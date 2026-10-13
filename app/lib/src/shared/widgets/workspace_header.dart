@@ -45,26 +45,33 @@ class WorkspaceHeader extends StatelessWidget {
               icon: const Icon(Icons.menu_rounded)),
           const SizedBox(width: 4),
         ],
-        InkWell(
-            onTap: onOpenWorkspaces,
-            borderRadius: BorderRadius.circular(20),
-            child: Row(children: [
-              const Icon(Icons.blur_on_rounded, size: 30),
-              const SizedBox(width: 9),
-              const Text('TRADERA',
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 2)),
-              if (!compact) ...[
-                const SizedBox(width: 8),
-                Text(workspace,
-                    style: TextStyle(
-                        fontSize: 10,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                const Icon(Icons.expand_more_rounded, size: 16),
-              ],
-            ])),
+        Flexible(
+          child: InkWell(
+              onTap: onOpenWorkspaces,
+              borderRadius: BorderRadius.circular(20),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.blur_on_rounded, size: 30),
+                const SizedBox(width: 9),
+                const Flexible(
+                  child: Text('TRADERA',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2)),
+                ),
+                if (!compact) ...[
+                  const SizedBox(width: 8),
+                  Text(workspace,
+                      style: TextStyle(
+                          fontSize: 10,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant)),
+                  const Icon(Icons.expand_more_rounded, size: 16),
+                ],
+              ])),
+        ),
         if (room != null) ...[
           SizedBox(width: compact ? 4 : 14),
           if (!compact) const Icon(Icons.chevron_right_rounded),
@@ -416,10 +423,7 @@ class _CreateWorkspaceDialogState extends State<_CreateWorkspaceDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return AlertDialog(
-      backgroundColor: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: const Text('New workspace'),
       content: SizedBox(
         width: 360,

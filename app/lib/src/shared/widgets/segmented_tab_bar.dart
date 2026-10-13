@@ -8,7 +8,11 @@ import 'package:flutter/material.dart';
 ///
 /// The pill sizes to its tabs and scrolls horizontally when they overflow, so
 /// captions always keep their natural size and every tab stays reachable.
-class SegmentedTabBar extends StatelessWidget {
+///
+/// This is the app's one tab bar style. Screens without a [TabController]
+/// pass [selectedIndex] and [onTap] instead; the bar then keeps its own
+/// controller and animates to each new selection.
+class SegmentedTabBar extends StatefulWidget {
   const SegmentedTabBar({
     super.key,
     required this.labels,
@@ -17,6 +21,8 @@ class SegmentedTabBar extends StatelessWidget {
     this.compact = false,
     this.alignment = Alignment.center,
     this.width,
+    this.selectedIndex,
+    this.onTap,
   });
 
   final List<String> labels;
@@ -26,13 +32,61 @@ class SegmentedTabBar extends StatelessWidget {
   final Alignment alignment;
   final double? width;
 
+  /// The selected tab when neither [controller] nor an enclosing
+  /// [DefaultTabController] drives the bar.
+  final int? selectedIndex;
+  final ValueChanged<int>? onTap;
+
+  @override
+  State<SegmentedTabBar> createState() => _SegmentedTabBarState();
+}
+
+class _SegmentedTabBarState extends State<SegmentedTabBar>
+    with TickerProviderStateMixin {
+  TabController? _own;
+
+  /// Uses the given or inherited controller; only a bar with neither owns one.
+  TabController _controller(BuildContext context) {
+    final given = widget.controller ?? DefaultTabController.maybeOf(context);
+    if (given != null) {
+      _retire(_own);
+      _own = null;
+      return given;
+    }
+    final index =
+        (widget.selectedIndex ?? 0).clamp(0, widget.labels.length - 1).toInt();
+    final own = _own;
+    if (own == null || own.length != widget.labels.length) {
+      _retire(own);
+      return _own = TabController(
+          length: widget.labels.length, initialIndex: index, vsync: this);
+    }
+    if (own.index != index) own.animateTo(index);
+    return own;
+  }
+
+  /// Disposes a replaced controller once the tab bar has let go of it.
+  void _retire(TabController? old) {
+    if (old == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+  }
+
+  @override
+  void dispose() {
+    _own?.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final tabs = controller ?? DefaultTabController.of(context);
-    final w = width ?? (compact ? 320 : 440);
+    final tabs = _controller(context);
+    final labels = widget.labels;
+    final icons = widget.icons;
+    final compact = widget.compact;
+    final w = widget.width ?? (compact ? 320 : 440);
     return Align(
-      alignment: alignment,
+      alignment: widget.alignment,
       child: Container(
         constraints: BoxConstraints(maxWidth: w),
         height: 52,
@@ -52,6 +106,7 @@ class SegmentedTabBar extends StatelessWidget {
         ),
         child: TabBar(
           controller: tabs,
+          onTap: widget.onTap,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
           dividerColor: Colors.transparent,
@@ -75,8 +130,8 @@ class SegmentedTabBar extends StatelessWidget {
               Tab(
                 height: 40,
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  if (icons != null && icons!.length > i && !compact) ...[
-                    Icon(icons![i], size: 17),
+                  if (icons != null && icons.length > i && !compact) ...[
+                    Icon(icons[i], size: 17),
                     const SizedBox(width: 7),
                   ],
                   Text(labels[i]),

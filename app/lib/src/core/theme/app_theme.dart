@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'app_shape.dart';
 
 abstract final class AppTheme {
   static ThemeData get dark => _theme(Brightness.dark, AppColors.primary);
@@ -15,7 +16,7 @@ abstract final class AppTheme {
       brightness: brightness,
       surface: dark ? const Color(0xFF111119) : const Color(0xFFF8F7FC),
     );
-    return ThemeData(
+    return _expressive(ThemeData(
       useMaterial3: true,
       brightness: brightness,
       colorScheme: scheme,
@@ -48,6 +49,95 @@ abstract final class AppTheme {
               borderRadius: BorderRadius.circular(28),
               side: BorderSide(
                   color: scheme.outlineVariant.withValues(alpha: .55)))),
-    );
+    ));
   }
+}
+
+/// Material 3 Expressive refinements applied to the whole app: pill buttons
+/// and chips, rounder dialogs, sheets and fields, floating snackbars, and the
+/// 2024 slider and progress styles.
+ThemeData _expressive(ThemeData base) {
+  final scheme = base.colorScheme;
+  // Derive every text style from the app's own so it keeps its font family.
+  final label = base.textTheme.labelLarge ?? const TextStyle();
+  const stadium = StadiumBorder();
+  final pill = ButtonStyle(
+    shape: const WidgetStatePropertyAll(stadium),
+    padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 20, vertical: 14)),
+    textStyle: WidgetStatePropertyAll(
+        label.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
+  );
+  OutlineInputBorder border(Color color, [double width = 1]) =>
+      OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppShape.control),
+          borderSide: BorderSide(color: color, width: width));
+  return base.copyWith(
+    filledButtonTheme: FilledButtonThemeData(style: pill),
+    outlinedButtonTheme: OutlinedButtonThemeData(style: pill),
+    textButtonTheme: TextButtonThemeData(
+        style: ButtonStyle(
+            shape: const WidgetStatePropertyAll(stadium),
+            textStyle: WidgetStatePropertyAll(
+                label.copyWith(fontWeight: FontWeight.w700)))),
+    chipTheme: base.chipTheme.copyWith(
+      shape: const StadiumBorder(),
+      side: BorderSide(color: scheme.outlineVariant),
+      labelStyle: label.copyWith(fontWeight: FontWeight.w600),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        textStyle: WidgetStatePropertyAll(
+            label.copyWith(fontWeight: FontWeight.w700, fontSize: 13)),
+        padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: 14, vertical: 12)),
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: scheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppShape.card)),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: scheme.surfaceContainerHigh,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(AppShape.card))),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: scheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppShape.control)),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppShape.control)),
+    ),
+    inputDecorationTheme: base.inputDecorationTheme.copyWith(
+      filled: true,
+      fillColor: scheme.surfaceContainerHighest.withValues(alpha: .55),
+      border: border(Colors.transparent),
+      enabledBorder: border(Colors.transparent),
+      focusedBorder: border(scheme.primary, 2),
+      errorBorder: border(scheme.error),
+      focusedErrorBorder: border(scheme.error, 2),
+    ),
+    // ignore: deprecated_member_use
+    sliderTheme: base.sliderTheme.copyWith(year2023: false),
+    // ignore: deprecated_member_use
+    progressIndicatorTheme:
+        base.progressIndicatorTheme.copyWith(year2023: false),
+    tooltipTheme: TooltipThemeData(
+      decoration: BoxDecoration(
+          color: scheme.inverseSurface,
+          borderRadius: BorderRadius.circular(10)),
+      textStyle: label.copyWith(
+          color: scheme.onInverseSurface,
+          fontSize: 12,
+          fontWeight: FontWeight.w500),
+    ),
+  );
 }

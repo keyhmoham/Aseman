@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tradera/src/features/account/presentation/account_hub_content.dart';
 import 'package:tradera/src/features/admin/presentation/admin_page_content.dart';
+import 'package:tradera/src/features/admin/presentation/admin_widgets.dart';
 import 'package:tradera/src/features/home/presentation/project_control_content.dart';
 
 void main() {
@@ -47,7 +48,14 @@ void main() {
 
     expect(find.text('Accounts'), findsOneWidget);
     expect(find.text('Search name, handle, email, or user id'), findsOneWidget);
-    expect(find.text('Ada Lovelace'), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byType(AdminDataTable),
+            matching: find.text('Ada Lovelace')),
+        findsOneWidget);
+    // Status filters are chips with counts, not a dropdown.
+    expect(find.byType(DropdownButton<String>), findsNothing);
+    expect(find.widgetWithText(ChoiceChip, 'Everyone'), findsOneWidget);
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Balance'), findsOneWidget);
   });
@@ -88,8 +96,9 @@ void main() {
 
     expect(find.text('Income'), findsOneWidget);
     expect(find.text('Customer spend'), findsOneWidget);
-    expect(find.text('WHAT CUSTOMERS SPENT IT ON'), findsOneWidget);
-    expect(find.byType(LinearProgressIndicator), findsNWidgets(4));
+    expect(find.text('What customers spent it on'), findsOneWidget);
+    expect(find.byType(AdminDonutChart), findsOneWidget);
+    expect(find.text('LLM tokens'), findsOneWidget);
     expect(find.textContaining('Balanced'), findsOneWidget);
   });
 

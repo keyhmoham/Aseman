@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../../../app_dependencies.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../data/models/bot.dart';
+import '../../../../shared/widgets/app_form.dart';
+import '../../../../shared/widgets/app_inputs.dart';
 import '../../../../shared/widgets/mini_tag.dart';
 import '../../../../shared/widgets/panel_header.dart';
 
@@ -93,10 +96,8 @@ class _RoutinesPanelState extends State<RoutinesPanel> {
   }
 
   Future<void> _create() async {
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (_) => const _RoutineFormDialog(),
-    );
+    final result = await showAppForm<Map<String, dynamic>>(
+        context, _RoutineFormDialog(agents: _agents()));
     if (result == null || !mounted) return;
     try {
       await widget.dependencies.service.createRoutine(widget.spaceId,
@@ -116,10 +117,8 @@ class _RoutinesPanelState extends State<RoutinesPanel> {
   }
 
   Future<void> _edit(Map<String, dynamic> r) async {
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (_) => _RoutineFormDialog(existing: r),
-    );
+    final result = await showAppForm<Map<String, dynamic>>(
+        context, _RoutineFormDialog(existing: r, agents: _agents()));
     if (result == null || !mounted) return;
     try {
       await widget.dependencies.service.updateRoutine(r['id'] as String? ?? '',
@@ -145,28 +144,25 @@ class _RoutinesPanelState extends State<RoutinesPanel> {
     } catch (_) {}
   }
 
+  /// The workspace's agents a routine can hand its task to.
+  Future<List<Bot>> _agents() async {
+    try {
+      final bots =
+          await widget.dependencies.service.fetchSpaceBots(widget.spaceId);
+      return bots.where((b) => b.kind == 'agent').toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<void> _delete(Map<String, dynamic> r) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete routine'),
-        content: Text('Delete "${r['name'] ?? 'routine'}"?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          FilledButton(
-              style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.danger,
-                  foregroundColor: Colors.white),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete')),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
+    final confirmed = await confirmAppAction(context,
+        icon: Icons.delete_outline_rounded,
+        title: 'Delete "${r['name'] ?? 'routine'}"?',
+        message: 'It stops firing and its run history is removed.',
+        action: 'Delete',
+        destructive: true);
+    if (!confirmed || !mounted) return;
     try {
       await widget.dependencies.service.deleteRoutine(r['id'] as String? ?? '');
       await _load();
@@ -688,8 +684,9 @@ class _MetaChip extends StatelessWidget {
 // ── form dialog ────────────────────────────────────────────────────────────
 
 class _RoutineFormDialog extends StatefulWidget {
-  const _RoutineFormDialog({this.existing});
+  const _RoutineFormDialog({this.existing, required this.agents});
   final Map<String, dynamic>? existing;
+  final Future<List<Bot>> agents;
 
   @override
   State<_RoutineFormDialog> createState() => _RoutineFormDialogState();
@@ -698,179 +695,135 @@ class _RoutineFormDialog extends StatefulWidget {
 class _RoutineFormDialogState extends State<_RoutineFormDialog> {
   late final name =
       TextEditingController(text: widget.existing?['name'] as String? ?? '');
-  late final target =
-      TextEditingController(text: widget.existing?['target'] as String? ?? '');
   late final task =
       TextEditingController(text: widget.existing?['task'] as String? ?? '');
-  late final delay =
-      TextEditingController(text: '${widget.existing?['delay_sec'] ?? 60}');
-  late final interval = TextEditingController(
-      text: '${widget.existing?['interval_sec'] ?? 3600}');
+  late int delay = (widget.existing?['delay_sec'] as num?)?.toInt() ?? 300;
+  late int interval =
+      (widget.existing?['interval_sec'] as num?)?.toInt() ?? 3600;
+  late String target = widget.existing?['target'] as String? ?? '';
   late String type = widget.existing?['type'] as String? ?? 'delayed';
+  List<Bot> agents = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    widget.agents.then((value) {
+      if (mounted) setState(() => agents = value);
+    });
+    task.addListener(_changed);
+  }
+
+  void _changed() => setState(() {});
 
   @override
   void dispose() {
+    task.removeListener(_changed);
     name.dispose();
-    target.dispose();
     task.dispose();
-    delay.dispose();
-    interval.dispose();
     super.dispose();
   }
 
-  String get _preview {
-    final t = type == 'periodic';
-    final secs = (type == 'periodic'
-            ? int.tryParse(interval.text)
-            : int.tryParse(delay.text)) ??
-        0;
-    return t
-        ? 'every ${fmtDur(secs > 0 ? secs : 3600)}'
-        : 'after ${fmtDur(secs > 0 ? secs : 60)}';
-  }
+  String get _preview => type == 'periodic'
+      ? 'every ${fmtDur(interval)}'
+      : 'once, ${fmtDur(delay)} from now';
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return AlertDialog(
-      backgroundColor: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-      title: Row(children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: .14),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(
-              widget.existing == null
-                  ? Icons.add_alarm_rounded
-                  : Icons.edit_calendar_rounded,
-              size: 18,
-              color: AppColors.primary),
+    final editing = widget.existing != null;
+    final known = agents.any((a) => a.id == target);
+    return AppFormFrame(
+      icon: editing ? Icons.edit_calendar_rounded : Icons.add_alarm_rounded,
+      title: editing ? 'Edit routine' : 'New routine',
+      subtitle: 'A task that runs by itself, once or on a schedule.',
+      submit: editing ? 'Save' : 'Create routine',
+      onSubmit: task.text.trim().isEmpty
+          ? null
+          : () => Navigator.pop(context, {
+                'name': name.text.trim(),
+                'type': type,
+                'target': target,
+                'task': task.text.trim(),
+                'delay_sec': type == 'delayed' ? delay : 0,
+                'interval_sec': type == 'periodic' ? interval : 0,
+              }),
+      children: [
+        TextField(
+            controller: name,
+            decoration: const InputDecoration(
+              labelText: 'Name',
+              hintText: 'e.g. Morning scan',
+              prefixIcon: Icon(Icons.drive_file_rename_outline_rounded),
+            )),
+        AppSegmentedField<String>(
+          label: 'When',
+          value: type,
+          onChanged: editing ? (_) {} : (v) => setState(() => type = v),
+          choices: const [
+            AppChoice('delayed', 'Once',
+                icon: Icons.timer_outlined,
+                hint: 'Runs a single time after the delay.'),
+            AppChoice('periodic', 'Repeating',
+                icon: Icons.loop_rounded,
+                hint: 'Runs again and again on a fixed interval.'),
+          ],
         ),
-        const SizedBox(width: 10),
-        Text(widget.existing == null ? 'New routine' : 'Edit routine'),
-      ]),
-      content: SizedBox(
-        width: 460,
-        child: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(
-                controller: name,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  hintText: 'e.g. Morning scan',
-                  prefixIcon:
-                      Icon(Icons.drive_file_rename_outline_rounded, size: 18),
-                )),
-            const SizedBox(height: 12),
-            // Type selector with helper text
-            SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(
-                      value: 'delayed',
-                      label: Text('Delayed'),
-                      icon: Icon(Icons.timer_outlined, size: 16)),
-                  ButtonSegment(
-                      value: 'periodic',
-                      label: Text('Periodic'),
-                      icon: Icon(Icons.loop_rounded, size: 16)),
-                ],
-                selected: {type},
-                onSelectionChanged: (s) => setState(() => type = s.first),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              type == 'delayed'
-                  ? 'Runs once, a set time after creation.'
-                  : 'Loops forever on a fixed interval.',
-              style: const TextStyle(fontSize: 10, color: AppColors.muted),
-            ),
-            const SizedBox(height: 12),
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(
-                  child: TextField(
-                      controller: delay,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Delay',
-                        suffixText: 'seconds',
-                        prefixIcon: Icon(Icons.timer_outlined, size: 18),
-                      ))),
-              const SizedBox(width: 10),
-              Expanded(
-                  child: TextField(
-                      controller: interval,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Interval',
-                        suffixText: 'seconds',
-                        prefixIcon: Icon(Icons.loop_rounded, size: 18),
-                      ))),
-            ]),
-            const SizedBox(height: 12),
-            TextField(
-                controller: target,
-                decoration: const InputDecoration(
-                  labelText: 'Target agent id (optional)',
-                  hintText: 'Leave empty to run inline',
-                  prefixIcon: Icon(Icons.smart_toy_outlined, size: 18),
-                )),
-            const SizedBox(height: 12),
-            TextField(
-                controller: task,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Task / instruction',
-                  hintText: 'What should the routine do?',
-                  alignLabelWithHint: true,
-                )),
-            const SizedBox(height: 12),
-            // Live preview
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: .1),
-                borderRadius: BorderRadius.circular(12),
-                border:
-                    Border.all(color: AppColors.primary.withValues(alpha: .3)),
-              ),
-              child: Row(children: [
-                const Icon(Icons.schedule_rounded,
-                    size: 15, color: AppColors.primary),
-                const SizedBox(width: 8),
-                Text('Runs $_preview',
-                    style: const TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.w700)),
-              ]),
+        if (type == 'delayed')
+          AppDurationField(
+              label: 'Run after',
+              seconds: delay,
+              presets: const [60, 300, 900, 3600, 21600, 86400],
+              onChanged: (v) => setState(() => delay = v))
+        else
+          AppDurationField(
+              label: 'Run every',
+              seconds: interval,
+              presets: const [300, 900, 3600, 21600, 86400, 604800],
+              onChanged: (v) => setState(() => interval = v)),
+        AppChoiceField<String>(
+          label: 'Who does it',
+          hint: target.isEmpty
+              ? 'The routine runs the task itself.'
+              : 'The task is handed to this agent.',
+          value: target,
+          onChanged: (v) => setState(() => target = v),
+          choices: [
+            const AppChoice('', 'Run inline', icon: Icons.bolt_rounded),
+            for (final a in agents)
+              AppChoice(a.id, a.name.isEmpty ? a.id : a.name,
+                  icon: Icons.smart_toy_outlined),
+            if (target.isNotEmpty && !known)
+              AppChoice(target, 'Current agent',
+                  icon: Icons.smart_toy_outlined),
+          ],
+        ),
+        TextField(
+            controller: task,
+            minLines: 3,
+            maxLines: 6,
+            decoration: const InputDecoration(
+              labelText: 'Task',
+              hintText: 'What should the routine do?',
+              alignLabelWithHint: true,
+            )),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: scheme.secondaryContainer,
+            borderRadius: BorderRadius.circular(AppShape.control),
+          ),
+          child: Row(children: [
+            Icon(Icons.schedule_rounded,
+                size: 18, color: scheme.onSecondaryContainer),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('Runs $_preview',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onSecondaryContainer)),
             ),
           ]),
-        ),
-      ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel')),
-        FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-          onPressed: () {
-            final t = task.text.trim();
-            if (t.isEmpty) return;
-            Navigator.pop(context, {
-              'name': name.text.trim(),
-              'type': type,
-              'target': target.text.trim(),
-              'task': t,
-              'delay_sec': int.tryParse(delay.text) ?? 0,
-              'interval_sec': int.tryParse(interval.text) ?? 0,
-            });
-          },
-          child: const Text('Save'),
         ),
       ],
     );

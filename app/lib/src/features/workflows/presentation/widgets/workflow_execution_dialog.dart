@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/widgets/app_form.dart';
+import '../../../../shared/widgets/app_inputs.dart';
 import '../../domain/workflow.dart';
 import '../workflow_view_model.dart';
 import 'workflow_notice.dart';
@@ -21,8 +23,8 @@ class _WorkflowExecutionDialogState extends State<WorkflowExecutionDialog> {
   bool saving = false;
 
   Future<void> _resolve(Map<String, dynamic> event) async {
-    final result = await showDialog<(String, String)>(
-        context: context, builder: (_) => const _ResolutionDialog());
+    final result =
+        await showAppForm<(String, String)>(context, const _ResolutionDialog());
     if (result == null || !mounted) return;
     setState(() => saving = true);
     final ok = await widget.model
@@ -113,41 +115,34 @@ class _ResolutionDialogState extends State<_ResolutionDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-          title: const Text('Record observed outcome'),
-          content: SizedBox(
-              width: 420,
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Text(
-                    'Check the operation’s actual effects before choosing an outcome.'),
-                DropdownButtonFormField<String>(
-                    initialValue: verdict,
-                    decoration:
-                        const InputDecoration(labelText: 'Observed outcome'),
-                    items: const [
-                      DropdownMenuItem(
-                          value: 'completed',
-                          child: Text('Operation completed')),
-                      DropdownMenuItem(
-                          value: 'not_executed',
-                          child: Text('Operation did not execute'))
-                    ],
-                    onChanged: (value) => setState(() => verdict = value)),
-                TextField(
-                    controller: result,
-                    maxLength: 8192,
-                    maxLines: 4,
-                    decoration:
-                        const InputDecoration(labelText: 'Evidence or result')),
-              ])),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel')),
-            FilledButton(
-                onPressed: verdict == null
-                    ? null
-                    : () => Navigator.pop(context, (verdict!, result.text)),
-                child: const Text('Record outcome'))
-          ]);
+  Widget build(BuildContext context) => AppFormFrame(
+        icon: Icons.fact_check_outlined,
+        title: 'Record the observed outcome',
+        subtitle:
+            'Check the operation’s actual effects before choosing an outcome.',
+        submit: 'Record outcome',
+        onSubmit: verdict == null
+            ? null
+            : () => Navigator.pop(context, (verdict!, result.text)),
+        children: [
+          AppChoiceField<String>(
+            label: 'What happened',
+            value: verdict,
+            onChanged: (v) => setState(() => verdict = v),
+            choices: const [
+              AppChoice('completed', 'It completed',
+                  icon: Icons.check_circle_outline_rounded),
+              AppChoice('not_executed', 'It did not run',
+                  icon: Icons.highlight_off_rounded),
+            ],
+          ),
+          TextField(
+              controller: result,
+              maxLength: 8192,
+              minLines: 3,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                  labelText: 'Evidence or result', alignLabelWithHint: true)),
+        ],
+      );
 }

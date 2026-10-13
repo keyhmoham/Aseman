@@ -271,7 +271,10 @@ void main() {
 
     await tester.tap(find.byTooltip('Open navigation menu'));
     await tester.pumpAndSettle();
-    expect(find.text('TRADERA ADMIN'), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byType(Drawer), matching: find.text('Admin console')),
+        findsOneWidget);
     expect(find.text('Users'), findsWidgets);
     expect(find.text('Projects'), findsWidgets);
     expect(tester.takeException(), isNull);

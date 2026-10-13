@@ -489,8 +489,7 @@ class _FieldRow extends StatelessWidget {
                 decoration: InputDecoration(
                     isDense: true,
                     labelText: label.isEmpty ? null : label,
-                    labelStyle: const TextStyle(fontSize: 9),
-                    border: const OutlineInputBorder()))),
+                    labelStyle: const TextStyle(fontSize: 9)))),
         if (submit != null)
           IconButton(
               onPressed: () => onSubmit(controller.text),

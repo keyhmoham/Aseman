@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/app_inputs.dart';
+import '../../../shared/widgets/segmented_tab_bar.dart';
 import 'admin_widgets.dart';
 
 typedef AdminAction = Future<void> Function(
@@ -28,6 +29,7 @@ class AdminPageContent extends StatefulWidget {
     required this.onAction,
     required this.onDirectAction,
     required this.onNavigate,
+    this.onQuery,
   });
 
   final String page;
@@ -42,11 +44,15 @@ class AdminPageContent extends StatefulWidget {
   final AdminDirectAction onDirectAction;
   final ValueChanged<String> onNavigate;
 
+  /// Re-requests one call of the page with extra request fields, e.g. the
+  /// period of the finance overview.
+  final Future<void> Function(String call, Map<String, dynamic> body)? onQuery;
+
   @override
-  State<AdminPageContent> createState() => _AdminPageContentState();
+  State<AdminPageContent> createState() => _AppPageContentState();
 }
 
-class _AdminPageContentState extends State<AdminPageContent> {
+class _AppPageContentState extends State<AdminPageContent> {
   final search = TextEditingController();
   String filter = 'all';
   String sort = 'created';
@@ -134,29 +140,37 @@ class _AdminPageContentState extends State<AdminPageContent> {
     final errors = widget.results.entries
         .where((entry) => _map(entry.value).containsKey('error'))
         .toList();
-    final gutter = MediaQuery.sizeOf(context).width < 600 ? 16.0 : 24.0;
+    final gutter = MediaQuery.sizeOf(context).width < 600 ? 16.0 : 28.0;
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
       child: ListView(
         key: PageStorageKey(widget.page),
-        padding: EdgeInsets.fromLTRB(gutter, 8, gutter, 40),
+        padding: EdgeInsets.fromLTRB(gutter, 8, gutter, 48),
         children: [
           if (errors.isNotEmpty)
             Container(
-              margin: const EdgeInsets.only(bottom: 14),
-              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.danger.withValues(alpha: .09),
-                borderRadius: BorderRadius.circular(12),
-                border:
-                    Border.all(color: AppColors.danger.withValues(alpha: .3)),
+                color: Theme.of(context).colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(AppShape.inner),
               ),
-              child: Text(
-                errors
-                    .map((e) => '${e.key}: ${_map(e.value)['error']}')
-                    .join('\n'),
-                style: const TextStyle(color: AppColors.danger, fontSize: 12),
-              ),
+              child:
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(Icons.cloud_off_rounded,
+                    color: Theme.of(context).colorScheme.onErrorContainer),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    errors
+                        .map((e) => '${e.key}: ${_map(e.value)['error']}')
+                        .join('\n'),
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                        fontSize: 13),
+                  ),
+                ),
+              ]),
             ),
           _page(),
         ],
@@ -192,96 +206,235 @@ class _AdminPageContentState extends State<AdminPageContent> {
       };
 
   Widget _overview() {
+    final scheme = Theme.of(context).colorScheme;
     final stats = _map(widget.results['admin.stats']);
     final counters =
         _map(stats['counters']).isNotEmpty ? _map(stats['counters']) : stats;
     final health = _map(widget.results['admin.health']);
     final counts = _map(health['counts']);
     final runs = _listOfMaps(_map(widget.results['admin.runs_list'])['runs']);
-    final failedRuns = runs.where((r) {
-      final s = '${r['status']}'.toLowerCase();
-      return s == 'failed' || s == 'error';
-    }).length;
-    final needs = <({String text, String target, Color tone})>[
-      if (_integer(counts['fail']) > 0)
-        (
-          text: '${_integer(counts['fail'])} deploy checks need attention',
-          target: 'Health',
-          tone: AppColors.danger
-        ),
-      if (_integer(counts['warn']) > 0)
+    final payouts = _listOfMaps(
+        _map(widget.results['finance.payouts_list'])['payouts'] ??
+            _map(widget.results['finance.payouts_list'])['requests']);
+    final listings =
+        _listOfMaps(_map(widget.results['market.catalog'])['listings']);
+    final resources =
+        _map(_map(widget.results['admin.node_stats'])['resources']);
+    final pendingPayouts =
+        payouts.where((p) => '${p['status']}' == 'pending').toList();
+    final pendingListings =
+        listings.where((l) => '${l['status']}' == 'pending').length;
+    final fail = _integer(counts['fail']);
+    final warn = _integer(counts['warn']);
+    final ok = _integer(counts['ok']);
+    final runTones = <AdminTone, int>{};
+    for (final r in runs) {
+      final tone = adminTone('${r['status']}');
+      runTones[tone] = (runTones[tone] ?? 0) + 1;
+    }
+    final failedRuns = runTones[AdminTone.bad] ?? 0;
+    final needs = <({String text, String target, Color tone, IconData icon})>[
+      if (fail > 0)
         (
           text:
-              '${_integer(counts['warn'])} deployment checks are worth a look',
+              '$fail deploy ${fail == 1 ? 'check needs' : 'checks need'} fixing',
           target: 'Health',
-          tone: AppColors.warning
+          tone: AppColors.danger,
+          icon: Icons.gpp_maybe_rounded,
+        ),
+      if (pendingPayouts.isNotEmpty)
+        (
+          text:
+              '${pendingPayouts.length} payout ${pendingPayouts.length == 1 ? 'request' : 'requests'} · ${_money(_sum(pendingPayouts, 'amount'))}',
+          target: 'Finance · Payouts',
+          tone: AppColors.warning,
+          icon: Icons.payments_rounded,
+        ),
+      if (pendingListings > 0)
+        (
+          text:
+              '$pendingListings marketplace ${pendingListings == 1 ? 'listing waits' : 'listings wait'} for review',
+          target: 'Agents',
+          tone: AppColors.warning,
+          icon: Icons.rate_review_rounded,
         ),
       if (failedRuns > 0)
         (
-          text: '$failedRuns agent runs failed recently',
+          text:
+              '$failedRuns agent ${failedRuns == 1 ? 'run' : 'runs'} failed recently',
           target: 'Projects',
-          tone: AppColors.danger
+          tone: AppColors.danger,
+          icon: Icons.running_with_errors_rounded,
+        ),
+      if (warn > 0)
+        (
+          text:
+              '$warn deployment ${warn == 1 ? 'check is' : 'checks are'} worth a look',
+          target: 'Health',
+          tone: AppColors.warning,
+          icon: Icons.tips_and_updates_rounded,
         ),
     ];
+    final checks = ok + warn + fail;
+    final score = checks == 0 ? 1.0 : ok / checks;
+    final cores = _number(resources['cpu_cores'], fallback: 1);
+    final load = _doubleList(resources['load_avg']);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      AdminSectionCard(
-        title: 'Needs you',
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: needs.isEmpty
-            ? const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                    'All clear: no reviews, payouts or failing checks are waiting.'))
-            : Column(
-                children: [
-                  for (final item in needs)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      leading: Container(
-                          width: 9,
-                          height: 9,
-                          decoration: BoxDecoration(
-                              color: item.tone, shape: BoxShape.circle)),
-                      title: Text(item.text,
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
-                      trailing: Text('${item.target} →',
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontWeight: FontWeight.w700)),
-                      onTap: () => widget.onNavigate(item.target),
-                    ),
-                ],
-              ),
+      AdminHeroCard(
+        icon: needs.isEmpty
+            ? Icons.verified_rounded
+            : Icons.notifications_active_rounded,
+        title: needs.isEmpty
+            ? 'All clear'
+            : '${needs.length} ${needs.length == 1 ? 'thing needs' : 'things need'} you',
+        message: needs.isEmpty
+            ? 'No reviews, payouts or failing checks are waiting.'
+            : 'Start with the most urgent below; everything else is running.',
+        visual: AdminGauge(
+          value: score,
+          label: 'health',
+          size: 128,
+          color: fail > 0
+              ? AppColors.danger
+              : warn > 0
+                  ? AppColors.warning
+                  : AppColors.success,
+          display: checks == 0 ? '—' : '$ok/$checks',
+        ),
       ),
-      const SizedBox(height: 18),
-      Text('PLATFORM', style: _eyebrow()),
-      const SizedBox(height: 9),
-      _statGrid([
+      if (needs.isNotEmpty) ...[
+        const SizedBox(height: 14),
+        AdminSectionCard(
+          title: 'Needs you',
+          icon: Icons.inbox_rounded,
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+          child: Column(children: [
+            for (final item in needs)
+              ListTile(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppShape.control)),
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: ShapeDecoration(
+                      color: item.tone.withValues(alpha: .16),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14))),
+                  child: Icon(item.icon, color: item.tone, size: 21),
+                ),
+                title: Text(item.text,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(item.target),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => widget.onNavigate(item.target),
+              ),
+          ]),
+        ),
+      ],
+      const SizedBox(height: 22),
+      _heading('Platform'),
+      AdminGrid(children: [
         AdminStatCard(
             label: 'Users',
             value: _compact(counters['users'] ?? counters['accounts']),
             hint: 'Accounts and wallets',
-            icon: Icons.people_outline,
+            icon: Icons.people_rounded,
             onTap: () => widget.onNavigate('Users')),
         AdminStatCard(
             label: 'Projects',
             value: _compact(counters['projects'] ?? counters['spaces']),
             hint: 'Workspaces and machines',
-            icon: Icons.folder_outlined,
+            icon: Icons.folder_rounded,
+            tone: AppColors.cyan,
             onTap: () => widget.onNavigate('Projects')),
         AdminStatCard(
             label: 'Bots',
             value: _compact(counters['bots']),
             hint: 'Agents, tools and miniapps',
-            icon: Icons.smart_toy_outlined,
+            icon: Icons.smart_toy_rounded,
+            tone: AppColors.success,
             onTap: () => widget.onNavigate('Agents')),
         AdminStatCard(
             label: 'Agent runs',
             value: _compact(counters['room_turns']),
             hint: 'Turns across all projects',
-            icon: Icons.play_circle_outline,
+            icon: Icons.play_circle_rounded,
+            tone: AppColors.warning,
             onTap: () => widget.onNavigate('Projects')),
+      ]),
+      const SizedBox(height: 22),
+      AdminGrid(maxColumns: 3, minTileWidth: 300, children: [
+        AdminSectionCard(
+          title: 'Deployment checks',
+          icon: Icons.monitor_heart_rounded,
+          trailing: TextButton(
+              onPressed: () => widget.onNavigate('Health'),
+              child: const Text('Open')),
+          child: AdminDonutPanel(
+            size: 132,
+            center: '$checks',
+            caption: 'checks',
+            slices: [
+              AdminChartSlice('Healthy', ok.toDouble(), AppColors.success),
+              AdminChartSlice(
+                  'Worth a look', warn.toDouble(), AppColors.warning),
+              AdminChartSlice('Need fixing', fail.toDouble(), AppColors.danger),
+            ],
+          ),
+        ),
+        AdminSectionCard(
+          title: 'Recent agent runs',
+          icon: Icons.play_circle_rounded,
+          child: AdminDonutPanel(
+            size: 132,
+            center: '${runs.length}',
+            caption: 'runs',
+            emptyLabel: 'No runs yet',
+            slices: [
+              AdminChartSlice('Finished',
+                  (runTones[AdminTone.ok] ?? 0).toDouble(), AppColors.success),
+              AdminChartSlice('In progress',
+                  (runTones[AdminTone.warn] ?? 0).toDouble(), AppColors.cyan),
+              AdminChartSlice(
+                  'Failed', failedRuns.toDouble(), AppColors.danger),
+              AdminChartSlice(
+                  'Other',
+                  (runTones[AdminTone.neutral] ?? 0).toDouble(),
+                  scheme.outline),
+            ],
+          ),
+        ),
+        AdminSectionCard(
+          title: 'This node',
+          icon: Icons.dns_rounded,
+          trailing: TextButton(
+              onPressed: () => widget.onNavigate('Node · Host'),
+              child: const Text('Live')),
+          child: resources.isEmpty
+              ? Text('No host reading yet.', style: _muted())
+              : Wrap(
+                  alignment: WrapAlignment.spaceAround,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                      AdminGauge(
+                          size: 96,
+                          thickness: 10,
+                          label: 'CPU',
+                          value: (load.isEmpty ? 0 : load.first) /
+                              (cores == 0 ? 1 : cores)),
+                      AdminGauge(
+                          size: 96,
+                          thickness: 10,
+                          label: 'Memory',
+                          value: _number(resources['mem_used_percent']) / 100),
+                      AdminGauge(
+                          size: 96,
+                          thickness: 10,
+                          label: 'Disk',
+                          value: _number(resources['disk_used_percent']) / 100),
+                    ]),
+        ),
       ]),
     ]);
   }
@@ -291,139 +444,178 @@ class _AdminPageContentState extends State<AdminPageContent> {
         _listOfMaps(_map(widget.results['users.accounts_list'])['accounts']);
     final admins =
         _listOfMaps(_map(widget.results['admin.admins_list'])['admins']);
+    final adminIds = admins.map((a) => '${a['id']}').toSet();
+    bool isAdmin(Map<String, dynamic> a) =>
+        a['is_admin'] == true ||
+        '${a['role']}' == 'admin' ||
+        adminIds.contains('${a['id']}');
+    String status(Map<String, dynamic> a) =>
+        '${a['status'] ?? 'active'}'.toLowerCase();
     final q = search.text.trim().toLowerCase();
     final rows = accounts.where((a) {
-      final status = '${a['status'] ?? 'active'}'.toLowerCase();
-      if (filter != 'all' &&
-          filter != status &&
-          !(filter == 'admin' && a['is_admin'] == true)) return false;
+      if (filter == 'admin' && !isAdmin(a)) return false;
+      if (filter != 'all' && filter != 'admin' && filter != status(a)) {
+        return false;
+      }
       return q.isEmpty ||
           '${a['handle']} ${a['email']} ${a['id']} ${jsonEncode(a['profile'] ?? {})}'
               .toLowerCase()
               .contains(q);
     }).toList();
-    final active = accounts
-        .where((a) => '${a['status'] ?? 'active'}'.toLowerCase() == 'active')
-        .length;
-    final adminIds = admins.map((a) => '${a['id']}').toSet();
+    final active = accounts.where((a) => status(a) == 'active').length;
+    final disabled = accounts.where((a) => status(a) == 'disabled').length;
+    final pending = accounts.where((a) => status(a) == 'pending').length;
+    final adminCount = accounts.where(isAdmin).length;
+    final palette = adminPalette(context);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _statGrid([
-        AdminStatCard(
-            label: 'Accounts',
-            value: '${accounts.length}',
-            hint: 'Registered users'),
-        AdminStatCard(
-            label: 'Active',
-            value: '$active',
-            hint: 'Can sign in',
-            tone: AppColors.success),
-        AdminStatCard(
-            label: 'Admins',
-            value: '${admins.length}',
-            hint: 'Platform operators'),
-        AdminStatCard(
-            label: 'Disabled',
-            value: '${accounts.length - active}',
-            hint: 'Access blocked',
-            tone: accounts.length == active ? null : AppColors.warning),
+      AdminGrid(maxColumns: 2, minTileWidth: 340, children: [
+        AdminSectionCard(
+          title: 'Accounts',
+          icon: Icons.people_rounded,
+          child: AdminDonutPanel(
+            size: 132,
+            center: '${accounts.length}',
+            caption: 'accounts',
+            slices: [
+              AdminChartSlice('Active', active.toDouble(), AppColors.success),
+              AdminChartSlice('Pending', pending.toDouble(), AppColors.warning),
+              AdminChartSlice(
+                  'Disabled', disabled.toDouble(), AppColors.danger),
+            ],
+          ),
+        ),
+        AdminSectionCard(
+          title: 'Largest wallets',
+          icon: Icons.account_balance_wallet_rounded,
+          child: AdminBarList(
+            maxItems: 4,
+            empty: 'No wallet holds credits yet.',
+            items: [
+              for (var i = 0; i < accounts.length; i++)
+                AdminChartSlice(_displayName(accounts[i]),
+                    _number(accounts[i]['balance']), palette[1],
+                    display: _credits(accounts[i]['balance'])),
+            ],
+          ),
+        ),
       ]),
-      const SizedBox(height: 14),
+      const SizedBox(height: 18),
       AdminSearchField(
           controller: search,
           hint: 'Search name, handle, email, or user id',
-          onChanged: (_) => setState(() {}),
-          trailing: _filterMenu(const {
-            'all': 'All users',
-            'active': 'Active',
-            'disabled': 'Disabled',
-            'pending': 'Pending',
-            'admin': 'Admins',
-          })),
+          onChanged: (_) => setState(() {})),
+      const SizedBox(height: 12),
+      AdminFilterChips<String>(
+        selected: filter,
+        onSelected: (v) => setState(() => filter = v),
+        options: [
+          AdminFilterOption('all', 'Everyone', count: accounts.length),
+          AdminFilterOption('active', 'Active',
+              count: active, icon: Icons.check_circle_outline_rounded),
+          if (pending > 0)
+            AdminFilterOption('pending', 'Pending',
+                count: pending, icon: Icons.hourglass_empty_rounded),
+          AdminFilterOption('disabled', 'Blocked',
+              count: disabled, icon: Icons.block_rounded),
+          AdminFilterOption('admin', 'Admins',
+              count: adminCount, icon: Icons.shield_outlined),
+        ],
+      ),
       const SizedBox(height: 14),
       AdminDataTable(
         empty: q.isEmpty ? 'No accounts registered yet.' : 'No users match.',
         onRowTap: (index) => _showUser(rows[index]),
         columns: const [
           AdminTableColumn('User', width: 220),
-          AdminTableColumn('Email', width: 240),
+          AdminTableColumn('Email', width: 210),
           AdminTableColumn('Role', width: 100),
           AdminTableColumn('Status', width: 110),
-          AdminTableColumn('Balance', width: 120, align: TextAlign.right),
-          AdminTableColumn('Last seen', width: 160),
+          AdminTableColumn('Balance', width: 110, align: TextAlign.right),
+          AdminTableColumn('Last seen', width: 130),
           // Three 48 px icon buttons plus cell padding, on one line.
           AdminTableColumn('Actions', width: 172, align: TextAlign.right),
         ],
         rows: [
           for (final a in rows)
             [
-              _primaryCell(_displayName(a),
-                  '@${a['handle'] ?? 'unknown'}\n${_shortId(a['id'])}'),
+              _personCell(_displayName(a), '@${a['handle'] ?? 'unknown'}'),
               Text('${a['email'] ?? '—'}'),
-              Text(a['is_admin'] == true || adminIds.contains('${a['id']}')
-                  ? 'Admin'
-                  : '${a['role'] ?? 'User'}'),
-              AdminStatusPill('${a['status'] ?? 'active'}'),
+              isAdmin(a)
+                  ? const _RoleBadge(admin: true)
+                  : const _RoleBadge(admin: false),
+              AdminStatusPill(status(a)),
               Text(_credits(a['balance']), textAlign: TextAlign.right),
               Text(_date(a['last_seen'] ?? a['created_at'])),
               Wrap(alignment: WrapAlignment.end, spacing: 3, children: [
                 IconButton(
                     tooltip: 'Edit profile and access',
-                    onPressed: () =>
-                        widget.onAction('users', 'account_update', {
-                          'account': a['id'],
-                          'handle': a['handle'],
-                          'email': a['email'],
-                          'role': a['role'],
-                          'status': a['status'],
-                          'profile': a['profile'] ?? <String, dynamic>{},
-                        }),
+                    onPressed: () => _editUser(a),
                     icon: const Icon(Icons.edit_outlined, size: 18)),
                 IconButton(
                     tooltip: 'Grant credits',
                     onPressed: () => widget.onAction('finance', 'wallet_mint', {
                           'target': a['id'],
+                          '_name': _displayName(a),
                         }),
                     icon: const Icon(Icons.add_card_rounded, size: 18)),
                 PopupMenuButton<String>(
                     tooltip: 'More actions',
                     onSelected: (value) {
                       if (value == 'password') {
-                        widget.onAction(
-                            'users', 'account_password', {'account': a['id']});
+                        widget.onAction('users', 'account_password',
+                            {'account': a['id'], '_name': _displayName(a)});
                       } else if (value == 'ledger') {
-                        widget.onAction('finance', 'admin_account',
-                            {'account': a['id'], 'limit': 100});
+                        _showUser(a, tab: 2);
                       } else {
-                        widget.onAction(
-                            'users', 'account_delete', {'account': a['id']});
+                        widget.onAction('users', 'account_delete',
+                            {'account': a['id'], '_name': _displayName(a)});
                       }
                     },
                     itemBuilder: (_) => const [
                           PopupMenuItem(
-                              value: 'password', child: Text('Set password')),
+                              value: 'password',
+                              child: ListTile(
+                                  leading: Icon(Icons.password_rounded),
+                                  title: Text('Set password'))),
                           PopupMenuItem(
-                              value: 'ledger', child: Text('Wallet activity')),
+                              value: 'ledger',
+                              child: ListTile(
+                                  leading: Icon(Icons.receipt_long_rounded),
+                                  title: Text('Wallet activity'))),
                           PopupMenuDivider(),
                           PopupMenuItem(
-                              value: 'delete', child: Text('Delete account')),
+                              value: 'delete',
+                              child: ListTile(
+                                  leading: Icon(Icons.delete_outline_rounded),
+                                  title: Text('Delete account'))),
                         ]),
               ]),
             ],
         ],
       ),
       const SizedBox(height: 10),
-      Text('${rows.length} of ${accounts.length} users',
-          style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 11)),
+      Text('${rows.length} of ${accounts.length} users', style: _muted()),
     ]);
   }
+
+  void _editUser(Map<String, dynamic> a) =>
+      widget.onAction('users', 'account_update', {
+        'account': a['id'],
+        'handle': a['handle'],
+        'email': a['email'],
+        'role': a['role'],
+        'is_admin': a['is_admin'],
+        'status': a['status'],
+        'profile': a['profile'] ?? <String, dynamic>{},
+      });
 
   Widget _projects() {
     final spaces =
         _listOfMaps(_map(widget.results['spaces.space_list_all'])['spaces']);
     final q = search.text.trim().toLowerCase();
     final rows = spaces.where((s) {
+      if (filter == 'awake' && _machineState(s) != 'awake') return false;
+      if (filter == 'asleep' && _machineState(s) == 'awake') return false;
       return q.isEmpty ||
           '${s['name']} ${s['id']} ${s['owner_id']} ${_map(s['owner'])['handle']}'
               .toLowerCase()
@@ -438,6 +630,9 @@ class _AdminPageContentState extends State<AdminPageContent> {
       } else if (sort == 'owner') {
         av = '${_map(a['owner'])['handle'] ?? a['owner_id']}'.toLowerCase();
         bv = '${_map(b['owner'])['handle'] ?? b['owner_id']}'.toLowerCase();
+      } else if (sort == 'spend') {
+        av = _number(a['spent'] ?? _map(a['usage'])['spent']);
+        bv = _number(b['spent'] ?? _map(b['usage'])['spent']);
       } else {
         av = '${a['created_at'] ?? ''}';
         bv = '${b['created_at'] ?? ''}';
@@ -446,23 +641,45 @@ class _AdminPageContentState extends State<AdminPageContent> {
       return ascending ? order : -order;
     });
     final awake = spaces.where((s) => _machineState(s) == 'awake').length;
+    final totalSpend = spaces.fold<double>(
+        0, (sum, s) => sum + _number(s['spent'] ?? _map(s['usage'])['spent']));
+    final palette = adminPalette(context);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _statGrid([
-        AdminStatCard(
-            label: 'Projects',
-            value: '${spaces.length}',
-            hint: 'Workspaces on this node'),
-        AdminStatCard(
-            label: 'Computers awake',
-            value: '$awake',
-            hint: 'Currently incurring runtime cost',
-            tone: awake > 0 ? AppColors.success : null),
-        AdminStatCard(
-            label: 'Sleeping',
-            value: '${spaces.length - awake}',
-            hint: 'No active compute'),
+      AdminGrid(maxColumns: 2, minTileWidth: 340, children: [
+        AdminSectionCard(
+          title: 'Computers',
+          icon: Icons.computer_rounded,
+          subtitle: 'Awake computers are billed by the minute.',
+          child: AdminDonutPanel(
+            size: 132,
+            center: '${spaces.length}',
+            caption: 'projects',
+            slices: [
+              AdminChartSlice('Awake', awake.toDouble(), AppColors.success),
+              AdminChartSlice('Asleep or none',
+                  (spaces.length - awake).toDouble(), palette.first),
+            ],
+          ),
+        ),
+        AdminSectionCard(
+          title: 'Top spenders',
+          icon: Icons.trending_up_rounded,
+          subtitle: 'Total ${_credits(totalSpend)} across projects',
+          child: AdminBarList(
+            maxItems: 4,
+            empty: 'No project has spent anything yet.',
+            items: [
+              for (final s in spaces)
+                AdminChartSlice(
+                    '${s['name'] ?? s['id']}',
+                    _number(s['spent'] ?? _map(s['usage'])['spent']),
+                    palette[1],
+                    display: _credits(s['spent'] ?? _map(s['usage'])['spent'])),
+            ],
+          ),
+        ),
       ]),
-      const SizedBox(height: 14),
+      const SizedBox(height: 18),
       AdminSearchField(
         controller: search,
         hint: 'Search title, id, or owner handle',
@@ -475,15 +692,38 @@ class _AdminPageContentState extends State<AdminPageContent> {
               ascending = !ascending;
             } else {
               sort = value;
-              ascending = value != 'created';
+              ascending = value == 'title' || value == 'owner';
             }
           }),
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'created', child: Text('Sort by created')),
-            PopupMenuItem(value: 'title', child: Text('Sort by title')),
-            PopupMenuItem(value: 'owner', child: Text('Sort by owner')),
+          itemBuilder: (_) => [
+            for (final (value, label, icon) in const [
+              ('created', 'Newest first', Icons.schedule_rounded),
+              ('spend', 'Most spent', Icons.payments_outlined),
+              ('title', 'Title', Icons.sort_by_alpha_rounded),
+              ('owner', 'Owner', Icons.person_outline_rounded),
+            ])
+              CheckedPopupMenuItem(
+                  value: value,
+                  checked: sort == value,
+                  child: Row(children: [
+                    Icon(icon, size: 18),
+                    const SizedBox(width: 10),
+                    Text(label),
+                  ])),
           ],
         ),
+      ),
+      const SizedBox(height: 12),
+      AdminFilterChips<String>(
+        selected: filter,
+        onSelected: (v) => setState(() => filter = v),
+        options: [
+          AdminFilterOption('all', 'All projects', count: spaces.length),
+          AdminFilterOption('awake', 'Awake',
+              count: awake, icon: Icons.bolt_rounded),
+          AdminFilterOption('asleep', 'Asleep',
+              count: spaces.length - awake, icon: Icons.bedtime_outlined),
+        ],
       ),
       const SizedBox(height: 14),
       AdminDataTable(
@@ -491,18 +731,27 @@ class _AdminPageContentState extends State<AdminPageContent> {
             spaces.isEmpty ? 'No projects created yet.' : 'No projects match.',
         onRowTap: (index) => _showProject(rows[index]),
         columns: const [
-          AdminTableColumn('Project', width: 240),
-          AdminTableColumn('Owner', width: 170),
+          AdminTableColumn('Project', width: 260),
+          AdminTableColumn('Owner', width: 160),
           AdminTableColumn('Agents', width: 90, align: TextAlign.right),
           AdminTableColumn('Machine', width: 120),
           AdminTableColumn('Spend', width: 120, align: TextAlign.right),
-          AdminTableColumn('Created', width: 160),
+          AdminTableColumn('Created', width: 150),
         ],
         rows: [
           for (final s in rows)
             [
-              _primaryCell('${s['name'] ?? s['id']}',
-                  '${s['home'] == true ? 'home · ' : ''}${_shortId(s['id'])}'),
+              Row(children: [
+                AdminAvatar('${s['name'] ?? s['id']}',
+                    size: 34,
+                    icon: s['home'] == true
+                        ? Icons.home_rounded
+                        : Icons.folder_rounded),
+                const SizedBox(width: 10),
+                Expanded(
+                    child: _primaryCell('${s['name'] ?? s['id']}',
+                        '${s['home'] == true ? 'Home · ' : ''}${_shortId(s['id'])}')),
+              ]),
               Text(_owner(s)),
               Text('${s['agents'] ?? _list(s['workers']).length}',
                   textAlign: TextAlign.right),
@@ -516,9 +765,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
       const SizedBox(height: 10),
       Text(
           '${rows.length} projects · tap a row for overview, machine, cost, storage, logs, and people',
-          style: TextStyle(
-              fontSize: 11,
-              color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          style: _muted()),
     ]);
   }
 
@@ -531,60 +778,111 @@ class _AdminPageContentState extends State<AdminPageContent> {
     final byBot = <String, Map<String, dynamic>>{
       for (final l in listings) '${l['bot_id'] ?? l['bot']}': l
     };
+    String status(Map<String, dynamic> b) =>
+        '${byBot['${b['id']}']?['status'] ?? 'unlisted'}';
     final q = search.text.trim().toLowerCase();
     final rows = bots.where((b) {
-      final listing = byBot['${b['id']}'];
-      final status = '${listing?['status'] ?? 'unlisted'}';
-      return (filter == 'all' || filter == status) &&
+      return (filter == 'all' || filter == status(b)) &&
           (q.isEmpty ||
               '${b['name']} ${b['handle']} ${b['owner_handle']} ${b['provider']} ${b['model']} ${b['fallback_models']}'
                   .toLowerCase()
                   .contains(q));
     }).toList();
-    final pending = listings
-        .where((l) =>
-            '${l['type'] ?? l['kind']}' == 'agent' &&
-            '${l['status']}' == 'pending')
-        .length;
+    int count(String s) => bots.where((b) => status(b) == s).length;
+    final models = <String, double>{};
+    for (final b in bots) {
+      final key = '${b['model'] ?? 'Platform default'}';
+      models[key] = (models[key] ?? 0) + 1;
+    }
+    final palette = adminPalette(context);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _toolbar(
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            _filterChip('All', 'all'),
-            _filterChip('Listed', 'approved'),
-            _filterChip('Review', 'pending', count: pending),
-            _filterChip('Denied', 'denied'),
-            _filterChip('Unlisted', 'unlisted'),
-          ]),
+          Text('${bots.length} agents on this node',
+              style:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           [
             OutlinedButton.icon(
               onPressed: () => widget.onAction(
                   'bots', 'agent_import_samples', const <String, dynamic>{}),
-              icon: const Icon(Icons.download_rounded, size: 17),
+              icon: const Icon(Icons.download_rounded, size: 18),
               label: const Text('Import samples'),
             ),
             FilledButton.icon(
               onPressed: () =>
                   widget.onAction('bots', 'bot_create', {'kind': 'agent'}),
-              icon: const Icon(Icons.add_rounded, size: 17),
+              icon: const Icon(Icons.add_rounded, size: 18),
               label: const Text('Add agent'),
             ),
           ]),
-      const SizedBox(height: 12),
+      const SizedBox(height: 16),
+      AdminGrid(maxColumns: 2, minTileWidth: 340, children: [
+        AdminSectionCard(
+          title: 'Marketplace',
+          icon: Icons.storefront_rounded,
+          child: AdminDonutPanel(
+            size: 132,
+            center: '${bots.length}',
+            caption: 'agents',
+            slices: [
+              AdminChartSlice(
+                  'Listed', count('approved').toDouble(), AppColors.success),
+              AdminChartSlice(
+                  'In review', count('pending').toDouble(), AppColors.warning),
+              AdminChartSlice(
+                  'Denied', count('denied').toDouble(), AppColors.danger),
+              AdminChartSlice(
+                  'Unlisted', count('unlisted').toDouble(), palette.first),
+            ],
+          ),
+        ),
+        AdminSectionCard(
+          title: 'Backbone models',
+          icon: Icons.memory_rounded,
+          child: AdminBarList(
+            maxItems: 4,
+            empty: 'No agents yet.',
+            items: [
+              for (final (i, e) in models.entries.indexed)
+                AdminChartSlice(
+                    e.key, e.value, palette[(i + 1) % palette.length],
+                    display:
+                        '${e.value.round()} ${e.value == 1 ? 'agent' : 'agents'}'),
+            ],
+          ),
+        ),
+      ]),
+      const SizedBox(height: 18),
       AdminSearchField(
           controller: search,
           hint: 'Search agent name, @handle, owner, model, or fallbacks…',
           onChanged: (_) => setState(() {})),
+      const SizedBox(height: 12),
+      AdminFilterChips<String>(
+        selected: filter,
+        onSelected: (v) => setState(() => filter = v),
+        options: [
+          AdminFilterOption('all', 'All', count: bots.length),
+          AdminFilterOption('pending', 'Review',
+              count: count('pending'), icon: Icons.rate_review_outlined),
+          AdminFilterOption('approved', 'Listed',
+              count: count('approved'), icon: Icons.storefront_outlined),
+          AdminFilterOption('denied', 'Denied',
+              count: count('denied'), icon: Icons.block_rounded),
+          AdminFilterOption('unlisted', 'Unlisted',
+              count: count('unlisted'), icon: Icons.visibility_off_outlined),
+        ],
+      ),
       const SizedBox(height: 14),
       AdminDataTable(
         empty: bots.isEmpty
             ? 'No agents have been created on this node yet.'
             : 'No agents match this search or filter.',
         columns: const [
-          AdminTableColumn('Agent', width: 230),
-          AdminTableColumn('Owner', width: 150),
-          AdminTableColumn('Backbone', width: 210),
+          AdminTableColumn('Agent', width: 240),
+          AdminTableColumn('Owner', width: 140),
+          AdminTableColumn('Backbone', width: 200),
           AdminTableColumn('Rate', width: 110, align: TextAlign.right),
-          AdminTableColumn('Listing', width: 110),
+          AdminTableColumn('Listing', width: 120),
           AdminTableColumn('Actions', width: 220, align: TextAlign.right),
         ],
         rows: [
@@ -597,15 +895,16 @@ class _AdminPageContentState extends State<AdminPageContent> {
   List<Widget> _agentRow(
       Map<String, dynamic> b, Map<String, dynamic>? listing) {
     final status = '${listing?['status'] ?? 'unlisted'}';
+    final name = '${b['name'] ?? b['handle'] ?? 'Agent'}';
     return [
-      _primaryCell('${b['name'] ?? b['handle'] ?? 'Agent'}',
-          '@${b['handle'] ?? _shortId(b['id'])}'),
-      Text('${b['owner_handle'] ?? _shortId(b['owner_id'])}'),
+      _personCell(name, '@${b['handle'] ?? _shortId(b['id'])}',
+          icon: Icons.smart_toy_rounded),
+      Text('@${b['owner_handle'] ?? _shortId(b['owner_id'])}'),
       _primaryCell(
           '${b['model'] ?? 'Default'}', '${b['provider'] ?? 'platform'}'),
-      Text(_credits(b['per_minute'] ?? _map(b['cost'])['per_minute']),
+      Text(_perMinute(b['per_minute'] ?? _map(b['cost'])['per_minute']),
           textAlign: TextAlign.right),
-      AdminStatusPill(status),
+      AdminStatusPill(status == 'approved' ? 'listed' : status),
       Wrap(alignment: WrapAlignment.end, spacing: 4, children: [
         IconButton(
             tooltip: 'Edit agent',
@@ -615,23 +914,29 @@ class _AdminPageContentState extends State<AdminPageContent> {
                   'instructions': b['instructions'],
                   'provider': b['provider'],
                   'model': b['model'],
-                  'cost': b['cost'] ?? <String, dynamic>{},
+                  'cost': b['cost'] ??
+                      {
+                        if (b['per_minute'] != null)
+                          'per_minute': b['per_minute']
+                      },
+                  '_kind': 'agent',
                 }),
             icon: const Icon(Icons.edit_outlined, size: 18)),
         if (status == 'pending') ...[
-          IconButton(
+          IconButton.filledTonal(
               tooltip: 'Approve listing',
               onPressed: () => widget.onDirectAction('market', 'approve', {
                     'listing': listing?['id'],
                     'bot': b['id'],
                   }),
-              icon: const Icon(Icons.check_circle_outline,
+              icon: const Icon(Icons.check_rounded,
                   size: 18, color: AppColors.success)),
           IconButton(
               tooltip: 'Deny listing',
               onPressed: () => widget.onAction('market', 'deny', {
                     'listing': listing?['id'],
                     'bot': b['id'],
+                    '_name': name,
                   }),
               icon: const Icon(Icons.block_rounded,
                   size: 18, color: AppColors.danger)),
@@ -643,6 +948,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
                       'bot': b['id'],
                       'type': 'agent',
                       'name': b['name'],
+                      'description': b['description'],
                     })
                   : widget.onDirectAction('market', 'unpublish', {
                       'listing': listing?['id'],
@@ -654,10 +960,14 @@ class _AdminPageContentState extends State<AdminPageContent> {
                   size: 18)),
         PopupMenuButton<String>(
           tooltip: 'More',
-          onSelected: (_) =>
-              widget.onAction('bots', 'bot_delete', {'bot': b['id']}),
+          onSelected: (_) => widget
+              .onAction('bots', 'bot_delete', {'bot': b['id'], '_name': name}),
           itemBuilder: (_) => const [
-            PopupMenuItem(value: 'delete', child: Text('Delete agent')),
+            PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                    leading: Icon(Icons.delete_outline_rounded),
+                    title: Text('Delete agent'))),
           ],
         ),
       ]),
@@ -674,6 +984,8 @@ class _AdminPageContentState extends State<AdminPageContent> {
         _listOfMaps(_map(widget.results['tools.mcp_samples'])['samples']);
     final listings =
         _listOfMaps(_map(widget.results['market.catalog'])['listings']);
+    bool isServer(Map<String, dynamic> b) =>
+        '${b['kind']}' == 'mcp' || _map(b['descriptor']).containsKey('url');
     final q = search.text.trim().toLowerCase();
     final rows = bots
         .where((b) =>
@@ -682,12 +994,41 @@ class _AdminPageContentState extends State<AdminPageContent> {
                 .toLowerCase()
                 .contains(q))
         .toList();
-    final servers = rows
-        .where((b) =>
-            '${b['kind']}' == 'mcp' || _map(b['descriptor']).containsKey('url'))
-        .toList();
-    final tools = rows.where((b) => !servers.contains(b)).toList();
+    final servers = rows.where(isServer).toList();
+    final tools = rows.where((b) => !isServer(b)).toList();
+    final listedIds = listings
+        .where((l) => '${l['status']}' == 'approved')
+        .map((l) => '${l['bot_id'] ?? l['bot']}')
+        .toSet();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      AdminGrid(children: [
+        AdminStatCard(
+            label: 'MCP servers',
+            value: '${bots.where(isServer).length}',
+            icon: Icons.hub_rounded),
+        AdminStatCard(
+            label: 'Tools',
+            value:
+                '${bots.where((b) => !isServer(b) && '${b['kind']}' != 'miniapp').length}',
+            icon: Icons.build_rounded,
+            tone: AppColors.cyan),
+        AdminStatCard(
+            label: 'Miniapps',
+            value: '${bots.where((b) => '${b['kind']}' == 'miniapp').length}',
+            icon: Icons.widgets_rounded,
+            tone: AppColors.warning),
+        AdminStatCard(
+            label: 'In the catalog',
+            value:
+                '${bots.where((b) => listedIds.contains('${b['id']}')).length}',
+            icon: Icons.storefront_rounded,
+            tone: AppColors.success,
+            progress: bots.isEmpty
+                ? 0
+                : bots.where((b) => listedIds.contains('${b['id']}')).length /
+                    bots.length),
+      ]),
+      const SizedBox(height: 18),
       _toolbar(
           AdminSearchField(
               controller: search,
@@ -697,21 +1038,21 @@ class _AdminPageContentState extends State<AdminPageContent> {
             OutlinedButton.icon(
               onPressed: () => widget.onAction(
                   'tools', 'mcp_import_samples', const <String, dynamic>{}),
-              icon: const Icon(Icons.download_rounded, size: 17),
+              icon: const Icon(Icons.download_rounded, size: 18),
               label:
                   Text(samples.isEmpty ? 'Import samples' : 'Import catalog'),
             ),
             FilledButton.icon(
               onPressed: () =>
                   widget.onAction('tools', 'mcp_register', const {}),
-              icon: const Icon(Icons.add_rounded, size: 17),
+              icon: const Icon(Icons.add_rounded, size: 18),
               label: const Text('Add server'),
             ),
           ]),
       const SizedBox(height: 16),
       _toolSection('MCP servers (${servers.length})', servers, listings,
           server: true),
-      const SizedBox(height: 18),
+      const SizedBox(height: 16),
       _toolSection('Tools and miniapps (${tools.length})', tools, listings),
     ]);
   }
@@ -721,13 +1062,15 @@ class _AdminPageContentState extends State<AdminPageContent> {
       {bool server = false}) {
     return AdminSectionCard(
       title: title,
-      padding: EdgeInsets.zero,
+      icon: server ? Icons.hub_rounded : Icons.widgets_rounded,
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
       child: rows.isEmpty
           ? AdminEmptyState(
               server ? 'No MCP servers' : 'No tools or miniapps',
               search.text.isEmpty
                   ? 'Nothing in this section yet.'
-                  : 'No items match your search.')
+                  : 'No items match your search.',
+              icon: server ? Icons.hub_outlined : Icons.widgets_outlined)
           : Column(children: [
               for (final b in rows)
                 Builder(builder: (context) {
@@ -738,20 +1081,22 @@ class _AdminPageContentState extends State<AdminPageContent> {
                           orElse: () => null);
                   final listed =
                       listing != null && '${listing['status']}' != 'unlisted';
+                  final name = '${b['name'] ?? b['handle'] ?? b['id']}';
                   return _adaptiveTile(
-                    leading: CircleAvatar(
-                        child: Icon(server
-                            ? Icons.hub_outlined
+                    leading: AdminAvatar(name,
+                        size: 40,
+                        icon: server
+                            ? Icons.hub_rounded
                             : '${b['kind']}' == 'miniapp'
-                                ? Icons.widgets_outlined
-                                : Icons.build_outlined)),
-                    title: Text('${b['name'] ?? b['handle'] ?? b['id']}',
-                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                                ? Icons.widgets_rounded
+                                : Icons.build_rounded),
+                    title: Text(name,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(
                         [
                           '${b['kind'] ?? (server ? 'MCP server' : 'tool')}',
                           '${b['url'] ?? _map(b['descriptor'])['url'] ?? ''}',
-                          _credits(
+                          _perMinute(
                               b['per_minute'] ?? _map(b['cost'])['per_minute']),
                         ].where((v) => v.isNotEmpty && v != '—').join(' · '),
                         maxLines: 2,
@@ -761,12 +1106,25 @@ class _AdminPageContentState extends State<AdminPageContent> {
                           listed ? 'listed' : '${b['status'] ?? 'unlisted'}'),
                       IconButton(
                           tooltip: 'Edit',
-                          onPressed: () => widget.onAction('tools',
-                                  server ? 'mcp_update' : 'mcp_register', {
-                                'bot': b['id'],
-                                'name': b['name'],
-                                'url': b['url']
-                              }),
+                          onPressed: () => server
+                              ? widget.onAction('tools', 'mcp_update', {
+                                  'bot': b['id'],
+                                  'name': b['name'],
+                                  'url':
+                                      b['url'] ?? _map(b['descriptor'])['url'],
+                                  'auth': b['auth'] ??
+                                      _map(b['descriptor'])['auth'],
+                                })
+                              : widget.onAction('bots', 'bot_edit', {
+                                  'bot': b['id'],
+                                  'name': b['name'],
+                                  'cost': b['cost'] ??
+                                      {
+                                        if (b['per_minute'] != null)
+                                          'per_minute': b['per_minute']
+                                      },
+                                  '_kind': '${b['kind'] ?? 'tool'}',
+                                }),
                           icon: const Icon(Icons.edit_outlined, size: 18)),
                       IconButton(
                           tooltip: listed ? 'Unlist' : 'List',
@@ -777,6 +1135,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
                                   'bot': b['id'],
                                   'type': '${b['kind'] ?? 'tool'}',
                                   'name': b['name'],
+                                  'description': b['description'],
                                 }),
                           icon: Icon(
                               listed
@@ -786,7 +1145,9 @@ class _AdminPageContentState extends State<AdminPageContent> {
                       IconButton(
                           tooltip: 'Delete',
                           onPressed: () => widget.onAction(
-                              'tools', 'mcp_delete', {'bot': b['id']}),
+                              server ? 'tools' : 'bots',
+                              server ? 'mcp_delete' : 'bot_delete',
+                              {'bot': b['id'], '_name': name}),
                           icon: const Icon(Icons.delete_outline_rounded,
                               size: 18)),
                     ],
@@ -806,6 +1167,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
         ...account,
         'name': profile['displayName'] ?? _displayName(account),
         'skills': profile['skills'] ?? const <String>[],
+        'rate': profile['rate'] ?? profile['hourlyRate'],
         'status': '${profile['marketStatus'] ?? 'pending'}' == 'denied'
             ? 'rejected'
             : '${profile['marketStatus'] ?? 'pending'}',
@@ -820,59 +1182,129 @@ class _AdminPageContentState extends State<AdminPageContent> {
                   .toLowerCase()
                   .contains(q));
     }).toList();
+    int count(String s) => all.where((t) => '${t['status']}' == s).length;
+    final skills = <String, double>{};
+    for (final t in all) {
+      for (final skill in _stringList(t['skills'])) {
+        skills[skill] = (skills[skill] ?? 0) + 1;
+      }
+    }
+    final palette = adminPalette(context);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Wrap(spacing: 8, children: [
-        _filterChip('Pending', 'pending'),
-        _filterChip('Approved', 'approved'),
-        _filterChip('Denied', 'rejected'),
-        _filterChip('All', 'all'),
+      AdminGrid(maxColumns: 2, minTileWidth: 340, children: [
+        AdminSectionCard(
+          title: 'Review status',
+          icon: Icons.badge_rounded,
+          child: AdminDonutPanel(
+            size: 132,
+            center: '${all.length}',
+            caption: 'people',
+            slices: [
+              AdminChartSlice(
+                  'Pending', count('pending').toDouble(), AppColors.warning),
+              AdminChartSlice(
+                  'Approved', count('approved').toDouble(), AppColors.success),
+              AdminChartSlice(
+                  'Denied', count('rejected').toDouble(), AppColors.danger),
+            ],
+          ),
+        ),
+        AdminSectionCard(
+          title: 'Most offered skills',
+          icon: Icons.psychology_rounded,
+          child: AdminBarList(
+            maxItems: 4,
+            empty: 'Nobody lists skills yet.',
+            items: [
+              for (final e in skills.entries)
+                AdminChartSlice(e.key, e.value, palette[2],
+                    display: '${e.value.round()}'),
+            ],
+          ),
+        ),
       ]),
-      const SizedBox(height: 12),
+      const SizedBox(height: 18),
       AdminSearchField(
           controller: search,
           hint: 'Search name, username, or skills',
           onChanged: (_) => setState(() {})),
+      const SizedBox(height: 12),
+      AdminFilterChips<String>(
+        selected: filter,
+        onSelected: (v) => setState(() => filter = v),
+        options: [
+          AdminFilterOption('pending', 'Pending',
+              count: count('pending'), icon: Icons.hourglass_empty_rounded),
+          AdminFilterOption('approved', 'Approved',
+              count: count('approved'), icon: Icons.verified_outlined),
+          AdminFilterOption('rejected', 'Denied',
+              count: count('rejected'), icon: Icons.block_rounded),
+          AdminFilterOption('all', 'All', count: all.length),
+        ],
+      ),
       const SizedBox(height: 14),
       AdminDataTable(
         empty: all.isEmpty
             ? 'No hireable talent matches this status.'
             : 'No people match your search.',
         columns: const [
-          AdminTableColumn('Person', width: 220),
-          AdminTableColumn('Skills', width: 280),
+          AdminTableColumn('Person', width: 230),
+          AdminTableColumn('Skills', width: 300),
           AdminTableColumn('Rate', width: 110, align: TextAlign.right),
           AdminTableColumn('Status', width: 110),
-          AdminTableColumn('Actions', width: 180, align: TextAlign.right),
+          AdminTableColumn('Actions', width: 200, align: TextAlign.right),
         ],
         rows: [
           for (final t in rows)
             [
-              _primaryCell('${t['name'] ?? t['display_name'] ?? 'Person'}',
+              _personCell('${t['name'] ?? t['display_name'] ?? 'Person'}',
                   '@${t['handle'] ?? t['username'] ?? 'unknown'}'),
-              Text(_stringList(t['skills']).join(', ')),
+              Wrap(spacing: 4, runSpacing: 4, children: [
+                for (final skill in _stringList(t['skills']).take(3))
+                  _Tag(skill),
+                if (_stringList(t['skills']).length > 3)
+                  _Tag('+${_stringList(t['skills']).length - 3}'),
+              ]),
               Text(_credits(t['rate'] ?? t['hourly_rate']),
                   textAlign: TextAlign.right),
               AdminStatusPill('${t['status'] ?? 'pending'}'),
               Wrap(alignment: WrapAlignment.end, spacing: 4, children: [
-                TextButton(
-                    onPressed: () =>
-                        widget.onAction('users', 'account_update', {
-                          'account': t['id'],
-                          'profile': {'marketStatus': 'approved'},
-                        }),
-                    child: const Text('Approve')),
-                TextButton(
-                    onPressed: () =>
-                        widget.onAction('users', 'account_update', {
-                          'account': t['id'],
-                          'profile': {'marketStatus': 'rejected'},
-                        }),
-                    child: const Text('Deny')),
+                if ('${t['status']}' != 'approved')
+                  FilledButton.tonalIcon(
+                      onPressed: () =>
+                          widget.onDirectAction('users', 'account_update', {
+                            'account': t['id'],
+                            'profile': {'marketStatus': 'approved'},
+                          }),
+                      icon: const Icon(Icons.check_rounded, size: 18),
+                      label: const Text('Approve')),
+                if ('${t['status']}' != 'rejected')
+                  IconButton(
+                      tooltip: 'Deny',
+                      onPressed: () =>
+                          widget.onDirectAction('users', 'account_update', {
+                            'account': t['id'],
+                            'profile': {'marketStatus': 'rejected'},
+                          }),
+                      icon: const Icon(Icons.block_rounded,
+                          size: 18, color: AppColors.danger)),
               ]),
             ],
         ],
       ),
     ]);
+  }
+
+  void _setPeriod(String value) {
+    setState(() => filter = value);
+    final days = const {'7d': 7, '30d': 30, '90d': 90}[value];
+    widget.onQuery?.call('finance.overview', {
+      if (days != null)
+        'since': DateTime.now()
+            .toUtc()
+            .subtract(Duration(days: days))
+            .toIso8601String(),
+    });
   }
 
   Widget _finance() {
@@ -883,35 +1315,45 @@ class _AdminPageContentState extends State<AdminPageContent> {
     final reconcile = _map(widget.results['finance.reconcile']);
     final costs = _map(widget.results['finance.costs']);
     final providers = _map(widget.results['finance.provider_costs']);
-    final components = <({String label, double value, Color color})>[
-      (
-        label: 'Compute',
-        value: _number(charged['compute']),
-        color: AppColors.cyan
-      ),
-      (
-        label: 'Tools',
-        value: _number(charged['tools']),
-        color: AppColors.primary
-      ),
-      (label: 'LLM', value: _number(charged['llm']), color: AppColors.warning),
-      (
-        label: 'Agent time',
-        value: _number(charged['agent_time']),
-        color: AppColors.success
-      ),
+    final palette = adminPalette(context);
+    final components = [
+      AdminChartSlice('LLM tokens', _number(charged['llm']), palette[0],
+          display: _money(charged['llm'])),
+      AdminChartSlice('Computers', _number(charged['compute']), palette[1],
+          display: _money(charged['compute'])),
+      AdminChartSlice('Agent time', _number(charged['agent_time']), palette[2],
+          display: _money(charged['agent_time'])),
+      AdminChartSlice('Tools', _number(charged['tools']), palette[3],
+          display: _money(charged['tools'])),
     ];
-    final total = components.fold<double>(0, (sum, item) => sum + item.value);
+    final destinations = [
+      AdminChartSlice('Creators', _number(paid['creators']), palette[4],
+          display: _money(paid['creators'])),
+      AdminChartSlice('Platform', _number(o['kept']), AppColors.success,
+          display: _money(o['kept'])),
+    ];
+    final bill =
+        _number(providers['bill'] ?? providers['total'] ?? costs['compute']);
+    final billed = _number(providers['charged'] ?? charged['compute']);
     final issues = _listOfMaps(reconcile['issues']);
+    final balanced = reconcile['ok'] == true;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Wrap(spacing: 8, children: [
-        _filterChip('7 days', '7d'),
-        _filterChip('30 days', '30d'),
-        _filterChip('90 days', '90d'),
-        _filterChip('All time', 'all'),
-      ]),
-      const SizedBox(height: 14),
-      _statGrid([
+      AdminFilterChips<String>(
+        selected: filter == 'all' || const {'7d', '30d', '90d'}.contains(filter)
+            ? filter
+            : 'all',
+        onSelected: _setPeriod,
+        options: const [
+          AdminFilterOption('7d', 'Last 7 days',
+              icon: Icons.date_range_rounded),
+          AdminFilterOption('30d', 'Last 30 days'),
+          AdminFilterOption('90d', 'Last 90 days'),
+          AdminFilterOption('all', 'All time',
+              icon: Icons.all_inclusive_rounded),
+        ],
+      ),
+      const SizedBox(height: 16),
+      AdminGrid(children: [
         AdminStatCard(
             label: 'Income',
             value: _money(income['credits_sold']),
@@ -928,92 +1370,123 @@ class _AdminPageContentState extends State<AdminPageContent> {
             label: 'Paid to creators',
             value: _money(paid['creators']),
             hint: "Earned by people's agents and tools",
-            icon: Icons.people_alt_outlined),
+            icon: Icons.people_alt_rounded,
+            tone: palette[4]),
         AdminStatCard(
             label: 'Net revenue',
             value: _money(o['kept']),
             hint: 'Kept by the platform, before provider bills',
-            icon: Icons.account_balance_outlined,
+            icon: Icons.account_balance_rounded,
+            progress: _number(charged['total']) <= 0
+                ? null
+                : _number(o['kept']) / _number(charged['total']),
             tone:
                 _number(o['kept']) < 0 ? AppColors.danger : AppColors.success),
       ]),
-      const SizedBox(height: 18),
-      AdminSectionCard(
-        title: 'What customers spent it on',
-        child: LayoutBuilder(builder: (context, constraints) {
-          final bars = _FinanceBars(items: components, total: total);
-          final values = Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (final item in components)
-                AdminKeyValue(item.label, _money(item.value)),
-            ],
-          );
-          if (constraints.maxWidth < 600) {
-            return Column(children: [bars, const SizedBox(height: 12), values]);
-          }
-          return SizedBox(
-            height: 190,
-            child: Row(children: [
-              Expanded(flex: 2, child: bars),
-              const SizedBox(width: 24),
-              Expanded(child: values),
-            ]),
-          );
-        }),
-      ),
-      const SizedBox(height: 18),
+      const SizedBox(height: 16),
+      AdminGrid(maxColumns: 2, minTileWidth: 360, children: [
+        AdminSectionCard(
+          title: 'What customers spent it on',
+          icon: Icons.donut_large_rounded,
+          child: AdminDonutPanel(
+            center: _money(charged['total']),
+            caption: 'spent',
+            slices: components,
+          ),
+        ),
+        AdminSectionCard(
+          title: 'Where it ended up',
+          icon: Icons.call_split_rounded,
+          child: Column(children: [
+            AdminStackedBar(slices: destinations, height: 22),
+            const SizedBox(height: 14),
+            AdminKeyValue('Platform LLM', _money(paid['platform_llm'])),
+            AdminKeyValue('Platform compute', _money(paid['platform_compute'])),
+            AdminKeyValue('Platform bots', _money(paid['platform_bots'])),
+            const Divider(height: 22),
+            AdminKeyValue(
+                'Unspent credits users hold', _money(o['held_by_users'])),
+          ]),
+        ),
+      ]),
+      const SizedBox(height: 16),
       AdminSectionCard(
         title: 'Computers: provider bill vs what you charged',
-        child: Column(children: [
-          AdminKeyValue(
-              'Provider billed',
-              _money(
-                  providers['bill'] ?? providers['total'] ?? costs['compute'])),
-          AdminKeyValue('Customers charged',
-              _money(providers['charged'] ?? charged['compute'])),
-          AdminKeyValue('Margin', _money(providers['margin'])),
-          for (final row in _listOfMaps(providers['by_resource']))
-            AdminKeyValue('  ${row['label'] ?? row['resource']}',
-                _money(row['units'] ?? row['cost'])),
-        ]),
+        icon: Icons.compare_arrows_rounded,
+        child: LayoutBuilder(builder: (context, constraints) {
+          final margin = billed <= 0 ? 0.0 : (billed - bill) / billed;
+          final bars = Column(children: [
+            AdminBarList(items: [
+              AdminChartSlice('Customers charged', billed, AppColors.success,
+                  display: _money(billed)),
+              AdminChartSlice('Provider billed', bill, AppColors.warning,
+                  display: _money(bill)),
+            ]),
+            for (final row in _listOfMaps(providers['by_resource']))
+              AdminKeyValue('${row['label'] ?? row['resource']}',
+                  _money(row['units'] ?? row['cost'])),
+          ]);
+          final gauge = AdminGauge(
+            value: margin.clamp(0, 1).toDouble(),
+            label: 'margin',
+            display: billed <= 0 ? '—' : '${(margin * 100).round()}%',
+            color: margin < 0 ? AppColors.danger : AppColors.success,
+            size: 124,
+          );
+          if (constraints.maxWidth < 520) {
+            return Column(children: [gauge, const SizedBox(height: 12), bars]);
+          }
+          return Row(children: [
+            gauge,
+            const SizedBox(width: 24),
+            Expanded(child: bars),
+          ]);
+        }),
       ),
-      const SizedBox(height: 18),
-      AdminSectionCard(
-        title: 'Where it ended up',
-        child: Column(children: [
-          AdminKeyValue(
-              'Creators (their agents and tools)', _money(paid['creators'])),
-          AdminKeyValue('Platform', _money(o['kept'])),
-          AdminKeyValue('Platform LLM', _money(paid['platform_llm'])),
-          AdminKeyValue('Platform compute', _money(paid['platform_compute'])),
-          AdminKeyValue('Platform bots', _money(paid['platform_bots'])),
-          const Divider(),
-          AdminKeyValue(
-              'Unspent credits users hold', _money(o['held_by_users'])),
-        ]),
-      ),
-      const SizedBox(height: 18),
+      const SizedBox(height: 16),
       AdminSectionCard(
         title: 'Ledger check',
-        trailing: IconButton(
+        icon: balanced ? Icons.verified_rounded : Icons.report_rounded,
+        trailing: IconButton.filledTonal(
             tooltip: 'Reconcile wallets',
             onPressed: widget.onRefresh,
             icon: const Icon(Icons.sync_rounded, size: 19)),
-        child: Column(children: [
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            AdminStatusPill(reconcile['ok'] == true ? 'healthy' : 'error'),
+            AdminStatusPill(balanced ? 'healthy' : 'error'),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(reconcile['ok'] == true
+              child: Text(balanced
                   ? 'Balanced — ${_integer(reconcile['checked'])} wallets checked'
-                  : '${issues.length} reconciliation issue(s)'),
+                  : '${issues.length} reconciliation ${issues.length == 1 ? 'issue' : 'issues'} in ${_integer(reconcile['checked'])} wallets'),
             ),
           ]),
           for (final issue in issues)
-            AdminKeyValue('${issue['kind']}',
-                '${issue['account_id'] ?? ''} ${issue['detail'] ?? ''}',
-                mono: true),
+            Container(
+              margin: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.danger.withValues(alpha: .1),
+                borderRadius: BorderRadius.circular(AppShape.control),
+              ),
+              child: Row(children: [
+                const Icon(Icons.warning_amber_rounded,
+                    color: AppColors.danger, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${issue['kind']}'.replaceAll('_', ' '),
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                        SelectableText(
+                            '${issue['detail'] ?? ''} · ${issue['account_id'] ?? ''}',
+                            style: _muted()),
+                      ]),
+                ),
+              ]),
+            ),
         ]),
       ),
     ]);
@@ -1023,77 +1496,125 @@ class _AdminPageContentState extends State<AdminPageContent> {
     final response = _map(widget.results['finance.purchases_list']);
     final all = _listOfMaps(response['purchases'] ?? response['transactions']);
     final q = search.text.trim().toLowerCase();
-    final rows = all
-        .where((p) =>
-            q.isEmpty ||
-            '${p['email']} ${p['product_id']} ${p['status']} ${p['transaction_id']} ${p['id']}'
-                .toLowerCase()
-                .contains(q))
-        .toList();
     final charged = all
         .where((p) => '${p['status']}' == 'credited' && p['sandbox'] != true)
         .toList();
     final sandbox = all.where((p) => p['sandbox'] == true).toList();
     final pending = all.where((p) => '${p['status']}' == 'pending').toList();
     final reversed = all.where((p) => '${p['status']}' == 'reversed').toList();
+    final rows = all.where((p) {
+      final match = switch (filter) {
+        'live' => '${p['status']}' == 'credited' && p['sandbox'] != true,
+        'sandbox' => p['sandbox'] == true,
+        'pending' => '${p['status']}' == 'pending',
+        'reversed' => '${p['status']}' == 'reversed',
+        _ => true,
+      };
+      return match &&
+          (q.isEmpty ||
+              '${p['email']} ${p['product_id']} ${p['status']} ${p['transaction_id']} ${p['id']}'
+                  .toLowerCase()
+                  .contains(q));
+    }).toList();
     final selectedRows =
         all.where((p) => selected.contains(_rowId(p))).toList();
     final selectedSandbox =
         selectedRows.where((p) => p['sandbox'] == true).length;
     final selectedLive = selectedRows.length - selectedSandbox;
+    final scheme = Theme.of(context).colorScheme;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _statGrid([
+      AdminGrid(children: [
         AdminStatCard(
             label: 'Charged',
             value: _money(_sum(charged, 'amount')),
             hint: '${charged.length} live purchases',
+            icon: Icons.paid_rounded,
             tone: AppColors.success),
         AdminStatCard(
             label: 'Sandbox',
             value: _money(_sum(sandbox, 'amount')),
-            hint: '${sandbox.length} test transactions'),
+            hint: '${sandbox.length} test transactions',
+            icon: Icons.science_rounded,
+            tone: AppColors.cyan),
         AdminStatCard(
             label: 'Pending',
             value: _money(_sum(pending, 'amount')),
             hint: '${pending.length} waiting',
+            icon: Icons.hourglass_top_rounded,
             tone: pending.isEmpty ? null : AppColors.warning),
         AdminStatCard(
             label: 'Reversed',
             value: _money(_sum(reversed, 'amount')),
             hint: '${reversed.length} refunds',
+            icon: Icons.undo_rounded,
             tone: reversed.isEmpty ? null : AppColors.danger),
       ]),
-      const SizedBox(height: 14),
+      const SizedBox(height: 16),
+      AdminSectionCard(
+        title: 'Purchases by outcome',
+        icon: Icons.stacked_bar_chart_rounded,
+        child: AdminStackedBar(height: 20, slices: [
+          AdminChartSlice('Live', charged.length.toDouble(), AppColors.success),
+          AdminChartSlice('Sandbox', sandbox.length.toDouble(), AppColors.cyan),
+          AdminChartSlice(
+              'Pending', pending.length.toDouble(), AppColors.warning),
+          AdminChartSlice(
+              'Reversed', reversed.length.toDouble(), AppColors.danger),
+        ]),
+      ),
+      const SizedBox(height: 18),
       AdminSearchField(
           controller: search,
           hint: 'Search email, product, or status',
           onChanged: (_) => setState(() {})),
-      if (selected.isNotEmpty) ...[
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-              color:
-                  Theme.of(context).colorScheme.primary.withValues(alpha: .08),
-              borderRadius: BorderRadius.circular(12)),
-          child: Row(children: [
-            Expanded(child: Text('${selected.length} selected')),
-            TextButton(
-                onPressed: () => setState(selected.clear),
-                child: const Text('Clear')),
-            if (selectedLive > 0)
-              OutlinedButton(
-                  onPressed: () => _labelPurchases(selectedRows, true),
-                  child: Text('Mark sandbox ($selectedLive)')),
-            if (selectedLive > 0 && selectedSandbox > 0)
-              const SizedBox(width: 8),
-            if (selectedSandbox > 0)
-              FilledButton.tonal(
-                  onPressed: () => _labelPurchases(selectedRows, false),
-                  child: Text('Mark live ($selectedSandbox)')),
-          ]),
-        ),
-      ],
+      const SizedBox(height: 12),
+      AdminFilterChips<String>(
+        selected: filter,
+        onSelected: (v) => setState(() => filter = v),
+        options: [
+          AdminFilterOption('all', 'All', count: all.length),
+          AdminFilterOption('live', 'Live', count: charged.length),
+          AdminFilterOption('sandbox', 'Sandbox', count: sandbox.length),
+          AdminFilterOption('pending', 'Pending', count: pending.length),
+          AdminFilterOption('reversed', 'Reversed', count: reversed.length),
+        ],
+      ),
+      AnimatedSize(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        child: selected.isEmpty
+            ? const SizedBox(width: double.infinity)
+            : Container(
+                margin: const EdgeInsets.only(top: 12),
+                padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                decoration: BoxDecoration(
+                    color: scheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(999)),
+                child: Row(children: [
+                  Icon(Icons.checklist_rounded,
+                      color: scheme.onSecondaryContainer),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: Text('${selected.length} selected',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: scheme.onSecondaryContainer))),
+                  TextButton(
+                      onPressed: () => setState(selected.clear),
+                      child: const Text('Clear')),
+                  if (selectedLive > 0)
+                    OutlinedButton(
+                        onPressed: () => _labelPurchases(selectedRows, true),
+                        child: Text('Mark sandbox ($selectedLive)')),
+                  if (selectedLive > 0 && selectedSandbox > 0)
+                    const SizedBox(width: 8),
+                  if (selectedSandbox > 0)
+                    FilledButton(
+                        onPressed: () => _labelPurchases(selectedRows, false),
+                        child: Text('Mark live ($selectedSandbox)')),
+                ]),
+              ),
+      ),
       const SizedBox(height: 14),
       AdminDataTable(
         empty: all.isEmpty
@@ -1105,13 +1626,13 @@ class _AdminPageContentState extends State<AdminPageContent> {
           selected.contains(id) ? selected.remove(id) : selected.add(id);
         }),
         columns: const [
-          AdminTableColumn('✓', width: 42),
-          AdminTableColumn('Customer', width: 230),
+          AdminTableColumn('', width: 48),
+          AdminTableColumn('Customer', width: 240),
           AdminTableColumn('Product', width: 180),
           AdminTableColumn('Amount', width: 110, align: TextAlign.right),
-          AdminTableColumn('Status', width: 150),
-          AdminTableColumn('Purchased', width: 170),
-          AdminTableColumn('Transaction', width: 190),
+          AdminTableColumn('Status', width: 170),
+          AdminTableColumn('Purchased', width: 150),
+          AdminTableColumn('Transaction', width: 170),
         ],
         rows: [
           for (final p in rows)
@@ -1124,12 +1645,12 @@ class _AdminPageContentState extends State<AdminPageContent> {
                             ? selected.remove(id)
                             : selected.add(id);
                       })),
-              _primaryCell('${p['email'] ?? p['account_handle'] ?? 'Unknown'}',
+              _personCell('${p['email'] ?? p['account_handle'] ?? 'Unknown'}',
                   _shortId(p['account_id'])),
               Text('${p['product_id'] ?? p['product'] ?? '—'}'),
               Text(_money(p['amount'] ?? p['listed_amount']),
                   textAlign: TextAlign.right),
-              Wrap(spacing: 5, children: [
+              Wrap(spacing: 5, runSpacing: 4, children: [
                 AdminStatusPill('${p['status'] ?? 'pending'}'),
                 if (p['sandbox'] == true) const AdminStatusPill('sandbox'),
               ]),
@@ -1156,80 +1677,111 @@ class _AdminPageContentState extends State<AdminPageContent> {
     final all = _listOfMaps(response['payouts'] ?? response['requests']);
     final pending = all.where((p) => '${p['status']}' == 'pending').toList();
     final paid = all.where((p) => '${p['status']}' == 'paid').toList();
-    final ordered = [...all]..sort((a, b) =>
-        '${b['created_at'] ?? ''}'.compareTo('${a['created_at'] ?? ''}'));
+    final rejected = all.where((p) => '${p['status']}' == 'rejected').toList();
+    final ordered = [...all]..sort((a, b) {
+        // Waiting requests first, then newest.
+        final wait = ('${a['status']}' == 'pending' ? 0 : 1)
+            .compareTo('${b['status']}' == 'pending' ? 0 : 1);
+        return wait != 0
+            ? wait
+            : '${b['created_at'] ?? ''}'.compareTo('${a['created_at'] ?? ''}');
+      });
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _statGrid([
+      AdminGrid(maxColumns: 3, children: [
         AdminStatCard(
             label: 'Waiting to pay',
             value: _money(_sum(pending, 'amount')),
-            hint: '${pending.length} requests',
+            hint:
+                '${pending.length} ${pending.length == 1 ? 'request' : 'requests'}',
+            icon: Icons.hourglass_top_rounded,
             tone: pending.isEmpty ? null : AppColors.warning),
         AdminStatCard(
             label: 'Marked paid',
             value: _money(_sum(paid, 'amount')),
             hint: 'This queue only — already resolved',
+            icon: Icons.price_check_rounded,
             tone: AppColors.success),
+        AdminStatCard(
+            label: 'Returned',
+            value: _money(_sum(rejected, 'amount')),
+            hint: '${rejected.length} rejected',
+            icon: Icons.undo_rounded,
+            tone: rejected.isEmpty ? null : AppColors.danger),
       ]),
-      const SizedBox(height: 18),
+      const SizedBox(height: 16),
       AdminSectionCard(
         title: 'Queue',
+        icon: Icons.payments_rounded,
         subtitle:
             'Pay creators externally, then record the provider confirmation here.',
-        padding: EdgeInsets.zero,
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
         child: ordered.isEmpty
             ? const AdminEmptyState(
-                'No payouts', 'Creator withdrawal requests will appear here.')
+                'No payouts', 'Creator withdrawal requests will appear here.',
+                icon: Icons.payments_outlined)
             : Column(children: [
                 for (final p in ordered)
                   ExpansionTile(
-                    leading: CircleAvatar(
-                        child: Text(
-                            ('${p['handle'] ?? ''}'.characters.firstOrNull ??
-                                    '?')
-                                .toUpperCase())),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppShape.control)),
+                    collapsedShape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppShape.control)),
+                    initiallyExpanded: '${p['status']}' == 'pending' &&
+                        identical(p, ordered.first),
+                    leading: AdminAvatar(
+                        '${p['handle'] ?? p['account_id'] ?? '?'}',
+                        size: 40),
                     title: Text(
-                        '${p['handle'] ?? p['account_id'] ?? 'Creator'}',
-                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                        '${(p['handle'] ?? '').toString().isEmpty ? p['account_id'] ?? 'Creator' : '@${p['handle']}'}',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(
                         '${_money(p['amount'])} · ${_date(p['created_at'])} · ${p['method'] ?? 'external'}'),
                     trailing: AdminStatusPill('${p['status'] ?? 'pending'}'),
                     childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                     children: [
-                      AdminKeyValue(
-                          'Destination', _jsonSummary(p['destination']),
-                          mono: true),
+                      for (final e in _map(p['destination']).entries)
+                        AdminKeyValue(_humanKey(e.key), '${e.value}',
+                            mono: true),
+                      if (p['destination'] is String)
+                        AdminKeyValue('Destination', '${p['destination']}',
+                            mono: true),
                       AdminKeyValue(
                           'Request id', '${p['id'] ?? p['request_id']}',
                           mono: true),
-                      if ('${p['status']}' == 'pending')
-                        Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
+                      if ('${p['status']}' == 'pending') ...[
+                        const SizedBox(height: 8),
+                        Wrap(
+                            alignment: WrapAlignment.end,
+                            spacing: 8,
+                            runSpacing: 8,
                             children: [
-                              OutlinedButton(
-                                  onPressed: () => widget.onAction(
-                                          'finance', 'payout_resolve', {
-                                        'payout_id': p['id'],
-                                        'resolution_id': '${p['id']}-rejected',
-                                        'status': 'rejected',
-                                      }),
-                                  child: const Text('Reject and return funds')),
-                              const SizedBox(width: 8),
-                              FilledButton(
-                                  onPressed: () => widget.onAction(
-                                          'finance', 'payout_resolve', {
-                                        'payout_id': p['id'],
-                                        'resolution_id': '${p['id']}-paid',
-                                        'status': 'paid',
-                                      }),
-                                  child: const Text('Mark paid')),
+                              OutlinedButton.icon(
+                                  onPressed: () =>
+                                      _resolvePayout(p, 'rejected'),
+                                  icon:
+                                      const Icon(Icons.undo_rounded, size: 18),
+                                  label: const Text('Reject and return funds')),
+                              FilledButton.icon(
+                                  onPressed: () => _resolvePayout(p, 'paid'),
+                                  icon: const Icon(Icons.price_check_rounded,
+                                      size: 18),
+                                  label: const Text('Mark paid')),
                             ]),
+                      ],
                     ],
                   ),
               ]),
       ),
     ]);
   }
+
+  void _resolvePayout(Map<String, dynamic> p, String status) =>
+      widget.onAction('finance', 'payout_resolve', {
+        'payout_id': p['id'],
+        'status': status,
+        '_amount': p['amount'],
+        '_name': p['handle'],
+      });
 
   Widget _models() {
     final response = _map(widget.results['llm.llm_providers_list']).isNotEmpty
@@ -1245,41 +1797,83 @@ class _AdminPageContentState extends State<AdminPageContent> {
     final q = search.text.trim().toLowerCase();
     final shown = models.where((m) {
       final provider = _map(m['_provider']);
-      return (filter == 'all' || '${provider['id']}' == filter) &&
+      return (filter == 'all' ||
+              '${provider['id']}' == filter ||
+              _modelPurpose(m).toLowerCase() == filter) &&
           (q.isEmpty ||
               '${provider['name']} ${m['id']} ${m['name']}'
                   .toLowerCase()
                   .contains(q));
     }).toList();
+    final palette = adminPalette(context);
+    final purposeColor = {
+      'Agent': palette[0],
+      'Decision': palette[1],
+      'Embedding': palette[3],
+    };
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      AdminGrid(maxColumns: 2, minTileWidth: 340, children: [
+        AdminSectionCard(
+          title: 'Models by purpose',
+          icon: Icons.category_rounded,
+          child: AdminDonutPanel(
+            size: 132,
+            center: '${models.length}',
+            caption: 'models',
+            slices: [
+              for (final purpose in const ['Agent', 'Decision', 'Embedding'])
+                AdminChartSlice(
+                    purpose,
+                    models
+                        .where((m) => _modelPurpose(m) == purpose)
+                        .length
+                        .toDouble(),
+                    purposeColor[purpose]!),
+            ],
+          ),
+        ),
+        AdminSectionCard(
+          title: 'Output price per 1M tokens',
+          icon: Icons.bar_chart_rounded,
+          child: AdminBarList(
+            maxItems: 5,
+            empty: 'No priced models yet.',
+            items: [
+              for (final m in models)
+                AdminChartSlice('${m['name'] ?? m['id']}',
+                    _number(m['output_price']), purposeColor[_modelPurpose(m)]!,
+                    display: _modelPrice(m['output_price'])),
+            ],
+          ),
+        ),
+      ]),
+      const SizedBox(height: 18),
       _toolbar(
           AdminSearchField(
               controller: search,
               hint: 'Search provider or model',
               onChanged: (_) => setState(() {})),
           [
-            DropdownButton<String>(
-              value:
-                  providers.any((p) => '${p['id']}' == filter) ? filter : 'all',
-              items: [
-                const DropdownMenuItem(
-                    value: 'all', child: Text('All providers')),
-                for (final p in providers)
-                  DropdownMenuItem(
-                      value: '${p['id']}',
-                      child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 220),
-                          child: Text('${p['name']}',
-                              overflow: TextOverflow.ellipsis))),
-              ],
-              onChanged: (value) => setState(() => filter = value ?? 'all'),
-            ),
             FilledButton.icon(
                 onPressed:
                     providers.isEmpty ? null : () => _showModel(providers),
                 icon: const Icon(Icons.add_rounded, size: 18),
                 label: const Text('Add model')),
           ]),
+      const SizedBox(height: 12),
+      AdminFilterChips<String>(
+        selected: filter,
+        onSelected: (v) => setState(() => filter = v),
+        options: [
+          AdminFilterOption('all', 'All', count: models.length),
+          for (final purpose in const ['Agent', 'Decision', 'Embedding'])
+            AdminFilterOption(purpose.toLowerCase(), purpose,
+                count: models.where((m) => _modelPurpose(m) == purpose).length),
+          for (final p in providers)
+            AdminFilterOption('${p['id']}', '${p['name']}',
+                icon: Icons.hub_outlined),
+        ],
+      ),
       const SizedBox(height: 14),
       AdminDataTable(
         empty: providers.isEmpty
@@ -1288,7 +1882,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
         columns: const [
           AdminTableColumn('Provider', width: 180),
           AdminTableColumn('Model', width: 260),
-          AdminTableColumn('Purpose', width: 140),
+          AdminTableColumn('Purpose', width: 130),
           AdminTableColumn('Input \$/1M', width: 120, align: TextAlign.right),
           AdminTableColumn('Output \$/1M', width: 120, align: TextAlign.right),
           AdminTableColumn('Actions', width: 130, align: TextAlign.right),
@@ -1296,14 +1890,27 @@ class _AdminPageContentState extends State<AdminPageContent> {
         rows: [
           for (final m in shown)
             [
-              _primaryCell(
-                  '${_map(m['_provider'])['name']}',
-                  _map(m['_provider'])['enabled'] == false
-                      ? 'disabled'
-                      : 'enabled'),
+              Row(children: [
+                Icon(
+                    _map(m['_provider'])['enabled'] == false
+                        ? Icons.cloud_off_rounded
+                        : Icons.cloud_done_rounded,
+                    size: 18,
+                    color: _map(m['_provider'])['enabled'] == false
+                        ? AppColors.muted
+                        : AppColors.success),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _primaryCell(
+                      '${_map(m['_provider'])['name']}',
+                      _map(m['_provider'])['enabled'] == false
+                          ? 'disabled'
+                          : 'enabled'),
+                ),
+              ]),
               _primaryCell('${m['name'] ?? m['id']}',
                   m['name'] != null ? '${m['id']}' : ''),
-              Text(_modelPurpose(m)),
+              _Tag(_modelPurpose(m), color: purposeColor[_modelPurpose(m)]),
               Text(_modelPrice(m['input_price']), textAlign: TextAlign.right),
               Text(_modelPrice(m['output_price']), textAlign: TextAlign.right),
               Wrap(alignment: WrapAlignment.end, children: [
@@ -1326,7 +1933,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
   Future<void> _showModel(List<Map<String, dynamic>> providers,
       {Map<String, dynamic>? provider, Map<String, dynamic>? model}) async {
     final selected = provider ??
-        providers.firstWhere((p) => filter != 'all' && '${p['id']}' == filter,
+        providers.firstWhere((p) => '${p['id']}' == filter,
             orElse: () => providers.first);
     await showDialog<void>(
       context: context,
@@ -1345,6 +1952,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        icon: const Icon(Icons.delete_outline_rounded),
         title: Text('Remove ${model['name'] ?? model['id']}?'),
         content: Text(
             'Agents using it will fall back to the default model from ${provider['name']}.'),
@@ -1372,174 +1980,231 @@ class _AdminPageContentState extends State<AdminPageContent> {
     final providers = _listOfMaps(setting['providers']);
     final enabled = setting['enabled'] == true;
     final providerId = '${setting['provider_id'] ?? ''}';
+    final modelId = '${setting['model_id'] ?? ''}';
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _settingStatus(setting),
+        const SizedBox(height: 16),
+        AdminSectionCard(
+          title: 'Fast decision model',
+          icon: Icons.bolt_rounded,
+          subtitle: 'Tool selection, routing, progress and completion checks.',
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            AppSwitchCard(
+              icon: Icons.alt_route_rounded,
+              title: enabled ? 'On' : 'Off',
+              subtitle: enabled
+                  ? 'Decisions use the fast model below together with each agent’s own model.'
+                  : 'Every agent decides with its own model.',
+              value: enabled,
+              onChanged: (value) => widget.onDirectAction('llm',
+                  'llm_decision_set', _decisionBody(setting, enabled: value)),
+            ),
+            const SizedBox(height: 20),
+            _modelPicker(
+              providers: providers,
+              providerId: providerId,
+              modelId: modelId,
+              models: _decisionModels(providers, providerId),
+              onProvider: (value) => widget.onDirectAction(
+                  'llm',
+                  'llm_decision_set',
+                  _decisionBody(setting, provider: value, model: '')),
+              onModel: (value) => widget.onDirectAction('llm',
+                  'llm_decision_set', _decisionBody(setting, model: value)),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 16),
+        AppSwitchCard(
+          icon: Icons.verified_user_outlined,
+          title: 'Auto-approve low-risk calls',
+          subtitle:
+              'Every other tool call still waits for a person; approvals are written to the work log.',
+          value: setting['auto_approve'] == true,
+          onChanged: (value) => widget.onDirectAction('llm', 'llm_decision_set',
+              _decisionBody(setting, autoApprove: value)),
+        ),
+      ]),
+    );
+  }
+
+  /// Provider then model, each picked with chips; options the node no longer
+  /// offers stay visible (marked unavailable) so the current choice shows.
+  Widget _modelPicker({
+    required List<Map<String, dynamic>> providers,
+    required String providerId,
+    required String modelId,
+    required List<Map<String, dynamic>> models,
+    required ValueChanged<String> onProvider,
+    required ValueChanged<String> onModel,
+    bool allowNone = false,
+  }) {
+    List<AppChoice<String>> choices(
+            List<Map<String, dynamic>> options, String value, IconData icon) =>
+        [
+          for (final o in options)
+            AppChoice('${o['id']}', '${o['name'] ?? o['id']}', icon: icon),
+          if (value.isNotEmpty && !options.any((o) => '${o['id']}' == value))
+            AppChoice(value, '$value (unavailable)',
+                icon: Icons.warning_amber_rounded),
+        ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _settingStatus(setting),
-      const SizedBox(height: 18),
-      AdminSectionCard(
-        title: 'Decision model',
-        subtitle: 'Tool selection, routing, progress and completion checks.',
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(
-                  value: true,
-                  label: Text('On'),
-                  icon: Icon(Icons.bolt_rounded)),
-              ButtonSegment(
-                  value: false,
-                  label: Text('Off'),
-                  icon: Icon(Icons.power_settings_new_rounded)),
-            ],
-            selected: {enabled},
-            onSelectionChanged: (value) => widget.onDirectAction(
-                'llm',
-                'llm_decision_set',
-                _decisionBody(setting, enabled: value.first)),
-          ),
-          const SizedBox(height: 10),
-          Text(
-              'On: decisions use the fast model below together with each agent’s own model. Off: every agent decides with its own model.',
-              style: _muted()),
-        ]),
+      AppChoiceField<String>(
+        label: 'Provider',
+        value: providerId,
+        onChanged: (v) {
+          if (v != providerId) onProvider(v);
+        },
+        choices: [
+          if (allowNone)
+            const AppChoice('', 'None — not used',
+                icon: Icons.do_not_disturb_on_outlined),
+          ...choices(providers, providerId, Icons.hub_outlined),
+        ],
       ),
-      const SizedBox(height: 18),
-      AdminSectionCard(
-        title: 'Provider and model',
-        child: Column(children: [
-          DropdownButtonFormField<String>(
-            initialValue: providerId.isEmpty ? null : providerId,
-            isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Provider'),
-            items: _optionItems(providers, providerId),
-            onChanged: (value) {
-              if (value == null) return;
-              widget.onAction('llm', 'llm_decision_set',
-                  _decisionBody(setting, provider: value, model: ''));
-            },
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: '${setting['model_id'] ?? ''}'.isEmpty
-                ? null
-                : '${setting['model_id']}',
-            isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Model'),
-            items: _optionItems(_decisionModels(providers, providerId),
-                '${setting['model_id'] ?? ''}'),
-            onChanged: (value) {
-              if (value == null) return;
-              widget.onAction('llm', 'llm_decision_set',
-                  _decisionBody(setting, model: value));
-            },
-          ),
-        ]),
-      ),
-      const SizedBox(height: 18),
-      SwitchListTile.adaptive(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-        title: const Text('Auto-approve low-risk calls',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: const Text(
-            'Every other tool call still waits for a person; approvals are written to the work log.'),
-        value: setting['auto_approve'] == true,
-        onChanged: (value) => widget.onDirectAction('llm', 'llm_decision_set',
-            _decisionBody(setting, autoApprove: value)),
-      ),
+      if (providerId.isNotEmpty) ...[
+        const SizedBox(height: 18),
+        AppChoiceField<String>(
+          label: 'Model',
+          hint: models.isEmpty
+              ? 'This provider offers no model for this purpose yet. Add one under Models.'
+              : null,
+          value: modelId,
+          onChanged: (v) {
+            if (v != modelId) onModel(v);
+          },
+          choices: choices(models, modelId, Icons.memory_rounded),
+        ),
+      ],
     ]);
   }
 
   Widget _memoryModels() {
     final setting = _map(widget.results['llm.llm_memory_get']);
     final providers = _listOfMaps(setting['providers']);
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _settingStatus(setting),
-      const SizedBox(height: 18),
-      _memorySlot(
-        title: 'Memory chat model',
-        hint:
-            'Reads each finished conversation and writes down preferences, decisions, people, and ways of working.',
-        providers: providers,
-        setting: setting,
-        providerKey: 'chat_provider_id',
-        modelKey: 'chat_model_id',
-        listKey: 'chat_models',
-      ),
-      const SizedBox(height: 18),
-      _memorySlot(
-        title: 'Embedding model',
-        hint:
-            'Turns memories into vectors so agents find relevant context by meaning. Changing it re-indexes every project.',
-        providers: providers,
-        setting: setting,
-        providerKey: 'embedding_provider_id',
-        modelKey: 'embedding_model_id',
-        listKey: 'embedding_models',
-      ),
-      const SizedBox(height: 14),
-      Text(
-          'Projects pay for memory token use at the model prices configured on Models, counted against the project budget.',
-          style: _muted()),
-    ]);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _settingStatus(setting),
+        const SizedBox(height: 16),
+        _memorySlot(
+          title: 'Memory chat model',
+          icon: Icons.edit_note_rounded,
+          hint:
+              'Reads each finished conversation and writes down preferences, decisions, people, and ways of working.',
+          providers: providers,
+          setting: setting,
+          providerKey: 'chat_provider_id',
+          modelKey: 'chat_model_id',
+          listKey: 'chat_models',
+          active: setting['chat_active'],
+        ),
+        const SizedBox(height: 16),
+        _memorySlot(
+          title: 'Embedding model',
+          icon: Icons.scatter_plot_rounded,
+          hint:
+              'Turns memories into vectors so agents find relevant context by meaning. Changing it re-indexes every project.',
+          providers: providers,
+          setting: setting,
+          providerKey: 'embedding_provider_id',
+          modelKey: 'embedding_model_id',
+          listKey: 'embedding_models',
+          active: setting['embedding_active'],
+          confirm: true,
+        ),
+        const SizedBox(height: 14),
+        Text(
+            'Projects pay for memory token use at the model prices configured on Models, counted against the project budget.',
+            style: _muted()),
+      ]),
+    );
   }
 
   Widget _memorySlot({
     required String title,
+    required IconData icon,
     required String hint,
     required List<Map<String, dynamic>> providers,
     required Map<String, dynamic> setting,
     required String providerKey,
     required String modelKey,
     required String listKey,
+    dynamic active,
+    bool confirm = false,
   }) {
     final providerId = '${setting[providerKey] ?? ''}';
     final provider = providers
         .cast<Map<String, dynamic>?>()
         .firstWhere((p) => '${p?['id']}' == providerId, orElse: () => null);
+    Future<void> save(Map<String, dynamic> body) async {
+      if (confirm &&
+          !await _confirm(
+              'Re-index every project?',
+              'Changing the embedding model rebuilds every project’s memory index. Recall is slower until it finishes.',
+              'Change model')) {
+        return;
+      }
+      await widget.onDirectAction('llm', 'llm_memory_set', body);
+    }
+
     return AdminSectionCard(
       title: title,
+      icon: icon,
       subtitle: hint,
-      child: Column(children: [
-        DropdownButtonFormField<String>(
-          initialValue: providerId,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Provider'),
-          items: [
-            const DropdownMenuItem(value: '', child: Text('None — not used')),
-            ..._optionItems(providers, providerId),
-          ],
-          onChanged: (value) => widget.onAction('llm', 'llm_memory_set', {
-            ..._memoryBody(setting),
-            providerKey: value ?? '',
-            modelKey: '',
-          }),
-        ),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          initialValue: '${setting[modelKey] ?? ''}'.isEmpty
-              ? null
-              : '${setting[modelKey]}',
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Model'),
-          items: _optionItems(
-              _listOfMaps(provider?[listKey] ?? provider?['models']),
-              '${setting[modelKey] ?? ''}'),
-          onChanged: providerId.isEmpty
-              ? null
-              : (value) => widget.onAction('llm', 'llm_memory_set', {
-                    ..._memoryBody(setting),
-                    modelKey: value ?? '',
-                  }),
-        ),
-      ]),
+      trailing: active == null
+          ? null
+          : AdminStatusPill(active == true ? 'active' : 'off'),
+      child: _modelPicker(
+        allowNone: true,
+        providers: providers,
+        providerId: providerId,
+        modelId: '${setting[modelKey] ?? ''}',
+        models: _listOfMaps(provider?[listKey] ?? provider?['models']),
+        onProvider: (value) => save({
+          ..._memoryBody(setting),
+          providerKey: value,
+          modelKey: '',
+        }),
+        onModel: (value) => save({
+          ..._memoryBody(setting),
+          modelKey: value,
+        }),
+      ),
     );
   }
 
+  Future<bool> _confirm(String title, String message, String action) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          icon: const Icon(Icons.help_outline_rounded),
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(action)),
+          ],
+        ),
+      ) ==
+      true;
+
   Widget _health() {
+    final scheme = Theme.of(context).colorScheme;
     final report = _map(widget.results['admin.health']);
     final checks = _listOfMaps(report['checks']);
     final pluginHealth =
         _listOfMaps(_map(widget.results['admin.plugins_health'])['health']);
     final counts = _map(report['counts']);
+    String statusOf(Map<String, dynamic> c) =>
+        '${c['status'] ?? (c['ok'] == true ? 'ok' : 'fail')}';
     final groups = <String, List<Map<String, dynamic>>>{};
     for (final check in checks) {
       (groups['${check['group'] ?? 'Platform'}'] ??= []).add(check);
@@ -1547,9 +2212,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
     if (pluginHealth.isNotEmpty) groups['Plugin health'] = pluginHealth;
     for (final rows in groups.values) {
       rows.sort((a, b) =>
-          _healthRank('${a['status'] ?? (a['ok'] == true ? 'ok' : 'fail')}')
-              .compareTo(_healthRank(
-                  '${b['status'] ?? (b['ok'] == true ? 'ok' : 'fail')}')));
+          _healthRank(statusOf(a)).compareTo(_healthRank(statusOf(b))));
     }
     final fail = counts.isNotEmpty
         ? _integer(counts['fail'])
@@ -1560,75 +2223,156 @@ class _AdminPageContentState extends State<AdminPageContent> {
     final ok = counts.isNotEmpty
         ? _integer(counts['ok'])
         : checks.where((c) => '${c['status']}' == 'ok').length;
+    final total = ok + warn + fail;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _statGrid([
+      AdminHeroCard(
+        tone: fail > 0
+            ? AppColors.danger
+            : warn > 0
+                ? AppColors.warning
+                : AppColors.success,
+        icon: fail > 0
+            ? Icons.gpp_maybe_rounded
+            : warn > 0
+                ? Icons.tips_and_updates_rounded
+                : Icons.verified_rounded,
+        title: fail > 0
+            ? '$fail ${fail == 1 ? 'check needs' : 'checks need'} fixing'
+            : warn > 0
+                ? 'Working, with $warn to review'
+                : 'Healthy deployment',
+        message: total == 0
+            ? 'Re-check the deployment to load live configuration checks.'
+            : 'Checked ${_date(report['generated_at'])}. Secrets are never shown, only whether they are set.',
+        actions: [
+          FilledButton.tonalIcon(
+              onPressed: widget.onRefresh,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Re-check')),
+        ],
+        visual: AdminDonutChart(
+          size: 140,
+          center: total == 0 ? '—' : '${(ok / total * 100).round()}%',
+          caption: 'healthy',
+          slices: [
+            AdminChartSlice('Healthy', ok.toDouble(), AppColors.success),
+            AdminChartSlice('Worth a look', warn.toDouble(), AppColors.warning),
+            AdminChartSlice('Need fixing', fail.toDouble(), AppColors.danger),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+      AdminGrid(maxColumns: 3, minTileWidth: 180, children: [
         AdminStatCard(
             label: 'Need fixing',
             value: '$fail',
             hint: fail > 0 ? 'Broken or unsafe' : 'Nothing broken',
+            icon: Icons.cancel_rounded,
             tone: fail > 0 ? AppColors.danger : AppColors.success),
         AdminStatCard(
             label: 'Worth a look',
             value: '$warn',
             hint: 'Works, but something is unset',
+            icon: Icons.error_rounded,
             tone: warn > 0 ? AppColors.warning : null),
-        AdminStatCard(label: 'Healthy', value: '$ok', tone: AppColors.success),
+        AdminStatCard(
+            label: 'Healthy',
+            value: '$ok',
+            icon: Icons.check_circle_rounded,
+            tone: AppColors.success),
       ]),
-      const SizedBox(height: 18),
+      const SizedBox(height: 16),
       for (final group in groups.entries) ...[
         AdminSectionCard(
           title: group.key,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          trailing: Text(
+              '${group.value.where((c) => adminTone(statusOf(c)) == AdminTone.ok).length}/${group.value.length} ok',
+              style: _muted()),
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: Column(children: [
             for (final c in group.value)
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 11),
-                decoration: BoxDecoration(
-                    border: Border(
-                        bottom: BorderSide(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .outlineVariant
-                                .withValues(alpha: .4)))),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
+              Builder(builder: (context) {
+                final tone = adminTone(statusOf(c));
+                final color = adminToneColor(context, tone);
+                final detail = '${c['detail'] ?? c['message'] ?? ''}';
+                final fix = '${c['fix'] ?? ''}';
+                return Container(
+                  margin: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: tone == AdminTone.ok
+                        ? Colors.transparent
+                        : color.withValues(alpha: .08),
+                    borderRadius: BorderRadius.circular(AppShape.control),
+                  ),
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(adminToneIcon(tone), color: color, size: 22),
+                        const SizedBox(width: 12),
                         Expanded(
-                            child: Text('${c['label'] ?? c['name'] ?? c['id']}',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w800))),
-                        AdminStatusPill(
-                            '${c['status'] ?? (c['ok'] == true ? 'ok' : 'error')}'),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${c['label'] ?? c['name'] ?? c['id']}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700)),
+                                if (detail.isNotEmpty) ...[
+                                  const SizedBox(height: 3),
+                                  Text(detail, style: _muted()),
+                                ],
+                                if (fix.isNotEmpty && tone != AdminTone.ok) ...[
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                        color: scheme.primaryContainer,
+                                        borderRadius:
+                                            BorderRadius.circular(10)),
+                                    child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.build_circle_outlined,
+                                              size: 16,
+                                              color: scheme.onPrimaryContainer),
+                                          const SizedBox(width: 6),
+                                          Flexible(
+                                            child: Text('Fix: $fix',
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: scheme
+                                                        .onPrimaryContainer,
+                                                    fontWeight:
+                                                        FontWeight.w600)),
+                                          ),
+                                        ]),
+                                  ),
+                                ],
+                              ]),
+                        ),
                       ]),
-                      if ('${c['detail'] ?? c['message'] ?? ''}'
-                          .isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text('${c['detail'] ?? c['message']}', style: _muted()),
-                      ],
-                      if ('${c['fix'] ?? ''}'.isNotEmpty &&
-                          '${c['status']}' != 'ok') ...[
-                        const SizedBox(height: 5),
-                        Text('Fix: ${c['fix']}',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.w700)),
-                      ],
-                    ]),
-              ),
+                );
+              }),
           ]),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
       ],
       if (checks.isEmpty && pluginHealth.isEmpty)
         const AdminEmptyState('No health report',
-            'Re-check the deployment to load live configuration checks.'),
-      Text(
-          'Checked ${_date(report['generated_at'])}. Secrets are never shown, only whether they are set.',
-          style: _muted()),
+            'Re-check the deployment to load live configuration checks.',
+            icon: Icons.monitor_heart_outlined),
     ]);
   }
+
+  Widget _liveChip(String period) => FilterChip(
+        selected: live,
+        showCheckmark: false,
+        avatar:
+            Icon(live ? Icons.sensors_rounded : Icons.pause_rounded, size: 18),
+        label: Text(live ? 'Live · $period' : 'Paused'),
+        onSelected: (value) => setState(() => live = value),
+      );
 
   Widget _node() {
     final stats = _map(widget.results['admin.node_stats']);
@@ -1639,41 +2383,68 @@ class _AdminPageContentState extends State<AdminPageContent> {
     final mesh = _map(widget.results['federation.nodes_list']);
     final nodes = _listOfMaps(mesh['nodes']);
     final load = _doubleList(r['load_avg']);
+    final cores = _number(r['cpu_cores'], fallback: 1);
     final memoryPercent = _number(r['mem_used_percent']);
+    final palette = adminPalette(context);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-        FilterChip(
-            selected: live,
-            avatar: Icon(live ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                size: 17),
-            label: Text(live ? 'Live · 5s' : 'Paused'),
-            onSelected: (value) => setState(() => live = value)),
+      Row(children: [
+        Expanded(
+          child: Text('${node['id'] ?? 'This node'}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        ),
+        _liveChip('5s'),
       ]),
-      const SizedBox(height: 8),
-      _statGrid([
-        AdminStatCard(
-            label: 'Node',
-            value: '${node['id'] ?? '—'}',
-            hint: '${node['go_version'] ?? ''}',
-            icon: Icons.dns_outlined),
+      const SizedBox(height: 12),
+      AdminSectionCard(
+        title: 'Resources',
+        icon: Icons.speed_rounded,
+        child: Wrap(
+          alignment: WrapAlignment.spaceAround,
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            AdminGauge(
+                label: 'CPU load',
+                value:
+                    (load.isEmpty ? 0 : load.first) / (cores == 0 ? 1 : cores)),
+            AdminGauge(label: 'Memory', value: memoryPercent / 100),
+            AdminGauge(
+                label: 'Disk', value: _number(r['disk_used_percent']) / 100),
+          ],
+        ),
+      ),
+      const SizedBox(height: 14),
+      AdminGrid(children: [
         AdminStatCard(
             label: 'Plugins',
             value: '${node['plugins'] ?? 0}',
             hint: '${node['goroutines'] ?? 0} goroutines',
-            icon: Icons.extension_outlined),
+            icon: Icons.extension_rounded),
         AdminStatCard(
             label: 'Uptime',
             value: _uptime(r['host_uptime_sec']),
             hint: '${r['cpu_cores'] ?? '—'} cores',
-            icon: Icons.timer_outlined),
+            icon: Icons.timer_rounded,
+            tone: AppColors.cyan),
         AdminStatCard(
             label: 'Disk',
             value: '${_number(r['disk_used_percent']).round()}%',
             hint:
                 '${_bytes(r['disk_used_bytes'])} of ${_bytes(r['disk_total_bytes'])}',
-            icon: Icons.storage_outlined),
+            icon: Icons.storage_rounded,
+            progress: _number(r['disk_used_percent']) / 100,
+            tone: AppColors.warning),
+        AdminStatCard(
+            label: 'Runtime',
+            value: '${node['go_version'] ?? '—'}',
+            hint: 'Process ${_bytes(r['process_rss_bytes'])}',
+            icon: Icons.code_rounded,
+            tone: AppColors.success),
       ]),
-      const SizedBox(height: 16),
+      const SizedBox(height: 14),
       LayoutBuilder(builder: (context, constraints) {
         final narrow = constraints.maxWidth < 700;
         final charts = <Widget>[
@@ -1691,7 +2462,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
             value: '${memoryPercent.round()}%',
             subtitle:
                 '${_bytes(r['mem_used_bytes'])} of ${_bytes(r['mem_total_bytes'])} · process ${_bytes(r['process_rss_bytes'])}',
-            color: AppColors.primary,
+            color: palette.first,
           ),
         ];
         if (narrow) {
@@ -1704,16 +2475,24 @@ class _AdminPageContentState extends State<AdminPageContent> {
           Expanded(child: charts[1]),
         ]);
       }),
-      const SizedBox(height: 18),
+      const SizedBox(height: 14),
       AdminSectionCard(
         title: 'Plugin health',
+        icon: Icons.health_and_safety_rounded,
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
         child: plugins.isEmpty
-            ? const Text('No telemetry yet.')
+            ? Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text('No telemetry yet.', style: _muted()))
             : Column(children: [
                 for (final p in plugins)
                   ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                        adminToneIcon(
+                            p['ok'] == true ? AdminTone.ok : AdminTone.bad),
+                        color: p['ok'] == true
+                            ? AppColors.success
+                            : AppColors.danger),
                     title: Text('${p['name']}',
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text('${p['message'] ?? ''}'),
@@ -1722,19 +2501,26 @@ class _AdminPageContentState extends State<AdminPageContent> {
                   ),
               ]),
       ),
-      const SizedBox(height: 18),
+      const SizedBox(height: 14),
       AdminSectionCard(
         title: 'Mesh',
+        icon: Icons.hub_rounded,
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
         child: nodes.isEmpty
-            ? const Text('This node is not federated with any other.')
+            ? Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text('This node is not federated with any other.',
+                    style: _muted()))
             : Column(children: [
                 for (final n in nodes)
                   ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.hub_outlined),
+                    leading: AdminAvatar('${n['id']}',
+                        icon: n['is_central'] == true
+                            ? Icons.hub_rounded
+                            : Icons.dns_rounded),
                     title: Text(
-                        '${n['id']}${n['id'] == mesh['local_node'] ? ' (this node)' : ''}${n['is_central'] == true ? ' · central' : ''}'),
+                        '${n['id']}${n['id'] == mesh['local_node'] ? ' (this node)' : ''}${n['is_central'] == true ? ' · central' : ''}',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(
                         '${n['url'] ?? ''} · last seen ${_date(n['last_seen'])}'),
                     trailing: AdminStatusPill('${n['status'] ?? 'unknown'}'),
@@ -1748,14 +2534,19 @@ class _AdminPageContentState extends State<AdminPageContent> {
     final plugins =
         _listOfMaps(_map(widget.results['admin.plugins_list'])['plugins']);
     final active = _map(_map(widget.results['admin.wiring'])['active']);
+    bool loaded(Map<String, dynamic> p) =>
+        const {'loaded', 'initialized', 'started'}.contains('${p['state']}');
     final q = search.text.trim().toLowerCase();
-    final shown = plugins
-        .where((p) =>
-            q.isEmpty ||
-            '${p['name']} ${p['type']} ${p['category']} ${p['provides']}'
-                .toLowerCase()
-                .contains(q))
-        .toList();
+    final shown = plugins.where((p) {
+      final kind = '${p['type']}' == 'adapter' ? 'adapter' : 'namespace';
+      return (filter == 'all' ||
+              filter == kind ||
+              (filter == 'error' && p['last_error'] != null)) &&
+          (q.isEmpty ||
+              '${p['name']} ${p['type']} ${p['category']} ${p['provides']}'
+                  .toLowerCase()
+                  .contains(q));
+    }).toList();
     final groups = <String, List<Map<String, dynamic>>>{};
     for (final p in shown) {
       final key = '${p['type']}' == 'adapter'
@@ -1763,26 +2554,64 @@ class _AdminPageContentState extends State<AdminPageContent> {
           : 'Action namespaces';
       (groups[key] ??= []).add(p);
     }
+    final errors = plugins.where((p) => p['last_error'] != null).length;
+    final loadedCount = plugins.where(loaded).length;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      AdminGrid(maxColumns: 3, minTileWidth: 180, children: [
+        AdminStatCard(
+            label: 'Loaded',
+            value: '$loadedCount / ${plugins.length}',
+            icon: Icons.extension_rounded,
+            progress: plugins.isEmpty ? 0 : loadedCount / plugins.length),
+        AdminStatCard(
+            label: 'Active adapters',
+            value: '${active.length}',
+            hint: active.entries.map((e) => '${e.key}: ${e.value}').join(' · '),
+            icon: Icons.cable_rounded,
+            tone: AppColors.cyan),
+        AdminStatCard(
+            label: 'Errors',
+            value: '$errors',
+            icon: Icons.error_rounded,
+            tone: errors > 0 ? AppColors.danger : AppColors.success),
+      ]),
+      const SizedBox(height: 18),
       AdminSearchField(
           controller: search,
           hint: 'Search namespaces and adapters',
           onChanged: (_) => setState(() {})),
+      const SizedBox(height: 12),
+      AdminFilterChips<String>(
+        selected: filter,
+        onSelected: (v) => setState(() => filter = v),
+        options: [
+          AdminFilterOption('all', 'All', count: plugins.length),
+          AdminFilterOption('namespace', 'Namespaces',
+              icon: Icons.api_rounded,
+              count: plugins.where((p) => '${p['type']}' != 'adapter').length),
+          AdminFilterOption('adapter', 'Adapters',
+              icon: Icons.cable_rounded,
+              count: plugins.where((p) => '${p['type']}' == 'adapter').length),
+          if (errors > 0)
+            AdminFilterOption('error', 'With errors',
+                icon: Icons.error_outline_rounded, count: errors),
+        ],
+      ),
       const SizedBox(height: 16),
       for (final group in groups.entries) ...[
         AdminSectionCard(
           title: group.key,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
           child: Column(children: [
             for (final p in group.value)
               _adaptiveTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon('${p['type']}' == 'adapter'
-                    ? Icons.cable_rounded
-                    : Icons.api_rounded),
+                leading: AdminAvatar('${p['name']}',
+                    icon: '${p['type']}' == 'adapter'
+                        ? Icons.cable_rounded
+                        : Icons.api_rounded),
                 title: Text(
                     '${p['name']}${p['version'] == null ? '' : '  v${p['version']}'}',
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
                 subtitle: Text(
                     [
                       _stringList(p['provides']).join(', '),
@@ -1795,7 +2624,9 @@ class _AdminPageContentState extends State<AdminPageContent> {
                     overflow: TextOverflow.ellipsis),
                 actions: [
                   if (p['category'] != null &&
-                      active['${p['category']}'] != p['name'])
+                      active['${p['category']}'] == p['name'])
+                    const _Tag('Active', icon: Icons.radio_button_checked)
+                  else if (p['category'] != null)
                     TextButton(
                         onPressed: () => widget.onDirectAction(
                             'admin',
@@ -1804,29 +2635,36 @@ class _AdminPageContentState extends State<AdminPageContent> {
                         child: const Text('Make active')),
                   AdminStatusPill(
                       '${p['last_error'] == null ? p['state'] : 'error'}'),
-                  OutlinedButton(
-                    onPressed: () {
-                      final loaded = const {'loaded', 'initialized', 'started'}
-                          .contains('${p['state']}');
-                      widget.onDirectAction(
+                  Switch(
+                    value: loaded(p),
+                    thumbIcon: WidgetStateProperty.resolveWith((states) => Icon(
+                        states.contains(WidgetState.selected)
+                            ? Icons.power_rounded
+                            : Icons.power_off_rounded)),
+                    onChanged: (on) async {
+                      if (!on &&
+                          !await _confirm(
+                              'Unload ${p['name']}?',
+                              'Its actions stop answering until it is loaded again.',
+                              'Unload')) {
+                        return;
+                      }
+                      await widget.onDirectAction(
                           'admin',
-                          loaded ? 'plugins_unload' : 'plugins_load',
+                          on ? 'plugins_load' : 'plugins_unload',
                           {'name': p['name']});
                     },
-                    child: Text(const {'loaded', 'initialized', 'started'}
-                            .contains('${p['state']}')
-                        ? 'Unload'
-                        : 'Load'),
                   ),
                 ],
               ),
           ]),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
       ],
       if (groups.isEmpty)
         const AdminEmptyState(
-            'No plugins match', 'Try a different namespace or adapter name.'),
+            'No plugins match', 'Try a different namespace or adapter name.',
+            icon: Icons.extension_off_rounded),
     ]);
   }
 
@@ -1847,75 +2685,142 @@ class _AdminPageContentState extends State<AdminPageContent> {
           _logLevel('${line['level'] ?? 'log'}').toUpperCase().padRight(5);
       return '${_date(line['time'])} $level ${line['logger'] == null ? '' : '[${line['logger']}] '}${line['message'] ?? ''}';
     }).join('\n');
+    int count(String level) =>
+        all.where((l) => _logLevel('${l['level'] ?? 'log'}') == level).length;
+    final scheme = Theme.of(context).colorScheme;
+    // Events per minute over the window on screen, split by level.
+    final buckets = <String, Map<String, int>>{};
+    for (final line in all) {
+      final t = _time(line['time']);
+      if (t.length < 5) continue;
+      final minute = t.substring(0, 5);
+      final level = _logLevel('${line['level'] ?? 'log'}');
+      final bucket = buckets[minute] ??= {};
+      bucket[level] = (bucket[level] ?? 0) + 1;
+    }
+    final minutes = buckets.keys.toList()..sort();
+    final recent =
+        minutes.length > 30 ? minutes.sublist(minutes.length - 30) : minutes;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _toolbar(
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            _filterChip('All', 'all'),
-            _filterChip('Info', 'log'),
-            _filterChip('Warnings', 'warn'),
-            _filterChip('Errors', 'error'),
-          ]),
+          AdminFilterChips<String>(
+            selected: filter,
+            onSelected: (v) => setState(() => filter = v),
+            options: [
+              AdminFilterOption('all', 'All', count: all.length),
+              AdminFilterOption('log', 'Info',
+                  count: count('log'), icon: Icons.info_outline_rounded),
+              AdminFilterOption('warn', 'Warnings',
+                  count: count('warn'), icon: Icons.warning_amber_rounded),
+              AdminFilterOption('error', 'Errors',
+                  count: count('error'), icon: Icons.error_outline_rounded),
+            ],
+          ),
           [
-            FilterChip(
-              selected: live,
-              label: Text(live ? 'Live' : 'Paused'),
-              avatar: Icon(
-                  live ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                  size: 17),
-              onSelected: (value) => setState(() => live = value),
-            ),
-            OutlinedButton.icon(
+            _liveChip('3s'),
+            IconButton.filledTonal(
+              tooltip: 'Copy filtered log',
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: dump));
-                if (mounted)
+                if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Filtered log copied')));
+                }
               },
-              icon: const Icon(Icons.copy_rounded, size: 17),
-              label: const Text('Copy'),
+              icon: const Icon(Icons.copy_rounded, size: 18),
             ),
           ]),
-      const SizedBox(height: 12),
+      if (recent.isNotEmpty) ...[
+        const SizedBox(height: 14),
+        AdminSectionCard(
+          title: 'Events per minute',
+          icon: Icons.insights_rounded,
+          child: AdminColumnChart(height: 84, columns: [
+            for (final m in recent)
+              AdminColumn(m, [
+                AdminChartSlice(
+                    'info',
+                    ((buckets[m]!['log'] ?? 0) + (buckets[m]!['debug'] ?? 0))
+                        .toDouble(),
+                    scheme.primary.withValues(alpha: .55)),
+                AdminChartSlice('warn', (buckets[m]!['warn'] ?? 0).toDouble(),
+                    AppColors.warning),
+                AdminChartSlice('error', (buckets[m]!['error'] ?? 0).toDouble(),
+                    AppColors.danger),
+              ]),
+          ]),
+        ),
+      ],
+      const SizedBox(height: 14),
       AdminSearchField(
           controller: search,
           hint: 'Filter by text…',
           onChanged: (_) => setState(() {})),
       const SizedBox(height: 14),
-      AdminSectionCard(
-        title:
-            '${rows.length} lines${all.length >= 500 ? ' · showing latest' : ''}',
-        padding: EdgeInsets.zero,
+      ClipRRect(
+        borderRadius: BorderRadius.circular(AppShape.card - 4),
         child: Container(
           height: 520,
           color: const Color(0xFF07101C),
-          child: rows.isEmpty
-              ? const Center(
+          child: Column(children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              color: const Color(0xFF0D1A2B),
+              child: Row(children: [
+                for (final c in const [
+                  Color(0xFFFF6B79),
+                  Color(0xFFFFB648),
+                  Color(0xFF43D39E)
+                ]) ...[
+                  Container(
+                      width: 10,
+                      height: 10,
+                      decoration:
+                          BoxDecoration(color: c, shape: BoxShape.circle)),
+                  const SizedBox(width: 6),
+                ],
+                const SizedBox(width: 8),
+                Expanded(
                   child: Text(
-                      'No lines yet for this filter. Reproduce the problem, then refresh.',
-                      style: TextStyle(color: AppColors.muted)))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(14),
-                  itemCount: rows.length,
-                  itemBuilder: (_, index) {
-                    final line = rows[index];
-                    final level = _logLevel('${line['level'] ?? 'log'}');
-                    final color = level == 'error'
-                        ? AppColors.danger
-                        : level == 'warn'
-                            ? AppColors.warning
-                            : level == 'debug'
-                                ? AppColors.muted
-                                : const Color(0xFFD3DEEA);
-                    return SelectableText(
-                      '${_time(line['time'])} ${level.toUpperCase().padRight(5)} ${line['logger'] == null ? '' : '[${line['logger']}] '}${line['message'] ?? ''}',
-                      style: TextStyle(
-                          color: color,
-                          fontFamily: 'monospace',
-                          fontSize: 11.5,
-                          height: 1.55),
-                    );
-                  },
+                      '${rows.length} lines${all.length >= 500 ? ' · showing latest' : ''}',
+                      style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                          fontFamily: 'monospace')),
                 ),
+              ]),
+            ),
+            Expanded(
+              child: rows.isEmpty
+                  ? const Center(
+                      child: Text(
+                          'No lines yet for this filter. Reproduce the problem, then refresh.',
+                          style: TextStyle(color: AppColors.muted)))
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(14),
+                      itemCount: rows.length,
+                      itemBuilder: (_, index) {
+                        final line = rows[index];
+                        final level = _logLevel('${line['level'] ?? 'log'}');
+                        final color = level == 'error'
+                            ? AppColors.danger
+                            : level == 'warn'
+                                ? AppColors.warning
+                                : level == 'debug'
+                                    ? AppColors.muted
+                                    : const Color(0xFFD3DEEA);
+                        return SelectableText(
+                          '${_time(line['time'])} ${level.toUpperCase().padRight(5)} ${line['logger'] == null ? '' : '[${line['logger']}] '}${line['message'] ?? ''}',
+                          style: TextStyle(
+                              color: color,
+                              fontFamily: 'monospace',
+                              fontSize: 11.5,
+                              height: 1.55),
+                        );
+                      },
+                    ),
+            ),
+          ]),
         ),
       ),
       const SizedBox(height: 8),
@@ -1934,16 +2839,18 @@ class _AdminPageContentState extends State<AdminPageContent> {
     final stray = rows.where((r) => !mine.contains(r)).toList();
     Widget list(List<Map<String, dynamic>> values, String empty) =>
         values.isEmpty
-            ? Padding(padding: const EdgeInsets.all(8), child: Text(empty))
+            ? Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(empty, style: _muted()))
             : Column(children: [
                 for (final row in values)
                   _adaptiveTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading:
-                        const CircleAvatar(child: Icon(Icons.computer_rounded)),
+                    leading: AdminAvatar(
+                        '${_map(row['project'])['name'] ?? row['id']}',
+                        icon: Icons.computer_rounded),
                     title: Text(
                         '${_map(row['project'])['name'] ?? row['machine'] ?? row['name'] ?? 'Unknown machine'}',
-                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: SelectableText(
                         '${row['id']} · started ${_date(row['started_at'] ?? row['created_at'])}'),
                     actions: [
@@ -1956,32 +2863,49 @@ class _AdminPageContentState extends State<AdminPageContent> {
                   ),
               ]);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _statGrid([
-        AdminStatCard(
-            label: 'Running now',
-            value: '${rows.length}',
-            hint:
-                'Every one is being billed by ${response['provider'] ?? 'the provider'}'),
-        AdminStatCard(label: "Projects' computers", value: '${mine.length}'),
+      AdminGrid(maxColumns: 2, minTileWidth: 340, children: [
+        AdminSectionCard(
+          title: 'Running now',
+          icon: Icons.computer_rounded,
+          subtitle:
+              'Every one is billed by ${response['provider'] ?? 'the provider'}.',
+          child: AdminDonutPanel(
+            size: 132,
+            center: '${rows.length}',
+            caption: 'machines',
+            emptyLabel: 'None running',
+            slices: [
+              AdminChartSlice("Projects' computers", mine.length.toDouble(),
+                  AppColors.success),
+              AdminChartSlice('Not used by a project', stray.length.toDouble(),
+                  AppColors.warning),
+            ],
+          ),
+        ),
         AdminStatCard(
             label: 'Not used by a project',
             value: '${stray.length}',
             hint: stray.isEmpty
-                ? 'None'
+                ? 'Every running machine belongs to a project.'
                 : 'Running without a project: check these',
-            tone: stray.isEmpty ? null : AppColors.warning),
+            icon: Icons.report_problem_rounded,
+            tone: stray.isEmpty ? AppColors.success : AppColors.warning),
       ]),
       if (stray.isNotEmpty) ...[
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
         AdminSectionCard(
             title: 'Not used by a project',
+            icon: Icons.report_problem_rounded,
             subtitle:
                 'These run at the provider but no project on this node uses them.',
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
             child: list(stray, 'None')),
       ],
-      const SizedBox(height: 18),
+      const SizedBox(height: 16),
       AdminSectionCard(
           title: "Projects' computers",
+          icon: Icons.folder_rounded,
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
           child: list(mine, 'No project computer is running right now.')),
     ]);
   }
@@ -1999,18 +2923,21 @@ class _AdminPageContentState extends State<AdminPageContent> {
         .toList();
     final used = rows.where((v) => _map(v['project']).isNotEmpty).toList();
     final unused = rows.where((v) => _map(v['project']).isEmpty).toList();
+    final usedAll = all.where((v) => _map(v['project']).isNotEmpty).length;
     Widget list(List<Map<String, dynamic>> values, String empty) =>
         values.isEmpty
-            ? Padding(padding: const EdgeInsets.all(8), child: Text(empty))
+            ? Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(empty, style: _muted()))
             : Column(children: [
                 for (final v in values)
                   _adaptiveTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading:
-                        const CircleAvatar(child: Icon(Icons.storage_outlined)),
+                    leading: AdminAvatar(
+                        '${_map(v['project'])['name'] ?? v['name'] ?? v['id']}',
+                        icon: Icons.storage_rounded),
                     title: Text(
                         '${_map(v['project'])['name'] ?? v['name'] ?? v['id']}',
-                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: SelectableText([
                       v['name'],
                       v['id'],
@@ -2025,34 +2952,50 @@ class _AdminPageContentState extends State<AdminPageContent> {
                   ),
               ]);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _statGrid([
-        AdminStatCard(
-            label: 'Volumes',
-            value: '${all.length}',
-            hint: '${response['provider'] ?? 'Provider'} storage'),
-        AdminStatCard(
-            label: "Holding a project's files",
-            value: '${all.where((v) => _map(v['project']).isNotEmpty).length}'),
+      AdminGrid(maxColumns: 2, minTileWidth: 340, children: [
+        AdminSectionCard(
+          title: 'Volumes',
+          icon: Icons.storage_rounded,
+          subtitle: '${response['provider'] ?? 'Provider'} storage',
+          child: AdminDonutPanel(
+            size: 132,
+            center: '${all.length}',
+            caption: 'volumes',
+            slices: [
+              AdminChartSlice("Holding a project's files", usedAll.toDouble(),
+                  AppColors.success),
+              AdminChartSlice('With no project',
+                  (all.length - usedAll).toDouble(), AppColors.warning),
+            ],
+          ),
+        ),
         AdminStatCard(
             label: 'With no project',
-            value: '${all.where((v) => _map(v['project']).isEmpty).length}',
-            hint: "Left from deleted projects, or not this node's"),
+            value: '${all.length - usedAll}',
+            hint: "Left from deleted projects, or not this node's",
+            icon: Icons.cleaning_services_rounded,
+            tone:
+                all.length == usedAll ? AppColors.success : AppColors.warning),
       ]),
-      const SizedBox(height: 14),
+      const SizedBox(height: 18),
       AdminSearchField(
           controller: search,
           hint: 'Search by project, volume name or id',
           onChanged: (_) => setState(() {})),
-      const SizedBox(height: 18),
+      const SizedBox(height: 16),
       AdminSectionCard(
           title: 'Projects (${used.length})',
+          icon: Icons.folder_rounded,
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
           child: list(used, "No volume holds a project's files.")),
       if (unused.isNotEmpty) ...[
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
         AdminSectionCard(
             title: 'No project (${unused.length})',
+            icon: Icons.cleaning_services_rounded,
             subtitle:
                 'Nothing on this node uses these. Remove them at the provider only after checking they are not needed.',
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
             child: list(unused, 'None')),
       ],
     ]);
@@ -2085,115 +3028,154 @@ class _AdminPageContentState extends State<AdminPageContent> {
       );
 
   Widget _categories() {
+    final scheme = Theme.of(context).colorScheme;
     final settings = _map(widget.results['settings.get']);
     final enabled = _stringList(settings['categories']);
-    const builtIn = [
-      'productivity',
-      'research',
-      'coding',
-      'writing',
-      'design',
-      'data',
-      'business',
-      'education',
-      'finance',
-      'legal',
-      'marketing',
-      'support',
-    ];
-    final all = <String>{...builtIn, ...enabled}.toList()..sort();
+    const builtIn = {
+      'productivity': Icons.task_alt_rounded,
+      'research': Icons.travel_explore_rounded,
+      'coding': Icons.code_rounded,
+      'writing': Icons.edit_note_rounded,
+      'design': Icons.palette_outlined,
+      'data': Icons.dataset_outlined,
+      'business': Icons.business_center_outlined,
+      'education': Icons.school_outlined,
+      'finance': Icons.show_chart_rounded,
+      'legal': Icons.gavel_rounded,
+      'marketing': Icons.campaign_outlined,
+      'support': Icons.support_agent_rounded,
+    };
+    final custom = enabled.where((c) => !builtIn.containsKey(c)).toList()
+      ..sort();
     final q = search.text.trim().toLowerCase();
-    final rows = all.where((x) => q.isEmpty || x.contains(q)).toList();
+    bool match(String id) => q.isEmpty || id.contains(q);
+    void toggle(String id) {
+      final next = [...enabled];
+      enabled.contains(id) ? next.remove(id) : next.add(id);
+      widget.onDirectAction('settings', 'update', {'categories': next});
+    }
+
+    String label(String id) => id.isEmpty
+        ? id
+        : '${id[0].toUpperCase()}${id.substring(1).replaceAll('-', ' ')}';
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Expanded(
-            child: Text('${enabled.length} categories on', style: _muted())),
-        FilledButton.tonalIcon(
-          onPressed: () => _addCategory(enabled),
-          icon: const Icon(Icons.add_rounded, size: 18),
-          label: const Text('Add'),
-        ),
+      AdminGrid(maxColumns: 2, minTileWidth: 260, children: [
+        AdminStatCard(
+            label: 'Shown in the market',
+            value: '${enabled.length}',
+            hint: 'Tap a category below to turn it on or off.',
+            icon: Icons.category_rounded,
+            progress: (builtIn.length + custom.length) == 0
+                ? 0
+                : enabled.length / (builtIn.length + custom.length)),
+        AdminStatCard(
+            label: 'Custom',
+            value: '${custom.length}',
+            hint: 'Added for this node',
+            icon: Icons.new_label_rounded,
+            tone: AppColors.cyan),
       ]),
-      const SizedBox(height: 12),
-      AdminSearchField(
-          controller: search,
-          hint: 'Filter categories',
-          onChanged: (_) => setState(() {})),
-      const SizedBox(height: 14),
-      AdminDataTable(
-        empty: 'No categories match.',
-        columns: const [
-          AdminTableColumn('Category', width: 250),
-          AdminTableColumn('Kind', width: 150),
-          AdminTableColumn('Status', width: 120),
-          AdminTableColumn('Actions', width: 150, align: TextAlign.right),
-        ],
-        rows: [
-          for (final id in rows)
-            [
-              Text(id, style: const TextStyle(fontWeight: FontWeight.w800)),
-              Text(builtIn.contains(id) ? 'Built-in' : 'Custom'),
-              AdminStatusPill(enabled.contains(id) ? 'active' : 'disabled'),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    final next = [...enabled];
-                    if (enabled.contains(id)) {
-                      next.remove(id);
-                    } else {
-                      next.add(id);
-                    }
-                    widget.onDirectAction(
-                        'settings', 'update', {'categories': next});
-                  },
-                  child: Text(builtIn.contains(id)
-                      ? (enabled.contains(id) ? 'Disable' : 'Enable')
-                      : 'Remove'),
-                ),
+      const SizedBox(height: 18),
+      _toolbar(
+          AdminSearchField(
+              controller: search,
+              hint: 'Filter categories',
+              onChanged: (_) => setState(() {})),
+          [
+            FilledButton.icon(
+              onPressed: () => _addCategory(enabled),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Add category'),
+            ),
+          ]),
+      const SizedBox(height: 16),
+      AdminSectionCard(
+        title: 'Built-in',
+        icon: Icons.inventory_2_rounded,
+        subtitle: 'Selected categories are offered when listing an agent.',
+        child: Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final e in builtIn.entries)
+            if (match(e.key))
+              FilterChip(
+                selected: enabled.contains(e.key),
+                avatar: Icon(e.value, size: 18),
+                label: Text(label(e.key)),
+                onSelected: (_) => toggle(e.key),
               ),
-            ],
-        ],
+        ]),
+      ),
+      const SizedBox(height: 14),
+      AdminSectionCard(
+        title: 'Custom',
+        icon: Icons.new_label_rounded,
+        child: custom.where(match).isEmpty
+            ? Text(
+                custom.isEmpty
+                    ? 'No custom categories yet. Add one for a niche your node serves.'
+                    : 'No custom category matches.',
+                style: _muted())
+            : Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final id in custom)
+                  if (match(id))
+                    InputChip(
+                      label: Text(label(id)),
+                      avatar: Icon(Icons.label_rounded,
+                          size: 18, color: scheme.primary),
+                      deleteIcon: const Icon(Icons.close_rounded, size: 18),
+                      deleteButtonTooltipMessage: 'Remove',
+                      onDeleted: () => toggle(id),
+                    ),
+              ]),
       ),
     ]);
   }
 
   Future<void> _addCategory(List<String> enabled) async {
     final controller = TextEditingController();
-    final value = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add category'),
-        content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                  'Lowercase id; spaces become hyphens. Saved immediately.'),
-              const SizedBox(height: 14),
-              TextField(
-                  controller: controller,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Category id', hintText: 'e.g. legal')),
-            ]),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(context, controller.text),
-              child: const Text('Add')),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (value == null) return;
-    final id = value
+    String slug(String value) => value
         .trim()
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
         .replaceAll(RegExp(r'^-+|-+$'), '');
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          icon: const Icon(Icons.new_label_rounded),
+          title: const Text('Add category'),
+          content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                    controller: controller,
+                    autofocus: true,
+                    onChanged: (_) => setDialog(() {}),
+                    onSubmitted: (_) => Navigator.pop(context, controller.text),
+                    decoration: const InputDecoration(
+                        labelText: 'Name', hintText: 'e.g. Real estate')),
+                const SizedBox(height: 12),
+                if (slug(controller.text).isNotEmpty)
+                  Chip(
+                      avatar: const Icon(Icons.label_rounded, size: 18),
+                      label: Text(slug(controller.text))),
+              ]),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: slug(controller.text).isEmpty
+                    ? null
+                    : () => Navigator.pop(context, controller.text),
+                child: const Text('Add')),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    if (value == null) return;
+    final id = slug(value);
     if (id.isEmpty) return;
     await widget.onDirectAction('settings', 'update', {
       'categories': <String>{...enabled, id}.toList(),
@@ -2217,12 +3199,14 @@ class _AdminPageContentState extends State<AdminPageContent> {
     );
   }
 
-  void _showUser(Map<String, dynamic> account) {
+  void _showUser(Map<String, dynamic> account, {int tab = 0}) {
     showDialog<void>(
       context: context,
       builder: (context) => _UserDialog(
         account: account,
+        initialTab: tab,
         onAction: widget.onAction,
+        onEdit: () => _editUser(account),
         loadFinance: () => widget.onDirectAction('finance', 'admin_account', {
           'account': account['id'],
           'limit': 200,
@@ -2231,21 +3215,19 @@ class _AdminPageContentState extends State<AdminPageContent> {
     );
   }
 
-  Widget _filterMenu(Map<String, String> entries) => DropdownButton<String>(
-        value: entries.containsKey(filter) ? filter : entries.keys.first,
-        items: [
-          for (final e in entries.entries)
-            DropdownMenuItem(value: e.key, child: Text(e.value))
-        ],
-        onChanged: (value) =>
-            setState(() => filter = value ?? entries.keys.first),
+  Widget _heading(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+        child: Text(text,
+            style: const TextStyle(
+                fontSize: 18, letterSpacing: -.2, fontWeight: FontWeight.w800)),
       );
 
-  Widget _filterChip(String label, String value, {int? count}) => FilterChip(
-        selected: filter == value,
-        label: Text(count != null && count > 0 ? '$label  $count' : label),
-        onSelected: (_) => setState(() => filter = value),
-      );
+  Widget _personCell(String name, String secondary, {IconData? icon}) =>
+      Row(children: [
+        AdminAvatar(name, size: 34, icon: icon),
+        const SizedBox(width: 10),
+        Expanded(child: _primaryCell(name, secondary)),
+      ]);
 
   /// A toolbar whose [actions] sit beside [main] on wide screens and wrap
   /// below it on narrow ones, so neither side gets squeezed.
@@ -2289,6 +3271,8 @@ class _AdminPageContentState extends State<AdminPageContent> {
         final wide = constraints.maxWidth >= 560;
         return ListTile(
           contentPadding: contentPadding,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppShape.control)),
           leading: leading,
           title: title,
           subtitle: wide || actions.isEmpty
@@ -2303,33 +3287,43 @@ class _AdminPageContentState extends State<AdminPageContent> {
       });
 
   Widget _settingStatus(Map<String, dynamic> setting) {
+    final scheme = Theme.of(context).colorScheme;
     final active = setting['active'] == true;
+    final partly = !active &&
+        (setting['chat_active'] == true || setting['embedding_active'] == true);
+    final color = active
+        ? AppColors.success
+        : partly
+            ? AppColors.warning
+            : scheme.onSurfaceVariant;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-            color: active
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.outlineVariant),
+        color: color.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(AppShape.inner),
       ),
       child: Row(children: [
-        Icon(active ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-            color: active ? AppColors.success : AppColors.muted),
-        const SizedBox(width: 12),
+        Icon(
+            active
+                ? Icons.check_circle_rounded
+                : partly
+                    ? Icons.timelapse_rounded
+                    : Icons.pause_circle_outline_rounded,
+            color: color,
+            size: 28),
+        const SizedBox(width: 14),
         Expanded(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(
               active
                   ? 'In effect'
-                  : (setting['chat_active'] == true ||
-                          setting['embedding_active'] == true)
+                  : partly
                       ? 'Partly in effect'
                       : 'Not in effect',
-              style: const TextStyle(fontWeight: FontWeight.w900)),
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
           const SizedBox(height: 2),
           Text('${setting['status'] ?? 'No status from the node.'}',
               style: _muted()),
@@ -2357,24 +3351,6 @@ class _AdminPageContentState extends State<AdminPageContent> {
         'embedding_model_id': setting['embedding_model_id'] ?? '',
       };
 
-  /// Dropdown items for [options], plus one for [value] when the node no
-  /// longer offers it (a disabled provider, a removed model): a dropdown whose
-  /// value has no matching item fails to build.
-  List<DropdownMenuItem<String>> _optionItems(
-          List<Map<String, dynamic>> options, String value) =>
-      [
-        for (final o in options)
-          DropdownMenuItem(
-              value: '${o['id']}',
-              child: Text('${o['name'] ?? o['id']}',
-                  overflow: TextOverflow.ellipsis)),
-        if (value.isNotEmpty && !options.any((o) => '${o['id']}' == value))
-          DropdownMenuItem(
-              value: value,
-              child: Text('$value (unavailable)',
-                  overflow: TextOverflow.ellipsis)),
-      ];
-
   List<Map<String, dynamic>> _decisionModels(
       List<Map<String, dynamic>> providers, String providerId) {
     final provider = providers
@@ -2383,60 +3359,10 @@ class _AdminPageContentState extends State<AdminPageContent> {
     return _listOfMaps(provider?['decision_models'] ?? provider?['models']);
   }
 
-  TextStyle _eyebrow() => TextStyle(
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
-      fontSize: 11,
-      fontWeight: FontWeight.w900,
-      letterSpacing: .8);
   TextStyle _muted() => TextStyle(
       color: Theme.of(context).colorScheme.onSurfaceVariant,
       fontSize: 12,
       height: 1.35);
-}
-
-class _FinanceBars extends StatelessWidget {
-  const _FinanceBars({required this.items, required this.total});
-  final List<({String label, double value, Color color})> items;
-  final double total;
-
-  @override
-  Widget build(BuildContext context) => Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          for (final item in items)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(children: [
-                SizedBox(
-                    width: 82,
-                    child:
-                        Text(item.label, style: const TextStyle(fontSize: 11))),
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(7),
-                    child: LinearProgressIndicator(
-                      minHeight: 18,
-                      value: total <= 0 ? 0 : item.value / total,
-                      backgroundColor:
-                          Theme.of(context).colorScheme.surfaceContainerHighest,
-                      valueColor: AlwaysStoppedAnimation(item.color),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                    width: 42,
-                    child: Text(
-                        total <= 0
-                            ? '0%'
-                            : '${(item.value / total * 100).round()}%',
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.w800))),
-              ]),
-            ),
-        ],
-      );
 }
 
 class _ModelEditorDialog extends StatefulWidget {
@@ -2663,6 +3589,63 @@ class _ModelEditorDialogState extends State<_ModelEditorDialog> {
       );
 }
 
+/// A Save bar that appears once something changed.
+class _SaveBar extends StatelessWidget {
+  const _SaveBar(
+      {required this.dirty,
+      required this.busy,
+      required this.onSave,
+      required this.onReset,
+      this.message = 'You have unsaved changes'});
+  final bool dirty;
+  final bool busy;
+  final VoidCallback onSave;
+  final VoidCallback onReset;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: !dirty
+          ? const SizedBox(width: double.infinity, key: ValueKey('clean'))
+          : Container(
+              key: const ValueKey('dirty'),
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
+              decoration: BoxDecoration(
+                  color: scheme.inverseSurface,
+                  borderRadius: BorderRadius.circular(999)),
+              child: Row(children: [
+                Icon(Icons.edit_note_rounded, color: scheme.onInverseSurface),
+                const SizedBox(width: 10),
+                Expanded(
+                    child: Text(message,
+                        style: TextStyle(
+                            color: scheme.onInverseSurface,
+                            fontWeight: FontWeight.w600))),
+                TextButton(
+                    onPressed: busy ? null : onReset,
+                    style: TextButton.styleFrom(
+                        foregroundColor: scheme.inversePrimary),
+                    child: const Text('Reset')),
+                const SizedBox(width: 4),
+                FilledButton.icon(
+                    onPressed: busy ? null : onSave,
+                    icon: busy
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.save_rounded, size: 18),
+                    label: Text(busy ? 'Saving…' : 'Save')),
+              ]),
+            ),
+    );
+  }
+}
+
 class _PricingEditor extends StatefulWidget {
   const _PricingEditor(
       {super.key,
@@ -2678,79 +3661,61 @@ class _PricingEditor extends StatefulWidget {
 }
 
 class _PricingEditorState extends State<_PricingEditor> {
-  late final Map<String, TextEditingController> fields;
+  /// Base rates in dollars per minute, resource rates in credits per minute.
+  late Map<String, double> values = _initial();
   bool advanced = false;
   bool busy = false;
+
+  Map<String, double> _initial() {
+    final p = _map(widget.settings['pricing']);
+    final sandbox = _map(p['sandbox']);
+    final tool = _map(p['tool']);
+    double usd(dynamic v) => ledgerToUsd(_number(v)).toDouble();
+    double credits(dynamic v) => ledgerToCredits(_number(v)).toDouble();
+    return {
+      'agent_per_minute': usd(p['agent_per_minute']),
+      'sandbox.per_minute': usd(sandbox['per_minute']),
+      'tool.per_minute': usd(tool['per_minute']),
+      'sandbox.cpu_per_min': credits(sandbox['cpu_per_min']),
+      'sandbox.memory_per_gb_min': credits(sandbox['memory_per_gb_min']),
+      'sandbox.disk_per_gb_min': credits(sandbox['disk_per_gb_min']),
+      'tool.cpu_per_min': credits(tool['cpu_per_min']),
+      'tool.memory_per_gb_min': credits(tool['memory_per_gb_min']),
+      'tool.disk_per_gb_min': credits(tool['disk_per_gb_min']),
+    };
+  }
 
   @override
   void initState() {
     super.initState();
-    final p = _map(widget.settings['pricing']);
-    final sandbox = _map(p['sandbox']);
-    final tool = _map(p['tool']);
-    fields = {
-      'agent_per_minute':
-          _controller(ledgerUsdField(_number(p['agent_per_minute']))),
-      'sandbox.per_minute':
-          _controller(ledgerUsdField(_number(sandbox['per_minute']))),
-      'tool.per_minute':
-          _controller(ledgerUsdField(_number(tool['per_minute']))),
-      'sandbox.cpu_per_min':
-          _controller(ledgerCreditsField(_number(sandbox['cpu_per_min']))),
-      'sandbox.memory_per_gb_min': _controller(
-          ledgerCreditsField(_number(sandbox['memory_per_gb_min']))),
-      'sandbox.disk_per_gb_min':
-          _controller(ledgerCreditsField(_number(sandbox['disk_per_gb_min']))),
-      'tool.cpu_per_min':
-          _controller(ledgerCreditsField(_number(tool['cpu_per_min']))),
-      'tool.memory_per_gb_min':
-          _controller(ledgerCreditsField(_number(tool['memory_per_gb_min']))),
-      'tool.disk_per_gb_min':
-          _controller(ledgerCreditsField(_number(tool['disk_per_gb_min']))),
-    };
-    advanced = fields.entries
+    advanced = values.entries
         .where((e) => e.key.contains('.') && !e.key.endsWith('per_minute'))
-        .any((e) => _parse(e.value.text) > 0);
+        .any((e) => e.value > 0);
   }
 
-  @override
-  void dispose() {
-    for (final field in fields.values) field.dispose();
-    super.dispose();
+  bool get dirty {
+    final initial = _initial();
+    return values.entries.any((e) => (initial[e.key]! - e.value).abs() > 1e-9);
   }
 
   Future<void> save() async {
-    final agent = parseUsdToLedger(fields['agent_per_minute']!.text);
-    final computer = parseUsdToLedger(fields['sandbox.per_minute']!.text);
-    final tool = parseUsdToLedger(fields['tool.per_minute']!.text);
-    final resources = <String, int?>{
-      for (final key in fields.keys
-          .where((key) => key.contains('.') && !key.endsWith('.per_minute')))
-        key: parseCreditsToLedger(fields[key]!.text),
-    };
-    if (agent == null ||
-        computer == null ||
-        tool == null ||
-        resources.values.any((value) => value == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter valid non-negative rates.')));
-      return;
-    }
+    int usd(String key) => usdToLedger(values[key]!);
+    int credits(String key) => creditsToLedger(values[key]!);
     setState(() => busy = true);
     try {
       await widget.onSave({
-        'agent_per_minute': agent,
+        'agent_per_minute': usd('agent_per_minute'),
         'sandbox': {
-          'per_minute': computer,
-          'cpu_per_min': resources['sandbox.cpu_per_min'],
-          'memory_per_gb_min': resources['sandbox.memory_per_gb_min'],
-          'disk_per_gb_min': resources['sandbox.disk_per_gb_min'],
+          'per_minute': usd('sandbox.per_minute'),
+          'cpu_per_min': credits('sandbox.cpu_per_min'),
+          'memory_per_gb_min': credits('sandbox.memory_per_gb_min'),
+          'disk_per_gb_min': credits('sandbox.disk_per_gb_min'),
         },
         'tool': {
-          'per_minute': tool,
-          'cpu_per_min': resources['tool.cpu_per_min'],
-          'memory_per_gb_min': resources['tool.memory_per_gb_min'],
-          'disk_per_gb_min': resources['tool.disk_per_gb_min'],
+          'per_minute': usd('tool.per_minute'),
+          'cpu_per_min': credits('tool.cpu_per_min'),
+          'memory_per_gb_min': credits('tool.memory_per_gb_min'),
+          'disk_per_gb_min': credits('tool.disk_per_gb_min'),
         },
       });
     } finally {
@@ -2758,93 +3723,141 @@ class _PricingEditorState extends State<_PricingEditor> {
     }
   }
 
-  Widget input(String key, String label, String hint,
-          {String suffix = '\$ / min'}) =>
-      TextField(
-        controller: fields[key],
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: InputDecoration(
-            labelText: label, hintText: hint, suffixText: suffix),
+  Widget rate(String key, String label, String hint, IconData icon) =>
+      AppAmountField(
+        label: label,
+        hint: '$hint · \$${(values[key]! * 60).toStringAsFixed(2)} an hour',
+        value: values[key]!,
+        max: 1,
+        step: .01,
+        decimals: 4,
+        unit: '\$ / min',
+        presets: const [.01, .02, .05, .1, .25],
+        presetLabel: _usd,
+        format: (v) => '${_usd(v)} / min',
+        onChanged: (v) => setState(() => values[key] = v),
+      );
+
+  Widget resource(String key, String label, String unit) => AppAmountField(
+        label: label,
+        value: values[key]!,
+        max: 5,
+        step: .1,
+        decimals: 2,
+        unit: 'credits',
+        presets: const [0, .5, 1, 2],
+        presetLabel: (v) => v == 0 ? 'None' : compactDecimal(v),
+        format: (v) =>
+            v == 0 ? 'None' : '${compactDecimal(v)} cr / $unit / min',
+        onChanged: (v) => setState(() => values[key] = v),
       );
 
   @override
-  Widget build(BuildContext context) => ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 650),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(
-                child: Text(
-                    'What users pay per minute. Credits are shown to users at 100 per \$1.',
-                    style: TextStyle(
-                        color:
-                            Theme.of(context).colorScheme.onSurfaceVariant))),
-            FilledButton.icon(
-                onPressed: busy ? null : save,
-                icon: const Icon(Icons.save_outlined, size: 18),
-                label: Text(busy ? 'Saving…' : 'Save')),
+  Widget build(BuildContext context) {
+    final palette = adminPalette(context);
+    final hourly = [
+      AdminChartSlice(
+          'Agent time', values['agent_per_minute']! * 60, palette[0],
+          display:
+              '\$${(values['agent_per_minute']! * 60).toStringAsFixed(2)}'),
+      AdminChartSlice(
+          'Project computer', values['sandbox.per_minute']! * 60, palette[1],
+          display:
+              '\$${(values['sandbox.per_minute']! * 60).toStringAsFixed(2)}'),
+      AdminChartSlice('Tools', values['tool.per_minute']! * 60, palette[3],
+          display: '\$${(values['tool.per_minute']! * 60).toStringAsFixed(2)}'),
+    ];
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _SaveBar(
+            dirty: dirty,
+            busy: busy,
+            onSave: save,
+            onReset: () => setState(() => values = _initial())),
+        AdminSectionCard(
+          title: 'An hour of busy work costs a user',
+          icon: Icons.schedule_rounded,
+          subtitle:
+              'Agent time, its project computer and tools, before model tokens. Credits are shown at 100 per \$1.',
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+                '\$${hourly.fold<double>(0, (sum, s) => sum + s.value).toStringAsFixed(2)}',
+                style: const TextStyle(
+                    fontSize: 34,
+                    letterSpacing: -.8,
+                    fontWeight: FontWeight.w800)),
+            const SizedBox(height: 12),
+            AdminStackedBar(slices: hourly, height: 18),
           ]),
-          const SizedBox(height: 18),
-          AdminSectionCard(
-              title: 'Base rates',
-              child: Column(children: [
-                input('agent_per_minute', 'Agent time', '0.06'),
-                const SizedBox(height: 14),
-                input('sandbox.per_minute', 'Project computer', '0.12'),
-                const SizedBox(height: 14),
-                input('tool.per_minute', 'Tools & miniapps', '0.02'),
-              ])),
+        ),
+        const SizedBox(height: 16),
+        AdminSectionCard(
+            title: 'Base rates',
+            icon: Icons.sell_rounded,
+            subtitle: 'What users pay per minute.',
+            child: Column(children: [
+              rate('agent_per_minute', 'Agent time', 'While an agent works',
+                  Icons.smart_toy_outlined),
+              const SizedBox(height: 22),
+              rate('sandbox.per_minute', 'Project computer',
+                  'While the computer is awake', Icons.computer_outlined),
+              const SizedBox(height: 22),
+              rate('tool.per_minute', 'Tools & miniapps', 'While one runs',
+                  Icons.build_outlined),
+            ])),
+        const SizedBox(height: 16),
+        AdminSectionCard(
+            title: 'Model tokens',
+            icon: Icons.memory_rounded,
+            subtitle: 'Input and output prices are set per model.',
+            child: Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.tonalIcon(
+                    onPressed: widget.onModels,
+                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                    label: const Text('Edit model prices')))),
+        const SizedBox(height: 16),
+        AppSwitchCard(
+          icon: Icons.tune_rounded,
+          title: 'Per-resource rates',
+          subtitle:
+              'Charge extra for each vCPU, GB of RAM and GB of disk. Off means flat pricing.',
+          value: advanced,
+          onChanged: (v) => setState(() => advanced = v),
+        ),
+        if (advanced) ...[
           const SizedBox(height: 16),
           AdminSectionCard(
-              title: 'Model tokens',
-              subtitle: 'Input and output prices are set per model.',
-              child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton(
-                      onPressed: widget.onModels,
-                      child: const Text('Edit model prices')))),
+            title: 'Project computer',
+            icon: Icons.computer_rounded,
+            subtitle: 'Extra credits per minute, per unit.',
+            child: Column(children: [
+              resource('sandbox.cpu_per_min', 'vCPU', 'vCPU'),
+              const SizedBox(height: 20),
+              resource('sandbox.memory_per_gb_min', 'RAM', 'GB'),
+              const SizedBox(height: 20),
+              resource('sandbox.disk_per_gb_min', 'Disk', 'GB'),
+            ]),
+          ),
           const SizedBox(height: 16),
-          TextButton.icon(
-              onPressed: () => setState(() => advanced = !advanced),
-              icon: Icon(advanced ? Icons.expand_less : Icons.expand_more),
-              label: Text(
-                  '${advanced ? 'Hide' : 'Show'} per-resource rates (advanced)')),
-          if (advanced) ...[
-            const SizedBox(height: 10),
-            AdminSectionCard(
-              title: 'Per-resource rates',
-              subtitle:
-                  'Extra credits per minute for each vCPU, GB of RAM and GB of disk. Leave at 0 for flat pricing.',
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Project computer',
-                        style: TextStyle(fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 10),
-                    input('sandbox.cpu_per_min', 'vCPU', '0',
-                        suffix: 'credits / vCPU / min'),
-                    const SizedBox(height: 10),
-                    input('sandbox.memory_per_gb_min', 'RAM GB', '0',
-                        suffix: 'credits / GB / min'),
-                    const SizedBox(height: 10),
-                    input('sandbox.disk_per_gb_min', 'Disk GB', '0',
-                        suffix: 'credits / GB / min'),
-                    const SizedBox(height: 18),
-                    const Text('Tools & miniapps',
-                        style: TextStyle(fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 10),
-                    input('tool.cpu_per_min', 'vCPU', '0',
-                        suffix: 'credits / vCPU / min'),
-                    const SizedBox(height: 10),
-                    input('tool.memory_per_gb_min', 'RAM GB', '0',
-                        suffix: 'credits / GB / min'),
-                    const SizedBox(height: 10),
-                    input('tool.disk_per_gb_min', 'Disk GB', '0',
-                        suffix: 'credits / GB / min'),
-                  ]),
-            ),
-          ],
-        ]),
-      );
+          AdminSectionCard(
+            title: 'Tools & miniapps',
+            icon: Icons.build_rounded,
+            subtitle: 'Extra credits per minute, per unit.',
+            child: Column(children: [
+              resource('tool.cpu_per_min', 'vCPU', 'vCPU'),
+              const SizedBox(height: 20),
+              resource('tool.memory_per_gb_min', 'RAM', 'GB'),
+              const SizedBox(height: 20),
+              resource('tool.disk_per_gb_min', 'Disk', 'GB'),
+            ]),
+          ),
+        ],
+      ]),
+    );
+  }
 }
 
 class _MachineEditor extends StatefulWidget {
@@ -2857,107 +3870,189 @@ class _MachineEditor extends StatefulWidget {
 }
 
 class _MachineEditorState extends State<_MachineEditor> {
-  late final Map<String, TextEditingController> fields;
+  /// CPU in vCPUs, memory and disk in GB; null means automatic.
+  late Map<String, double?> values = _initial();
   bool busy = false;
-  @override
-  void initState() {
-    super.initState();
+
+  Map<String, double?> _initial() {
     final m = _map(widget.settings['machine']);
-    fields = {
-      'cpu': _controller(m['cpu']),
-      'memory_mb': _controller(_number(m['memory_mb']) / 1024),
-      'disk_mb': _controller(_number(m['disk_mb']) / 1024),
-      'reserve_cpu': _controller(m['reserve_cpu']),
-      'reserve_memory_mb': _controller(m['reserve_memory_mb'] == null
-          ? ''
-          : _number(m['reserve_memory_mb']) / 1024),
-      'max_cpu': _controller(m['max_cpu']),
-      'max_memory_mb': _controller(
-          m['max_memory_mb'] == null ? '' : _number(m['max_memory_mb']) / 1024),
+    double? gb(dynamic v) => v == null ? null : _number(v) / 1024;
+    double? n(dynamic v) => v == null || '$v'.isEmpty ? null : _number(v);
+    return {
+      'cpu': n(m['cpu']) ?? 2,
+      'memory': gb(m['memory_mb']) ?? 2,
+      'disk': gb(m['disk_mb']) ?? 4,
+      'reserve_cpu': n(m['reserve_cpu']),
+      'reserve_memory': gb(m['reserve_memory_mb']),
+      'max_cpu': n(m['max_cpu']),
+      'max_memory': gb(m['max_memory_mb']),
     };
   }
 
-  @override
-  void dispose() {
-    for (final f in fields.values) f.dispose();
-    super.dispose();
+  bool get dirty {
+    final initial = _initial();
+    return values.entries.any((e) => initial[e.key] != e.value);
   }
 
-  Widget field(String key, String label, String hint, {String? suffix}) =>
-      TextField(
-          controller: fields[key],
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-              labelText: label, hintText: hint, suffixText: suffix));
   Future<void> save() async {
     setState(() => busy = true);
     try {
-      double? optional(String key, {double factor = 1}) =>
-          fields[key]!.text.trim().isEmpty
-              ? null
-              : _parse(fields[key]!.text) * factor;
+      int? mb(double? gb) => gb == null ? null : (gb * 1024).round();
       await widget.onSave({
-        'cpu': _parse(fields['cpu']!.text),
-        'memory_mb': (_parse(fields['memory_mb']!.text) * 1024).round(),
-        'disk_mb': (_parse(fields['disk_mb']!.text) * 1024).round(),
-        'reserve_cpu': optional('reserve_cpu'),
-        'reserve_memory_mb':
-            optional('reserve_memory_mb', factor: 1024)?.round(),
-        'max_cpu': optional('max_cpu'),
-        'max_memory_mb': optional('max_memory_mb', factor: 1024)?.round(),
+        'cpu': values['cpu'],
+        'memory_mb': mb(values['memory']),
+        'disk_mb': mb(values['disk']),
+        'reserve_cpu': values['reserve_cpu'],
+        'reserve_memory_mb': mb(values['reserve_memory']),
+        'max_cpu': values['max_cpu'],
+        'max_memory_mb': mb(values['max_memory']),
       });
     } finally {
       if (mounted) setState(() => busy = false);
     }
   }
 
+  String _size(double v, String unit) => '${compactDecimal(v)} $unit';
+
+  Widget sizeChips(String key, String label, List<double> options, String unit,
+      {bool auto = false, String? hint}) {
+    final value = values[key];
+    final all = <double>{...options, if (value != null) value}.toList()..sort();
+    return AppChoiceField<double?>(
+      label: label,
+      hint: hint,
+      value: value,
+      onChanged: (v) => setState(() => values[key] = v),
+      choices: [
+        if (auto)
+          const AppChoice<double?>(null, 'Automatic',
+              icon: Icons.auto_mode_rounded),
+        for (final o in all) AppChoice<double?>(o, _size(o, unit)),
+      ],
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 650),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                  onPressed: busy ? null : save,
-                  icon: const Icon(Icons.save_outlined, size: 18),
-                  label: Text(busy ? 'Saving…' : 'Save'))),
-          const SizedBox(height: 14),
-          AdminSectionCard(
-              title: 'Billed size',
-              subtitle:
-                  "What a project's computer is sold at and created with.",
-              child: Row(children: [
-                Expanded(child: field('cpu', 'vCPU', '2')),
-                const SizedBox(width: 12),
-                Expanded(child: field('memory_mb', 'RAM', '2', suffix: 'GB')),
-                const SizedBox(width: 12),
-                Expanded(child: field('disk_mb', 'Disk', '4', suffix: 'GB'))
-              ])),
-          const SizedBox(height: 16),
-          AdminSectionCard(
-              title: 'Idle reserve',
-              subtitle:
-                  'The share guaranteed and billed while a computer is awake and quiet. Blank uses automatic defaults.',
-              child: Row(children: [
-                Expanded(child: field('reserve_cpu', 'vCPU', 'auto')),
-                const SizedBox(width: 12),
-                Expanded(
-                    child:
-                        field('reserve_memory_mb', 'RAM', 'auto', suffix: 'GB'))
-              ])),
-          const SizedBox(height: 16),
-          AdminSectionCard(
-              title: 'Ceiling',
-              subtitle:
-                  'The most a busy computer can use. Blank uses automatic defaults.',
-              child: Row(children: [
-                Expanded(child: field('max_cpu', 'vCPU', 'auto')),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: field('max_memory_mb', 'RAM', 'auto', suffix: 'GB'))
-              ])),
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final cpu = values['cpu'] ?? 2;
+    final memory = values['memory'] ?? 2;
+    Widget range(String label, double? reserve, double billed, double? max,
+        String unit) {
+      final top = [billed, reserve ?? 0, max ?? billed * 2]
+          .reduce((a, b) => a > b ? a : b);
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+        Text(
+            'reserve ${reserve == null ? 'auto' : _size(reserve, unit)} · billed ${_size(billed, unit)} · ceiling ${max == null ? 'auto' : _size(max, unit)}',
+            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+        const SizedBox(height: 8),
+        AdminStackedBar(legend: false, height: 14, slices: [
+          AdminChartSlice(
+              'Reserve', reserve ?? billed * .25, AppColors.success),
+          AdminChartSlice(
+              'Billed', billed - (reserve ?? billed * .25), scheme.primary),
+          AdminChartSlice(
+              'Burst', (max ?? billed * 2) - billed, AppColors.cyan),
+          AdminChartSlice('', top - (max ?? billed * 2) + .0001,
+              scheme.surfaceContainerHighest),
         ]),
-      );
+      ]);
+    }
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _SaveBar(
+            dirty: dirty,
+            busy: busy,
+            onSave: save,
+            onReset: () => setState(() => values = _initial())),
+        AdminSectionCard(
+          title: 'At a glance',
+          icon: Icons.insights_rounded,
+          subtitle:
+              'From the idle reserve, through the billed size, up to the burst ceiling.',
+          child: Column(children: [
+            range('CPU', values['reserve_cpu'], cpu, values['max_cpu'], 'vCPU'),
+            const SizedBox(height: 16),
+            range('RAM', values['reserve_memory'], memory, values['max_memory'],
+                'GB'),
+            const SizedBox(height: 14),
+            Wrap(spacing: 16, runSpacing: 6, children: [
+              for (final (label, color) in [
+                ('Idle reserve', AppColors.success),
+                ('Billed size', scheme.primary),
+                ('Burst', AppColors.cyan),
+              ])
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(3))),
+                  const SizedBox(width: 6),
+                  Text(label, style: const TextStyle(fontSize: 12)),
+                ]),
+            ]),
+          ]),
+        ),
+        const SizedBox(height: 16),
+        AdminSectionCard(
+            title: 'Billed size',
+            icon: Icons.developer_board_rounded,
+            subtitle: "What a project's computer is sold at and created with.",
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              sizeChips('cpu', 'vCPU', const [.5, 1, 2, 4, 8, 16], 'vCPU'),
+              const SizedBox(height: 20),
+              sizeChips('memory', 'RAM', const [.5, 1, 2, 4, 8, 16, 32], 'GB'),
+              const SizedBox(height: 20),
+              AppAmountField(
+                label: 'Disk',
+                value: values['disk'] ?? 4,
+                min: 1,
+                max: 200,
+                step: 1,
+                decimals: 0,
+                unit: 'GB',
+                presets: const [4, 10, 20, 50, 100],
+                presetLabel: (v) => '${compactDecimal(v)} GB',
+                format: (v) => '${compactDecimal(v)} GB',
+                onChanged: (v) => setState(() => values['disk'] = v),
+              ),
+            ])),
+        const SizedBox(height: 16),
+        AdminSectionCard(
+            title: 'Idle reserve',
+            icon: Icons.bedtime_rounded,
+            subtitle:
+                'The share guaranteed and billed while a computer is awake and quiet.',
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              sizeChips('reserve_cpu', 'vCPU', const [.25, .5, 1, 2], 'vCPU',
+                  auto: true),
+              const SizedBox(height: 20),
+              sizeChips('reserve_memory', 'RAM', const [.25, .5, 1, 2], 'GB',
+                  auto: true),
+            ])),
+        const SizedBox(height: 16),
+        AdminSectionCard(
+            title: 'Ceiling',
+            icon: Icons.vertical_align_top_rounded,
+            subtitle: 'The most a busy computer can use.',
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              sizeChips('max_cpu', 'vCPU', const [2, 4, 8, 16], 'vCPU',
+                  auto: true),
+              const SizedBox(height: 20),
+              sizeChips('max_memory', 'RAM', const [4, 8, 16, 32], 'GB',
+                  auto: true),
+            ])),
+      ]),
+    );
+  }
 }
 
 class _PromptEditor extends StatefulWidget {
@@ -2971,6 +4066,17 @@ class _PromptEditor extends StatefulWidget {
 class _PromptEditorState extends State<_PromptEditor> {
   late final TextEditingController controller;
   bool busy = false;
+  static const limit = 20000;
+  static const snippets = {
+    'Reply in the user’s language': 'Always answer in the user’s language.',
+    'No invented facts':
+        'Never invent facts, figures or dates; say when you are not sure.',
+    'Cite sources': 'Cite the source of every figure you use.',
+    'Ask before spending':
+        'Ask before any action that spends more than 100 credits.',
+    'Be concise': 'Keep answers short and lead with the conclusion.',
+  };
+
   @override
   void initState() {
     super.initState();
@@ -2986,58 +4092,234 @@ class _PromptEditorState extends State<_PromptEditor> {
     super.dispose();
   }
 
+  void _insert(String line) {
+    final text = controller.text.trimRight();
+    controller.text = text.isEmpty ? line : '$text\n$line';
+  }
+
   @override
-  Widget build(BuildContext context) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(
-              child: Text(
-                  'Keep it short — every turn pays for these tokens. Blank means none.',
-                  style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant))),
-          FilledButton.icon(
-              onPressed: busy || controller.text.trim().length > 20000
-                  ? null
-                  : () async {
-                      setState(() => busy = true);
-                      try {
-                        await widget.onSave(controller.text);
-                      } finally {
-                        if (mounted) setState(() => busy = false);
-                      }
-                    },
-              icon: const Icon(Icons.save_outlined, size: 18),
-              label: Text(busy ? 'Saving…' : 'Save')),
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final length = controller.text.trim().length;
+    // Roughly four characters a token for English text.
+    final tokens = (length / 4).ceil();
+    final over = length > limit;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 900),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _SaveBar(
+            dirty: controller.text != widget.value,
+            busy: busy || over,
+            message: over
+                ? 'Too long: shorten to $limit characters to save'
+                : 'You have unsaved changes',
+            onReset: () => controller.text = widget.value,
+            onSave: () async {
+              setState(() => busy = true);
+              try {
+                await widget.onSave(controller.text);
+              } finally {
+                if (mounted) setState(() => busy = false);
+              }
+            }),
+        AdminGrid(maxColumns: 3, minTileWidth: 200, children: [
+          AdminStatCard(
+              label: 'Length',
+              value: '$length',
+              hint: 'of $limit characters',
+              icon: Icons.short_text_rounded,
+              progress: length / limit,
+              tone: over ? AppColors.danger : null),
+          AdminStatCard(
+              label: 'Tokens per turn',
+              value: '≈$tokens',
+              hint: 'Paid on every agent turn',
+              icon: Icons.token_outlined,
+              tone: tokens > 1500 ? AppColors.warning : AppColors.success),
+          AdminStatCard(
+              label: 'Rules',
+              value:
+                  '${controller.text.split('\n').where((l) => l.trim().isNotEmpty).length}',
+              hint: 'Non-empty lines',
+              icon: Icons.rule_rounded,
+              tone: AppColors.cyan),
         ]),
         const SizedBox(height: 16),
-        TextField(
-            controller: controller,
-            minLines: 10,
-            maxLines: 24,
-            decoration: InputDecoration(
-                labelText:
-                    'Platform rules · ${controller.text.trim().length}/20000',
-                hintText:
-                    "Always answer in the user's language. Never invent delivery dates.",
-                alignLabelWithHint: true,
-                border: const OutlineInputBorder())),
-      ]);
+        AdminSectionCard(
+          title: 'Platform rules',
+          icon: Icons.description_rounded,
+          subtitle:
+              'Added to every agent’s instructions. Keep it short — every turn pays for these tokens. Blank means none.',
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Quick add', style: _labelStyle(scheme)),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final e in snippets.entries)
+                ActionChip(
+                  avatar: Icon(
+                      controller.text.contains(e.value)
+                          ? Icons.check_rounded
+                          : Icons.add_rounded,
+                      size: 18),
+                  label: Text(e.key),
+                  onPressed: controller.text.contains(e.value)
+                      ? null
+                      : () => _insert(e.value),
+                ),
+            ]),
+            const SizedBox(height: 16),
+            TextField(
+                controller: controller,
+                minLines: 10,
+                maxLines: 24,
+                style: const TextStyle(height: 1.5),
+                decoration: InputDecoration(
+                    hintText:
+                        "Always answer in the user's language. Never invent delivery dates.",
+                    errorText: over ? 'Over the $limit character limit' : null,
+                    alignLabelWithHint: true)),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+TextStyle _labelStyle(ColorScheme scheme) => TextStyle(
+    fontSize: 13, fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant);
+
+/// The full-screen frame of a detail view: an avatar header, tabs, and
+/// the selected tab's content.
+class _DetailFrame extends StatelessWidget {
+  const _DetailFrame({
+    required this.title,
+    required this.subtitle,
+    required this.avatar,
+    required this.tabs,
+    required this.tab,
+    required this.onTab,
+    required this.onRefresh,
+    required this.menu,
+    required this.loading,
+    required this.child,
+  });
+  final String title;
+  final String subtitle;
+  final Widget avatar;
+  final List<(String, IconData)> tabs;
+  final int tab;
+  final ValueChanged<int> onTab;
+  final VoidCallback onRefresh;
+  final Widget menu;
+  final bool loading;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final narrow = MediaQuery.sizeOf(context).width < 700;
+    return Builder(
+      builder: (context) => Dialog.fullscreen(
+        backgroundColor: scheme.surface,
+        child: DefaultTabController(
+          length: tabs.length,
+          initialIndex: tab,
+          child: Scaffold(
+            backgroundColor: scheme.surface,
+            appBar: AppBar(
+              backgroundColor: scheme.surface,
+              surfaceTintColor: Colors.transparent,
+              toolbarHeight: 72,
+              leading: IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded)),
+              titleSpacing: 0,
+              title: Row(children: [
+                avatar,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w800)),
+                        Text(subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 12, color: scheme.onSurfaceVariant)),
+                      ]),
+                ),
+              ]),
+              actions: [
+                IconButton(
+                    tooltip: 'Refresh',
+                    onPressed: onRefresh,
+                    icon: const Icon(Icons.refresh_rounded)),
+                menu,
+              ],
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(64),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                  child: SegmentedTabBar(
+                    width: 600,
+                    compact: narrow,
+                    onTap: onTab,
+                    labels: [for (final (label, _) in tabs) label],
+                    icons: [for (final (_, icon) in tabs) icon],
+                  ),
+                ),
+              ),
+            ),
+            body: loading
+                ? const Center(child: CircularProgressIndicator())
+                : AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: ListView(
+                        key: ValueKey(tab),
+                        padding: EdgeInsets.symmetric(
+                            horizontal: narrow ? 16 : 28, vertical: 20),
+                        children: [
+                          Center(
+                            child: ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 1100),
+                                child: child),
+                          ),
+                        ]),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _UserDialog extends StatefulWidget {
-  const _UserDialog(
-      {required this.account,
-      required this.onAction,
-      required this.loadFinance});
+  const _UserDialog({
+    required this.account,
+    required this.onAction,
+    required this.onEdit,
+    required this.loadFinance,
+    this.initialTab = 0,
+  });
   final Map<String, dynamic> account;
   final AdminAction onAction;
+  final VoidCallback onEdit;
   final Future<dynamic> Function() loadFinance;
+  final int initialTab;
   @override
   State<_UserDialog> createState() => _UserDialogState();
 }
 
 class _UserDialogState extends State<_UserDialog> {
-  int tab = 0;
+  late int tab = widget.initialTab;
   bool loading = true;
   Map<String, dynamic> finance = const {};
   @override
@@ -3051,6 +4333,8 @@ class _UserDialogState extends State<_UserDialog> {
     try {
       final value = _map(await widget.loadFinance());
       if (mounted) setState(() => finance = value);
+    } catch (_) {
+      // The caller already reported the failure.
     } finally {
       if (mounted && loading) setState(() => loading = false);
     }
@@ -3058,111 +4342,125 @@ class _UserDialogState extends State<_UserDialog> {
 
   @override
   Widget build(BuildContext context) {
-    const tabs = ['Summary', 'Purchases', 'Wallet', 'Profile & access'];
     final a = widget.account;
-    return Dialog.fullscreen(
-        child: Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.close_rounded)),
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_displayName(a),
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-          Text('@${a['handle']} · ${a['email'] ?? ''}',
-              style: TextStyle(
-                  fontSize: 10,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant))
-        ]),
-        actions: [
-          IconButton(onPressed: load, icon: const Icon(Icons.refresh_rounded)),
-          PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'delete')
-                  widget.onAction(
-                      'users', 'account_delete', {'account': a['id']});
-              },
-              itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'delete', child: Text('Delete user'))
-                  ])
-        ],
-        bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(48),
-            child: SegmentedButton<int>(
-                showSelectedIcon: false,
-                segments: [
-                  for (var i = 0; i < tabs.length; i++)
-                    ButtonSegment(value: i, label: Text(tabs[i]))
-                ],
-                selected: {tab},
-                onSelectionChanged: (value) =>
-                    setState(() => tab = value.first))),
-      ),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(padding: const EdgeInsets.all(24), children: [_content()]),
-    ));
-  }
-
-  Widget _content() => switch (tab) {
+    final name = _displayName(a);
+    return _DetailFrame(
+      title: name,
+      subtitle: '@${a['handle']} · ${a['email'] ?? ''}',
+      avatar: AdminAvatar(name, size: 44),
+      tabs: const [
+        ('Summary', Icons.space_dashboard_rounded),
+        ('Purchases', Icons.shopping_bag_rounded),
+        ('Wallet', Icons.account_balance_wallet_rounded),
+        ('Profile & access', Icons.manage_accounts_rounded),
+      ],
+      tab: tab,
+      onTab: (value) => setState(() => tab = value),
+      onRefresh: load,
+      loading: loading,
+      menu: PopupMenuButton<String>(
+          onSelected: (value) {
+            if (value == 'delete') {
+              widget.onAction('users', 'account_delete',
+                  {'account': a['id'], '_name': name});
+            }
+          },
+          itemBuilder: (_) => const [
+                PopupMenuItem(
+                    value: 'delete',
+                    child: ListTile(
+                        leading: Icon(Icons.delete_outline_rounded),
+                        title: Text('Delete user')))
+              ]),
+      child: switch (tab) {
         0 => _summary(),
         1 => _purchases(),
         2 => _wallet(),
         _ => _profile()
-      };
+      },
+    );
+  }
+
   Widget _summary() {
     final m = _map(finance['summary']).isNotEmpty
         ? _map(finance['summary'])
         : finance;
+    final palette = adminPalette(context);
+    final kinds = _listOfMaps(m['by_kind'] ?? finance['by_kind']);
+    final projects = _listOfMaps(m['projects'] ?? finance['projects']);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _statGrid([
+      AdminGrid(children: [
         AdminStatCard(
             label: 'Balance',
             value: _money(m['balance']),
+            icon: Icons.account_balance_wallet_rounded,
             hint:
                 '${_credits(m['balance'])}${_number(m['locked']) > 0 ? ' · ${_credits(m['locked'])} locked' : ''}'),
         AdminStatCard(
             label: 'Bought',
             value: _money(m['bought']),
+            icon: Icons.shopping_bag_rounded,
+            tone: AppColors.success,
             hint: '${m['bought_count'] ?? 0} packs · ${_credits(m['bought'])}'),
         AdminStatCard(
             label: 'Added by admin',
             value: _money(m['granted']),
+            icon: Icons.card_giftcard_rounded,
+            tone: AppColors.cyan,
             hint: _credits(m['granted'])),
         AdminStatCard(
             label: 'Spent',
             value: _money(m['spent']),
+            icon: Icons.trending_down_rounded,
+            tone: AppColors.warning,
             hint: _credits(m['spent'])),
       ]),
-      const SizedBox(height: 18),
-      AdminSectionCard(
-          title: 'What was spent on',
-          child: Column(children: [
-            for (final row in _listOfMaps(m['by_kind'] ?? finance['by_kind']))
-              AdminKeyValue('${row['kind'] ?? row['label']}',
-                  _money(row['amount'] ?? row['spent']))
-          ])),
-      const SizedBox(height: 18),
-      AdminSectionCard(
-          title: 'Spent per project',
-          child: Column(children: [
-            for (final row in _listOfMaps(m['projects'] ?? finance['projects']))
-              AdminKeyValue(
-                  '${row['name'] ?? row['space_name'] ?? row['space_id']}',
-                  _money(row['spent']))
-          ])),
+      const SizedBox(height: 16),
+      AdminGrid(maxColumns: 2, minTileWidth: 340, children: [
+        AdminSectionCard(
+            title: 'What was spent on',
+            icon: Icons.donut_large_rounded,
+            child: AdminDonutPanel(
+              size: 132,
+              center: _money(m['spent']),
+              caption: 'spent',
+              emptyLabel: 'Nothing spent',
+              slices: [
+                for (final (i, row) in kinds.indexed)
+                  AdminChartSlice(
+                      '${row['kind'] ?? row['label']}',
+                      _number(row['amount'] ?? row['spent']),
+                      palette[i % palette.length],
+                      display: _money(row['amount'] ?? row['spent'])),
+              ],
+            )),
+        AdminSectionCard(
+            title: 'Spent per project',
+            icon: Icons.folder_rounded,
+            child: AdminBarList(
+              maxItems: 5,
+              empty: 'No project spending yet.',
+              items: [
+                for (final row in projects)
+                  AdminChartSlice(
+                      '${row['name'] ?? row['space_name'] ?? row['space_id']}',
+                      _number(row['spent']),
+                      palette[1],
+                      display: _money(row['spent'])),
+              ],
+            )),
+      ]),
     ]);
   }
 
   Widget _purchases() {
     final rows = _listOfMaps(finance['purchases']);
     return AdminDataTable(empty: 'No purchases for this user.', columns: const [
-      AdminTableColumn('Purchased', width: 180),
+      AdminTableColumn('Purchased', width: 160),
       AdminTableColumn('Product', width: 220),
-      AdminTableColumn('Amount', width: 130, align: TextAlign.right),
+      AdminTableColumn('Amount', width: 120, align: TextAlign.right),
       AdminTableColumn('Status', width: 130),
-      AdminTableColumn('Transaction', width: 260)
+      AdminTableColumn('Transaction', width: 240)
     ], rows: [
       for (final p in rows)
         [
@@ -3179,9 +4477,9 @@ class _UserDialogState extends State<_UserDialog> {
   Widget _wallet() {
     final rows = _listOfMaps(finance['ledger'] ?? finance['entries']);
     return AdminDataTable(empty: 'No wallet activity.', columns: const [
-      AdminTableColumn('When', width: 180),
+      AdminTableColumn('When', width: 160),
       AdminTableColumn('Description', width: 320),
-      AdminTableColumn('Kind', width: 140),
+      AdminTableColumn('Kind', width: 130),
       AdminTableColumn('Amount', width: 130, align: TextAlign.right),
       AdminTableColumn('Balance', width: 130, align: TextAlign.right)
     ], rows: [
@@ -3189,8 +4487,14 @@ class _UserDialogState extends State<_UserDialog> {
         [
           Text(_date(e['created_at'])),
           Text('${e['description'] ?? e['reason'] ?? e['kind']}'),
-          Text('${e['kind'] ?? e['type']}'),
-          Text(_credits(e['amount']), textAlign: TextAlign.right),
+          _Tag('${e['kind'] ?? e['type']}'),
+          Text(_credits(e['amount']),
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: _number(e['amount']) < 0
+                      ? AppColors.danger
+                      : AppColors.success)),
           Text(_credits(e['balance']), textAlign: TextAlign.right)
         ]
     ]);
@@ -3198,61 +4502,113 @@ class _UserDialogState extends State<_UserDialog> {
 
   Widget _profile() {
     final a = widget.account;
+    final name = _displayName(a);
+    final disabled = '${a['status']}' == 'disabled';
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       AdminSectionCard(
           title: 'Profile',
+          icon: Icons.badge_rounded,
+          trailing: FilledButton.tonalIcon(
+              onPressed: widget.onEdit,
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: const Text('Edit')),
           child: Column(children: [
-            AdminKeyValue('Name', _displayName(a)),
+            AdminKeyValue('Name', name),
             AdminKeyValue('Username', '@${a['handle']}'),
             AdminKeyValue('Email', '${a['email'] ?? '—'}'),
-            AdminKeyValue('Role',
-                '${a['role'] ?? (a['is_admin'] == true ? 'admin' : 'user')}'),
-            AdminKeyValue('Status', '${a['status'] ?? 'active'}'),
-            const SizedBox(height: 8),
-            Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.tonalIcon(
-                    onPressed: () =>
-                        widget.onAction('users', 'account_update', {
-                          'account': a['id'],
-                          'handle': a['handle'],
-                          'email': a['email'],
-                          'role': a['role'],
-                          'status': a['status'],
-                          'profile': a['profile'] ?? <String, dynamic>{}
-                        }),
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    label: const Text('Edit profile')))
+            AdminKeyValue(
+                'Role',
+                a['is_admin'] == true || '${a['role']}' == 'admin'
+                    ? 'Administrator'
+                    : 'Member'),
+            AdminKeyValue('Joined', _date(a['created_at'])),
+            AdminKeyValue('User id', '${a['id']}', mono: true),
           ])),
-      const SizedBox(height: 18),
-      AdminSectionCard(
-          title: 'Access',
-          child: Wrap(spacing: 8, runSpacing: 8, children: [
-            OutlinedButton(
-                onPressed: () => widget.onAction('users', 'account_update', {
-                      'account': a['id'],
-                      'status':
-                          '${a['status']}' == 'disabled' ? 'active' : 'disabled'
-                    }),
-                child: Text('${a['status']}' == 'disabled'
-                    ? 'Enable user'
-                    : 'Disable user')),
-            OutlinedButton(
-                onPressed: () => widget.onAction(
-                    'users', 'account_password', {'account': a['id']}),
-                child: const Text('Set new password'))
-          ])),
-      const SizedBox(height: 18),
-      AdminSectionCard(
+      const SizedBox(height: 16),
+      AdminGrid(maxColumns: 3, minTileWidth: 220, children: [
+        _ActionTile(
+          icon: disabled ? Icons.lock_open_rounded : Icons.block_rounded,
+          title: disabled ? 'Allow sign-in' : 'Block sign-in',
+          subtitle: disabled ? 'Currently blocked' : 'Data and wallet are kept',
+          tone: disabled ? AppColors.success : AppColors.danger,
+          onTap: widget.onEdit,
+        ),
+        _ActionTile(
+          icon: Icons.password_rounded,
+          title: 'Set new password',
+          subtitle: 'Replace their sign-in password',
+          onTap: () => widget.onAction(
+              'users', 'account_password', {'account': a['id'], '_name': name}),
+        ),
+        _ActionTile(
+          icon: Icons.add_card_rounded,
           title: 'Grant credits',
-          child: Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.icon(
-                  onPressed: () => widget
-                      .onAction('finance', 'wallet_mint', {'target': a['id']}),
-                  icon: const Icon(Icons.add_card_rounded),
-                  label: const Text('Grant credits')))),
+          subtitle: 'Add credits to their wallet',
+          tone: AppColors.success,
+          onTap: () => widget.onAction(
+              'finance', 'wallet_mint', {'target': a['id'], '_name': name}),
+        ),
+      ]),
     ]);
+  }
+}
+
+/// A large tappable action with an icon badge.
+class _ActionTile extends StatelessWidget {
+  const _ActionTile(
+      {required this.icon,
+      required this.title,
+      required this.subtitle,
+      required this.onTap,
+      this.tone});
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final Color? tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = tone ?? scheme.primary;
+    return Material(
+      color: scheme.surfaceContainer,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppShape.inner + 4)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: ShapeDecoration(
+                  color: color.withValues(alpha: .16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15))),
+              child: Icon(icon, color: color),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text(subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 12, color: scheme.onSurfaceVariant)),
+                  ]),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 }
 
@@ -3291,6 +4647,8 @@ class _ProjectDialogState extends State<_ProjectDialog> {
     try {
       final value = await widget.loadDetail();
       if (mounted) setState(() => detail = {...widget.project, ..._map(value)});
+    } catch (_) {
+      if (mounted) setState(() => detail = {...widget.project, ...detail});
     } finally {
       if (mounted && loading) setState(() => loading = false);
     }
@@ -3298,121 +4656,122 @@ class _ProjectDialogState extends State<_ProjectDialog> {
 
   Future<void> loadTab(int value) async {
     setState(() => tab = value);
-    if (value == 4 && work.isEmpty) {
-      final value = await widget.loadWork();
-      if (mounted)
-        setState(() => work = _listOfMaps(_map(value)['logs'] ??
-            _map(value)['work'] ??
-            _map(value)['events']));
-    }
-    if (value == 3 && files.isEmpty) {
-      final value = await widget.loadFiles();
-      if (mounted) setState(() => files = _listOfMaps(_map(value)['files']));
+    try {
+      if (value == 4 && work.isEmpty) {
+        final value = await widget.loadWork();
+        if (mounted) {
+          setState(() => work = _listOfMaps(_map(value)['logs'] ??
+              _map(value)['work'] ??
+              _map(value)['events']));
+        }
+      }
+      if (value == 3 && files.isEmpty) {
+        final value = await widget.loadFiles();
+        if (mounted) setState(() => files = _listOfMaps(_map(value)['files']));
+      }
+    } catch (_) {
+      // The caller already reported the failure.
     }
   }
+
+  Map<String, dynamic> get budget => _map(detail['budget']);
+  dynamic get cap =>
+      budget['cap'] ?? (detail['budget'] is num ? detail['budget'] : null);
+  dynamic get spent =>
+      detail['spent'] ?? _map(detail['usage'])['spent'] ?? budget['spent'];
+
+  void _setBudget(String id) => widget.onAction('finance', 'budget_set', {
+        'space': id,
+        '_cap': cap,
+        '_spent': spent,
+      });
 
   @override
   Widget build(BuildContext context) {
     final id = '${detail['id'] ?? widget.project['id']}';
-    final tabs = const [
-      'Overview',
-      'Machine',
-      'Cost',
-      'Storage',
-      'Logs',
-      'People'
-    ];
-    return Dialog.fullscreen(
-      child: Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.close_rounded)),
-          title:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('${detail['name'] ?? widget.project['name'] ?? 'Project'}',
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-            Text(id,
-                style: TextStyle(
-                    fontSize: 10,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          ]),
-          actions: [
-            IconButton(
-                tooltip: 'Refresh',
-                onPressed: load,
-                icon: const Icon(Icons.refresh_rounded)),
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'budget')
-                  widget.onAction('finance', 'budget_set', {'space': id});
-                if (value == 'delete')
-                  widget.onAction('spaces', 'space_delete', {'space': id});
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'budget', child: Text('Set budget')),
-                PopupMenuDivider(),
-                PopupMenuItem(value: 'delete', child: Text('Delete project')),
-              ],
-            ),
-          ],
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(48),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SegmentedButton<int>(
-                showSelectedIcon: false,
-                segments: [
-                  for (var i = 0; i < tabs.length; i++)
-                    ButtonSegment(value: i, label: Text(tabs[i]))
-                ],
-                selected: {tab},
-                onSelectionChanged: (value) => loadTab(value.first),
-              ),
-            ),
-          ),
-        ),
-        body: loading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(padding: const EdgeInsets.all(24), children: [_tab(id)]),
+    final name = '${detail['name'] ?? widget.project['name'] ?? 'Project'}';
+    return _DetailFrame(
+      title: name,
+      subtitle: id,
+      avatar: AdminAvatar(name, size: 44, icon: Icons.folder_rounded),
+      tabs: const [
+        ('Overview', Icons.space_dashboard_rounded),
+        ('Machine', Icons.computer_rounded),
+        ('Cost', Icons.savings_rounded),
+        ('Storage', Icons.folder_open_rounded),
+        ('Logs', Icons.receipt_long_rounded),
+        ('People', Icons.group_rounded),
+      ],
+      tab: tab,
+      onTab: loadTab,
+      onRefresh: load,
+      loading: loading,
+      menu: PopupMenuButton<String>(
+        onSelected: (value) {
+          if (value == 'budget') _setBudget(id);
+          if (value == 'delete') {
+            widget.onAction(
+                'spaces', 'space_delete', {'space': id, '_name': name});
+          }
+        },
+        itemBuilder: (_) => const [
+          PopupMenuItem(
+              value: 'budget',
+              child: ListTile(
+                  leading: Icon(Icons.savings_outlined),
+                  title: Text('Set budget'))),
+          PopupMenuDivider(),
+          PopupMenuItem(
+              value: 'delete',
+              child: ListTile(
+                  leading: Icon(Icons.delete_outline_rounded),
+                  title: Text('Delete project'))),
+        ],
       ),
-    );
-  }
-
-  Widget _tab(String id) => switch (tab) {
+      child: switch (tab) {
         0 => _overview(),
         1 => _machine(id),
         2 => _cost(id),
         3 => _files(),
         4 => _work(),
         _ => _people(),
-      };
+      },
+    );
+  }
+
   Widget _overview() {
     final machine = _map(detail['machine']);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _statGrid([
+      AdminGrid(children: [
         AdminStatCard(
             label: 'Machine',
             value: '${machine['state'] ?? 'none'}',
             hint: '${machine['provider'] ?? ''}',
-            icon: Icons.computer_outlined),
+            icon: Icons.computer_rounded,
+            tone: adminToneColor(
+                context, adminTone('${machine['state'] ?? 'none'}'))),
         AdminStatCard(
             label: 'Agents',
             value: '${detail['agents'] ?? _list(detail['workers']).length}',
-            icon: Icons.smart_toy_outlined),
+            icon: Icons.smart_toy_rounded,
+            tone: AppColors.cyan),
         AdminStatCard(
             label: 'Rooms',
             value: '${_list(detail['rooms']).length}',
-            icon: Icons.forum_outlined),
+            icon: Icons.forum_rounded,
+            tone: AppColors.success),
         AdminStatCard(
             label: 'Budget',
-            value: _credits(_map(detail['budget'])['cap'] ?? detail['budget']),
-            icon: Icons.account_balance_wallet_outlined),
+            value: _number(cap) == 0 ? 'No limit' : _credits(cap),
+            hint: 'Spent ${_credits(spent)}',
+            progress: _number(cap) == 0 ? null : _number(spent) / _number(cap),
+            icon: Icons.savings_rounded,
+            tone: AppColors.warning),
       ]),
-      const SizedBox(height: 18),
+      const SizedBox(height: 16),
       AdminSectionCard(
           title: 'Project',
+          icon: Icons.info_outline_rounded,
           child: Column(children: [
             AdminKeyValue('Owner', _owner(detail)),
             AdminKeyValue('Created', _date(detail['created_at'])),
@@ -3424,11 +4783,29 @@ class _ProjectDialogState extends State<_ProjectDialog> {
 
   Widget _machine(String id) {
     final machine = _map(detail['machine']);
+    const ops = [
+      ('status', 'Check state', 'Ask the provider', Icons.info_outline_rounded),
+      (
+        'provision',
+        'Start',
+        'Create or wake it',
+        Icons.power_settings_new_rounded
+      ),
+      ('keepalive', 'Keep awake', 'Reset the idle timer', Icons.coffee_rounded),
+      ('sleep', 'Sleep', 'Stop billing; keep files', Icons.bedtime_rounded),
+      (
+        'replace',
+        'Replace',
+        'Fresh machine from the image',
+        Icons.autorenew_rounded
+      ),
+    ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       AdminSectionCard(
           title: 'Computer',
+          icon: Icons.computer_rounded,
+          trailing: AdminStatusPill('${machine['state'] ?? 'none'}'),
           child: Column(children: [
-            AdminKeyValue('State', '${machine['state'] ?? 'none'}'),
             AdminKeyValue('Provider id',
                 '${machine['id'] ?? machine['sandbox_id'] ?? ''}',
                 mono: true),
@@ -3436,52 +4813,79 @@ class _ProjectDialogState extends State<_ProjectDialog> {
             AdminKeyValue('Last active', _date(machine['last_active_at'])),
           ])),
       const SizedBox(height: 16),
-      Wrap(spacing: 8, runSpacing: 8, children: [
-        for (final op in const [
-          'status',
-          'provision',
-          'keepalive',
-          'sleep',
-          'replace'
-        ])
-          OutlinedButton(
-              onPressed: () => widget.onAction(
-                  'spaces', 'computer', {'space': id, 'operation': op}),
-              child: Text(op[0].toUpperCase() + op.substring(1))),
+      AdminGrid(minTileWidth: 200, maxColumns: 5, children: [
+        for (final (op, label, hint, icon) in ops)
+          _ActionTile(
+            icon: icon,
+            title: label,
+            subtitle: hint,
+            tone: op == 'replace' || op == 'sleep' ? AppColors.warning : null,
+            onTap: () => widget
+                .onAction('spaces', 'computer', {'space': id, 'operation': op}),
+          ),
       ]),
     ]);
   }
 
-  Widget _cost(String id) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        AdminSectionCard(
-            title: 'Budget and spend',
-            child: Column(children: [
-              AdminKeyValue('Budget cap',
-                  _credits(_map(detail['budget'])['cap'] ?? detail['budget'])),
-              AdminKeyValue('Spent',
-                  _credits(detail['spent'] ?? _map(detail['usage'])['spent'])),
+  Widget _cost(String id) {
+    final limit = _number(cap);
+    final used = _number(spent);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      AdminSectionCard(
+          title: 'Budget and spend',
+          icon: Icons.savings_rounded,
+          trailing: FilledButton.tonalIcon(
+              onPressed: () => _setBudget(id),
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: const Text('Set budget')),
+          child: LayoutBuilder(builder: (context, constraints) {
+            final gauge = AdminGauge(
+              value: limit == 0 ? 0 : used / limit,
+              label: limit == 0 ? 'no limit' : 'of budget',
+              display: limit == 0 ? '∞' : null,
+            );
+            final facts = Column(children: [
               AdminKeyValue(
-                  'Remaining', _credits(_map(detail['budget'])['remaining'])),
-            ])),
-        const SizedBox(height: 14),
-        FilledButton.icon(
-            onPressed: () =>
-                widget.onAction('finance', 'budget_set', {'space': id}),
-            icon: const Icon(Icons.edit_outlined, size: 18),
-            label: const Text('Set budget')),
-      ]);
+                  'Budget cap', limit == 0 ? 'No limit' : _credits(cap)),
+              AdminKeyValue('Spent', _credits(spent)),
+              AdminKeyValue(
+                  'Remaining',
+                  limit == 0
+                      ? '—'
+                      : _credits(budget['remaining'] ?? (limit - used))),
+            ]);
+            if (constraints.maxWidth < 480) {
+              return Column(
+                  children: [gauge, const SizedBox(height: 12), facts]);
+            }
+            return Row(children: [
+              gauge,
+              const SizedBox(width: 24),
+              Expanded(child: facts),
+            ]);
+          })),
+    ]);
+  }
+
   Widget _files() => AdminDataTable(
         empty: 'No project files.',
         columns: const [
           AdminTableColumn('Path', width: 420),
           AdminTableColumn('Size', width: 120, align: TextAlign.right),
-          AdminTableColumn('Modified', width: 180)
+          AdminTableColumn('Modified', width: 160)
         ],
         rows: [
           for (final f in files)
             [
-              Text('${f['path'] ?? f['name']}'),
+              Row(children: [
+                Icon(
+                    '${f['type'] ?? ''}' == 'dir' || f['is_dir'] == true
+                        ? Icons.folder_rounded
+                        : Icons.insert_drive_file_outlined,
+                    size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text('${f['path'] ?? f['name']}')),
+              ]),
               Text(_bytes(f['size']), textAlign: TextAlign.right),
               Text(_date(f['modified_at'] ?? f['updated_at']))
             ]
@@ -3490,9 +4894,9 @@ class _ProjectDialogState extends State<_ProjectDialog> {
   Widget _work() => AdminDataTable(
         empty: 'No work log entries.',
         columns: const [
-          AdminTableColumn('Time', width: 170),
+          AdminTableColumn('Time', width: 150),
           AdminTableColumn('Agent', width: 170),
-          AdminTableColumn('Event', width: 220),
+          AdminTableColumn('Event', width: 180),
           AdminTableColumn('Detail', width: 400)
         ],
         rows: [
@@ -3500,33 +4904,89 @@ class _ProjectDialogState extends State<_ProjectDialog> {
             [
               Text(_date(e['created_at'] ?? e['time'])),
               Text('${e['bot_name'] ?? e['agent'] ?? '—'}'),
-              Text('${e['kind'] ?? e['event'] ?? e['status'] ?? '—'}'),
+              AdminStatusPill(
+                  '${e['kind'] ?? e['event'] ?? e['status'] ?? '—'}'),
               Text('${e['message'] ?? e['detail'] ?? e['prompt'] ?? ''}')
             ]
         ],
       );
   Widget _people() {
     final people = [..._listOfMaps(detail['members'])];
-    if (_map(detail['owner']).isNotEmpty)
+    if (_map(detail['owner']).isNotEmpty) {
       people.insert(0, {..._map(detail['owner']), 'role': 'owner'});
+    }
     return AdminDataTable(
       empty: 'No people attached to this project.',
       columns: const [
         AdminTableColumn('Person', width: 260),
         AdminTableColumn('Role', width: 150),
-        AdminTableColumn('Joined', width: 180)
+        AdminTableColumn('Joined', width: 160)
       ],
       rows: [
         for (final p in people)
           [
-            _primaryCell(
-                _displayName(p), '@${p['handle'] ?? _shortId(p['id'])}'),
-            Text('${p['role'] ?? 'member'}'),
+            Row(children: [
+              AdminAvatar(_displayName(p), size: 34),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: _primaryCell(
+                      _displayName(p), '@${p['handle'] ?? _shortId(p['id'])}')),
+            ]),
+            _Tag('${p['role'] ?? 'member'}'),
             Text(_date(p['created_at'] ?? p['joined_at']))
           ]
       ],
     );
   }
+}
+
+/// A small tonal label.
+class _Tag extends StatelessWidget {
+  const _Tag(this.text, {this.color, this.icon});
+  final String text;
+  final Color? color;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final tint = color ?? scheme.onSurfaceVariant;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: color == null
+            ? scheme.surfaceContainerHighest
+            : tint.withValues(alpha: .15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (icon != null) ...[
+          Icon(icon, size: 13, color: color ?? scheme.primary),
+          const SizedBox(width: 4),
+        ],
+        Flexible(
+          child: Text(text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: color ?? scheme.onSurface)),
+        ),
+      ]),
+    );
+  }
+}
+
+class _RoleBadge extends StatelessWidget {
+  const _RoleBadge({required this.admin});
+  final bool admin;
+  @override
+  Widget build(BuildContext context) => admin
+      ? _Tag('Admin',
+          color: Theme.of(context).colorScheme.primary,
+          icon: Icons.shield_rounded)
+      : const _Tag('Member');
 }
 
 Map<String, dynamic> _map(dynamic value) => value is Map
@@ -3557,6 +5017,24 @@ String _credits(dynamic value) {
 String _money(dynamic credits) {
   if (credits == null || '$credits'.isEmpty) return '\$0.00';
   return formatLedgerUsd(_number(credits));
+}
+
+/// Dollars with cents, or up to four decimals below a cent.
+String _usd(double v) =>
+    v >= .01 || v == 0 ? '\$${v.toStringAsFixed(2)}' : '\$${compactDecimal(v)}';
+
+String _perMinute(dynamic units) {
+  if (units == null || '$units'.isEmpty || _number(units) == 0)
+    return 'Default';
+  return '${formatLedgerUsd(_number(units))}/min';
+}
+
+String _humanKey(String key) {
+  final words = key.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+  if (words.isEmpty) return key;
+  return words.length <= 4
+      ? words.toUpperCase()
+      : '${words[0].toUpperCase()}${words.substring(1)}';
 }
 
 String _modelPrice(dynamic credits) =>
@@ -3625,11 +5103,6 @@ double _sum(List<Map<String, dynamic>> rows, String key) => rows.fold(
     0,
     (sum, row) =>
         sum + _number(row[key] ?? row['credits'] ?? row['listed_amount']));
-String _jsonSummary(dynamic value) {
-  if (value == null) return '—';
-  if (value is String) return value;
-  return const JsonEncoder.withIndent('  ').convert(value);
-}
 
 String _modelPurpose(Map<String, dynamic> model) {
   final capabilities = _stringList(model['capabilities']);
@@ -3664,22 +5137,6 @@ String _uptime(dynamic value) {
           : '${minutes}m';
 }
 
-/// Stat cards laid out four, two or one per row depending on the width.
-Widget _statGrid(List<Widget> cards) =>
-    LayoutBuilder(builder: (context, constraints) {
-      final count = math.min(
-          cards.length,
-          constraints.maxWidth >= 900
-              ? 4
-              : constraints.maxWidth >= 540
-                  ? 2
-                  : 1);
-      final width = (constraints.maxWidth - 12 * (count - 1)) / count;
-      return Wrap(spacing: 12, runSpacing: 12, children: [
-        for (final card in cards) SizedBox(width: width, child: card)
-      ]);
-    });
-
 Widget _primaryCell(String primary, String secondary) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -3694,10 +5151,3 @@ Widget _primaryCell(String primary, String secondary) => Column(
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 10, color: AppColors.muted))
         ]);
-TextEditingController _controller(dynamic value) => TextEditingController(
-    text: value == null || '$value'.isEmpty
-        ? ''
-        : value is num
-            ? value.toString()
-            : '$value');
-double _parse(String value) => double.tryParse(value.trim()) ?? 0;

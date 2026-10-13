@@ -129,6 +129,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('permanently deletes'), findsOneWidget);
 
+    // Destructive confirmations wait for the acknowledgement.
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
     await tester.tap(find.text('Delete workspace').last);
     await tester.pumpAndSettle();
     expect(exitCalled, isTrue);
@@ -149,6 +152,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Leave Shared Desk?'), findsOneWidget);
 
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
     await tester.tap(find.text('Leave workspace').last);
     await tester.pumpAndSettle();
     expect(exitCalled, isTrue);

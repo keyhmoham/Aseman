@@ -14,6 +14,7 @@ import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/profile_menu.dart';
+import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../admin/presentation/admin_screen.dart';
@@ -1062,94 +1063,15 @@ class _MobileTabs extends StatelessWidget {
   final String? room;
   final ValueChanged<int> onSelect;
   @override
-  Widget build(BuildContext context) => Container(
-        width: 246,
-        height: 44,
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: .1),
-                  blurRadius: 18,
-                  offset: const Offset(0, 7))
-            ]),
-        child: Stack(children: [
-          AnimatedAlign(
-              duration: const Duration(milliseconds: 330),
-              curve: Curves.easeOutCubic,
-              alignment:
-                  selected == 0 ? Alignment.centerLeft : Alignment.centerRight,
-              child: Container(
-                  width: 119,
-                  height: 36,
-                  decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withValues(alpha: .12),
-                            blurRadius: 10)
-                      ]))),
-          Row(children: [
-            Expanded(
-                child: _MobileTab(
-                    label: 'Desk',
-                    icon: Icons.dashboard_customize_outlined,
-                    selected: selected == 0,
-                    onTap: () => onSelect(0))),
-            Expanded(
-                child: _MobileTab(
-                    label: room == null ? 'Feed' : 'Chat',
-                    icon: room == null
-                        ? Icons.dynamic_feed_outlined
-                        : Icons.forum_outlined,
-                    selected: selected == 1,
-                    onTap: () => onSelect(1))),
-          ]),
-        ]),
+  Widget build(BuildContext context) => SegmentedTabBar(
+        selectedIndex: selected,
+        onTap: onSelect,
+        labels: ['Desk', room == null ? 'Feed' : 'Chat'],
+        icons: [
+          Icons.dashboard_customize_outlined,
+          room == null ? Icons.dynamic_feed_outlined : Icons.forum_outlined,
+        ],
       );
-}
-
-class _MobileTab extends StatelessWidget {
-  const _MobileTab(
-      {required this.label,
-      required this.icon,
-      required this.selected,
-      required this.onTap});
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Center(
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-        AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: Icon(icon,
-                key: ValueKey('$icon-$selected'),
-                size: 17,
-                color: selected
-                    ? Theme.of(context).colorScheme.onPrimaryContainer
-                    : Theme.of(context).colorScheme.onSurfaceVariant)),
-        const SizedBox(width: 7),
-        AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 220),
-            style: TextStyle(
-                fontSize: 12,
-                color: selected
-                    ? Theme.of(context).colorScheme.onPrimaryContainer
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w500),
-            child: Text(label))
-      ])));
 }
 
 class _LibraryPanel extends StatelessWidget {
@@ -4179,25 +4101,11 @@ class _SearchPanelState extends State<_SearchPanel>
                         visualDensity: VisualDensity.compact);
                   })),
           const SizedBox(height: 9),
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .surfaceContainerHighest
-                    .withValues(alpha: .55),
-                borderRadius: BorderRadius.circular(24)),
-            child: TabBar(
-                controller: tabs,
-                dividerColor: Colors.transparent,
-                indicatorSize: TabBarIndicatorSize.tab,
-                indicator: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(20)),
-                tabs: [
-                  Tab(text: 'In ${widget.workspace}'),
-                  const Tab(text: 'Explore Tradera')
-                ]),
+          SegmentedTabBar(
+            controller: tabs,
+            compact: compact,
+            labels: ['In ${widget.workspace}', 'Explore Tradera'],
+            icons: const [Icons.hub_outlined, Icons.travel_explore_rounded],
           ),
           Expanded(
               child: AnimatedSwitcher(
@@ -4232,96 +4140,16 @@ class _SearchSectionNav extends StatelessWidget {
   final int selected;
   final ValueChanged<int> onSelect;
   @override
-  Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
-        final tabWidths = [
-          for (final section in sections) _searchTabWidth(context, section)
-        ];
-        final contentWidth =
-            8 + tabWidths.fold<double>(0, (width, tab) => width + tab);
-        final width = math.min(box.maxWidth, contentWidth);
-        return Center(
-            child: SizedBox(
-                width: width,
-                height: 56,
-                child: Container(
-                    margin: const EdgeInsets.only(top: 6),
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(26),
-                        boxShadow: [
-                          BoxShadow(
-                              color: Colors.black.withValues(alpha: .12),
-                              blurRadius: 18,
-                              offset: const Offset(0, 7))
-                        ]),
-                    child: DefaultTabController(
-                        key: ValueKey(sections.join('-')),
-                        length: sections.length,
-                        initialIndex: selected,
-                        child: TabBar(
-                            isScrollable: true,
-                            tabAlignment: TabAlignment.start,
-                            dividerColor: Colors.transparent,
-                            indicatorSize: TabBarIndicatorSize.tab,
-                            indicator: BoxDecoration(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .primaryContainer,
-                                borderRadius: BorderRadius.circular(22),
-                                boxShadow: [
-                                  BoxShadow(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primary
-                                          .withValues(alpha: .12),
-                                      blurRadius: 10)
-                                ]),
-                            labelColor: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
-                            unselectedLabelColor:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                            labelStyle: const TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w800),
-                            unselectedLabelStyle: const TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w500),
-                            labelPadding: EdgeInsets.zero,
-                            onTap: onSelect,
-                            tabs: [
-                              for (var index = 0;
-                                  index < sections.length;
-                                  index++)
-                                Tab(
-                                    height: 42,
-                                    child: SizedBox(
-                                        width: tabWidths[index],
-                                        child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Icon(
-                                                  _sectionIcon(sections[index]),
-                                                  size: 17),
-                                              const SizedBox(width: 6),
-                                              Text(sections[index])
-                                            ])))
-                            ])))));
-      });
-}
-
-double _searchTabWidth(BuildContext context, String section) {
-  final painter = TextPainter(
-      text: TextSpan(
-          text: section,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-      textDirection: Directionality.of(context),
-      textScaler: MediaQuery.textScalerOf(context),
-      maxLines: 1)
-    ..layout();
-  return painter.width + 39;
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, box) => SegmentedTabBar(
+          key: ValueKey(sections.join('-')),
+          width: box.maxWidth,
+          selectedIndex: selected,
+          onTap: onSelect,
+          labels: sections,
+          icons: [for (final section in sections) _sectionIcon(section)],
+        ),
+      );
 }
 
 IconData _sectionIcon(String section) => switch (section) {
@@ -6070,10 +5898,7 @@ class _RoomNameDialogState extends State<_RoomNameDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return AlertDialog(
-      backgroundColor: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: const Text('New room'),
       content: SizedBox(
         width: 360,

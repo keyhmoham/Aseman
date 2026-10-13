@@ -147,17 +147,12 @@ class _PostEditorDialogState extends State<_PostEditorDialog> {
     showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-              backgroundColor: Theme.of(ctx).colorScheme.surfaceContainerLow,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
               title: Text(title),
               content: TextField(
                 controller: field,
                 autofocus: true,
-                decoration: InputDecoration(
-                    labelText: label,
-                    hintText: 'https://…',
-                    border: const OutlineInputBorder()),
+                decoration:
+                    InputDecoration(labelText: label, hintText: 'https://…'),
               ),
               actions: [
                 TextButton(
@@ -184,9 +179,6 @@ class _PostEditorDialogState extends State<_PostEditorDialog> {
     showDialog<String>(
         context: context,
         builder: (ctx) => SimpleDialog(
-              backgroundColor: Theme.of(ctx).colorScheme.surfaceContainerLow,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
               title: const Text('Insert an info card'),
               children: [
                 for (final (label, kind) in const [
@@ -389,7 +381,6 @@ class _PostEditorDialogState extends State<_PostEditorDialog> {
                   decoration: InputDecoration(
                     hintText: widget.hint ??
                         'Write your post in markdown…\n\nUse the toolbar above to add headings, lists, links, images, video, audio, charts and info cards.',
-                    border: const OutlineInputBorder(),
                   ),
                 ),
         ),

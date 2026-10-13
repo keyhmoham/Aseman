@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/formatting/billing_units.dart';
 import '../../../data/models/llm_provider.dart';
+import '../../../shared/widgets/app_form.dart';
+import '../../../shared/widgets/app_inputs.dart';
 import '../../miniapps/presentation/miniapp_sandbox_screen.dart';
 
 /// Result of the structured bot creation form. Sent to the backend which
@@ -51,10 +53,8 @@ class BotFormResult {
 /// the node admin configured; the agent picks its backbone from them.
 Future<BotFormResult?> showCreateBotForm(BuildContext context,
         {Future<List<LlmProvider>> Function()? loadLlmCatalog}) =>
-    showDialog<BotFormResult>(
-      context: context,
-      builder: (_) => _CreateBotDialog(loadLlmCatalog: loadLlmCatalog),
-    );
+    showAppForm<BotFormResult>(
+        context, _CreateBotDialog(loadLlmCatalog: loadLlmCatalog));
 
 class _CreateBotDialog extends StatefulWidget {
   const _CreateBotDialog({this.loadLlmCatalog});
@@ -78,8 +78,8 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
   String? catalogError;
   String providerId = '';
   String model = '';
-  final maxTurns = TextEditingController(text: '6');
-  final maxTokens = TextEditingController(text: '2000');
+  int maxTurns = 6;
+  int maxTokens = 2000;
   final Set<String> capabilities = {};
 
   // Miniapp / tool fields.
@@ -89,9 +89,10 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
   bool useStarterFrontend = true;
 
   // Resources.
-  final cpu = TextEditingController(text: '1');
-  final memory = TextEditingController(text: '512');
-  final disk = TextEditingController(text: '512');
+  int cpu = 1;
+  int memory = 512;
+  int disk = 512;
+  bool advanced = false;
 
   @override
   void initState() {
@@ -147,14 +148,9 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
     name.dispose();
     description.dispose();
     instructions.dispose();
-    maxTurns.dispose();
-    maxTokens.dispose();
     module.dispose();
     customFrontend.dispose();
     widgetDsl.dispose();
-    cpu.dispose();
-    memory.dispose();
-    disk.dispose();
     super.dispose();
   }
 
@@ -183,8 +179,8 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
       instructions: instructions.text.trim(),
       provider: kind == 'agent' ? providerId : '',
       model: kind == 'agent' ? model : '',
-      maxTurns: int.tryParse(maxTurns.text) ?? 0,
-      maxTokens: int.tryParse(maxTokens.text) ?? 0,
+      maxTurns: maxTurns,
+      maxTokens: maxTokens,
       skills: [
         for (final c in capabilities)
           {
@@ -204,9 +200,9 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
               ? _starterWidgetDsl(name.text.trim())
               : widgetDsl.text.trim())
           : '',
-      cpu: int.tryParse(cpu.text) ?? 1,
-      memoryMb: int.tryParse(memory.text) ?? 512,
-      diskMb: int.tryParse(disk.text) ?? 512,
+      cpu: cpu,
+      memoryMb: memory,
+      diskMb: disk,
     );
   }
 
@@ -240,134 +236,102 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
         ],
       });
 
+  static String _mb(int mb) =>
+      mb >= 1024 ? '${compactDecimal(mb / 1024)} GB' : '$mb MB';
+
   @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Dialog(
-      backgroundColor: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 680),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Row(children: [
-              const Icon(Icons.add_box_outlined, size: 26),
-              const SizedBox(width: 10),
-              Expanded(
-                  child: Text(
-                      kind == 'agent' ? 'Create agent' : 'Create miniapp',
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.w900))),
-              IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded)),
-            ]),
-            const SizedBox(height: 10),
-            Align(
-                alignment: Alignment.centerLeft,
-                child: SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(
-                        value: 'agent',
-                        label: Text('Agent'),
-                        icon: Icon(Icons.smart_toy_outlined)),
-                    ButtonSegment(
-                        value: 'miniapp',
-                        label: Text('Miniapp'),
-                        icon: Icon(Icons.extension_outlined)),
-                  ],
-                  selected: {kind},
-                  onSelectionChanged: (sel) => _selectKind(sel.first),
-                )),
-            const SizedBox(height: 14),
-            Flexible(
-              child: SingleChildScrollView(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _field(context, 'Name', name,
-                          hint: 'e.g. Nova Quant', autofocus: true),
-                      const SizedBox(height: 10),
-                      _field(context, 'Description', description,
-                          hint: 'What does it do?'),
-                      const SizedBox(height: 16),
-                      if (kind == 'agent')
-                        ..._agentFields(context)
-                      else
-                        ..._miniappFields(context),
-                      const SizedBox(height: 16),
-                      _resourcesFields(context),
-                      const SizedBox(height: 6),
-                    ]),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel')),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: () {
-                  final result = _submit();
-                  if (result == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text('Please complete the required fields.')));
-                    return;
-                  }
-                  Navigator.pop(context, result);
-                },
-                icon: const Icon(Icons.check_rounded, size: 18),
-                label: const Text('Create'),
-              ),
-            ]),
-          ]),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => AppFormFrame(
+        icon: kind == 'agent'
+            ? Icons.smart_toy_outlined
+            : Icons.extension_outlined,
+        title: kind == 'agent' ? 'Create agent' : 'Create miniapp',
+        subtitle: kind == 'agent'
+            ? 'An assistant that works in your rooms with its own model and instructions.'
+            : 'A small app with a backend module and a desk widget.',
+        submit: 'Create',
+        onSubmit: () {
+          final result = _submit();
+          if (result == null) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+                content: Text('Please complete the required fields.')));
+            return;
+          }
+          Navigator.pop(context, result);
+        },
+        children: [
+          AppSegmentedField<String>(
+            label: 'What are you making?',
+            value: kind,
+            onChanged: _selectKind,
+            choices: const [
+              AppChoice('agent', 'Agent', icon: Icons.smart_toy_outlined),
+              AppChoice('miniapp', 'Miniapp', icon: Icons.extension_outlined),
+            ],
+          ),
+          _field(context, 'Name', name,
+              hint: 'e.g. Nova Quant', autofocus: true),
+          _field(context, 'Description', description,
+              hint: 'What does it do?', maxLines: 2),
+          if (kind == 'agent')
+            ..._agentFields(context)
+          else
+            ..._miniappFields(context),
+          _resourcesFields(context),
+        ],
+      );
 
   List<Widget> _agentFields(BuildContext context) => [
-        _sectionLabel(context, 'ROLE & INSTRUCTIONS'),
         _field(context, 'Instructions', instructions,
-            hint: 'Describe the agent\u2019s role, goals and constraints…',
-            maxLines: 4),
-        const SizedBox(height: 12),
+            hint: 'Describe the agent’s role, goals and constraints…',
+            maxLines: 5),
         ..._llmFields(context),
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(
-              child: _field(context, 'Max turns', maxTurns,
-                  keyboard: TextInputType.number)),
-          const SizedBox(width: 10),
-          Expanded(
-              child: _field(context, 'Max tokens', maxTokens,
-                  keyboard: TextInputType.number)),
-        ]),
-        const SizedBox(height: 14),
-        _sectionLabel(context, 'CAPABILITIES'),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final (label, icon) in _capabilityPool)
-              FilterChip(
-                avatar: Icon(icon,
-                    size: 15,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
-                label: Text(label, style: const TextStyle(fontSize: 11)),
-                selected: capabilities.contains(label),
-                onSelected: (sel) => setState(() {
-                  if (sel) {
-                    capabilities.add(label);
-                  } else {
-                    capabilities.remove(label);
-                  }
-                }),
-              ),
+        AppAmountField(
+          label: 'Steps per task',
+          hint: 'How many tool calls and replies it may take before stopping.',
+          value: maxTurns.toDouble(),
+          min: 1,
+          max: 30,
+          step: 1,
+          decimals: 0,
+          presets: const [3, 6, 10, 20],
+          presetLabel: (v) => '${v.round()}',
+          format: (v) => '${v.round()} steps',
+          onChanged: (v) => setState(() => maxTurns = v.round()),
+        ),
+        AppChoiceField<int>(
+          label: 'Reply length',
+          hint: 'The most tokens one reply may use.',
+          value: maxTokens,
+          onChanged: (v) => setState(() => maxTokens = v),
+          choices: const [
+            AppChoice(1000, 'Short · 1K'),
+            AppChoice(2000, 'Normal · 2K'),
+            AppChoice(4000, 'Long · 4K'),
+            AppChoice(8000, 'Very long · 8K'),
           ],
         ),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const AppFieldLabel('Capabilities'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final (label, icon) in _capabilityPool)
+                FilterChip(
+                  avatar: Icon(icon, size: 17),
+                  label: Text(label),
+                  selected: capabilities.contains(label),
+                  onSelected: (sel) => setState(() {
+                    if (sel) {
+                      capabilities.add(label);
+                    } else {
+                      capabilities.remove(label);
+                    }
+                  }),
+                ),
+            ],
+          ),
+        ]),
       ];
 
   /// Provider + model pickers for the agent's LLM backbone, with the token
@@ -380,17 +344,17 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
     if (catalog.isEmpty) {
       return [
         Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: scheme.errorContainer.withValues(alpha: .5),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppShape.control),
           ),
           child: Text(
             catalogError != null
                 ? 'Could not load LLM models: $catalogError'
                 : 'No LLM provider is configured on this node yet. The node '
                     'admin must add one in Admin console → LLM.',
-            style: const TextStyle(fontSize: 12),
+            style: const TextStyle(fontSize: 13),
           ),
         ),
       ];
@@ -398,106 +362,102 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
     final provider = _provider;
     final selected = _model;
     return [
-      _sectionLabel(context, 'LLM BACKBONE'),
-      Row(children: [
-        Expanded(
-          child: DropdownButtonFormField<String>(
-            initialValue: providerId,
-            isExpanded: true,
-            decoration: const InputDecoration(
-                labelText: 'LLM provider', border: OutlineInputBorder()),
-            items: [
-              for (final p in catalog)
-                DropdownMenuItem(value: p.id, child: Text(p.name)),
-            ],
-            onChanged: (v) => setState(() {
-              providerId = v ?? providerId;
-              final models = _provider?.models ?? const <LlmModel>[];
-              model = models.isEmpty ? '' : models.first.id;
-            }),
-          ),
+      if (catalog.length > 1)
+        AppChoiceField<String>(
+          label: 'Provider',
+          value: providerId,
+          onChanged: (v) => setState(() {
+            providerId = v;
+            final models = _provider?.models ?? const <LlmModel>[];
+            model = models.isEmpty ? '' : models.first.id;
+          }),
+          choices: [
+            for (final p in catalog)
+              AppChoice(p.id, p.name, icon: Icons.hub_outlined),
+          ],
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: DropdownButtonFormField<String>(
-            key: ValueKey('model-$providerId'),
-            initialValue: model.isEmpty ? null : model,
-            isExpanded: true,
-            decoration: const InputDecoration(
-                labelText: 'Model', border: OutlineInputBorder()),
-            items: [
-              for (final m in provider?.models ?? const <LlmModel>[])
-                DropdownMenuItem(value: m.id, child: Text(m.label)),
-            ],
-            onChanged: (v) => setState(() => model = v ?? model),
-          ),
-        ),
-      ]),
-      if (selected != null)
-        Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(
-            'Token pricing: ${formatLedgerUsdPerMillion(selected.inputPrice)} / 1M input '
-            '· ${formatLedgerUsdPerMillion(selected.outputPrice)} / 1M output',
-            style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
-          ),
-        ),
+      AppChoiceField<String>(
+        label: 'Model',
+        hint: selected == null
+            ? null
+            : '${formatLedgerUsdPerMillion(selected.inputPrice)} input · '
+                '${formatLedgerUsdPerMillion(selected.outputPrice)} output per 1M tokens',
+        value: model,
+        onChanged: (v) => setState(() => model = v),
+        choices: [
+          for (final m in provider?.models ?? const <LlmModel>[])
+            AppChoice(m.id, m.label, icon: Icons.memory_rounded),
+        ],
+      ),
     ];
   }
 
   List<Widget> _miniappFields(BuildContext context) => [
-        _sectionLabel(context, 'BACKEND MODULE'),
         _field(context, 'Wasm module', module,
             hint: 'module path, e.g. miniapp.wasm',
             autofocus: kind == 'miniapp'),
-        const SizedBox(height: 12),
-        _sectionLabel(context, 'FRONTEND'),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Use starter frontend',
-              style: TextStyle(fontSize: 13)),
-          subtitle: const Text(
-              'Generates a working elpian bundle that pings the backend.',
-              style: TextStyle(fontSize: 10)),
+        AppSwitchCard(
+          icon: Icons.auto_awesome_rounded,
+          title: 'Use the starter frontend',
+          subtitle: 'Generates a working app screen that talks to the backend.',
           value: useStarterFrontend,
           onChanged: (v) => setState(() => useStarterFrontend = v),
         ),
-        if (!useStarterFrontend)
-          _field(context, 'Frontend bundle', customFrontend,
-              hint: 'JSON {manifest, source}', maxLines: 4),
-        const SizedBox(height: 12),
-        _field(context, 'Desk widget DSL (optional)', widgetDsl,
-            hint: 'JSON widget layout for the room desk', maxLines: 3),
+        AppSwitchCard(
+          icon: Icons.code_rounded,
+          title: 'Advanced',
+          subtitle: 'Provide your own frontend bundle and desk widget layout.',
+          value: advanced || !useStarterFrontend,
+          onChanged: (v) => setState(() => advanced = v),
+        ),
+        if (advanced || !useStarterFrontend) ...[
+          if (!useStarterFrontend)
+            _field(context, 'Frontend bundle', customFrontend,
+                hint: 'JSON {manifest, source}', maxLines: 4, mono: true),
+          _field(context, 'Desk widget layout (optional)', widgetDsl,
+              hint: 'JSON widget layout for the room desk',
+              maxLines: 3,
+              mono: true),
+        ],
       ];
 
   Widget _resourcesFields(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionLabel(context, 'RESOURCES'),
-          Row(children: [
-            Expanded(
-                child: _field(context, 'CPU (vCPU)', cpu,
-                    keyboard: TextInputType.number)),
-            const SizedBox(width: 10),
-            Expanded(
-                child: _field(context, 'Memory (MB)', memory,
-                    keyboard: TextInputType.number)),
-            const SizedBox(width: 10),
-            Expanded(
-                child: _field(context, 'Disk (MB)', disk,
-                    keyboard: TextInputType.number)),
-          ]),
+          AppChoiceField<int>(
+            label: 'Computer size',
+            hint:
+                'What its machine is created with; bigger costs more per minute.',
+            value: cpu,
+            onChanged: (v) => setState(() => cpu = v),
+            choices: const [
+              AppChoice(1, '1 vCPU'),
+              AppChoice(2, '2 vCPU'),
+              AppChoice(4, '4 vCPU'),
+            ],
+          ),
+          const SizedBox(height: 18),
+          AppChoiceField<int>(
+            label: 'Memory',
+            value: memory,
+            onChanged: (v) => setState(() => memory = v),
+            choices: [
+              for (final mb in const [256, 512, 1024, 2048, 4096])
+                AppChoice(mb, _mb(mb)),
+            ],
+          ),
+          const SizedBox(height: 18),
+          AppChoiceField<int>(
+            label: 'Disk',
+            value: disk,
+            onChanged: (v) => setState(() => disk = v),
+            choices: [
+              for (final mb in const [512, 1024, 4096, 10240])
+                AppChoice(mb, _mb(mb)),
+            ],
+          ),
         ],
       );
-
-  Widget _sectionLabel(BuildContext context, String text) => Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(text,
-          style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.1,
-              color: Theme.of(context).colorScheme.primary)));
 
   Widget _field(
     BuildContext context,
@@ -506,20 +466,20 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
     String? hint,
     int maxLines = 1,
     bool autofocus = false,
-    TextInputType? keyboard,
+    bool mono = false,
   }) =>
       TextField(
         controller: controller,
         autofocus: autofocus,
+        minLines: maxLines > 1 ? 2 : 1,
         maxLines: maxLines,
-        keyboardType: keyboard,
+        style: mono
+            ? const TextStyle(fontFamily: 'monospace', fontSize: 13)
+            : null,
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
-          hintStyle:
-              TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-          border: const OutlineInputBorder(),
-          isDense: true,
+          alignLabelWithHint: maxLines > 1,
         ),
       );
 }

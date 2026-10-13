@@ -583,7 +583,6 @@ class _AgentChatSheetState extends State<_AgentChatSheet> {
                     onSubmitted: (_) => _send(),
                     decoration: const InputDecoration(
                       hintText: 'Message...',
-                      border: OutlineInputBorder(),
                     ),
                   ),
                 ),

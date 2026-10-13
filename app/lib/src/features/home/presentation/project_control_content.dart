@@ -120,34 +120,26 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
             label: const Text('Install desktop')),
       ]),
       const SizedBox(height: 18),
-      Wrap(spacing: 12, runSpacing: 12, children: [
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'vCPU',
-                value:
-                    '${machine['cpu'] ?? _map(machine['resources'])['cpu'] ?? '—'}',
-                icon: Icons.memory_rounded)),
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Memory',
-                value: _memorySize(machine['memory_mb'] ??
-                    _map(machine['resources'])['memory']),
-                icon: Icons.developer_board_outlined)),
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Disk',
-                value: _memorySize(
-                    machine['disk_mb'] ?? _map(machine['resources'])['disk']),
-                icon: Icons.storage_outlined)),
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Last active',
-                value: _date(machine['last_active_at']),
-                icon: Icons.schedule_rounded)),
+      AdminGrid(minTileWidth: 150, children: [
+        AdminStatCard(
+            label: 'vCPU',
+            value:
+                '${machine['cpu'] ?? _map(machine['resources'])['cpu'] ?? '—'}',
+            icon: Icons.memory_rounded),
+        AdminStatCard(
+            label: 'Memory',
+            value: _memorySize(
+                machine['memory_mb'] ?? _map(machine['resources'])['memory']),
+            icon: Icons.developer_board_outlined),
+        AdminStatCard(
+            label: 'Disk',
+            value: _memorySize(
+                machine['disk_mb'] ?? _map(machine['resources'])['disk']),
+            icon: Icons.storage_outlined),
+        AdminStatCard(
+            label: 'Last active',
+            value: _date(machine['last_active_at']),
+            icon: Icons.schedule_rounded),
       ]),
       const SizedBox(height: 18),
       AdminSectionCard(
@@ -562,32 +554,24 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
             label: const Text('Set budget'))
       ]),
       const SizedBox(height: 12),
-      Wrap(spacing: 12, runSpacing: 12, children: [
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Total spend',
-                value: _credits(total),
-                hint: _usd(total),
-                icon: Icons.query_stats_rounded)),
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Agent time',
-                value: _credits(summary['agent_time']),
-                icon: Icons.smart_toy_outlined)),
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Computer',
-                value: _credits(summary['compute']),
-                icon: Icons.computer_outlined)),
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Models & tools',
-                value: _credits(_num(summary['llm']) + _num(summary['tools'])),
-                icon: Icons.memory_outlined)),
+      AdminGrid(minTileWidth: 150, children: [
+        AdminStatCard(
+            label: 'Total spend',
+            value: _credits(total),
+            hint: _usd(total),
+            icon: Icons.query_stats_rounded),
+        AdminStatCard(
+            label: 'Agent time',
+            value: _credits(summary['agent_time']),
+            icon: Icons.smart_toy_outlined),
+        AdminStatCard(
+            label: 'Computer',
+            value: _credits(summary['compute']),
+            icon: Icons.computer_outlined),
+        AdminStatCard(
+            label: 'Models & tools',
+            value: _credits(_num(summary['llm']) + _num(summary['tools'])),
+            icon: Icons.memory_outlined),
       ]),
       const SizedBox(height: 18),
       AdminSectionCard(
@@ -690,8 +674,7 @@ class _MemoryEditorState extends State<_MemoryEditor> {
                 labelText: 'AGENTS.md',
                 hintText:
                     '# Project memory\n\nDecisions, preferences and ways of working…',
-                alignLabelWithHint: true,
-                border: OutlineInputBorder())),
+                alignLabelWithHint: true)),
       ]);
 }
 

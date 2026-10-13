@@ -164,36 +164,28 @@ class _AccountHubContentState extends State<AccountHubContent> {
         _maps(_map(widget.results['finance.purchases_mine'])['purchases']);
     final balance = wallet['balance'] ?? account['balance'];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Wrap(spacing: 12, runSpacing: 12, children: [
-        SizedBox(
-            width: 220,
-            child: AdminStatCard(
-                label: 'Available balance',
-                value: _credits(balance),
-                hint: _usd(balance),
-                icon: Icons.account_balance_wallet_outlined,
-                tone: AppColors.success)),
-        SizedBox(
-            width: 220,
-            child: AdminStatCard(
-                label: 'Locked',
-                value: _credits(wallet['locked'] ?? account['locked']),
-                hint: 'Reserved for active work',
-                icon: Icons.lock_clock_outlined)),
-        SizedBox(
-            width: 220,
-            child: AdminStatCard(
-                label: 'Lifetime bought',
-                value: _credits(account['bought']),
-                hint: '${purchases.length} credit packs',
-                icon: Icons.shopping_bag_outlined)),
-        SizedBox(
-            width: 220,
-            child: AdminStatCard(
-                label: 'Lifetime spent',
-                value: _credits(account['spent']),
-                hint: 'Across projects',
-                icon: Icons.query_stats_outlined)),
+      AdminGrid(minTileWidth: 150, children: [
+        AdminStatCard(
+            label: 'Available balance',
+            value: _credits(balance),
+            hint: _usd(balance),
+            icon: Icons.account_balance_wallet_outlined,
+            tone: AppColors.success),
+        AdminStatCard(
+            label: 'Locked',
+            value: _credits(wallet['locked'] ?? account['locked']),
+            hint: 'Reserved for active work',
+            icon: Icons.lock_clock_outlined),
+        AdminStatCard(
+            label: 'Lifetime bought',
+            value: _credits(account['bought']),
+            hint: '${purchases.length} credit packs',
+            icon: Icons.shopping_bag_outlined),
+        AdminStatCard(
+            label: 'Lifetime spent',
+            value: _credits(account['spent']),
+            hint: 'Across projects',
+            icon: Icons.query_stats_outlined),
       ]),
       const SizedBox(height: 18),
       Row(children: [
@@ -262,31 +254,24 @@ class _AccountHubContentState extends State<AccountHubContent> {
     final account = _map(widget.results['finance.account']);
     final payouts = _maps(account['payouts']);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Wrap(spacing: 12, runSpacing: 12, children: [
-        SizedBox(
-            width: 230,
-            child: AdminStatCard(
-                label: 'Creator earnings',
-                value: _credits(account['earned']),
-                hint: _usd(account['earned']),
-                icon: Icons.auto_graph_rounded,
-                tone: AppColors.success)),
-        SizedBox(
-            width: 230,
-            child: AdminStatCard(
-                label: 'Available to withdraw',
-                value:
-                    _credits(account['withdrawable'] ?? account['available']),
-                hint: 'After pending reservations',
-                icon: Icons.payments_outlined)),
-        SizedBox(
-            width: 230,
-            child: AdminStatCard(
-                label: 'Pending payout',
-                value: _credits(account['payout_pending']),
-                hint: 'Awaiting operator settlement',
-                icon: Icons.hourglass_top_rounded,
-                tone: AppColors.warning)),
+      AdminGrid(minTileWidth: 150, children: [
+        AdminStatCard(
+            label: 'Creator earnings',
+            value: _credits(account['earned']),
+            hint: _usd(account['earned']),
+            icon: Icons.auto_graph_rounded,
+            tone: AppColors.success),
+        AdminStatCard(
+            label: 'Available to withdraw',
+            value: _credits(account['withdrawable'] ?? account['available']),
+            hint: 'After pending reservations',
+            icon: Icons.payments_outlined),
+        AdminStatCard(
+            label: 'Pending payout',
+            value: _credits(account['payout_pending']),
+            hint: 'Awaiting operator settlement',
+            icon: Icons.hourglass_top_rounded,
+            tone: AppColors.warning),
       ]),
       const SizedBox(height: 18),
       AdminSectionCard(
@@ -332,28 +317,22 @@ class _AccountHubContentState extends State<AccountHubContent> {
     final rows = _maps(response['projects']);
     final total = rows.fold<double>(0, (sum, row) => sum + _num(row['spent']));
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Wrap(spacing: 12, runSpacing: 12, children: [
-        SizedBox(
-            width: 220,
-            child: AdminStatCard(
-                label: 'Total spend',
-                value: _credits(total),
-                hint: _usd(total),
-                icon: Icons.query_stats_rounded)),
-        SizedBox(
-            width: 220,
-            child: AdminStatCard(
-                label: 'Projects',
-                value: '${rows.length}',
-                hint: 'With recorded usage',
-                icon: Icons.folder_outlined)),
-        SizedBox(
-            width: 220,
-            child: AdminStatCard(
-                label: 'Events',
-                value: '${response['events'] ?? response['event_count'] ?? 0}',
-                hint: 'Billable activity',
-                icon: Icons.bolt_outlined)),
+      AdminGrid(minTileWidth: 150, children: [
+        AdminStatCard(
+            label: 'Total spend',
+            value: _credits(total),
+            hint: _usd(total),
+            icon: Icons.query_stats_rounded),
+        AdminStatCard(
+            label: 'Projects',
+            value: '${rows.length}',
+            hint: 'With recorded usage',
+            icon: Icons.folder_outlined),
+        AdminStatCard(
+            label: 'Events',
+            value: '${response['events'] ?? response['event_count'] ?? 0}',
+            hint: 'Billable activity',
+            icon: Icons.bolt_outlined),
       ]),
       const SizedBox(height: 18),
       AdminDataTable(

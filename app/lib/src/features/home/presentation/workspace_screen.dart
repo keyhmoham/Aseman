@@ -5898,10 +5898,7 @@ class _RoomNameDialogState extends State<_RoomNameDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return AlertDialog(
-      backgroundColor: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: const Text('New room'),
       content: SizedBox(
         width: 360,

@@ -309,10 +309,7 @@ class _NewMessageDialogState extends State<_NewMessageDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return AlertDialog(
-      backgroundColor: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: const Text('New message'),
       content: SizedBox(
         width: 400,
@@ -364,8 +361,6 @@ class _ReplyDialog extends StatelessWidget {
     final controller = TextEditingController();
     final scheme = Theme.of(context).colorScheme;
     return AlertDialog(
-      backgroundColor: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: const Text('Answer request'),
       content: SizedBox(
         width: 400,

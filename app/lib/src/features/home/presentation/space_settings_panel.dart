@@ -6,9 +6,11 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_shape.dart';
 import '../../../core/utils/context_extensions.dart';
 import '../../../data/models/profile.dart';
 import '../../../data/models/space.dart';
+import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
@@ -373,31 +375,14 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
     required String confirmLabel,
     required bool destructive,
   }) =>
-      showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: Text(title),
-          content: SizedBox(width: 380, child: Text(message)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: destructive
-                    ? AppColors.danger
-                    : Theme.of(context).colorScheme.primary,
-              ),
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: Text(confirmLabel),
-            ),
-          ],
-        ),
-      );
+      confirmAppAction(context,
+          icon: destructive
+              ? Icons.warning_amber_rounded
+              : Icons.help_outline_rounded,
+          title: title,
+          message: message,
+          action: confirmLabel,
+          destructive: destructive);
 
   @override
   Widget build(BuildContext context) {
@@ -414,8 +399,10 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                   const Text('Workspace settings',
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                      style: TextStyle(
+                          fontSize: 24,
+                          letterSpacing: -.4,
+                          fontWeight: FontWeight.w800)),
                   Text(_space.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -433,11 +420,11 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
                 tooltip: 'Files, computer, apps, routines, memory and plugins',
                 onPressed: _openProjectControls,
                 icon: const Icon(Icons.dashboard_customize_outlined)),
-            IconButton(
+            IconButton.filledTonal(
+                tooltip: 'Close',
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.close_rounded)),
           ])),
-      const Divider(height: 1),
       Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -788,25 +775,31 @@ class _Section extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Material(
-      color: colors.surfaceContainerHighest.withValues(alpha: .55),
+      color: colors.surfaceContainerLow,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: colors.outlineVariant),
-      ),
+          borderRadius: BorderRadius.circular(AppShape.card)),
       clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Icon(icon, size: 19, color: colors.primary),
-            const SizedBox(width: 10),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: ShapeDecoration(
+                  color: colors.secondaryContainer,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14))),
+              child: Icon(icon, size: 21, color: colors.onSecondaryContainer),
+            ),
+            const SizedBox(width: 12),
             Expanded(
                 child: Text(title,
                     style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w900))),
+                        fontSize: 18, fontWeight: FontWeight.w800))),
             if (trailing != null) trailing!,
           ]),
-          const Divider(height: 26),
+          const SizedBox(height: 16),
           child,
         ]),
       ),
@@ -830,18 +823,18 @@ class _StatTile extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Container(
       width: math.max(92, (MediaQuery.sizeOf(context).width - 120) / 5),
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
       decoration: BoxDecoration(
-          color: colors.surfaceContainerLow.withValues(alpha: .7),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: colors.outlineVariant)),
+          color: colors.surfaceContainer,
+          borderRadius: BorderRadius.circular(AppShape.inner)),
       child: Column(children: [
-        Icon(icon, size: 20, color: colors.primary),
-        const SizedBox(height: 7),
+        Icon(icon, size: 22, color: colors.primary),
+        const SizedBox(height: 8),
         Text('$value',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+            style: const TextStyle(
+                fontSize: 26, letterSpacing: -.5, fontWeight: FontWeight.w800)),
         Text(label,
-            style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant)),
+            style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant)),
       ]),
     );
   }
@@ -978,10 +971,7 @@ class _InviteDialogState extends State<_InviteDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return AlertDialog(
-      backgroundColor: colors.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: const Text('Invite to workspace'),
       content: SizedBox(
         width: 380,
@@ -1080,10 +1070,7 @@ class _PromptDialogState extends State<_PromptDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return AlertDialog(
-      backgroundColor: colors.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: Text(widget.title),
       content: SizedBox(
         width: 360,

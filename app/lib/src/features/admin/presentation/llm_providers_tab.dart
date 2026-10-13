@@ -29,11 +29,8 @@ class _LlmProvidersTabState extends State<LlmProvidersTab> {
     _load();
   }
 
+  /// Spinner only on the first load; later reloads swap the data in place.
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
     try {
       final results = await Future.wait([
         widget.service.adminLlmProviders(),
@@ -44,9 +41,16 @@ class _LlmProvidersTabState extends State<LlmProvidersTab> {
         _providers = results[0] as List<LlmProvider>;
         _kinds = results[1] as List<LlmKind>;
         _loading = false;
+        _error = null;
       });
     } catch (e) {
       if (!mounted) return;
+      if (!_loading && _error == null) {
+        // Keep the list on screen when a reload fails.
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Could not refresh: $e')));
+        return;
+      }
       setState(() {
         _error = e.toString();
         _loading = false;

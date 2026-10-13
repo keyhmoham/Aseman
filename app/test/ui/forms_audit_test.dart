@@ -108,8 +108,15 @@ void main() {
       testWidgets('${size.key} · ${form.key}', (tester) async {
         final errors = <String>[];
         final previous = FlutterError.onError;
-        FlutterError.onError = (details) =>
-            errors.add(details.exceptionAsString().split('\n').first);
+        FlutterError.onError = (details) {
+          final where = RegExp(r'file:///\S+')
+              .allMatches(details.toString())
+              .map((m) => m.group(0)!.split('/lib/').last)
+              .take(2)
+              .join(' < ');
+          errors
+              .add('${details.exceptionAsString().split('\n').first} @ $where');
+        };
         tester.view.physicalSize = size.value;
         tester.view.devicePixelRatio = 1;
         try {

@@ -105,14 +105,19 @@ class AppFormFrame extends StatelessWidget {
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Cancel')),
             const SizedBox(width: 8),
-            FilledButton(
-              style: destructive
-                  ? FilledButton.styleFrom(
-                      backgroundColor: scheme.error,
-                      foregroundColor: scheme.onError)
-                  : null,
-              onPressed: onSubmit,
-              child: Text(submit),
+            // Long labels ("Request 2500 credits") shrink rather than
+            // overflow on narrow phones with large text.
+            Flexible(
+              child: FilledButton(
+                style: destructive
+                    ? FilledButton.styleFrom(
+                        backgroundColor: scheme.error,
+                        foregroundColor: scheme.onError)
+                    : null,
+                onPressed: onSubmit,
+                child:
+                    Text(submit, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
             ),
           ]),
         ),

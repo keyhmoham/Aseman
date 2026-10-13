@@ -202,7 +202,6 @@ func (a *Adapter) CreateVM(ctx context.Context, spec vmm.VMSpec) (vmm.VM, error)
 	}, nil
 }
 
-
 // buildJob converts a VMSpec into a Nomad job.
 func (a *Adapter) buildJob(spec vmm.VMSpec) (*nomadapi.Job, error) {
 	jobName := jobPrefix + spec.Name + "-" + mustToken()

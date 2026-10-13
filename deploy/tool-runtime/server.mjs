@@ -25,6 +25,7 @@
 
 import http from 'node:http';
 import { compileElpian, createElpianEngine } from './lib/elpian.mjs';
+import { createFetcher } from './lib/fetch.mjs';
 import { handleMcp } from './lib/mcp.mjs';
 import { NodeGateway, loadProgram } from './lib/node.mjs';
 import { createQuickJSEngine } from './lib/quickjs.mjs';
@@ -70,7 +71,7 @@ function send(res, status, body) {
 }
 
 /** The backend role's HTTP handler. */
-export function backendHandler({ engine, tools, token, node, version, log = console.log }) {
+export function backendHandler({ engine, tools, token, node, fetch = null, version, log = console.log }) {
   return async (req, res) => {
     try {
       if (req.method === 'GET' && req.url === '/health') {
@@ -78,7 +79,7 @@ export function backendHandler({ engine, tools, token, node, version, log = cons
       }
       if (req.method === 'POST' && req.url.split('?')[0] === '/mcp') {
         const message = JSON.parse((await readBody(req)) || '{}');
-        const [status, body] = await handleMcp({ engine, tools, token, node, headers: req.headers, message, log });
+        const [status, body] = await handleMcp({ engine, tools, token, node, fetch, headers: req.headers, message, log });
         return send(res, status, body);
       }
       send(res, 404, { error: 'not found' });
@@ -124,7 +125,10 @@ async function main() {
   const program = await loadProgram({ file: process.env.TRADERA_TOOL_PROGRAM_FILE, gateway });
   const engine = await createEngine({ ...program, engine: program.engine || process.env.TRADERA_TOOL_ENGINE });
   const tools = await engine.list();
-  const handler = backendHandler({ engine, tools, token: process.env.TRADERA_TOOL_TOKEN, node: gateway, version: process.env.TRADERA_TOOL_VERSION });
+  const handler = backendHandler({
+    engine, tools, token: process.env.TRADERA_TOOL_TOKEN, node: gateway,
+    fetch: createFetcher(), version: process.env.TRADERA_TOOL_VERSION,
+  });
   http.createServer(handler).listen(port, '0.0.0.0', () => {
     console.log(`[runtime] ${engine.engine} backend serving ${tools.length} microtool(s) on :${port}`);
   });

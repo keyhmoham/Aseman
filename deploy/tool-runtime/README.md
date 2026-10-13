@@ -55,6 +55,7 @@ Map forecast(Map args) {
 | `tradera.send` | `{body, room?}`: post into the room the tool was called from |
 | `tradera.ask` | `{bot, body}`: ask another tool or agent of the space |
 | `tradera.kv.get` / `.set` / `.delete` | the tool's own key-value store |
+| `tradera.fetch` | `{url, method?, headers?, body?}` → `{status, ok, contentType, json, text}`: HTTP to the public internet only (private, loopback and link-local addresses are refused, the connection is pinned to the checked address), 10 s, 2 MB |
 | `log` | a line in the runtime's log |
 
 What a microtool returns is its result (an object becomes MCP

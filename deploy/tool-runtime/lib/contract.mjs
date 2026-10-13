@@ -18,6 +18,9 @@
 //     tradera.ask        { bot, body } → asks another tool or agent of the space
 //     tradera.kv.get / tradera.kv.set / tradera.kv.delete
 //                        the tool's own key-value store
+//     tradera.fetch      { url, method?, headers?, body? } → { status, ok,
+//                          contentType, json, text }: an HTTP request to the
+//                          public internet (see lib/fetch.mjs)
 //     log                a line in the runtime's log
 //
 // Calls are served one at a time per backend: a program keeps module state
@@ -46,9 +49,10 @@ export function toolDefinitions(declared) {
 
 /**
  * Serves the host APIs a program calls. [scope] is the call's execution scope;
- * [node] performs platform actions in it (absent when describing a program).
+ * [node] performs platform actions in it (absent when describing a program);
+ * [fetch] performs a program's outbound HTTP (absent: no network).
  */
-export function hostApis(scope, node, log = console.log) {
+export function hostApis(scope, node, log = console.log, fetch = null) {
   const call = async (namespace, action, body) => {
     if (!node) throw new Error('no platform here: the program is only being described');
     return node.call(scope, namespace, action, body ?? {});
@@ -72,6 +76,9 @@ export function hostApis(scope, node, log = console.log) {
         return call('bots', 'kv_set', { key: payload?.key, value: payload?.value });
       case 'tradera.kv.delete':
         return call('bots', 'kv_delete', { key: payload?.key ?? payload });
+      case 'tradera.fetch':
+        if (!fetch) throw new Error('this runtime gives programs no network');
+        return fetch(payload);
       case 'log':
         log(`[tool] ${typeof payload === 'string' ? payload : JSON.stringify(payload)}`);
         return null;

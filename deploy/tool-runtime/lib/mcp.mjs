@@ -34,7 +34,7 @@ export function toolResult(value) {
  * [token] is the node's runtime credential: only the node may call. [tools]
  * is what the program's tools() declared when it was loaded.
  */
-export async function handleMcp({ engine, tools, token, node, headers, message, log = console.log }) {
+export async function handleMcp({ engine, tools, token, node, fetch = null, headers, message, log = console.log }) {
   if (token && !sameSecret(headers['x-tradera-token'], token)) {
     return [401, { jsonrpc: '2.0', id: message?.id ?? null, error: { code: -32001, message: 'unauthorized' } }];
   }
@@ -55,7 +55,7 @@ export async function handleMcp({ engine, tools, token, node, headers, message, 
       const args = message.params?.arguments ?? {};
       if (!tools.some((t) => t.name === name)) return fail(-32602, `unknown microtool ${name}`);
       try {
-        const value = await engine.call(name, args, hostApis(scopeOf(headers), node, log));
+        const value = await engine.call(name, args, hostApis(scopeOf(headers), node, log, fetch));
         return reply(toolResult(value));
       } catch (error) {
         // A failing microtool is a result the caller reads, not a transport error.

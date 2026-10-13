@@ -51,6 +51,9 @@ const (
 	EnvAgentRuntimeURL     = "TRADERA_AGENT_RUNTIME_URL"
 	EnvAgentRuntimeNetwork = "TRADERA_AGENT_RUNTIME_NETWORK"
 	EnvAgentRuntimeSecret  = "TRADERA_AGENT_RUNTIME_SECRET"
+	// EnvToolRuntimeImage is the image Nomad runs managed Elpian VM and QuickJS
+	// tool backends in (default tradera/tool-runtime:v1).
+	EnvToolRuntimeImage = "TRADERA_TOOL_RUNTIME_IMAGE"
 )
 
 // ApplyEnv overlays the infrastructure environment variables onto the config.
@@ -127,6 +130,7 @@ func (c *Config) ApplyEnv() {
 		case "nomad":
 			setIf(p, "nomad_url", os.Getenv(EnvNomadURL))
 			setOption(p, "docker_host", os.Getenv(EnvDockerHost))
+			setOption(p, "tool_runtime_image", os.Getenv(EnvToolRuntimeImage))
 		case "docker":
 			setOption(p, "host", os.Getenv(EnvDockerHost))
 			setOption(p, "network", os.Getenv(EnvSandboxDockerNetwork))
@@ -176,9 +180,16 @@ func (c *Config) AutoAdapters() []PluginSpec {
 	add("http", map[string]any{"addr": addr})
 	if u := os.Getenv(EnvNomadURL); u != "" {
 		nomad := map[string]any{"nomad_url": u}
+		options := map[string]any{}
 		// The nomad provider execs into its docker allocations directly.
 		if h := os.Getenv(EnvDockerHost); h != "" {
-			nomad["options"] = map[string]any{"docker_host": h}
+			options["docker_host"] = h
+		}
+		if img := os.Getenv(EnvToolRuntimeImage); img != "" {
+			options["tool_runtime_image"] = img
+		}
+		if len(options) > 0 {
+			nomad["options"] = options
 		}
 		add("nomad", nomad)
 	}

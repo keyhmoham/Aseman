@@ -24,6 +24,7 @@ class AdminPageContent extends StatefulWidget {
     required this.results,
     required this.loading,
     required this.onRefresh,
+    this.onLiveRefresh,
     required this.onAction,
     required this.onDirectAction,
     required this.onNavigate,
@@ -33,6 +34,10 @@ class AdminPageContent extends StatefulWidget {
   final Map<String, dynamic> results;
   final bool loading;
   final Future<void> Function() onRefresh;
+
+  /// Periodic refresh used by live pages. It must update the data in place;
+  /// falls back to [onRefresh] when not given.
+  final Future<void> Function()? onLiveRefresh;
   final AdminAction onAction;
   final AdminDirectAction onDirectAction;
   final ValueChanged<String> onNavigate;
@@ -52,6 +57,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
   final cpu = <double>[];
   final memory = <double>[];
   Timer? timer;
+  bool ticking = false;
 
   @override
   void initState() {
@@ -72,15 +78,29 @@ class _AdminPageContentState extends State<AdminPageContent> {
       live = true;
       _configureTimer();
     }
-    if (oldWidget.results != widget.results) _sampleNode();
+    // Seed the charts with the first reading; afterwards they advance once
+    // per live tick so partial updates of other panels do not add samples.
+    if (cpu.isEmpty &&
+        !identical(oldWidget.results['admin.node_stats'],
+            widget.results['admin.node_stats'])) {
+      _sampleNode();
+    }
   }
 
   void _configureTimer() {
     timer?.cancel();
     if (widget.page == 'Node · Host' || widget.page == 'Node · Logs') {
       timer = Timer.periodic(
-          Duration(seconds: widget.page == 'Node · Logs' ? 3 : 5), (_) {
-        if (mounted && live && !widget.loading) widget.onRefresh();
+          Duration(seconds: widget.page == 'Node · Logs' ? 3 : 5), (_) async {
+        if (!mounted || !live || widget.loading || ticking) return;
+        ticking = true;
+        final page = widget.page;
+        try {
+          await (widget.onLiveRefresh ?? widget.onRefresh)();
+        } finally {
+          ticking = false;
+        }
+        if (mounted && page == widget.page) setState(_sampleNode);
       });
     }
   }
@@ -3027,11 +3047,12 @@ class _UserDialogState extends State<_UserDialog> {
   }
 
   Future<void> load() async {
-    setState(() => loading = true);
+    // Refreshing keeps the current figures visible until new ones arrive.
     try {
-      finance = _map(await widget.loadFinance());
+      final value = _map(await widget.loadFinance());
+      if (mounted) setState(() => finance = value);
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted && loading) setState(() => loading = false);
     }
   }
 
@@ -3266,12 +3287,12 @@ class _ProjectDialogState extends State<_ProjectDialog> {
   }
 
   Future<void> load() async {
-    setState(() => loading = true);
+    // Refreshing keeps the current detail visible until new data arrives.
     try {
       final value = await widget.loadDetail();
-      detail = {...widget.project, ..._map(value)};
+      if (mounted) setState(() => detail = {...widget.project, ..._map(value)});
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted && loading) setState(() => loading = false);
     }
   }
 

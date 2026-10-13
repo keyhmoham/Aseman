@@ -226,6 +226,11 @@ class _AdminScreenState extends State<AdminScreen> {
   bool loading = false;
   Map<String, dynamic> results = const {};
 
+  /// Bumped whenever the visible page changes so responses that arrive for a
+  /// page the admin already left are dropped.
+  int _generation = 0;
+  Future<void>? _refreshing;
+
   _Page get current => sections[section].pages[page];
 
   @override
@@ -234,31 +239,91 @@ class _AdminScreenState extends State<AdminScreen> {
     load();
   }
 
+  /// Loads the current page from scratch. The spinner is only shown here,
+  /// when there is nothing on screen yet.
   Future<void> load() async {
     final selected = current;
+    final generation = ++_generation;
+    _refreshing = null;
     if (selected.providers) return;
     setState(() {
       loading = true;
       results = const {};
     });
-    final entries = await Future.wait(selected.calls.map((call) async {
+    await _fetch(selected, generation, keepOnError: false);
+    if (!mounted || generation != _generation) return;
+    setState(() => loading = false);
+  }
+
+  /// Refreshes the current page in place. Data already on screen stays
+  /// visible and every call updates only its own panel when it returns, so
+  /// live pages never fall back to the loading state. Overlapping requests
+  /// (timer ticks, pull to refresh, the refresh button) share one round trip;
+  /// [afterChange] waits for one already in flight and fetches again so the
+  /// result of a mutation is never missed.
+  Future<void> refresh({bool background = false, bool afterChange = false}) {
+    if (current.providers) return Future.value();
+    if (loading) return Future.value();
+    final pending = _refreshing;
+    if (pending != null) {
+      return afterChange ? pending.then((_) => refresh()) : pending;
+    }
+    late final Future<void> next;
+    next =
+        _fetch(current, _generation, keepOnError: background).whenComplete(() {
+      if (identical(_refreshing, next)) _refreshing = null;
+    });
+    return _refreshing = next;
+  }
+
+  Future<void> _fetch(_Page selected, int generation,
+      {required bool keepOnError}) async {
+    await Future.wait(selected.calls.map((call) async {
+      dynamic value;
       try {
-        final value = await widget.dependencies.service.invokeAction(
+        value = await widget.dependencies.service.invokeAction(
           call.namespace,
           call.action,
           body: call.body,
           timeout: const Duration(minutes: 3),
         );
-        return MapEntry<String, dynamic>(call.label, value);
       } catch (error) {
-        return MapEntry<String, dynamic>(call.label, {'error': '$error'});
+        // A missed background tick keeps the last good data instead of
+        // replacing a working panel with an error.
+        final previous = results[call.label];
+        if (keepOnError && previous != null && !_isError(previous)) return;
+        value = {'error': '$error'};
       }
+      if (!mounted || generation != _generation) return;
+      // Unchanged responses leave the panel untouched.
+      if (results.containsKey(call.label) &&
+          _jsonEquals(results[call.label], value)) {
+        return;
+      }
+      setState(() => results = {...results, call.label: value});
     }));
-    if (!mounted || !identical(current, selected)) return;
-    setState(() {
-      results = Map.fromEntries(entries);
-      loading = false;
-    });
+  }
+
+  static bool _isError(dynamic value) =>
+      value is Map && value.containsKey('error');
+
+  static bool _jsonEquals(dynamic a, dynamic b) {
+    if (identical(a, b)) return true;
+    if (a is Map && b is Map) {
+      if (a.length != b.length) return false;
+      for (final key in a.keys) {
+        if (!b.containsKey(key) || !_jsonEquals(a[key], b[key])) return false;
+      }
+      return true;
+    }
+    if (a is List && b is List) {
+      if (a.length != b.length) return false;
+      for (var i = 0; i < a.length; i++) {
+        if (!_jsonEquals(a[i], b[i])) return false;
+      }
+      return true;
+    }
+    return a == b;
   }
 
   void select(int nextSection, int nextPage) {
@@ -285,7 +350,7 @@ class _AdminScreenState extends State<AdminScreen> {
       setState(() => results = {...results, call.label: value});
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('${call.label} completed')));
-      await load();
+      await refresh(afterChange: true);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -325,7 +390,7 @@ class _AdminScreenState extends State<AdminScreen> {
       if (mutations.contains(action)) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('$namespace.$action completed')));
-        await load();
+        await refresh(afterChange: true);
       }
       return value;
     } catch (error) {
@@ -370,7 +435,7 @@ class _AdminScreenState extends State<AdminScreen> {
           icon: const Icon(Icons.search_rounded)),
       IconButton(
           tooltip: 'Refresh',
-          onPressed: current.providers ? null : load,
+          onPressed: current.providers ? null : refresh,
           icon: const Icon(Icons.refresh_rounded)),
     ];
     final content = Column(children: [
@@ -399,7 +464,8 @@ class _AdminScreenState extends State<AdminScreen> {
                 page: current.label,
                 results: results,
                 loading: loading,
-                onRefresh: load,
+                onRefresh: refresh,
+                onLiveRefresh: () => refresh(background: true),
                 onAction: (namespace, action, body) =>
                     runAction(_Call(namespace, action, body)),
                 onDirectAction: runDirectAction,

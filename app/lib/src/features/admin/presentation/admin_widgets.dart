@@ -48,14 +48,22 @@ class AdminStatCard extends StatelessWidget {
                 size: 15, color: scheme.onSurfaceVariant),
         ]),
         const SizedBox(height: 8),
-        Text(value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-                fontSize: 24,
-                height: 1.05,
-                color: tone,
-                fontWeight: FontWeight.w900)),
+        // Live values cross-fade in place instead of re-rendering the card.
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          layoutBuilder: (current, previous) => Stack(
+              alignment: Alignment.centerLeft,
+              children: [...previous, if (current != null) current]),
+          child: Text(value,
+              key: ValueKey(value),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: 24,
+                  height: 1.05,
+                  color: tone,
+                  fontWeight: FontWeight.w900)),
+        ),
         if (hint != null) ...[
           const SizedBox(height: 7),
           Text(hint!,

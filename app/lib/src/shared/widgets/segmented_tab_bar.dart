@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 /// The app's signature segmented pill tab control (the same component used by
@@ -85,61 +87,88 @@ class _SegmentedTabBarState extends State<SegmentedTabBar>
     final icons = widget.icons;
     final compact = widget.compact;
     final w = widget.width ?? (compact ? 320 : 440);
+    final base = Theme.of(context).textTheme.labelLarge ?? const TextStyle();
+    final selectedStyle =
+        base.copyWith(fontSize: 12.5, fontWeight: FontWeight.w800);
+    final unselectedStyle =
+        base.copyWith(fontSize: 12.5, fontWeight: FontWeight.w500);
+    final showIcons = icons != null && !compact;
+    // The width the tabs need side by side: each label (measured bold, its
+    // widest state), its icon and the tab's 16 px padding on both sides,
+    // plus the pill's own padding and border.
+    final scaler = MediaQuery.textScalerOf(context);
+    var natural = 4.0 * 2 + 1 * 2 + 2;
+    for (var i = 0; i < labels.length; i++) {
+      final painter = TextPainter(
+        text: TextSpan(text: labels[i], style: selectedStyle),
+        textDirection: Directionality.of(context),
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      natural += painter.width.ceilToDouble() + 32 + 1;
+      if (showIcons && icons.length > i) natural += 17 + 7;
+      painter.dispose();
+    }
     return Align(
       alignment: widget.alignment,
-      child: Container(
-        constraints: BoxConstraints(maxWidth: w),
-        height: 52,
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHighest.withValues(alpha: .7),
-          borderRadius: BorderRadius.circular(26),
-          border:
-              Border.all(color: scheme.outlineVariant.withValues(alpha: .5)),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: .12),
-                blurRadius: 18,
-                offset: const Offset(0, 7)),
-          ],
-        ),
-        child: TabBar(
-          controller: tabs,
-          onTap: widget.onTap,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          dividerColor: Colors.transparent,
-          indicatorSize: TabBarIndicatorSize.tab,
-          indicator: BoxDecoration(
-            color: scheme.primaryContainer,
-            borderRadius: BorderRadius.circular(22),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final room =
+            constraints.hasBoundedWidth ? math.min(w, constraints.maxWidth) : w;
+        // Shrink to the tabs when they fit; otherwise fill the room and
+        // let the tabs scroll.
+        return Container(
+          width: math.min(natural, room),
+          height: 52,
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest.withValues(alpha: .7),
+            borderRadius: BorderRadius.circular(26),
+            border:
+                Border.all(color: scheme.outlineVariant.withValues(alpha: .5)),
             boxShadow: [
               BoxShadow(
-                  color: scheme.primary.withValues(alpha: .15), blurRadius: 10),
+                  color: Colors.black.withValues(alpha: .12),
+                  blurRadius: 18,
+                  offset: const Offset(0, 7)),
             ],
           ),
-          labelColor: scheme.onPrimaryContainer,
-          unselectedLabelColor: scheme.onSurfaceVariant,
-          labelStyle:
-              const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
-          unselectedLabelStyle:
-              const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
-          tabs: [
-            for (var i = 0; i < labels.length; i++)
-              Tab(
-                height: 40,
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  if (icons != null && icons.length > i && !compact) ...[
-                    Icon(icons[i], size: 17),
-                    const SizedBox(width: 7),
-                  ],
-                  Text(labels[i]),
-                ]),
-              ),
-          ],
-        ),
-      ),
+          child: TabBar(
+            controller: tabs,
+            onTap: widget.onTap,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            dividerColor: Colors.transparent,
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicator: BoxDecoration(
+              color: scheme.primaryContainer,
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: [
+                BoxShadow(
+                    color: scheme.primary.withValues(alpha: .15),
+                    blurRadius: 10),
+              ],
+            ),
+            labelColor: scheme.onPrimaryContainer,
+            unselectedLabelColor: scheme.onSurfaceVariant,
+            labelStyle: selectedStyle,
+            unselectedLabelStyle: unselectedStyle,
+            tabs: [
+              for (var i = 0; i < labels.length; i++)
+                Tab(
+                  height: 40,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (showIcons && icons.length > i) ...[
+                      Icon(icons[i], size: 17),
+                      const SizedBox(width: 7),
+                    ],
+                    Text(labels[i]),
+                  ]),
+                ),
+            ],
+          ),
+        );
+      }),
     );
   }
 }

@@ -19,8 +19,10 @@ class SessionController extends ChangeNotifier {
   bool _ready = false;
   bool _busy = false;
   String? _error;
+  bool _isAdmin = false;
 
   Session? get session => _session;
+  bool get isAdmin => _isAdmin;
   bool get isReady => _ready;
   bool get isLoggedIn => _session?.isLoggedIn ?? false;
   bool get isBusy => _busy;
@@ -31,6 +33,7 @@ class SessionController extends ChangeNotifier {
       await service.restoreSession();
       _session = service.session;
       if (_session?.isLoggedIn ?? false) {
+        await _refreshRole();
         try {
           await notifications.sync();
         } catch (_) {}
@@ -48,6 +51,7 @@ class SessionController extends ChangeNotifier {
       final s = await service.login(account: account, password: password);
       await SessionStore.save(s);
       _session = s;
+      await _refreshRole();
       await _enableNotificationsSafely();
       _busy = false;
       notifyListeners();
@@ -69,6 +73,7 @@ class SessionController extends ChangeNotifier {
           handle: handle, email: email, password: password);
       await SessionStore.save(s);
       _session = s;
+      await _refreshRole();
       await _enableNotificationsSafely();
       _busy = false;
       notifyListeners();
@@ -89,6 +94,7 @@ class SessionController extends ChangeNotifier {
       final s = await service.oauth(provider, identityToken);
       await SessionStore.save(s);
       _session = s;
+      await _refreshRole();
       await _enableNotificationsSafely();
       _busy = false;
       notifyListeners();
@@ -104,8 +110,19 @@ class SessionController extends ChangeNotifier {
   Future<void> adopt(Session session) async {
     await SessionStore.save(session);
     _session = session;
+    await _refreshRole();
     await _enableNotificationsSafely();
     notifyListeners();
+  }
+
+  /// Reads the account's role from the server so admin-only surfaces stay
+  /// hidden unless the backend says this account is an admin.
+  Future<void> _refreshRole() async {
+    try {
+      _isAdmin = await service.fetchIsAdmin();
+    } catch (_) {
+      _isAdmin = false;
+    }
   }
 
   Future<void> _enableNotificationsSafely() async {
@@ -125,11 +142,13 @@ class SessionController extends ChangeNotifier {
     } catch (_) {}
     await service.logout();
     _session = null;
+    _isAdmin = false;
     notifyListeners();
   }
 
   void setSession(Session session) {
     _session = session;
     notifyListeners();
+    _refreshRole().then((_) => notifyListeners());
   }
 }

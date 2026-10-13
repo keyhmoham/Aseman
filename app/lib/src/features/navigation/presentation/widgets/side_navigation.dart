@@ -10,10 +10,12 @@ class SideNavigation extends StatelessWidget {
       {super.key,
       required this.selected,
       required this.onSelect,
-      this.handle = 'me'});
+      this.handle = 'me',
+      this.showAdmin = false});
   final AppDestination selected;
   final ValueChanged<AppDestination> onSelect;
   final String handle;
+  final bool showAdmin;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -39,7 +41,7 @@ class SideNavigation extends StatelessWidget {
         ])
           _Tile(item, selected, onSelect),
         const Spacer(),
-        _Tile(AppDestination.admin, selected, onSelect),
+        if (showAdmin) _Tile(AppDestination.admin, selected, onSelect),
         const Divider(),
         Material(
             color: Colors.transparent,

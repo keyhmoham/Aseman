@@ -24,31 +24,38 @@ class AppFieldLabel extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Expanded(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label,
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: scheme.onSurface)),
-            if (hint != null) ...[
-              const SizedBox(height: 2),
-              Text(hint!,
+      child: LayoutBuilder(
+        builder: (context, constraints) =>
+            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label,
                   style: TextStyle(
-                      fontSize: 12,
-                      height: 1.3,
-                      color: scheme.onSurfaceVariant)),
-            ],
-          ]),
-        ),
-        if (trailing != null) ...[
-          const SizedBox(width: 8),
-          // Never wider than the row: long values shrink with an ellipsis.
-          Flexible(child: trailing!),
-        ],
-      ]),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onSurface)),
+              if (hint != null) ...[
+                const SizedBox(height: 2),
+                Text(hint!,
+                    style: TextStyle(
+                        fontSize: 12,
+                        height: 1.3,
+                        color: scheme.onSurfaceVariant)),
+              ],
+            ]),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            // Never more than about half the row: long values shrink with
+            // an ellipsis instead of overflowing or squeezing the label.
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: constraints.maxWidth * .55),
+              child: trailing!,
+            ),
+          ],
+        ]),
+      ),
     );
   }
 }

@@ -120,20 +120,20 @@ void main() {
     // Default provider + its first model are preselected with their prices.
     expect(find.text('OpenAI'), findsOneWidget);
     expect(find.text('gpt-5.4'), findsOneWidget);
-    expect(find.textContaining(r'$0.001 / 1M input'), findsOneWidget);
+    expect(find.textContaining(r'$0.001 input'), findsOneWidget);
 
-    // Switch to Anthropic: the model list follows the provider.
-    await tester.tap(find.text('OpenAI'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Anthropic').last);
+    // Switch to Anthropic: the model chips follow the provider.
+    await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Anthropic'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Anthropic'));
     await tester.pumpAndSettle();
     expect(find.text('claude-sonnet-5-5'), findsOneWidget);
-    expect(find.textContaining(r'$0.015 / 1M output'), findsOneWidget);
+    expect(find.textContaining(r'$0.015 output'), findsOneWidget);
 
     await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Nova');
     await tester.enterText(
         find.widgetWithText(TextField, 'Instructions'), 'Trade carefully.');
-    await tester.tap(find.text('Create'));
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Create'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Create'));
     await tester.pumpAndSettle();
 
     expect(result, isNotNull);

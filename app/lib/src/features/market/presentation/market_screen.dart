@@ -4,6 +4,8 @@ import '../../../app_dependencies.dart';
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/bot.dart';
+import '../../../shared/widgets/app_form.dart';
+import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
@@ -112,10 +114,8 @@ class _MarketScreenState extends State<MarketScreen> {
   }
 
   Future<void> _openPublish() async {
-    final published = await showDialog<bool>(
-      context: context,
-      builder: (context) => _PublishDialog(dependencies: widget.dependencies),
-    );
+    final published = await showAppForm<bool>(
+        context, _PublishDialog(dependencies: widget.dependencies));
     if (published == true) await _load();
   }
 
@@ -370,7 +370,7 @@ class _PublishDialogState extends State<_PublishDialog> {
   Bot? _selected;
   final nameController = TextEditingController();
   final descController = TextEditingController();
-  final priceController = TextEditingController();
+  double _price = 0;
 
   @override
   void initState() {
@@ -382,7 +382,6 @@ class _PublishDialogState extends State<_PublishDialog> {
   void dispose() {
     nameController.dispose();
     descController.dispose();
-    priceController.dispose();
     super.dispose();
   }
 
@@ -391,7 +390,13 @@ class _PublishDialogState extends State<_PublishDialog> {
       final bots = await widget.dependencies.service.fetchBots();
       setState(() {
         _bots = bots;
-        _selected = bots.isEmpty ? null : bots.first;
+        final agents = bots.where((b) => b.kind == _type);
+        _selected = agents.isNotEmpty
+            ? agents.first
+            : bots.isEmpty
+                ? null
+                : bots.first;
+        if (_selected?.kind == 'miniapp') _type = 'miniapp';
         _loading = false;
       });
     } catch (_) {
@@ -402,12 +407,7 @@ class _PublishDialogState extends State<_PublishDialog> {
   Future<void> _submit() async {
     final bot = _selected;
     if (bot == null) return;
-    final price = parseCreditsToLedger(priceController.text);
-    if (price == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter a valid credit price.')));
-      return;
-    }
+    final price = creditsToLedger(_price);
     try {
       await widget.dependencies.service.publishListing(
         botId: bot.id,
@@ -429,74 +429,95 @@ class _PublishDialogState extends State<_PublishDialog> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return AlertDialog(
-      backgroundColor: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: const Text('Publish to marketplace'),
-      content: SizedBox(
-        width: 420,
-        child: _loading
-            ? const Padding(
-                padding: EdgeInsets.all(32),
-                child: Center(child: CircularProgressIndicator()))
-            : _bots.isEmpty
-                ? const Text(
-                    'You have no bots yet. Create an agent or miniapp first.')
-                : SingleChildScrollView(
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(value: 'agent', label: Text('Agent')),
-                          ButtonSegment(
-                              value: 'miniapp', label: Text('Miniapp')),
-                        ],
-                        selected: {_type},
-                        onSelectionChanged: (sel) =>
-                            setState(() => _type = sel.first),
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<Bot>(
-                        initialValue: _selected,
-                        decoration: const InputDecoration(labelText: 'Bot'),
-                        items: _bots
-                            .map((b) => DropdownMenuItem(
-                                value: b,
-                                child: Text(
-                                    '${b.name} · ${b.kind} · ${b.vmType}')))
-                            .toList(),
-                        onChanged: (b) => setState(() => _selected = b),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(
-                            labelText: 'Marketplace name (optional)'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: descController,
-                        maxLines: 2,
-                        decoration:
-                            const InputDecoration(labelText: 'Description'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: priceController,
-                        keyboardType: TextInputType.number,
-                        decoration:
-                            const InputDecoration(labelText: 'Price (credits)'),
-                      ),
-                    ]),
+    final shown = _bots.where((b) => b.kind == _type).toList();
+    return AppFormFrame(
+      icon: Icons.storefront_outlined,
+      title: 'Publish to the market',
+      subtitle: 'Pick one of your bots and set how it is listed.',
+      submit: 'Publish',
+      onSubmit: _loading || _selected == null ? null : _submit,
+      children: [
+        if (_loading)
+          const LinearProgressIndicator()
+        else if (_bots.isEmpty)
+          Text('You have no bots yet. Create an agent or miniapp first.',
+              style: TextStyle(color: scheme.onSurfaceVariant))
+        else ...[
+          AppSegmentedField<String>(
+            label: 'Type',
+            value: _type,
+            onChanged: (v) => setState(() {
+              _type = v;
+              final match = _bots.where((b) => b.kind == v);
+              _selected = match.isEmpty ? null : match.first;
+            }),
+            choices: const [
+              AppChoice('agent', 'Agent', icon: Icons.smart_toy_outlined),
+              AppChoice('miniapp', 'Miniapp', icon: Icons.extension_outlined),
+            ],
+          ),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const AppFieldLabel('Bot'),
+            if (shown.isEmpty)
+              Text('You have no ${_type}s yet.',
+                  style: TextStyle(color: scheme.onSurfaceVariant)),
+            for (final b in shown)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Material(
+                  color: _selected?.id == b.id
+                      ? scheme.secondaryContainer
+                      : scheme.surfaceContainerHighest.withValues(alpha: .5),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppShape.control)),
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    onTap: () => setState(() => _selected = b),
+                    leading: CircleAvatar(
+                        child: Icon(b.kind == 'agent'
+                            ? Icons.smart_toy_outlined
+                            : Icons.extension_outlined)),
+                    title: Text(b.name,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text('${b.kind} · ${b.status}'),
+                    trailing: _selected?.id == b.id
+                        ? Icon(Icons.check_circle_rounded,
+                            color: scheme.primary)
+                        : null,
                   ),
-      ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel')),
-        FilledButton(
-          onPressed: _loading || _selected == null ? null : _submit,
-          child: const Text('Publish'),
-        ),
+                ),
+              ),
+          ]),
+          TextField(
+            controller: nameController,
+            decoration: InputDecoration(
+                labelText: 'Listing title',
+                hintText: _selected?.name,
+                helperText: 'Leave empty to use the bot’s name.'),
+          ),
+          TextField(
+            controller: descController,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+                labelText: 'Description', alignLabelWithHint: true),
+          ),
+          AppAmountField(
+            label: 'Price',
+            hint: _price == 0
+                ? 'Free to add; usage is still billed.'
+                : '≈ ${formatLedgerUsd(creditsToLedger(_price))}',
+            value: _price,
+            max: 5000,
+            step: 10,
+            decimals: 0,
+            unit: 'credits',
+            presets: const [0, 50, 100, 500, 1000],
+            presetLabel: (v) => v == 0 ? 'Free' : compactDecimal(v),
+            format: (v) => v == 0 ? 'Free' : '${compactDecimal(v)} credits',
+            onChanged: (v) => setState(() => _price = v),
+          ),
+        ],
       ],
     );
   }

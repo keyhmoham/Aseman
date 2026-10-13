@@ -1,8 +1,11 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/formatting/billing_units.dart';
+import 'app_form.dart';
+import 'app_inputs.dart';
 
 enum BackendFieldType {
   text,
@@ -30,34 +33,6 @@ class _FieldTemplate {
   final String? hint;
 }
 
-class _FieldValue {
-  _FieldValue({
-    required String name,
-    required this.type,
-    required this.required,
-    required this.sensitive,
-    required this.ledgerCredits,
-    required this.fromInitialBody,
-    this.hint,
-    String value = '',
-  })  : name = TextEditingController(text: name),
-        value = TextEditingController(text: value);
-
-  final TextEditingController name;
-  final TextEditingController value;
-  BackendFieldType type;
-  bool required;
-  bool sensitive;
-  final bool ledgerCredits;
-  final bool fromInitialBody;
-  final String? hint;
-
-  void dispose() {
-    name.dispose();
-    value.dispose();
-  }
-}
-
 const _destructiveWords = <String>{
   'delete',
   'deny',
@@ -75,7 +50,7 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('handle'),
     _FieldTemplate('email'),
     _FieldTemplate('role', hint: 'user or admin'),
-    _FieldTemplate('status', hint: 'pending, active, or disabled'),
+    _FieldTemplate('status'),
     _FieldTemplate('profile', type: BackendFieldType.object),
   ],
   'users.account_password': [
@@ -333,7 +308,7 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('space', required: true),
     _FieldTemplate('room'),
     _FieldTemplate('name'),
-    _FieldTemplate('type', required: true, hint: 'delayed or periodic'),
+    _FieldTemplate('type', required: true),
     _FieldTemplate('target'),
     _FieldTemplate('task', type: BackendFieldType.multiline, required: true),
     _FieldTemplate('delay_sec', type: BackendFieldType.integer),
@@ -483,13 +458,6 @@ BackendFieldType _inferType(String name, Object? value) {
   return BackendFieldType.text;
 }
 
-String _displayValue(Object? value) {
-  if (value is Map || value is List) {
-    return const JsonEncoder.withIndent('  ').convert(value);
-  }
-  return value?.toString() ?? '';
-}
-
 const _actionTitles = <String, String>{
   'users.account_update': 'Edit user',
   'users.account_password': 'Set user password',
@@ -543,7 +511,7 @@ const _actionDescriptions = <String, String>{
 
 const _fieldChoices = <String, List<String>>{
   'users.account_update.role': ['user', 'admin'],
-  'users.account_update.status': ['pending', 'active', 'disabled'],
+  'users.account_update.status': ['active', 'disabled'],
   'finance.payout_resolve.status': ['paid', 'rejected'],
   'bots.bot_create.kind': ['agent', 'tool', 'miniapp'],
   'market.publish.type': ['agent', 'tool', 'miniapp'],
@@ -563,6 +531,15 @@ const _fieldChoices = <String, List<String>>{
     'preview'
   ],
   'talent.respond.status': ['accepted', 'declined'],
+  'routines.create.type': ['delayed', 'periodic'],
+  'users.push_register.environment': ['development', 'production'],
+  'admin.plugins_set_active.category': [
+    'database',
+    'cache',
+    'network',
+    'filesystem',
+    'vmm'
+  ],
 };
 
 String _humanLabel(String name) {
@@ -595,21 +572,98 @@ String _humanLabel(String name) {
       : '${words[0].toUpperCase()}${words.substring(1)}';
 }
 
+/// Field names that identify the record an action works on. When the screen
+/// already supplies one it is passed through instead of shown as a field.
+const _identifiers = {
+  'account',
+  'target',
+  'space',
+  'bot',
+  'listing',
+  'proxy',
+  'routine',
+  'invitation',
+  'file',
+  'payout_id',
+  'id',
+  'room',
+  'widget',
+  'peer',
+  'resolution_id',
+  'confirmation',
+};
+
+/// Objects whose shape is free-form; everything else that is a flat map is
+/// edited as name/value rows.
+const _structuredObjects = {
+  'arguments',
+  'payload',
+  'descriptor',
+  'config',
+  'entities',
+  'resources',
+  'cost',
+  'profile',
+};
+
+const _actionIcons = <String, IconData>{
+  'users': Icons.person_outline_rounded,
+  'finance': Icons.account_balance_wallet_outlined,
+  'spaces': Icons.workspaces_outline,
+  'bots': Icons.smart_toy_outlined,
+  'market': Icons.storefront_outlined,
+  'tools': Icons.build_outlined,
+  'talent': Icons.badge_outlined,
+  'admin': Icons.admin_panel_settings_outlined,
+  'routines': Icons.schedule_rounded,
+  'auth': Icons.manage_accounts_outlined,
+  'usage': Icons.query_stats_rounded,
+  'llm': Icons.memory_rounded,
+};
+
 /// Opens the standard validated action form used by every backend operation.
+/// It shows as a bottom sheet on phones and a dialog elsewhere.
 Future<Map<String, dynamic>?> showBackendActionForm(
   BuildContext context, {
   required String namespace,
   required String action,
   Map<String, dynamic> initialBody = const {},
-}) {
-  return showDialog<Map<String, dynamic>>(
-    context: context,
-    builder: (_) => BackendActionDialog(
-      namespace: namespace,
-      action: action,
-      initialBody: initialBody,
-    ),
-  );
+}) =>
+    showAppForm<Map<String, dynamic>>(
+      context,
+      BackendActionDialog(
+        namespace: namespace,
+        action: action,
+        initialBody: initialBody,
+      ),
+    );
+
+class _Field {
+  _Field({
+    required this.name,
+    required this.type,
+    required this.required,
+    required this.sensitive,
+    required this.ledgerCredits,
+    required this.hidden,
+    required this.fromInitialBody,
+    required this.value,
+    this.hint,
+  }) : text = TextEditingController(
+            text: value is String || value is num ? '$value' : '');
+
+  final String name;
+  final BackendFieldType type;
+  final bool required;
+  final bool sensitive;
+  final bool ledgerCredits;
+  final bool hidden;
+  final bool fromInitialBody;
+  final String? hint;
+
+  /// The value of non-text editors (switches, chips, pickers, lists, maps).
+  dynamic value;
+  final TextEditingController text;
 }
 
 class BackendActionDialog extends StatefulWidget {
@@ -630,7 +684,9 @@ class BackendActionDialog extends StatefulWidget {
 
 class _BackendActionDialogState extends State<BackendActionDialog> {
   final formKey = GlobalKey<FormState>();
-  late final List<_FieldValue> fields;
+  late final List<_Field> fields;
+  bool understood = false;
+  final obscured = <String>{};
 
   String get key => '${widget.namespace}.${widget.action}';
   bool get destructive => _destructiveWords.any(widget.action.contains);
@@ -645,285 +701,385 @@ class _BackendActionDialogState extends State<BackendActionDialog> {
     };
     fields = [
       for (final name in names)
-        _makeField(
-            name, templates.where((item) => item.name == name).firstOrNull),
+        _make(name, templates.where((item) => item.name == name).firstOrNull),
     ];
+    obscured.addAll(fields.where((f) => f.sensitive).map((f) => f.name));
   }
 
-  _FieldValue _makeField(String name, _FieldTemplate? template) {
+  _Field _make(String name, _FieldTemplate? template) {
     final hasInitial = widget.initialBody.containsKey(name);
     final initial = widget.initialBody[name];
     final lowered = name.toLowerCase();
-    return _FieldValue(
+    final type = template?.type ?? _inferType(name, initial);
+    final ledger = template?.ledgerCredits ?? false;
+    final supplied = hasInitial && initial != null && '$initial'.isNotEmpty;
+    dynamic value = initial;
+    if (ledger) {
+      value = initial is num ? ledgerToCredits(initial).toDouble() : 0.0;
+    } else if (type == BackendFieldType.stringList) {
+      value = initial is List ? initial : <dynamic>[];
+    } else if (type == BackendFieldType.object) {
+      value = initial is Map ? initial : <String, dynamic>{};
+    } else if (type == BackendFieldType.boolean) {
+      value = initial == true;
+    }
+    if (name == 'request_id' && !supplied) {
+      value = 'req-${DateTime.now().microsecondsSinceEpoch}';
+    }
+    return _Field(
       name: name,
-      type: template?.type ?? _inferType(name, initial),
+      type: type,
       required: template?.required ?? false,
       sensitive: template?.sensitive ??
           lowered.contains('password') ||
               lowered.contains('secret') ||
               lowered.contains('token') ||
               lowered.contains('api_key'),
-      ledgerCredits: template?.ledgerCredits ?? false,
+      ledgerCredits: ledger,
+      hidden: (supplied && _identifiers.contains(name)) || name == 'request_id',
       fromInitialBody: hasInitial,
+      value: value,
       hint: template?.hint,
-      value: template?.ledgerCredits == true && initial is num
-          ? ledgerCreditsField(initial)
-          : _displayValue(initial),
     );
   }
 
   @override
   void dispose() {
     for (final field in fields) {
-      field.dispose();
+      field.text.dispose();
     }
     super.dispose();
   }
 
-  Object? _parse(_FieldValue field) {
-    final value = field.value.text.trim();
-    if (field.ledgerCredits) {
-      final units = parseCreditsToLedger(value);
-      if (units == null) throw const FormatException('Invalid credit amount');
-      return units;
+  bool _flat(dynamic value) =>
+      value is Map &&
+      value.values.every((v) => v == null || v is! Map && v is! List);
+
+  bool _jsonEditor(_Field f) =>
+      (f.type == BackendFieldType.object &&
+          (_structuredObjects.contains(f.name) || !_flat(f.value))) ||
+      (f.type == BackendFieldType.stringList &&
+          ((f.hint ?? '').contains('JSON') ||
+              (f.value as List).any((v) => v is Map || v is List)));
+
+  /// The value to send, or null to leave the field out.
+  Object? _parse(_Field f) {
+    if (f.hidden) return f.value;
+    if (f.ledgerCredits) {
+      final credits = (f.value as num?) ?? 0;
+      return credits == 0 && !f.required ? null : creditsToLedger(credits);
     }
-    switch (field.type) {
+    if (_jsonEditor(f)) {
+      final raw = f.text.text.trim();
+      if (raw.isEmpty) return f.fromInitialBody ? f.value : null;
+      return jsonDecode(raw);
+    }
+    final text = f.text.text.trim();
+    switch (f.type) {
       case BackendFieldType.text:
       case BackendFieldType.multiline:
-        return field.value.text;
-      case BackendFieldType.integer:
-        return int.parse(value);
-      case BackendFieldType.decimal:
-        return double.parse(value);
-      case BackendFieldType.boolean:
-        return value.toLowerCase() == 'true';
-      case BackendFieldType.stringList:
-        if (value.startsWith('[')) {
-          final decoded = jsonDecode(value);
-          if (decoded is! List) throw const FormatException('Expected a list');
-          return decoded;
+        if (_choicesOf(f) != null || f.name == 'expires_at' || f.name == 'at') {
+          final v = f.value;
+          if (v == null || '$v'.isEmpty) return null;
+          return v;
         }
-        return value
-            .split(',')
-            .map((part) => part.trim())
-            .where((part) => part.isNotEmpty)
-            .toList();
+        return text.isEmpty && !f.fromInitialBody ? null : f.text.text;
+      case BackendFieldType.integer:
+        if (f.name == 'limit' || f.name.endsWith('_sec')) return f.value;
+        return text.isEmpty ? null : int.parse(text);
+      case BackendFieldType.decimal:
+        return text.isEmpty ? null : double.parse(text);
+      case BackendFieldType.boolean:
+        return f.value == true;
+      case BackendFieldType.stringList:
+        final list = f.value as List;
+        return list.isEmpty && !f.required ? null : list;
       case BackendFieldType.object:
-        final decoded = jsonDecode(value.isEmpty ? '{}' : value);
-        if (decoded is! Map) throw const FormatException('Expected an object');
-        return decoded.cast<String, dynamic>();
+        final map = f.value as Map;
+        return map.isEmpty && !f.fromInitialBody ? null : map;
     }
   }
+
+  List<String>? _choicesOf(_Field f) => _fieldChoices['$key.${f.name}'];
 
   void submit() {
     if (!(formKey.currentState?.validate() ?? false)) return;
     final body = <String, dynamic>{};
+    final missing = <String>[];
     try {
-      for (final field in fields) {
-        final name = field.name.text.trim();
-        final value = field.value.text.trim();
-        if (name.isEmpty || (value.isEmpty && !field.fromInitialBody)) continue;
-        if (body.containsKey(name)) {
-          throw FormatException('Duplicate field: $name');
+      for (final f in fields) {
+        final value = _parse(f);
+        if (value == null) {
+          if (f.required) missing.add(_humanLabel(f.name));
+          continue;
         }
-        body[name] = _parse(field);
+        body[f.name] = value;
       }
-      Navigator.pop(context, body);
     } catch (error) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Check the form: $error')));
+      _toast('Check the form: $error');
+      return;
     }
+    if (missing.isNotEmpty) {
+      _toast('Fill in: ${missing.join(', ')}');
+      return;
+    }
+    Navigator.pop(context, body);
   }
 
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-        title: Text(_actionTitles[key] ?? _humanLabel(widget.action)),
-        content: SizedBox(
-          width: 680,
-          child: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_actionDescriptions[key] case final description?)
-                      Text(description,
-                          style: TextStyle(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant)),
-                    if (destructive) ...[
-                      const SizedBox(height: 12),
-                      Card(
-                        color: Theme.of(context).colorScheme.errorContainer,
-                        child: const ListTile(
-                          leading: Icon(Icons.warning_amber_rounded),
-                          title:
-                              Text('This action can remove or disable data.'),
-                          subtitle:
-                              Text('Review the identifiers before continuing.'),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 14),
-                    for (var index = 0; index < fields.length; index++)
-                      _FieldEditor(
-                        key: ValueKey(fields[index]),
-                        field: fields[index],
-                        actionKey: key,
-                      ),
-                  ]),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          FilledButton.icon(
-            onPressed: submit,
-            icon: Icon(destructive
-                ? Icons.warning_amber_rounded
-                : Icons.play_arrow_rounded),
-            label: Text(destructive
-                ? 'Confirm'
-                : widget.action.contains('create') ||
-                        widget.action.contains('register') ||
-                        widget.action.contains('request')
-                    ? 'Create'
-                    : 'Save'),
-          ),
-        ],
-      );
-}
-
-class _FieldEditor extends StatefulWidget {
-  const _FieldEditor({
-    super.key,
-    required this.field,
-    required this.actionKey,
-  });
-
-  final _FieldValue field;
-  final String actionKey;
+  void _toast(String text) => ScaffoldMessenger.maybeOf(context)
+      ?.showSnackBar(SnackBar(content: Text(text)));
 
   @override
-  State<_FieldEditor> createState() => _FieldEditorState();
-}
+  Widget build(BuildContext context) {
+    final visible = fields.where((f) => !f.hidden).toList();
+    return AppFormFrame(
+      formKey: formKey,
+      icon: destructive
+          ? Icons.warning_amber_rounded
+          : _actionIcons[widget.namespace] ?? Icons.tune_rounded,
+      title: _actionTitles[key] ?? _humanLabel(widget.action),
+      subtitle: _actionDescriptions[key] ??
+          (destructive ? 'This action can remove or disable data.' : null),
+      destructive: destructive,
+      submit: destructive
+          ? 'Confirm'
+          : widget.action.contains('create') ||
+                  widget.action.contains('register') ||
+                  widget.action.contains('request')
+              ? 'Create'
+              : 'Save',
+      onSubmit: destructive && !understood ? null : submit,
+      children: [
+        for (final f in visible) _editor(f),
+        if (destructive)
+          AppConfirmCheck(
+              value: understood,
+              onChanged: (v) => setState(() => understood = v),
+              label: 'I understand this cannot be undone'),
+      ],
+    );
+  }
 
-class _FieldEditorState extends State<_FieldEditor> {
-  bool obscure = true;
-
-  Widget _valueEditor(_FieldValue field) {
-    final choices = _fieldChoices['${widget.actionKey}.${field.name.text}'];
+  Widget _editor(_Field f) {
+    final label = _humanLabel(f.name);
+    final choices = _choicesOf(f);
     if (choices != null) {
-      final value =
-          choices.contains(field.value.text) ? field.value.text : null;
-      return DropdownButtonFormField<String>(
-        initialValue: value,
-        decoration: InputDecoration(
-          labelText: _humanLabel(field.name.text),
-          hintText: field.hint ?? 'Choose an option',
-        ),
-        items: [
-          for (final choice in choices)
-            DropdownMenuItem(value: choice, child: Text(_humanLabel(choice))),
-        ],
-        onChanged: (value) => field.value.text = value ?? '',
-        validator: (value) =>
-            field.required && value == null ? 'Required' : null,
+      final options = [
+        for (final c in choices) AppChoice<String>(c, _humanLabel(c)),
+      ];
+      final current = choices.contains('${f.value}') ? '${f.value}' : null;
+      if (choices.length <= 3 && current != null) {
+        return AppSegmentedField<String>(
+            label: label,
+            hint: f.hint,
+            value: current,
+            choices: options,
+            onChanged: (v) => setState(() => f.value = v));
+      }
+      return AppChoiceField<String>(
+          label: label,
+          hint: f.hint,
+          value: current,
+          choices: options,
+          onChanged: (v) => setState(() => f.value = v));
+    }
+    if (f.type == BackendFieldType.boolean) {
+      return AppSwitchCard(
+          title: label,
+          subtitle: f.hint,
+          value: f.value == true,
+          onChanged: (v) => setState(() => f.value = v));
+    }
+    if (f.ledgerCredits) {
+      final max = switch (f.name) {
+        'cap' => 50000.0,
+        'price' || 'image_price' => 5000.0,
+        _ => 10000.0,
+      };
+      return AppAmountField(
+        label: label,
+        hint: f.hint ??
+            '≈ ${formatLedgerUsd(creditsToLedger((f.value as num?) ?? 0))}',
+        value: ((f.value as num?) ?? 0).toDouble(),
+        max: max,
+        step: max >= 10000 ? 50 : 10,
+        decimals: 2,
+        unit: 'credits',
+        presets: [max / 100, max / 20, max / 10, max / 2]
+            .map((v) => v.roundToDouble())
+            .toList(),
+        presetLabel: (v) => compactDecimal(v),
+        format: (v) => '${compactDecimal(v)} credits',
+        onChanged: (v) => setState(() => f.value = v),
       );
     }
-    if (field.type == BackendFieldType.boolean) {
-      final current = field.value.text == 'true' || field.value.text == 'false'
-          ? field.value.text
+    if (f.name == 'expires_at') {
+      return AppExpiryField(
+          label: label,
+          hint: f.hint == null || f.hint!.contains('RFC') ? null : f.hint,
+          value: DateTime.tryParse('${f.value ?? ''}')?.toLocal(),
+          onChanged: (v) => setState(() => f.value = v == null
+              ? null
+              : DateTime.utc(v.year, v.month, v.day, 23, 59, 59)
+                  .toIso8601String()));
+    }
+    if (f.name == 'at') {
+      final parts = '${f.value ?? ''}'.split(':');
+      final time = parts.length == 2
+          ? TimeOfDay(
+              hour: int.tryParse(parts[0]) ?? 9,
+              minute: int.tryParse(parts[1]) ?? 0)
           : null;
-      return DropdownButtonFormField<String>(
-        initialValue: current,
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        AppFieldLabel(label, hint: 'Runs every day at this time.'),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          ChoiceChip(
+              selected: time == null,
+              label: const Text('Not daily'),
+              onSelected: (_) => setState(() => f.value = null)),
+          ActionChip(
+            avatar: const Icon(Icons.schedule_rounded, size: 18),
+            label: Text(time == null ? 'Pick a time' : time.format(context)),
+            onPressed: () async {
+              final picked = await showTimePicker(
+                  context: context,
+                  initialTime: time ?? const TimeOfDay(hour: 9, minute: 0));
+              if (picked != null) {
+                setState(() => f.value =
+                    '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}');
+              }
+            },
+          ),
+        ]),
+      ]);
+    }
+    if (f.type == BackendFieldType.integer && f.name.endsWith('_sec')) {
+      return AppDurationField(
+          label: label.replaceAll(' sec', ''),
+          hint: f.hint,
+          seconds: f.value is num ? (f.value as num).toInt() : null,
+          onChanged: (v) => setState(() => f.value = v));
+    }
+    if (f.type == BackendFieldType.integer && f.name == 'limit') {
+      f.value ??= 50;
+      return AppChoiceField<int>(
+          label: 'How many',
+          value: f.value as int?,
+          choices: const [
+            AppChoice(25, '25'),
+            AppChoice(50, '50'),
+            AppChoice(100, '100'),
+            AppChoice(200, '200'),
+          ],
+          onChanged: (v) => setState(() => f.value = v));
+    }
+    if (_jsonEditor(f)) {
+      if (f.text.text.isEmpty && f.value != null) {
+        final v = f.value;
+        if ((v is Map && v.isNotEmpty) || (v is List && v.isNotEmpty)) {
+          f.text.text = const JsonEncoder.withIndent('  ').convert(v);
+        }
+      }
+      return TextFormField(
+        controller: f.text,
+        minLines: 3,
+        maxLines: 10,
+        style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
         decoration: InputDecoration(
-          labelText: _humanLabel(field.name.text),
-          hintText: field.hint ?? 'Choose yes or no',
-        ),
-        items: const [
-          DropdownMenuItem(value: 'true', child: Text('Yes')),
-          DropdownMenuItem(value: 'false', child: Text('No')),
-        ],
-        onChanged: (value) => field.value.text = value ?? '',
-        validator: (value) =>
-            field.required && value == null ? 'Required' : null,
+            labelText: label,
+            helperText: f.hint ?? 'Advanced: JSON',
+            alignLabelWithHint: true),
+        validator: (value) {
+          final text = (value ?? '').trim();
+          if (text.isEmpty) return f.required ? 'Required' : null;
+          try {
+            final decoded = jsonDecode(text);
+            if (f.type == BackendFieldType.object && decoded is! Map) {
+              return 'Use a JSON object';
+            }
+            if (f.type == BackendFieldType.stringList && decoded is! List) {
+              return 'Use a JSON list';
+            }
+          } catch (_) {
+            return 'Not valid JSON';
+          }
+          return null;
+        },
       );
     }
+    if (f.type == BackendFieldType.stringList) {
+      return AppTagsField(
+          label: label,
+          hint: f.hint,
+          values: [for (final v in f.value as List) '$v'],
+          onChanged: (v) => setState(() => f.value = v));
+    }
+    if (f.type == BackendFieldType.object) {
+      return AppPairsEditor(
+          label: label,
+          hint: f.hint,
+          obscureValues: f.sensitive,
+          initial: {
+            for (final e in (f.value as Map).entries) '${e.key}': '${e.value}'
+          },
+          onChanged: (v) => f.value = v);
+    }
+    final numeric = f.type == BackendFieldType.integer ||
+        f.type == BackendFieldType.decimal;
+    final multiline = f.type == BackendFieldType.multiline;
+    final hidden = f.sensitive && obscured.contains(f.name);
     return TextFormField(
-      controller: field.value,
-      obscureText: field.sensitive && obscure,
-      minLines: field.type == BackendFieldType.multiline ||
-              field.type == BackendFieldType.object
-          ? 3
-          : 1,
-      maxLines: field.sensitive && obscure
-          ? 1
-          : field.type == BackendFieldType.multiline ||
-                  field.type == BackendFieldType.object
-              ? 8
-              : 1,
-      keyboardType: switch (field.type) {
+      controller: f.text,
+      obscureText: hidden,
+      minLines: multiline ? 3 : 1,
+      maxLines: hidden ? 1 : (multiline ? 8 : 1),
+      keyboardType: switch (f.type) {
         BackendFieldType.integer => TextInputType.number,
         BackendFieldType.decimal =>
           const TextInputType.numberWithOptions(decimal: true),
-        _ => TextInputType.text,
+        _ => f.name.contains('email')
+            ? TextInputType.emailAddress
+            : f.name.contains('url')
+                ? TextInputType.url
+                : TextInputType.text,
       },
+      inputFormatters: numeric
+          ? [
+              FilteringTextInputFormatter.allow(RegExp(
+                  f.type == BackendFieldType.integer ? r'[0-9]' : r'[0-9.]'))
+            ]
+          : null,
       decoration: InputDecoration(
-        labelText: _humanLabel(field.name.text),
-        hintText: field.hint,
-        suffixText: field.ledgerCredits ? 'credits' : null,
-        suffixIcon: field.sensitive
+        labelText: label,
+        hintText: f.hint,
+        alignLabelWithHint: multiline,
+        suffixIcon: f.sensitive
             ? IconButton(
-                onPressed: () => setState(() => obscure = !obscure),
-                icon: Icon(obscure
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined),
+                onPressed: () => setState(() =>
+                    hidden ? obscured.remove(f.name) : obscured.add(f.name)),
+                icon: Icon(hidden
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined),
               )
             : null,
       ),
       validator: (value) {
         final text = (value ?? '').trim();
-        if (field.required && text.isEmpty) return 'Required';
+        if (f.required && text.isEmpty) return 'Required';
         if (text.isEmpty) return null;
-        try {
-          switch (field.type) {
-            case BackendFieldType.integer:
-              int.parse(text);
-              break;
-            case BackendFieldType.decimal:
-              double.parse(text);
-              break;
-            case BackendFieldType.object:
-              if (jsonDecode(text) is! Map) return 'Use a JSON object';
-              break;
-            case BackendFieldType.stringList:
-              if (text.startsWith('[') && jsonDecode(text) is! List) {
-                return 'Use comma-separated values or a JSON list';
-              }
-              break;
-            case BackendFieldType.boolean:
-            case BackendFieldType.text:
-            case BackendFieldType.multiline:
-              break;
-          }
-        } catch (_) {
-          return 'Invalid ${field.type.name}';
+        if (f.type == BackendFieldType.integer && int.tryParse(text) == null) {
+          return 'Enter a whole number';
+        }
+        if (f.type == BackendFieldType.decimal &&
+            double.tryParse(text) == null) {
+          return 'Enter a number';
+        }
+        if (f.name.contains('email') &&
+            !RegExp(r'^\S+@\S+\.\S+$').hasMatch(text)) {
+          return 'Enter a valid email address';
         }
         return null;
       },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final field = widget.field;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: _valueEditor(field),
     );
   }
 }

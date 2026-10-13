@@ -725,3 +725,135 @@ class AppMeter extends StatelessWidget {
     );
   }
 }
+
+/// A list of short values entered one at a time and shown as removable
+/// chips, instead of a comma-separated text box.
+class AppTagsField extends StatefulWidget {
+  const AppTagsField({
+    super.key,
+    required this.label,
+    required this.values,
+    required this.onChanged,
+    this.hint,
+    this.suggestions = const [],
+  });
+  final String label;
+  final String? hint;
+  final List<String> values;
+  final ValueChanged<List<String>> onChanged;
+
+  /// Values offered as one-tap chips.
+  final List<String> suggestions;
+
+  @override
+  State<AppTagsField> createState() => _AppTagsFieldState();
+}
+
+class _AppTagsFieldState extends State<AppTagsField> {
+  final input = TextEditingController();
+
+  @override
+  void dispose() {
+    input.dispose();
+    super.dispose();
+  }
+
+  void _add(String raw) {
+    final next = [...widget.values];
+    for (final part in raw.split(',')) {
+      final value = part.trim();
+      if (value.isNotEmpty && !next.contains(value)) next.add(value);
+    }
+    input.clear();
+    widget.onChanged(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final offered =
+        widget.suggestions.where((s) => !widget.values.contains(s)).toList();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      AppFieldLabel(widget.label, hint: widget.hint),
+      if (widget.values.isNotEmpty) ...[
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final v in widget.values)
+            InputChip(
+              label: Text(v),
+              onDeleted: () => widget.onChanged([...widget.values]..remove(v)),
+            ),
+        ]),
+        const SizedBox(height: 10),
+      ],
+      TextField(
+        controller: input,
+        onSubmitted: _add,
+        textInputAction: TextInputAction.done,
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: 'Type and press Enter',
+          suffixIcon: IconButton(
+              tooltip: 'Add',
+              onPressed: () => _add(input.text),
+              icon: const Icon(Icons.add_rounded)),
+        ),
+      ),
+      if (offered.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final s in offered)
+            ActionChip(
+                avatar: const Icon(Icons.add_rounded, size: 16),
+                label: Text(s),
+                onPressed: () => _add(s)),
+        ]),
+      ],
+    ]);
+  }
+}
+
+/// A duration picked from common presets, in seconds.
+class AppDurationField extends StatelessWidget {
+  const AppDurationField({
+    super.key,
+    required this.label,
+    required this.seconds,
+    required this.onChanged,
+    this.hint,
+    this.presets = const [300, 900, 3600, 21600, 86400, 604800],
+  });
+  final String label;
+  final String? hint;
+  final int? seconds;
+  final ValueChanged<int> onChanged;
+  final List<int> presets;
+
+  static String format(int seconds) {
+    if (seconds % 604800 == 0) {
+      final w = seconds ~/ 604800;
+      return '$w week${w == 1 ? '' : 's'}';
+    }
+    if (seconds % 86400 == 0) {
+      final d = seconds ~/ 86400;
+      return '$d day${d == 1 ? '' : 's'}';
+    }
+    if (seconds % 3600 == 0) {
+      final h = seconds ~/ 3600;
+      return '$h hour${h == 1 ? '' : 's'}';
+    }
+    if (seconds % 60 == 0) return '${seconds ~/ 60} min';
+    return '$seconds s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final options = <int>{...presets, if (seconds != null) seconds!}.toList()
+      ..sort();
+    return AppChoiceField<int>(
+      label: label,
+      hint: hint,
+      value: seconds,
+      onChanged: onChanged,
+      choices: [for (final s in options) AppChoice(s, format(s))],
+    );
+  }
+}

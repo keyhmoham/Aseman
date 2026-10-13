@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/bot.dart';
+import '../../../data/services/tradera_service.dart';
+import '../../../shared/widgets/app_form.dart';
+import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 
@@ -92,10 +97,11 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   Future<void> _transfer() async {
-    final result = await showDialog<(String, int)>(
-      context: context,
-      builder: (context) => const _TransferDialog(),
-    );
+    final result = await showAppForm<(String, int)>(
+        context,
+        _TransferForm(
+            service: widget.dependencies.service,
+            available: _wallet?.balance ?? 0));
     if (result == null || !mounted) return;
     final (to, amount) = result;
     if (amount <= 0) return;
@@ -432,65 +438,140 @@ class _Transaction extends StatelessWidget {
   }
 }
 
-class _TransferDialog extends StatefulWidget {
-  const _TransferDialog();
+/// Sends credits to someone found by name, with the amount picked on a
+/// slider capped at the balance.
+class _TransferForm extends StatefulWidget {
+  const _TransferForm({required this.service, required this.available});
+  final TraderaService service;
+
+  /// Balance in ledger units.
+  final num available;
 
   @override
-  State<_TransferDialog> createState() => _TransferDialogState();
+  State<_TransferForm> createState() => _TransferFormState();
 }
 
-class _TransferDialogState extends State<_TransferDialog> {
-  final to = TextEditingController();
-  final amount = TextEditingController(text: '10');
+class _TransferFormState extends State<_TransferForm> {
+  final query = TextEditingController();
+  List<AccountSummary> results = const [];
+  AccountSummary? recipient;
+  bool searching = false;
+  Timer? debounce;
+  late final double max =
+      ledgerToCredits(widget.available).floorToDouble().clamp(0, 1e9);
+  late double credits = max >= 10 ? 10 : max;
 
   @override
   void dispose() {
-    to.dispose();
-    amount.dispose();
+    debounce?.cancel();
+    query.dispose();
     super.dispose();
+  }
+
+  void _search(String text) {
+    debounce?.cancel();
+    debounce = Timer(const Duration(milliseconds: 300), () async {
+      final q = text.trim().replaceFirst(RegExp(r'^@+'), '');
+      if (q.isEmpty) {
+        if (mounted) setState(() => results = const []);
+        return;
+      }
+      setState(() => searching = true);
+      try {
+        final found = await widget.service.searchUsers(q, limit: 6);
+        if (mounted) setState(() => results = found);
+      } catch (_) {
+        if (mounted) setState(() => results = const []);
+      } finally {
+        if (mounted) setState(() => searching = false);
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return AlertDialog(
-      backgroundColor: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: const Text('Transfer credits'),
-      content: SizedBox(
-        width: 380,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-            controller: to,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Recipient account id',
-              hintText: '32-char account id',
+    final raw = query.text.trim();
+    // A pasted 32-character account id works without a search match.
+    final pastedId = RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(raw);
+    final to = recipient?.id ?? (pastedId ? raw : null);
+    return AppFormFrame(
+      icon: Icons.send_rounded,
+      title: 'Send credits',
+      subtitle: 'Moves credits from your wallet to another person right away.',
+      submit: 'Send ${compactDecimal(credits)} credits',
+      onSubmit: to == null || credits <= 0
+          ? null
+          : () => Navigator.pop(context, (to, creditsToLedger(credits))),
+      children: [
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const AppFieldLabel('To'),
+          if (recipient != null)
+            InputChip(
+              avatar: CircleAvatar(
+                  child: Text(recipient!.handle.isEmpty
+                      ? '?'
+                      : recipient!.handle[0].toUpperCase())),
+              label: Text('@${recipient!.handle}'),
+              onDeleted: () => setState(() => recipient = null),
+            )
+          else ...[
+            TextField(
+              controller: query,
+              autofocus: true,
+              onChanged: (v) {
+                setState(() {});
+                _search(v);
+              },
+              decoration: InputDecoration(
+                hintText: 'Search by @handle or email',
+                prefixIcon: const Icon(Icons.person_search_rounded),
+                suffixIcon: searching
+                    ? const Padding(
+                        padding: EdgeInsets.all(14),
+                        child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2)))
+                    : null,
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: amount,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Amount (credits)',
-              suffixText: 'credits',
-            ),
-          ),
+            for (final r in results)
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 6),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppShape.control)),
+                leading: CircleAvatar(
+                    child: Text(
+                        r.handle.isEmpty ? '?' : r.handle[0].toUpperCase())),
+                title: Text('@${r.handle}'),
+                subtitle: Text(r.kind),
+                onTap: () => setState(() => recipient = r),
+              ),
+            if (pastedId)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text('Sending to account $raw',
+                    style: TextStyle(
+                        fontSize: 12, color: scheme.onSurfaceVariant)),
+              ),
+          ],
         ]),
-      ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel')),
-        FilledButton(
-          onPressed: () {
-            final recipient = to.text.trim();
-            final value = parseCreditsToLedger(amount.text) ?? 0;
-            if (recipient.isEmpty || value <= 0) return;
-            Navigator.pop(context, (recipient, value));
-          },
-          child: const Text('Send'),
+        AppAmountField(
+          label: 'Amount',
+          hint: '${compactDecimal(max)} credits available',
+          value: credits.clamp(0, max <= 0 ? 0 : max).toDouble(),
+          max: max <= 0 ? 1 : max,
+          step: max >= 500 ? 10 : 1,
+          decimals: 0,
+          unit: 'credits',
+          presets: [
+            for (final p in const [10.0, 50.0, 100.0, 500.0])
+              if (p <= max) p,
+          ],
+          presetLabel: compactDecimal,
+          format: (v) => '${compactDecimal(v)} credits',
+          onChanged: (v) => setState(() => credits = v),
         ),
       ],
     );

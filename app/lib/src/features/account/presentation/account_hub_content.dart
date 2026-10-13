@@ -296,8 +296,10 @@ class _AccountHubContentState extends State<AccountHubContent> {
         child: Align(
             alignment: Alignment.centerLeft,
             child: FilledButton.icon(
-                onPressed: () =>
-                    widget.onAction('finance', 'payout_request', const {}),
+                onPressed: () => widget.onAction('finance', 'payout_request', {
+                      '_available':
+                          account['withdrawable'] ?? account['available'],
+                    }),
                 icon: const Icon(Icons.north_east_rounded, size: 17),
                 label: const Text('Request payout'))),
       ),
@@ -426,8 +428,8 @@ class _AccountHubContentState extends State<AccountHubContent> {
                   ]),
                   const SizedBox(height: 14),
                   FilledButton.tonalIcon(
-                      onPressed: () => widget.onAction(
-                          'auth', 'profile_update', {'profile': profile}),
+                      onPressed: () => widget.onAction('auth', 'profile_update',
+                          {'_mode': 'profile', 'profile': profile}),
                       icon: const Icon(Icons.edit_outlined, size: 17),
                       label: const Text('Edit profile')),
                 ])),
@@ -482,13 +484,16 @@ class _AccountHubContentState extends State<AccountHubContent> {
           title: 'Profile and password',
           child: Wrap(spacing: 8, runSpacing: 8, children: [
             OutlinedButton.icon(
-                onPressed: () => widget.onAction('auth', 'profile_update',
-                    {'profile': me['profile'] ?? <String, dynamic>{}}),
+                onPressed: () => widget.onAction('auth', 'profile_update', {
+                      '_mode': 'identity',
+                      'handle': me['handle'],
+                      'email': me['email'],
+                    }),
                 icon: const Icon(Icons.person_outline, size: 17),
                 label: const Text('Edit identity')),
             OutlinedButton.icon(
-                onPressed: () =>
-                    widget.onAction('auth', 'profile_update', const {}),
+                onPressed: () => widget.onAction(
+                    'auth', 'profile_update', const {'_mode': 'password'}),
                 icon: const Icon(Icons.password_rounded, size: 17),
                 label: const Text('Change password')),
           ])),

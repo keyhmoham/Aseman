@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/formatting/billing_units.dart';
+import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/backend_action_ui.dart';
 
@@ -97,27 +98,7 @@ Future<Map<String, dynamic>?> showAdminActionForm(
             if (!_contextKeys.contains(e.key)) e.key: e.value
         });
   }
-  if (MediaQuery.sizeOf(context).width < 600) {
-    return showModalBottomSheet<Map<String, dynamic>>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-        child: form,
-      ),
-    );
-  }
-  return showDialog<Map<String, dynamic>>(
-    context: context,
-    builder: (context) => Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 580, maxHeight: 780),
-        child: form,
-      ),
-    ),
-  );
+  return showAppForm<Map<String, dynamic>>(context, form);
 }
 
 /// What to tell the operator after an action succeeds.
@@ -210,99 +191,6 @@ double _num(dynamic v) =>
 Map<String, dynamic> _asMap(dynamic v) =>
     v is Map ? v.map((k, x) => MapEntry('$k', x)) : <String, dynamic>{};
 
-/// The frame every admin form shares: an icon badge, a headline, the
-/// scrolling fields, and the actions pinned to the bottom.
-class _FormFrame extends StatelessWidget {
-  const _FormFrame({
-    required this.icon,
-    required this.title,
-    required this.children,
-    required this.submit,
-    required this.onSubmit,
-    this.subtitle,
-    this.destructive = false,
-    this.formKey,
-  });
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final List<Widget> children;
-  final String submit;
-  final VoidCallback? onSubmit;
-  final bool destructive;
-  final GlobalKey<FormState>? formKey;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final badge = destructive ? scheme.errorContainer : scheme.primaryContainer;
-    final onBadge =
-        destructive ? scheme.onErrorContainer : scheme.onPrimaryContainer;
-    final compact = MediaQuery.sizeOf(context).width < 600;
-    return Form(
-      key: formKey,
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Flexible(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(24, compact ? 4 : 24, 24, 8),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: ShapeDecoration(
-                  color: badge,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18)),
-                ),
-                child: Icon(icon, color: onBadge, size: 26),
-              ),
-              const SizedBox(height: 16),
-              Text(title,
-                  style: const TextStyle(
-                      fontSize: 24,
-                      height: 1.15,
-                      letterSpacing: -.4,
-                      fontWeight: FontWeight.w800)),
-              if (subtitle != null) ...[
-                const SizedBox(height: 6),
-                Text(subtitle!,
-                    style: TextStyle(
-                        fontSize: 14,
-                        height: 1.4,
-                        color: scheme.onSurfaceVariant)),
-              ],
-              const SizedBox(height: 22),
-              for (var i = 0; i < children.length; i++) ...[
-                if (i > 0) const SizedBox(height: 22),
-                children[i],
-              ],
-            ]),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel')),
-            const SizedBox(width: 8),
-            FilledButton(
-              style: destructive
-                  ? FilledButton.styleFrom(
-                      backgroundColor: scheme.error,
-                      foregroundColor: scheme.onError)
-                  : null,
-              onPressed: onSubmit,
-              child: Text(submit),
-            ),
-          ]),
-        ),
-      ]),
-    );
-  }
-}
-
 class _ConfirmForm extends StatefulWidget {
   const _ConfirmForm({
     required this.initial,
@@ -329,7 +217,7 @@ class _ConfirmFormState extends State<_ConfirmForm> {
   bool understood = false;
 
   @override
-  Widget build(BuildContext context) => _FormFrame(
+  Widget build(BuildContext context) => AppFormFrame(
         icon: widget.icon,
         title: widget.title,
         subtitle: widget.message,
@@ -426,7 +314,7 @@ class _UserFormState extends State<_UserForm> {
   @override
   Widget build(BuildContext context) {
     final name = [first.text, last.text].where((x) => x.trim().isNotEmpty);
-    return _FormFrame(
+    return AppFormFrame(
       formKey: formKey,
       icon: Icons.manage_accounts_rounded,
       title: 'Edit ${name.isEmpty ? '@${handle.text}' : name.join(' ')}',
@@ -545,7 +433,7 @@ class _PasswordFormState extends State<_PasswordForm> {
   @override
   Widget build(BuildContext context) {
     final name = '${widget.initial['_name'] ?? ''}';
-    return _FormFrame(
+    return AppFormFrame(
       formKey: formKey,
       icon: Icons.password_rounded,
       title: 'Set a new password',
@@ -595,7 +483,7 @@ class _GrantFormState extends State<_GrantForm> {
   @override
   Widget build(BuildContext context) {
     final name = '${widget.initial['_name'] ?? ''}';
-    return _FormFrame(
+    return AppFormFrame(
       icon: Icons.add_card_rounded,
       title: 'Grant credits',
       subtitle:
@@ -674,7 +562,7 @@ class _BudgetFormState extends State<_BudgetForm> {
   Widget build(BuildContext context) {
     final spent = ledgerToCredits(_num(widget.initial['_spent']));
     final scheme = Theme.of(context).colorScheme;
-    return _FormFrame(
+    return AppFormFrame(
       icon: Icons.savings_outlined,
       title: 'Project budget',
       subtitle:
@@ -751,7 +639,7 @@ class _PayoutFormState extends State<_PayoutForm> {
     final amount = widget.initial['_amount'];
     final name = '${widget.initial['_name'] ?? ''}';
     final paid = status == 'paid';
-    return _FormFrame(
+    return AppFormFrame(
       icon: paid ? Icons.price_check_rounded : Icons.money_off_rounded,
       destructive: !paid,
       title: '${amount == null ? 'Payout' : formatLedgerUsd(_num(amount))}'
@@ -939,7 +827,7 @@ class _AgentFormState extends State<_AgentForm> {
     final scheme = Theme.of(context).colorScheme;
     final models = _models(provider);
     final noun = agent ? 'agent' : (kind == 'miniapp' ? 'miniapp' : 'tool');
-    return _FormFrame(
+    return AppFormFrame(
       formKey: formKey,
       icon: agent ? Icons.smart_toy_outlined : Icons.build_outlined,
       title: widget.editing ? 'Edit $noun' : 'New $noun',
@@ -1083,7 +971,7 @@ class _PublishFormState extends State<_PublishForm> {
   @override
   Widget build(BuildContext context) {
     final type = '${widget.initial['type'] ?? 'agent'}';
-    return _FormFrame(
+    return AppFormFrame(
       icon: Icons.storefront_outlined,
       title: 'List in the market',
       subtitle:
@@ -1168,7 +1056,7 @@ class _DenyFormState extends State<_DenyForm> {
   @override
   Widget build(BuildContext context) {
     final name = '${widget.initial['_name'] ?? ''}';
-    return _FormFrame(
+    return AppFormFrame(
       icon: Icons.block_rounded,
       destructive: true,
       title: 'Deny ${name.isEmpty ? 'this listing' : name}?',
@@ -1259,7 +1147,7 @@ class _McpFormState extends State<_McpForm> {
 
   @override
   Widget build(BuildContext context) {
-    return _FormFrame(
+    return AppFormFrame(
       formKey: formKey,
       icon: Icons.hub_outlined,
       title: widget.editing

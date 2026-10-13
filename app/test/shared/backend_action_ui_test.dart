@@ -25,15 +25,57 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Grant credits'), findsOneWidget);
 
-    final fields = find.byType(TextFormField);
-    await tester.enterText(fields.at(0), 'account-1');
-    await tester.enterText(fields.at(1), '12');
+    // The amount is picked with a preset chip, not typed.
+    await tester.enterText(find.byType(TextFormField).first, 'account-1');
+    await tester.tap(find.widgetWithText(ChoiceChip, '500'));
+    await tester.pump();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Save'));
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
 
     expect(submitted, {
       'target': 'account-1',
-      'amount': 120000,
+      'amount': 5000000,
+    });
+  });
+
+  testWidgets('supplied identifiers are passed through, not shown',
+      (tester) async {
+    Map<String, dynamic>? submitted;
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(builder: (context) {
+        return FilledButton(
+          onPressed: () async {
+            submitted = await showBackendActionForm(
+              context,
+              namespace: 'routines',
+              action: 'create',
+              initialBody: const {'space': 'space-1'},
+            );
+          },
+          child: const Text('Open'),
+        );
+      }),
+    ));
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.text('space-1'), findsNothing);
+    expect(find.text('Project'), findsNothing);
+    // Choices are chips, intervals are durations.
+    await tester.tap(find.text('Periodic'));
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Task'), 'Summarise the news');
+    await tester.ensureVisible(find.text('1 hour').last);
+    await tester.tap(find.text('1 hour').last);
+    await tester.pump();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Create'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+    await tester.pumpAndSettle();
+    expect(submitted, {
+      'space': 'space-1',
+      'type': 'periodic',
+      'task': 'Summarise the news',
+      'interval_sec': 3600,
     });
   });
 
@@ -57,6 +99,12 @@ void main() {
     expect(
         find.text('This action can remove or disable data.'), findsOneWidget);
     expect(find.text('Confirm'), findsOneWidget);
+    // The confirm button waits for the acknowledgement.
+    expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Confirm'))
+            .onPressed,
+        isNull);
   });
 
   testWidgets('record lists render as structured tables', (tester) async {

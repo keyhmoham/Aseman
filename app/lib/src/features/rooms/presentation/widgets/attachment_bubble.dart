@@ -190,23 +190,27 @@ class AttachmentBubble extends StatelessWidget {
                       color: color, fontWeight: FontWeight.w800, fontSize: 10)),
             ),
             const SizedBox(width: 10),
-            ConstrainedBox(
+            Flexible(
+                child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxWidth - 70),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(file.name,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 12)),
                   const SizedBox(height: 2),
                   Text('${file.humanSize} · tap to download',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           fontSize: 10, color: scheme.onSurfaceVariant)),
                 ],
               ),
-            ),
+            )),
             const SizedBox(width: 8),
             Icon(Icons.download_rounded,
                 color: scheme.onSurfaceVariant, size: 20),

@@ -29,9 +29,10 @@ the backend always sees the signed-in user's identity.
 
 The Elpian engine is part of the app, not a dependency: its Flutter host is
 copied into `lib/src/elpian` (rendering engine, Elpian VM and QuickJS
-runtimes, miniapp host, A2UI renderer — see its README), its native VM
-library into `packages/elpian_vm_native`, and its web runtimes into
-`assets/elpian`. A miniapp is a
+runtimes, miniapp host, A2UI renderer, the Godot `Scene3D` widget — see its
+README), its native VM library into `packages/elpian_vm_native`, the
+embedded Godot engine into `packages/elpian_godot_native`, and its web
+runtimes into `assets/elpian`. A miniapp is a
 bot whose `frontend` field holds a `{ manifest, source }` bundle. The
 `MiniappSandboxScreen` runs the bundle inside an `ElpianVmWidget` (QuickJS
 runtime) with host handlers wired by `features/miniapps/elpian/miniapp_bridge.dart`:

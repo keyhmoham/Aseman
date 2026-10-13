@@ -35,5 +35,15 @@ export 'superapp/mini_app.dart';
 export 'superapp/mini_app_host.dart';
 export 'vm/governance/models.dart';
 
+// ── Embedded Godot 3D: the Scene3D widget, its controller and protocol ──
+export 'godot/godot_binding.dart';
+export 'godot/godot_controller.dart';
+export 'godot/godot_object.dart';
+export 'godot/godot_values.dart';
+export 'godot/protocol.dart';
+export 'godot/scene3d_widget.dart';
+export 'godot/scene_dsl.dart';
+export 'godot/scene_taps.dart';
+
 // ── Agent-generated UI (A2UI v0.9.1) ───────────────────────────────
 export 'a2ui/a2ui.dart';

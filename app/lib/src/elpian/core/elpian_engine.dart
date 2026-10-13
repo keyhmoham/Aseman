@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../css/css_parser.dart';
 import '../css/json_stylesheet_parser.dart';
 import '../css/stylesheet.dart';
+import '../godot/scene3d_widget.dart';
 import '../html_widgets/html_widgets.dart';
 import '../models/css_style.dart';
 import '../models/elpian_node.dart';
@@ -116,6 +117,10 @@ class ElpianEngine {
     _registry.register('Canvas', ElpianCanvasWidget.build);
     _registry.register('CachedCanvas', ElpianCachedCanvas.build);
     _registry.register(ScopeContract.type, ElpianScope.build);
+
+    // Embedded Godot 3D
+    _registry.register('Scene3D', Scene3D.build);
+    _registry.register('scene3d', Scene3D.build);
 
     // Flutter widgets - Additional
     _registry.register('Wrap', ElpianWrap.build);

@@ -13,14 +13,14 @@ the web runtimes (`assets/elpian`) are part of the app.
 | `superapp/` | the miniapp model: manifest ∩ grant → policy, and the governed host |
 | `a2ui/` | the A2UI v0.9.1 renderer: generated tool frontends and agents' widgets |
 | `scope/`, `stream/`, `diagnostics/` | scoped components, streamed UI, tracing |
+| `godot/` | the `Scene3D` widget: an embedded Godot 4 3D scene, driven by ops (its native engine is `packages/elpian_godot_native`; without the engine artifacts it shows a placeholder) |
 
-Left out: the embedded Godot 3D surface, the Next.js bridge, the `elpiand`
-fullstack client (Tradera wires frontends to backends through its own node)
-and the generic WASM runtime.
+Left out: the Next.js bridge, the `elpiand` fullstack client (Tradera wires
+frontends to backends through its own node) and the generic WASM runtime.
 
 Changes made to the copy, so a refresh can repeat them:
 
-* the `wasm` runtime kind and the `Scene3D` registration are removed;
+* the `wasm` runtime kind is removed;
 * asset and font paths point at the app's own (`assets/elpian/…`,
   families `serif` / `monospace`);
 * `a2ui/lowering.dart` lowers Tradera's `ToolFrontend` component through

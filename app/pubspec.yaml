@@ -26,6 +26,9 @@ dependencies:
   # are part of this app; these are the packages the engine itself uses.
   tradera_elpian_vm:
     path: packages/elpian_vm_native
+  # The embedded Godot engine behind Scene3D (packages/elpian_godot_native).
+  tradera_elpian_godot:
+    path: packages/elpian_godot_native
   collection: ^1.17.0
   ffi: ^2.1.0
   flutter_js: ^0.8.3

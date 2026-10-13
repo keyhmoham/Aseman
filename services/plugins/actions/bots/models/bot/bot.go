@@ -38,7 +38,31 @@ const (
 	// VMTypeDeepAgents is an agent served by the deep agents runtime. Every
 	// agent (the built-in tradera lead and every market agent) runs on it.
 	VMTypeDeepAgents VMType = "deepagents"
+	// VMTypeElpian / VMTypeQuickJS are managed tool backends: Elpian VM or
+	// QuickJS programs run by the tool runtime image as Nomad services.
+	VMTypeElpian  VMType = "elpian"
+	VMTypeQuickJS VMType = "quickjs"
+	// VMTypeMCP is a tool whose backend is an external MCP server.
+	VMTypeMCP VMType = "mcp"
+	// VMTypeInstalled is a tool backend installed into the sandbox of every
+	// space that adds it, with no machine of its own.
+	VMTypeInstalled VMType = "installed"
 )
+
+// IsToolBackend reports whether the bot is a tool whose backend answers
+// microtool calls over MCP (an external server, a managed runtime, or one
+// installed into a space sandbox), as opposed to the space sandbox itself or
+// a wasm miniapp.
+func (b *Bot) IsToolBackend() bool {
+	if b == nil || b.Kind == KindAgent || b.IsSandbox() {
+		return false
+	}
+	switch b.VMType {
+	case VMTypeMCP, VMTypeElpian, VMTypeQuickJS, VMTypeInstalled, VMTypeDocker:
+		return true
+	}
+	return false
+}
 
 // AgentVMType maps the agent engine a record or request names onto the one
 // agent runtime. Engines this node no longer runs ("langchain", "grok") are

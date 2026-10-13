@@ -842,6 +842,7 @@ func (a *botAddAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	if err := a.s.AddBot(ctx, req.Caller.ID, spID, roomID, botID); err != nil {
 		return nil, err
 	}
+	a.s.installTool(ctx, spID, botID)
 	return helper.JSON(map[string]any{"ok": true})
 }
 

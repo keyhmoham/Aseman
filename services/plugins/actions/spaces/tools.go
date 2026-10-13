@@ -46,6 +46,8 @@ func toolDetail(toolName string) string {
 		return "scheduling a routine…"
 	case "proxy_create":
 		return "opening a gateway proxy…"
+	case "ui_compose":
+		return "composing a widget…"
 	default:
 		return "using tool " + toolName + "…"
 	}
@@ -100,8 +102,12 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 			BotID:       rec.ID.String(),
 			Kind:        string(rec.Kind),
 		}
-		if rec.VMType == bot.VMType("mcp") {
+		if rec.IsToolBackend() {
 			tool.Commands = s.appCommands(ctx, spaceID, rec)
+			tool.Frontend = s.toolFrontend(ctx, rec)
+			if tool.Frontend != "" {
+				tool.Description += " It has a " + tool.Frontend + " frontend: show it to people with ui_compose ({\"component\": \"ToolFrontend\", \"tool\": \"" + rec.ID.String() + "\"})."
+			}
 		}
 		tools = append(tools, tool)
 	}
@@ -141,6 +147,15 @@ func (s *Service) appCommands(ctx context.Context, spaceID identity.ID, rec *bot
 		out = append(out, vmm.ToolCommand{Name: name, Description: description, Schema: schema})
 	}
 	return out
+}
+
+// toolFrontend is the mode of a tool's frontend (static, generative or none).
+func (s *Service) toolFrontend(ctx context.Context, rec *bot.Bot) string {
+	var mode string
+	if err := bridge.Invoke(ctx, s.K, "tools", "FrontendMode", []any{ctx, rec.ID.String()}, &mode); err != nil {
+		return ""
+	}
+	return mode
 }
 
 // botForMember resolves a membership member id (a bot account or bot record id)
@@ -324,6 +339,8 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 		result, terr = s.proxyManageTool(ctx, id, toolName, argsJSON)
 	case toolName == "proxy_create":
 		result, terr = s.proxyCreateTool(ctx, id, argsJSON)
+	case toolName == "ui_compose":
+		result, terr = s.composeUI(ctx, id, roomID, agentName, argsJSON)
 	default:
 		var tools []vmm.Tool
 		tools, terr = s.SpaceTools(ctx, id, roomID)

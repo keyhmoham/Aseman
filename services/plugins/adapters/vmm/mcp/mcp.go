@@ -1,5 +1,7 @@
-// Package mcp represents connected remote tools as logical VMs. Connection
-// ownership and credentials stay in the tools action namespace.
+// Package mcp represents tool backends without a machine of their own as
+// logical VMs: external MCP servers (type mcp) and backends installed into the
+// sandbox of each space that adds them (type installed). Connection ownership,
+// credentials and where a backend answers stay in the tools action namespace.
 package mcp
 
 import (
@@ -11,6 +13,7 @@ import (
 	"github.com/tradera/tradera/pkg/logger"
 	"github.com/tradera/tradera/plugins/adapters/base"
 	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"strings"
 	"sync"
 	"time"
 )
@@ -23,7 +26,7 @@ type Adapter struct {
 }
 
 func New(log *logger.Logger) *Adapter {
-	return &Adapter{Base: base.Base{Name: "mcp", Category: api.CategoryVMM, Version: "1.0.0", Description: "Connected remote MCP tools", Provides: []string{"vmm"}, Log: log}, vms: map[string]vmm.VM{}}
+	return &Adapter{Base: base.Base{Name: "mcp", Category: api.CategoryVMM, Version: "1.0.0", Description: "Connected remote MCP tools and space-installed tool backends", Provides: []string{"vmm"}, Log: log}, vms: map[string]vmm.VM{}}
 }
 func (a *Adapter) Init(ctx context.Context, d *api.Dependencies) error {
 	a.K = d.Kernel
@@ -42,20 +45,27 @@ func (a *Adapter) Close(context.Context) error {
 	return nil
 }
 func (a *Adapter) Health(context.Context) vmm.Health { return vmm.Health{OK: true} }
-func (a *Adapter) SupportedTypes() []vmm.Type        { return []vmm.Type{vmm.TypeMCP} }
+func (a *Adapter) SupportedTypes() []vmm.Type {
+	return []vmm.Type{vmm.TypeMCP, vmm.TypeInstalled}
+}
+func supported(t vmm.Type) bool { return t == vmm.TypeMCP || t == vmm.TypeInstalled }
 func (a *Adapter) BuildImage(ctx context.Context, s vmm.ImageSpec) (vmm.Image, error) {
-	return vmm.Image{ID: s.Name, Name: s.Name, Type: vmm.TypeMCP, Ref: s.YML, CreatedAt: time.Now().UTC()}, nil
+	t := s.Type
+	if !supported(t) {
+		t = vmm.TypeMCP
+	}
+	return vmm.Image{ID: s.Name, Name: s.Name, Type: t, Ref: s.YML, CreatedAt: time.Now().UTC()}, nil
 }
 func (a *Adapter) DeleteImage(context.Context, string) error { return nil }
 func (a *Adapter) CreateVM(ctx context.Context, s vmm.VMSpec) (vmm.VM, error) {
-	if s.Type != vmm.TypeMCP {
-		return vmm.VM{}, errs.InvalidArgument("MCP runtime only supports MCP tools")
+	if !supported(s.Type) {
+		return vmm.VM{}, errs.InvalidArgument("MCP runtime only supports MCP and installed tools")
 	}
 	id, e := idutil.RandomHex(16)
 	if e != nil {
 		return vmm.VM{}, e
 	}
-	vm := vmm.VM{ID: "mcp-" + id, Type: vmm.TypeMCP, Name: s.Name, ImageRef: s.ImageRef, Status: vmm.StatusRunning, CreatedAt: time.Now().UTC()}
+	vm := vmm.VM{ID: string(s.Type) + "-" + id, Type: s.Type, Name: s.Name, ImageRef: s.ImageRef, Status: vmm.StatusRunning, CreatedAt: time.Now().UTC()}
 	a.mu.Lock()
 	a.vms[vm.ID] = vm
 	a.mu.Unlock()
@@ -65,7 +75,11 @@ func (a *Adapter) EnsureAgent(ctx context.Context, id, spec string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if _, ok := a.vms[id]; !ok {
-		a.vms[id] = vmm.VM{ID: id, Type: vmm.TypeMCP, ImageRef: spec, Status: vmm.StatusRunning, CreatedAt: time.Now().UTC()}
+		t := vmm.TypeMCP
+		if strings.HasPrefix(id, string(vmm.TypeInstalled)+"-") {
+			t = vmm.TypeInstalled
+		}
+		a.vms[id] = vmm.VM{ID: id, Type: t, ImageRef: spec, Status: vmm.StatusRunning, CreatedAt: time.Now().UTC()}
 	}
 	return nil
 }
@@ -97,7 +111,7 @@ func (a *Adapter) PauseVM(ctx context.Context, id string) error {
 }
 func (a *Adapter) ResumeVM(ctx context.Context, id string) error { return a.StartVM(ctx, id) }
 func (a *Adapter) ResizeVM(ctx context.Context, id string, res vmm.ResourceSpec) (vmm.VM, error) {
-	return vmm.VM{}, errs.InvalidArgument("remote MCP connections have no allocatable VM resources")
+	return vmm.VM{}, errs.InvalidArgument("remote MCP connections and installed tools have no allocatable VM resources")
 }
 func (a *Adapter) GetVM(ctx context.Context, id string) (vmm.VM, error) {
 	a.mu.Lock()
@@ -129,7 +143,7 @@ func (a *Adapter) Send(ctx context.Context, id, body string) (string, error) {
 		return "", e
 	}
 	if vm.Status != vmm.StatusRunning {
-		return "", errs.New(errs.CodeUnavailable, "MCP tool is stopped")
+		return "", errs.New(errs.CodeUnavailable, "tool is stopped")
 	}
 	var out string
 	e = bridge.Invoke(ctx, a.K, "tools", "InvokeMCP", []any{ctx, id, body}, &out)

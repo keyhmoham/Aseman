@@ -2,6 +2,8 @@ package vmm
 
 import (
 	"encoding/json"
+	"strings"
+
 	"github.com/tradera/tradera/pkg/errs"
 )
 
@@ -37,4 +39,45 @@ func ToolFailureResult(tool, output string, err error) string {
 	}
 	payload, _ := json.Marshal(map[string]any{"ok": false, "tool": tool, "error": map[string]any{"code": errs.CodeOf(err), "message": err.Error()}, "output": output, "recovery": recovery})
 	return "error: " + string(payload)
+}
+
+// ToolResultValue is what an MCP tool result means as data: its structured
+// content, else its text (as JSON when it is JSON). An error result is an
+// error.
+func ToolResultValue(reply string) (any, error) {
+	var result map[string]any
+	if json.Unmarshal([]byte(reply), &result) != nil || result == nil {
+		var v any
+		if json.Unmarshal([]byte(reply), &v) == nil {
+			return v, nil
+		}
+		return reply, nil
+	}
+	if _, isMCP := result["content"]; !isMCP {
+		if _, isMCP = result["structuredContent"]; !isMCP {
+			return result, nil
+		}
+	}
+	var texts []string
+	if blocks, ok := result["content"].([]any); ok {
+		for _, b := range blocks {
+			if block, ok := b.(map[string]any); ok && block["type"] == "text" {
+				if t, ok := block["text"].(string); ok {
+					texts = append(texts, t)
+				}
+			}
+		}
+	}
+	text := strings.Join(texts, "\n")
+	if isErr, _ := result["isError"].(bool); isErr {
+		return nil, errs.New(CodeToolExecutionFailed, "the tool reported an error: "+text)
+	}
+	if sc, ok := result["structuredContent"]; ok && sc != nil {
+		return sc, nil
+	}
+	var v any
+	if json.Unmarshal([]byte(text), &v) == nil {
+		return v, nil
+	}
+	return text, nil
 }

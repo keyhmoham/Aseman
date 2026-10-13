@@ -26,6 +26,11 @@ import (
 
 const jobPrefix = "tradera-"
 
+// DefaultToolRuntimeImage runs managed Elpian VM and QuickJS tool backends
+// (deploy/tool-runtime). The tag is pinned because Nomad always pulls
+// ":latest" images.
+const DefaultToolRuntimeImage = "tradera/tool-runtime:v1"
+
 // Adapter is the Nomad VMM plugin.
 type Adapter struct {
 	base.Base
@@ -33,6 +38,8 @@ type Adapter struct {
 	region     string
 	dc         string
 	dockerHost string // docker daemon used for exec into running containers
+	// toolRuntime is the image elpian and quickjs tool backends run in.
+	toolRuntime string
 
 	mu    sync.Mutex
 	specs map[string]vmm.VMSpec // vm id (nomad job name) -> last spec (for pause/resume)
@@ -77,6 +84,10 @@ func (a *Adapter) Init(ctx context.Context, deps *api.Dependencies) error {
 	a.client = client
 	a.region = c.Region
 	a.dc = c.Datacenter
+	a.toolRuntime = c.Options["tool_runtime_image"]
+	if a.toolRuntime == "" {
+		a.toolRuntime = DefaultToolRuntimeImage
+	}
 	a.dockerHost = c.Options["docker_host"]
 	if a.dockerHost == "" {
 		a.dockerHost = dockerexec.DefaultHost
@@ -121,12 +132,16 @@ func (a *Adapter) Health(ctx context.Context) vmm.Health {
 	return vmm.Health{OK: true, Message: "nomad healthy"}
 }
 
-// SupportedTypes implements vmm.VMM. Only docker is advertised: the wasm
-// driver is not available on standard Nomad agents, so wasm miniapps keep
-// running on the in-process wasm adapter.
+// SupportedTypes implements vmm.VMM. Docker, plus the two tool backend
+// runtimes, which are docker tasks of the tool runtime image. The wasm driver
+// is not advertised: it is not available on standard Nomad agents, so wasm
+// miniapps keep running on the in-process wasm adapter.
 func (a *Adapter) SupportedTypes() []vmm.Type {
-	return []vmm.Type{vmm.TypeDocker}
+	return []vmm.Type{vmm.TypeDocker, vmm.TypeElpian, vmm.TypeQuickJS}
 }
+
+// isToolRuntime reports whether a VM type runs in the tool runtime image.
+func isToolRuntime(t vmm.Type) bool { return t == vmm.TypeElpian || t == vmm.TypeQuickJS }
 
 // BuildImage implements vmm.VMM. For Nomad, the "image" is a driver artifact
 // reference (docker registry image or wasm module) plus a stored definition.
@@ -134,8 +149,8 @@ func (a *Adapter) BuildImage(ctx context.Context, spec vmm.ImageSpec) (vmm.Image
 	if spec.Name == "" {
 		return vmm.Image{}, errs.InvalidArgument("image name required")
 	}
-	if spec.Type != vmm.TypeDocker && spec.Type != vmm.TypeWASM {
-		return vmm.Image{}, errs.InvalidArgument("nomad provider supports docker and wasm images")
+	if spec.Type != vmm.TypeDocker && spec.Type != vmm.TypeWASM && !isToolRuntime(spec.Type) {
+		return vmm.Image{}, errs.InvalidArgument("nomad provider supports docker, wasm, elpian and quickjs images")
 	}
 	id, err := idutil.RandomHex(8)
 	if err != nil {
@@ -159,8 +174,8 @@ func (a *Adapter) CreateVM(ctx context.Context, spec vmm.VMSpec) (vmm.VM, error)
 	if a.client == nil {
 		return vmm.VM{}, errs.New(errs.CodeUnavailable, "nomad not configured")
 	}
-	if spec.Type != vmm.TypeDocker && spec.Type != vmm.TypeWASM {
-		return vmm.VM{}, errs.InvalidArgument("nomad supports docker and wasm VMs")
+	if spec.Type != vmm.TypeDocker && spec.Type != vmm.TypeWASM && !isToolRuntime(spec.Type) {
+		return vmm.VM{}, errs.InvalidArgument("nomad supports docker, wasm, elpian and quickjs VMs")
 	}
 	job, err := a.buildJob(spec)
 	if err != nil {
@@ -180,11 +195,13 @@ func (a *Adapter) CreateVM(ctx context.Context, spec vmm.VMSpec) (vmm.VM, error)
 		Type:      spec.Type,
 		Status:    vmm.StatusPending,
 		ImageRef:  spec.ImageRef,
+		Address:   vmm.ServiceAddress(spec.Labels),
 		Resources: spec.Resources,
 		Labels:    spec.Labels,
 		CreatedAt: time.Now().UTC(),
 	}, nil
 }
+
 
 // buildJob converts a VMSpec into a Nomad job.
 func (a *Adapter) buildJob(spec vmm.VMSpec) (*nomadapi.Job, error) {
@@ -200,11 +217,23 @@ func (a *Adapter) buildJob(spec vmm.VMSpec) (*nomadapi.Job, error) {
 	job.Datacenters = dc
 	job.Meta = spec.Labels
 
+	image, env := spec.ImageRef, spec.Environment
+	if isToolRuntime(spec.Type) {
+		// An Elpian VM or QuickJS backend is a program, not an image: the
+		// runtime image hosts it and learns which engine runs it from its
+		// environment (the program itself it fetches from the node).
+		image = a.toolRuntime
+		env = map[string]string{}
+		for k, v := range spec.Environment {
+			env[k] = v
+		}
+		env["TRADERA_TOOL_ENGINE"] = string(spec.Type)
+	}
 	task := &nomadapi.Task{
 		Name:   "main",
 		Driver: "docker",
-		Config: map[string]any{"image": spec.ImageRef, "force_pull": false},
-		Env:    spec.Environment,
+		Config: map[string]any{"image": image, "force_pull": false},
+		Env:    env,
 		Resources: &nomadapi.Resources{
 			CPU:      intPtr(int(nomadCPU(spec.Resources.CPU))),
 			MemoryMB: intPtr(int(nomadMem(spec.Resources.MemoryMB))),
@@ -463,6 +492,7 @@ func (a *Adapter) GetVM(ctx context.Context, id string) (vmm.VM, error) {
 	}
 	if job.Meta != nil {
 		vm.Labels = job.Meta
+		vm.Address = vmm.ServiceAddress(job.Meta)
 	}
 	return vm, nil
 }

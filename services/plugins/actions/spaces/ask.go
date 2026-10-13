@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tradera/tradera/internal/plugins/api"
+	"github.com/tradera/tradera/internal/plugins/bridge"
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/errs"
 	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
@@ -22,7 +23,9 @@ import (
 //   - agents run a turn in the room the ask was made from;
 //   - docker/container/modal bots (the shared sandbox) execute the body as a
 //     shell command;
-//   - mcp and wasm tool backends receive the body as their input.
+//   - tool backends (external MCP, managed elpian/quickjs/docker, installed in
+//     the space's sandbox) receive {"function","payload"} as a microtool call;
+//   - wasm miniapp backends receive the body as their input.
 //
 // [attachments] are files sent with the ask.
 func (s *Service) AskBot(ctx context.Context, spaceID, botID identity.ID, body string, attachments []vmm.FileAttachment, history []vmm.ChatMessage) (string, error) {
@@ -47,7 +50,9 @@ func (s *Service) AskBot(ctx context.Context, spaceID, botID identity.ID, body s
 		}
 	}
 	// Reject machine backends before EnsureVM can start or contact one.
-	if vmm.ExecutionFrom(ctx).NoSandbox && !isAgentRuntime(rec) && (rec.VMType == bot.VMTypeDocker || rec.VMType == bot.VMTypeContainer || rec.VMType == bot.VMTypeModal) {
+	// A tool installed into the space runs on the sandbox too.
+	machine := (!rec.IsToolBackend() && (rec.VMType == bot.VMTypeDocker || rec.VMType == bot.VMTypeContainer || rec.VMType == bot.VMTypeModal)) || rec.VMType == bot.VMTypeInstalled
+	if vmm.ExecutionFrom(ctx).NoSandbox && !isAgentRuntime(rec) && machine {
 		return "", errs.Permission("sandbox access is disabled for this request")
 	}
 	// Rebuild the VM runtime when the daemon restarted and the adapter lost it.
@@ -65,18 +70,24 @@ func (s *Service) AskBot(ctx context.Context, spaceID, botID identity.ID, body s
 		// The ask is a turn of the agent in the room it was made from.
 		return s.promptAgent(ctx, spaceID, roomID, rec, helper.Actor(ctx), body, "", attachments)
 	}
-	switch rec.VMType {
-	case bot.VMTypeDocker, bot.VMTypeContainer, bot.VMTypeModal:
-		// Docker/container/Modal bots are the shared per-space sandbox; run the
-		// command there.
-		return s.SandboxExec(ctx, spaceID, body)
-	case bot.VMType("mcp"):
+	if rec.IsToolBackend() {
+		// Every tool backend — an external MCP server, a managed Elpian VM,
+		// QuickJS or docker service, or one installed into this space's
+		// sandbox — is called the same way, in the scope of this ask.
 		execution := vmm.ExecutionFrom(ctx)
 		execution.ActorID = helper.Actor(ctx).String()
 		execution.SpaceID = spaceID.String()
 		execution.RoomID = roomID.String()
 		ctx = vmm.WithExecution(ctx, execution)
-		return s.Bots.SendMessage(ctx, botID, body, attachments, history)
+		var reply string
+		err := bridge.Invoke(ctx, s.K, "tools", "InvokeTool", []any{ctx, botID.String(), body}, &reply)
+		return reply, err
+	}
+	switch rec.VMType {
+	case bot.VMTypeDocker, bot.VMTypeContainer, bot.VMTypeModal:
+		// Docker/container/Modal bots are the shared per-space sandbox; run the
+		// command there.
+		return s.SandboxExec(ctx, spaceID, body)
 	case bot.VMTypeWASM:
 		if wm, ok := vm.(interface {
 			Send(ctx context.Context, vmID, message string) (string, error)

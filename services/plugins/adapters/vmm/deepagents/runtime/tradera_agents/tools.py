@@ -45,6 +45,8 @@ PLATFORM_TOOLS = {
     "routine_get": "routine_get",
     "routine_update": "routine_update",
     "routine_delete": "routine_delete",
+    # Widgets: A2UI composed from the space's tools' data and frontends.
+    "ui_compose": "compose_ui",
 }
 
 # Tools every agent keeps whatever its allowed_tools say: without them it can

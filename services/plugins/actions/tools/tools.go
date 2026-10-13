@@ -22,7 +22,6 @@ import (
 	"github.com/tradera/tradera/plugins/actions/tools/mechanisms/mcp"
 	"github.com/tradera/tradera/plugins/actions/tools/models"
 	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
 	"os"
 	"strings"
 	"sync"
@@ -33,6 +32,12 @@ type Service struct {
 	K      api.Kernel
 	R      *repo.Repo
 	Client *mcp.Client
+	// Internal reaches the backends this node runs itself (managed services
+	// and sandbox-installed tools), which live on private addresses that the
+	// public-facing Client refuses.
+	Internal *mcp.Client
+	// Compiler compiles Elpian VM programs (TRADERA_TOOL_COMPILER_URL).
+	Compiler *Compiler
 
 	// commandCache holds what each connected app offers, per person and
 	// project, for a few minutes: agents ask for it at the start of every turn.
@@ -68,7 +73,20 @@ func (s *Service) CommandsFor(ctx context.Context, botID, actorID, spaceID strin
 		return nil, e
 	}
 	commands := tool.Commands
-	if tool.Auth == "user" || len(commands) == 0 {
+	if tool.EffectiveMode() != models.ModeExternal {
+		// A managed backend is asked when nothing is known of it yet; an
+		// installed one only answers inside a space's sandbox, so what it said
+		// last is used rather than starting a sandbox to list it.
+		if len(commands) == 0 && tool.EffectiveMode() == models.ModeManaged {
+			if rec, e := s.bot(ctx, botID); e == nil {
+				actor, _ := identity.Parse(actorID)
+				if live, e := s.microtools(ctx, &tool, rec, actor, spaceID); e == nil {
+					commands = live
+					s.rememberMicrotools(ctx, &tool, live)
+				}
+			}
+		}
+	} else if tool.Auth == "user" || len(commands) == 0 {
 		actor, _ := identity.Parse(actorID)
 		h, e := s.headers(ctx, &tool, actor, spaceID)
 		if e != nil {
@@ -228,7 +246,7 @@ func (s *Service) registerMCP(ctx context.Context, req *api.ActionRequest, in mc
 		commands = commandDefs(r)
 	}
 	var rec bot.Bot
-	if e := bridge.Invoke(ctx, s.K, "bots", "CreateBot", []any{ctx, req.Caller.ID, botdto.CreateBotRequest{Name: in.Name, Kind: bot.KindTool, VMType: bot.VMType("mcp"), ImageRef: in.URL, SpecYML: in.URL}}, &rec); e != nil {
+	if e := bridge.Invoke(ctx, s.K, "bots", "CreateBot", []any{ctx, req.Caller.ID, botdto.CreateBotRequest{Name: in.Name, Kind: bot.KindTool, VMType: bot.VMTypeMCP, ImageRef: in.URL, SpecYML: in.URL}}, &rec); e != nil {
 		return nil, e
 	}
 	secret, e := s.seal(map[string]any{"headers": headers})
@@ -305,6 +323,14 @@ func (s *Service) mcpDelete(ctx context.Context, req *api.ActionRequest) (*api.A
 		for i := range connections {
 			if id, e := identity.Parse(connections[i].ID); e == nil {
 				_ = s.R.Delete(ctx, "tool_connections", id)
+			}
+		}
+	}
+	var components []models.Component
+	if e := s.R.List(ctx, "tool_components", database.Filter{Equal: map[string]any{"bot_id": in.Bot}}, &components); e == nil {
+		for i := range components {
+			if id, e := identity.Parse(components[i].ID); e == nil {
+				_ = s.R.Delete(ctx, "tool_components", id)
 			}
 		}
 	}
@@ -495,68 +521,6 @@ func (s *Service) headers(ctx context.Context, tool *models.Tool, actor identity
 	}
 	return headers, nil
 }
-func (s *Service) InvokeMCP(ctx context.Context, vmID, body string) (string, error) {
-	var bots []bot.Bot
-	if e := s.R.List(ctx, "bots", database.Filter{Equal: map[string]any{"vm_id": vmID}}, &bots); e != nil {
-		return "", e
-	}
-	if len(bots) == 0 {
-		return "", errs.NotFound("MCP bot")
-	}
-	rec := bots[0]
-	execution := vmm.ExecutionFrom(ctx)
-	actor := helper.Actor(ctx)
-	if execution.ActorID != "" {
-		id, e := identity.Parse(execution.ActorID)
-		if e != nil {
-			return "", e
-		}
-		actor = id
-	}
-	if actor.IsZero() {
-		return "", errs.Unauthenticated("MCP caller required")
-	}
-	if execution.SpaceID != "" {
-		sp, e := identity.Parse(execution.SpaceID)
-		if e != nil {
-			return "", e
-		}
-		if e = helper.CheckSpaceAccess(ctx, s.R, actor, sp, identity.ID{}, true); e != nil {
-			return "", e
-		}
-		if e = helper.CheckSpaceAccess(ctx, s.R, rec.AccountID, sp, identity.ID{}, false); e != nil {
-			return "", e
-		}
-	}
-	var tool models.Tool
-	if e := s.R.GetString(ctx, "tool_registry", rec.ID.String(), &tool); e != nil {
-		return "", e
-	}
-	headers, e := s.headers(ctx, &tool, actor, execution.SpaceID)
-	if e != nil {
-		return "", e
-	}
-	headers, e = s.Client.Session(ctx, tool.URL, headers)
-	if e != nil {
-		return "", e
-	}
-	var in struct {
-		Function string         `json:"function"`
-		Payload  map[string]any `json:"payload"`
-	}
-	if e = json.Unmarshal([]byte(body), &in); e != nil {
-		return "", e
-	}
-	if in.Function == "" {
-		return "", errs.InvalidArgument("MCP function required")
-	}
-	result, e := s.Client.RPC(ctx, tool.URL, headers, "tools/call", map[string]any{"name": in.Function, "arguments": in.Payload})
-	if e != nil {
-		return "", e
-	}
-	b, e := json.Marshal(result)
-	return string(b), e
-}
 func (s *Service) invoke(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if e := helper.RequireUser(req); e != nil {
 		return nil, e
@@ -702,8 +666,35 @@ func (s *Service) commandsList(ctx context.Context, req *api.ActionRequest) (*ap
 }
 func NewPlugin() api.Plugin {
 	return module.New(api.Info{Name: "tools-ns", Version: "1.0.0", Provides: []string{"service/tools"}}, func(ctx context.Context, d *api.Dependencies) (module.Instance, error) {
-		s := &Service{K: d.Kernel, R: repo.New(d.Kernel), Client: mcp.New(os.Getenv("TRADERA_MCP_ALLOW_PRIVATE") == "true")}
+		s := &Service{K: d.Kernel, R: repo.New(d.Kernel), Client: mcp.New(os.Getenv("TRADERA_MCP_ALLOW_PRIVATE") == "true"), Internal: mcp.New(true), Compiler: NewCompiler(os.Getenv("TRADERA_TOOL_COMPILER_URL"))}
 		actions := []api.Action{helper.Action{Namespace: "tools", Name: "mcp_register", Summary: "Register a remote MCP tool", Handler: s.mcpRegister}, helper.Action{Namespace: "tools", Name: "mcp_update", Summary: "Update remote MCP configuration", Handler: s.mcpUpdate}, helper.Action{Namespace: "tools", Name: "mcp_oauth_get", Summary: "Read the OAuth client saved for an MCP server", Handler: s.mcpOAuthGet}, helper.Action{Namespace: "tools", Name: "mcp_oauth_set", Summary: "Save the OAuth client people sign in to an MCP server with", Handler: s.mcpOAuthSet}, helper.Action{Namespace: "tools", Name: "mcp_delete", Summary: "Delete a registered MCP server", Handler: s.mcpDelete}, helper.Action{Namespace: "tools", Name: "mcp_samples", Summary: "Admin: the sample MCP servers and which are already in the catalog", Handler: s.mcpSamples}, helper.Action{Namespace: "tools", Name: "mcp_import_samples", Summary: "Admin: add the sample MCP servers to the catalog", Handler: s.mcpImportSamples}, helper.Action{Namespace: "tools", Name: "connection_set", Summary: "Set a personal project connection", Handler: s.connectionSet}, helper.Action{Namespace: "tools", Name: "commands_list", Summary: "Discover tool commands", Handler: s.commandsList}, helper.Action{Namespace: "tools", Name: "invoke", Summary: "Invoke a project tool as its caller", Handler: s.invoke}}
-		return module.Instance{Service: s, Models: append(schema.Models(), models.Models()...), Actions: append(actions, oauthActions(s)...)}, nil
+		actions = append(actions,
+			helper.Action{Namespace: "tools", Name: "tool_create", Summary: "Create a tool: an external, managed or installed backend and a static or generative frontend", Handler: s.toolCreate},
+			helper.Action{Namespace: "tools", Name: "tool_update", Summary: "Replace a tool's backend program or frontend", Handler: s.toolUpdate},
+			helper.Action{Namespace: "tools", Name: "tool_get", Summary: "Read a tool: its backend mode, runtime, frontend and microtools", Handler: s.toolGet},
+			helper.Action{Namespace: "tools", Name: "tool_delete", Summary: "Delete a tool", Handler: s.toolDelete},
+			helper.Action{Namespace: "tools", Name: "tool_microtools", Summary: "List a tool's microtools, asking its backend", Handler: s.toolMicrotools},
+			helper.Action{Namespace: "tools", Name: "frontend_get", Summary: "A tool's frontend: its static program, or its generated surface filled with data", Handler: s.frontendGet},
+			helper.Action{Namespace: "tools", Name: "frontend_action", Summary: "Run an action of a tool's generated frontend", Handler: s.frontendAction},
+			helper.Action{Namespace: "tools", Name: "components_list", Summary: "The generated frontends the component registry holds for a tool", Handler: s.componentsList},
+		)
+		var release func()
+		return module.Instance{Service: s, Models: append(schema.Models(), models.Models()...), Actions: append(actions, oauthActions(s)...),
+			Mount: func(context.Context) error {
+				// The gateway managed and installed backends reach the node by.
+				binder, ok := d.Kernel.(api.NetworkBindings)
+				if !ok {
+					return nil
+				}
+				var err error
+				release, err = binder.BindRoutes("tools", s.bindRoutes, s.unbindRoutes)
+				return err
+			},
+			Close: func(context.Context) error {
+				if release != nil {
+					release()
+				}
+				return nil
+			}}, nil
 	})
 }

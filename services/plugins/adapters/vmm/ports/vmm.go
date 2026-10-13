@@ -26,7 +26,22 @@ const (
 	// deepagents on LangGraph). Agents reach people and each other through
 	// space messaging, tools through spaces.ask, and share the space sandbox.
 	TypeDeepAgents Type = "deepagents"
+	// TypeElpian is a tool backend written for the Elpian VM (Dart or the
+	// JavaScript subset, compiled to Elpian bytecode) and TypeQuickJS one
+	// written in plain JavaScript run by QuickJS. Both run in the tool runtime
+	// image, which serves the backend's microtools over MCP (see
+	// ToolRuntimePort); Nomad schedules them like any other service VM.
+	TypeElpian  Type = "elpian"
+	TypeQuickJS Type = "quickjs"
+	// TypeInstalled is a tool backend with no machine of its own: it is
+	// installed into, and runs inside, the sandbox of each space that adds it.
+	// The VM is logical; the tools namespace resolves where it answers.
+	TypeInstalled Type = "installed"
 )
+
+// ToolRuntimePort is the port a tool backend serves MCP (JSON-RPC over HTTP,
+// at /mcp) on, in the tool runtime image and inside a space sandbox alike.
+const ToolRuntimePort = 8790
 
 // Status of a VM.
 type Status string
@@ -133,7 +148,20 @@ const (
 	// LabelVolume mounts a named volume, "name:/path", so the VM's state
 	// survives restarts.
 	LabelVolume = "tradera.volume"
+	// LabelServicePort is the port a service VM answers on; with
+	// LabelNetworkAlias it makes the VM's Address (http://alias:port).
+	LabelServicePort = "tradera.service_port"
 )
+
+// ServiceAddress is where a service VM answers on its network: its alias and
+// port, when its labels declare both.
+func ServiceAddress(labels map[string]string) string {
+	alias, port := labels[LabelNetworkAlias], labels[LabelServicePort]
+	if alias == "" || port == "" {
+		return ""
+	}
+	return "http://" + alias + ":" + port
+}
 
 // VM is the provider-agnostic VM representation.
 type VM struct {

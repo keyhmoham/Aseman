@@ -399,3 +399,29 @@ func (p *guardedVMM) Explain(ctx context.Context, id string) string {
 	}
 	return ""
 }
+
+func (p *guardedVMM) EnsureSidecar(ctx context.Context, id, name, image string, env map[string]string) error {
+	ctx, release, err := p.gate.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	adapter, ok := p.port.(vmm.SidecarRunner)
+	if !ok {
+		return errs.New(errs.CodeUnavailable, "adapter does not support sidecars")
+	}
+	return adapter.EnsureSidecar(ctx, id, name, image, env)
+}
+
+func (p *guardedVMM) RemoveSidecar(ctx context.Context, id, name string) error {
+	ctx, release, err := p.gate.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	adapter, ok := p.port.(vmm.SidecarRunner)
+	if !ok {
+		return errs.New(errs.CodeUnavailable, "adapter does not support sidecars")
+	}
+	return adapter.RemoveSidecar(ctx, id, name)
+}

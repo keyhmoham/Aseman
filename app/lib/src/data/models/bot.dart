@@ -26,6 +26,27 @@ class Bot {
   bool get isAgent => kind == 'agent';
   bool get isTool => kind == 'tool';
 
+  /// A tool whose backend serves microtools over MCP — an external server, a
+  /// backend this node runs (Elpian VM, QuickJS or docker) or one installed
+  /// into each space's sandbox. It is used through its frontend
+  /// (features/tools), not as a legacy wasm miniapp.
+  bool get isUnifiedTool =>
+      isTool &&
+      !name.startsWith('sbx-') &&
+      const {'mcp', 'elpian', 'quickjs', 'installed', 'docker'}
+          .contains(vmType);
+
+  /// Where a tool's backend runs, for display: External, Managed (with its
+  /// runtime) or Installed.
+  String get toolModeLabel => switch (vmType) {
+        'mcp' => 'External',
+        'installed' => 'Installed',
+        'elpian' => 'Managed · Elpian VM',
+        'quickjs' => 'Managed · QuickJS',
+        'docker' => 'Managed · Docker',
+        _ => isMiniapp ? 'Miniapp' : 'Tool',
+      };
+
   /// In the client UI miniapps are surfaced as tools.
   String get displayKind => isMiniapp ? 'tool' : kind;
 

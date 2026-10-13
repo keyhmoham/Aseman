@@ -367,6 +367,12 @@ func (s *Service) HostCall(ctx context.Context, sc Scope, namespace, action stri
 	if namespace == "bots" {
 		fields["bot"] = sc.Bot
 	}
+	// A backend asking itself would call itself without end.
+	if name == "spaces.ask" {
+		if target, _ := fields["bot"].(string); target == sc.Bot || target == rec.AccountID.String() {
+			return nil, errs.InvalidArgument("a tool cannot ask itself")
+		}
+	}
 	body, _ = json.Marshal(fields)
 	ctx = vmm.WithExecution(ctx, vmm.Execution{ActorID: sc.Actor, SpaceID: sc.Space, RoomID: sc.Room, AgentID: sc.Bot})
 	ctx = vmm.WithRoom(ctx, sc.Room)

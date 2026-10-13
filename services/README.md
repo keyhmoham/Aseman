@@ -182,7 +182,7 @@ through `internal/plugins/host`; see [runtime plugin architecture](plugins/READM
 | cache | local-cache, redis | local-cache |
 | filesystem | local, s3 | local |
 | network | http, tcp (JSON frames), websocket | http |
-| vmm | nomad, docker, wasm (wazero), modal, deepagents, mcp | nomad |
+| vmm | nomad (docker, plus elpian/quickjs tool backends), docker, wasm (wazero), modal, deepagents, mcp (external and installed tools) | nomad |
 
 VMM providers implement a common interface (images, create/start/stop/pause/
 resume/resize/delete, live `Usage` metering). `ResizeVM` applies new resource
@@ -283,6 +283,56 @@ A miniapp frontend talks to its backend through two actions:
 `message.ask` (request/response — used by miniapp backends and chat agents)
 and `message.send` (fire-and-forget). Every such call is signed by the user,
 so the backend always sees the caller's identity.
+
+## Tools: one form, three backends, two frontends
+
+A tool is created from one form (`tools.tool_create`) with two halves.
+
+**Backend** — always an MCP server, so agents and frontends use every mode
+the same way:
+
+| Mode | Runs | Reached |
+|---|---|---|
+| `external` | an MCP server someone else runs | its URL, with shared or per-person credentials |
+| `managed` | this node, as a Nomad service of its own (`vm_type` `elpian`, `quickjs` or `docker`) serving every space the tool is added to | `http://tool-<key>:<port>/mcp` on the stack's network |
+| `installed` | inside the sandbox of each space that adds it, serving only that space (`vm_type` `installed`) | the space's gateway proxy to the tool's sandbox port |
+
+Elpian VM (Dart or the Elpian JS subset) and QuickJS backends run in the
+**tool runtime** (`deploy/tool-runtime`): Nomad runs its image for managed
+tools, the sandbox computer image carries it for installed ones. A docker
+backend is the author's own image (an installed one runs as a sidecar in the
+sandbox's network namespace). The node calls a managed or installed backend
+with the tool's runtime credential and the call's **execution scope** —
+who asks (`X-Tradera-Actor`), on whose behalf an agent asks
+(`X-Tradera-Agent`), from which space and room — plus a signed scope token
+the backend hands back to act in that scope through the tool gateway
+(`/tools/v1/runtime/host`: `spaces.message_send`, `spaces.ask`,
+`spaces.message_list`, `bots.kv_*`, …), as the tool's account. A backend
+acts only in the space it was called from.
+
+**Frontend**:
+
+| Mode | What it is |
+|---|---|
+| `static` | an Elpian miniapp: a program on the Elpian VM (compiled to bytecode by the node's tool compiler, or uploaded compiled) or QuickJS, run by the app; it calls microtools with `tool.call` |
+| `generative` | A2UI generated from the deployer's skill the first time anyone opens it, kept in the **component registry** (`tool_components`, keyed by the skill's version and the backend's microtools) and served from there afterwards, filled with fresh microtool data per request; its buttons map to microtools |
+
+Agents get every tool's microtools as tools (`spaces.tools_list`, through
+`spaces.ask`), and with `ui_compose` they post widgets built from A2UI,
+microtool data and tools' own frontends (`ToolFrontend` components) —
+combining several tools into one view.
+
+| Action | |
+|---|---|
+| `tools.tool_create` / `tool_update` / `tool_get` / `tool_delete` | the tool |
+| `tools.tool_microtools` | what its backend offers, asked live |
+| `tools.invoke` | call a microtool as the signed-in person in a space |
+| `tools.frontend_get` / `frontend_action` | its frontend, and a generated frontend's actions |
+| `tools.components_list` | the generated frontends the registry holds |
+
+Configuration: `TRADERA_TOOL_RUNTIME_IMAGE`, `TRADERA_TOOL_RUNTIME_NETWORK`,
+`TRADERA_TOOL_NODE_URL` (the node as backends reach it) and
+`TRADERA_TOOL_COMPILER_URL` (compose sets them all).
 
 ## Agents: the deep agents runtime
 

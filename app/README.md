@@ -43,6 +43,24 @@ runtime) with host handlers wired by `features/miniapps/elpian/miniapp_bridge.da
 | `host.send`     | `message.send` (fire-and-forget)     |
 | `ctx.user`      | the signed-in user context           |
 
+## Tools
+
+Tools are created from one form (`features/tools/presentation/tool_create_form.dart`,
+"My bots → Create → Tool") with a **backend** — external (an MCP server),
+managed (an Elpian VM, QuickJS or docker backend the node runs) or installed
+(into each space's sandbox) — and a **frontend**:
+
+* **static** — an Elpian miniapp the app runs on the Elpian VM (bytecode) or
+  QuickJS, with `ToolFrontendHost` as its host: `tool.call(microtool, args)`,
+  `tool.microtools()`, `tool.context()`;
+* **generative** — A2UI the node generated from the deployer's skill (cached
+  in its component registry) rendered by `A2UIView`, its buttons running
+  microtools through `tools.frontend_action`.
+
+`ToolScreen` opens a tool in a space; agents' composed widgets (`ui` room
+messages) render with `ComposedWidgetCard`, whose `ToolFrontend` components
+embed tools' own frontends.
+
 ## Architecture
 
 ```text

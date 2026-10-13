@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 
 import '../../../data/services/tradera_service.dart';
 import '../../../elpian/elpian.dart';
+import 'host_values.dart';
 
 /// Bridges a miniapp's elpian frontend to its backend bot through the user's
 /// signed identity.
@@ -223,30 +224,10 @@ class MiniappHostBridge {
   FutureOr<String> _kvSet(String apiName, String payload) =>
       _typed('object', {'ok': true});
 
-  static List<dynamic> _unwrapArgs(String payload) {
-    if (payload.isEmpty) return const [];
-    try {
-      final decoded = jsonDecode(payload);
-      if (decoded is List) return decoded;
-      return <dynamic>[decoded];
-    } catch (_) {
-      return <dynamic>[payload];
-    }
-  }
+  static List<dynamic> _unwrapArgs(String payload) => HostValues.args(payload);
 
-  static dynamic _tryDecode(String raw) {
-    if (raw.isEmpty) return null;
-    try {
-      return jsonDecode(raw);
-    } catch (_) {
-      return raw;
-    }
-  }
+  static dynamic _tryDecode(String raw) => HostValues.decode(raw);
 
-  /// The typed envelope the QuickJS guest unwraps:
-  /// `JSON.parse(raw).data.value`.
-  static String _typed(String type, dynamic value) => jsonEncode({
-        'type': type,
-        'data': {'value': value}
-      });
+  static String _typed(String type, dynamic value) =>
+      HostValues.reply(type, value);
 }

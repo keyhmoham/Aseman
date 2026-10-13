@@ -8,6 +8,9 @@ import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/status_tag.dart';
 import '../../miniapps/presentation/miniapp_sandbox_screen.dart';
+import '../../tools/data/tools_api.dart';
+import '../../tools/presentation/tool_create_form.dart';
+import '../../tools/presentation/tool_screen.dart';
 import 'agent_create_form.dart';
 
 /// "My bots" — a modal panel (dialog on desktop, bottom sheet on mobile) that
@@ -57,7 +60,26 @@ class _AgentsScreenState extends State<AgentsScreen> {
   List<Bot> get _agents => _bots.where((b) => b.isAgent).toList();
   List<Bot> get _tools => _bots.where((b) => b.isMiniapp || b.isTool).toList();
 
-  Future<void> _create() async {
+  /// Create an agent or a tool.
+  Future<void> _create(String what) =>
+      what == 'tool' ? _createTool() : _createAgent();
+
+  /// A tool: one form for its backend (external, managed or installed) and
+  /// its frontend (static or generative).
+  Future<void> _createTool() async {
+    final draft = await showCreateToolForm(context);
+    if (draft == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ToolsApi.of(widget.dependencies.service).create(draft);
+      messenger.showSnackBar(SnackBar(content: Text('${draft.name} created')));
+      await _load();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Create failed: $e')));
+    }
+  }
+
+  Future<void> _createAgent() async {
     final result = await showCreateBotForm(context,
         loadLlmCatalog: widget.dependencies.service.fetchLlmCatalog);
     if (result == null || !mounted) return;
@@ -103,9 +125,39 @@ class _AgentsScreenState extends State<AgentsScreen> {
   }
 
   void _openMiniapp(Bot bot) {
+    if (bot.isUnifiedTool) {
+      _openTool(bot);
+      return;
+    }
     Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (_) =>
             MiniappSandboxScreen(dependencies: widget.dependencies, bot: bot)));
+  }
+
+  /// A tool runs in a space; from here, the owner's home space (it is added
+  /// there first when it is not yet).
+  Future<void> _openTool(Bot bot) async {
+    final service = widget.dependencies.service;
+    final home =
+        widget.dependencies.sessionController.session?.homeSpaceId ?? '';
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    if (home.isEmpty) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Open the tool from a workspace it was added to.')));
+      return;
+    }
+    try {
+      final inHome = await service.fetchSpaceBots(home);
+      if (!inHome.any((b) => b.id == bot.id)) {
+        await service.addBotToSpace(home, bot.id);
+      }
+      await navigator.push(MaterialPageRoute<void>(
+          builder: (_) => ToolScreen(
+              dependencies: widget.dependencies, bot: bot, spaceId: home)));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not open: $e')));
+    }
   }
 
   Future<void> _chat(Bot bot) async {
@@ -134,10 +186,31 @@ class _AgentsScreenState extends State<AgentsScreen> {
             subtitle: 'Agents & tools you created across the network',
             onClose: () => Navigator.pop(context),
             actions: [
-              FilledButton.icon(
-                onPressed: _create,
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Create'),
+              PopupMenuButton<String>(
+                tooltip: 'Create',
+                onSelected: _create,
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                      value: 'agent',
+                      child: ListTile(
+                          leading: Icon(Icons.smart_toy_outlined),
+                          title: Text('Agent'),
+                          subtitle: Text('An assistant with its own model'))),
+                  PopupMenuItem(
+                      value: 'tool',
+                      child: ListTile(
+                          leading: Icon(Icons.widgets_outlined),
+                          title: Text('Tool'),
+                          subtitle: Text(
+                              'A backend and the frontend it is used through'))),
+                ],
+                child: IgnorePointer(
+                  child: FilledButton.icon(
+                    onPressed: () {},
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Create'),
+                  ),
+                ),
               ),
               IconButton(
                   tooltip: 'Refresh',
@@ -223,8 +296,7 @@ class _ToolsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     if (tools.isEmpty) {
       return const _PanelEmpty(
-          icon: Icons.widgets_outlined,
-          message: 'No tools yet — create a miniapp.');
+          icon: Icons.widgets_outlined, message: 'No tools yet — create one.');
     }
     return LayoutBuilder(builder: (context, box) {
       final columns = box.maxWidth > 900
@@ -241,7 +313,10 @@ class _ToolsTab extends StatelessWidget {
           _SummaryRow(
             cells: [
               _Summary('Total', '${tools.length}'),
-              _Summary('Elpian', '${tools.where((b) => b.hasFrontend).length}'),
+              _Summary('Managed',
+                  '${tools.where((b) => b.toolModeLabel.startsWith('Managed')).length}'),
+              _Summary('Installed',
+                  '${tools.where((b) => b.vmType == 'installed').length}'),
             ],
           ),
           const SizedBox(height: 12),
@@ -413,7 +488,7 @@ class _ToolCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w800)),
               const SizedBox(height: 3),
-              Text('${bot.vmType} · ${bot.status}',
+              Text('${bot.toolModeLabel} · ${bot.status}',
                   style:
                       TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
               const SizedBox(height: 10),

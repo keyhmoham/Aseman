@@ -88,6 +88,7 @@ class LoweringOptions {
     this.keyPrefix,
     this.showAttribution = true,
     this.expandAll = false,
+    this.customComponents = const {},
   });
 
   final LoweringHooks hooks;
@@ -101,7 +102,15 @@ class LoweringOptions {
 
   /// Lower every deferred subtree too — closed modals, hidden tabs (previews, tests).
   final bool expandAll;
+
+  /// Components of a host's own catalog, by type: each lowers a component
+  /// (with its node key) to an Elpian node the host's engine renders.
+  final Map<String, A2UICustomLowering> customComponents;
 }
+
+/// Lowers a host-defined component to an Elpian node.
+typedef A2UICustomLowering = LoweredNode Function(
+    Map<String, dynamic> component, String key);
 
 class LoweringPlaceholder {
   const LoweringPlaceholder(this.id, this.reason);
@@ -629,6 +638,8 @@ class _Lowerer {
       case 'DateTimeInput':
         return _dateTime(c, key, ctx);
       default:
+        final custom = options.customComponents[c['component']];
+        if (custom != null) return custom(Map<String, dynamic>.of(c), key);
         return _placeholder(
             '${c['id']}', 'Unknown component: ${c['component']}', key);
     }

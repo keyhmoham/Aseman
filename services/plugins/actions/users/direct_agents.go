@@ -52,4 +52,13 @@ func (s *Service) deliverDirect(ctx context.Context, from, agentAccount, botID i
 	if err := s.R.CreateID(context.WithoutCancel(ctx), "directs", id, dm); err != nil && s.L != nil {
 		s.L.Warn("store agent direct reply", "bot", botID.String(), "error", err)
 	}
+	s.mirrorDirect(context.WithoutCancel(ctx), agentAccount, from, reply)
+}
+
+// mirrorDirect posts a direct message into the pair's direct conversation
+// room (the spaces namespace), where the messenger shows it.
+func (s *Service) mirrorDirect(ctx context.Context, from, to identity.ID, body string) {
+	if err := bridge.Invoke(ctx, s.K, "spaces", "PostDirect", []any{ctx, from, to, body}); err != nil && s.L != nil {
+		s.L.Debug("mirror direct message", "from", from.String(), "to", to.String(), "error", err)
+	}
 }

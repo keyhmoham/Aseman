@@ -308,6 +308,35 @@ class TraderaService implements BackendService {
         body: {'space': spaceId, 'patch': patch});
   }
 
+  // ── messenger ─────────────────────────────────────────────────────────────
+
+  /// Every conversation of the caller, newest first: direct chats and the
+  /// rooms of their projects. [kind] narrows it to "direct" or "room".
+  Future<List<ChatSummary>> fetchChats({String kind = ''}) async {
+    final resp = await client
+        .call('spaces', 'chat_list', body: {if (kind.isNotEmpty) 'kind': kind});
+    final list = (resp.body as Map?)?['chats'] as List? ?? [];
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(ChatSummary.fromJson)
+        .toList();
+  }
+
+  /// Opens the direct chat with a person or an agent ([peer] is an account or
+  /// bot id), starting it on first use.
+  Future<ChatSummary> openDirect(String peer) async {
+    final resp =
+        await client.call('spaces', 'direct_open', body: {'peer': peer});
+    final m = (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+    return ChatSummary.fromJson({...m, 'kind': 'direct'});
+  }
+
+  /// Records that the caller has read a space's conversation up to [at].
+  Future<void> markSeen(String spaceId, DateTime at) async {
+    await client.call('spaces', 'seen_set',
+        body: {'space': spaceId, 'at': at.toUtc().toIso8601String()});
+  }
+
   // ── room messages ─────────────────────────────────────────────────────────
 
   Future<({List<RoomMessage> messages, String working, String workingDetail})>

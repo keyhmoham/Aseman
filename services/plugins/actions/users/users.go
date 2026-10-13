@@ -349,6 +349,7 @@ func (a *dmSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	if err := a.s.R.CreateID(ctx, "directs", id, dm); err != nil {
 		return nil, err
 	}
+	a.s.mirrorDirect(ctx, req.Caller.ID, to, in.Body)
 	// A message to an agent is a conversation with it: the agent answers in
 	// the same direct thread, without holding up this request. An agent
 	// messaging another agent inside a run keeps that run's scope.

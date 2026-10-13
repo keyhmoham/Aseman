@@ -8,10 +8,10 @@ import 'package:tradera/src/core/settings/app_settings.dart';
 import 'package:tradera/src/core/theme/app_theme.dart';
 import 'package:tradera/src/data/models/llm_provider.dart';
 import 'package:tradera/src/features/account/presentation/account_forms.dart';
+import 'package:tradera/src/features/account/presentation/account_panel.dart';
 import 'package:tradera/src/features/agents/presentation/agent_create_form.dart';
 import 'package:tradera/src/features/home/presentation/widgets/routines_panel.dart';
 import 'package:tradera/src/features/market/presentation/market_screen.dart';
-import 'package:tradera/src/features/wallet/presentation/wallet_screen.dart';
 import 'package:tradera/src/shared/widgets/backend_action_ui.dart';
 
 import '../fake_tradera_service.dart';
@@ -77,9 +77,9 @@ void main() {
       (d) => MarketScreen(dependencies: d),
       (t) => t.tap(find.text('Publish')),
     ),
-    'wallet_send': (
-      (d) => WalletScreen(dependencies: d),
-      (t) => t.tap(find.byTooltip('Transfer')),
+    'wallet_add_credits': (
+      (d) => AccountPanel(dependencies: d, area: AccountArea.wallet),
+      (t) => t.tap(find.text('Add credits')),
     ),
     'payout_request': (
       (d) => Builder(

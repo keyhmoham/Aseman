@@ -46,6 +46,9 @@ func (s *Service) EnsureTraderaEverywhere(ctx context.Context) error {
 	}
 	added := 0
 	for i := range spaces {
+		if spaces[i].Direct {
+			continue
+		}
 		_, before := s.SpaceMembership(ctx, spaces[i].ID, s.traderaAccount(ctx))
 		s.ensureTradera(ctx, spaces[i].ID)
 		if before != nil {

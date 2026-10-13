@@ -20,6 +20,7 @@ func spaces() database.Model {
 			f("name", database.KindString), f("description", database.KindString),
 			f("avatar_id", database.KindString), f("metadata_id", database.KindString),
 			f("public", database.KindBool), f("home", database.KindBool),
+			f("direct", database.KindBool), f("direct_key", database.KindString),
 			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		},
 	}

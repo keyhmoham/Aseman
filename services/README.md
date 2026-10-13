@@ -305,7 +305,7 @@ The platform's own APIs are the agents' transport:
 
 | what | transport |
 |---|---|
-| people ↔ agents | room messages (`spaces.message_send` / `message_list`) and direct messages (`users.dm_send` / `dm_list`) |
+| people ↔ agents | room messages (`spaces.message_send` / `message_list`) and direct chats: a one-room space per pair (`spaces.direct_open`, listed with project rooms by `spaces.chat_list`); `users.dm_send` / `dm_list` still work and mirror into that room |
 | lead ↔ subagents (and any agent ↔ agent) | room messages: the delegating agent mentions the agent it hands work to; the agent's answer is a message whose `reply_to` is the hand-off |
 | agents → tools | `spaces.ask`: the shared sandbox (`raw` shell commands), tool and miniapp bots, and platform tools (`tool` + `args`: files, images, previews, routines) |
 | work logs and live status | `spaces.agent_log` (log messages in the room + the room's live activity) |

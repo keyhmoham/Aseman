@@ -9,15 +9,15 @@ import 'package:tradera/src/core/network/session_store.dart';
 import 'package:tradera/src/core/settings/app_settings.dart';
 import 'package:tradera/src/core/theme/app_theme.dart';
 import 'package:tradera/src/data/models/space.dart';
-import 'package:tradera/src/features/account/presentation/account_hub_screen.dart';
+import 'package:tradera/src/features/account/presentation/account_panel.dart';
 import 'package:tradera/src/features/agents/presentation/agents_screen.dart';
-import 'package:tradera/src/features/chats/presentation/chats_screen.dart';
 import 'package:tradera/src/features/home/presentation/project_control_screen.dart';
 import 'package:tradera/src/features/home/presentation/space_settings_panel.dart';
 import 'package:tradera/src/features/home/presentation/widgets/routines_panel.dart';
 import 'package:tradera/src/features/market/presentation/market_screen.dart';
+import 'package:tradera/src/features/messenger/presentation/chat_page.dart';
+import 'package:tradera/src/features/messenger/presentation/messenger_panel.dart';
 import 'package:tradera/src/features/settings/presentation/settings_screen.dart';
-import 'package:tradera/src/features/wallet/presentation/wallet_screen.dart';
 
 import '../fake_tradera_service.dart';
 import '../features/admin/admin_fixtures.dart' show loadFonts;
@@ -102,12 +102,15 @@ void main() {
 
   final screens = <String, Widget Function(AppDependencies)>{
     'settings': (d) => SettingsScreen(dependencies: d),
-    'wallet': (d) => WalletScreen(dependencies: d),
-    'chats': (d) => ChatsScreen(dependencies: d),
+    'messenger': (d) => MessengerPanel(dependencies: d),
+    'chat_direct': (d) =>
+        ChatPage(dependencies: d, chat: FakeTraderaService().chats.first),
+    'chat_agent': (d) =>
+        ChatPage(dependencies: d, chat: FakeTraderaService().chats[1]),
     'market': (d) => MarketScreen(dependencies: d),
     'my_bots': (d) => AgentsScreen(dependencies: d),
-    for (var i = 0; i < 7; i++)
-      'account_$i': (d) => AccountHubScreen(dependencies: d, initialIndex: i),
+    for (final area in AccountArea.values)
+      'account_${area.name}': (d) => AccountPanel(dependencies: d, area: area),
     'project_control': (d) => ProjectControlScreen(
         dependencies: d,
         spaceId: FakeTraderaService.atlasId,
@@ -206,6 +209,32 @@ void main() {
           await tester.pumpAndSettle();
           await tester.tap(find.text('Chat').last);
         }
+      }, roomService());
+      for (final item in ['Wallet', 'Invitations', 'Usage', 'Account']) {
+        await app('menu_${item.toLowerCase()}', () async {
+          await tester.tap(find.byType(CircleAvatar).first);
+          await tester.pumpAndSettle();
+          await tester.tap(find.text(item).last);
+        });
+      }
+      await app('messenger', () async {
+        await tester.tap(find.byType(CircleAvatar).first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Messages').last);
+      }, roomService());
+      await app('messenger_spaces', () async {
+        await tester.tap(find.byType(CircleAvatar).first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Messages').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Spaces').last);
+      }, roomService());
+      await app('messenger_chat', () async {
+        await tester.tap(find.byType(CircleAvatar).first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Messages').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('general').last);
       }, roomService());
       await app('feed_following', () async {
         await tester.tap(find.text('Following').first);

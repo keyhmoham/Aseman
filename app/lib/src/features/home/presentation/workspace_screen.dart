@@ -1274,63 +1274,45 @@ class _LibraryPanel extends StatelessWidget {
           .toList();
       // The shared sandbox is surfaced as a first-class tool: its frontend is
       // the file-explorer miniapp (Sandbox Explorer).
-      final sandboxTile = onOpenSandbox == null
-          ? null
-          : Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _SandboxExplorerTile(onTap: onOpenSandbox!),
-            );
-      if (tools.isEmpty && candidates.isEmpty && sandboxTile == null) {
+      final hasSandbox = onOpenSandbox != null;
+      if (tools.isEmpty && candidates.isEmpty && !hasSandbox) {
         return const _LibraryEmpty(
             icon: Icons.widgets_outlined,
             message:
                 'No tools in this workspace yet — add a miniapp from the market.');
       }
-      return LayoutBuilder(builder: (context, box) {
-        final columns = math.max(1, (box.maxWidth / 124).floor());
-        return GridView.builder(
-            padding: EdgeInsets.zero,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: columns,
-                crossAxisSpacing: 7,
-                mainAxisSpacing: 7,
-                childAspectRatio: 1.12),
-            itemCount: tools.length +
-                (sandboxTile == null ? 0 : 1) +
-                (candidates.isEmpty ? 0 : 1),
-            itemBuilder: (_, index) {
-              if (sandboxTile != null) {
-                if (index == 0) return sandboxTile;
-                index--;
+      return ListView.separated(
+          padding: EdgeInsets.zero,
+          itemCount: tools.length +
+              (hasSandbox ? 1 : 0) +
+              (candidates.isEmpty ? 0 : 1),
+          separatorBuilder: (_, __) => const SizedBox(height: 7),
+          itemBuilder: (context, index) {
+            if (hasSandbox) {
+              if (index == 0) {
+                return _SandboxExplorerTile(onTap: onOpenSandbox!);
               }
-              if (index == tools.length) {
-                return _AddBotTile(
-                    label: 'Add tool',
-                    icon: Icons.widgets_outlined,
-                    candidates: candidates,
-                    onAdd: (b) => onAddBot?.call(b));
-              }
-              final bot = tools[index];
-              return Stack(children: [
-                _LibraryToolCard(
-                    label: bot.name,
-                    icon: Icons.widgets_outlined,
-                    dependencies: dependencies,
-                    spaceId: spaceId,
-                    onTap: () => onOpenMiniapp?.call(bot)),
-                Positioned(
-                    top: 2,
-                    right: 2,
-                    child: onRemoveBot == null
-                        ? const SizedBox.shrink()
-                        : IconButton(
-                            tooltip: 'Remove from workspace',
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => onRemoveBot!(bot),
-                            icon: const Icon(Icons.close_rounded, size: 14))),
-              ]);
-            });
-      });
+              index--;
+            }
+            if (index == tools.length) {
+              return _AddBotTile(
+                  label: 'Add tool',
+                  icon: Icons.widgets_outlined,
+                  candidates: candidates,
+                  onAdd: (b) => onAddBot?.call(b));
+            }
+            final bot = tools[index];
+            return _LibraryToolCard(
+                label: bot.name,
+                subtitle:
+                    '${bot.isMiniapp ? 'Miniapp' : 'Tool'} · ${bot.status}',
+                icon: Icons.widgets_outlined,
+                dependencies: dependencies,
+                spaceId: spaceId,
+                onTap: () => onOpenMiniapp?.call(bot),
+                onRemove:
+                    onRemoveBot == null ? null : () => onRemoveBot!(bot));
+          });
     }
     return const _LibraryEmpty(
         icon: Icons.folder_outlined,
@@ -1781,7 +1763,10 @@ class _SandboxExplorerTile extends StatelessWidget {
                       const Text('Sandbox Explorer',
                           style: TextStyle(
                               fontSize: 12, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 3),
                       Text('Shared workspace file manager',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               fontSize: 9,
                               color: Theme.of(context)
@@ -1887,12 +1872,16 @@ class _LibraryToolCard extends StatelessWidget {
   const _LibraryToolCard(
       {required this.label,
       required this.icon,
+      this.subtitle,
       this.onTap,
+      this.onRemove,
       this.dependencies,
       this.spaceId = ''});
   final String label;
   final IconData icon;
+  final String? subtitle;
   final VoidCallback? onTap;
+  final VoidCallback? onRemove;
   final AppDependencies? dependencies;
   final String spaceId;
   @override
@@ -1905,31 +1894,55 @@ class _LibraryToolCard extends StatelessWidget {
                   context, 'Tools', label, dependencies, spaceId),
           borderRadius: BorderRadius.circular(17),
           child: Padding(
-              padding: const EdgeInsets.all(11),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Icon(icon,
-                          size: 21,
-                          color: Theme.of(context).colorScheme.primary),
-                      const Spacer(),
-                      Container(
-                          width: 7,
-                          height: 7,
-                          decoration: const BoxDecoration(
-                              color: Colors.greenAccent,
-                              shape: BoxShape.circle))
-                    ]),
-                    const Spacer(),
-                    Text(label,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 3),
-                    const Text('Connected', style: TextStyle(fontSize: 9))
-                  ]))));
+              padding: const EdgeInsets.all(10),
+              child: Row(children: [
+                Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: .14),
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Icon(icon, size: 19, color: AppColors.primary)),
+                const SizedBox(width: 9),
+                Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text(label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 3),
+                      Row(children: [
+                        Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                                color: Colors.greenAccent,
+                                shape: BoxShape.circle)),
+                        const SizedBox(width: 5),
+                        Expanded(
+                            child: Text(subtitle ?? 'Connected',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 9,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant)))
+                      ])
+                    ])),
+                if (onRemove != null)
+                  IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Remove from workspace',
+                      onPressed: onRemove,
+                      icon: const Icon(Icons.close_rounded, size: 17))
+              ]))));
 }
 
 class _CommandReplyBubble extends StatelessWidget {

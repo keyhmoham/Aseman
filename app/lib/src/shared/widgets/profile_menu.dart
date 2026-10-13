@@ -55,7 +55,7 @@ Future<void> showProfileMenu(
         child: SingleChildScrollView(
           child: _ProfileBody(
             dependencies: dependencies,
-            showAdmin: true,
+            showAdmin: dependencies.sessionController.isAdmin,
             onSelect: (a) => Navigator.pop(sheetContext, a),
           ),
         ),

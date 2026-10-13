@@ -17,8 +17,11 @@ import 'package:tradera/src/features/miniapps/domain/widget_dsl.dart';
 /// in for the backend gateway so tests exercise the real UI with stable data,
 /// with no network and no showcase fallbacks.
 class FakeTraderaService extends TraderaService {
-  FakeTraderaService({TraderaApiClient? client})
+  FakeTraderaService({TraderaApiClient? client, this.admin = true})
       : super(client ?? TraderaApiClient(baseUrl: 'http://localhost:8080'));
+
+  /// Whether `auth.me` reports the signed-in account as an admin.
+  final bool admin;
 
   static const homeId = '00000000000000010000000000000002';
   static const atlasId = '00000000000000010000000000000003';
@@ -37,6 +40,9 @@ class FakeTraderaService extends TraderaService {
     Map<String, dynamic> body = const {},
     Duration? timeout,
   }) async {
+    if (namespace == 'auth' && action == 'me') {
+      return {'id': 'me', 'handle': 'test', 'is_admin': admin};
+    }
     if (namespace == 'auth' && action == 'config') {
       return const {
         'password': true,

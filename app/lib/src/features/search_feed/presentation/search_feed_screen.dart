@@ -187,12 +187,14 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
               workspace: model.workspace,
               compact: compact,
               onOpenWorkspaces: () => _openWorkspaces(context),
-              onOpenAdmin: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) =>
-                          AdminScreen(dependencies: widget.dependencies),
-                    ),
-                  ),
+              onOpenAdmin: !widget.dependencies.sessionController.isAdmin
+                  ? null
+                  : () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              AdminScreen(dependencies: widget.dependencies),
+                        ),
+                      ),
               onOpenProfile: () =>
                   showProfileMenu(context, widget.dependencies)));
 

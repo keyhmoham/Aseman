@@ -280,6 +280,22 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('profile menu hides the admin console from non-admins',
+      (tester) async {
+    await seedSession();
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    await tester.pumpWidget(TraderaApp(
+        dependencies:
+            AppDependencies.withService(FakeTraderaService(admin: false))));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(CircleAvatar).first);
+    await tester.pumpAndSettle();
+    expect(find.text('My bots'), findsOneWidget);
+    expect(find.text('Admin console'), findsNothing);
+  });
+
   testWidgets('workspace header opens the profile popup on the feed',
       (tester) async {
     await seedSession();

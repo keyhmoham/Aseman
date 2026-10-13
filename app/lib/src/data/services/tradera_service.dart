@@ -142,6 +142,12 @@ class TraderaService implements BackendService {
     return s;
   }
 
+  /// Whether the signed-in account may use the admin console (`auth.me`).
+  Future<bool> fetchIsAdmin() async {
+    final me = await actionMap('auth', 'me');
+    return me['is_admin'] == true;
+  }
+
   Future<void> logout() async {
     try {
       await client.call('auth', 'logout');

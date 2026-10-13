@@ -679,12 +679,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                       scaffoldKey.currentState?.openDrawer(),
                   onOpenWorkspaces: () => _workspacePicker(context),
                   onGoHome: goHome,
-                  onOpenAdmin: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) =>
-                              AdminScreen(dependencies: widget.dependencies),
-                        ),
-                      ),
+                  onOpenAdmin: !widget.dependencies.sessionController.isAdmin
+                      ? null
+                      : () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => AdminScreen(
+                                  dependencies: widget.dependencies),
+                            ),
+                          ),
                   onOpenSpaceSettings: () => _openSpaceSettings(),
                   onOpenProfile: () =>
                       showProfileMenu(context, widget.dependencies),

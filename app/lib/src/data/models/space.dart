@@ -80,6 +80,8 @@ class RoomMessage {
     this.kind = 'message',
     this.mentions = const [],
     this.attachments = const [],
+    this.senderName = '',
+    this.senderIsAgent = false,
   });
 
   final String id;
@@ -100,6 +102,11 @@ class RoomMessage {
   /// Files attached to this message (photos, gifs, audio, voice, video,
   /// documents). Each entry carries its own metadata + streaming content url.
   final List<UploadedFile> attachments;
+
+  /// The sender's display name and whether it is a bot, as the node resolved
+  /// them when listing the room (empty when it did not).
+  final String senderName;
+  final bool senderIsAgent;
 
   /// Message pages can rotate at the same length or enrich an existing
   /// attachment. Compare visible content rather than only the oldest ID.
@@ -140,7 +147,17 @@ class RoomMessage {
             DateTime.now(),
         mentions: _strings(json['mentions']),
         attachments: _attachments(json['attachments']),
+        senderName: _senderName(json['sender']),
+        senderIsAgent: json['sender'] is Map && json['sender']['kind'] == 'bot',
       );
+
+  static String _senderName(dynamic sender) {
+    if (sender is! Map) return '';
+    final name = '${sender['display_name'] ?? ''}'.trim();
+    if (name.isNotEmpty) return name;
+    final handle = '${sender['handle'] ?? ''}'.trim();
+    return handle.isEmpty ? '' : '@$handle';
+  }
 
   static List<String> _strings(dynamic raw) {
     if (raw is List) return raw.map((e) => e.toString()).toList();
@@ -203,4 +220,114 @@ class Packet {
         correlationId: json['correlation_id'] as String? ?? '',
         repliedAt: DateTime.tryParse(json['replied_at'] as String? ?? ''),
       );
+}
+
+/// The other side of a direct chat: a person or an agent.
+class ChatPeer {
+  const ChatPeer({
+    required this.id,
+    this.handle = '',
+    this.name = '',
+    this.kind = 'user',
+    this.botId = '',
+    this.avatar = '',
+  });
+
+  final String id;
+  final String handle;
+  final String name;
+
+  /// "user" or "bot".
+  final String kind;
+
+  /// The bot record id when the peer is an agent (what mentions address).
+  final String botId;
+  final String avatar;
+
+  bool get isAgent => kind == 'bot';
+  String get displayName => name.isNotEmpty
+      ? name
+      : handle.isNotEmpty
+          ? '@$handle'
+          : 'Conversation';
+
+  factory ChatPeer.fromJson(Map<String, dynamic> json) => ChatPeer(
+        id: '${json['id'] ?? ''}',
+        handle: '${json['handle'] ?? ''}',
+        name: '${json['display_name'] ?? ''}',
+        kind: '${json['kind'] ?? 'user'}',
+        botId: '${json['bot_id'] ?? ''}',
+        avatar: '${json['avatar'] ?? ''}',
+      );
+}
+
+/// One conversation of the messenger (`spaces.chat_list`): a direct chat (a
+/// one-room space shared by two accounts) or a room of one of the caller's
+/// projects, with its latest message.
+class ChatSummary {
+  const ChatSummary({
+    required this.spaceId,
+    required this.roomId,
+    this.direct = false,
+    this.spaceName = '',
+    this.roomName = '',
+    this.peer,
+    this.lastBody = '',
+    this.lastSenderId = '',
+    this.lastSenderName = '',
+    this.lastAttachments = 0,
+    this.updatedAt,
+    this.unread = 0,
+    this.working = false,
+    this.role = '',
+  });
+
+  final String spaceId;
+  final String roomId;
+  final bool direct;
+  final String spaceName;
+  final String roomName;
+  final ChatPeer? peer;
+  final String lastBody;
+  final String lastSenderId;
+  final String lastSenderName;
+  final int lastAttachments;
+  final DateTime? updatedAt;
+  final int unread;
+  final bool working;
+
+  /// The caller's role in the chat's space ("owner", "admin", "member", ...).
+  final String role;
+
+  bool get canManage => role == 'owner' || role == 'admin';
+  String get key => '$spaceId/$roomId';
+  String get title => direct ? (peer?.displayName ?? 'Direct chat') : roomName;
+
+  factory ChatSummary.fromJson(Map<String, dynamic> json) {
+    final last = json['last'] is Map
+        ? (json['last'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final sender = last['sender'] is Map
+        ? (last['sender'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final peer = json['peer'] is Map
+        ? ChatPeer.fromJson((json['peer'] as Map).cast<String, dynamic>())
+        : null;
+    return ChatSummary(
+      spaceId: '${json['space_id'] ?? ''}',
+      roomId: '${json['room_id'] ?? ''}',
+      direct: json['kind'] == 'direct',
+      spaceName: '${json['space_name'] ?? ''}',
+      roomName: '${json['room_name'] ?? ''}',
+      peer: peer,
+      lastBody: '${last['body'] ?? ''}',
+      lastSenderId: '${sender['id'] ?? ''}',
+      lastSenderName: ChatPeer.fromJson(sender).displayName,
+      lastAttachments: (last['attachments'] as num?)?.toInt() ?? 0,
+      updatedAt: DateTime.tryParse('${json['updated_at'] ?? ''}')?.toLocal(),
+      unread: (json['unread'] as num?)?.toInt() ?? 0,
+      working: json['working'] == true,
+      role: '${json['role'] ?? ''}',
+    );
+  }
 }

@@ -5,13 +5,12 @@ import 'package:flutter/material.dart';
 import '../../app_dependencies.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_shape.dart';
-import '../../features/account/presentation/account_hub_screen.dart';
+import '../../features/account/presentation/account_panel.dart';
 import '../../features/admin/presentation/admin_screen.dart';
 import '../../features/agents/presentation/agents_screen.dart';
-import '../../features/chats/presentation/chats_screen.dart';
 import '../../features/market/presentation/market_screen.dart';
+import '../../features/messenger/presentation/messenger_panel.dart';
 import '../../features/settings/presentation/settings_screen.dart';
-import '../../features/wallet/presentation/wallet_screen.dart';
 import 'overlay_panels.dart';
 import 'user_profile_sheet.dart';
 
@@ -21,6 +20,8 @@ enum ProfileAction {
   market,
   wallet,
   messages,
+  invitations,
+  usage,
   account,
   admin,
   settings,
@@ -29,8 +30,9 @@ enum ProfileAction {
 
 /// Opens the profile menu anchored at the app-bar avatar. On desktop it is an
 /// animated floating popup; on mobile it is a standard bottom sheet. Both
-/// present the account header (with a settings action) above a 2×2 grid of
-/// Profile / My bots / Market / Wallet, and a logout row beneath.
+/// present the account header (with a settings action) above a row of
+/// Profile / My bots / Market / Wallet, then Messages, Invitations, Usage and
+/// Account, and a logout row beneath. Each item opens as its own modal panel.
 Future<void> showProfileMenu(
   BuildContext context,
   AppDependencies dependencies,
@@ -136,20 +138,15 @@ Future<void> _dispatch(
         maxWidth: 820,
       );
     case ProfileAction.wallet:
-      await showFloatingPanel(
-        context,
-        WalletScreen(dependencies: dependencies),
-        maxWidth: 760,
-      );
+      await showAccountPanel(context, dependencies, AccountArea.wallet);
     case ProfileAction.messages:
-      await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => ChatsScreen(dependencies: dependencies)));
+      await showMessenger(context, dependencies);
+    case ProfileAction.invitations:
+      await showAccountPanel(context, dependencies, AccountArea.invitations);
+    case ProfileAction.usage:
+      await showAccountPanel(context, dependencies, AccountArea.usage);
     case ProfileAction.account:
-      await showFloatingPanel(
-        context,
-        AccountHubScreen(dependencies: dependencies),
-        maxWidth: 1100,
-      );
+      await showAccountPanel(context, dependencies, AccountArea.account);
     case ProfileAction.admin:
       await Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (_) => AdminScreen(dependencies: dependencies),
@@ -283,8 +280,20 @@ class _ProfileBody extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               _MenuRow(
+                icon: Icons.mark_email_unread_outlined,
+                label: 'Invitations',
+                onTap: () => onSelect(ProfileAction.invitations),
+              ),
+              const SizedBox(height: 2),
+              _MenuRow(
+                icon: Icons.query_stats_outlined,
+                label: 'Usage',
+                onTap: () => onSelect(ProfileAction.usage),
+              ),
+              const SizedBox(height: 2),
+              _MenuRow(
                 icon: Icons.manage_accounts_outlined,
-                label: 'Account, billing, payouts & usage',
+                label: 'Account',
                 onTap: () => onSelect(ProfileAction.account),
               ),
               if (showAdmin) ...[

@@ -46,7 +46,7 @@ func BuildActions(s *Service) []api.Action {
 		&fileUploadAction{s: s}, &fileDownloadAction{s: s}, &fileGetAction{s: s},
 		&fileDeleteAction{s: s}, &fileListAction{s: s},
 		&kvSetAction{s: s}, &kvGetAction{s: s}, &kvListAction{s: s}, &kvDeleteAction{s: s},
-	}, clientActions(s)...), agentActions(s)...)
+	}, append(clientActions(s), directActions(s)...)...), agentActions(s)...)
 }
 
 // --- spaces ---
@@ -233,23 +233,37 @@ func (a *spaceListAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 	var in struct {
 		Limit  int `json:"limit,omitempty"`
 		Offset int `json:"offset,omitempty"`
+		// Direct conversations are spaces too, but not projects: they are
+		// listed only when asked for ("all" or "direct").
+		Kind string `json:"kind,omitempty"`
 	}
 	_ = helper.Decode(req, &in)
 	limit, offset := helper.Paging(in.Limit, in.Offset, 50, 200)
 	var mems []membership.Membership
 	if err := a.s.R.List(ctx, "memberships", database.Filter{
 		Equal:   map[string]any{"member_id": req.Caller.ID.String(), "room_id": zeroRoom},
-		OrderBy: "created_at", Asc: false, Limit: limit, Offset: offset,
+		OrderBy: "created_at", Asc: false,
 	}, &mems); err != nil {
 		return nil, err
 	}
 	out := []map[string]any{}
 	people := a.s.participants()
+	skipped := 0
 	for _, m := range mems {
+		if len(out) >= limit {
+			break
+		}
 		if sp, err := a.s.GetSpace(ctx, m.SpaceID); err == nil {
+			if (sp.Direct && in.Kind != "all" && in.Kind != "direct") || (!sp.Direct && in.Kind == "direct") {
+				continue
+			}
+			if skipped < offset {
+				skipped++
+				continue
+			}
 			row := map[string]any{"id": sp.ID.String(), "name": sp.Name, "description": sp.Description,
 				"owner_id": sp.OwnerID.String(), "role": m.Role, "public": sp.Public, "home": sp.Home,
-				"created_at": sp.CreatedAt, "updated_at": sp.UpdatedAt}
+				"direct": sp.Direct, "created_at": sp.CreatedAt, "updated_at": sp.UpdatedAt}
 			// The card fields a list renders (avatar, brief) live in the
 			// workspace's metadata profile.
 			if rec, err := a.s.M.Get(ctx, sp.ID); err == nil && rec != nil {
@@ -964,6 +978,7 @@ func (a *msgSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	if in.Body == "" && len(in.Attachments) == 0 {
 		return nil, errs.InvalidArgument("body or attachments required")
 	}
+	in.Mentions = a.s.directMentions(ctx, spID, req.Caller.ID, in.Mentions)
 	// An agent handing work to agents is refused up front when the chain is
 	// already as deep as it may go, so the sender hears it instead of waiting
 	// on a reply that will never come.

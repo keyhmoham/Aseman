@@ -332,6 +332,12 @@ func (s *Service) Can(ctx context.Context, spaceID, roomID identity.ID, caller i
 
 // CreateSpace creates a space with a default room, metadata and owner membership.
 func (s *Service) CreateSpace(ctx context.Context, owner identity.ID, name, description string) (*space.Space, error) {
+	return s.createSpace(ctx, owner, name, description, "")
+}
+
+// createSpace creates a space with its first room. A non-empty directKey makes
+// it a direct conversation, which the tradera lead does not join.
+func (s *Service) createSpace(ctx context.Context, owner identity.ID, name, description, directKey string) (*space.Space, error) {
 	if name == "" {
 		return nil, errs.InvalidArgument("space name required")
 	}
@@ -353,6 +359,7 @@ func (s *Service) CreateSpace(ctx context.Context, owner identity.ID, name, desc
 		Entity:  entity.Entity{ID: spID, CreatedAt: now, UpdatedAt: now},
 		OwnerID: owner, Name: name, Description: description,
 		MetadataID: spID, Public: false,
+		Direct: directKey != "", DirectKey: directKey,
 	}
 	if err := s.R.CreateID(ctx, "spaces", spID, sp); err != nil {
 		return nil, err
@@ -378,7 +385,9 @@ func (s *Service) CreateSpace(ctx context.Context, owner identity.ID, name, desc
 	if err := s.R.CreateID(ctx, "metadatas", spID, meta); err != nil {
 		return nil, err
 	}
-	s.ensureTradera(ctx, spID)
+	if !sp.Direct {
+		s.ensureTradera(ctx, spID)
+	}
 	return sp, nil
 }
 

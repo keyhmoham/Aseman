@@ -336,6 +336,80 @@ class FakeTraderaService extends TraderaService {
 
   final Map<String, List<RoomMessage>> roomMessages = {};
 
+  static const directId = '00000000000000010000000000000007';
+  static const agentDirectId = '00000000000000010000000000000008';
+
+  /// The messenger's conversations: two direct chats and the Atlas rooms.
+  List<ChatSummary> chats = [
+    ChatSummary(
+      spaceId: directId,
+      roomId: 'd1',
+      direct: true,
+      spaceName: 'Direct',
+      roomName: 'general',
+      role: 'owner',
+      peer: const ChatPeer(
+          id: '00000000000000010000000000000042',
+          handle: 'maya',
+          name: 'Maya Chen'),
+      lastBody: 'See you at the desk review tomorrow?',
+      lastSenderId: '00000000000000010000000000000042',
+      lastSenderName: 'Maya Chen',
+      updatedAt: DateTime(2026, 3, 4, 9, 40),
+      unread: 2,
+    ),
+    ChatSummary(
+      spaceId: agentDirectId,
+      roomId: 'd2',
+      direct: true,
+      spaceName: 'Direct',
+      roomName: 'general',
+      role: 'owner',
+      peer: const ChatPeer(
+          id: '00000000000000010000000000000043',
+          handle: 'alphabot',
+          name: 'AlphaBot',
+          kind: 'bot',
+          botId: 'bot-alpha'),
+      lastBody: 'Entry 68,200 · stop 66,900 · size 0.31 BTC.',
+      lastSenderId: '00000000000000010000000000000043',
+      lastSenderName: 'AlphaBot',
+      updatedAt: DateTime(2026, 3, 4, 9, 20),
+      working: true,
+    ),
+    ChatSummary(
+      spaceId: atlasId,
+      roomId: 'a1',
+      spaceName: 'Atlas Capital',
+      roomName: 'general',
+      role: 'owner',
+      lastBody: 'Perfect, thanks!',
+      lastSenderId: '00000000000000010000000000000001',
+      lastSenderName: 'Sam',
+      updatedAt: DateTime(2026, 3, 3, 18, 5),
+    ),
+  ];
+
+  final List<String> seen = [];
+
+  @override
+  Future<List<ChatSummary>> fetchChats({String kind = ''}) async => chats
+      .where((c) => kind.isEmpty || (kind == 'direct') == c.direct)
+      .toList();
+
+  @override
+  Future<ChatSummary> openDirect(String peer) async => chats.firstWhere(
+      (c) => c.direct && (c.peer?.id == peer || c.peer?.botId == peer),
+      orElse: () => ChatSummary(
+          spaceId: '00000000000000010000000000000009',
+          roomId: 'd9',
+          direct: true,
+          role: 'owner',
+          peer: ChatPeer(id: peer, handle: 'new')));
+
+  @override
+  Future<void> markSeen(String spaceId, DateTime at) async => seen.add(spaceId);
+
   /// Simulates the backend "working agent" signal for the room indicator.
   String workingAgent = '';
 

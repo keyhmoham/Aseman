@@ -8,7 +8,8 @@ import '../../../core/settings/app_settings.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/overlay_panels.dart';
-import '../../account/presentation/account_hub_screen.dart';
+import '../../../shared/widgets/user_profile_sheet.dart';
+import '../../account/presentation/account_panel.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, this.dependencies});
@@ -158,13 +159,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (ok) await _clearCache();
   }
 
-  /// Opens an area of the account hub (see AccountHubScreen.areas).
-  void _openAccount(int area) {
+  /// Opens one of the account panels.
+  void _openAccount(AccountArea area) {
     final deps = widget.dependencies;
     if (deps == null) return;
-    showFloatingPanel(
-        context, AccountHubScreen(dependencies: deps, initialIndex: area),
-        maxWidth: 1100);
+    showAccountPanel(context, deps, area);
+  }
+
+  void _openProfile() {
+    final deps = widget.dependencies;
+    if (deps == null) return;
+    showFloatingPanel(context, UserProfileSheet(dependencies: deps),
+        maxWidth: 760);
   }
 
   static final _textSizes = <double, String>{
@@ -194,7 +200,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           sliver: SliverList.list(children: [
             _AccountCard(
                 dependencies: widget.dependencies,
-                onManage: () => _openAccount(6)),
+                onManage: () => _openAccount(AccountArea.account)),
             const SizedBox(height: 16),
             _Section(
                 title: 'Appearance',
@@ -282,17 +288,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: Icons.person_outline,
                       title: 'Profile information',
                       subtitle: 'Name, username, bio and profile media',
-                      onTap: () => _openAccount(5)),
+                      onTap: _openProfile),
                   _SettingsTile(
                       icon: Icons.workspace_premium_outlined,
-                      title: 'Plan and billing',
+                      title: 'Wallet',
                       subtitle: 'Balance, top-ups and purchases',
-                      onTap: () => _openAccount(2)),
+                      onTap: () => _openAccount(AccountArea.wallet)),
                   _SettingsTile(
                       icon: Icons.query_stats_rounded,
                       title: 'Usage',
                       subtitle: 'What each project spent and on which models',
-                      onTap: () => _openAccount(4)),
+                      onTap: () => _openAccount(AccountArea.usage)),
                   const _SettingsTile(
                       icon: Icons.account_balance_wallet_outlined,
                       title: 'Trading accounts',
@@ -384,7 +390,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: Icons.notifications_active_outlined,
                       title: 'Push notifications on this device',
                       subtitle: 'Turn device notifications on or off',
-                      onTap: () => _openAccount(6)),
+                      onTap: () => _openAccount(AccountArea.account)),
                 ]),
             _Section(
                 title: 'Privacy & security',
@@ -406,7 +412,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: Icons.password_rounded,
                       title: 'Password and sign-in',
                       subtitle: 'Change your password, username and email',
-                      onTap: () => _openAccount(6)),
+                      onTap: () => _openAccount(AccountArea.account)),
                   const _SettingsTile(
                       icon: Icons.key_outlined,
                       title: 'Passkeys and two-factor authentication'),

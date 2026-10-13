@@ -20,6 +20,11 @@ type Space struct {
 	// Home marks the workspace automatically linked to a user's account at
 	// registration (the "my workspace" default).
 	Home bool `db:"home" json:"home,omitempty"`
+	// Direct marks a direct conversation: a one-room space between two
+	// accounts (two people, or a person and an agent). DirectKey names the
+	// pair so the conversation is found again from either side.
+	Direct    bool   `db:"direct" json:"direct,omitempty"`
+	DirectKey string `db:"direct_key" json:"direct_key,omitempty"`
 }
 
 // Room scopes messages, files and bots within a space.

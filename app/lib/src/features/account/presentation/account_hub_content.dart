@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../admin/presentation/admin_widgets.dart';
+import 'account_panel.dart';
 
 typedef AccountAction = Future<void> Function(
     String namespace, String action, Map<String, dynamic> initialBody);
@@ -13,14 +14,12 @@ class AccountHubContent extends StatefulWidget {
     required this.area,
     required this.results,
     required this.onAction,
-    required this.onUpload,
     required this.onNotifications,
     required this.notificationsSupported,
   });
-  final String area;
+  final AccountArea area;
   final Map<String, dynamic> results;
   final AccountAction onAction;
-  final VoidCallback onUpload;
   final ValueChanged<bool> onNotifications;
   final bool notificationsSupported;
 
@@ -29,33 +28,16 @@ class AccountHubContent extends StatefulWidget {
 }
 
 class _AccountHubContentState extends State<AccountHubContent> {
-  final search = TextEditingController();
-  @override
-  void didUpdateWidget(covariant AccountHubContent oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.area != widget.area) search.clear();
-  }
-
-  @override
-  void dispose() {
-    search.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) => ListView(
-        key: PageStorageKey(widget.area),
+        key: PageStorageKey(widget.area.name),
         padding: const EdgeInsets.only(top: 4, bottom: 28),
         children: [
           switch (widget.area) {
-            'Invitations' => _invitations(),
-            'Messages' => _messages(),
-            'Billing' => _billing(),
-            'Payout' => _payout(),
-            'Usage' => _usage(),
-            'Profile' => _profile(),
-            'Account' => _account(),
-            _ => const SizedBox.shrink(),
+            AccountArea.invitations => _invitations(),
+            AccountArea.wallet => _wallet(),
+            AccountArea.usage => _usage(),
+            AccountArea.account => _account(),
           }
         ],
       );
@@ -95,66 +77,7 @@ class _AccountHubContentState extends State<AccountHubContent> {
     ]);
   }
 
-  Widget _messages() {
-    final rows = _maps(_map(widget.results['users.dm_threads'])['threads']);
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      AdminSearchField(
-          controller: search,
-          hint: 'Search conversations',
-          onChanged: (_) => setState(() {}),
-          trailing: FilledButton.icon(
-              onPressed: () => widget.onAction('users', 'dm_send', const {}),
-              icon: const Icon(Icons.edit_square, size: 17),
-              label: const Text('New message'))),
-      const SizedBox(height: 14),
-      if (rows.isEmpty)
-        const AdminEmptyState('No messages',
-            'Direct conversations with people and agents appear here.',
-            icon: Icons.forum_outlined)
-      else
-        AdminSectionCard(
-          title: 'Conversations',
-          padding: EdgeInsets.zero,
-          child: Column(children: [
-            for (final thread in rows.where((t) =>
-                search.text.isEmpty ||
-                '${t['handle']} ${t['name']} ${t['last_message']}'
-                    .toLowerCase()
-                    .contains(search.text.toLowerCase())))
-              ListTile(
-                leading: CircleAvatar(
-                    child: Text('${thread['handle'] ?? thread['name'] ?? '?'}'
-                        .characters
-                        .first
-                        .toUpperCase())),
-                title: Text(
-                    '${thread['name'] ?? '@${thread['handle'] ?? 'conversation'}'}',
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
-                subtitle: Text(
-                    '${thread['last_message'] ?? 'Open the conversation'}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(_date(thread['updated_at'] ?? thread['last_at']),
-                          style: const TextStyle(
-                              fontSize: 10, color: AppColors.muted)),
-                      if (_num(thread['unread']) > 0)
-                        Badge(label: Text('${_num(thread['unread']).round()}')),
-                    ]),
-                onTap: () => widget.onAction('users', 'dm_list', {
-                  'peer':
-                      thread['peer_id'] ?? thread['account_id'] ?? thread['id']
-                }),
-              ),
-          ]),
-        ),
-    ]);
-  }
-
-  Widget _billing() {
+  Widget _wallet() {
     final account = _map(widget.results['finance.account']);
     final wallet = _map(widget.results['finance.wallet_get']);
     final ledger = _maps(
@@ -250,68 +173,6 @@ class _AccountHubContentState extends State<AccountHubContent> {
     ]);
   }
 
-  Widget _payout() {
-    final account = _map(widget.results['finance.account']);
-    final payouts = _maps(account['payouts']);
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      AdminGrid(minTileWidth: 150, children: [
-        AdminStatCard(
-            label: 'Creator earnings',
-            value: _credits(account['earned']),
-            hint: _usd(account['earned']),
-            icon: Icons.auto_graph_rounded,
-            tone: AppColors.success),
-        AdminStatCard(
-            label: 'Available to withdraw',
-            value: _credits(account['withdrawable'] ?? account['available']),
-            hint: 'After pending reservations',
-            icon: Icons.payments_outlined),
-        AdminStatCard(
-            label: 'Pending payout',
-            value: _credits(account['payout_pending']),
-            hint: 'Awaiting operator settlement',
-            icon: Icons.hourglass_top_rounded,
-            tone: AppColors.warning),
-      ]),
-      const SizedBox(height: 18),
-      AdminSectionCard(
-        title: 'Withdraw earnings',
-        subtitle:
-            'Choose your method and destination. The amount stays reserved until the operator pays or rejects it.',
-        child: Align(
-            alignment: Alignment.centerLeft,
-            child: FilledButton.icon(
-                onPressed: () => widget.onAction('finance', 'payout_request', {
-                      '_available':
-                          account['withdrawable'] ?? account['available'],
-                    }),
-                icon: const Icon(Icons.north_east_rounded, size: 17),
-                label: const Text('Request payout'))),
-      ),
-      const SizedBox(height: 18),
-      AdminDataTable(
-        empty: 'No payout requests yet.',
-        columns: const [
-          AdminTableColumn('Requested', width: 170),
-          AdminTableColumn('Method', width: 150),
-          AdminTableColumn('Amount', width: 130, align: TextAlign.right),
-          AdminTableColumn('Status', width: 130),
-          AdminTableColumn('Reference', width: 220)
-        ],
-        rows: [
-          for (final p in payouts)
-            [
-              Text(_date(p['created_at'])),
-              Text('${p['method'] ?? 'external'}'),
-              Text(_credits(p['amount']), textAlign: TextAlign.right),
-              AdminStatusPill('${p['status'] ?? 'pending'}'),
-              Text('${p['provider_reference'] ?? '—'}')
-            ]
-        ],
-      ),
-    ]);
-  }
-
   Widget _usage() {
     final response = _map(widget.results['usage.projects']);
     final rows = _maps(response['projects']);
@@ -363,77 +224,6 @@ class _AccountHubContentState extends State<AccountHubContent> {
             ]
         ],
       ),
-    ]);
-  }
-
-  Widget _profile() {
-    final me = _map(widget.results['auth.me']);
-    final profile = _map(me['profile']);
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            CircleAvatar(
-                radius: 38,
-                backgroundImage: '${profile['avatar_url'] ?? ''}'.isEmpty
-                    ? null
-                    : NetworkImage('${profile['avatar_url']}'),
-                child: '${profile['avatar_url'] ?? ''}'.isEmpty
-                    ? Text(
-                        '${me['handle'] ?? '?'}'.characters.first.toUpperCase(),
-                        style: const TextStyle(
-                            fontSize: 28, fontWeight: FontWeight.w900))
-                    : null),
-            const SizedBox(width: 18),
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(_name(me),
-                      style: const TextStyle(
-                          fontSize: 21, fontWeight: FontWeight.w900)),
-                  Text('@${me['handle'] ?? ''}',
-                      style: const TextStyle(color: AppColors.muted)),
-                  if ('${profile['bio'] ?? ''}'.isNotEmpty) ...[
-                    const SizedBox(height: 9),
-                    Text('${profile['bio']}')
-                  ],
-                  const SizedBox(height: 12),
-                  Wrap(spacing: 14, children: [
-                    Text('${me['followers'] ?? 0} followers'),
-                    Text('${me['following'] ?? 0} following'),
-                    Text('${me['posts'] ?? 0} posts')
-                  ]),
-                  const SizedBox(height: 14),
-                  FilledButton.tonalIcon(
-                      onPressed: () => widget.onAction('auth', 'profile_update',
-                          {'_mode': 'profile', 'profile': profile}),
-                      icon: const Icon(Icons.edit_outlined, size: 17),
-                      label: const Text('Edit profile')),
-                ])),
-          ]),
-        ),
-      ),
-      const SizedBox(height: 18),
-      AdminSectionCard(
-          title: 'Profile files',
-          subtitle: 'Documents and media attached to your public identity.',
-          child: Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                  onPressed: widget.onUpload,
-                  icon: const Icon(Icons.upload_file_rounded),
-                  label: const Text('Upload profile file')))),
-      const SizedBox(height: 18),
-      AdminSectionCard(
-          title: 'Public metadata',
-          child: Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton(
-                  onPressed: () =>
-                      widget.onAction('users', 'metadata_public', const {}),
-                  child: const Text('Edit public metadata')))),
     ]);
   }
 
@@ -526,14 +316,6 @@ String _date(dynamic v) {
   if (d == null) return '$v';
   final x = d.toLocal();
   return '${x.year}-${x.month.toString().padLeft(2, '0')}-${x.day.toString().padLeft(2, '0')} ${x.hour.toString().padLeft(2, '0')}:${x.minute.toString().padLeft(2, '0')}';
-}
-
-String _name(Map<String, dynamic> me) {
-  final p = _map(me['profile']);
-  final n = [p['firstName'] ?? p['first_name'], p['lastName'] ?? p['last_name']]
-      .where((x) => x != null && '$x'.trim().isNotEmpty)
-      .join(' ');
-  return n.isEmpty ? '${me['handle'] ?? 'User'}' : n;
 }
 
 Widget _primary(String a, String b) =>

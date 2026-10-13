@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tradera/src/features/account/presentation/account_hub_content.dart';
+import 'package:tradera/src/features/account/presentation/account_panel.dart';
 import 'package:tradera/src/features/admin/presentation/admin_page_content.dart';
 import 'package:tradera/src/features/admin/presentation/admin_widgets.dart';
 import 'package:tradera/src/features/home/presentation/project_control_content.dart';
@@ -107,7 +108,7 @@ void main() {
     await pumpWide(
       tester,
       AccountHubContent(
-        area: 'Billing',
+        area: AccountArea.wallet,
         results: const {
           'finance.wallet_get': {'balance': 500, 'locked': 10},
           'finance.ledger_list': {
@@ -118,7 +119,6 @@ void main() {
           'finance.purchases_mine': {'purchases': <Map<String, dynamic>>[]},
         },
         onAction: (_, __, ___) async {},
-        onUpload: () {},
         onNotifications: (_) {},
         notificationsSupported: false,
       ),

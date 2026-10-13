@@ -117,16 +117,19 @@ class AdminSectionCard extends StatelessWidget {
         if (trailing != null) trailing!,
       ]),
       const SizedBox(height: 9),
-      Container(
-        width: double.infinity,
-        padding: padding,
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerLow,
-          border:
-              Border.all(color: scheme.outlineVariant.withValues(alpha: .65)),
+      // A Material (not a decorated Container) so list tiles inside the card
+      // paint their ink and selection on the card itself.
+      Material(
+        color: scheme.surfaceContainerLow,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: scheme.outlineVariant.withValues(alpha: .65)),
           borderRadius: BorderRadius.circular(14),
         ),
-        child: child,
+        child: SizedBox(
+          width: double.infinity,
+          child: Padding(padding: padding, child: child),
+        ),
       ),
     ]);
   }
@@ -266,11 +269,25 @@ class AdminDataTable extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     // Rows have 14 px horizontal padding on both sides. Include it in the
     // scroll extent so fixed-width cells never overflow the row itself.
-    final width = columns.fold<double>(0, (sum, col) => sum + col.width) + 28;
+    final natural = columns.fold<double>(0, (sum, col) => sum + col.width) + 28;
+    // Column widths are minimums: on wide screens they grow proportionally so
+    // the table fills the page; on narrow ones the table scrolls sideways.
+    return LayoutBuilder(builder: (context, constraints) {
+      final available =
+          constraints.hasBoundedWidth ? constraints.maxWidth - 2 : natural;
+      final scale =
+          available > natural ? (available - 29) / (natural - 28) : 1.0;
+      final width = available > natural ? available : natural;
+      return _table(context, scheme, width, scale);
+    });
+  }
+
+  Widget _table(
+      BuildContext context, ColorScheme scheme, double width, double scale) {
     Widget cell(Widget child, AdminTableColumn col, {bool header = false}) =>
         SizedBox(
-          width: col.width,
-          child: DefaultTextStyle(
+          width: col.width * scale,
+          child: DefaultTextStyle.merge(
             style: TextStyle(
                 color: header ? scheme.onSurfaceVariant : scheme.onSurface,
                 fontSize: header ? 11 : 12,
@@ -373,7 +390,6 @@ class AdminLiveChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      constraints: const BoxConstraints(minWidth: 250),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
@@ -390,16 +406,16 @@ class AdminLiveChart extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                     color: scheme.onSurfaceVariant)),
           ),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(value,
-                style: TextStyle(
-                    color: color, fontSize: 21, fontWeight: FontWeight.w900)),
-            if (subtitle != null)
-              Text(subtitle!,
-                  style:
-                      TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
-          ]),
+          Text(value,
+              style: TextStyle(
+                  color: color, fontSize: 21, fontWeight: FontWeight.w900)),
         ]),
+        // On its own line so long readings wrap instead of overflowing.
+        if (subtitle != null)
+          Text(subtitle!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
         const SizedBox(height: 12),
         SizedBox(
           height: 96,

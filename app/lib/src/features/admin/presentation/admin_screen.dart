@@ -354,38 +354,46 @@ class _AdminScreenState extends State<AdminScreen> {
         for (var p = 0; p < sections[s].pages.length; p++)
           (s, p, sections[s].pages[p]),
     ];
-    final picked = await showSearch<(int, int)>(
+    final picked = await showSearch<(int, int)?>(
         context: context, delegate: _AdminSearch(entries));
     if (picked != null) select(picked.$1, picked.$2);
   }
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 820;
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = width < 820;
+    final actions = [
+      IconButton(
+          tooltip: 'Search',
+          onPressed: openSearch,
+          icon: const Icon(Icons.search_rounded)),
+      IconButton(
+          tooltip: 'Refresh',
+          onPressed: current.providers ? null : load,
+          icon: const Icon(Icons.refresh_rounded)),
+    ];
     final content = Column(children: [
-      Padding(
-        padding:
-            EdgeInsets.fromLTRB(compact ? 16 : 24, 18, compact ? 16 : 24, 10),
-        child: PanelHeader(
-          icon: Icons.admin_panel_settings_outlined,
-          title: current.label,
-          subtitle: current.hint,
-          onClose: () => Navigator.pop(context),
-          actions: [
-            IconButton(
-                tooltip: 'Search',
-                onPressed: openSearch,
-                icon: const Icon(Icons.search_rounded)),
-            IconButton(
-                tooltip: 'Refresh',
-                onPressed: current.providers ? null : load,
-                icon: const Icon(Icons.refresh_rounded)),
-          ],
-        ),
-      ),
+      // On compact screens the app bar carries the title and actions.
+      if (!compact)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 18, 24, 10),
+          child: PanelHeader(
+            icon: Icons.admin_panel_settings_outlined,
+            title: current.label,
+            subtitle: current.hint,
+            onClose: () => Navigator.pop(context),
+            actions: actions,
+          ),
+        )
+      else
+        const SizedBox(height: 12),
       Expanded(
         child: current.providers
-            ? LlmProvidersTab(service: widget.dependencies.service)
+            ? Padding(
+                padding:
+                    EdgeInsets.symmetric(horizontal: width < 600 ? 16 : 24),
+                child: LlmProvidersTab(service: widget.dependencies.service))
             : AdminPageContent(
                 key: ValueKey(current.label),
                 page: current.label,
@@ -412,7 +420,29 @@ class _AdminScreenState extends State<AdminScreen> {
             select(s, p);
           },
         ))),
-        appBar: AppBar(title: const Text('Admin console')),
+        appBar: AppBar(
+          title:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(current.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+            Text(current.hint,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ]),
+          actions: [
+            ...actions,
+            IconButton(
+                tooltip: 'Close admin console',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close_rounded)),
+          ],
+        ),
         body: content,
       );
     }
@@ -491,7 +521,7 @@ class _Navigation extends StatelessWidget {
       );
 }
 
-class _AdminSearch extends SearchDelegate<(int, int)> {
+class _AdminSearch extends SearchDelegate<(int, int)?> {
   _AdminSearch(this.entries);
   final List<(int, int, _Page)> entries;
   @override
@@ -501,7 +531,7 @@ class _AdminSearch extends SearchDelegate<(int, int)> {
       ];
   @override
   Widget buildLeading(BuildContext context) => IconButton(
-      onPressed: () => close(context, (0, 0)),
+      onPressed: () => close(context, null),
       icon: const Icon(Icons.arrow_back_rounded));
   @override
   Widget buildResults(BuildContext context) => buildSuggestions(context);

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/segmented_tab_bar.dart';
 import 'admin_inputs.dart';
 import 'admin_widgets.dart';
 
@@ -4265,17 +4266,18 @@ class _DetailFrame extends StatelessWidget {
                     icon: const Icon(Icons.refresh_rounded)),
                 menu,
               ],
-              bottom: TabBar(
-                isScrollable: narrow,
-                tabAlignment: narrow ? TabAlignment.start : TabAlignment.fill,
-                onTap: onTab,
-                tabs: [
-                  for (final (label, icon) in tabs)
-                    Tab(
-                        icon: narrow ? null : Icon(icon, size: 20),
-                        text: label,
-                        iconMargin: const EdgeInsets.only(bottom: 4)),
-                ],
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(64),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                  child: SegmentedTabBar(
+                    width: 600,
+                    compact: narrow,
+                    onTap: onTab,
+                    labels: [for (final (label, _) in tabs) label],
+                    icons: [for (final (_, icon) in tabs) icon],
+                  ),
+                ),
               ),
             ),
             body: loading

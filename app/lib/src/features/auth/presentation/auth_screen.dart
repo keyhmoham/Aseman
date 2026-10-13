@@ -8,6 +8,7 @@ import '../../../core/network/session_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_brand.dart';
 import '../../../shared/widgets/glow_painter.dart';
+import '../../../shared/widgets/segmented_tab_bar.dart';
 import 'google_sign_in_button.dart';
 
 /// Gates the whole app behind authentication. Shows the auth screen until a
@@ -321,11 +322,10 @@ class _AuthScreenState extends State<AuthScreen>
         border: Border.all(color: scheme.outlineVariant),
       ),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TabBar(
+        SegmentedTabBar(
           controller: tabs,
-          dividerColor: Colors.transparent,
-          indicatorSize: TabBarIndicatorSize.tab,
-          tabs: const [Tab(text: 'Log in'), Tab(text: 'Create account')],
+          labels: const ['Log in', 'Create account'],
+          icons: const [Icons.login_rounded, Icons.person_add_alt_rounded],
         ),
         const SizedBox(height: 20),
         if (tabs.index == 0) ...[

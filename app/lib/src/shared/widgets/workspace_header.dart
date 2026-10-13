@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
+import '../../core/theme/app_shape.dart';
+import '../../core/theme/app_surfaces.dart';
 import '../../data/models/space.dart';
 
 /// Shared top app bar: brand + workspace switcher on the left, platform
@@ -223,9 +225,13 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                   constraints: BoxConstraints(
                       maxHeight: compact ? double.infinity : 620),
                   padding: const EdgeInsets.all(26),
+                  // In a bottom sheet the sheet already paints the surface;
+                  // floating on desktop it matches every other modal panel.
                   decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(compact ? 0 : 34),
+                      color: compact
+                          ? null
+                          : AppSurfaces.overlay(Theme.of(context).colorScheme),
+                      borderRadius: BorderRadius.circular(AppShape.card),
                       boxShadow: compact
                           ? null
                           : const [

@@ -219,19 +219,23 @@ class _BlockView extends StatelessWidget {
     }
   }
 
-  static Widget _MediaFallback(IconData icon, String label) => Container(
-        height: 140,
-        alignment: Alignment.center,
-        color: AppColors.panel,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 30, color: AppColors.muted),
-          const SizedBox(height: 6),
-          Text(label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 10, color: AppColors.muted)),
-        ]),
-      );
+  static Widget _MediaFallback(IconData icon, String label) =>
+      Builder(builder: (context) {
+        final scheme = Theme.of(context).colorScheme;
+        return Container(
+          height: 140,
+          alignment: Alignment.center,
+          color: scheme.surfaceContainerHighest,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 30, color: scheme.onSurfaceVariant),
+            const SizedBox(height: 6),
+            Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
+          ]),
+        );
+      });
 }
 
 /// Builds a rich [TextSpan] from inline tokens.

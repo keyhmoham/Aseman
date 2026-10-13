@@ -20,7 +20,7 @@ class SideNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
       width: 244,
-      color: AppColors.navigation,
+      color: Theme.of(context).colorScheme.surfaceContainer,
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Padding(
@@ -54,8 +54,9 @@ class SideNavigation extends StatelessWidget {
                     style: const TextStyle(
                         fontWeight: FontWeight.w700, fontSize: 14)),
                 subtitle: Text('@$handle',
-                    style: const TextStyle(
-                        color: AppColors.muted, fontSize: 12)))),
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12)))),
       ]));
 }
 
@@ -66,8 +67,8 @@ class _Label extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
       padding: const EdgeInsets.fromLTRB(10, 4, 8, 8),
       child: Text(text,
-          style: const TextStyle(
-              color: AppColors.muted,
+          style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 11,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.2)));
@@ -91,7 +92,10 @@ class _Tile extends StatelessWidget {
                 tileColor:
                     active ? AppColors.primary.withValues(alpha: .16) : null,
                 leading: Icon(value.icon,
-                    size: 20, color: active ? AppColors.cyan : AppColors.muted),
+                    size: 20,
+                    color: active
+                        ? AppColors.cyan
+                        : Theme.of(context).colorScheme.onSurfaceVariant),
                 title: Text(value.label,
                     style: TextStyle(
                         fontWeight:

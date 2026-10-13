@@ -112,7 +112,6 @@ class _AgentsScreenState extends State<AgentsScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       builder: (context) => _AgentChatSheet(
         dependencies: widget.dependencies,
         bot: bot,
@@ -335,7 +334,7 @@ class _AgentCard extends StatelessWidget {
         ? AppColors.success
         : bot.status == 'paused'
             ? AppColors.warning
-            : AppColors.muted;
+            : Theme.of(context).colorScheme.onSurfaceVariant;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),

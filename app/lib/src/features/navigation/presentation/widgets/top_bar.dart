@@ -12,8 +12,10 @@ class TopBar extends StatelessWidget {
   Widget build(BuildContext context) => Container(
       height: 72,
       padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: AppColors.border))),
+      decoration: BoxDecoration(
+          border: Border(
+              bottom: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant))),
       child: Row(children: [
         Expanded(
             child: ConstrainedBox(
@@ -24,14 +26,17 @@ class TopBar extends StatelessWidget {
                         hintText: 'Search rooms, agents, traders, or \$BTC',
                         isDense: true)))),
         const Spacer(),
-        const Icon(Icons.notifications_none_rounded, color: AppColors.muted),
+        Icon(Icons.notifications_none_rounded,
+            color: Theme.of(context).colorScheme.onSurfaceVariant),
         const SizedBox(width: 22),
         Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const Text('Wallet balance',
-                  style: TextStyle(color: AppColors.muted, fontSize: 11)),
+              Text('Wallet balance',
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 11)),
               Text(formatLedgerCredits(balance),
                   style: const TextStyle(fontWeight: FontWeight.w700))
             ]),

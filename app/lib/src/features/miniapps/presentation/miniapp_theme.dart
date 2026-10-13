@@ -12,27 +12,32 @@ class MiniappTheme {
     return '#$v';
   }
 
-  /// Semantic classes mapped onto [AppColors]. Keep the keys stable so guest
-  /// bundles reference them by name.
-  static Map<String, String> _tokens() => {
-        'bg': _hex(AppColors.background),
-        'nav': _hex(AppColors.navigation),
-        'panel': _hex(AppColors.panel),
-        'card': _hex(AppColors.card),
-        'border': _hex(AppColors.border),
-        'primary': _hex(AppColors.primary),
-        'accent': _hex(AppColors.cyan),
-        'success': _hex(AppColors.success),
-        'warning': _hex(AppColors.warning),
-        'danger': _hex(AppColors.danger),
-        'fg': _hex(AppColors.foreground),
-        'muted': _hex(AppColors.muted),
-      };
+  /// Semantic classes mapped onto the host [theme] (or [AppColors] when no
+  /// theme is given), so a miniapp follows the light/dark mode and accent of
+  /// the app around it. Keep the keys stable so guest bundles reference them
+  /// by name.
+  static Map<String, String> _tokens(ThemeData? theme) {
+    final scheme = theme?.colorScheme;
+    return {
+      'bg': _hex(theme?.scaffoldBackgroundColor ?? AppColors.background),
+      'nav': _hex(scheme?.surfaceContainer ?? AppColors.navigation),
+      'panel': _hex(scheme?.surfaceContainerHighest ?? AppColors.panel),
+      'card': _hex(scheme?.surface ?? AppColors.card),
+      'border': _hex(scheme?.outlineVariant ?? AppColors.border),
+      'primary': _hex(scheme?.primary ?? AppColors.primary),
+      'accent': _hex(AppColors.cyan),
+      'success': _hex(AppColors.success),
+      'warning': _hex(AppColors.warning),
+      'danger': _hex(AppColors.danger),
+      'fg': _hex(scheme?.onSurface ?? AppColors.foreground),
+      'muted': _hex(scheme?.onSurfaceVariant ?? AppColors.muted),
+    };
+  }
 
   /// A JSON stylesheet (rules + shared text/padding helpers) that [ElpianVmWidget]
   /// loads via its `stylesheet` parameter. See JsonStylesheetParser.
-  static Map<String, dynamic> stylesheet() {
-    final t = _tokens();
+  static Map<String, dynamic> stylesheet([ThemeData? theme]) {
+    final t = _tokens(theme);
     return {
       'rules': [
         for (final entry in t.entries)
@@ -62,7 +67,7 @@ class MiniappTheme {
           'selector': '.btn-primary',
           'styles': {
             'backgroundColor': t['primary'] ?? '',
-            'color': '#FFFFFF',
+            'color': _hex(theme?.colorScheme.onPrimary ?? Colors.white),
             'borderRadius': '8'
           },
         },

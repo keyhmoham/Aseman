@@ -26,7 +26,7 @@ class FeaturePage extends StatelessWidget {
     final compact = MediaQuery.sizeOf(context).width < Breakpoints.compact;
     final heading = _Heading(title, subtitle);
     return Material(
-      color: AppColors.background,
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: Column(children: [
         Padding(
           padding: EdgeInsets.fromLTRB(
@@ -80,6 +80,8 @@ class _Heading extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 27, fontWeight: FontWeight.w800, letterSpacing: -.5)),
         const SizedBox(height: 4),
-        Text(subtitle, style: const TextStyle(color: AppColors.muted)),
+        Text(subtitle,
+            style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ]);
 }

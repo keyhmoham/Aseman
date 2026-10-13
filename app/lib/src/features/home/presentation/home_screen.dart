@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_surfaces.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/post.dart';
 import '../../../data/repositories/market_repository.dart';
@@ -111,11 +112,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Center(child: CircularProgressIndicator()),
                         )
                       else if (_feed.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.all(24),
+                        Padding(
+                          padding: const EdgeInsets.all(24),
                           child: Center(
                               child: Text('No platform posts yet.',
-                                  style: TextStyle(color: AppColors.muted))),
+                                  style: TextStyle(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant))),
                         )
                       else
                         ..._feed.map((p) => _FeedCard.fromPost(p)),
@@ -139,12 +143,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                 AppPanel(
                                     title: 'Active agents',
                                     child: _bots.isEmpty
-                                        ? const Padding(
-                                            padding: EdgeInsets.all(12),
+                                        ? Padding(
+                                            padding: const EdgeInsets.all(12),
                                             child: Text('No agents yet',
                                                 style: TextStyle(
                                                     fontSize: 11,
-                                                    color: AppColors.muted)))
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .onSurfaceVariant)))
                                         : Column(
                                             children: _bots
                                                 .where((b) => b.isAgent)
@@ -154,7 +160,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                                     b.status,
                                                     b.status == 'running'
                                                         ? AppColors.success
-                                                        : AppColors.muted))
+                                                        : Theme.of(context)
+                                                            .colorScheme
+                                                            .onSurfaceVariant))
                                                 .toList())),
                               ])),
                     ]);
@@ -171,10 +179,7 @@ class _MarketTile extends StatelessWidget {
         width: 165,
         margin: const EdgeInsets.only(right: 10),
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-            color: AppColors.panel,
-            borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: AppColors.border)),
+        decoration: AppSurfaces.cardDecoration(context),
         child: Row(children: [
           AppAvatar(quote.symbol[0], color: quote.color),
           const SizedBox(width: 8),
@@ -188,8 +193,9 @@ class _MarketTile extends StatelessWidget {
                 Text(quote.price,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style:
-                        const TextStyle(fontSize: 11, color: AppColors.muted)),
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 Text('${quote.change > 0 ? '+' : ''}${quote.change}%',
                     style: TextStyle(
                         color: quote.change > 0
@@ -228,10 +234,7 @@ class _FeedCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-            color: AppColors.panel,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.border)),
+        decoration: AppSurfaces.cardDecoration(context),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           AppAvatar(initials, color: color),
           const SizedBox(width: 13),
@@ -249,13 +252,18 @@ class _FeedCard extends StatelessWidget {
                 Text(body, style: const TextStyle(height: 1.5)),
                 const SizedBox(height: 12),
                 Row(children: [
-                  const Icon(Icons.favorite_border_rounded,
-                      color: AppColors.muted, size: 18),
+                  Icon(Icons.favorite_border_rounded,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      size: 18),
                   const SizedBox(width: 5),
-                  Text(likes, style: const TextStyle(color: AppColors.muted)),
+                  Text(likes,
+                      style: TextStyle(
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant)),
                   const SizedBox(width: 18),
-                  const Icon(Icons.chat_bubble_outline_rounded,
-                      color: AppColors.muted, size: 17),
+                  Icon(Icons.chat_bubble_outline_rounded,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      size: 17),
                 ])
               ]))
         ]),

@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/auth/federated_sign_in.dart';
 import '../../../core/network/session_controller.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_brand.dart';
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
@@ -288,10 +287,9 @@ class _AuthScreenState extends State<AuthScreen>
                       const SizedBox(height: 4),
                       Text(
                         'Your federated agentic workspace',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(color: AppColors.muted),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant),
                       ),
                       const SizedBox(height: 28),
                       _panel(context, scheme),

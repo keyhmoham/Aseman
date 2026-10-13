@@ -8,6 +8,7 @@ import '../../../../data/models/bot.dart';
 import '../../../../shared/widgets/app_form.dart';
 import '../../../../shared/widgets/app_inputs.dart';
 import '../../../../shared/widgets/mini_tag.dart';
+import '../../../../shared/widgets/overlay_panels.dart';
 import '../../../../shared/widgets/panel_header.dart';
 
 /// Opens the per-room routines manager as a sheet/modal. Lists, creates,
@@ -25,29 +26,7 @@ Future<void> showRoutinesSheet(
     roomId: roomId,
     roomName: roomName,
   );
-  if (MediaQuery.sizeOf(context).width < 820) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-      builder: (_) => FractionallySizedBox(heightFactor: .94, child: panel),
-    );
-  }
-  return showDialog<void>(
-    context: context,
-    builder: (_) => Dialog(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 780, maxHeight: 820),
-        child: panel,
-      ),
-    ),
-  );
+  return showAdaptivePanel<void>(context, panel, breakpoint: 820);
 }
 
 class RoutinesPanel extends StatefulWidget {
@@ -370,15 +349,17 @@ class _NextRunBanner extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: Text.rich(TextSpan(children: [
-            const TextSpan(
+            TextSpan(
                 text: 'Next run · ',
-                style: TextStyle(fontSize: 10, color: AppColors.muted)),
+                style: TextStyle(
+                    fontSize: 10,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
             TextSpan(
                 text: name,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.foreground)),
+                    color: Theme.of(context).colorScheme.onSurface)),
             TextSpan(
                 text: '  ${next == null ? '—' : fmtRel(next, now)}',
                 style: const TextStyle(
@@ -559,15 +540,18 @@ class _RoutineCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 7),
             child: Row(children: [
-              const Icon(Icons.smart_toy_outlined,
-                  size: 13, color: AppColors.muted),
+              Icon(Icons.smart_toy_outlined,
+                  size: 13,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
               const SizedBox(width: 5),
               Flexible(
                   child: Text('Target agent $target',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 9.5, color: AppColors.muted))),
+                      style: TextStyle(
+                          fontSize: 9.5,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant))),
             ]),
           ),
         const SizedBox(height: 9),
@@ -602,7 +586,9 @@ class _RoutineCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text('${(progress * 100).round()}% until next run',
-              style: const TextStyle(fontSize: 9, color: AppColors.muted)),
+              style: TextStyle(
+                  fontSize: 9,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
         ],
         if (lastResult.isNotEmpty) ...[
           const SizedBox(height: 9),
@@ -619,17 +605,19 @@ class _RoutineCard extends StatelessWidget {
                       ? Icons.error_outline_rounded
                       : Icons.receipt_long_rounded,
                   size: 14,
-                  color:
-                      status == 'failed' ? AppColors.danger : AppColors.muted),
+                  color: status == 'failed'
+                      ? AppColors.danger
+                      : Theme.of(context).colorScheme.onSurfaceVariant),
               const SizedBox(width: 7),
               Expanded(
                   child: Text(lastResult,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 9.5,
                           height: 1.35,
-                          color: AppColors.muted))),
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant))),
             ]),
           ),
         ],
@@ -670,7 +658,9 @@ class _MetaChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = emphasize ? AppColors.primary : AppColors.muted;
+    final color = emphasize
+        ? AppColors.primary
+        : Theme.of(context).colorScheme.onSurfaceVariant;
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Icon(icon, size: 13, color: color),
       const SizedBox(width: 4),

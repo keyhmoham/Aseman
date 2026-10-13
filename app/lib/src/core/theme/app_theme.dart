@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 import 'app_shape.dart';
+import 'app_surfaces.dart';
 
 abstract final class AppTheme {
   static ThemeData get dark => _theme(Brightness.dark, AppColors.primary);
@@ -37,18 +38,18 @@ abstract final class AppTheme {
             borderRadius: BorderRadius.circular(24),
             borderSide: BorderSide(color: scheme.outlineVariant)),
       ),
-      navigationBarTheme: const NavigationBarThemeData(
-        backgroundColor: AppColors.navigation,
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: scheme.surfaceContainer,
         height: 66,
       ),
-      dividerTheme: const DividerThemeData(color: AppColors.border),
+      dividerTheme: DividerThemeData(color: scheme.outlineVariant),
       cardTheme: CardThemeData(
-          color: scheme.surface,
+          color: AppSurfaces.card(scheme),
+          surfaceTintColor: Colors.transparent,
           elevation: 0,
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(28),
-              side: BorderSide(
-                  color: scheme.outlineVariant.withValues(alpha: .55)))),
+              borderRadius: BorderRadius.circular(AppShape.card),
+              side: BorderSide(color: AppSurfaces.cardBorder(scheme)))),
     ));
   }
 }
@@ -61,6 +62,13 @@ ThemeData _expressive(ThemeData base) {
   // Derive every text style from the app's own so it keeps its font family.
   final label = base.textTheme.labelLarge ?? const TextStyle();
   const stadium = StadiumBorder();
+  final overlay = AppSurfaces.overlay(scheme);
+  final menuStyle = MenuStyle(
+    backgroundColor: WidgetStatePropertyAll(overlay),
+    surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+    shape: WidgetStatePropertyAll(RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppShape.control))),
+  );
   final pill = ButtonStyle(
     shape: const WidgetStatePropertyAll(stadium),
     padding: const WidgetStatePropertyAll(
@@ -94,23 +102,30 @@ ThemeData _expressive(ThemeData base) {
             EdgeInsets.symmetric(horizontal: 14, vertical: 12)),
       ),
     ),
+    // Every modal surface shares one background, scrim and corner radius
+    // (see AppSurfaces), so call sites never pass their own.
     dialogTheme: DialogThemeData(
-      backgroundColor: scheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.card)),
+      backgroundColor: overlay,
+      surfaceTintColor: Colors.transparent,
+      barrierColor: AppSurfaces.barrier,
+      shape: AppSurfaces.overlayShape,
     ),
     bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: scheme.surfaceContainerHigh,
+      backgroundColor: overlay,
+      modalBackgroundColor: overlay,
+      surfaceTintColor: Colors.transparent,
+      modalBarrierColor: AppSurfaces.barrier,
       showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.vertical(top: Radius.circular(AppShape.card))),
+      shape: AppSurfaces.sheetShape,
     ),
     popupMenuTheme: PopupMenuThemeData(
-      color: scheme.surfaceContainerHigh,
+      color: overlay,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppShape.control)),
     ),
+    menuTheme: MenuThemeData(style: menuStyle),
+    dropdownMenuTheme: DropdownMenuThemeData(menuStyle: menuStyle),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(

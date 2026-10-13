@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_surfaces.dart';
 
 class StatCard extends StatelessWidget {
   const StatCard(
@@ -18,13 +18,12 @@ class StatCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         constraints: const BoxConstraints(minWidth: 180),
         padding: const EdgeInsets.all(17),
-        decoration: BoxDecoration(
-            color: AppColors.panel,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.border)),
+        decoration: AppSurfaces.cardDecoration(context),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(title,
-              style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 12)),
           const SizedBox(height: 9),
           Text(value,
               style:

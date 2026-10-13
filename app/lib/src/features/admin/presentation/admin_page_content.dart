@@ -1897,7 +1897,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                         : Icons.cloud_done_rounded,
                     size: 18,
                     color: _map(m['_provider'])['enabled'] == false
-                        ? AppColors.muted
+                        ? Theme.of(context).colorScheme.onSurfaceVariant
                         : AppColors.success),
                 const SizedBox(width: 8),
                 Expanded(
@@ -2783,8 +2783,8 @@ class _AppPageContentState extends State<AdminPageContent> {
                 Expanded(
                   child: Text(
                       '${rows.length} lines${all.length >= 500 ? ' · showing latest' : ''}',
-                      style: const TextStyle(
-                          color: AppColors.muted,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 12,
                           fontFamily: 'monospace')),
                 ),
@@ -2792,10 +2792,13 @@ class _AppPageContentState extends State<AdminPageContent> {
             ),
             Expanded(
               child: rows.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text(
                           'No lines yet for this filter. Reproduce the problem, then refresh.',
-                          style: TextStyle(color: AppColors.muted)))
+                          style: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant)))
                   : ListView.builder(
                       padding: const EdgeInsets.all(14),
                       itemCount: rows.length,
@@ -2807,7 +2810,9 @@ class _AppPageContentState extends State<AdminPageContent> {
                             : level == 'warn'
                                 ? AppColors.warning
                                 : level == 'debug'
-                                    ? AppColors.muted
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant
                                     : const Color(0xFFD3DEEA);
                         return SelectableText(
                           '${_time(line['time'])} ${level.toUpperCase().padRight(5)} ${line['logger'] == null ? '' : '[${line['logger']}] '}${line['message'] ?? ''}',
@@ -5146,8 +5151,11 @@ Widget _primaryCell(String primary, String secondary) => Column(
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w800)),
           if (secondary.isNotEmpty)
-            Text(secondary,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 10, color: AppColors.muted))
+            Builder(
+                builder: (context) => Text(secondary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant)))
         ]);

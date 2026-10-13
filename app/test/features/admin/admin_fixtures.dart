@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/services.dart';
 import 'package:tradera/src/data/models/llm_provider.dart';
 
 import '../../fake_tradera_service.dart';
@@ -503,4 +506,32 @@ class AdminFakeService extends FakeTraderaService {
 
   @override
   Future<List<LlmKind>> adminLlmKinds() async => const [];
+}
+
+/// Loads Roboto and the Material icons so screenshots show real text.
+Future<void> loadFonts() async {
+  final root = '${Platform.environment['FLUTTER_ROOT']}'
+      '/bin/cache/artifacts/material_fonts';
+  Future<void> load(String family, List<String> files) async {
+    final loader = FontLoader(family);
+    for (final f in files) {
+      final bytes = File('$root/$f').readAsBytesSync();
+      loader.addFont(Future.value(ByteData.view(bytes.buffer)));
+    }
+    await loader.load();
+  }
+
+  await load('Roboto', [
+    'Roboto-Regular.ttf',
+    'Roboto-Medium.ttf',
+    'Roboto-Bold.ttf',
+    'Roboto-Black.ttf'
+  ]);
+  await load('sans-serif', [
+    'Roboto-Regular.ttf',
+    'Roboto-Medium.ttf',
+    'Roboto-Bold.ttf',
+    'Roboto-Black.ttf'
+  ]);
+  await load('MaterialIcons', ['MaterialIcons-Regular.otf']);
 }

@@ -1,11 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tradera/src/app_dependencies.dart';
 import 'package:tradera/src/core/theme/app_theme.dart';
 import 'package:tradera/src/features/admin/presentation/admin_screen.dart';
+import 'package:tradera/src/features/admin/presentation/admin_widgets.dart';
 
 import 'admin_fixtures.dart';
 
@@ -43,33 +43,6 @@ const sizes = {
 
 /// Writes screenshots when ADMIN_SHOTS names a directory.
 final shots = Platform.environment['ADMIN_SHOTS'];
-
-Future<void> loadFonts() async {
-  final root = '${Platform.environment['FLUTTER_ROOT']}'
-      '/bin/cache/artifacts/material_fonts';
-  Future<void> load(String family, List<String> files) async {
-    final loader = FontLoader(family);
-    for (final f in files) {
-      final bytes = File('$root/$f').readAsBytesSync();
-      loader.addFont(Future.value(ByteData.view(bytes.buffer)));
-    }
-    await loader.load();
-  }
-
-  await load('Roboto', [
-    'Roboto-Regular.ttf',
-    'Roboto-Medium.ttf',
-    'Roboto-Bold.ttf',
-    'Roboto-Black.ttf'
-  ]);
-  await load('sans-serif', [
-    'Roboto-Regular.ttf',
-    'Roboto-Medium.ttf',
-    'Roboto-Bold.ttf',
-    'Roboto-Black.ttf'
-  ]);
-  await load('MaterialIcons', ['MaterialIcons-Regular.otf']);
-}
 
 void main() {
   setUpAll(() async {
@@ -144,18 +117,24 @@ void main() {
       'user dialog': (
         'Users',
         (t) async {
-          await t.ensureVisible(find.text('Ada Lovelace').first);
+          final row = find.descendant(
+              of: find.byType(AdminDataTable),
+              matching: find.text('Ada Lovelace'));
+          await t.ensureVisible(row.first);
           await t.pump();
-          await t.tap(find.text('Ada Lovelace').first);
+          await t.tap(row.first);
           await settle(t);
         }
       ),
       'project dialog': (
         'Projects',
         (t) async {
-          await t.ensureVisible(find.textContaining('A project with').first);
+          final row = find.descendant(
+              of: find.byType(AdminDataTable),
+              matching: find.textContaining('A project with'));
+          await t.ensureVisible(row.first);
           await t.pump();
-          await t.tap(find.textContaining('A project with').first);
+          await t.tap(row.first);
           await settle(t);
         }
       ),

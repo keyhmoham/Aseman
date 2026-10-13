@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tradera/src/core/network/api_client.dart';
 import 'package:tradera/src/data/models/llm_provider.dart';
 import 'package:tradera/src/data/services/tradera_service.dart';
+import 'package:tradera/src/features/admin/presentation/admin_widgets.dart';
 import 'package:tradera/src/features/admin/presentation/llm_providers_tab.dart';
 import 'package:tradera/src/features/agents/presentation/agent_create_form.dart';
 
@@ -169,15 +170,17 @@ void main() {
 
     expect(find.text('OpenAI'), findsOneWidget);
     expect(find.text('DEFAULT'), findsOneWidget);
-    expect(find.text('2'), findsOneWidget);
-    expect(find.textContaining('managed under Models'), findsOneWidget);
+    // The provider card lists how many models it serves.
+    expect(
+        find.descendant(
+            of: find.byType(AdminKeyValue), matching: find.text('2')),
+        findsOneWidget);
+    expect(find.textContaining('set under Models'), findsOneWidget);
 
     await tester.tap(find.text('Add provider'));
     await tester.pumpAndSettle();
     // Picking a kind fills its preset name and endpoint.
-    await tester.tap(find.byType(DropdownButtonFormField<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('xAI Grok').last);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'xAI Grok'));
     await tester.pumpAndSettle();
     await tester.enterText(
         find.widgetWithText(TextField, 'API key'), 'xai-secret');

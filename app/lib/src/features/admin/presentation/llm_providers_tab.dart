@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../data/models/llm_provider.dart';
 import '../../../data/services/tradera_service.dart';
 import '../../../shared/widgets/status_tag.dart';
+import 'admin_inputs.dart';
 import 'admin_widgets.dart';
 
 /// Admin panel section managing the node's LLM providers: API keys (owned by
@@ -122,86 +123,150 @@ class _LlmProvidersTabState extends State<LlmProvidersTab> {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
       return Center(
-          child: Text(_error!, style: TextStyle(color: scheme.error)));
+          child: AdminEmptyState('Could not load providers', _error!,
+              icon: Icons.cloud_off_rounded));
     }
+    final enabled = _providers.where((p) => p.enabled).length;
+    final missing = _providers.where((p) => !p.hasKey).length;
+    final models = _providers.fold<int>(0, (sum, p) => sum + p.models.length);
     return ListView(
-      padding: const EdgeInsets.only(top: 4, bottom: 18),
+      padding: const EdgeInsets.only(top: 8, bottom: 48),
       children: [
-        Row(children: [
-          Expanded(
-            child: Text(
-              'Agents run on these providers. Token usage is charged to the '
-              'agent’s users with the prices below (credits per 1M tokens) '
-              'and paid to your wallet.',
-              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
-            ),
-          ),
-          const SizedBox(width: 10),
-          FilledButton.icon(
+        AdminGrid(children: [
+          AdminStatCard(
+              label: 'Providers',
+              value: '${_providers.length}',
+              icon: Icons.hub_rounded,
+              hint: '$enabled enabled',
+              progress: _providers.isEmpty ? 0 : enabled / _providers.length),
+          AdminStatCard(
+              label: 'Models',
+              value: '$models',
+              icon: Icons.memory_rounded,
+              tone: AppColors.cyan,
+              hint: 'Prices are set under Models'),
+          AdminStatCard(
+              label: 'Missing keys',
+              value: '$missing',
+              icon: Icons.key_off_rounded,
+              tone: missing > 0 ? AppColors.danger : AppColors.success,
+              hint:
+                  missing > 0 ? 'Agents cannot use these' : 'Every key is set'),
+        ]),
+        const SizedBox(height: 18),
+        LayoutBuilder(builder: (context, constraints) {
+          final text = Text(
+            'Agents run on these providers. Token usage is charged to the '
+            'agent’s users at each model’s price and paid to your wallet.',
+            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+          );
+          final add = FilledButton.icon(
             onPressed: () => _edit(),
             icon: const Icon(Icons.add_rounded, size: 18),
             label: const Text('Add provider'),
-          ),
-        ]),
-        const SizedBox(height: 12),
-        AdminDataTable(
-          empty:
-              'No providers yet. Agents need an enabled provider with an API key.',
-          columns: const [
-            AdminTableColumn('Provider', width: 180),
-            AdminTableColumn('Endpoint', width: 270),
-            AdminTableColumn('API key', width: 120),
-            AdminTableColumn('Models', width: 80, align: TextAlign.right),
-            AdminTableColumn('Enabled', width: 110),
-            AdminTableColumn('Default', width: 130),
-            AdminTableColumn('Actions', width: 120, align: TextAlign.right),
-          ],
-          rows: [
-            for (final p in _providers)
-              [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(p.name,
-                      style: const TextStyle(fontWeight: FontWeight.w800)),
-                  Text(p.kind,
-                      style: TextStyle(
-                          fontSize: 10, color: scheme.onSurfaceVariant)),
-                ]),
-                Text(p.baseUrl.isEmpty ? 'Default for the kind' : p.baseUrl,
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text(
-                    p.hasKey
-                        ? (p.keyPreview.isEmpty ? 'Set' : p.keyPreview)
-                        : 'Missing',
-                    style: TextStyle(
-                        color: p.hasKey ? scheme.onSurface : AppColors.danger,
-                        fontWeight: FontWeight.w700)),
-                Text('${p.models.length}', textAlign: TextAlign.right),
-                TextButton(
-                    onPressed: () => _quick(p, enabled: !p.enabled),
-                    child: Text(p.enabled ? 'Enabled' : 'Disabled')),
-                p.isDefault
-                    ? const StatusTag('DEFAULT', AppColors.primary)
-                    : TextButton(
-                        onPressed:
-                            p.enabled ? () => _quick(p, isDefault: true) : null,
-                        child: const Text('Make default')),
-                Wrap(alignment: WrapAlignment.end, children: [
-                  IconButton(
-                      tooltip: 'Edit',
-                      onPressed: () => _edit(p),
-                      icon: const Icon(Icons.edit_outlined, size: 18)),
-                  IconButton(
-                      tooltip: 'Delete',
-                      onPressed: () => _delete(p),
-                      icon: const Icon(Icons.delete_outline_rounded, size: 18)),
-                ]),
-              ],
-          ],
-        ),
-        const SizedBox(height: 10),
-        Text('Model names and token prices are managed under Models.',
-            style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
+          );
+          if (constraints.maxWidth < 560) {
+            return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [text, const SizedBox(height: 10), add]);
+          }
+          return Row(children: [
+            Expanded(child: text),
+            const SizedBox(width: 12),
+            add,
+          ]);
+        }),
+        const SizedBox(height: 14),
+        if (_providers.isEmpty)
+          const AdminEmptyState('No providers yet',
+              'Agents need an enabled provider with an API key.',
+              icon: Icons.hub_outlined)
+        else
+          AdminGrid(maxColumns: 2, minTileWidth: 360, children: [
+            for (final p in _providers) _card(p),
+          ]),
       ],
+    );
+  }
+
+  Widget _card(LlmProvider p) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AdminShape.card)),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 12, 14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            AdminAvatar(p.name, size: 44, icon: Icons.hub_rounded),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(p.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w800)),
+                    Text(p.kind,
+                        style: TextStyle(
+                            fontSize: 12, color: scheme.onSurfaceVariant)),
+                  ]),
+            ),
+            if (p.isDefault) const StatusTag('DEFAULT', AppColors.primary),
+            Switch(
+              value: p.enabled,
+              thumbIcon: WidgetStateProperty.resolveWith((states) => Icon(
+                  states.contains(WidgetState.selected)
+                      ? Icons.check_rounded
+                      : Icons.close_rounded)),
+              onChanged: (v) => _quick(p, enabled: v),
+            ),
+          ]),
+          const SizedBox(height: 14),
+          AdminKeyValue('Endpoint',
+              p.baseUrl.isEmpty ? 'Default for the kind' : p.baseUrl),
+          Row(children: [
+            Expanded(
+                child: Text('API key',
+                    style: TextStyle(
+                        fontSize: 13, color: scheme.onSurfaceVariant))),
+            AdminStatusPill(p.hasKey ? 'ok' : 'error'),
+            const SizedBox(width: 8),
+            Text(
+                p.hasKey
+                    ? (p.keyPreview.isEmpty ? 'Set' : p.keyPreview)
+                    : 'Missing',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: p.hasKey ? scheme.onSurface : AppColors.danger)),
+          ]),
+          const SizedBox(height: 4),
+          AdminKeyValue('Models', '${p.models.length}'),
+          const SizedBox(height: 4),
+          Row(children: [
+            if (!p.isDefault)
+              TextButton.icon(
+                  onPressed:
+                      p.enabled ? () => _quick(p, isDefault: true) : null,
+                  icon: const Icon(Icons.star_outline_rounded, size: 18),
+                  label: const Text('Make default')),
+            const Spacer(),
+            IconButton(
+                tooltip: 'Edit',
+                onPressed: () => _edit(p),
+                icon: const Icon(Icons.edit_outlined, size: 20)),
+            IconButton(
+                tooltip: 'Delete',
+                onPressed: () => _delete(p),
+                icon: const Icon(Icons.delete_outline_rounded, size: 20)),
+          ]),
+        ]),
+      ),
     );
   }
 }
@@ -356,20 +421,27 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Dialog(
-      backgroundColor: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 720),
+        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 780),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
+          padding: const EdgeInsets.fromLTRB(24, 22, 20, 18),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Row(children: [
-              const Icon(Icons.psychology_alt_outlined, size: 26),
-              const SizedBox(width: 10),
+              Container(
+                width: 48,
+                height: 48,
+                decoration: ShapeDecoration(
+                    color: scheme.primaryContainer,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16))),
+                child:
+                    Icon(Icons.hub_rounded, color: scheme.onPrimaryContainer),
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Text(editing ? 'Edit LLM provider' : 'Add LLM provider',
                     style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.w900)),
+                        fontSize: 22, fontWeight: FontWeight.w800)),
               ),
               IconButton(
                   onPressed: () => Navigator.pop(context),
@@ -381,22 +453,19 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      DropdownButtonFormField<String>(
-                        initialValue: kind,
-                        decoration: const InputDecoration(
-                            labelText: 'Provider',
-                            border: OutlineInputBorder(),
-                            isDense: true),
-                        items: [
+                      AdminChoiceField<String>(
+                        label: 'Provider',
+                        value: kind,
+                        onChanged: _selectKind,
+                        choices: [
                           for (final k in widget.kinds)
-                            DropdownMenuItem(
-                                value: k.kind, child: Text(k.name)),
+                            AdminChoice(k.kind, k.name,
+                                icon: Icons.hub_outlined),
                           if (widget.kinds.every((k) => k.kind != kind))
-                            DropdownMenuItem(value: kind, child: Text(kind)),
+                            AdminChoice(kind, kind, icon: Icons.hub_outlined),
                         ],
-                        onChanged: (v) => v == null ? null : _selectKind(v),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 18),
                       _field('Display name', name),
                       const SizedBox(height: 10),
                       _field('Base URL (OpenAI-compatible)', baseUrl,
@@ -411,25 +480,25 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                             : 'Paste the provider API key',
                       ),
                       const SizedBox(height: 6),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Enabled',
-                            style: TextStyle(fontSize: 13)),
+                      const SizedBox(height: 10),
+                      AdminSwitchCard(
+                        icon: Icons.power_rounded,
+                        title: 'Enabled',
+                        subtitle: 'Agents can run on this provider.',
                         value: enabled,
                         onChanged: (v) => setState(() => enabled = v),
                       ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Default provider',
-                            style: TextStyle(fontSize: 13)),
-                        subtitle: const Text(
+                      const SizedBox(height: 10),
+                      AdminSwitchCard(
+                        icon: Icons.star_rounded,
+                        title: 'Default provider',
+                        subtitle:
                             'Used by agents created without an explicit provider.',
-                            style: TextStyle(fontSize: 10)),
                         value: isDefault,
                         onChanged: (v) => setState(() => isDefault = v),
                       ),
-                      const SizedBox(height: 8),
-                      _label('MODELS & TOKEN PRICES (CREDITS PER 1M TOKENS)'),
+                      const SizedBox(height: 18),
+                      _label('Models and token prices (credits per 1M tokens)'),
                       for (var i = 0; i < rows.length; i++)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
@@ -482,7 +551,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      _label('IMAGE GENERATION (OPTIONAL)'),
+                      _label('Image generation (optional)'),
                       Row(children: [
                         Expanded(
                             flex: 3,
@@ -523,11 +592,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   Widget _label(String text) => Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(text,
-          style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.1,
-              color: Theme.of(context).colorScheme.primary)));
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)));
 
   Widget _field(String label, TextEditingController c,
           {String? hint, bool obscure = false, bool number = false}) =>
@@ -537,11 +602,6 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         keyboardType: number
             ? const TextInputType.numberWithOptions(decimal: true)
             : null,
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          border: const OutlineInputBorder(),
-          isDense: true,
-        ),
+        decoration: InputDecoration(labelText: label, hintText: hint),
       );
 }

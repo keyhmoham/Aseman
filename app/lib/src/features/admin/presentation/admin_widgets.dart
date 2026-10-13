@@ -4,6 +4,103 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 
+/// Building blocks of the admin console, drawn in the Material 3 Expressive
+/// style: tonal surfaces instead of outlines, generous corner radii, bold
+/// display numbers and charts that ease in when their data arrives.
+
+/// Corner radii shared by every admin surface.
+abstract final class AdminShape {
+  static const card = 28.0;
+  static const inner = 20.0;
+  static const control = 16.0;
+}
+
+const _ok = {
+  'approved',
+  'credited',
+  'paid',
+  'healthy',
+  'running',
+  'ready',
+  'live',
+  'started',
+  'awake',
+  'ok',
+  'listed',
+  'loaded',
+  'initialized',
+  'active',
+  'done',
+  'completed',
+  'succeeded',
+};
+const _warn = {
+  'pending',
+  'queued',
+  'installing',
+  'provisioning',
+  'waiting',
+  'working',
+  'warn',
+  'sandbox',
+  'asleep',
+  'needs setup',
+  'review',
+};
+const _bad = {
+  'denied',
+  'failed',
+  'rejected',
+  'reversed',
+  'error',
+  'fail',
+  'disabled',
+  'unreachable',
+};
+
+/// The semantic tone of a backend status word.
+enum AdminTone { ok, warn, bad, neutral }
+
+AdminTone adminTone(String status) {
+  final s = status.toLowerCase().trim();
+  if (_ok.contains(s)) return AdminTone.ok;
+  if (_warn.contains(s)) return AdminTone.warn;
+  if (_bad.contains(s)) return AdminTone.bad;
+  return AdminTone.neutral;
+}
+
+Color adminToneColor(BuildContext context, AdminTone tone) => switch (tone) {
+      AdminTone.ok => AppColors.success,
+      AdminTone.warn => AppColors.warning,
+      AdminTone.bad => AppColors.danger,
+      AdminTone.neutral => Theme.of(context).colorScheme.onSurfaceVariant,
+    };
+
+IconData adminToneIcon(AdminTone tone) => switch (tone) {
+      AdminTone.ok => Icons.check_circle_rounded,
+      AdminTone.warn => Icons.error_rounded,
+      AdminTone.bad => Icons.cancel_rounded,
+      AdminTone.neutral => Icons.radio_button_unchecked_rounded,
+    };
+
+/// Categorical colours for chart series, in a fixed order so the same slot
+/// always means the same colour on a page.
+List<Color> adminPalette(BuildContext context) {
+  final scheme = Theme.of(context).colorScheme;
+  return [
+    scheme.primary,
+    AppColors.cyan,
+    AppColors.success,
+    AppColors.warning,
+    scheme.tertiary,
+    AppColors.danger,
+    const Color(0xFFFF8AD8),
+    const Color(0xFFA5E36B),
+  ];
+}
+
+/// A key figure. [progress] adds a thin meter under the value, [footer] any
+/// small visual (a sparkline, a stacked bar).
 class AdminStatCard extends StatelessWidget {
   const AdminStatCard({
     super.key,
@@ -13,6 +110,8 @@ class AdminStatCard extends StatelessWidget {
     this.icon,
     this.onTap,
     this.tone,
+    this.progress,
+    this.footer,
   });
 
   final String label;
@@ -21,36 +120,55 @@ class AdminStatCard extends StatelessWidget {
   final IconData? icon;
   final VoidCallback? onTap;
   final Color? tone;
+  final double? progress;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final card = Container(
-      constraints: const BoxConstraints(minWidth: 170, minHeight: 116),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .65)),
-        borderRadius: BorderRadius.circular(14),
-      ),
+    final accent = tone ?? scheme.primary;
+    final body = Padding(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           if (icon != null) ...[
-            Icon(icon, size: 17, color: tone ?? scheme.primary),
-            const SizedBox(width: 7),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: ShapeDecoration(
+                color: accent.withValues(alpha: .16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: Icon(icon, size: 19, color: accent),
+            ),
+            const SizedBox(width: 10),
           ],
           Expanded(
             child: Text(label,
-                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurfaceVariant)),
           ),
           if (onTap != null)
-            Icon(Icons.arrow_forward_rounded,
-                size: 15, color: scheme.onSurfaceVariant),
+            Icon(Icons.arrow_outward_rounded,
+                size: 17, color: scheme.onSurfaceVariant),
         ]),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         // Live values cross-fade in place instead of re-rendering the card.
         AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
+          duration: const Duration(milliseconds: 260),
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+                position: Tween(begin: const Offset(0, .25), end: Offset.zero)
+                    .animate(CurvedAnimation(
+                        parent: animation, curve: Curves.easeOutCubic)),
+                child: child),
+          ),
           layoutBuilder: (current, previous) => Stack(
               alignment: Alignment.centerLeft,
               children: [...previous, if (current != null) current]),
@@ -59,31 +177,74 @@ class AdminStatCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 30,
                   height: 1.05,
-                  color: tone,
-                  fontWeight: FontWeight.w900)),
+                  letterSpacing: -.6,
+                  color: tone ?? scheme.onSurface,
+                  fontWeight: FontWeight.w800)),
         ),
+        if (progress != null) ...[
+          const SizedBox(height: 12),
+          AdminMeter(value: progress!, color: accent),
+        ],
         if (hint != null) ...[
-          const SizedBox(height: 7),
+          const SizedBox(height: 8),
           Text(hint!,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                  height: 1.25, fontSize: 11, color: scheme.onSurfaceVariant)),
+                  height: 1.3, fontSize: 12, color: scheme.onSurfaceVariant)),
         ],
+        if (footer != null) ...[const SizedBox(height: 12), footer!],
       ]),
     );
-    return onTap == null
-        ? card
-        : InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: onTap,
-            child: card,
-          );
+    return Material(
+      color: scheme.surfaceContainer,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AdminShape.inner + 4)),
+      child: onTap == null ? body : InkWell(onTap: onTap, child: body),
+    );
   }
 }
 
+/// A thin rounded progress meter that animates to [value] (0–1).
+class AdminMeter extends StatelessWidget {
+  const AdminMeter(
+      {super.key, required this.value, this.color, this.height = 8});
+  final double value;
+  final Color? color;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: value.isFinite ? value.clamp(0.0, 1.0) : 0.0),
+      duration: const Duration(milliseconds: 650),
+      curve: Curves.easeOutCubic,
+      builder: (context, v, _) => LayoutBuilder(
+        builder: (context, constraints) => Container(
+          height: height,
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(height),
+          ),
+          alignment: Alignment.centerLeft,
+          child: Container(
+            width: constraints.maxWidth * v,
+            decoration: BoxDecoration(
+              color: color ?? scheme.primary,
+              borderRadius: BorderRadius.circular(height),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A titled tonal surface grouping related content.
 class AdminSectionCard extends StatelessWidget {
   const AdminSectionCard({
     super.key,
@@ -91,55 +252,140 @@ class AdminSectionCard extends StatelessWidget {
     required this.child,
     this.subtitle,
     this.trailing,
-    this.padding = const EdgeInsets.all(16),
+    this.icon,
+    this.padding = const EdgeInsets.all(18),
   });
 
   final String title;
   final String? subtitle;
   final Widget? trailing;
+  final IconData? icon;
   final Widget child;
   final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Expanded(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title.toUpperCase(),
-                style: TextStyle(
-                    color: scheme.onSurfaceVariant,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: .8)),
-            if (subtitle != null) ...[
-              const SizedBox(height: 3),
-              Text(subtitle!,
-                  style:
-                      TextStyle(color: scheme.onSurfaceVariant, fontSize: 11)),
+    // A Material (not a decorated Container) so list tiles inside the card
+    // paint their ink and selection on the card itself.
+    return Material(
+      color: scheme.surfaceContainerLow,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AdminShape.card)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 14, 0),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            if (icon != null) ...[
+              Icon(icon, size: 20, color: scheme.primary),
+              const SizedBox(width: 10),
             ],
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: TextStyle(
+                            color: scheme.onSurface,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -.1)),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 3),
+                      Text(subtitle!,
+                          style: TextStyle(
+                              color: scheme.onSurfaceVariant,
+                              fontSize: 12,
+                              height: 1.3)),
+                    ],
+                  ]),
+            ),
+            if (trailing != null) trailing!,
           ]),
         ),
-        if (trailing != null) trailing!,
-      ]),
-      const SizedBox(height: 9),
-      // A Material (not a decorated Container) so list tiles inside the card
-      // paint their ink and selection on the card itself.
-      Material(
-        color: scheme.surfaceContainerLow,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          side: BorderSide(color: scheme.outlineVariant.withValues(alpha: .65)),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: SizedBox(
+        SizedBox(height: trailing == null ? 10 : 4),
+        SizedBox(
           width: double.infinity,
           child: Padding(padding: padding, child: child),
         ),
+      ]),
+    );
+  }
+}
+
+/// A prominent banner in the primary container colour.
+class AdminHeroCard extends StatelessWidget {
+  const AdminHeroCard({
+    super.key,
+    required this.title,
+    required this.message,
+    this.icon,
+    this.visual,
+    this.actions = const [],
+    this.tone,
+  });
+  final String title;
+  final String message;
+  final IconData? icon;
+  final Widget? visual;
+  final List<Widget> actions;
+  final Color? tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final background = tone == null
+        ? scheme.primaryContainer
+        : Color.alphaBlend(tone!.withValues(alpha: .22), scheme.surface);
+    final foreground =
+        tone == null ? scheme.onPrimaryContainer : scheme.onSurface;
+    final text = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, color: foreground, size: 28),
+            const SizedBox(height: 10),
+          ],
+          Text(title,
+              style: TextStyle(
+                  color: foreground,
+                  fontSize: 26,
+                  height: 1.1,
+                  letterSpacing: -.5,
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          Text(message,
+              style: TextStyle(
+                  color: foreground.withValues(alpha: .82),
+                  fontSize: 14,
+                  height: 1.35)),
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Wrap(spacing: 8, runSpacing: 8, children: actions),
+          ],
+        ]);
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AdminShape.card + 4),
       ),
-    ]);
+      child: LayoutBuilder(builder: (context, constraints) {
+        if (visual == null) return text;
+        if (constraints.maxWidth < 520) {
+          return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [text, const SizedBox(height: 18), visual!]);
+        }
+        return Row(children: [
+          Expanded(child: text),
+          const SizedBox(width: 24),
+          visual!,
+        ]);
+      }),
+    );
   }
 }
 
@@ -150,59 +396,64 @@ class AdminStatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final normalized = status.toLowerCase().trim();
-    final ok = const {
-      'approved',
-      'credited',
-      'paid',
-      'healthy',
-      'running',
-      'ready',
-      'live',
-      'started',
-      'awake',
-      'ok',
-      'listed',
-      'loaded',
-      'initialized',
-      'active'
-    }.contains(normalized);
-    final warn = const {
-      'pending',
-      'queued',
-      'installing',
-      'provisioning',
-      'waiting',
-      'working',
-      'warn',
-      'sandbox',
-      'asleep',
-      'needs setup'
-    }.contains(normalized);
-    final bad = const {
-      'denied',
-      'failed',
-      'rejected',
-      'reversed',
-      'error',
-      'fail',
-      'disabled'
-    }.contains(normalized);
-    final color = ok
-        ? AppColors.success
-        : warn
-            ? AppColors.warning
-            : bad
-                ? AppColors.danger
-                : Theme.of(context).colorScheme.onSurfaceVariant;
+    final color = adminToneColor(context, adminTone(normalized));
+    final label = normalized.isEmpty ? 'unknown' : normalized;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.fromLTRB(8, 4, 10, 4),
       decoration: BoxDecoration(
-          color: color.withValues(alpha: .13),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: .26))),
-      child: Text(normalized.isEmpty ? 'unknown' : normalized,
-          style: TextStyle(
-              color: color, fontSize: 10, fontWeight: FontWeight.w800)),
+          color: color.withValues(alpha: .15),
+          borderRadius: BorderRadius.circular(999)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text('${label[0].toUpperCase()}${label.substring(1)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+        ),
+      ]),
+    );
+  }
+}
+
+/// A round avatar with initials in a colour derived from [name], so the same
+/// person always gets the same colour.
+class AdminAvatar extends StatelessWidget {
+  const AdminAvatar(this.name, {super.key, this.size = 36, this.icon});
+  final String name;
+  final double size;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = adminPalette(context);
+    final clean = name.replaceAll(RegExp(r'[^A-Za-z0-9 ]'), ' ').trim();
+    final words = clean.split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+    final initials = words.isEmpty
+        ? '?'
+        : words.take(2).map((w) => w[0].toUpperCase()).join();
+    final color = palette[name.hashCode.abs() % palette.length];
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: ShapeDecoration(
+        color: color.withValues(alpha: .2),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(size * .36)),
+      ),
+      child: icon != null
+          ? Icon(icon, size: size * .5, color: color)
+          : Text(initials,
+              style: TextStyle(
+                  color: color,
+                  fontSize: size * .36,
+                  fontWeight: FontWeight.w800)),
     );
   }
 }
@@ -221,31 +472,114 @@ class AdminSearchField extends StatelessWidget {
   final Widget? trailing;
 
   @override
-  Widget build(BuildContext context) => Row(children: [
-        Expanded(
-          child: TextField(
-            controller: controller,
-            onChanged: onChanged,
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: hint,
-              prefixIcon: const Icon(Icons.search_rounded, size: 19),
-              suffixIcon: controller.text.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: 'Clear',
-                      onPressed: () {
-                        controller.clear();
-                        onChanged?.call('');
-                      },
-                      icon: const Icon(Icons.close_rounded, size: 18)),
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(children: [
+      Expanded(
+        child: TextField(
+          controller: controller,
+          onChanged: onChanged,
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: hint,
+            filled: true,
+            fillColor: scheme.surfaceContainerHigh,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+            prefixIcon: const Padding(
+              padding: EdgeInsets.only(left: 6),
+              child: Icon(Icons.search_rounded, size: 21),
             ),
+            suffixIcon: controller.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Clear',
+                    onPressed: () {
+                      controller.clear();
+                      onChanged?.call('');
+                    },
+                    icon: const Icon(Icons.close_rounded, size: 18)),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(999),
+                borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(999),
+                borderSide: BorderSide.none),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(999),
+                borderSide: BorderSide(color: scheme.primary, width: 2)),
           ),
         ),
-        if (trailing != null) ...[const SizedBox(width: 10), trailing!],
-      ]);
+      ),
+      if (trailing != null) ...[const SizedBox(width: 10), trailing!],
+    ]);
+  }
+}
+
+/// One option of an [AdminFilterChips] row.
+class AdminFilterOption<T> {
+  const AdminFilterOption(this.value, this.label, {this.count, this.icon});
+  final T value;
+  final String label;
+  final int? count;
+  final IconData? icon;
+}
+
+/// A single-choice row of filter chips with optional counts. Scrolls
+/// sideways when it does not fit instead of wrapping onto many lines.
+class AdminFilterChips<T> extends StatelessWidget {
+  const AdminFilterChips({
+    super.key,
+    required this.options,
+    required this.selected,
+    required this.onSelected,
+  });
+  final List<AdminFilterOption<T>> options;
+  final T selected;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: [
+        for (final option in options) ...[
+          ChoiceChip(
+            selected: option.value == selected,
+            showCheckmark: false,
+            avatar: option.icon == null
+                ? null
+                : Icon(option.icon,
+                    size: 17,
+                    color: option.value == selected
+                        ? scheme.onSecondaryContainer
+                        : scheme.onSurfaceVariant),
+            label: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(option.label),
+              if (option.count != null) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                      color: option.value == selected
+                          ? scheme.onSecondaryContainer.withValues(alpha: .14)
+                          : scheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(999)),
+                  child: Text('${option.count}',
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ]),
+            onSelected: (_) => onSelected(option.value),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ]),
+    );
+  }
 }
 
 class AdminTableColumn {
@@ -275,16 +609,16 @@ class AdminDataTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // Rows have 14 px horizontal padding on both sides. Include it in the
+    // Rows have 16 px horizontal padding on both sides. Include it in the
     // scroll extent so fixed-width cells never overflow the row itself.
-    final natural = columns.fold<double>(0, (sum, col) => sum + col.width) + 28;
+    final natural = columns.fold<double>(0, (sum, col) => sum + col.width) + 32;
     // Column widths are minimums: on wide screens they grow proportionally so
     // the table fills the page; on narrow ones the table scrolls sideways.
     return LayoutBuilder(builder: (context, constraints) {
       final available =
-          constraints.hasBoundedWidth ? constraints.maxWidth - 2 : natural;
+          constraints.hasBoundedWidth ? constraints.maxWidth : natural;
       final scale =
-          available > natural ? (available - 29) / (natural - 28) : 1.0;
+          available > natural ? (available - 33) / (natural - 32) : 1.0;
       final width = available > natural ? available : natural;
       return _table(context, scheme, width, scale);
     });
@@ -298,8 +632,8 @@ class AdminDataTable extends StatelessWidget {
           child: DefaultTextStyle.merge(
             style: TextStyle(
                 color: header ? scheme.onSurfaceVariant : scheme.onSurface,
-                fontSize: header ? 11 : 12,
-                fontWeight: header ? FontWeight.w800 : FontWeight.w500),
+                fontSize: header ? 12 : 13,
+                fontWeight: header ? FontWeight.w700 : FontWeight.w500),
             textAlign: col.align,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -315,20 +649,19 @@ class AdminDataTable extends StatelessWidget {
           ),
         );
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .65)),
-        borderRadius: BorderRadius.circular(12),
-      ),
+    return Material(
+      color: scheme.surfaceContainerLow,
       clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AdminShape.card - 4)),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: SizedBox(
           width: width,
           child: Column(children: [
             Container(
-              color: scheme.surfaceContainerHighest.withValues(alpha: .6),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              color: scheme.surfaceContainer,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
               child: Row(children: [
                 for (final col in columns)
                   cell(Text(col.label), col, header: true),
@@ -336,28 +669,36 @@ class AdminDataTable extends StatelessWidget {
             ),
             if (rows.isEmpty)
               SizedBox(
-                height: 96,
+                height: 120,
                 child: Center(
-                    child: Text(empty,
-                        style: TextStyle(color: scheme.onSurfaceVariant))),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.inbox_outlined,
+                        size: 26, color: scheme.onSurfaceVariant),
+                    const SizedBox(height: 8),
+                    Text(empty,
+                        style: TextStyle(color: scheme.onSurfaceVariant)),
+                  ]),
+                ),
               ),
             for (var rowIndex = 0; rowIndex < rows.length; rowIndex++)
               Material(
                 color: selected?.call(rowIndex) == true
-                    ? scheme.primary.withValues(alpha: .08)
+                    ? scheme.secondaryContainer.withValues(alpha: .6)
                     : Colors.transparent,
                 child: InkWell(
                   onTap: onRowTap == null ? null : () => onRowTap!(rowIndex),
                   child: Container(
-                    constraints: const BoxConstraints(minHeight: 54),
+                    constraints: const BoxConstraints(minHeight: 60),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                        horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      border: Border(
-                        top: BorderSide(
-                            color:
-                                scheme.outlineVariant.withValues(alpha: .45)),
-                      ),
+                      border: rowIndex == 0
+                          ? null
+                          : Border(
+                              top: BorderSide(
+                                  color: scheme.outlineVariant
+                                      .withValues(alpha: .35)),
+                            ),
                     ),
                     child: Row(children: [
                       for (var i = 0; i < columns.length; i++)
@@ -398,35 +739,36 @@ class AdminLiveChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .65)),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AdminShape.card),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Expanded(
-            child: Text(label.toUpperCase(),
+            child: Text(label,
                 style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: .7,
-                    fontWeight: FontWeight.w800,
-                    color: scheme.onSurfaceVariant)),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface)),
           ),
           Text(value,
               style: TextStyle(
-                  color: color, fontSize: 21, fontWeight: FontWeight.w900)),
+                  color: color,
+                  fontSize: 26,
+                  letterSpacing: -.5,
+                  fontWeight: FontWeight.w800)),
         ]),
         // On its own line so long readings wrap instead of overflowing.
         if (subtitle != null)
           Text(subtitle!,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
-        const SizedBox(height: 12),
+              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
+        const SizedBox(height: 14),
         SizedBox(
-          height: 96,
+          height: 110,
           width: double.infinity,
           child: samples.isEmpty
               ? Center(
@@ -459,47 +801,52 @@ class _LineChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final gridPaint = Paint()
-      ..color = grid.withValues(alpha: .55)
+      ..color = grid.withValues(alpha: .4)
       ..strokeWidth = 1;
     for (final fraction in const [.25, .5, .75]) {
       final y = size.height * fraction;
       for (double x = 0; x < size.width; x += 8) {
         canvas.drawLine(
-            Offset(x, y), Offset(math.min(x + 4, size.width), y), gridPaint);
+            Offset(x, y), Offset(math.min(x + 3, size.width), y), gridPaint);
       }
     }
-    final path = Path();
     final ceiling = math.max(1.0, max);
-    for (var i = 0; i < samples.length; i++) {
-      final x = samples.length == 1
-          ? size.width
-          : i / (samples.length - 1) * size.width;
-      final y =
-          size.height - (samples[i].clamp(0, ceiling) / ceiling) * size.height;
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
+    Offset point(int i) => Offset(
+        samples.length == 1
+            ? size.width
+            : i / (samples.length - 1) * size.width,
+        size.height - (samples[i].clamp(0, ceiling) / ceiling) * size.height);
+    // A smooth curve through the samples rather than sharp segments.
+    final path = Path()..moveTo(point(0).dx, point(0).dy);
+    for (var i = 1; i < samples.length; i++) {
+      final a = point(i - 1);
+      final b = point(i);
+      final mid = (a.dx + b.dx) / 2;
+      path.cubicTo(mid, a.dy, mid, b.dy, b.dx, b.dy);
     }
     final area = Path.from(path)
       ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
+      ..lineTo(samples.length == 1 ? size.width : 0, size.height)
       ..close();
-    canvas.drawPath(area, Paint()..color = color.withValues(alpha: .12));
+    canvas.drawPath(
+        area,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [color.withValues(alpha: .32), color.withValues(alpha: 0)],
+          ).createShader(Offset.zero & size));
     canvas.drawPath(
         path,
         Paint()
           ..color = color
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.2
+          ..strokeWidth = 3
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round);
-    final last = samples.last.clamp(0, ceiling).toDouble();
-    canvas.drawCircle(
-        Offset(size.width, size.height - last / ceiling * size.height),
-        3.2,
-        Paint()..color = color);
+    final last = point(samples.length - 1);
+    canvas.drawCircle(last, 7, Paint()..color = color.withValues(alpha: .25));
+    canvas.drawCircle(last, 4, Paint()..color = color);
   }
 
   @override
@@ -507,6 +854,524 @@ class _LineChartPainter extends CustomPainter {
       oldDelegate.samples != samples ||
       oldDelegate.max != max ||
       oldDelegate.color != color;
+}
+
+/// A labelled share of a chart.
+class AdminChartSlice {
+  const AdminChartSlice(this.label, this.value, this.color, {this.display});
+  final String label;
+  final double value;
+  final Color color;
+
+  /// How the value is written in legends; defaults to the rounded number.
+  final String? display;
+}
+
+/// A ring chart with a figure in its centre. Segments sweep in on first
+/// paint and glide to new proportions when the data changes.
+class AdminDonutChart extends StatelessWidget {
+  const AdminDonutChart({
+    super.key,
+    required this.slices,
+    this.center,
+    this.caption,
+    this.size = 168,
+    this.thickness = 22,
+  });
+  final List<AdminChartSlice> slices;
+  final String? center;
+  final String? caption;
+  final double size;
+  final double thickness;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final total =
+        slices.fold<double>(0, (sum, s) => sum + math.max(0, s.value));
+    return SizedBox(
+      width: size,
+      height: size,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 800),
+        curve: Curves.easeOutCubic,
+        builder: (context, t, child) => CustomPaint(
+          painter: _DonutPainter(
+            slices: slices,
+            total: total,
+            progress: t,
+            track: scheme.surfaceContainerHighest,
+            thickness: thickness,
+          ),
+          child: child,
+        ),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(thickness + 6),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              if (center != null)
+                FittedBox(
+                  child: Text(center!,
+                      style: TextStyle(
+                          fontSize: size * .17,
+                          letterSpacing: -.5,
+                          fontWeight: FontWeight.w800,
+                          color: scheme.onSurface)),
+                ),
+              if (caption != null)
+                Text(caption!,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 11, color: scheme.onSurfaceVariant)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DonutPainter extends CustomPainter {
+  _DonutPainter({
+    required this.slices,
+    required this.total,
+    required this.progress,
+    required this.track,
+    required this.thickness,
+  });
+  final List<AdminChartSlice> slices;
+  final double total;
+  final double progress;
+  final Color track;
+  final double thickness;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromCircle(
+        center: size.center(Offset.zero),
+        radius: (math.min(size.width, size.height) - thickness) / 2);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = thickness
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, 0, math.pi * 2, false, paint..color = track);
+    if (total <= 0) return;
+    final visible = slices.where((s) => s.value > 0).toList();
+    // Round caps overlap neighbours; leave a gap so each segment stays
+    // distinct, as the expressive spec draws them.
+    final gap = visible.length > 1 ? thickness / rect.width * 1.6 : 0.0;
+    var start = -math.pi / 2;
+    for (final slice in visible) {
+      final sweep = slice.value / total * math.pi * 2 * progress;
+      final drawn = math.max(0.0, sweep - gap);
+      if (drawn > 0) {
+        canvas.drawArc(
+            rect, start + gap / 2, drawn, false, paint..color = slice.color);
+      } else if (sweep > 0) {
+        canvas.drawArc(
+            rect, start + sweep / 2, .0001, false, paint..color = slice.color);
+      }
+      start += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DonutPainter old) =>
+      old.progress != progress ||
+      old.total != total ||
+      old.slices != slices ||
+      old.track != track;
+}
+
+/// The colour key for a chart, with each value and its share.
+class AdminLegend extends StatelessWidget {
+  const AdminLegend({super.key, required this.slices, this.showShare = true});
+  final List<AdminChartSlice> slices;
+  final bool showShare;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final total =
+        slices.fold<double>(0, (sum, s) => sum + math.max(0, s.value));
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      for (final s in slices)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Row(children: [
+            Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                    color: s.color, borderRadius: BorderRadius.circular(4))),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Text(s.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13))),
+            const SizedBox(width: 8),
+            Text(s.display ?? _plain(s.value),
+                style:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            if (showShare)
+              SizedBox(
+                width: 46,
+                child: Text(
+                    total <= 0 ? '0%' : '${(s.value / total * 100).round()}%',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        fontSize: 12, color: scheme.onSurfaceVariant)),
+              ),
+          ]),
+        ),
+    ]);
+  }
+}
+
+/// A donut beside its legend; stacks them on narrow widths.
+class AdminDonutPanel extends StatelessWidget {
+  const AdminDonutPanel({
+    super.key,
+    required this.slices,
+    this.center,
+    this.caption,
+    this.size = 156,
+    this.emptyLabel = 'No data yet',
+  });
+  final List<AdminChartSlice> slices;
+  final String? center;
+  final String? caption;
+  final double size;
+  final String emptyLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasData = slices.any((s) => s.value > 0);
+    final donut = AdminDonutChart(
+        slices: slices,
+        center: center,
+        caption: hasData ? caption : emptyLabel,
+        size: size);
+    final legend = AdminLegend(slices: slices);
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 380) {
+        return Column(children: [donut, const SizedBox(height: 14), legend]);
+      }
+      return Row(children: [
+        donut,
+        const SizedBox(width: 24),
+        Expanded(child: legend),
+      ]);
+    });
+  }
+}
+
+/// Ranked horizontal bars, largest first.
+class AdminBarList extends StatelessWidget {
+  const AdminBarList({
+    super.key,
+    required this.items,
+    this.maxItems = 6,
+    this.empty = 'Nothing to rank yet.',
+  });
+  final List<AdminChartSlice> items;
+  final int maxItems;
+  final String empty;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final sorted = [...items]..sort((a, b) => b.value.compareTo(a.value));
+    final shown = sorted.take(maxItems).toList();
+    final top = shown.isEmpty ? 0.0 : math.max(shown.first.value, 0.0);
+    if (shown.isEmpty || top <= 0) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Text(empty, style: TextStyle(color: scheme.onSurfaceVariant)),
+      );
+    }
+    return Column(children: [
+      for (final item in shown)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(
+                  child: Text(item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600))),
+              const SizedBox(width: 8),
+              Text(item.display ?? _plain(item.value),
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onSurface)),
+            ]),
+            const SizedBox(height: 6),
+            AdminMeter(value: item.value / top, color: item.color, height: 10),
+          ]),
+        ),
+    ]);
+  }
+}
+
+/// One proportional bar split into coloured parts, with a legend.
+class AdminStackedBar extends StatelessWidget {
+  const AdminStackedBar(
+      {super.key, required this.slices, this.height = 16, this.legend = true});
+  final List<AdminChartSlice> slices;
+  final double height;
+  final bool legend;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final visible = slices.where((s) => s.value > 0).toList();
+    final total = visible.fold<double>(0, (sum, s) => sum + s.value);
+    final bar = ClipRRect(
+      borderRadius: BorderRadius.circular(height),
+      child: SizedBox(
+        height: height,
+        child: total <= 0
+            ? Container(color: scheme.surfaceContainerHighest)
+            : TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: 1),
+                duration: const Duration(milliseconds: 700),
+                curve: Curves.easeOutCubic,
+                builder: (context, t, _) => Row(children: [
+                  for (var i = 0; i < visible.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 3),
+                    Expanded(
+                      flex: math.max(
+                          1, (visible[i].value / total * 1000 * t).round()),
+                      child: Container(
+                        decoration: BoxDecoration(
+                            color: visible[i].color,
+                            borderRadius: BorderRadius.circular(4)),
+                      ),
+                    ),
+                  ],
+                  if (t < 1)
+                    Expanded(
+                        flex: math.max(1, ((1 - t) * 1000).round()),
+                        child: const SizedBox()),
+                ]),
+              ),
+      ),
+    );
+    if (!legend) return bar;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      bar,
+      const SizedBox(height: 12),
+      Wrap(spacing: 16, runSpacing: 8, children: [
+        for (final s in slices)
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                    color: s.color, borderRadius: BorderRadius.circular(3))),
+            const SizedBox(width: 6),
+            Text('${s.label} ',
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+            Text(s.display ?? _plain(s.value),
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          ]),
+      ]),
+    ]);
+  }
+}
+
+/// A 270° arc gauge for a ratio such as usage or a health score.
+class AdminGauge extends StatelessWidget {
+  const AdminGauge({
+    super.key,
+    required this.value,
+    required this.label,
+    this.display,
+    this.color,
+    this.size = 132,
+    this.thickness = 14,
+  });
+
+  /// 0–1.
+  final double value;
+  final String label;
+  final String? display;
+  final Color? color;
+  final double size;
+  final double thickness;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final v = value.isFinite ? value.clamp(0.0, 1.0) : 0.0;
+    final tint = color ??
+        (v >= .9
+            ? AppColors.danger
+            : v >= .75
+                ? AppColors.warning
+                : scheme.primary);
+    return SizedBox(
+      width: size,
+      height: size,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: v),
+        duration: const Duration(milliseconds: 800),
+        curve: Curves.easeOutCubic,
+        builder: (context, t, child) => CustomPaint(
+          painter: _GaugePainter(
+              value: t,
+              color: tint,
+              track: scheme.surfaceContainerHighest,
+              thickness: thickness),
+          child: child,
+        ),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(thickness + 4),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              FittedBox(
+                child: Text(display ?? '${(v * 100).round()}%',
+                    style: TextStyle(
+                        fontSize: size * .2,
+                        letterSpacing: -.5,
+                        fontWeight: FontWeight.w800,
+                        color: scheme.onSurface)),
+              ),
+              Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GaugePainter extends CustomPainter {
+  _GaugePainter(
+      {required this.value,
+      required this.color,
+      required this.track,
+      required this.thickness});
+  final double value;
+  final Color color;
+  final Color track;
+  final double thickness;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromCircle(
+        center: size.center(Offset.zero),
+        radius: (math.min(size.width, size.height) - thickness) / 2);
+    const start = math.pi * .75;
+    const sweep = math.pi * 1.5;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = thickness
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, start, sweep, false, paint..color = track);
+    if (value > 0) {
+      canvas.drawArc(rect, start, sweep * value, false, paint..color = color);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GaugePainter old) =>
+      old.value != value || old.color != color || old.track != track;
+}
+
+/// One bar of an [AdminColumnChart], split into stacked parts.
+class AdminColumn {
+  const AdminColumn(this.label, this.parts);
+  final String label;
+  final List<AdminChartSlice> parts;
+  double get total => parts.fold(0, (sum, p) => sum + math.max(0, p.value));
+}
+
+/// Vertical stacked columns, for counts over time.
+class AdminColumnChart extends StatelessWidget {
+  const AdminColumnChart({super.key, required this.columns, this.height = 120});
+  final List<AdminColumn> columns;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final top = columns.fold<double>(0, (m, c) => math.max(m, c.total));
+    return SizedBox(
+      height: height + 22,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeOutCubic,
+        builder: (context, t, _) => Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (var i = 0; i < columns.length; i++)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Tooltip(
+                          message:
+                              '${columns[i].label}: ${columns[i].parts.map((p) => '${p.label} ${_plain(p.value)}').join(', ')}',
+                          child: Container(
+                            height: math.max(
+                                4,
+                                top <= 0
+                                    ? 4
+                                    : columns[i].total / top * height * t),
+                            clipBehavior: Clip.antiAlias,
+                            decoration: BoxDecoration(
+                              color: scheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Column(children: [
+                              for (final part in columns[i].parts.reversed)
+                                if (part.value > 0)
+                                  Expanded(
+                                    flex: math.max(1, part.value.round()),
+                                    child: Container(color: part.color),
+                                  ),
+                            ]),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        SizedBox(
+                          height: 16,
+                          child: (i == 0 ||
+                                  i == columns.length - 1 ||
+                                  i == columns.length ~/ 2)
+                              ? FittedBox(
+                                  child: Text(columns[i].label,
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          color: scheme.onSurfaceVariant)))
+                              : null,
+                        ),
+                      ]),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class AdminEmptyState extends StatelessWidget {
@@ -518,45 +1383,197 @@ class AdminEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
-      child: Column(children: [
-        Icon(icon ?? Icons.inbox_outlined,
-            size: 34, color: scheme.onSurfaceVariant),
-        const SizedBox(height: 10),
-        Text(title,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 4),
-        Text(body,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
-      ]),
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
+      child: Center(
+        child: Column(children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: ShapeDecoration(
+                color: scheme.secondaryContainer,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(22))),
+            child: Icon(icon ?? Icons.inbox_outlined,
+                size: 30, color: scheme.onSecondaryContainer),
+          ),
+          const SizedBox(height: 14),
+          Text(title,
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(body,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
+        ]),
+      ),
     );
   }
 }
 
 class AdminKeyValue extends StatelessWidget {
-  const AdminKeyValue(this.label, this.value, {super.key, this.mono = false});
+  const AdminKeyValue(this.label, this.value,
+      {super.key, this.mono = false, this.color});
   final String label;
   final String value;
   final bool mono;
+  final Color? color;
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 7),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (color != null) ...[
+            Container(
+                margin: const EdgeInsets.only(top: 4, right: 10),
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                    color: color, borderRadius: BorderRadius.circular(3))),
+          ],
           Expanded(
               child: Text(label,
                   style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 13,
                       color: Theme.of(context).colorScheme.onSurfaceVariant))),
           const SizedBox(width: 16),
           Flexible(
-            child: SelectableText(value.isEmpty ? '—' : value,
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                    fontSize: 12,
-                    fontFamily: mono ? 'monospace' : null,
-                    fontWeight: FontWeight.w600)),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: SelectableText(value.isEmpty ? '—' : value,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontFamily: mono ? 'monospace' : null,
+                      fontWeight: FontWeight.w600)),
+            ),
           ),
         ]),
       );
+}
+
+/// Lays [children] out in equal columns: [maxColumns] on wide screens, fewer
+/// as the width shrinks, one per row on a phone.
+class AdminGrid extends StatelessWidget {
+  const AdminGrid({
+    super.key,
+    required this.children,
+    this.maxColumns = 4,
+    this.minTileWidth = 220,
+    this.spacing = 12,
+  });
+  final List<Widget> children;
+  final int maxColumns;
+  final double minTileWidth;
+  final double spacing;
+
+  @override
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: (context, constraints) {
+        final fit =
+            ((constraints.maxWidth + spacing) / (minTileWidth + spacing))
+                .floor();
+        final count =
+            math.max(1, math.min(children.length, math.min(maxColumns, fit)));
+        final width = (constraints.maxWidth - spacing * (count - 1)) / count;
+        return Wrap(spacing: spacing, runSpacing: spacing, children: [
+          for (final child in children) SizedBox(width: width, child: child)
+        ]);
+      });
+}
+
+String _plain(double value) {
+  if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
+  if (value >= 10000) return '${(value / 1000).toStringAsFixed(1)}K';
+  return value == value.roundToDouble()
+      ? value.round().toString()
+      : value.toStringAsFixed(1);
+}
+
+/// Material 3 Expressive refinements applied to the whole admin console:
+/// pill buttons and chips, rounder dialogs and fields, and the 2024 slider
+/// and progress styles.
+ThemeData adminTheme(ThemeData base) {
+  final scheme = base.colorScheme;
+  // Derive every text style from the app's own so the console keeps its
+  // font family.
+  final label = base.textTheme.labelLarge ?? const TextStyle();
+  const stadium = StadiumBorder();
+  final pill = ButtonStyle(
+    shape: const WidgetStatePropertyAll(stadium),
+    padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 20, vertical: 14)),
+    textStyle: WidgetStatePropertyAll(
+        label.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
+  );
+  OutlineInputBorder border(Color color, [double width = 1]) =>
+      OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AdminShape.control),
+          borderSide: BorderSide(color: color, width: width));
+  return base.copyWith(
+    filledButtonTheme: FilledButtonThemeData(style: pill),
+    outlinedButtonTheme: OutlinedButtonThemeData(style: pill),
+    textButtonTheme: TextButtonThemeData(
+        style: ButtonStyle(
+            shape: const WidgetStatePropertyAll(stadium),
+            textStyle: WidgetStatePropertyAll(
+                label.copyWith(fontWeight: FontWeight.w700)))),
+    chipTheme: base.chipTheme.copyWith(
+      shape: const StadiumBorder(),
+      side: BorderSide(color: scheme.outlineVariant),
+      labelStyle: label.copyWith(fontWeight: FontWeight.w600),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        textStyle: WidgetStatePropertyAll(
+            label.copyWith(fontWeight: FontWeight.w700, fontSize: 13)),
+        padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: 14, vertical: 12)),
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: scheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AdminShape.card)),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: scheme.surfaceContainerHigh,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(AdminShape.card))),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: scheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AdminShape.control)),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AdminShape.control)),
+    ),
+    inputDecorationTheme: base.inputDecorationTheme.copyWith(
+      filled: true,
+      fillColor: scheme.surfaceContainerHighest.withValues(alpha: .55),
+      border: border(Colors.transparent),
+      enabledBorder: border(Colors.transparent),
+      focusedBorder: border(scheme.primary, 2),
+      errorBorder: border(scheme.error),
+      focusedErrorBorder: border(scheme.error, 2),
+    ),
+    // ignore: deprecated_member_use
+    sliderTheme: base.sliderTheme.copyWith(year2023: false),
+    // ignore: deprecated_member_use
+    progressIndicatorTheme:
+        base.progressIndicatorTheme.copyWith(year2023: false),
+    tooltipTheme: TooltipThemeData(
+      decoration: BoxDecoration(
+          color: scheme.inverseSurface,
+          borderRadius: BorderRadius.circular(10)),
+      textStyle: label.copyWith(
+          color: scheme.onInverseSurface,
+          fontSize: 12,
+          fontWeight: FontWeight.w500),
+    ),
+  );
 }

@@ -112,13 +112,13 @@ class _AccountHubContentState extends State<AccountHubContent> {
       ]),
       const SizedBox(height: 18),
       Row(children: [
-        const Expanded(
+        Expanded(
             child: Text('WALLET ACTIVITY',
                 style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w900,
                     letterSpacing: .8,
-                    color: AppColors.muted))),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant))),
         FilledButton.icon(
             onPressed: () =>
                 widget.onAction('finance', 'purchase_confirm', const {}),
@@ -322,5 +322,9 @@ Widget _primary(String a, String b) =>
     Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(a, style: const TextStyle(fontWeight: FontWeight.w800)),
       if (b.isNotEmpty)
-        Text(b, style: const TextStyle(fontSize: 10, color: AppColors.muted))
+        Builder(
+            builder: (context) => Text(b,
+                style: TextStyle(
+                    fontSize: 10,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)))
     ]);

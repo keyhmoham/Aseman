@@ -498,11 +498,17 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
           ),
         const SizedBox(height: 6),
         Wrap(spacing: 8, runSpacing: 8, children: [
-          MiniTag(_public ? 'PUBLIC' : 'PRIVATE',
-              _public ? AppColors.success : AppColors.muted),
+          MiniTag(
+              _public ? 'PUBLIC' : 'PRIVATE',
+              _public
+                  ? AppColors.success
+                  : Theme.of(context).colorScheme.onSurfaceVariant),
           if (_space.home) const MiniTag('HOME', AppColors.primary),
-          MiniTag('OWNER · ${_profile?.ownerHandle ?? ''}',
-              _isOwner ? AppColors.cyan : AppColors.muted),
+          MiniTag(
+              'OWNER · ${_profile?.ownerHandle ?? ''}',
+              _isOwner
+                  ? AppColors.cyan
+                  : Theme.of(context).colorScheme.onSurfaceVariant),
           if (_myRole.isNotEmpty)
             MiniTag('YOUR ROLE · ${_myRole.toUpperCase()}', AppColors.warning),
         ]),
@@ -866,7 +872,7 @@ class _MemberTile extends StatelessWidget {
     final roleColor = switch (_role) {
       'owner' => AppColors.cyan,
       'admin' => AppColors.warning,
-      _ => AppColors.muted,
+      _ => Theme.of(context).colorScheme.onSurfaceVariant,
     };
     return ListTile(
       contentPadding: EdgeInsets.zero,

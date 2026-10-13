@@ -137,9 +137,6 @@ class _RoomChatState extends State<RoomChat> {
     }
     showModalBottomSheet<Bot>(
         context: context,
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
         builder: (context) => SafeArea(
                 child: SizedBox(
               height: 360,
@@ -240,9 +237,6 @@ class _RoomChatState extends State<RoomChat> {
     final scheme = Theme.of(context).colorScheme;
     showModalBottomSheet<void>(
         context: context,
-        backgroundColor: scheme.surfaceContainerLow,
-        shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
         builder: (context) => SafeArea(
             child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),

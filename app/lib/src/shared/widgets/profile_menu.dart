@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../app_dependencies.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_shape.dart';
+import '../../core/theme/app_surfaces.dart';
 import '../../features/account/presentation/account_panel.dart';
 import '../../features/admin/presentation/admin_screen.dart';
 import '../../features/agents/presentation/agents_screen.dart';
@@ -44,10 +45,6 @@ Future<void> showProfileMenu(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-      ),
       builder: (sheetContext) => ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.sizeOf(sheetContext).height * .92,
@@ -69,20 +66,15 @@ Future<void> showProfileMenu(
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Close profile menu',
-      barrierColor: Colors.black26,
+      barrierColor: AppSurfaces.barrier,
       transitionDuration: const Duration(milliseconds: 260),
       pageBuilder: (dialogContext, _, __) => SafeArea(
         child: Align(
           alignment: Alignment.topRight,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 66, 16, 16),
-            child: Material(
-              color: Theme.of(dialogContext).colorScheme.surfaceContainer,
+            child: FloatingPanelSurface(
               elevation: 6,
-              shadowColor: Colors.black45,
-              clipBehavior: Clip.antiAlias,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppShape.card)),
               child: SizedBox(
                 width: width,
                 child: SingleChildScrollView(

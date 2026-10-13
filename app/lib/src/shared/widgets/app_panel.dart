@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_surfaces.dart';
 
 class AppPanel extends StatelessWidget {
   const AppPanel(
@@ -12,19 +12,16 @@ class AppPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: AppColors.panel,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
+        decoration: AppSurfaces.cardDecoration(context),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Expanded(
                 child: Text(title,
                     style: const TextStyle(fontWeight: FontWeight.w800))),
             action ??
-                const Icon(Icons.more_horiz_rounded,
-                    color: AppColors.muted, size: 19),
+                Icon(Icons.more_horiz_rounded,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    size: 19),
           ]),
           const SizedBox(height: 13),
           child,

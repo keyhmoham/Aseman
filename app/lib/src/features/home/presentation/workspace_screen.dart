@@ -928,28 +928,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
           if (mounted) await switchWorkspace(value);
         });
     if (MediaQuery.sizeOf(context).width < 820) {
-      showModalBottomSheet<void>(
-          context: context,
-          isScrollControlled: true,
-          useSafeArea: true,
-          showDragHandle: true,
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-          builder: (_) =>
-              FractionallySizedBox(heightFactor: .82, child: picker));
+      showAppSheet<void>(context, picker, heightFactor: .82);
       return;
     }
-    showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Workspaces',
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 420),
-      pageBuilder: (_, __, ___) => picker,
-      transitionBuilder: (routeContext, animation, __, child) =>
-          desktopFloatingPanelTransition(routeContext, animation, child),
-    );
+    showFloatingDialog<void>(context,
+        barrierLabel: 'Workspaces', pageBuilder: (_) => picker);
   }
 
   void _openSpaceSettings() {
@@ -1715,7 +1698,9 @@ class _LibraryBotCard extends StatelessWidget {
   final VoidCallback? onRemove;
   @override
   Widget build(BuildContext context) {
-    final color = bot.status == 'running' ? AppColors.success : AppColors.muted;
+    final color = bot.status == 'running'
+        ? AppColors.success
+        : Theme.of(context).colorScheme.onSurfaceVariant;
     return Material(
         color: Theme.of(context).colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(17),
@@ -1803,8 +1788,9 @@ class _SandboxExplorerTile extends StatelessWidget {
                                   .colorScheme
                                   .onSurfaceVariant))
                     ])),
-                const Icon(Icons.arrow_forward_ios_rounded,
-                    size: 13, color: AppColors.muted),
+                Icon(Icons.arrow_forward_ios_rounded,
+                    size: 13,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
               ]))));
 }
 
@@ -1838,9 +1824,6 @@ class _AddBotTile extends StatelessWidget {
     }
     showModalBottomSheet<Bot>(
         context: context,
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
         builder: (context) => SafeArea(
                 child: SizedBox(
               height: 420,
@@ -2476,9 +2459,11 @@ class _DeskWidgetState extends State<_DeskWidget> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('AVAILABLE',
+              Text('AVAILABLE',
                   style: TextStyle(
-                      fontSize: 8, letterSpacing: .6, color: AppColors.muted)),
+                      fontSize: 8,
+                      letterSpacing: .6,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
               Text(formatLedgerCredits(wallet.available),
                   style: TextStyle(
                       fontSize: large ? 20 : 15,
@@ -2486,7 +2471,9 @@ class _DeskWidgetState extends State<_DeskWidget> {
                       color: AppColors.success)),
               const SizedBox(height: 3),
               Text('${formatLedgerCredits(wallet.locked)} locked',
-                  style: const TextStyle(fontSize: 8, color: AppColors.muted)),
+                  style: TextStyle(
+                      fontSize: 8,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ]);
       case _WidgetKind.agents:
         final bots = widget.desk.bots.where((b) => b.isAgent).toList();
@@ -2503,7 +2490,7 @@ class _DeskWidgetState extends State<_DeskWidget> {
                       size: 13,
                       color: b.status == 'running'
                           ? AppColors.success
-                          : AppColors.muted),
+                          : Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(width: 5),
                   Expanded(
                       child: Text(b.name,
@@ -2515,7 +2502,9 @@ class _DeskWidgetState extends State<_DeskWidget> {
                           fontSize: 8,
                           color: b.status == 'running'
                               ? AppColors.success
-                              : AppColors.muted)),
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant)),
                 ])),
         ]);
       case _WidgetKind.watchlist:
@@ -3568,40 +3557,8 @@ void _openEntityProfile(BuildContext context, String section, String title,
       title: title,
       dependencies: dependencies,
       spaceId: spaceId);
-  if (MediaQuery.sizeOf(context).width < 820) {
-    showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        showDragHandle: true,
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-        builder: (_) =>
-            FractionallySizedBox(heightFactor: .94, child: profile));
-    return;
-  }
-  showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Close profile',
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 420),
-      pageBuilder: (routeContext, __, ___) {
-        final size = MediaQuery.sizeOf(routeContext);
-        return Material(
-            color: Theme.of(routeContext).colorScheme.surface,
-            clipBehavior: Clip.antiAlias,
-            borderRadius: BorderRadius.circular(30),
-            child: SizedBox(
-                width: math.min(700, size.width - 48),
-                height: math.min(760, size.height - 48),
-                child: profile));
-      },
-      transitionBuilder: (routeContext, animation, __, child) => Align(
-          alignment: Alignment.center,
-          child:
-              desktopFloatingPanelTransition(routeContext, animation, child)));
+  showFloatingPanel(context, profile,
+      maxWidth: 700, maxHeight: 760, barrierLabel: 'Close profile');
 }
 
 class _EntityProfileScreen extends StatefulWidget {
@@ -4267,8 +4224,10 @@ class _TraderProfileDetail extends StatelessWidget {
           'Recent posts',
           Icons.dynamic_feed_rounded,
           posts.isEmpty
-              ? const Text('No posts yet.',
-                  style: TextStyle(fontSize: 11, color: AppColors.muted))
+              ? Text('No posts yet.',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant))
               : Column(children: [
                   for (final p in posts.take(5))
                     Padding(
@@ -4281,8 +4240,11 @@ class _TraderProfileDetail extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(fontSize: 11)),
                               Text(_timeAgo(p.createdAt),
-                                  style: const TextStyle(
-                                      fontSize: 8, color: AppColors.muted))
+                                  style: TextStyle(
+                                      fontSize: 8,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant))
                             ]))
                 ])),
     ]);
@@ -4294,9 +4256,6 @@ class _TraderProfileDetail extends StatelessWidget {
     showDialog<void>(
         context: context,
         builder: (ctx) => Dialog(
-            backgroundColor: Theme.of(ctx).colorScheme.surfaceContainerLow,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             child: SizedBox(
                 width: 360,
                 height: 420,
@@ -4316,9 +4275,12 @@ class _TraderProfileDetail extends StatelessWidget {
                         const Divider(height: 1),
                         Expanded(
                           child: list.isEmpty
-                              ? const Center(
+                              ? Center(
                                   child: Text('None yet',
-                                      style: TextStyle(color: AppColors.muted)))
+                                      style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant)))
                               : ListView.separated(
                                   itemCount: list.length,
                                   separatorBuilder: (_, __) =>
@@ -4409,8 +4371,10 @@ class _AgentProfileDetail extends StatelessWidget {
           'Entities',
           Icons.folder_copy_rounded,
           bot.entities.isEmpty
-              ? const Text('No runtime entities yet.',
-                  style: TextStyle(fontSize: 11, color: AppColors.muted))
+              ? Text('No runtime entities yet.',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant))
               : Wrap(spacing: 7, runSpacing: 7, children: [
                   for (final key in bot.entities) Chip(label: Text(key)),
                 ])),
@@ -4568,8 +4532,10 @@ class _RoomProfileDetail extends StatelessWidget {
           'Recent room activity',
           Icons.forum_outlined,
           room.recentMessages.isEmpty
-              ? const Text('No messages yet.',
-                  style: TextStyle(fontSize: 11, color: AppColors.muted))
+              ? Text('No messages yet.',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant))
               : Column(children: [
                   for (final m in room.recentMessages)
                     _RoomActivityRow(

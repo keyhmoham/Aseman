@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../data/services/tradera_service.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 import '../data/workflow_repository.dart';
 import 'widgets/workflow_notice.dart';
 import 'widgets/workflow_run_card.dart';
@@ -15,20 +16,7 @@ Future<void> showWorkflowPanel(BuildContext context, TraderaService service,
       roomId: roomId,
       roomName: roomName,
       canManage: canManage);
-  if (MediaQuery.sizeOf(context).width < 820) {
-    return showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        showDragHandle: true,
-        builder: (_) => FractionallySizedBox(heightFactor: .94, child: panel));
-  }
-  return showDialog<void>(
-      context: context,
-      builder: (_) => Dialog(
-          child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 780, maxHeight: 820),
-              child: panel)));
+  return showAdaptivePanel<void>(context, panel, breakpoint: 820);
 }
 
 class WorkflowPanel extends StatefulWidget {

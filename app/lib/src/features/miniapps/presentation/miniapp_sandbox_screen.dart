@@ -124,7 +124,7 @@ class _MiniappSandboxScreenState extends State<MiniappSandboxScreen> {
       machineId: 'miniapp-${widget.bot.id}',
       code: _source!,
       runtime: ElpianRuntime.quickJs,
-      stylesheet: MiniappTheme.stylesheet(),
+      stylesheet: MiniappTheme.stylesheet(Theme.of(context)),
       hostHandlers: bridge.buildHostHandlers(),
       onUpdateApp: (data) {
         debugPrint('miniapp updateApp: $data');

@@ -90,7 +90,8 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
                 const SizedBox(height: 3),
                 Text(
                     '${machine['provider'] ?? ''}${machine['id'] == null ? '' : ' · ${machine['id']}'}',
-                    style: const TextStyle(color: AppColors.muted))
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant))
               ])),
           AdminStatusPill(state),
         ]),
@@ -515,8 +516,11 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
                               ]),
                               const SizedBox(height: 8),
                               SelectableText('${p['url'] ?? p['id']}',
-                                  style: const TextStyle(
-                                      fontSize: 11, color: AppColors.muted)),
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant)),
                               const SizedBox(height: 10),
                               Row(
                                   mainAxisAlignment: MainAxisAlignment.end,
@@ -618,7 +622,9 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
           Text('${f['name'] ?? f['path']}',
               style: const TextStyle(fontWeight: FontWeight.w800)),
           Text('${f['path'] ?? ''}',
-              style: const TextStyle(fontSize: 10, color: AppColors.muted),
+              style: TextStyle(
+                  fontSize: 10,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
               overflow: TextOverflow.ellipsis)
         ]))
       ]);
@@ -733,5 +739,9 @@ Widget _primary(String a, String b) =>
     Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(a, style: const TextStyle(fontWeight: FontWeight.w800)),
       if (b.isNotEmpty)
-        Text(b, style: const TextStyle(fontSize: 10, color: AppColors.muted))
+        Builder(
+            builder: (context) => Text(b,
+                style: TextStyle(
+                    fontSize: 10,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)))
     ]);

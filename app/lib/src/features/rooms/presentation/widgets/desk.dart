@@ -30,20 +30,24 @@ class _DeskState extends State<Desk> {
 
   @override
   Widget build(BuildContext context) => Container(
-        decoration: const BoxDecoration(
-            color: AppColors.navigation,
-            border: Border(left: BorderSide(color: AppColors.border))),
+        decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainer,
+            border: Border(
+                left: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant))),
         child: ListView(padding: const EdgeInsets.all(12), children: [
           Row(children: [
-            const Expanded(
+            Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                  Text('The desk',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  const Text('The desk',
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w800)),
                   Text('Drag widgets to rearrange',
-                      style: TextStyle(color: AppColors.muted, fontSize: 10))
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 10))
                 ])),
             IconButton(
                 tooltip: 'Add widget',
@@ -68,8 +72,10 @@ class _DeskState extends State<Desk> {
                     title: _title(type),
                     action: IconButton(
                         onPressed: () => setState(() => items.remove(type)),
-                        icon: const Icon(Icons.close_rounded,
-                            color: AppColors.muted, size: 16)),
+                        icon: Icon(Icons.close_rounded,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                            size: 16)),
                     child: _content(type),
                   ));
             },
@@ -92,13 +98,13 @@ class _DeskState extends State<Desk> {
         DeskWidgetType.chart =>
           SizedBox(height: 130, child: CustomPaint(painter: _ChartPainter())),
         DeskWidgetType.trade => Column(children: [
-            const Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  StatusTag('BUY BTC', AppColors.success),
-                  Text('Limit / Market',
-                      style: TextStyle(color: AppColors.muted, fontSize: 11))
-                ]),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const StatusTag('BUY BTC', AppColors.success),
+              Text('Limit / Market',
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 11))
+            ]),
             const SizedBox(height: 10),
             const TextField(
                 decoration: InputDecoration(

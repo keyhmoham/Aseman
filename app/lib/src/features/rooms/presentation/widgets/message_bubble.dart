@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_surfaces.dart';
 import '../../../../domain/models/message.dart';
 import '../../../../shared/widgets/avatar.dart';
 import '../../../../shared/widgets/status_tag.dart';
@@ -22,12 +23,12 @@ class MessageBubble extends StatelessWidget {
             decoration: BoxDecoration(
               color: message.isAgent
                   ? AppColors.primary.withValues(alpha: .10)
-                  : AppColors.panel,
+                  : AppSurfaces.card(Theme.of(context).colorScheme),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                   color: message.isAgent
                       ? AppColors.primary.withValues(alpha: .3)
-                      : AppColors.border),
+                      : AppSurfaces.cardBorder(Theme.of(context).colorScheme)),
             ),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -40,8 +41,9 @@ class MessageBubble extends StatelessWidget {
                 ],
                 const Spacer(),
                 Text(message.sentAt,
-                    style:
-                        const TextStyle(color: AppColors.muted, fontSize: 10))
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 10))
               ]),
               const SizedBox(height: 5),
               Text(message.body, style: const TextStyle(height: 1.4)),

@@ -7,10 +7,6 @@ import '../../../shared/widgets/status_tag.dart';
 Future<void> showAgentSettings(BuildContext context) => showDialog(
       context: context,
       builder: (dialogContext) => Dialog(
-        backgroundColor: AppColors.panel,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: const BorderSide(color: AppColors.border)),
         child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 720),
             child: Padding(
@@ -54,11 +50,12 @@ Future<void> showAgentSettings(BuildContext context) => showDialog(
                     const Text('Connected tools',
                         style: TextStyle(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
-                    const Wrap(spacing: 8, runSpacing: 8, children: [
-                      StatusTag('✓ Web Search', AppColors.success),
-                      StatusTag('✓ DEX/CEX Trading', AppColors.success),
-                      StatusTag('✓ Market Data', AppColors.success),
-                      StatusTag('News Aggregator', AppColors.muted)
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      const StatusTag('✓ Web Search', AppColors.success),
+                      const StatusTag('✓ DEX/CEX Trading', AppColors.success),
+                      const StatusTag('✓ Market Data', AppColors.success),
+                      StatusTag('News Aggregator',
+                          Theme.of(context).colorScheme.onSurfaceVariant)
                     ]),
                     const SizedBox(height: 20),
                     Row(mainAxisAlignment: MainAxisAlignment.end, children: [

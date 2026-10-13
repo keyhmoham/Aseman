@@ -127,7 +127,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         padding: const EdgeInsets.all(24),
                         child: Center(
                           child: Text('No agents match "$query".',
-                              style: const TextStyle(color: AppColors.muted)),
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant)),
                         ),
                       )
                     else
@@ -161,8 +164,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                             MainAxisAlignment.spaceBetween,
                                         children: [
                                           Text(room.members,
-                                              style: const TextStyle(
-                                                  color: AppColors.muted)),
+                                              style: TextStyle(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant)),
                                           Text(room.status,
                                               style: const TextStyle(
                                                   color: AppColors.success))
@@ -182,7 +187,9 @@ class _AgentCard extends StatelessWidget {
         Text(description,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+            style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 12)),
         const SizedBox(height: 12),
         Row(children: [
           StatusTag(roi, AppColors.success),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 import 'rich_post_content.dart';
 
 /// Opens the markup post editor as a bottom sheet on mobile and a centered
@@ -47,29 +47,8 @@ Future<String?> showMarkupEditor(
       title: title,
       publishLabel: publishLabel,
       publishIcon: publishIcon);
-  if (MediaQuery.sizeOf(context).width < 820) {
-    return showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-      builder: (_) => FractionallySizedBox(heightFactor: .94, child: editor),
-    );
-  }
-  return showDialog<String>(
-    context: context,
-    builder: (_) => Dialog(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 860, maxHeight: 820),
-        child: editor,
-      ),
-    ),
-  );
+  return showAdaptivePanel<String>(context, editor,
+      breakpoint: 820, maxWidth: 860);
 }
 
 class _PostEditorDialog extends StatefulWidget {
@@ -366,9 +345,12 @@ class _PostEditorDialogState extends State<_PostEditorDialog> {
                           color: scheme.outlineVariant.withValues(alpha: .5))),
                   child: SingleChildScrollView(
                       child: controller.text.trim().isEmpty
-                          ? const Text('Nothing to preview yet.',
+                          ? Text('Nothing to preview yet.',
                               style: TextStyle(
-                                  color: AppColors.muted, fontSize: 12))
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  fontSize: 12))
                           : RichPostContent(controller.text)),
                 )
               : TextField(
@@ -387,7 +369,9 @@ class _PostEditorDialogState extends State<_PostEditorDialog> {
         const SizedBox(height: 10),
         Row(children: [
           Text('${controller.text.length} chars',
-              style: const TextStyle(fontSize: 10, color: AppColors.muted)),
+              style: TextStyle(
+                  fontSize: 10,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const Spacer(),
           TextButton(
               onPressed: () => Navigator.pop(context),

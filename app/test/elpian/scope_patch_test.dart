@@ -1,0 +1,142 @@
+import 'dart:convert';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:tradera/src/elpian/scope/scope_patch.dart';
+
+void main() {
+  group('ScopePatch.normalizeKey', () {
+    test('trims and rejects empty / "null"', () {
+      expect(ScopePatch.normalizeKey(null), isNull);
+      expect(ScopePatch.normalizeKey('   '), isNull);
+      expect(ScopePatch.normalizeKey('null'), isNull);
+      expect(ScopePatch.normalizeKey('  hud  '), 'hud');
+    });
+  });
+
+  // Build the fixture the way production does: every node is a
+  // `Map<String, dynamic>` (as `jsonDecode` yields), not a `Map<String, Object>`
+  // that map literals would otherwise infer. The round-trip guarantees the
+  // patch path is exercised against the exact map type it sees at runtime.
+  Map<String, dynamic> tree() => jsonDecode(jsonEncode({
+        'type': 'div',
+        'children': [
+          // Mirrors the real `scope()` primitive: the `Scope` wrapper is keyed
+          // `<key>__scope`, the inner content node carries the bare `<key>` that
+          // a client `host.render(view, key)` targets.
+          {
+            'type': 'Scope',
+            'key': 'navbar__scope',
+            'props': <String, dynamic>{},
+            'children': [
+              {
+                'type': 'span',
+                'key': 'navbar',
+                'props': {'text': 'nav'}
+              }
+            ],
+          },
+          {
+            'type': 'Scope',
+            'key': 'hud__scope',
+            'props': <String, dynamic>{},
+            'children': [
+              {
+                'type': 'span',
+                'key': 'hud',
+                'props': {'text': 'old'}
+              }
+            ],
+          },
+        ],
+      })) as Map<String, dynamic>;
+
+  group('ScopePatch.apply', () {
+    test('no scope key → returns the new view (full render)', () {
+      final view = {'type': 'div'};
+      expect(ScopePatch.apply(tree(), view, null), same(view));
+    });
+
+    test('unknown key → returns the new view (caller does full render)', () {
+      final view = {'type': 'div', 'key': 'nope'};
+      expect(ScopePatch.apply(tree(), view, 'nope'), same(view));
+    });
+
+    test('known key → patches subtree in place and bumps enclosing scope token',
+        () {
+      final t = tree();
+      final view = {
+        'type': 'span',
+        'props': {'text': 'new'},
+      };
+      final result = ScopePatch.apply(t, view, 'hud');
+
+      // Mutated the original tree in place (same instance returned).
+      expect(result, same(t));
+
+      final hudScope = (t['children'] as List)[1] as Map<String, dynamic>;
+      // The enclosing Scope's render token was bumped so it rebuilds...
+      expect(hudScope['props']['__scopeRenderToken'], isA<int>());
+      // ...while the untouched navbar scope keeps no token.
+      final navScope = (t['children'] as List)[0] as Map<String, dynamic>;
+      expect(navScope['props'].containsKey('__scopeRenderToken'), isFalse);
+
+      // The matched node now carries the new content + its key (for next time).
+      final patched = (hudScope['children'] as List)[0] as Map<String, dynamic>;
+      expect(patched['props']['text'], 'new');
+      expect(patched['key'], 'hud');
+    });
+
+    test('every apply produces a strictly increasing token', () {
+      final t1 = tree();
+      ScopePatch.apply(t1, {'type': 'span'}, 'hud');
+      final token1 = ((t1['children'] as List)[1] as Map)['props']
+          ['__scopeRenderToken'] as int;
+
+      final t2 = tree();
+      ScopePatch.apply(t2, {'type': 'span'}, 'hud');
+      final token2 = ((t2['children'] as List)[1] as Map)['props']
+          ['__scopeRenderToken'] as int;
+
+      expect(token2, greaterThan(token1));
+    });
+  });
+
+  group('ScopePatch.applyBounded', () {
+    test('no scope key → returns the view (legitimate full render)', () {
+      final view = {
+        'type': 'Scope',
+        'key': 'x',
+        'props': <String, dynamic>{},
+      };
+      expect(ScopePatch.applyBounded(tree(), view, null), same(view));
+      final props = view['props']! as Map<String, dynamic>;
+      expect(props['__scopeRenderToken'], isA<int>());
+    });
+
+    test('null tree → returns the view (first seed)', () {
+      final view = {'type': 'div'};
+      expect(ScopePatch.applyBounded(null, view, 'hud'), same(view));
+    });
+
+    test('known key → patches the tree in place and returns it', () {
+      final t = tree();
+      final result = ScopePatch.applyBounded(t, {'type': 'span'}, 'hud');
+      expect(result, same(t));
+      final patched =
+          (((t['children'] as List)[1] as Map)['children'] as List)[0] as Map;
+      expect(patched['type'], 'span');
+    });
+
+    test('missing key → returns null (caller keeps current; NO global render)',
+        () {
+      final t = tree();
+      final before = jsonEncode(t);
+      final result =
+          ScopePatch.applyBounded(t, {'type': 'span'}, 'does-not-exist');
+      // Signals "miss": caller must keep the current screen, not globalize.
+      expect(result, isNull);
+      // And the tree was left untouched.
+      expect(jsonEncode(t), before);
+    });
+  });
+}

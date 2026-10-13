@@ -1,0 +1,12 @@
+# The Elpian VM, as Tradera's app links it: the crates the native library
+# (crates/elpian-ffi, artifact libelpian_vm) is built from, copied from
+# Elpian's Rust workspace (github.com/cosmopole-org/elpian, rust/). See
+# ../README.md for the copy's origin and how to refresh it.
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "BSD-3-Clause"

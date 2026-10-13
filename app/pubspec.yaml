@@ -22,8 +22,13 @@ dependencies:
   google_sign_in: ^7.2.0
   google_sign_in_web: ^1.1.3
   sign_in_with_apple: ^8.2.0
-  elpian_ui:
-    path: third_party/elpian
+  # The Elpian engine (lib/src/elpian) and its native VM (packages/elpian_vm_native)
+  # are part of this app; these are the packages the engine itself uses.
+  tradera_elpian_vm:
+    path: packages/elpian_vm_native
+  collection: ^1.17.0
+  ffi: ^2.1.0
+  flutter_js: ^0.8.3
   webview_flutter: ^4.14.1
   webview_flutter_web: ^0.2.3+4
 
@@ -35,3 +40,29 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    # The Elpian VM (WebAssembly) and QuickJS runtimes for the web build.
+    - assets/elpian/web_runtime/quickjs_web_runtime.js
+    - assets/elpian/web_runtime/elpian_wasm_loader.js
+    - assets/elpian/web_runtime/vendor/quickjs-emscripten.mjs
+    - assets/elpian/web_runtime/vendor/quickjs-emscripten.wasm
+    - assets/elpian/web_runtime/wasm/elpian_vm/elpian_vm.js
+    - assets/elpian/web_runtime/wasm/elpian_vm/elpian_vm_bg.wasm
+
+  # Generic CSS families for Elpian content: `serif` and `monospace` (and the
+  # stacks that fall back to them) need real faces; Flutter has only its sans.
+  fonts:
+    - family: serif
+      fonts:
+        - asset: assets/elpian/fonts/LiberationSerif-Regular.ttf
+        - asset: assets/elpian/fonts/LiberationSerif-Italic.ttf
+          style: italic
+        - asset: assets/elpian/fonts/LiberationSerif-Bold.ttf
+          weight: 700
+        - asset: assets/elpian/fonts/LiberationSerif-BoldItalic.ttf
+          weight: 700
+          style: italic
+    - family: monospace
+      fonts:
+        - asset: assets/elpian/fonts/LiberationMono-Regular.ttf
+        - asset: assets/elpian/fonts/LiberationMono-Bold.ttf
+          weight: 700

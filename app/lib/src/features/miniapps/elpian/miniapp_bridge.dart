@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:elpian_ui/elpian_ui.dart';
 import 'package:file_selector/file_selector.dart';
 
 import '../../../data/services/tradera_service.dart';
+import '../../../elpian/elpian.dart';
 
 /// Bridges a miniapp's elpian frontend to its backend bot through the user's
 /// signed identity.

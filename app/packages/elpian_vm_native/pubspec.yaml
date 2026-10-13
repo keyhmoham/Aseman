@@ -1,0 +1,25 @@
+name: tradera_elpian_vm
+description: The Elpian VM native library (libelpian_vm), built from its Rust sources for every platform Tradera ships. The Dart side lives in lib/src/elpian of the app.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        ffiPlugin: true
+      ios:
+        ffiPlugin: true
+      linux:
+        ffiPlugin: true
+      macos:
+        ffiPlugin: true
+      windows:
+        ffiPlugin: true

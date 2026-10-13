@@ -1,0 +1,9 @@
+# The Elpian engine is copied from Elpian's Flutter host and kept as close to
+# it as possible, so it is analyzed the way Elpian analyzes it rather than
+# with this app's stricter settings (strict casts, inference, raw types).
+analyzer:
+  errors:
+    deprecated_member_use: ignore
+linter:
+  rules:
+    avoid_print: true

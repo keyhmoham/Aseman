@@ -1,0 +1,144 @@
+# Tradera AIOS
+
+**Tradera AIOS** is an agentic social workspace and federated AI operating system. Users deploy LLM-backed autonomous agents, tools, and miniapps, collaborate in shared spaces/rooms, and manage execution costs via in-platform wallets powered by a distributed ledger.
+
+---
+
+## Architecture Overview
+
+```
+TraderaAIOS/
+├── app/         # Tradera Flutter client (web, iOS, Android, desktop)
+├── services/    # Tradera core node (Go): API gateway, agent runtime, finance, federation
+└── deploy/      # Deployment configurations (Nomad agent, sandbox computer, OpenViking)
+```
+
+| Component | Tech Stack | Role |
+| :--- | :--- | :--- |
+| **`app/`** | Flutter, Dart | Unified UI (Web, iOS, Android and desktop) for chat, projects, agent work, social features, billing and administration. |
+| **`services/`** | Go (Hexagonal architecture) | Core node managing accounts, spaces, wallets, LLM proxy, and node-to-node federation. |
+| **`deploy/`** | Docker, Nomad | Nomad bot scheduler, per-space sandbox container definitions and the agents' memory server. |
+
+---
+
+## Quickstart (Docker)
+
+Run the entire platform with a single command. Docker with the Compose plugin is the only prerequisite.
+
+```bash
+# Start all services (builds images on first run)
+./tradera.sh up
+
+# Or launch with a custom configuration file
+./tradera.sh up path/to/config.yml
+```
+
+> **Note:** `./tradera.sh up` is equivalent to running `docker compose up -d --build`.
+
+### Service Map
+
+| Service | Purpose | Port |
+| :--- | :--- | :--- |
+| **`web`** | Flutter Web client (served via nginx) | [http://localhost:3000](http://localhost:3000) |
+| **`tradera`** | Core Go node (REST/WebSocket API, agent gateway, finance) | [http://localhost:8080](http://localhost:8080) |
+| **`postgres`** | The stack's one database server (Postgres 16 with pgvector): the node's records and the timelines' database | Internal |
+| **`nomad`** | Nomad agent executing bot and agent workloads | Internal |
+| **`sandbox-computer`** | Builds the base sandbox image for spaces, then exits | — |
+| **`deepagents`** | Builds the LangChain/LangGraph agent runtime image, then exits | — |
+| **`openviking`** | Self-hosted [OpenViking](https://openviking.ai): the agents' long-term memory | Internal |
+| **`timeline-db`** | Creates the timelines' database on `postgres` if it is missing, then exits | — |
+| **`timeline`** | Self-hosted [Utopia](https://github.com/deeplethe/utopia): each project's dated timeline, on `postgres` | Internal |
+
+### Accessing the System
+
+1. Open **[http://localhost:3000](http://localhost:3000)** in your browser.
+2. Sign in with the default admin credentials:
+   - **Handle:** `node-a` (or your configured `node.name`)
+   - **Password:** `changeme` (or the value of `TRADERA_ADMIN_PASSWORD` in your `.env`)
+3. Open **Admin Console → LLM** to configure provider API keys (OpenAI, Anthropic, Gemini, Grok, DeepSeek, Vercel AI Gateway, or custom OpenAI-compatible endpoints) and token pricing.
+
+### Common CLI Controls
+
+```bash
+./tradera.sh ps             # Check status of running containers
+./tradera.sh logs [service] # Stream logs (e.g., ./tradera.sh logs tradera)
+./tradera.sh down           # Stop services (persists database and volume data)
+```
+
+---
+
+## Configuration
+
+Configuration values specific to your node live in `services/configs/config.yml` (fallback: `services/configs/config.example.yml`):
+
+```yaml
+node:
+  name: "node-a"              # Node name and handle of the admin account
+  oauth_client_id: ""         # Optional: Google OAuth client ID
+
+sandbox:                      # Shared per-space sandbox backbone
+  backend: "docker"           # "docker" (local per-space container) or "modal" (remote Modal sandbox)
+
+modal:                        # Required only when sandbox.backend is "modal"
+  token_id: "ak-..."
+  token_secret: "as-..."
+```
+
+Additional environment-level overrides (database credentials, transactional email via Resend/SMTP, RevenueCat backend secrets, ports, public URLs, admin password) can be set via `.env`. See [`.env.example`](.env.example) for all available options.
+
+The Flutter client reads the Google web/server client ID from the node at runtime. For an iOS build, also set the `GOOGLE_REVERSED_CLIENT_ID` Xcode build setting to the reversed iOS OAuth client ID and pass that client ID with `--dart-define=GOOGLE_IOS_CLIENT_ID=...`. The iOS target already includes Sign in with Apple and APNs entitlements; signing profiles must enable both capabilities.
+
+---
+
+## Agent Memory
+
+Agents remember through a self-hosted [OpenViking](https://openviking.ai) server (`deploy/openviking`), not files in the sandbox:
+
+- **Isolation:** each space is an OpenViking account and each agent a user in it; one space never sees another's memory.
+- **Notes:** the space's shared notes (`viking://resources/space/notes.md`) and each agent's own (`viking://user/<agent>/memories/notes.md`) are in every agent's prompt; agents keep them with `remember` / `rewrite_notes`.
+- **Recall:** what memory holds about a message is recalled with it, and agents search and read more with `recall` / `read_memory`.
+- **Learning:** every finished turn is committed to the agent's OpenViking session of the room, from which OpenViking extracts long-term memories (preferences, entities, events, cases, patterns, and what it learned about each person).
+- **Models:** OpenViking has no model settings of its own. It calls its models through the node, which uses the ones picked in **Admin → Memory models**: a chat model that learns from conversations and an embedding model that finds memories by meaning, chosen from the providers and models under **Admin → Providers / Models** (mark embedding models as such on Models). Without them agents still keep and read their notes. Changing the embedding model re-indexes every project's memory.
+- **Billing:** a project pays for what its memory uses, like the rest of its agents' work: the memory models' tokens at their own prices (Admin → Models), paid to the owner of the provider's key, counted in the project's spend and against its budget. The payer is whoever ran the project's latest agent turn, else its owner. OpenViking names the project of every model call (`deploy/openviking/sitecustomize.py`), and the node charges each project every 30 seconds. A project that cannot pay gets no memory model calls until it can.
+- **Setup:** nothing to configure: the root key is generated into `.env` on first start. Requests marked "no memory" never reach OpenViking. Notes kept in a space's sandbox `AGENTS.md` files before are imported once, and the project's Memory screen reads and edits the notes in OpenViking.
+
+## Project Timeline
+
+Every project keeps a dated timeline of its work and events, and every agent can read it. It lives in a self-hosted [Utopia](https://github.com/deeplethe/utopia) server (service `timeline`), a bitemporal knowledge graph, which runs on the stack's own Postgres in a database of its own (`tradera_timeline`); there is no second database server.
+
+- **What is on it:** people's requests and how they ended, the tools each agent ran, room messages and agents' work logs, model usage and cost, files shared, members joining, rooms opened, routines and their runs. The node reads these from its own records (the `timeline` namespace) and pushes them about every 10 seconds, history included on first start. Each entry carries when it happened and when it was recorded.
+- **Agents:** the timeline is a built-in MCP server of every agent, on by default. The runtime reaches it only through the node's agent gateway (`/deepagents/v1/timeline/mcp`), which forwards to the turn's own project; agents see it as `timeline_*` tools (find, history, changes, facts, related, paths, search, entry), whatever tools they are otherwise allowed, and are told in their prompt when to use them. Reads only: Utopia's write tool is not served. Requests marked "no memory" get no timeline.
+- **Isolation:** each project is a knowledge base of its own in Utopia; an agent never names the project or holds a Utopia key.
+- **No models needed:** events go in as structured statements, so building and reading the timeline uses no LLM.
+- **Setup:** nothing to configure: the node's Utopia password (`TRADERA_TIMELINE_PASSWORD`) is generated into `.env` on first start, and the node creates its account, each project's knowledge base and its read token itself. Set `TRADERA_TIMELINE_URL=` (empty) in `.env` to turn timelines off. Admins see each feed's progress with `timeline.status`.
+
+## LLM Providers & Billing
+
+- **Provider Management:** Admin users can register API keys and set per-model input/output token pricing directly from the web UI (**Admin → LLM**).
+- **Execution & Metering:** All model calls route through the node's metered LLM proxy, ensuring exact usage tracking based on provider responses.
+- **Billing Mechanics:** Agent work is billed to the account that initiated the task (`pay_llm` for model tokens, `pay_bot` / `pay_node` for execution runtime).
+- **Decision Model:** Optionally pick a decision model such as TypeSafe AI's Jev on Vercel AI Gateway (**Admin → Decision model**). Agents then use it for tool selection, routing and work checks together with their own model; turned off, every agent decides with its own model.
+- **First Boot Bootstrap:** To automatically seed an initial LLM provider on startup, set `TRADERA_LLM_API_KEY` (and optionally `TRADERA_LLM_MODEL`) in your `.env`.
+
+---
+
+## Local Development
+
+### Backend (`services/`)
+- Built with Go. See [`services/README.md`](services/README.md) for architecture details, plugin systems, and unit test execution (`make build`, `make test`).
+- When run directly without Docker variables, the node operates in-memory with local cache.
+
+### Client (`app/`)
+- Built with Flutter.
+- Start dev server:
+  ```bash
+  cd app
+  flutter pub get
+  flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8080
+  ```
+- Code checks:
+  ```bash
+  flutter analyze
+  flutter test
+  ```
+- Refer to [`app/README.md`](app/README.md) for client architecture and backend wiring.

@@ -1,0 +1,207 @@
+// Package bot defines the VM-backed bot entity. Every running VM in the
+// federated network is a bot. The bot's lifecycle is managed through the VMM
+// port; its financials through the finance services.
+package bot
+
+import (
+	"strings"
+
+	"gopkg.in/yaml.v3"
+	"time"
+
+	"github.com/tradera/tradera/internal/plugins/entity"
+	"github.com/tradera/tradera/internal/plugins/identity"
+)
+
+// Kind classifies what a bot is used for. Agents are LLM-driven assistants
+// (served by the deep agents runtime); miniapps are wasm-backed bots with an elpian frontend (surfaced
+// as tools in the client); tool is a generic helper bot.
+type Kind string
+
+const (
+	KindAgent   Kind = "agent"
+	KindMiniapp Kind = "miniapp"
+	KindTool    Kind = "tool"
+)
+
+// VMType supported by the VMM layer.
+type VMType string
+
+const (
+	// VMTypeContainer is a standalone Docker Engine container (the shared
+	// per-space sandbox when sandbox.backend=docker). Distinct from
+	// VMTypeDocker (Nomad docker jobs) so VMMFor resolves it unambiguously.
+	VMTypeContainer VMType = "container"
+	VMTypeDocker    VMType = "docker"
+	VMTypeWASM      VMType = "wasm"
+	VMTypeModal     VMType = "modal"
+	// VMTypeDeepAgents is an agent served by the deep agents runtime. Every
+	// agent (the built-in tradera lead and every market agent) runs on it.
+	VMTypeDeepAgents VMType = "deepagents"
+)
+
+// AgentVMType maps the agent engine a record or request names onto the one
+// agent runtime. Engines this node no longer runs ("langchain", "grok") are
+// served by deep agents, so older records and older clients keep working.
+func AgentVMType(t VMType) VMType {
+	switch t {
+	case "langchain", "grok", "":
+		return VMTypeDeepAgents
+	}
+	return t
+}
+
+// Status lifecycle states of a bot VM.
+type Status string
+
+const (
+	StatusPending  Status = "pending"
+	StatusCreating Status = "creating"
+	StatusRunning  Status = "running"
+	StatusStopped  Status = "stopped"
+	StatusPaused   Status = "paused"
+	StatusEnded    Status = "ended"
+	StatusFailed   Status = "failed"
+)
+
+// ResourceProfile describes the resource limits/requests of a bot VM.
+type ResourceProfile struct {
+	CPU           float64 `json:"cpu"`    // vCPU
+	Memory        int64   `json:"memory"` // MB
+	Disk          int64   `json:"disk"`   // MB
+	MaxRuntimeSec int64   `json:"max_runtime_sec,omitempty"`
+}
+
+// CostModel prices the bot execution. Billing is metered per minute across
+// three dimensions and summed:
+//
+//   - execution time  → PerMinute × minutes
+//   - VM resources    → (cpu×CPUPerMin) + (ramGB×MemoryPerGBMin) + (diskGB×DiskPerGBMin) × minutes
+//   - LLM tokens      → tokensIn×TokenInRate/1000 + tokensOut×TokenOutRate/1000 (langchain agents)
+//
+// Amounts are integer credits.
+type CostModel struct {
+	PerMinute int64 `json:"per_minute"` // base execution time rate (credits/min)
+	// PerCall is a flat price for every call of the bot (a tool or miniapp
+	// call), on top of the time and resources it runs for.
+	PerCall   int64 `json:"per_call,omitempty"`
+	ImageCost int64 `json:"image_cost,omitempty"`
+
+	// Resource rates (credits per minute per unit).
+	CPUPerMin      int64 `json:"cpu_per_min,omitempty"`       // per vCPU
+	MemoryPerGBMin int64 `json:"memory_per_gb_min,omitempty"` // per GB RAM
+	DiskPerGBMin   int64 `json:"disk_per_gb_min,omitempty"`   // per GB disk
+
+	// Token rates (credits per 1000 tokens).
+	TokenInRate  int64 `json:"token_in_rate,omitempty"`  // input (prompt) tokens
+	TokenOutRate int64 `json:"token_out_rate,omitempty"` // output (completion) tokens
+}
+
+// Bot is a VM operating as a federation participant.
+type Bot struct {
+	entity.Entity
+	OwnerID   identity.ID `db:"owner_id" json:"owner_id"` // account that deploys the VM
+	AccountID identity.ID `db:"account_id" json:"account_id"`
+	Name      string      `db:"name" json:"name"`
+	Kind      Kind        `db:"kind" json:"kind,omitempty"` // agent | miniapp | tool
+	VMType    VMType      `db:"vm_type" json:"vm_type"`
+	Status    Status      `db:"status" json:"status"`
+	VMID      string      `db:"vm_id" json:"vm_id,omitempty"` // provider VM id
+	ImageRef  string      `db:"image_ref" json:"image_ref,omitempty"`
+	SpecYML   string      `db:"spec_yml" json:"-"`                    // the VM configuration yml
+	Resources string      `db:"resources" json:"resources,omitempty"` // JSON ResourceProfile
+	Cost      string      `db:"cost" json:"cost,omitempty"`           // JSON CostModel
+	PoolID    string      `db:"pool_id" json:"pool_id,omitempty"`     // finance pool id
+	// Frontend is the elpian mini-app bundle (JSON manifest + source) served to
+	// clients that launch the bot's UI inside an elpian sandbox.
+	Frontend string `db:"frontend" json:"frontend,omitempty"`
+	// FrontendRef optionally points at a stored file/ref hosting the bundle.
+	FrontendRef string     `db:"frontend_ref" json:"frontend_ref,omitempty"`
+	StartedAt   *time.Time `db:"started_at" json:"started_at,omitempty"`
+	StoppedAt   *time.Time `db:"stopped_at" json:"stopped_at,omitempty"`
+}
+
+// ParseResources decodes the resource profile JSON column.
+func (b *Bot) ParseResources() (*ResourceProfile, error) {
+	var p ResourceProfile
+	if b.Resources == "" {
+		return &p, nil
+	}
+	if err := unmarshalJSON(b.Resources, &p); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// ParseCost decodes the cost model JSON column.
+func (b *Bot) ParseCost() (*CostModel, error) {
+	var c CostModel
+	if b.Cost == "" {
+		return &c, nil
+	}
+	if err := unmarshalJSON(b.Cost, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// IsSandbox reports whether the bot is a space's shared sandbox (the computer
+// the space's agents work on), which the platform prices itself.
+func (b *Bot) IsSandbox() bool {
+	if b.Kind != KindTool || !strings.HasPrefix(b.Name, "sbx-") {
+		return false
+	}
+	switch b.VMType {
+	case VMTypeContainer, VMTypeDocker, VMTypeModal:
+		return true
+	}
+	return false
+}
+
+// ExecutionPriced reports whether the cost model charges for execution time
+// or resources (as opposed to only tokens or images).
+func (c *CostModel) ExecutionPriced() bool {
+	return c != nil && (c.PerMinute != 0 || c.CPUPerMin != 0 || c.MemoryPerGBMin != 0 || c.DiskPerGBMin != 0)
+}
+
+// StatusFromVMM maps a provider VM status onto the bot status.
+func StatusFromVMM(s string) Status {
+	switch s {
+	case "running":
+		return StatusRunning
+	case "pending", "creating":
+		return StatusPending
+	case "stopped":
+		return StatusStopped
+	case "paused":
+		return StatusPaused
+	case "ended":
+		return StatusEnded
+	case "failed":
+		return StatusFailed
+	default:
+		return StatusPending
+	}
+}
+
+// IsTradera identifies the reserved platform orchestrator image.
+func IsTradera(rec *Bot) bool { return rec != nil && rec.ImageRef == "tradera.wasm" }
+
+// BuiltinTraderaImage is the reserved image ref marking the built-in lead agent
+// (identified by this, not by its name, which an admin may change).
+const BuiltinTraderaImage = "tradera.wasm"
+
+// IsBuiltinLead reports whether the bot is the built-in lead agent.
+func (b *Bot) IsBuiltinLead() bool { return b != nil && b.ImageRef == BuiltinTraderaImage }
+
+// AgentBackbone extracts the LLM provider and model from an agent's yml spec.
+func AgentBackbone(specYML string) (provider, model string) {
+	var spec struct {
+		Provider string `yaml:"provider"`
+		Model    string `yaml:"model"`
+	}
+	if strings.TrimSpace(specYML) == "" || yaml.Unmarshal([]byte(specYML), &spec) != nil {
+		return "", ""
+	}
+	return spec.Provider, spec.Model
+}

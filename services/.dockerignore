@@ -1,0 +1,13 @@
+bin/
+data/
+*.test
+.idea/
+.vscode/
+configs/*.local.yml
+
+# Local secrets are mounted at runtime, never copied into the build source.
+.env
+.env.*
+configs/config.yml
+
+plugins/.builds/

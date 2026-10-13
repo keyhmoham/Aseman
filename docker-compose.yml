@@ -1,0 +1,247 @@
+# Tradera / tradera — full stack in one command:
+#
+#   ./tradera.sh up [path/to/config.yml]
+#   # or: docker compose up -d --build   (uses services/configs/config.example.yml)
+#
+# The config file only carries node identity, Google sign-in (optional) and the
+# Modal credentials. Postgres, Nomad, the docker sandbox host, storage and HTTP
+# are wired here through TRADERA_* environment variables, and LLM providers
+# (API keys, models, token prices) are managed in the app's admin panel.
+# Optional settings live in .env (see .env.example).
+name: tradera
+
+services:
+  # The stack's one Postgres: the node's records, and the spaces' timelines
+  # (Utopia) in a database of their own. postgres:16-alpine with pgvector
+  # added (deploy/postgres), so existing data volumes keep working.
+  postgres:
+    build: ./deploy/postgres
+    image: tradera/postgres:16-pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tradera}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tradera}
+      POSTGRES_DB: ${POSTGRES_DB:-tradera}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  nomad:
+    image: hashicorp/nomad:${NOMAD_VERSION:-1.10}
+    restart: unless-stopped
+    command:
+      - agent
+      - -config=/etc/nomad.d/nomad.hcl
+      - -data-dir=${NOMAD_DATA_DIR:-/tmp/tradera-nomad}
+    # The docker task driver manages containers on the host docker daemon.
+    # Use the host cgroup namespace so the nomad client can create its own
+    # cgroups (cgroup v2 subtree_control) inside the container.
+    privileged: true
+    cgroup: host
+    volumes:
+      - ./deploy/nomad/nomad.hcl:/etc/nomad.d/nomad.hcl:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Same path inside and outside: allocation dirs are bind-mounted into
+      # task containers by the host docker daemon.
+      - ${NOMAD_DATA_DIR:-/tmp/tradera-nomad}:${NOMAD_DATA_DIR:-/tmp/tradera-nomad}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4646/v1/status/leader | grep -q ':'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # The sandbox computer: the default per-space sandbox image (the shared
+  # shell and files of a space's agents). Built here so the node can create
+  # sandboxes from it; the container itself exits immediately.
+  sandbox-computer:
+    build: ./deploy/sandbox-computer
+    image: tradera/sandbox-computer:latest
+    command: ["true"]
+    restart: "no"
+
+  # The deep agents runtime (LangChain deepagents on LangGraph) that runs every
+  # agent. Built here; the node runs it as a Nomad service on the stack's
+  # network (alias tradera-deepagents) the first time an agent works. The
+  # tag is pinned because Nomad always pulls ":latest" images.
+  deepagents:
+    build: ./services/plugins/adapters/vmm/deepagents/runtime
+    image: tradera/deepagents:v1
+    command: ["true"]
+    restart: "no"
+
+  # Self-hosted OpenViking (https://openviking.ai): the context database that
+  # keeps the agents' memory (each space is an account, each agent a user).
+  # Reached only on the stack's network, by the deep agents runtime and the
+  # node, with the root key (./tradera.sh up generates one into .env). It
+  # has no model settings: it calls its models through the node, which uses
+  # the ones picked under Admin → Memory models.
+  openviking:
+    build: ./deploy/openviking
+    image: tradera/openviking:v1
+    restart: unless-stopped
+    environment:
+      OPENVIKING_ROOT_API_KEY: ${TRADERA_OPENVIKING_ROOT_KEY:?set TRADERA_OPENVIKING_ROOT_KEY in .env (./tradera.sh up generates one)}
+      OPENVIKING_NODE_URL: http://tradera:8080
+    volumes:
+      - openviking-data:/data
+
+  # Creates the timelines' database on the node's Postgres (with pgvector)
+  # if it is missing, then exits. Runs on every start; changes nothing when
+  # the database is there.
+  timeline-db:
+    build: ./deploy/postgres
+    image: tradera/postgres:16-pgvector
+    command: ["timeline-db"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-tradera}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tradera}
+      POSTGRES_DB: ${POSTGRES_DB:-tradera}
+      TIMELINE_DB: ${TRADERA_TIMELINE_DB:-tradera_timeline}
+
+  # The spaces' timelines: Utopia (https://github.com/deeplethe/utopia), a
+  # bitemporal knowledge graph, on the node's own Postgres (no database of its
+  # own). The node pushes each space's events into it and serves it to every
+  # agent as a built-in MCP server. Reached only on the stack's network; the
+  # node signs in with TRADERA_TIMELINE_PASSWORD (./tradera.sh up
+  # generates one). Its own web console is not published.
+  timeline:
+    image: ${TRADERA_TIMELINE_IMAGE:-ghcr.io/deeplethe/utopia:0.1.0-rc9}
+    restart: unless-stopped
+    depends_on:
+      timeline-db:
+        condition: service_completed_successfully
+    environment:
+      UTOPIA_DATABASE_URL: postgres://${POSTGRES_USER:-tradera}:${POSTGRES_PASSWORD:-tradera}@postgres:5432/${TRADERA_TIMELINE_DB:-tradera_timeline}
+      UTOPIA_BIND_ADDR: 0.0.0.0:1516
+      UTOPIA_DATA_DIR: /app/data
+      UTOPIA_WEB_DIST: /app/web-dist
+      # Only the first account (the node's) may register.
+      UTOPIA_OPEN_REGISTRATION: "false"
+      # Its share of the node's Postgres connections (max_connections 100).
+      UTOPIA_DB_MAX_CONNECTIONS: ${TRADERA_TIMELINE_DB_CONNECTIONS:-16}
+    volumes:
+      # Full-text index, the signing and sealing keys Utopia generates.
+      - timeline-data:/app/data
+
+  tradera:
+    build: ./services
+    image: tradera/traderad:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nomad:
+        condition: service_healthy
+      sandbox-computer:
+        condition: service_completed_successfully
+      deepagents:
+        condition: service_completed_successfully
+      openviking:
+        condition: service_healthy
+      timeline:
+        condition: service_started
+    environment:
+      TRADERA_CONFIG: /app/config.yml
+      TRADERA_DATABASE_DSN: postgres://${POSTGRES_USER:-tradera}:${POSTGRES_PASSWORD:-tradera}@postgres:5432/${POSTGRES_DB:-tradera}?sslmode=disable
+      TRADERA_NOMAD_URL: http://nomad:4646
+      TRADERA_DOCKER_HOST: unix:///var/run/docker.sock
+      # Sandbox backbone: "docker" = one docker container per space (default),
+      # "modal" = Modal remote sandboxes. One variable switches the whole stack.
+      TRADERA_SANDBOX_BACKEND: ${TRADERA_SANDBOX_BACKEND:-docker}
+      # Modal credentials (only used when the backend is "modal"). The config
+      # file's modal: section wins if it sets them.
+      TRADERA_MODAL_TOKEN_ID: ${TRADERA_MODAL_TOKEN_ID:-}
+      TRADERA_MODAL_TOKEN_SECRET: ${TRADERA_MODAL_TOKEN_SECRET:-}
+      # Modal environment (e.g. "dev") holding this node's sandboxes, volumes and
+      # costs. Empty = the Modal profile default. Keep local and prod different.
+      TRADERA_MODAL_ENVIRONMENT: ${TRADERA_MODAL_ENVIRONMENT:-}
+      # Docker sandbox containers join the node's network so proxied sandbox
+      # ports are reachable from this containerized node.
+      TRADERA_SANDBOX_DOCKER_NETWORK: ${TRADERA_SANDBOX_DOCKER_NETWORK:-tradera_default}
+      # Sandbox computer image (default: the sandbox computer built above).
+      TRADERA_SANDBOX_IMAGE: ${TRADERA_SANDBOX_IMAGE:-tradera/sandbox-computer:latest}
+      # The deep agents runtime: its image, the node as the runtime reaches it
+      # (agent gateway + metered LLM proxy) and the network it joins.
+      TRADERA_AGENT_RUNTIME_IMAGE: ${TRADERA_AGENT_RUNTIME_IMAGE:-tradera/deepagents:v1}
+      TRADERA_AGENT_NODE_URL: ${TRADERA_AGENT_NODE_URL:-http://tradera:8080}
+      TRADERA_AGENT_RUNTIME_NETWORK: ${TRADERA_AGENT_RUNTIME_NETWORK:-tradera_default}
+      # Memory (MB) the runtime reserves on Nomad. Lower it on a small server, raise it on a big one.
+      TRADERA_AGENT_RUNTIME_MEMORY_MB: ${TRADERA_AGENT_RUNTIME_MEMORY_MB:-2048}
+      # Set to run the runtime yourself instead (e.g. http://host:8000).
+      TRADERA_AGENT_RUNTIME_URL: ${TRADERA_AGENT_RUNTIME_URL:-}
+      # The agents' memory: the self-hosted OpenViking above, as the runtime
+      # reaches it, and how much it recalls with each message (tokens).
+      TRADERA_OPENVIKING_URL: ${TRADERA_OPENVIKING_URL:-http://openviking:1933}
+      TRADERA_OPENVIKING_API_KEY: ${TRADERA_OPENVIKING_ROOT_KEY:-}
+      TRADERA_OPENVIKING_RECALL_TOKENS: ${TRADERA_OPENVIKING_RECALL_TOKENS:-1500}
+      # The spaces' timelines: the Utopia server above and the node's account
+      # in it. Set TRADERA_TIMELINE_URL to an empty value to turn them off.
+      TRADERA_TIMELINE_URL: ${TRADERA_TIMELINE_URL-http://timeline:1516}
+      TRADERA_TIMELINE_EMAIL: ${TRADERA_TIMELINE_EMAIL:-timeline@tradera.local}
+      TRADERA_TIMELINE_PASSWORD: ${TRADERA_TIMELINE_PASSWORD:?set TRADERA_TIMELINE_PASSWORD in .env (./tradera.sh up generates one)}
+      # Allow MCP tools on private addresses (e.g. MCP servers on this stack's
+      # network). Off by default: tool URLs are user-supplied.
+      TRADERA_MCP_ALLOW_PRIVATE: ${TRADERA_MCP_ALLOW_PRIVATE:-false}
+      TRADERA_HTTP_ADDR: ":8080"
+      TRADERA_REVENUECAT_SECRET: ${TRADERA_REVENUECAT_SECRET:-}
+      TRADERA_REVENUECAT_PRODUCTS: ${TRADERA_REVENUECAT_PRODUCTS:-}
+      # What buyers actually paid (after discounts), read from RevenueCat's v2 API.
+      TRADERA_REVENUECAT_PROJECT: ${TRADERA_REVENUECAT_PROJECT:-}
+      TRADERA_REVENUECAT_V2_SECRET: ${TRADERA_REVENUECAT_V2_SECRET:-}
+      TRADERA_RESEND_API_KEY: ${TRADERA_RESEND_API_KEY:-}
+      TRADERA_SMTP_HOST: ${TRADERA_SMTP_HOST:-}
+      TRADERA_SMTP_FROM: ${TRADERA_SMTP_FROM:-}
+      TRADERA_SMTP_USER: ${TRADERA_SMTP_USER:-}
+      TRADERA_SMTP_PASSWORD: ${TRADERA_SMTP_PASSWORD:-}
+      TRADERA_GOOGLE_CLIENT_ID: ${TRADERA_GOOGLE_CLIENT_ID:-}
+      TRADERA_APPLE_CLIENT_ID: ${TRADERA_APPLE_CLIENT_ID:-}
+      # iOS push notifications (an APNs auth key from the Apple developer account).
+      TRADERA_APNS_KEY: ${TRADERA_APNS_KEY:-}
+      TRADERA_APNS_KEY_ID: ${TRADERA_APNS_KEY_ID:-}
+      TRADERA_APNS_TEAM_ID: ${TRADERA_APNS_TEAM_ID:-}
+      TRADERA_APNS_TOPIC: ${TRADERA_APNS_TOPIC:-}
+      TRADERA_NODE_URL: ${TRADERA_PUBLIC_URL:-http://localhost:8080}
+      TRADERA_ADMIN_PASSWORD: ${TRADERA_ADMIN_PASSWORD:-changeme}
+      # Optional: seeds the first LLM provider on first boot (manage keys in
+      # the admin panel afterwards).
+      TRADERA_LLM_API_KEY: ${TRADERA_LLM_API_KEY:-}
+      TRADERA_LLM_BASE_URL: ${TRADERA_LLM_BASE_URL:-}
+      TRADERA_LLM_MODEL: ${TRADERA_LLM_MODEL:-}
+      # Optional: pin the built-in tradera lead agent to one of the
+      # admin-configured LLM providers (by provider name/id/kind) + model.
+      # Every other agent uses its own model or the node's default provider.
+      TRADERA_ORCHESTRATOR_PROVIDER: ${TRADERA_ORCHESTRATOR_PROVIDER:-}
+      TRADERA_ORCHESTRATOR_MODEL: ${TRADERA_ORCHESTRATOR_MODEL:-}
+    volumes:
+      - ${TRADERA_CONFIG_FILE:-./services/configs/config.example.yml}:/app/config.yml:ro
+      - tradera-data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "${TRADERA_PORT:-8080}:8080"
+
+  # The Flutter web client (nginx). It proxies the node's API (/v1) on the same
+  # origin, so the browser only ever talks to this port.
+  web:
+    build: ./app
+    image: tradera/flutter-web:latest
+    restart: unless-stopped
+    depends_on:
+      tradera:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-3000}:80"
+
+volumes:
+  postgres-data:
+  tradera-data:
+  openviking-data:
+  timeline-data:

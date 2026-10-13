@@ -1,0 +1,111 @@
+# On every push to main: ship the repo to your server over SSH and (re)start the
+# whole stack there with docker compose. The server keeps its own .env (and
+# services/configs/config.yml); this workflow never writes or deletes them.
+# The sandbox image for Modal is published by sandbox-image.yml, only when it changes.
+#
+# Setup (once): see deploy/README.md: repository secrets, DNS.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+# Two ways to deploy, chosen by the commit message:
+#
+#   (default)        GitHub's runner uploads the repo and the SERVER builds the images
+#                    (about 8 minutes on a small server).
+#   [self-hosted]    in the commit message: your own machine (a self-hosted runner, labelled
+#                    "self-hosted" + "macOS") builds the images natively, pushes them to your
+#                    private GHCR, and the server only pulls and restarts. See deploy/README.md.
+jobs:
+  deploy:
+    name: Deploy the stack to the server
+    runs-on: ${{ fromJSON(contains(github.event.head_commit.message, '[self-hosted]') && '["self-hosted","macOS"]' || '"ubuntu-latest"') }}
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    env:
+      SELF_HOSTED: ${{ contains(github.event.head_commit.message, '[self-hosted]') }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '/opt/tradera' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # The key and ssh config live in the job's temp folder and are removed at the end,
+      # so a self-hosted runner leaves nothing in ~/.ssh.
+      - name: SSH setup
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          dir="$RUNNER_TEMP/deploy-ssh"
+          install -m 700 -d "$dir"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$dir/id_deploy"
+          chmod 600 "$dir/id_deploy"
+          ssh-keyscan -H "$DEPLOY_HOST" > "$dir/known_hosts" 2>/dev/null
+          cat > "$dir/config" <<CFG
+          Host deploy
+            HostName $DEPLOY_HOST
+            User $DEPLOY_USER
+            IdentityFile $dir/id_deploy
+            UserKnownHostsFile $dir/known_hosts
+            ServerAliveInterval 30
+          CFG
+          echo "SSH_CONFIG=$dir/config" >> "$GITHUB_ENV"
+
+      - name: Upload the repo
+        run: |
+          ssh -F "$SSH_CONFIG" deploy "mkdir -p '$DEPLOY_PATH'"
+          rsync -az --delete -e "ssh -F $SSH_CONFIG" \
+            --exclude '.git' --exclude '.github' \
+            --exclude 'app/build' --exclude 'app/.dart_tool' \
+            --exclude '/.env' --exclude 'services/configs/config.yml' \
+            ./ "deploy:$DEPLOY_PATH/"
+
+      # [self-hosted]: build on this machine, ship images through GHCR, restart.
+      - name: Build here, deploy images
+        if: env.SELF_HOSTED == 'true'
+        env:
+          SSH_TARGET: deploy
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_OWNER: ${{ github.repository_owner }}
+        run: ./deploy/ship.sh
+
+      # Default: the server builds.
+      - name: Start the stack (server builds)
+        if: env.SELF_HOSTED != 'true'
+        run: |
+          ssh -F "$SSH_CONFIG" deploy bash -s <<REMOTE
+          set -euo pipefail
+          cd '$DEPLOY_PATH'
+          # Settings live on the server (never in GitHub): create .env there once.
+          [ -f .env ] || { echo "Missing $DEPLOY_PATH/.env on the server. See deploy/README.md." >&2; exit 1; }
+          # The agents' memory server (OpenViking) needs a root key: made once, kept in .env.
+          grep -qs '^TRADERA_OPENVIKING_ROOT_KEY=.' .env || printf '\\nTRADERA_OPENVIKING_ROOT_KEY=%s\\n' "\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')" >> .env
+          # The node's account in the timelines' server (Utopia): made once, kept in .env.
+          grep -qs '^TRADERA_TIMELINE_PASSWORD=.' .env || printf '\\nTRADERA_TIMELINE_PASSWORD=%s\\n' "\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')" >> .env
+          mkdir -p /tmp/tradera-nomad
+          # Free disk before building: the parallel image builds need several GB of scratch space.
+          docker image prune -af --filter "until=72h"
+          docker builder prune -f --keep-storage 6GB
+          df -h /
+          # Build first while the site keeps running; only then swap the containers.
+          docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml build
+          # Remove only service containers; keep volumes and networks.
+          docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml rm --stop --force
+          docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --no-build --remove-orphans
+          docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml ps
+          docker image prune -af --filter "until=72h"
+          docker builder prune -f --keep-storage 6GB
+          REMOTE
+
+      - name: Remove the deploy key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/deploy-ssh"

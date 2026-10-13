@@ -1,0 +1,10 @@
+{
+  "name": "Tradera",
+  "short_name": "Tradera",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#36a7ff",
+  "description": "Agentic social workspace for traders",
+  "orientation": "any"
+}

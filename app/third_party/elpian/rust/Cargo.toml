@@ -1,0 +1,18 @@
+# The Elpian Rust workspace.
+#
+# A *virtual* manifest: it defines no package of its own, so every crate lives
+# under `crates/` on equal footing. Previously `elpian-vm` was both the root
+# package and the workspace root, which put the VM's own `src/` beside its
+# member crates and made the layout read as though the VM contained them.
+#
+# `rust/target/` stays the shared build directory, so the Flutter build wiring
+# (rust_builder's CMake and podspecs, which look for
+# `rust/target/release/libelpian_vm.*`) keeps resolving.
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "BSD-3-Clause"

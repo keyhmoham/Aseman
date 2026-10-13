@@ -1,0 +1,18 @@
+# Build artifacts
+bin/
+*.exe
+*.test
+
+# Runtime data (node identity, keys, logs, uploaded files)
+data/
+!data/.gitkeep
+
+# Local config overrides
+configs/*.local.yml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+# Temporary source packages used by native runtime builds.
+plugins/.builds/

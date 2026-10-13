@@ -1,0 +1,17 @@
+{
+  "name": "elpian-wasm",
+  "type": "module",
+  "description": "wasm-bindgen browser adapter for the Elpian VM.",
+  "version": "0.1.0",
+  "license": "BSD-3-Clause",
+  "files": [
+    "elpian_vm_bg.wasm",
+    "elpian_vm.js",
+    "elpian_vm.d.ts"
+  ],
+  "main": "elpian_vm.js",
+  "types": "elpian_vm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

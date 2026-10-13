@@ -1,0 +1,12 @@
+build/
+.dart_tool/
+**/.dart_tool/
+**/build/
+**/target/
+.idea/
+.vscode/
+android/
+ios/
+macos/
+windows/
+linux/

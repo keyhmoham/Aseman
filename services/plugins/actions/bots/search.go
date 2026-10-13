@@ -1,0 +1,91 @@
+package bots
+
+import (
+	"context"
+	"strings"
+
+	"github.com/tradera/tradera/internal/plugins/api"
+	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
+	"github.com/tradera/tradera/plugins/actions/support/helper"
+	"github.com/tradera/tradera/plugins/adapters/database/ports"
+)
+
+// SearchBots lists bots platform-wide (any owner), optionally filtered by one
+// or more comma-separated kinds (agent, miniapp, tool) and a name substring,
+// newest first. This powers the Explore → global search so the whole platform's
+// agents/tools are discoverable, not just the caller's own bots.
+func (s *Service) SearchBots(ctx context.Context, query, kind string, limit, offset int) ([]bot.Bot, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var kinds map[string]bool
+	if kind != "" {
+		kinds = map[string]bool{}
+		for _, k := range strings.Split(kind, ",") {
+			k = strings.TrimSpace(k)
+			if k != "" {
+				kinds[k] = true
+			}
+		}
+	}
+	var all []bot.Bot
+	if err := s.R.List(ctx, "bots", database.Filter{OrderBy: "created_at", Asc: false}, &all); err != nil {
+		return nil, err
+	}
+	q := strings.ToLower(strings.TrimSpace(query))
+	var out []bot.Bot
+	for _, b := range all {
+		if kinds != nil && !kinds[string(b.Kind)] {
+			continue
+		}
+		if q != "" && !strings.Contains(strings.ToLower(b.Name), q) {
+			continue
+		}
+		out = append(out, b)
+	}
+	if offset > len(out) {
+		offset = len(out)
+	}
+	out = out[offset:]
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+// botSearchAction implements bots.bot_search.
+type botSearchAction struct{ s *Service }
+
+func (a *botSearchAction) Meta() api.ActionMeta {
+	return api.ActionMeta{Namespace: "bots", Name: "bot_search", Summary: "Search agents/miniapps/tools across the whole platform"}
+}
+func (a *botSearchAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+	if err := helper.RequireAuthenticated(req); err != nil {
+		return nil, err
+	}
+	var in struct {
+		Query  string `json:"query,omitempty"`
+		Kind   string `json:"kind,omitempty"` // agent | miniapp | tool
+		Limit  int    `json:"limit,omitempty"`
+		Offset int    `json:"offset,omitempty"`
+	}
+	if err := helper.Decode(req, &in); err != nil {
+		return nil, err
+	}
+	list, err := a.s.SearchBots(ctx, in.Query, in.Kind, in.Limit, in.Offset)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(list))
+	for i := range list {
+		out = append(out, map[string]any{
+			"id": list[i].ID.String(), "name": list[i].Name,
+			"kind": string(list[i].Kind), "vm_type": string(list[i].VMType),
+			"status": string(list[i].Status), "owner_id": list[i].OwnerID.String(),
+		})
+	}
+	return helper.JSON(map[string]any{"bots": out})
+}

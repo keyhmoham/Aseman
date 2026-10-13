@@ -1,0 +1,165 @@
+// Package mail delivers the auth namespace's transactional email (one-time
+// codes). It supports the Resend API (via TRADERA_RESEND_API_KEY) or standard
+// SMTP. If neither is configured, messages are written to the node log so a
+// development node stays usable without external services.
+package mail
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/smtp"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/tradera/tradera/pkg/logger"
+)
+
+// Environment variables configuring email delivery.
+const (
+	EnvResendKey = "TRADERA_RESEND_API_KEY" // Resend API key (re_...)
+
+	EnvHost     = "TRADERA_SMTP_HOST" // host[:port], port defaults to 587
+	EnvFrom     = "TRADERA_SMTP_FROM" // sender address (e.g. noreply@yourdomain.com)
+	EnvUser     = "TRADERA_SMTP_USER"
+	EnvPassword = "TRADERA_SMTP_PASSWORD"
+)
+
+// Sender delivers one message.
+type Sender interface {
+	Send(ctx context.Context, to, subject, body string) error
+	// Transport names the delivery mechanism ("resend", "smtp", or "log").
+	Transport() string
+}
+
+// FromEnv returns the configured email sender:
+// 1. Resend API sender if TRADERA_RESEND_API_KEY is set.
+// 2. SMTP sender if TRADERA_SMTP_HOST is set.
+// 3. Fallback log sender for local development.
+func FromEnv(log *logger.Logger) Sender {
+	from := strings.TrimSpace(os.Getenv(EnvFrom))
+	if from == "" {
+		from = "no-reply@localhost"
+	}
+
+	resendKey := strings.TrimSpace(os.Getenv(EnvResendKey))
+	if resendKey != "" {
+		return &resendSender{
+			apiKey: resendKey,
+			from:   from,
+			client: &http.Client{Timeout: 15 * time.Second},
+		}
+	}
+
+	host := strings.TrimSpace(os.Getenv(EnvHost))
+	if host != "" {
+		if !strings.Contains(host, ":") {
+			host += ":587"
+		}
+		return smtpSender{
+			addr:     host,
+			from:     from,
+			user:     os.Getenv(EnvUser),
+			password: os.Getenv(EnvPassword),
+		}
+	}
+
+	return logSender{log: log}
+}
+
+// resendSender sends emails via Resend REST API (https://api.resend.com/emails).
+type resendSender struct {
+	apiKey string
+	from   string
+	client *http.Client
+}
+
+func (r *resendSender) Transport() string { return "resend" }
+
+func (r *resendSender) Send(ctx context.Context, to, subject, body string) error {
+	payload := map[string]any{
+		"from":    r.from,
+		"to":      []string{to},
+		"subject": subject,
+		"text":    body,
+	}
+
+	jsonBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.resend.com/emails", bytes.NewReader(jsonBytes))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+r.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("resend request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		resBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return fmt.Errorf("resend error (%d): %s", resp.StatusCode, strings.TrimSpace(string(resBody)))
+	}
+
+	return nil
+}
+
+type smtpSender struct{ addr, from, user, password string }
+
+func (s smtpSender) Transport() string { return "smtp" }
+
+func (s smtpSender) Send(ctx context.Context, to, subject, body string) error {
+	if strings.ContainsAny(to, "\r\n") || strings.ContainsAny(subject, "\r\n") {
+		return fmt.Errorf("invalid mail header")
+	}
+	host, _, err := net.SplitHostPort(s.addr)
+	if err != nil {
+		return err
+	}
+	var auth smtp.Auth
+	if s.user != "" {
+		auth = smtp.PlainAuth("", s.user, s.password, host)
+	}
+	msg := strings.Join([]string{
+		"From: " + s.from,
+		"To: " + to,
+		"Subject: " + subject,
+		"Date: " + time.Now().UTC().Format(time.RFC1123Z),
+		"MIME-Version: 1.0",
+		"Content-Type: text/plain; charset=UTF-8",
+		"",
+		body,
+	}, "\r\n")
+	done := make(chan error, 1)
+	go func() { done <- smtp.SendMail(s.addr, auth, s.from, []string{to}, []byte(msg)) }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+type logSender struct{ log *logger.Logger }
+
+func (s logSender) Transport() string { return "log" }
+
+func (s logSender) Send(_ context.Context, to, subject, body string) error {
+	if s.log != nil {
+		s.log.Warn("email service not configured; email written to node log", "to", to, "subject", subject, "body", body)
+	}
+	return nil
+}

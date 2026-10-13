@@ -1,0 +1,229 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter_js/flutter_js.dart';
+
+import 'elpian_vm.dart';
+import 'governance/host_side_governor.dart';
+import 'vm_runtime_client.dart';
+
+/// A QuickJS-backed runtime that mirrors [ElpianVm]'s host API lifecycle.
+class QuickJsVm implements VmRuntimeClient {
+  final String machineId;
+  final Map<String, HostCallHandler> _hostHandlers = {};
+  HostCallHandler? _defaultHostHandler;
+  Map<String, dynamic> _globalHostData = const {};
+
+  late final JavascriptRuntime _runtime;
+  bool _initialized = false;
+  String? _bootCode;
+
+  QuickJsVm({required this.machineId});
+
+  static const String _label = 'QuickJs';
+
+  /// Governs this instance at the host-call seam.
+  ///
+  /// This engine exposes no interrupt hook through its Dart API, so an
+  /// instruction budget cannot be enforced here — `governanceSupport` says so
+  /// rather than implying protection that is not there.
+  @override
+  late final HostSideGovernor governor = HostSideGovernor(
+    machineId: machineId,
+    enforcesInstructionBudget: false,
+    onTerminate: () {
+      unawaited(dispose());
+    },
+  );
+
+  static Future<void> initialize() async {
+    // flutter_js runtime is initialized per VM instance.
+  }
+
+  static Future<QuickJsVm> fromCode(String machineId, String code) async {
+    final vm = QuickJsVm(machineId: machineId);
+    await vm._init();
+    vm._bootstrapHostBridge();
+    vm._bootCode = code;
+    return vm;
+  }
+
+  /// QuickJS mode executes raw JavaScript; AST input is not supported.
+  static Future<QuickJsVm> fromAst(String machineId, String astJson) async {
+    throw UnsupportedError(
+      'QuickJS runtime expects JavaScript source in `code`; AST JSON is only supported by the Elpian runtime.',
+    );
+  }
+
+  Future<void> _init() async {
+    if (_initialized) return;
+    // xhr:false disables flutter_js's fetch/XHR extension, which otherwise
+    // installs a permanent Timer.periodic event pump. Elpian's server-rendered
+    // client components communicate via the host bridge (askHost), not browser
+    // fetch/XHR, so the extension is unnecessary — and the dangling timer trips
+    // flutter_test's pending-timer guard.
+    _runtime = getJavascriptRuntime(xhr: false);
+    _initialized = true;
+  }
+
+  void _bootstrapHostBridge() {
+    _runtime.onMessage('elpianHost', (dynamic args) {
+      try {
+        final request = _normalizeHostRequest(args);
+        final apiName = request['apiName']!;
+        final payload = request['payload']!;
+
+        return _dispatchHostCall(apiName, payload);
+      } catch (e) {
+        debugPrint('QuickJsVm[$machineId]: host bridge error: $e');
+        return '{"type":"i16","data":{"value":0}}';
+      }
+    });
+
+    _runtime.evaluate('''
+      globalThis.askHost = function(apiName) {
+        var args = Array.prototype.slice.call(arguments, 1);
+        var payload = '';
+        if (args.length === 1) {
+          payload = args[0];
+        } else if (args.length > 1) {
+          payload = args;
+        }
+        return sendMessage('elpianHost', JSON.stringify({
+          apiName: apiName,
+          payload: payload
+        }));
+      };
+    ''');
+  }
+
+  Map<String, String> _normalizeHostRequest(dynamic raw) {
+    dynamic request = raw;
+
+    if (request is List && request.isNotEmpty) {
+      request = request.first;
+    }
+
+    if (request is String) {
+      final decoded = jsonDecode(request);
+      if (decoded is Map<String, dynamic>) {
+        request = decoded;
+      }
+    }
+
+    if (request is Map) {
+      final apiName = request['apiName']?.toString() ?? '';
+      final payloadRaw = request['payload'];
+      final payload =
+          payloadRaw is String ? payloadRaw : jsonEncode(payloadRaw);
+      return {'apiName': apiName, 'payload': payload};
+    }
+
+    throw StateError('Unsupported host message format: ${request.runtimeType}');
+  }
+
+  @override
+  void registerHostHandler(String apiName, HostCallHandler handler) {
+    _hostHandlers[apiName] = handler;
+  }
+
+  @override
+  void registerHostHandlers(Map<String, HostCallHandler> handlers) {
+    _hostHandlers.addAll(handlers);
+  }
+
+  @override
+  void setDefaultHostHandler(HostCallHandler handler) {
+    _defaultHostHandler = handler;
+  }
+
+  @override
+  Future<void> setGlobalHostData(Map<String, dynamic> data) async {
+    _globalHostData = Map<String, dynamic>.from(data);
+    if (!_initialized) return;
+    final encoded = jsonEncode(jsonEncode(_globalHostData));
+    _runtime.evaluate('''
+      (function() {
+        var __env = JSON.parse($encoded);
+        globalThis.__ELPIAN_HOST_ENV__ = __env;
+        globalThis.ELPIAN_HOST_ENV = __env;
+        globalThis.getElpianHostEnv = function() { return globalThis.__ELPIAN_HOST_ENV__; };
+      })();
+    ''');
+  }
+
+  Future<String> runCode(String code) async {
+    final result = _runtime.evaluate(code);
+    return result.stringResult;
+  }
+
+  @override
+  Future<String> run() async {
+    final code = _bootCode;
+    if (code == null || code.isEmpty) return '';
+    return runCode(code);
+  }
+
+  @override
+  Future<String> callFunction(String funcName) async {
+    final result = _runtime.evaluate('$funcName();');
+    return result.stringResult;
+  }
+
+  @override
+  Future<String> callFunctionWithInput(
+      String funcName, String inputJson) async {
+    final escaped = jsonEncode(inputJson);
+    final result = _runtime.evaluate('$funcName(JSON.parse($escaped));');
+    return result.stringResult;
+  }
+
+  String _dispatchHostCall(String apiName, String payload) {
+    // The capability gate. Every host call a mini app makes crosses here, so
+    // this is where a QuickJS/WASM guest is bounded — the engine itself gives
+    // Dart no other seam. A denied call gets the typed null the Elpian VM
+    // produces for the same case, so a guest sees one behaviour across all
+    // three runtimes.
+    final refusal = governor.checkAndCharge(apiName, bytes: payload.length);
+    if (refusal != null) {
+      assert(() {
+        debugPrint('$_label[$machineId]: $apiName refused — $refusal');
+        return true;
+      }());
+      return '{"type":"null","data":{"value":null}}';
+    }
+
+    final handler = _hostHandlers[apiName];
+    if (handler != null) {
+      final result = handler(apiName, payload);
+      if (result is String) return result;
+      return '{"type":"i16","data":{"value":0}}';
+    }
+
+    if (_defaultHostHandler != null) {
+      final result = _defaultHostHandler!(apiName, payload);
+      if (result is String) return result;
+      return '{"type":"i16","data":{"value":0}}';
+    }
+
+    if (apiName == 'println') {
+      debugPrint('QuickJsVm[$machineId]: $payload');
+    }
+    if (apiName == 'env.get') {
+      return jsonEncode({
+        'type': 'object',
+        'data': {'value': _globalHostData},
+      });
+    }
+    if (apiName == 'stringify') {
+      return '{"type":"string","data":{"value":${jsonEncode(payload)}}}';
+    }
+    return '{"type":"i16","data":{"value":0}}';
+  }
+
+  @override
+  Future<void> dispose() async {
+    _runtime.dispose();
+  }
+}

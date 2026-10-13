@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Tradera agentic trading network">
+  <meta name="theme-color" content="#07111f">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tradera</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Elpian miniapp web runtimes (vendored with the elpian_ui package). Without
+       these the QuickJS/wasm guests cannot boot in the browser and miniapps
+       fail with "QuickJS web runtime not loaded". -->
+  <script type="module" src="assets/packages/elpian_ui/assets/web_runtime/elpian_wasm_loader.js"></script>
+  <script type="module" src="assets/packages/elpian_ui/assets/web_runtime/quickjs_web_runtime.js"></script>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

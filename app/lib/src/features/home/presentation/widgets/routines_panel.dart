@@ -7,27 +7,44 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../data/models/bot.dart';
 import '../../../../shared/widgets/app_form.dart';
 import '../../../../shared/widgets/app_inputs.dart';
-import '../../../../shared/widgets/mini_tag.dart';
 import '../../../../shared/widgets/overlay_panels.dart';
 import '../../../../shared/widgets/panel_header.dart';
+import '../../../../shared/widgets/segmented_tab_bar.dart';
 
-/// Opens the per-room routines manager as a sheet/modal. Lists, creates,
-/// edits, pauses and deletes delayed / periodic routines for the room.
+/// Opens the per-room routines manager as a floating panel (a bottom sheet on
+/// compact widths), the same as the messenger and requests panels. Lists,
+/// creates, edits, pauses and deletes delayed / periodic routines for the room.
 Future<void> showRoutinesSheet(
   BuildContext context,
   AppDependencies dependencies,
   String spaceId,
   String roomId,
   String roomName,
-) {
-  final panel = RoutinesPanel(
-    dependencies: dependencies,
-    spaceId: spaceId,
-    roomId: roomId,
-    roomName: roomName,
-  );
-  return showAdaptivePanel<void>(context, panel, breakpoint: 820);
-}
+) =>
+    showFloatingPanel(
+        context,
+        RoutinesPanel(
+          dependencies: dependencies,
+          spaceId: spaceId,
+          roomId: roomId,
+          roomName: roomName,
+        ),
+        maxWidth: 760);
+
+/// The filter tabs above the list, in display order.
+const _filters = ['all', 'active', 'paused', 'done', 'failed'];
+
+String _statusOf(Map<String, dynamic> r) => r['status'] as String? ?? 'active';
+
+/// Label, colour and icon for a routine status, shared by the filter tabs and
+/// the status pill on each card.
+(String, Color, IconData) _statusStyle(String status, ColorScheme scheme) =>
+    switch (status) {
+      'paused' => ('Paused', AppColors.warning, Icons.pause_circle_outline),
+      'done' => ('Done', AppColors.success, Icons.check_circle_outline),
+      'failed' => ('Failed', AppColors.danger, Icons.error_outline_rounded),
+      _ => ('Active', scheme.primary, Icons.bolt_rounded),
+    };
 
 class RoutinesPanel extends StatefulWidget {
   const RoutinesPanel({
@@ -50,6 +67,8 @@ class RoutinesPanel extends StatefulWidget {
 class _RoutinesPanelState extends State<RoutinesPanel> {
   List<Map<String, dynamic>> _routines = const [];
   bool _loading = true;
+  String? _error;
+  int _filter = 0;
   DateTime _now = DateTime.now();
 
   @override
@@ -67,11 +86,21 @@ class _RoutinesPanelState extends State<RoutinesPanel> {
         _routines = list;
         _now = DateTime.now();
         _loading = false;
+        _error = null;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _error = '$e';
+      });
     }
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _create() async {
@@ -89,9 +118,7 @@ class _RoutinesPanelState extends State<RoutinesPanel> {
           intervalSec: (result['interval_sec'] as num?)?.toInt() ?? 0);
       await _load();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Create failed: $e')));
+      _toast('Create failed: $e');
     }
   }
 
@@ -108,19 +135,19 @@ class _RoutinesPanelState extends State<RoutinesPanel> {
           intervalSec: (result['interval_sec'] as num?)?.toInt() ?? 0);
       await _load();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Update failed: $e')));
+      _toast('Update failed: $e');
     }
   }
 
   Future<void> _toggle(Map<String, dynamic> r) async {
     final id = r['id'] as String? ?? '';
-    final paused = r['status'] == 'paused';
+    final paused = _statusOf(r) == 'paused';
     try {
       await widget.dependencies.service.setRoutineStatus(id, !paused);
       await _load();
-    } catch (_) {}
+    } catch (e) {
+      _toast('${paused ? 'Resume' : 'Pause'} failed: $e');
+    }
   }
 
   /// The workspace's agents a routine can hand its task to.
@@ -145,52 +172,59 @@ class _RoutinesPanelState extends State<RoutinesPanel> {
     try {
       await widget.dependencies.service.deleteRoutine(r['id'] as String? ?? '');
       await _load();
-    } catch (_) {}
-  }
-
-  // ── derived stats for the overview strip ────────────────────────────────
-  (int, int, int, int) get _stats {
-    var active = 0, paused = 0, done = 0, failed = 0;
-    for (final r in _routines) {
-      switch (r['status'] as String? ?? 'active') {
-        case 'paused':
-          paused++;
-        case 'done':
-          done++;
-        case 'failed':
-          failed++;
-        default:
-          active++;
-      }
+    } catch (e) {
+      _toast('Delete failed: $e');
     }
-    return (active, paused, done, failed);
   }
 
+  int _count(String filter) => filter == 'all'
+      ? _routines.length
+      : _routines.where((r) => _statusOf(r) == filter).length;
+
+  List<Map<String, dynamic>> get _shown {
+    final filter = _filters[_filter];
+    if (filter == 'all') return _routines;
+    return _routines.where((r) => _statusOf(r) == filter).toList();
+  }
+
+  /// The active routine that fires next, if any.
   Map<String, dynamic>? get _dueSoon {
     Map<String, dynamic>? best;
+    DateTime? bestAt;
     for (final r in _routines) {
-      if ((r['status'] as String? ?? 'active') != 'active') continue;
+      if (_statusOf(r) != 'active') continue;
       final n = _parseT(r['next_run_at']);
       if (n == null) continue;
-      if (best == null || n.isBefore(_parseT(best['next_run_at']) ?? n)) {
+      if (bestAt == null || n.isBefore(bestAt)) {
         best = r;
+        bestAt = n;
       }
     }
     return best;
   }
 
+  String _filterLabel(String filter, ColorScheme scheme) {
+    final name = filter == 'all' ? 'All' : _statusStyle(filter, scheme).$1;
+    final n = _count(filter);
+    return n > 0 ? '$name · $n' : name;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final (active, paused, done, failed) = _stats;
+    final scheme = Theme.of(context).colorScheme;
+    final compact = MediaQuery.sizeOf(context).width < 560;
+    final gutter = compact ? 16.0 : 26.0;
     final next = _dueSoon;
-    return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(22, 14, 18, 4),
-        child: PanelHeader(
+    final shown = _shown;
+    final count = _routines.length;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(gutter, compact ? 16 : 22, gutter, 0),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        PanelHeader(
           icon: Icons.schedule_rounded,
           title: 'Routines',
           subtitle:
-              '${widget.roomName} · ${_routines.length} scheduled task${_routines.length == 1 ? '' : 's'}',
+              '${widget.roomName} · $count scheduled task${count == 1 ? '' : 's'}',
           onClose: () => Navigator.pop(context),
           actions: [
             IconButton(
@@ -198,219 +232,182 @@ class _RoutinesPanelState extends State<RoutinesPanel> {
                 onPressed: _load,
                 icon: const Icon(Icons.refresh_rounded)),
             FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              ),
-              onPressed: _create,
-              icon: const Icon(Icons.add_rounded, size: 20),
-              label: const Text('New routine'),
-            ),
+                onPressed: _create,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('New routine')),
           ],
         ),
-      ),
-      // ── overview strip ──────────────────────────────────────────────────
-      Padding(
-        padding: const EdgeInsets.fromLTRB(22, 12, 22, 10),
-        child: Row(children: [
-          Expanded(
-              child: _StatTile(
-                  icon: Icons.bolt_rounded,
-                  label: 'Active',
-                  value: '$active',
-                  color: AppColors.primary)),
-          const SizedBox(width: 8),
-          Expanded(
-              child: _StatTile(
-                  icon: Icons.pause_rounded,
-                  label: 'Paused',
-                  value: '$paused',
-                  color: AppColors.warning)),
-          const SizedBox(width: 8),
-          Expanded(
-              child: _StatTile(
-                  icon: Icons.check_circle_outline_rounded,
-                  label: 'Done',
-                  value: '$done',
-                  color: AppColors.success)),
-          const SizedBox(width: 8),
-          Expanded(
-              child: _StatTile(
-                  icon: Icons.error_outline_rounded,
-                  label: 'Failed',
-                  value: '$failed',
-                  color: AppColors.danger)),
-        ]),
-      ),
-      // ── next-run teaser ─────────────────────────────────────────────────
-      if (next != null)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 0, 22, 10),
-          child: _NextRunBanner(routine: next, now: _now),
+        const SizedBox(height: 14),
+        SegmentedTabBar(
+          alignment: Alignment.centerLeft,
+          compact: compact,
+          width: 620,
+          selectedIndex: _filter,
+          onTap: (i) => setState(() => _filter = i),
+          labels: [for (final f in _filters) _filterLabel(f, scheme)],
+          icons: const [
+            Icons.all_inbox_rounded,
+            Icons.bolt_rounded,
+            Icons.pause_circle_outline,
+            Icons.check_circle_outline,
+            Icons.error_outline_rounded,
+          ],
         ),
-      const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 22),
-        child: Divider(height: 1),
-      ),
-      const SizedBox(height: 10),
-      // ── list ────────────────────────────────────────────────────────────
-      Expanded(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _routines.isEmpty
-                ? _EmptyState(onCreate: _create)
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView.separated(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(22, 4, 22, 22),
-                      itemCount: _routines.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (context, i) => _RoutineCard(
-                          routine: _routines[i],
-                          now: _now,
-                          onEdit: () => _edit(_routines[i]),
-                          onToggle: () => _toggle(_routines[i]),
-                          onDelete: () => _delete(_routines[i])),
-                    ),
-                  ),
-      ),
-    ]);
-  }
-}
-
-/// Small stat tile for the overview strip.
-class _StatTile extends StatelessWidget {
-  const _StatTile(
-      {required this.icon,
-      required this.label,
-      required this.value,
-      required this.color});
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: .4),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .4)),
-      ),
-      child: Row(children: [
-        Icon(icon, size: 15, color: color),
-        const SizedBox(width: 6),
-        Text('$value',
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-        const SizedBox(width: 4),
-        Flexible(
-            child: Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 9,
-                    color: scheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600))),
+        if (next != null) ...[
+          const SizedBox(height: 10),
+          _NextRunBanner(routine: next, now: _now, onTap: () => _edit(next)),
+        ],
+        const SizedBox(height: 8),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null && _routines.isEmpty
+                  ? _Empty(
+                      icon: Icons.cloud_off_rounded,
+                      title: 'Could not load routines',
+                      body: _error!)
+                  : _routines.isEmpty
+                      ? _Empty(
+                          icon: Icons.schedule_rounded,
+                          title: 'No routines yet',
+                          body:
+                              'Schedule a delayed or periodic task: it fires by itself, passes to an agent, or runs inline.',
+                          action: FilledButton.tonalIcon(
+                              onPressed: _create,
+                              icon: const Icon(Icons.add_rounded, size: 18),
+                              label: const Text('Create first routine')))
+                      : shown.isEmpty
+                          ? _Empty(
+                              icon: _statusStyle(_filters[_filter], scheme).$3,
+                              title: 'No ${_filters[_filter]} routines',
+                              body: 'Routines show up here when they are '
+                                  '${_filters[_filter]}.')
+                          : RefreshIndicator(
+                              onRefresh: _load,
+                              child: ListView.separated(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                padding:
+                                    const EdgeInsets.only(top: 4, bottom: 24),
+                                itemCount: shown.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 8),
+                                itemBuilder: (context, i) => _RoutineCard(
+                                    routine: shown[i],
+                                    now: _now,
+                                    onEdit: () => _edit(shown[i]),
+                                    onToggle: () => _toggle(shown[i]),
+                                    onDelete: () => _delete(shown[i])),
+                              ),
+                            ),
+        ),
       ]),
     );
   }
 }
 
-/// Banner highlighting the soonest upcoming run.
+/// Tappable banner for the soonest upcoming run, styled like the messenger's
+/// requests banner.
 class _NextRunBanner extends StatelessWidget {
-  const _NextRunBanner({required this.routine, required this.now});
+  const _NextRunBanner(
+      {required this.routine, required this.now, required this.onTap});
   final Map<String, dynamic> routine;
   final DateTime now;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final name = routine['name'] as String? ?? 'routine';
+    final name = routine['name'] as String? ?? '';
     final next = _parseT(routine['next_run_at']);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [
-          AppColors.primary.withValues(alpha: .18),
-          scheme.surfaceContainerHighest.withValues(alpha: .3),
-        ]),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.primary.withValues(alpha: .35)),
-      ),
-      child: Row(children: [
-        const Icon(Icons.notifications_active_rounded,
-            size: 17, color: AppColors.primary),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text.rich(TextSpan(children: [
-            TextSpan(
-                text: 'Next run · ',
+    return Material(
+      color: scheme.primaryContainer.withValues(alpha: .55),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppShape.inner)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(children: [
+            Icon(Icons.notifications_active_outlined, color: scheme.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text.rich(
+                TextSpan(children: [
+                  const TextSpan(text: 'Next run · '),
+                  TextSpan(
+                      text: name.isEmpty ? 'Untitled routine' : name,
+                      style: const TextStyle(fontWeight: FontWeight.w800)),
+                ]),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(next == null ? '—' : fmtRel(next, now),
                 style: TextStyle(
-                    fontSize: 10,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            TextSpan(
-                text: name,
-                style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    color: Theme.of(context).colorScheme.onSurface)),
-            TextSpan(
-                text: '  ${next == null ? '—' : fmtRel(next, now)}',
-                style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary)),
-          ])),
+                    color: scheme.primary)),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
+          ]),
         ),
-      ]),
+      ),
     );
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onCreate});
-  final VoidCallback onCreate;
+/// Centered empty / error state, matching the messenger panel's.
+class _Empty extends StatelessWidget {
+  const _Empty(
+      {required this.icon,
+      required this.title,
+      required this.body,
+      this.action});
+  final IconData icon;
+  final String title;
+  final String body;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Center(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppColors.primary.withValues(alpha: .12),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: ShapeDecoration(
+                color: scheme.secondaryContainer,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24))),
+            child: Icon(icon, size: 34, color: scheme.onSecondaryContainer),
           ),
-          child: const Icon(Icons.schedule_rounded,
-              size: 34, color: AppColors.primary),
-        ),
-        const SizedBox(height: 14),
-        const Text('No routines yet',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 6),
-        Text(
-          'Schedule a delayed or periodic task: it fires by itself,\npasses to an agent, or runs inline.',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 16),
-        FilledButton.icon(
-          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-          onPressed: onCreate,
-          icon: const Icon(Icons.add_rounded, size: 18),
-          label: const Text('Create first routine'),
-        ),
-      ]),
+          const SizedBox(height: 16),
+          Text(title,
+              textAlign: TextAlign.center,
+              style:
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text(body,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: scheme.onSurfaceVariant)),
+          if (action != null) ...[
+            const SizedBox(height: 18),
+            action!,
+          ],
+        ]),
+      ),
     );
   }
 }
+
+enum _CardMenu { toggle, edit, delete }
 
 class _RoutineCard extends StatelessWidget {
   const _RoutineCard({
@@ -426,27 +423,16 @@ class _RoutineCard extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback onDelete;
 
-  Color get _statusColor {
-    switch (routine['status'] as String? ?? 'active') {
-      case 'paused':
-        return AppColors.warning;
-      case 'done':
-        return AppColors.success;
-      case 'failed':
-        return AppColors.danger;
-      default:
-        return AppColors.primary;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final typ = routine['type'] as String? ?? 'delayed';
-    final periodic = typ == 'periodic';
-    final status = routine['status'] as String? ?? 'active';
-    final color = _statusColor;
+    final periodic = (routine['type'] as String? ?? 'delayed') == 'periodic';
+    final status = _statusOf(routine);
+    final (label, color, icon) = _statusStyle(status, scheme);
     final paused = status == 'paused';
+    final finished = status == 'done' || status == 'failed';
+    final name = (routine['name'] as String? ?? '').trim();
+    final task = (routine['task'] as String? ?? '').trim();
     final next = _parseT(routine['next_run_at']);
     final last = _parseT(routine['last_run_at']);
     final lastResult = (routine['last_result'] as String? ?? '').trim();
@@ -457,218 +443,213 @@ class _RoutineCard extends StatelessWidget {
     // Progress for active periodic routines between the anchor and next run.
     final anchor = (last ?? _parseT(routine['created_at'])) ??
         now.subtract(Duration(seconds: interval > 0 ? interval : 3600));
-    final progress = periodic &&
-            !paused &&
-            status != 'failed' &&
-            next != null &&
-            next.isAfter(anchor)
-        ? ((now.difference(anchor).inMilliseconds /
-                math.max(1, next.difference(anchor).inMilliseconds)))
-            .clamp(0.0, 1.0)
-        : null;
+    final progress =
+        periodic && status == 'active' && next != null && next.isAfter(anchor)
+            ? (now.difference(anchor).inMilliseconds /
+                    math.max(1, next.difference(anchor).inMilliseconds))
+                .clamp(0.0, 1.0)
+            : null;
 
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: .45),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withValues(alpha: .45)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          // Type tile
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  color.withValues(alpha: .35),
-                  color.withValues(alpha: .12)
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(13),
+    final meta = TextStyle(fontSize: 12, color: scheme.onSurfaceVariant);
+    Widget metaItem(IconData i, String text, {bool emphasize = false}) =>
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(i,
+              size: 15,
+              color: emphasize ? scheme.primary : scheme.onSurfaceVariant),
+          const SizedBox(width: 5),
+          Text(text,
+              style: emphasize
+                  ? meta.copyWith(
+                      color: scheme.primary, fontWeight: FontWeight.w700)
+                  : meta),
+        ]);
+
+    return Material(
+      color: scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppShape.inner + 2)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onEdit,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 6, 14),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: ShapeDecoration(
+                  color: scheme.secondaryContainer,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppShape.control))),
+              child: Icon(periodic ? Icons.loop_rounded : Icons.timer_outlined,
+                  size: 22, color: scheme.onSecondaryContainer),
             ),
-            child: Icon(periodic ? Icons.loop_rounded : Icons.timer_rounded,
-                size: 22, color: color),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(routine['name'] as String? ?? 'Untitled routine',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w900, fontSize: 14)),
-              const SizedBox(height: 3),
-              Wrap(spacing: 6, runSpacing: 4, children: [
-                MiniTag(typ.toUpperCase(), color),
-                MiniTag(status.toUpperCase(),
-                    paused ? AppColors.warning : AppColors.success),
-              ]),
-            ]),
-          ),
-          // Actions
-          Column(mainAxisSize: MainAxisSize.min, children: [
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              _CardAction(
-                  tooltip: paused ? 'Resume' : 'Pause',
-                  icon: paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                  onTap: onToggle),
-              _CardAction(
-                  tooltip: 'Edit', icon: Icons.edit_outlined, onTap: onEdit),
-              _CardAction(
-                  tooltip: 'Delete',
-                  icon: Icons.delete_outline_rounded,
-                  color: AppColors.danger,
-                  onTap: onDelete),
-            ]),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Flexible(
+                        child: Text(name.isEmpty ? 'Untitled routine' : name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w700)),
+                      ),
+                      const SizedBox(width: 8),
+                      _StatusPill(label: label, color: color, icon: icon),
+                    ]),
+                    if (task.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(task,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 14,
+                              height: 1.4,
+                              color: scheme.onSurfaceVariant)),
+                    ],
+                    const SizedBox(height: 10),
+                    Wrap(spacing: 14, runSpacing: 6, children: [
+                      metaItem(
+                          periodic ? Icons.loop_rounded : Icons.timer_outlined,
+                          periodic
+                              ? 'Every ${fmtDur(interval)}'
+                              : 'Once, after ${fmtDur(delay)}'),
+                      metaItem(
+                          target.isEmpty
+                              ? Icons.bolt_rounded
+                              : Icons.smart_toy_outlined,
+                          target.isEmpty ? 'Runs inline' : 'Agent $target'),
+                      if (next != null && !finished)
+                        metaItem(
+                            Icons.schedule_rounded, 'Next ${fmtRel(next, now)}',
+                            emphasize: !paused),
+                      if (last != null)
+                        metaItem(
+                            Icons.history_rounded, 'Last ${fmtRel(last, now)}'),
+                    ]),
+                    if (progress != null) ...[
+                      const SizedBox(height: 12),
+                      LinearProgressIndicator(
+                        value: progress,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      const SizedBox(height: 4),
+                      Text('${(progress * 100).round()}% until next run',
+                          style: meta.copyWith(fontSize: 11)),
+                    ],
+                    if (lastResult.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: status == 'failed'
+                              ? AppColors.danger.withValues(alpha: .12)
+                              : scheme.surfaceContainerHighest
+                                  .withValues(alpha: .55),
+                          borderRadius: BorderRadius.circular(AppShape.control),
+                        ),
+                        child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                  status == 'failed'
+                                      ? Icons.error_outline_rounded
+                                      : Icons.receipt_long_outlined,
+                                  size: 16,
+                                  color: status == 'failed'
+                                      ? AppColors.danger
+                                      : scheme.onSurfaceVariant),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                  child: Text(lastResult,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: meta.copyWith(height: 1.35))),
+                            ]),
+                      ),
+                    ],
+                  ]),
+            ),
+            PopupMenuButton<_CardMenu>(
+              tooltip: 'Routine actions',
+              icon:
+                  Icon(Icons.more_vert_rounded, color: scheme.onSurfaceVariant),
+              onSelected: (choice) {
+                switch (choice) {
+                  case _CardMenu.toggle:
+                    onToggle();
+                  case _CardMenu.edit:
+                    onEdit();
+                  case _CardMenu.delete:
+                    onDelete();
+                }
+              },
+              itemBuilder: (context) => [
+                if (!finished)
+                  PopupMenuItem(
+                    value: _CardMenu.toggle,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(paused
+                          ? Icons.play_arrow_rounded
+                          : Icons.pause_rounded),
+                      title: Text(paused ? 'Resume' : 'Pause'),
+                    ),
+                  ),
+                const PopupMenuItem(
+                  value: _CardMenu.edit,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.edit_outlined),
+                    title: Text('Edit'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _CardMenu.delete,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    iconColor: scheme.error,
+                    textColor: scheme.error,
+                    leading: const Icon(Icons.delete_outline_rounded),
+                    title: const Text('Delete'),
+                  ),
+                ),
+              ],
+            ),
           ]),
-        ]),
-        if ((routine['task'] as String? ?? '').isNotEmpty) ...[
-          const SizedBox(height: 9),
-          Text(routine['task'] as String? ?? '',
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontSize: 11, height: 1.45, color: scheme.onSurfaceVariant)),
-        ],
-        if (target.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 7),
-            child: Row(children: [
-              Icon(Icons.smart_toy_outlined,
-                  size: 13,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
-              const SizedBox(width: 5),
-              Flexible(
-                  child: Text('Target agent $target',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 9.5,
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant))),
-            ]),
-          ),
-        const SizedBox(height: 9),
-        // Timing meta row
-        Wrap(spacing: 16, runSpacing: 6, children: [
-          _MetaChip(
-            icon: periodic ? Icons.loop_rounded : Icons.timer_outlined,
-            text: periodic
-                ? 'every ${fmtDur(interval)}'
-                : 'after ${fmtDur(delay)}',
-          ),
-          if (next != null)
-            _MetaChip(
-              icon: Icons.schedule_rounded,
-              text: 'next ${fmtRel(next, now)}',
-              emphasize: !paused,
-            ),
-          if (last != null)
-            _MetaChip(
-                icon: Icons.history_rounded, text: 'last ${fmtRel(last, now)}'),
-        ]),
-        if (progress != null) ...[
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 5,
-              backgroundColor: scheme.surfaceContainerHighest,
-              valueColor: AlwaysStoppedAnimation(color),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text('${(progress * 100).round()}% until next run',
-              style: TextStyle(
-                  fontSize: 9,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
-        ],
-        if (lastResult.isNotEmpty) ...[
-          const SizedBox(height: 9),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(9),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest.withValues(alpha: .35),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Icon(
-                  status == 'failed'
-                      ? Icons.error_outline_rounded
-                      : Icons.receipt_long_rounded,
-                  size: 14,
-                  color: status == 'failed'
-                      ? AppColors.danger
-                      : Theme.of(context).colorScheme.onSurfaceVariant),
-              const SizedBox(width: 7),
-              Expanded(
-                  child: Text(lastResult,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 9.5,
-                          height: 1.35,
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant))),
-            ]),
-          ),
-        ],
-      ]),
+        ),
+      ),
     );
   }
 }
 
-class _CardAction extends StatelessWidget {
-  const _CardAction(
-      {required this.tooltip,
-      required this.icon,
-      required this.onTap,
-      this.color});
-  final String tooltip;
+/// Rounded status pill (icon + label), the same as the requests panel's.
+class _StatusPill extends StatelessWidget {
+  const _StatusPill(
+      {required this.label, required this.color, required this.icon});
+  final String label;
+  final Color color;
   final IconData icon;
-  final VoidCallback onTap;
-  final Color? color;
 
   @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return IconButton(
-      visualDensity: VisualDensity.compact,
-      tooltip: tooltip,
-      onPressed: onTap,
-      icon: Icon(icon, size: 18, color: color ?? scheme.onSurfaceVariant),
-    );
-  }
-}
-
-class _MetaChip extends StatelessWidget {
-  const _MetaChip(
-      {required this.icon, required this.text, this.emphasize = false});
-  final IconData icon;
-  final String text;
-  final bool emphasize;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = emphasize
-        ? AppColors.primary
-        : Theme.of(context).colorScheme.onSurfaceVariant;
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 13, color: color),
-      const SizedBox(width: 4),
-      Text(text,
-          style: TextStyle(
-              fontSize: 10, color: color, fontWeight: FontWeight.w700)),
-    ]);
-  }
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+            color: color.withValues(alpha: .15),
+            borderRadius: BorderRadius.circular(999)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+        ]),
+      );
 }
 
 // ── form dialog ────────────────────────────────────────────────────────────

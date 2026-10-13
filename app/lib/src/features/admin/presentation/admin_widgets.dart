@@ -3,17 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/app_inputs.dart';
 
 /// Building blocks of the admin console, drawn in the Material 3 Expressive
 /// style: tonal surfaces instead of outlines, generous corner radii, bold
 /// display numbers and charts that ease in when their data arrives.
-
-/// Corner radii shared by every admin surface.
-abstract final class AdminShape {
-  static const card = 28.0;
-  static const inner = 20.0;
-  static const control = 16.0;
-}
 
 const _ok = {
   'approved',
@@ -185,7 +179,7 @@ class AdminStatCard extends StatelessWidget {
         ),
         if (progress != null) ...[
           const SizedBox(height: 12),
-          AdminMeter(value: progress!, color: accent),
+          AppMeter(value: progress!, color: accent),
         ],
         if (hint != null) ...[
           const SizedBox(height: 8),
@@ -202,44 +196,8 @@ class AdminStatCard extends StatelessWidget {
       color: scheme.surfaceContainer,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AdminShape.inner + 4)),
+          borderRadius: BorderRadius.circular(AppShape.inner + 4)),
       child: onTap == null ? body : InkWell(onTap: onTap, child: body),
-    );
-  }
-}
-
-/// A thin rounded progress meter that animates to [value] (0–1).
-class AdminMeter extends StatelessWidget {
-  const AdminMeter(
-      {super.key, required this.value, this.color, this.height = 8});
-  final double value;
-  final Color? color;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return TweenAnimationBuilder<double>(
-      tween: Tween(end: value.isFinite ? value.clamp(0.0, 1.0) : 0.0),
-      duration: const Duration(milliseconds: 650),
-      curve: Curves.easeOutCubic,
-      builder: (context, v, _) => LayoutBuilder(
-        builder: (context, constraints) => Container(
-          height: height,
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(height),
-          ),
-          alignment: Alignment.centerLeft,
-          child: Container(
-            width: constraints.maxWidth * v,
-            decoration: BoxDecoration(
-              color: color ?? scheme.primary,
-              borderRadius: BorderRadius.circular(height),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -272,7 +230,7 @@ class AdminSectionCard extends StatelessWidget {
       color: scheme.surfaceContainerLow,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AdminShape.card)),
+          borderRadius: BorderRadius.circular(AppShape.card)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 14, 0),
@@ -370,7 +328,7 @@ class AdminHeroCard extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(AdminShape.card + 4),
+        borderRadius: BorderRadius.circular(AppShape.card + 4),
       ),
       child: LayoutBuilder(builder: (context, constraints) {
         if (visual == null) return text;
@@ -653,7 +611,7 @@ class AdminDataTable extends StatelessWidget {
       color: scheme.surfaceContainerLow,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AdminShape.card - 4)),
+          borderRadius: BorderRadius.circular(AppShape.card - 4)),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: SizedBox(
@@ -742,7 +700,7 @@ class AdminLiveChart extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(AdminShape.card),
+        borderRadius: BorderRadius.circular(AppShape.card),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1115,7 +1073,7 @@ class AdminBarList extends StatelessWidget {
                       color: scheme.onSurface)),
             ]),
             const SizedBox(height: 6),
-            AdminMeter(value: item.value / top, color: item.color, height: 10),
+            AppMeter(value: item.value / top, color: item.color, height: 10),
           ]),
         ),
     ]);
@@ -1486,94 +1444,4 @@ String _plain(double value) {
   return value == value.roundToDouble()
       ? value.round().toString()
       : value.toStringAsFixed(1);
-}
-
-/// Material 3 Expressive refinements applied to the whole admin console:
-/// pill buttons and chips, rounder dialogs and fields, and the 2024 slider
-/// and progress styles.
-ThemeData adminTheme(ThemeData base) {
-  final scheme = base.colorScheme;
-  // Derive every text style from the app's own so the console keeps its
-  // font family.
-  final label = base.textTheme.labelLarge ?? const TextStyle();
-  const stadium = StadiumBorder();
-  final pill = ButtonStyle(
-    shape: const WidgetStatePropertyAll(stadium),
-    padding: const WidgetStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 20, vertical: 14)),
-    textStyle: WidgetStatePropertyAll(
-        label.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
-  );
-  OutlineInputBorder border(Color color, [double width = 1]) =>
-      OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AdminShape.control),
-          borderSide: BorderSide(color: color, width: width));
-  return base.copyWith(
-    filledButtonTheme: FilledButtonThemeData(style: pill),
-    outlinedButtonTheme: OutlinedButtonThemeData(style: pill),
-    textButtonTheme: TextButtonThemeData(
-        style: ButtonStyle(
-            shape: const WidgetStatePropertyAll(stadium),
-            textStyle: WidgetStatePropertyAll(
-                label.copyWith(fontWeight: FontWeight.w700)))),
-    chipTheme: base.chipTheme.copyWith(
-      shape: const StadiumBorder(),
-      side: BorderSide(color: scheme.outlineVariant),
-      labelStyle: label.copyWith(fontWeight: FontWeight.w600),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-    ),
-    segmentedButtonTheme: SegmentedButtonThemeData(
-      style: ButtonStyle(
-        textStyle: WidgetStatePropertyAll(
-            label.copyWith(fontWeight: FontWeight.w700, fontSize: 13)),
-        padding: const WidgetStatePropertyAll(
-            EdgeInsets.symmetric(horizontal: 14, vertical: 12)),
-      ),
-    ),
-    dialogTheme: DialogThemeData(
-      backgroundColor: scheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AdminShape.card)),
-    ),
-    bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: scheme.surfaceContainerHigh,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.vertical(top: Radius.circular(AdminShape.card))),
-    ),
-    popupMenuTheme: PopupMenuThemeData(
-      color: scheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AdminShape.control)),
-    ),
-    snackBarTheme: SnackBarThemeData(
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AdminShape.control)),
-    ),
-    inputDecorationTheme: base.inputDecorationTheme.copyWith(
-      filled: true,
-      fillColor: scheme.surfaceContainerHighest.withValues(alpha: .55),
-      border: border(Colors.transparent),
-      enabledBorder: border(Colors.transparent),
-      focusedBorder: border(scheme.primary, 2),
-      errorBorder: border(scheme.error),
-      focusedErrorBorder: border(scheme.error, 2),
-    ),
-    // ignore: deprecated_member_use
-    sliderTheme: base.sliderTheme.copyWith(year2023: false),
-    // ignore: deprecated_member_use
-    progressIndicatorTheme:
-        base.progressIndicatorTheme.copyWith(year2023: false),
-    tooltipTheme: TooltipThemeData(
-      decoration: BoxDecoration(
-          color: scheme.inverseSurface,
-          borderRadius: BorderRadius.circular(10)),
-      textStyle: label.copyWith(
-          color: scheme.onInverseSurface,
-          fontSize: 12,
-          fontWeight: FontWeight.w500),
-    ),
-  );
 }

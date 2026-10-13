@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/formatting/billing_units.dart';
+import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/backend_action_ui.dart';
-import 'admin_inputs.dart';
-import 'admin_widgets.dart';
 
 /// Reads backend data a form needs to offer choices (providers, categories).
 typedef AdminLookup = Future<dynamic> Function(
@@ -341,7 +340,7 @@ class _ConfirmFormState extends State<_ConfirmForm> {
             : () => Navigator.pop(context, _clean(widget.initial)),
         children: [
           if (widget.needsCheck)
-            AdminConfirmCheck(
+            AppConfirmCheck(
                 value: understood,
                 onChanged: (v) => setState(() => understood = v),
                 label: 'I understand this cannot be undone'),
@@ -472,33 +471,33 @@ class _UserFormState extends State<_UserForm> {
             },
           ),
         ]),
-        AdminSegmentedField<String>(
+        AppSegmentedField<String>(
           label: 'Role',
           value: role,
           onChanged: (v) => setState(() => role = v),
           choices: const [
-            AdminChoice('user', 'Member',
+            AppChoice('user', 'Member',
                 icon: Icons.person_outline_rounded,
                 hint: 'Uses the platform; no access to this console.'),
-            AdminChoice('admin', 'Administrator',
+            AppChoice('admin', 'Administrator',
                 icon: Icons.admin_panel_settings_outlined,
                 hint:
                     'Full access to this console, every project and the node’s money.'),
           ],
         ),
-        AdminSegmentedField<String>(
+        AppSegmentedField<String>(
           label: 'Access',
           value: status,
           onChanged: (v) => setState(() => status = v),
           choices: const [
-            AdminChoice('active', 'Can sign in', icon: Icons.lock_open_rounded),
-            AdminChoice('disabled', 'Blocked',
+            AppChoice('active', 'Can sign in', icon: Icons.lock_open_rounded),
+            AppChoice('disabled', 'Blocked',
                 icon: Icons.block_rounded,
                 hint: 'Sign-in is refused; their data and wallet are kept.'),
           ],
         ),
         Column(children: [
-          AdminSwitchCard(
+          AppSwitchCard(
             icon: Icons.badge_outlined,
             title: 'Listed for hire',
             subtitle: 'Shown in the talent directory once approved.',
@@ -507,16 +506,16 @@ class _UserFormState extends State<_UserForm> {
           ),
           if (hireable) ...[
             const SizedBox(height: 14),
-            AdminSegmentedField<String>(
+            AppSegmentedField<String>(
               label: 'Talent review',
               value: market,
               onChanged: (v) => setState(() => market = v),
               choices: const [
-                AdminChoice('pending', 'Pending',
+                AppChoice('pending', 'Pending',
                     icon: Icons.hourglass_empty_rounded),
-                AdminChoice('approved', 'Approved',
+                AppChoice('approved', 'Approved',
                     icon: Icons.verified_outlined),
-                AdminChoice('rejected', 'Denied', icon: Icons.block_rounded),
+                AppChoice('rejected', 'Denied', icon: Icons.block_rounded),
               ],
             ),
           ],
@@ -558,7 +557,7 @@ class _PasswordFormState extends State<_PasswordForm> {
         Navigator.pop(context,
             {'account': widget.initial['account'], 'password': password.text});
       },
-      children: [AdminPasswordField(controller: password)],
+      children: [AppPasswordField(controller: password)],
     );
   }
 }
@@ -577,14 +576,14 @@ class _GrantFormState extends State<_GrantForm> {
   DateTime? expires;
 
   static const reasons = [
-    AdminChoice('Welcome bonus', 'Welcome bonus',
+    AppChoice('Welcome bonus', 'Welcome bonus',
         icon: Icons.celebration_outlined),
-    AdminChoice('Support credit', 'Support credit',
+    AppChoice('Support credit', 'Support credit',
         icon: Icons.support_agent_rounded),
-    AdminChoice('Refund', 'Refund', icon: Icons.undo_rounded),
-    AdminChoice('Promotion', 'Promotion', icon: Icons.campaign_outlined),
-    AdminChoice('Testing', 'Testing', icon: Icons.science_outlined),
-    AdminChoice('Other', 'Other', icon: Icons.more_horiz_rounded),
+    AppChoice('Refund', 'Refund', icon: Icons.undo_rounded),
+    AppChoice('Promotion', 'Promotion', icon: Icons.campaign_outlined),
+    AppChoice('Testing', 'Testing', icon: Icons.science_outlined),
+    AppChoice('Other', 'Other', icon: Icons.more_horiz_rounded),
   ];
 
   @override
@@ -620,7 +619,7 @@ class _GrantFormState extends State<_GrantForm> {
               });
             },
       children: [
-        AdminAmountField(
+        AppAmountField(
           label: 'Amount',
           hint: '≈ ${formatLedgerUsd(creditsToLedger(credits))} of usage',
           value: credits,
@@ -634,7 +633,7 @@ class _GrantFormState extends State<_GrantForm> {
           presetLabel: (v) => compactDecimal(v),
           onChanged: (v) => setState(() => credits = v),
         ),
-        AdminChoiceField<String>(
+        AppChoiceField<String>(
           label: 'Reason',
           hint: 'Shown on the user’s wallet activity.',
           choices: reasons,
@@ -649,7 +648,7 @@ class _GrantFormState extends State<_GrantForm> {
                   reason == 'Other' ? 'Describe the reason' : 'Note (optional)',
               prefixIcon: const Icon(Icons.notes_rounded)),
         ),
-        AdminExpiryField(
+        AppExpiryField(
           label: 'Expires',
           hint: 'Unused granted credits disappear after this date.',
           value: expires,
@@ -686,7 +685,7 @@ class _BudgetFormState extends State<_BudgetForm> {
         'cap': creditsToLedger(credits),
       }),
       children: [
-        AdminAmountField(
+        AppAmountField(
           label: 'Spending limit',
           hint: credits == 0
               ? 'No limit'
@@ -703,11 +702,11 @@ class _BudgetFormState extends State<_BudgetForm> {
         ),
         if (spent > 0)
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            AdminFieldLabel('Spent so far',
+            AppFieldLabel('Spent so far',
                 hint: credits == 0
                     ? '${compactDecimal(spent)} credits'
                     : '${compactDecimal(spent)} of ${compactDecimal(credits)} credits'),
-            AdminMeter(
+            AppMeter(
                 value: credits == 0 ? 0 : spent / credits,
                 color: credits > 0 && spent >= credits
                     ? scheme.error
@@ -733,10 +732,10 @@ class _PayoutFormState extends State<_PayoutForm> {
   String reason = 'Payment details are invalid';
 
   static const reasons = [
-    AdminChoice('Payment details are invalid', 'Invalid details'),
-    AdminChoice('Requested by the creator', 'Creator asked'),
-    AdminChoice('Suspicious activity', 'Suspicious'),
-    AdminChoice('Other', 'Other'),
+    AppChoice('Payment details are invalid', 'Invalid details'),
+    AppChoice('Requested by the creator', 'Creator asked'),
+    AppChoice('Suspicious activity', 'Suspicious'),
+    AppChoice('Other', 'Other'),
   ];
 
   @override
@@ -775,13 +774,13 @@ class _PayoutFormState extends State<_PayoutForm> {
                   ].join(' — '),
               }),
       children: [
-        AdminSegmentedField<String>(
+        AppSegmentedField<String>(
           label: 'Outcome',
           value: status,
           onChanged: (v) => setState(() => status = v),
           choices: const [
-            AdminChoice('paid', 'Paid', icon: Icons.check_circle_outline),
-            AdminChoice('rejected', 'Rejected', icon: Icons.undo_rounded),
+            AppChoice('paid', 'Paid', icon: Icons.check_circle_outline),
+            AppChoice('rejected', 'Rejected', icon: Icons.undo_rounded),
           ],
         ),
         if (paid)
@@ -795,7 +794,7 @@ class _PayoutFormState extends State<_PayoutForm> {
                 prefixIcon: Icon(Icons.receipt_long_outlined)),
           )
         else ...[
-          AdminChoiceField<String>(
+          AppChoiceField<String>(
             label: 'Why',
             hint: 'The creator sees this reason.',
             choices: reasons,
@@ -992,7 +991,7 @@ class _AgentFormState extends State<_AgentForm> {
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                          AdminChoiceField<String>(
+                          AppChoiceField<String>(
                             label: 'Provider',
                             value: provider,
                             onChanged: (v) => setState(() {
@@ -1001,12 +1000,12 @@ class _AgentFormState extends State<_AgentForm> {
                             }),
                             choices: [
                               for (final p in providers)
-                                AdminChoice('${p['id']}', '${p['name']}',
+                                AppChoice('${p['id']}', '${p['name']}',
                                     icon: Icons.hub_outlined),
                             ],
                           ),
                           const SizedBox(height: 18),
-                          AdminChoiceField<String>(
+                          AppChoiceField<String>(
                             label: 'Model',
                             hint: provider.isEmpty
                                 ? 'Pick a provider first, or keep the platform default.'
@@ -1014,18 +1013,18 @@ class _AgentFormState extends State<_AgentForm> {
                             value: model,
                             onChanged: (v) => setState(() => model = v),
                             choices: [
-                              const AdminChoice('', 'Platform default',
+                              const AppChoice('', 'Platform default',
                                   icon: Icons.auto_mode_rounded),
                               for (final m in models)
-                                AdminChoice(
+                                AppChoice(
                                     '${m['id']}', '${m['name'] ?? m['id']}'),
                               if (model.isNotEmpty &&
                                   !models.any((m) => '${m['id']}' == model))
-                                AdminChoice(model, '$model (current)'),
+                                AppChoice(model, '$model (current)'),
                             ],
                           ),
                         ]),
-        AdminAmountField(
+        AppAmountField(
           label: 'Price per minute',
           hint: rate == 0
               ? 'Uses the platform’s ${agent ? 'agent' : 'tool'} rate from Settings › Pricing.'
@@ -1119,17 +1118,17 @@ class _PublishFormState extends State<_PublishForm> {
               alignLabelWithHint: true),
         ),
         if (categories.isNotEmpty)
-          AdminChoiceField<String>(
+          AppChoiceField<String>(
             label: 'Category',
             value: category,
             onChanged: (v) => setState(() => category = v),
             choices: [
-              const AdminChoice('', 'None'),
+              const AppChoice('', 'None'),
               for (final c in categories)
-                AdminChoice(c, '${c[0].toUpperCase()}${c.substring(1)}'),
+                AppChoice(c, '${c[0].toUpperCase()}${c.substring(1)}'),
             ],
           ),
-        AdminAmountField(
+        AppAmountField(
           label: 'Price',
           hint: price == 0
               ? 'Free to add; usage is still billed per minute.'
@@ -1185,17 +1184,17 @@ class _DenyFormState extends State<_DenyForm> {
                 ].join(' — '),
               }),
       children: [
-        AdminChoiceField<String>(
+        AppChoiceField<String>(
           label: 'Reason',
           value: reason,
           onChanged: (v) => setState(() => reason = v),
           choices: const [
-            AdminChoice('Description is unclear', 'Unclear description'),
-            AdminChoice('Does not work as described', 'Does not work'),
-            AdminChoice('Price is not justified', 'Price too high'),
-            AdminChoice('Violates the content policy', 'Policy violation'),
-            AdminChoice('Duplicates an existing listing', 'Duplicate'),
-            AdminChoice('Other', 'Other'),
+            AppChoice('Description is unclear', 'Unclear description'),
+            AppChoice('Does not work as described', 'Does not work'),
+            AppChoice('Price is not justified', 'Price too high'),
+            AppChoice('Violates the content policy', 'Policy violation'),
+            AppChoice('Duplicates an existing listing', 'Duplicate'),
+            AppChoice('Other', 'Other'),
           ],
         ),
         TextField(
@@ -1297,15 +1296,15 @@ class _McpFormState extends State<_McpForm> {
                 : null;
           },
         ),
-        AdminSegmentedField<String>(
+        AppSegmentedField<String>(
           label: 'Sign-in',
           value: auth,
           onChanged: (v) => setState(() => auth = v),
           choices: const [
-            AdminChoice('', 'Shared key',
+            AppChoice('', 'Shared key',
                 icon: Icons.key_rounded,
                 hint: 'Everyone uses the credentials you enter here.'),
-            AdminChoice('user', 'Each person',
+            AppChoice('user', 'Each person',
                 icon: Icons.person_pin_outlined,
                 hint:
                     'People connect their own account the first time they use it.'),
@@ -1327,7 +1326,7 @@ class _McpFormState extends State<_McpForm> {
                         ? Icons.visibility_outlined
                         : Icons.visibility_off_outlined))),
           ),
-          AdminPairsEditor(
+          AppPairsEditor(
             label: 'Extra headers',
             hint: 'For servers that expect their own key header.',
             keyHint: 'Header',
@@ -1338,7 +1337,7 @@ class _McpFormState extends State<_McpForm> {
           ),
         ],
         if (!widget.editing)
-          AdminSwitchCard(
+          AppSwitchCard(
             icon: Icons.public_rounded,
             title: 'List in the catalog',
             subtitle: 'Every project on this node can add it.',

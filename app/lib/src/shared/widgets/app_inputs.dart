@@ -3,16 +3,18 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../core/theme/app_colors.dart';
-import 'admin_widgets.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_shape.dart';
 
-/// Input controls for the admin console. Each one picks a value by tapping
+export '../../core/theme/app_shape.dart';
+
+/// Input controls shared across the app. Each one picks a value by tapping
 /// (chips, segments, sliders, switches) and keeps typing for what really is
 /// free text: names, addresses, secrets.
 
 /// A small heading above a group of controls.
-class AdminFieldLabel extends StatelessWidget {
-  const AdminFieldLabel(this.label, {super.key, this.hint, this.trailing});
+class AppFieldLabel extends StatelessWidget {
+  const AppFieldLabel(this.label, {super.key, this.hint, this.trailing});
   final String label;
   final String? hint;
   final Widget? trailing;
@@ -52,8 +54,8 @@ class AdminFieldLabel extends StatelessWidget {
 }
 
 /// One option of a chip or segment picker.
-class AdminChoice<T> {
-  const AdminChoice(this.value, this.label, {this.icon, this.hint});
+class AppChoice<T> {
+  const AppChoice(this.value, this.label, {this.icon, this.hint});
   final T value;
   final String label;
   final IconData? icon;
@@ -61,8 +63,8 @@ class AdminChoice<T> {
 }
 
 /// Pick one of a few options with chips that wrap onto new lines.
-class AdminChoiceField<T> extends StatelessWidget {
-  const AdminChoiceField({
+class AppChoiceField<T> extends StatelessWidget {
+  const AppChoiceField({
     super.key,
     required this.label,
     required this.choices,
@@ -72,7 +74,7 @@ class AdminChoiceField<T> extends StatelessWidget {
   });
   final String label;
   final String? hint;
-  final List<AdminChoice<T>> choices;
+  final List<AppChoice<T>> choices;
   final T? value;
   final ValueChanged<T> onChanged;
 
@@ -81,7 +83,7 @@ class AdminChoiceField<T> extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final selected = choices.where((c) => c.value == value).firstOrNull;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      AdminFieldLabel(label, hint: hint),
+      AppFieldLabel(label, hint: hint),
       Wrap(spacing: 8, runSpacing: 8, children: [
         for (final choice in choices)
           ChoiceChip(
@@ -108,8 +110,8 @@ class AdminChoiceField<T> extends StatelessWidget {
 }
 
 /// Pick one of two to four options with a full-width segmented button.
-class AdminSegmentedField<T> extends StatelessWidget {
-  const AdminSegmentedField({
+class AppSegmentedField<T> extends StatelessWidget {
+  const AppSegmentedField({
     super.key,
     required this.label,
     required this.choices,
@@ -119,7 +121,7 @@ class AdminSegmentedField<T> extends StatelessWidget {
   });
   final String label;
   final String? hint;
-  final List<AdminChoice<T>> choices;
+  final List<AppChoice<T>> choices;
   final T value;
   final ValueChanged<T> onChanged;
 
@@ -128,7 +130,7 @@ class AdminSegmentedField<T> extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final selected = choices.where((c) => c.value == value).firstOrNull;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      AdminFieldLabel(label, hint: hint),
+      AppFieldLabel(label, hint: hint),
       SizedBox(
         width: double.infinity,
         child: SegmentedButton<T>(
@@ -155,8 +157,8 @@ class AdminSegmentedField<T> extends StatelessWidget {
 }
 
 /// A switch on a tonal surface, with an icon, title and explanation.
-class AdminSwitchCard extends StatelessWidget {
-  const AdminSwitchCard({
+class AppSwitchCard extends StatelessWidget {
+  const AppSwitchCard({
     super.key,
     required this.title,
     required this.value,
@@ -178,7 +180,7 @@ class AdminSwitchCard extends StatelessWidget {
           ? scheme.secondaryContainer.withValues(alpha: .7)
           : scheme.surfaceContainerHighest.withValues(alpha: .55),
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AdminShape.inner)),
+          borderRadius: BorderRadius.circular(AppShape.inner)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onChanged == null ? null : () => onChanged!(!value),
@@ -227,8 +229,8 @@ class AdminSwitchCard extends StatelessWidget {
 
 /// Picks a number with a slider, − / + steps and preset chips. The value
 /// itself is a button that opens exact entry for the rare precise figure.
-class AdminAmountField extends StatelessWidget {
-  const AdminAmountField({
+class AppAmountField extends StatelessWidget {
+  const AppAmountField({
     super.key,
     required this.label,
     required this.value,
@@ -317,7 +319,7 @@ class AdminAmountField extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final top = math.max(max, value);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      AdminFieldLabel(
+      AppFieldLabel(
         label,
         hint: hint,
         trailing: Material(
@@ -382,8 +384,8 @@ class AdminAmountField extends StatelessWidget {
 }
 
 /// Rows of name/value pairs (HTTP headers, environment variables).
-class AdminPairsEditor extends StatefulWidget {
-  const AdminPairsEditor({
+class AppPairsEditor extends StatefulWidget {
+  const AppPairsEditor({
     super.key,
     required this.label,
     required this.initial,
@@ -402,10 +404,10 @@ class AdminPairsEditor extends StatefulWidget {
   final bool obscureValues;
 
   @override
-  State<AdminPairsEditor> createState() => _AdminPairsEditorState();
+  State<AppPairsEditor> createState() => _AppPairsEditorState();
 }
 
-class _AdminPairsEditorState extends State<AdminPairsEditor> {
+class _AppPairsEditorState extends State<AppPairsEditor> {
   final rows = <(TextEditingController, TextEditingController)>[];
 
   @override
@@ -436,7 +438,7 @@ class _AdminPairsEditorState extends State<AdminPairsEditor> {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      AdminFieldLabel(widget.label, hint: widget.hint),
+      AppFieldLabel(widget.label, hint: widget.hint),
       for (var i = 0; i < rows.length; i++)
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
@@ -483,17 +485,17 @@ class _AdminPairsEditorState extends State<AdminPairsEditor> {
 }
 
 /// A password entry with a generator, a copy button and a strength meter.
-class AdminPasswordField extends StatefulWidget {
-  const AdminPasswordField(
+class AppPasswordField extends StatefulWidget {
+  const AppPasswordField(
       {super.key, required this.controller, this.label = 'New password'});
   final TextEditingController controller;
   final String label;
 
   @override
-  State<AdminPasswordField> createState() => _AdminPasswordFieldState();
+  State<AppPasswordField> createState() => _AppPasswordFieldState();
 }
 
-class _AdminPasswordFieldState extends State<AdminPasswordField> {
+class _AppPasswordFieldState extends State<AppPasswordField> {
   bool obscure = true;
 
   @override
@@ -568,7 +570,7 @@ class _AdminPasswordFieldState extends State<AdminPasswordField> {
         ),
       ),
       const SizedBox(height: 10),
-      AdminMeter(value: value, color: color, height: 6),
+      AppMeter(value: value, color: color, height: 6),
       const SizedBox(height: 6),
       Row(children: [
         Expanded(
@@ -585,8 +587,8 @@ class _AdminPasswordFieldState extends State<AdminPasswordField> {
 }
 
 /// When something lapses: never, after a preset period, or on a picked date.
-class AdminExpiryField extends StatelessWidget {
-  const AdminExpiryField({
+class AppExpiryField extends StatelessWidget {
+  const AppExpiryField({
     super.key,
     required this.label,
     required this.value,
@@ -611,7 +613,7 @@ class AdminExpiryField extends StatelessWidget {
     final current = value == null ? null : daysAway(value!);
     final isPreset = current != null && presets.values.contains(current);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      AdminFieldLabel(label, hint: hint),
+      AppFieldLabel(label, hint: hint),
       Wrap(spacing: 8, runSpacing: 8, children: [
         ChoiceChip(
           selected: value == null,
@@ -657,8 +659,8 @@ class AdminExpiryField extends StatelessWidget {
 
 /// A destructive confirmation: the action button stays disabled until the
 /// operator ticks that they understand.
-class AdminConfirmCheck extends StatelessWidget {
-  const AdminConfirmCheck(
+class AppConfirmCheck extends StatelessWidget {
+  const AppConfirmCheck(
       {super.key,
       required this.value,
       required this.onChanged,
@@ -673,7 +675,7 @@ class AdminConfirmCheck extends StatelessWidget {
     return Material(
       color: scheme.errorContainer.withValues(alpha: .45),
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AdminShape.inner)),
+          borderRadius: BorderRadius.circular(AppShape.inner)),
       clipBehavior: Clip.antiAlias,
       child: CheckboxListTile(
         value: value,
@@ -684,6 +686,41 @@ class AdminConfirmCheck extends StatelessWidget {
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: scheme.onErrorContainer)),
+      ),
+    );
+  }
+}
+
+/// A thin rounded progress meter that animates to [value] (0–1).
+class AppMeter extends StatelessWidget {
+  const AppMeter({super.key, required this.value, this.color, this.height = 8});
+  final double value;
+  final Color? color;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: value.isFinite ? value.clamp(0.0, 1.0) : 0.0),
+      duration: const Duration(milliseconds: 650),
+      curve: Curves.easeOutCubic,
+      builder: (context, v, _) => LayoutBuilder(
+        builder: (context, constraints) => Container(
+          height: height,
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(height),
+          ),
+          alignment: Alignment.centerLeft,
+          child: Container(
+            width: constraints.maxWidth * v,
+            decoration: BoxDecoration(
+              color: color ?? scheme.primary,
+              borderRadius: BorderRadius.circular(height),
+            ),
+          ),
+        ),
       ),
     );
   }

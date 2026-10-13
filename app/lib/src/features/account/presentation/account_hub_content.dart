@@ -424,12 +424,13 @@ class _AccountHubContentState extends State<AccountHubContent> {
                     Text('${me['following'] ?? 0} following'),
                     Text('${me['posts'] ?? 0} posts')
                   ]),
+                  const SizedBox(height: 14),
+                  FilledButton.tonalIcon(
+                      onPressed: () => widget.onAction(
+                          'auth', 'profile_update', {'profile': profile}),
+                      icon: const Icon(Icons.edit_outlined, size: 17),
+                      label: const Text('Edit profile')),
                 ])),
-            FilledButton.tonalIcon(
-                onPressed: () => widget
-                    .onAction('auth', 'profile_update', {'profile': profile}),
-                icon: const Icon(Icons.edit_outlined, size: 17),
-                label: const Text('Edit profile')),
           ]),
         ),
       ),

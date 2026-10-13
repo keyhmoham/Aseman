@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/llm_provider.dart';
 import '../../../data/services/tradera_service.dart';
+import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/status_tag.dart';
-import 'admin_inputs.dart';
 import 'admin_widgets.dart';
 
 /// Admin panel section managing the node's LLM providers: API keys (owned by
@@ -194,7 +194,7 @@ class _LlmProvidersTabState extends State<LlmProvidersTab> {
     return Material(
       color: scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AdminShape.card)),
+          borderRadius: BorderRadius.circular(AppShape.card)),
       clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 18, 12, 14),
@@ -453,16 +453,15 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      AdminChoiceField<String>(
+                      AppChoiceField<String>(
                         label: 'Provider',
                         value: kind,
                         onChanged: _selectKind,
                         choices: [
                           for (final k in widget.kinds)
-                            AdminChoice(k.kind, k.name,
-                                icon: Icons.hub_outlined),
+                            AppChoice(k.kind, k.name, icon: Icons.hub_outlined),
                           if (widget.kinds.every((k) => k.kind != kind))
-                            AdminChoice(kind, kind, icon: Icons.hub_outlined),
+                            AppChoice(kind, kind, icon: Icons.hub_outlined),
                         ],
                       ),
                       const SizedBox(height: 18),
@@ -481,7 +480,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                       ),
                       const SizedBox(height: 6),
                       const SizedBox(height: 10),
-                      AdminSwitchCard(
+                      AppSwitchCard(
                         icon: Icons.power_rounded,
                         title: 'Enabled',
                         subtitle: 'Agents can run on this provider.',
@@ -489,7 +488,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                         onChanged: (v) => setState(() => enabled = v),
                       ),
                       const SizedBox(height: 10),
-                      AdminSwitchCard(
+                      AppSwitchCard(
                         icon: Icons.star_rounded,
                         title: 'Default provider',
                         subtitle:

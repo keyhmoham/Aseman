@@ -469,9 +469,13 @@ class _Section extends StatelessWidget {
             Row(children: [
               Icon(icon, color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: 10),
-              Text(title,
-                  style: const TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.w900))
+              Expanded(
+                child: Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.w900)),
+              )
             ]),
             const Divider(height: 28),
             ...children

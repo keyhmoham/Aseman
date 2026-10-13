@@ -33,7 +33,7 @@ void main() {
     late Future<Map<String, dynamic>?> result;
     await tester.pumpWidget(MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: adminTheme(AppTheme.darkWith(const Color(0xFF8B7BFF))),
+      theme: AppTheme.darkWith(const Color(0xFF8B7BFF)),
       home: Builder(
         builder: (context) => Scaffold(
           body: Center(

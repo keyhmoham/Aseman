@@ -6,8 +6,8 @@ import 'package:flutter/services.dart';
 
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
-import 'admin_inputs.dart';
 import 'admin_widgets.dart';
 
 typedef AdminAction = Future<void> Function(
@@ -49,10 +49,10 @@ class AdminPageContent extends StatefulWidget {
   final Future<void> Function(String call, Map<String, dynamic> body)? onQuery;
 
   @override
-  State<AdminPageContent> createState() => _AdminPageContentState();
+  State<AdminPageContent> createState() => _AppPageContentState();
 }
 
-class _AdminPageContentState extends State<AdminPageContent> {
+class _AppPageContentState extends State<AdminPageContent> {
   final search = TextEditingController();
   String filter = 'all';
   String sort = 'created';
@@ -153,7 +153,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(AdminShape.inner),
+                borderRadius: BorderRadius.circular(AppShape.inner),
               ),
               child:
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -312,7 +312,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
             for (final item in needs)
               ListTile(
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AdminShape.control)),
+                    borderRadius: BorderRadius.circular(AppShape.control)),
                 leading: Container(
                   width: 40,
                   height: 40,
@@ -1467,7 +1467,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.danger.withValues(alpha: .1),
-                borderRadius: BorderRadius.circular(AdminShape.control),
+                borderRadius: BorderRadius.circular(AppShape.control),
               ),
               child: Row(children: [
                 const Icon(Icons.warning_amber_rounded,
@@ -1723,11 +1723,9 @@ class _AdminPageContentState extends State<AdminPageContent> {
                 for (final p in ordered)
                   ExpansionTile(
                     shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AdminShape.control)),
+                        borderRadius: BorderRadius.circular(AppShape.control)),
                     collapsedShape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AdminShape.control)),
+                        borderRadius: BorderRadius.circular(AppShape.control)),
                     initiallyExpanded: '${p['status']}' == 'pending' &&
                         identical(p, ordered.first),
                     leading: AdminAvatar(
@@ -1994,7 +1992,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
           subtitle: 'Tool selection, routing, progress and completion checks.',
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            AdminSwitchCard(
+            AppSwitchCard(
               icon: Icons.alt_route_rounded,
               title: enabled ? 'On' : 'Off',
               subtitle: enabled
@@ -2020,7 +2018,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
           ]),
         ),
         const SizedBox(height: 16),
-        AdminSwitchCard(
+        AppSwitchCard(
           icon: Icons.verified_user_outlined,
           title: 'Auto-approve low-risk calls',
           subtitle:
@@ -2044,17 +2042,17 @@ class _AdminPageContentState extends State<AdminPageContent> {
     required ValueChanged<String> onModel,
     bool allowNone = false,
   }) {
-    List<AdminChoice<String>> choices(
+    List<AppChoice<String>> choices(
             List<Map<String, dynamic>> options, String value, IconData icon) =>
         [
           for (final o in options)
-            AdminChoice('${o['id']}', '${o['name'] ?? o['id']}', icon: icon),
+            AppChoice('${o['id']}', '${o['name'] ?? o['id']}', icon: icon),
           if (value.isNotEmpty && !options.any((o) => '${o['id']}' == value))
-            AdminChoice(value, '$value (unavailable)',
+            AppChoice(value, '$value (unavailable)',
                 icon: Icons.warning_amber_rounded),
         ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      AdminChoiceField<String>(
+      AppChoiceField<String>(
         label: 'Provider',
         value: providerId,
         onChanged: (v) {
@@ -2062,14 +2060,14 @@ class _AdminPageContentState extends State<AdminPageContent> {
         },
         choices: [
           if (allowNone)
-            const AdminChoice('', 'None — not used',
+            const AppChoice('', 'None — not used',
                 icon: Icons.do_not_disturb_on_outlined),
           ...choices(providers, providerId, Icons.hub_outlined),
         ],
       ),
       if (providerId.isNotEmpty) ...[
         const SizedBox(height: 18),
-        AdminChoiceField<String>(
+        AppChoiceField<String>(
           label: 'Model',
           hint: models.isEmpty
               ? 'This provider offers no model for this purpose yet. Add one under Models.'
@@ -2305,7 +2303,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
                     color: tone == AdminTone.ok
                         ? Colors.transparent
                         : color.withValues(alpha: .08),
-                    borderRadius: BorderRadius.circular(AdminShape.control),
+                    borderRadius: BorderRadius.circular(AppShape.control),
                   ),
                   child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2760,7 +2758,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
           onChanged: (_) => setState(() {})),
       const SizedBox(height: 14),
       ClipRRect(
-        borderRadius: BorderRadius.circular(AdminShape.card - 4),
+        borderRadius: BorderRadius.circular(AppShape.card - 4),
         child: Container(
           height: 520,
           color: const Color(0xFF07101C),
@@ -3274,7 +3272,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
         return ListTile(
           contentPadding: contentPadding,
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AdminShape.control)),
+              borderRadius: BorderRadius.circular(AppShape.control)),
           leading: leading,
           title: title,
           subtitle: wide || actions.isEmpty
@@ -3303,7 +3301,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: color.withValues(alpha: .12),
-        borderRadius: BorderRadius.circular(AdminShape.inner),
+        borderRadius: BorderRadius.circular(AppShape.inner),
       ),
       child: Row(children: [
         Icon(
@@ -3726,7 +3724,7 @@ class _PricingEditorState extends State<_PricingEditor> {
   }
 
   Widget rate(String key, String label, String hint, IconData icon) =>
-      AdminAmountField(
+      AppAmountField(
         label: label,
         hint: '$hint · \$${(values[key]! * 60).toStringAsFixed(2)} an hour',
         value: values[key]!,
@@ -3740,7 +3738,7 @@ class _PricingEditorState extends State<_PricingEditor> {
         onChanged: (v) => setState(() => values[key] = v),
       );
 
-  Widget resource(String key, String label, String unit) => AdminAmountField(
+  Widget resource(String key, String label, String unit) => AppAmountField(
         label: label,
         value: values[key]!,
         max: 5,
@@ -3821,7 +3819,7 @@ class _PricingEditorState extends State<_PricingEditor> {
                     icon: const Icon(Icons.open_in_new_rounded, size: 18),
                     label: const Text('Edit model prices')))),
         const SizedBox(height: 16),
-        AdminSwitchCard(
+        AppSwitchCard(
           icon: Icons.tune_rounded,
           title: 'Per-resource rates',
           subtitle:
@@ -3920,16 +3918,16 @@ class _MachineEditorState extends State<_MachineEditor> {
       {bool auto = false, String? hint}) {
     final value = values[key];
     final all = <double>{...options, if (value != null) value}.toList()..sort();
-    return AdminChoiceField<double?>(
+    return AppChoiceField<double?>(
       label: label,
       hint: hint,
       value: value,
       onChanged: (v) => setState(() => values[key] = v),
       choices: [
         if (auto)
-          const AdminChoice<double?>(null, 'Automatic',
+          const AppChoice<double?>(null, 'Automatic',
               icon: Icons.auto_mode_rounded),
-        for (final o in all) AdminChoice<double?>(o, _size(o, unit)),
+        for (final o in all) AppChoice<double?>(o, _size(o, unit)),
       ],
     );
   }
@@ -4011,7 +4009,7 @@ class _MachineEditorState extends State<_MachineEditor> {
               const SizedBox(height: 20),
               sizeChips('memory', 'RAM', const [.5, 1, 2, 4, 8, 16, 32], 'GB'),
               const SizedBox(height: 20),
-              AdminAmountField(
+              AppAmountField(
                 label: 'Disk',
                 value: values['disk'] ?? 4,
                 min: 1,
@@ -4221,9 +4219,8 @@ class _DetailFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final narrow = MediaQuery.sizeOf(context).width < 700;
-    return Theme(
-      data: adminTheme(Theme.of(context)),
-      child: Dialog.fullscreen(
+    return Builder(
+      builder: (context) => Dialog.fullscreen(
         backgroundColor: scheme.surface,
         child: DefaultTabController(
           length: tabs.length,
@@ -4577,7 +4574,7 @@ class _ActionTile extends StatelessWidget {
     return Material(
       color: scheme.surfaceContainer,
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AdminShape.inner + 4)),
+          borderRadius: BorderRadius.circular(AppShape.inner + 4)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,

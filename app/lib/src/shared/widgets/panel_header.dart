@@ -25,22 +25,39 @@ class PanelHeader extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final close = onClose == null
         ? null
-        : IconButton(onPressed: onClose, icon: const Icon(Icons.close));
+        : IconButton.filledTonal(
+            tooltip: 'Close',
+            onPressed: onClose,
+            icon: const Icon(Icons.close_rounded));
+    // An expressive header: the icon sits in a tonal rounded square beside
+    // a bold title, the same as the admin console's page headers.
     final heading = Row(children: [
-      Icon(icon, size: 30, color: scheme.primary),
-      const SizedBox(width: 12),
+      Container(
+        width: 48,
+        height: 48,
+        decoration: ShapeDecoration(
+          color: scheme.primaryContainer,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        child: Icon(icon, size: 24, color: scheme.onPrimaryContainer),
+      ),
+      const SizedBox(width: 14),
       Expanded(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style:
-                  const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+              style: const TextStyle(
+                  fontSize: 26,
+                  height: 1.15,
+                  letterSpacing: -.5,
+                  fontWeight: FontWeight.w800)),
           const SizedBox(height: 2),
           Text(subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11)),
+              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
         ]),
       ),
     ]);

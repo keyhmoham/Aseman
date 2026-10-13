@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/theme/app_shape.dart';
 import 'admin_forms.dart';
 import 'admin_page_content.dart';
-import 'admin_widgets.dart';
 import 'llm_providers_tab.dart';
 
 typedef JsonMap = Map<String, dynamic>;
@@ -41,10 +41,10 @@ class AdminScreen extends StatefulWidget {
   final AppDependencies dependencies;
 
   @override
-  State<AdminScreen> createState() => _AdminScreenState();
+  State<AdminScreen> createState() => _AppScreenState();
 }
 
-class _AdminScreenState extends State<AdminScreen> {
+class _AppScreenState extends State<AdminScreen> {
   static const sections = <_Section>[
     _Section('Operate', [
       _Page('Overview', 'What needs attention', Icons.dashboard_outlined,
@@ -467,8 +467,7 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      Theme(data: adminTheme(Theme.of(context)), child: _shell());
+  Widget build(BuildContext context) => _shell();
 
   Widget _shell() => Builder(builder: (context) {
         final scheme = Theme.of(context).colorScheme;
@@ -635,8 +634,7 @@ class _AdminScreenState extends State<AdminScreen> {
                     color: scheme.surface,
                     clipBehavior: Clip.antiAlias,
                     shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AdminShape.card + 4)),
+                        borderRadius: BorderRadius.circular(AppShape.card + 4)),
                     child: content,
                   ),
                 ),
@@ -664,7 +662,7 @@ class _Navigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    const sections = _AdminScreenState.sections;
+    const sections = _AppScreenState.sections;
     final list = ListView(
       padding: const EdgeInsets.fromLTRB(12, 18, 12, 24),
       children: [

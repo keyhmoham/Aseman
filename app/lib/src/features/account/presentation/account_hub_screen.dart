@@ -7,6 +7,7 @@ import '../../../app_dependencies.dart';
 import '../../../core/notifications/push_notification_service.dart';
 import '../../../shared/widgets/backend_action_ui.dart';
 import '../../../shared/widgets/panel_header.dart';
+import '../../../shared/widgets/segmented_tab_bar.dart';
 import 'account_hub_content.dart';
 
 class _Endpoint {
@@ -252,19 +253,14 @@ class _AccountHubScreenState extends State<AccountHubScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          height: 44,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: areas.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 7),
-            itemBuilder: (context, index) => ChoiceChip(
-              selected: selected == index,
-              avatar: Icon(areas[index].icon, size: 17),
-              label: Text(areas[index].label),
-              onSelected: (_) => choose(index),
-            ),
-          ),
+        SegmentedTabBar(
+          width: 1000,
+          compact: compact,
+          alignment: Alignment.centerLeft,
+          selectedIndex: selected,
+          onTap: choose,
+          labels: [for (final a in areas) a.label],
+          icons: [for (final a in areas) a.icon],
         ),
         const SizedBox(height: 10),
         Expanded(

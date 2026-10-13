@@ -41,6 +41,7 @@ class WorkspaceHeader extends StatelessWidget {
       child: Row(children: [
         if (compact && onOpenNavigation != null) ...[
           IconButton(
+              tooltip: 'Rooms and workspace',
               onPressed: onOpenNavigation,
               icon: const Icon(Icons.menu_rounded)),
           const SizedBox(width: 4),

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_shape.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/post.dart';
 import '../../../data/models/profile.dart';
@@ -3455,8 +3456,10 @@ class _RoomChatState extends State<_RoomChat> {
                     if (messages.isEmpty)
                       const _NoMessages()
                     else ...[
-                      ...List.generate(messages.length,
-                          (i) => _chatBubble(context, messages[i])),
+                      ...List.generate(
+                          messages.length,
+                          (i) => _chatBubble(context, messages[i],
+                              previous: i == 0 ? null : messages[i - 1])),
                       if (widget.working.isNotEmpty)
                         _WorkingIndicator(
                             agent: widget.working,
@@ -3480,8 +3483,10 @@ class _RoomChatState extends State<_RoomChat> {
               : ListView(
                   controller: _chatScroll,
                   padding: const EdgeInsets.all(12),
-                  children: List.generate(messages.length,
-                          (i) => _chatBubble(context, messages[i])) +
+                  children: List.generate(
+                          messages.length,
+                          (i) => _chatBubble(context, messages[i],
+                              previous: i == 0 ? null : messages[i - 1])) +
                       [
                         if (widget.working.isNotEmpty)
                           _WorkingIndicator(
@@ -3494,106 +3499,201 @@ class _RoomChatState extends State<_RoomChat> {
     );
   }
 
-  Widget _chatHeader() => Container(
-      padding: const EdgeInsets.all(16),
-      child: Row(children: [
-        CircleAvatar(child: Text(widget.room.isEmpty ? 'R' : widget.room[0])),
-        const SizedBox(width: 10),
-        Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(widget.room,
-              style: const TextStyle(fontWeight: FontWeight.w900)),
-          Text(
-              widget.messages.isEmpty
-                  ? 'Live room'
-                  : '${widget.messages.length} messages',
-              style: const TextStyle(fontSize: 10))
-        ])),
-        IconButton(
-            tooltip: 'Agent tasks',
-            onPressed: widget.dependencies == null ||
-                    widget.spaceId.isEmpty ||
-                    widget.roomId.isEmpty
-                ? null
-                : () => showWorkflowPanel(context, widget.dependencies!.service,
-                    widget.spaceId, widget.roomId, widget.room,
-                    canManage: widget.canManageTasks),
-            icon: const Icon(Icons.account_tree_outlined, size: 18)),
-        IconButton(
-            tooltip: 'Routines',
-            onPressed: widget.dependencies == null
-                ? null
-                : () => showRoutinesSheet(context, widget.dependencies!,
-                    widget.spaceId, widget.roomId, widget.room),
-            icon: const Icon(Icons.schedule_rounded, size: 18)),
-        const Icon(Icons.more_vert)
-      ]));
-  Widget _composer() => Container(
-      decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: Theme.of(context)
-                  .colorScheme
-                  .outlineVariant
-                  .withValues(alpha: .5))),
-      child: Column(children: [
-        if (_drafts.isNotEmpty)
-          Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: SizedBox(
-                  height: 42,
-                  child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _drafts.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 6),
-                      itemBuilder: (context, index) =>
-                          _draftChip(_drafts[index])))),
-        if (_mentions.isNotEmpty)
-          Padding(
-              padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
-              child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(spacing: 4, runSpacing: 4, children: [
-                    for (final id in _mentions)
-                      InputChip(
-                          visualDensity: VisualDensity.compact,
-                          label: Text('@${_mentionNames[id] ?? id}',
-                              style: const TextStyle(fontSize: 10)),
-                          onDeleted: () => _removeMention(id)),
-                  ]))),
-        Row(children: [
-          IconButton(
-              tooltip: 'Attach file',
-              onPressed: _sending ? null : _showAttachSheet,
-              icon: const Icon(Icons.add_circle_outline_rounded, size: 18)),
-          IconButton(
-              tooltip: 'Mention an agent',
-              onPressed: _pickMention,
-              icon: const Icon(Icons.alternate_email_rounded, size: 18)),
-          IconButton(
-              tooltip: 'Design a message',
-              onPressed: _sending ? null : _openDesigner,
-              icon: const Icon(Icons.auto_awesome_rounded, size: 18)),
+  Widget _chatHeader() {
+    final scheme = Theme.of(context).colorScheme;
+    final deps = widget.dependencies;
+    final count = widget.messages.where((m) => m.kind != 'log').length;
+    return Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+        child: Row(children: [
+          Container(
+              width: 42,
+              height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                  color: scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(AppShape.control)),
+              child: Text(
+                  widget.room.isEmpty ? 'R' : widget.room[0].toUpperCase(),
+                  style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: scheme.onPrimaryContainer))),
+          const SizedBox(width: 12),
           Expanded(
-              child: TextField(
-                  controller: input,
-                  enabled: !_sending,
-                  onSubmitted: _submit,
-                  decoration: const InputDecoration(
-                      hintText: 'Message room…', border: InputBorder.none))),
-          IconButton(
-              onPressed: _sending ? null : () => _submit(input.text),
-              icon: _sending
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.send_rounded, size: 18)),
-        ]),
-      ]));
-  Widget _chatBubble(BuildContext context, RoomMessage m) {
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(widget.room,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Row(children: [
+                  Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                          color: widget.working.isNotEmpty
+                              ? scheme.primary
+                              : AppColors.success,
+                          shape: BoxShape.circle)),
+                  const SizedBox(width: 6),
+                  Flexible(
+                      child: Text(
+                          widget.working.isNotEmpty
+                              ? '${widget.working} is working'
+                              : count == 0
+                                  ? 'Live room'
+                                  : '$count messages',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 12, color: scheme.onSurfaceVariant))),
+                ]),
+              ])),
+          IconButton.filledTonal(
+              tooltip: 'Agent tasks',
+              visualDensity: VisualDensity.compact,
+              onPressed: deps == null ||
+                      widget.spaceId.isEmpty ||
+                      widget.roomId.isEmpty
+                  ? null
+                  : () => showWorkflowPanel(context, deps.service,
+                      widget.spaceId, widget.roomId, widget.room,
+                      canManage: widget.canManageTasks),
+              icon: const Icon(Icons.account_tree_outlined, size: 18)),
+          const SizedBox(width: 4),
+          IconButton.filledTonal(
+              tooltip: 'Routines',
+              visualDensity: VisualDensity.compact,
+              onPressed: deps == null
+                  ? null
+                  : () => showRoutinesSheet(context, deps, widget.spaceId,
+                      widget.roomId, widget.room),
+              icon: const Icon(Icons.schedule_rounded, size: 18)),
+        ]));
+  }
+
+  Widget _composer() {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+        color: scheme.surfaceContainerHigh,
+        elevation: widget.flat ? 3 : 0,
+        shadowColor: Colors.black.withValues(alpha: .25),
+        borderRadius: BorderRadius.circular(AppShape.card),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              if (_drafts.isNotEmpty)
+                Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 2, 4, 6),
+                    child: SizedBox(
+                        height: 42,
+                        child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _drafts.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(width: 6),
+                            itemBuilder: (context, index) =>
+                                _draftChip(_drafts[index])))),
+              if (_mentions.isNotEmpty)
+                Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 2, 6, 4),
+                    child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Wrap(spacing: 6, runSpacing: 4, children: [
+                          for (final id in _mentions)
+                            InputChip(
+                                visualDensity: VisualDensity.compact,
+                                shape: const StadiumBorder(),
+                                avatar: const Icon(Icons.smart_toy_outlined,
+                                    size: 16),
+                                label: Text('@${_mentionNames[id] ?? id}',
+                                    style: const TextStyle(fontSize: 12)),
+                                onDeleted: () => _removeMention(id)),
+                        ]))),
+              LayoutBuilder(builder: (context, box) {
+                final actions = [
+                  _composerAction(Icons.add_rounded, 'Attach file',
+                      _sending ? null : _showAttachSheet),
+                  _composerAction(Icons.alternate_email_rounded,
+                      'Mention an agent', _pickMention),
+                  _composerAction(Icons.auto_awesome_rounded,
+                      'Design a message', _sending ? null : _openDesigner),
+                ];
+                final field = TextField(
+                    controller: input,
+                    enabled: !_sending,
+                    onSubmitted: _submit,
+                    minLines: 1,
+                    maxLines: 5,
+                    textInputAction: TextInputAction.send,
+                    style: const TextStyle(fontSize: 15),
+                    decoration: const InputDecoration(
+                        hintText: 'Message room…',
+                        hintMaxLines: 1,
+                        filled: false,
+                        isDense: true,
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none));
+                final send = IconButton.filled(
+                    tooltip: 'Send',
+                    onPressed: _sending ? null : () => _submit(input.text),
+                    icon: _sending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.send_rounded, size: 20));
+                // Narrow panels give the text its own line above the actions.
+                if (box.maxWidth < 340) {
+                  return Column(mainAxisSize: MainAxisSize.min, children: [
+                    field,
+                    Row(children: [...actions, const Spacer(), send]),
+                  ]);
+                }
+                return Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      ...actions,
+                      const SizedBox(width: 4),
+                      Expanded(child: field),
+                      const SizedBox(width: 4),
+                      send,
+                    ]);
+              }),
+            ])));
+  }
+
+  Widget _composerAction(IconData icon, String tooltip, VoidCallback? onTap) =>
+      IconButton(
+          tooltip: tooltip,
+          visualDensity: VisualDensity.compact,
+          onPressed: onTap,
+          icon: Icon(icon, size: 20));
+
+  // Resolves a sender id to a display name: the agents in the workspace are
+  // known by name, other members fall back to a short id.
+  ({String name, bool agent}) _sender(String id) {
+    for (final b in widget.mentionable) {
+      if (b.id == id) return (name: b.name, agent: true);
+    }
+    if (id.isEmpty) return (name: 'Unknown', agent: false);
+    return (
+      name: id.length > 8 ? 'Member ${id.substring(id.length - 4)}' : id,
+      agent: false
+    );
+  }
+
+  Widget _chatBubble(BuildContext context, RoomMessage m,
+      {RoomMessage? previous}) {
     // Agentic-flow content (tradera's plans, dispatches, tool/sandbox outputs)
     // renders as a collapsible log section rather than a chat bubble.
     if (m.kind == 'log') {
@@ -3605,22 +3705,33 @@ class _RoomChatState extends State<_RoomChat> {
         dependencies: widget.dependencies,
       );
     }
+    final scheme = Theme.of(context).colorScheme;
     final mine = m.senderId == widget.me;
+    // Consecutive messages from the same sender are grouped: only the first
+    // one shows the sender, and the group sits tighter together.
+    final continued = previous != null &&
+        previous.kind != 'log' &&
+        previous.senderId == m.senderId &&
+        m.createdAt.difference(previous.createdAt).inMinutes.abs() < 5;
     final time = _msgTime(m.createdAt);
     final deps = widget.dependencies;
-    return Align(
-        alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(11),
-            constraints: const BoxConstraints(maxWidth: 300),
-            decoration: BoxDecoration(
-                color: mine
-                    ? Theme.of(context).colorScheme.primaryContainer
-                    : Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(18)),
+    final sender = _sender(m.senderId);
+    final fg = mine ? scheme.onPrimaryContainer : scheme.onSurface;
+    const r = Radius.circular(20);
+    const tail = Radius.circular(6);
+    final bubble = Container(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+        decoration: BoxDecoration(
+            color: mine ? scheme.primaryContainer : scheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.only(
+                topLeft: !mine && !continued ? tail : r,
+                topRight: mine && !continued ? tail : r,
+                bottomLeft: r,
+                bottomRight: r)),
+        child: DefaultTextStyle.merge(
+            style: TextStyle(color: fg, fontSize: 14, height: 1.4),
             child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               if (m.attachments.isNotEmpty)
                 ...m.attachments.map((f) => Padding(
                       padding: const EdgeInsets.only(bottom: 4),
@@ -3643,24 +3754,78 @@ class _RoomChatState extends State<_RoomChat> {
                         ? null
                         : (link) =>
                             openWorkspaceLink(context, deps.service, link)),
-              // A gateway proxy message gets an "open in webview" button so the
-              // room's users can view the page served from the sandbox behind it.
-              if (deps != null &&
-                  m.kind != 'log' &&
-                  _proxyPathIn(m.body) != null)
+              // A gateway proxy message gets an "open in webview" button
+              // so the room's users can view the page served from the
+              // sandbox behind it.
+              if (deps != null && _proxyPathIn(m.body) != null)
                 Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: _ProxyOpenButton(
                         title: _proxyTitle(m.body) ?? 'Sandbox service',
                         url:
                             deps.service.proxyUrl(_proxyPathIn(m.body) ?? ''))),
-              const SizedBox(height: 4),
-              Text(
-                  mine
-                      ? 'You · $time'
-                      : '@${m.senderId.isEmpty ? '?' : m.senderId.substring(0, 8)} · $time',
-                  style: const TextStyle(fontSize: 8))
+              const SizedBox(height: 2),
+              Text(time,
+                  style: TextStyle(
+                      fontSize: 10, color: fg.withValues(alpha: .65))),
             ])));
+    final avatar = SizedBox(
+        width: 30,
+        child: continued
+            ? null
+            : CircleAvatar(
+                radius: 15,
+                backgroundColor: sender.agent
+                    ? scheme.tertiaryContainer
+                    : scheme.secondaryContainer,
+                child: sender.agent
+                    ? Icon(Icons.smart_toy_rounded,
+                        size: 16, color: scheme.onTertiaryContainer)
+                    : Icon(Icons.person_rounded,
+                        size: 17, color: scheme.onSecondaryContainer)));
+    return Padding(
+        padding: EdgeInsets.only(top: continued ? 2 : 10),
+        child: Row(
+            mainAxisAlignment:
+                mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (mine) const SizedBox(width: 32),
+              if (!mine) ...[avatar, const SizedBox(width: 8)],
+              Flexible(
+                  child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 380),
+                      child: Column(
+                          crossAxisAlignment: mine
+                              ? CrossAxisAlignment.end
+                              : CrossAxisAlignment.start,
+                          children: [
+                            if (!mine && !continued)
+                              Padding(
+                                  padding:
+                                      const EdgeInsets.only(left: 4, bottom: 3),
+                                  child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Flexible(
+                                            child: Text(sender.name,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: sender.agent
+                                                        ? scheme.tertiary
+                                                        : scheme.primary))),
+                                        if (sender.agent) ...[
+                                          const SizedBox(width: 6),
+                                          MiniTag('AI', scheme.tertiary),
+                                        ],
+                                      ])),
+                            bubble,
+                          ]))),
+              SizedBox(width: mine ? 4 : 12),
+            ]));
   }
 
   static String _msgTime(DateTime t) =>
@@ -3797,12 +3962,18 @@ class _ProxyOpenButton extends StatelessWidget {
                   size: 16,
                   color: scheme.onPrimary),
               const SizedBox(width: 6),
-              Text(
-                  workspacePreviewUsesWebView ? 'Open in webview' : 'Open page',
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: scheme.onPrimary)),
+              Flexible(
+                child: Text(
+                    workspacePreviewUsesWebView
+                        ? 'Open in webview'
+                        : 'Open page',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: scheme.onPrimary)),
+              ),
             ]),
           ),
         ),
@@ -3815,17 +3986,32 @@ class _NoMessages extends StatelessWidget {
   const _NoMessages();
 
   @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Text(
-            'No messages yet. Say hello!',
-            style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+                color: scheme.primaryContainer,
+                borderRadius: BorderRadius.circular(AppShape.inner)),
+            child: Icon(Icons.forum_rounded,
+                size: 30, color: scheme.onPrimaryContainer),
           ),
-        ),
-      );
+          const SizedBox(height: 14),
+          const Text('No messages yet',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text('Say hello, or mention an agent with @ to put it to work.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
+        ]),
+      ),
+    );
+  }
 }
 
 // _WorkingIndicator shows, below the last message, which agent is currently
@@ -3861,13 +4047,11 @@ class _WorkingIndicatorState extends State<_WorkingIndicator>
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+        margin: const EdgeInsets.only(top: 10, left: 38),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: scheme.surface.withValues(alpha: .75),
-          borderRadius: BorderRadius.circular(16),
-          border:
-              Border.all(color: scheme.outlineVariant.withValues(alpha: .5)),
+          color: scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(20),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Text(widget.agent,
@@ -3876,11 +4060,15 @@ class _WorkingIndicatorState extends State<_WorkingIndicator>
                   fontWeight: FontWeight.w800,
                   color: scheme.primary)),
           const SizedBox(width: 4),
-          Text(detail,
-              style: TextStyle(
-                  fontSize: 11,
-                  fontStyle: FontStyle.italic,
-                  color: scheme.onSurfaceVariant)),
+          Flexible(
+            child: Text(detail,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                    color: scheme.onSurfaceVariant)),
+          ),
           const SizedBox(width: 8),
           _WorkingDots(controller: _controller, color: scheme.primary),
         ]),
@@ -3960,33 +4148,44 @@ class _LogSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(top: 10),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: .55),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .6)),
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppShape.control),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .4)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         InkWell(
           onTap: onToggle,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppShape.control),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            padding: const EdgeInsets.fromLTRB(8, 8, 10, 8),
             child: Row(children: [
-              Icon(Icons.terminal_rounded,
-                  size: 14, color: scheme.onSurfaceVariant),
-              const SizedBox(width: 6),
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                    color: scheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(9)),
+                child: Icon(Icons.terminal_rounded,
+                    size: 15, color: scheme.onSecondaryContainer),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 12.5,
                         fontWeight: FontWeight.w700,
                         color: scheme.onSurfaceVariant)),
               ),
-              Icon(expanded ? Icons.expand_less : Icons.expand_more,
-                  size: 16, color: scheme.onSurfaceVariant),
+              AnimatedRotation(
+                turns: expanded ? .5 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: Icon(Icons.expand_more_rounded,
+                    size: 20, color: scheme.onSurfaceVariant),
+              ),
             ]),
           ),
         ),

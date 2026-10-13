@@ -103,9 +103,9 @@ void main() {
   final screens = <String, Widget Function(AppDependencies)>{
     'settings': (d) => SettingsScreen(dependencies: d),
     'wallet': (d) => WalletScreen(dependencies: d),
+    'chats': (d) => ChatsScreen(dependencies: d),
     'market': (d) => MarketScreen(dependencies: d),
     'my_bots': (d) => AgentsScreen(dependencies: d),
-    'chats': (d) => ChatsScreen(dependencies: d),
     for (var i = 0; i < 7; i++)
       'account_$i': (d) => AccountHubScreen(dependencies: d, initialIndex: i),
     'project_control': (d) => ProjectControlScreen(
@@ -127,6 +127,35 @@ void main() {
             roomName: 'General')),
   };
 
+  // A fake service whose Atlas "general" room already holds a conversation.
+  FakeTraderaService roomService() {
+    final service = FakeTraderaService();
+    final t = DateTime(2026, 3, 4, 9, 30);
+    RoomMessage msg(String id, String sender, String body, int minute,
+            {String kind = 'message'}) =>
+        RoomMessage(
+            id: id,
+            spaceId: FakeTraderaService.atlasId,
+            roomId: 'a1',
+            senderId: sender,
+            body: body,
+            kind: kind,
+            createdAt: t.add(Duration(minutes: minute)));
+    service.roomMessages['${FakeTraderaService.atlasId}/a1'] = [
+      msg('m1', '00000000000000010000000000000042',
+          'Morning team. BTC broke above the weekly range overnight.', 0),
+      msg('m2', '00000000000000010000000000000001',
+          'Nice. @AlphaBot can you size a long with 2% risk?', 2),
+      msg('m3', 'bot-alpha', 'Plan: fetch order book, compute ATR stop, size.',
+          3,
+          kind: 'log'),
+      msg('m4', 'bot-alpha',
+          'Entry 68,200 · stop 66,900 · size 0.31 BTC (2% of equity).', 4),
+      msg('m5', '00000000000000010000000000000001', 'Perfect, thanks!', 5),
+    ];
+    return service;
+  }
+
   for (final size in sizes.entries) {
     for (final screen in screens.entries) {
       testWidgets('${size.key} · ${screen.key}', (tester) async {
@@ -139,12 +168,15 @@ void main() {
     }
 
     testWidgets('${size.key} · app flows', (tester) async {
-      Future<void> app(String name, [Future<void> Function()? interact]) async {
+      Future<void> app(String name,
+          [Future<void> Function()? interact,
+          FakeTraderaService? service]) async {
         await seedSession();
         final errors =
             await capture(tester, size.value, '${size.key}_$name', () async {
           await tester.pumpWidget(TraderaApp(
-              dependencies: AppDependencies.withService(FakeTraderaService())));
+              dependencies: AppDependencies.withService(
+                  service ?? FakeTraderaService())));
           await tester.pumpAndSettle();
           await interact?.call();
           await tester.pumpAndSettle();
@@ -159,6 +191,24 @@ void main() {
         await tester.tap(find.text('TRADERA'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Atlas Capital'));
+      });
+      await app('room', () async {
+        await tester.tap(find.text('TRADERA'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Atlas Capital'));
+        await tester.pumpAndSettle();
+        if (size.key == 'phone') {
+          await tester.tap(find.byTooltip('Rooms and workspace').first);
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.text('general').first);
+        if (size.key == 'phone') {
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Chat').last);
+        }
+      }, roomService());
+      await app('feed_following', () async {
+        await tester.tap(find.text('Following').first);
       });
       SharedPreferences.setMockInitialValues({});
       final errors =

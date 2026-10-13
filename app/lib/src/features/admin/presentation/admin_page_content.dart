@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -113,11 +114,12 @@ class _AdminPageContentState extends State<AdminPageContent> {
     final errors = widget.results.entries
         .where((entry) => _map(entry.value).containsKey('error'))
         .toList();
+    final gutter = MediaQuery.sizeOf(context).width < 600 ? 16.0 : 24.0;
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
       child: ListView(
         key: PageStorageKey(widget.page),
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+        padding: EdgeInsets.fromLTRB(gutter, 8, gutter, 40),
         children: [
           if (errors.isNotEmpty)
             Container(
@@ -328,7 +330,8 @@ class _AdminPageContentState extends State<AdminPageContent> {
           AdminTableColumn('Status', width: 110),
           AdminTableColumn('Balance', width: 120, align: TextAlign.right),
           AdminTableColumn('Last seen', width: 160),
-          AdminTableColumn('Actions', width: 160, align: TextAlign.right),
+          // Three 48 px icon buttons plus cell padding, on one line.
+          AdminTableColumn('Actions', width: 172, align: TextAlign.right),
         ],
         rows: [
           for (final a in rows)
@@ -524,31 +527,28 @@ class _AdminPageContentState extends State<AdminPageContent> {
             '${l['status']}' == 'pending')
         .length;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Expanded(
-          child: Wrap(spacing: 8, runSpacing: 8, children: [
+      _toolbar(
+          Wrap(spacing: 8, runSpacing: 8, children: [
             _filterChip('All', 'all'),
             _filterChip('Listed', 'approved'),
             _filterChip('Review', 'pending', count: pending),
             _filterChip('Denied', 'denied'),
             _filterChip('Unlisted', 'unlisted'),
           ]),
-        ),
-        const SizedBox(width: 10),
-        OutlinedButton.icon(
-          onPressed: () => widget.onAction(
-              'bots', 'agent_import_samples', const <String, dynamic>{}),
-          icon: const Icon(Icons.download_rounded, size: 17),
-          label: const Text('Import samples'),
-        ),
-        const SizedBox(width: 8),
-        FilledButton.icon(
-          onPressed: () =>
-              widget.onAction('bots', 'bot_create', {'kind': 'agent'}),
-          icon: const Icon(Icons.add_rounded, size: 17),
-          label: const Text('Add agent'),
-        ),
-      ]),
+          [
+            OutlinedButton.icon(
+              onPressed: () => widget.onAction(
+                  'bots', 'agent_import_samples', const <String, dynamic>{}),
+              icon: const Icon(Icons.download_rounded, size: 17),
+              label: const Text('Import samples'),
+            ),
+            FilledButton.icon(
+              onPressed: () =>
+                  widget.onAction('bots', 'bot_create', {'kind': 'agent'}),
+              icon: const Icon(Icons.add_rounded, size: 17),
+              label: const Text('Add agent'),
+            ),
+          ]),
       const SizedBox(height: 12),
       AdminSearchField(
           controller: search,
@@ -668,27 +668,26 @@ class _AdminPageContentState extends State<AdminPageContent> {
         .toList();
     final tools = rows.where((b) => !servers.contains(b)).toList();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Expanded(
-          child: AdminSearchField(
+      _toolbar(
+          AdminSearchField(
               controller: search,
               hint: 'Search MCP servers, tools and miniapps',
               onChanged: (_) => setState(() {})),
-        ),
-        const SizedBox(width: 10),
-        OutlinedButton.icon(
-          onPressed: () => widget.onAction(
-              'tools', 'mcp_import_samples', const <String, dynamic>{}),
-          icon: const Icon(Icons.download_rounded, size: 17),
-          label: Text(samples.isEmpty ? 'Import samples' : 'Import catalog'),
-        ),
-        const SizedBox(width: 8),
-        FilledButton.icon(
-          onPressed: () => widget.onAction('tools', 'mcp_register', const {}),
-          icon: const Icon(Icons.add_rounded, size: 17),
-          label: const Text('Add server'),
-        ),
-      ]),
+          [
+            OutlinedButton.icon(
+              onPressed: () => widget.onAction(
+                  'tools', 'mcp_import_samples', const <String, dynamic>{}),
+              icon: const Icon(Icons.download_rounded, size: 17),
+              label:
+                  Text(samples.isEmpty ? 'Import samples' : 'Import catalog'),
+            ),
+            FilledButton.icon(
+              onPressed: () =>
+                  widget.onAction('tools', 'mcp_register', const {}),
+              icon: const Icon(Icons.add_rounded, size: 17),
+              label: const Text('Add server'),
+            ),
+          ]),
       const SizedBox(height: 16),
       _toolSection('MCP servers (${servers.length})', servers, listings,
           server: true),
@@ -719,7 +718,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
                           orElse: () => null);
                   final listed =
                       listing != null && '${listing['status']}' != 'unlisted';
-                  return ListTile(
+                  return _adaptiveTile(
                     leading: CircleAvatar(
                         child: Icon(server
                             ? Icons.hub_outlined
@@ -737,44 +736,40 @@ class _AdminPageContentState extends State<AdminPageContent> {
                         ].where((v) => v.isNotEmpty && v != '—').join(' · '),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis),
-                    trailing: Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 4,
-                        children: [
-                          AdminStatusPill(listed
-                              ? 'listed'
-                              : '${b['status'] ?? 'unlisted'}'),
-                          IconButton(
-                              tooltip: 'Edit',
-                              onPressed: () => widget.onAction('tools',
-                                      server ? 'mcp_update' : 'mcp_register', {
-                                    'bot': b['id'],
-                                    'name': b['name'],
-                                    'url': b['url']
-                                  }),
-                              icon: const Icon(Icons.edit_outlined, size: 18)),
-                          IconButton(
-                              tooltip: listed ? 'Unlist' : 'List',
-                              onPressed: () => listed
-                                  ? widget.onDirectAction('market', 'unpublish',
-                                      {'listing': listing['id']})
-                                  : widget.onAction('market', 'publish', {
-                                      'bot': b['id'],
-                                      'type': '${b['kind'] ?? 'tool'}',
-                                      'name': b['name'],
-                                    }),
-                              icon: Icon(
-                                  listed
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.storefront_outlined,
-                                  size: 18)),
-                          IconButton(
-                              tooltip: 'Delete',
-                              onPressed: () => widget.onAction(
-                                  'tools', 'mcp_delete', {'bot': b['id']}),
-                              icon: const Icon(Icons.delete_outline_rounded,
-                                  size: 18)),
-                        ]),
+                    actions: [
+                      AdminStatusPill(
+                          listed ? 'listed' : '${b['status'] ?? 'unlisted'}'),
+                      IconButton(
+                          tooltip: 'Edit',
+                          onPressed: () => widget.onAction('tools',
+                                  server ? 'mcp_update' : 'mcp_register', {
+                                'bot': b['id'],
+                                'name': b['name'],
+                                'url': b['url']
+                              }),
+                          icon: const Icon(Icons.edit_outlined, size: 18)),
+                      IconButton(
+                          tooltip: listed ? 'Unlist' : 'List',
+                          onPressed: () => listed
+                              ? widget.onDirectAction('market', 'unpublish',
+                                  {'listing': listing['id']})
+                              : widget.onAction('market', 'publish', {
+                                  'bot': b['id'],
+                                  'type': '${b['kind'] ?? 'tool'}',
+                                  'name': b['name'],
+                                }),
+                          icon: Icon(
+                              listed
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.storefront_outlined,
+                              size: 18)),
+                      IconButton(
+                          tooltip: 'Delete',
+                          onPressed: () => widget.onAction(
+                              'tools', 'mcp_delete', {'bot': b['id']}),
+                          icon: const Icon(Icons.delete_outline_rounded,
+                              size: 18)),
+                    ],
                   );
                 }),
             ]),
@@ -925,27 +920,27 @@ class _AdminPageContentState extends State<AdminPageContent> {
       const SizedBox(height: 18),
       AdminSectionCard(
         title: 'What customers spent it on',
-        child: Column(children: [
-          SizedBox(
+        child: LayoutBuilder(builder: (context, constraints) {
+          final bars = _FinanceBars(items: components, total: total);
+          final values = Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (final item in components)
+                AdminKeyValue(item.label, _money(item.value)),
+            ],
+          );
+          if (constraints.maxWidth < 600) {
+            return Column(children: [bars, const SizedBox(height: 12), values]);
+          }
+          return SizedBox(
             height: 190,
             child: Row(children: [
-              Expanded(
-                flex: 2,
-                child: _FinanceBars(items: components, total: total),
-              ),
+              Expanded(flex: 2, child: bars),
               const SizedBox(width: 24),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    for (final item in components)
-                      AdminKeyValue(item.label, _money(item.value)),
-                  ],
-                ),
-              ),
+              Expanded(child: values),
             ]),
-          ),
-        ]),
+          );
+        }),
       ),
       const SizedBox(height: 18),
       AdminSectionCard(
@@ -1169,10 +1164,10 @@ class _AdminPageContentState extends State<AdminPageContent> {
                 for (final p in ordered)
                   ExpansionTile(
                     leading: CircleAvatar(
-                        child: Text('${p['handle'] ?? '?'}'
-                            .characters
-                            .first
-                            .toUpperCase())),
+                        child: Text(
+                            ('${p['handle'] ?? ''}'.characters.firstOrNull ??
+                                    '?')
+                                .toUpperCase())),
                     title: Text(
                         '${p['handle'] ?? p['account_id'] ?? 'Creator'}',
                         style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -1237,30 +1232,34 @@ class _AdminPageContentState extends State<AdminPageContent> {
                   .contains(q));
     }).toList();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Expanded(
-          child: AdminSearchField(
+      _toolbar(
+          AdminSearchField(
               controller: search,
               hint: 'Search provider or model',
               onChanged: (_) => setState(() {})),
-        ),
-        const SizedBox(width: 10),
-        DropdownButton<String>(
-          value: providers.any((p) => '${p['id']}' == filter) ? filter : 'all',
-          items: [
-            const DropdownMenuItem(value: 'all', child: Text('All providers')),
-            for (final p in providers)
-              DropdownMenuItem(
-                  value: '${p['id']}', child: Text('${p['name']}')),
-          ],
-          onChanged: (value) => setState(() => filter = value ?? 'all'),
-        ),
-        const SizedBox(width: 10),
-        FilledButton.icon(
-            onPressed: providers.isEmpty ? null : () => _showModel(providers),
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Add model')),
-      ]),
+          [
+            DropdownButton<String>(
+              value:
+                  providers.any((p) => '${p['id']}' == filter) ? filter : 'all',
+              items: [
+                const DropdownMenuItem(
+                    value: 'all', child: Text('All providers')),
+                for (final p in providers)
+                  DropdownMenuItem(
+                      value: '${p['id']}',
+                      child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 220),
+                          child: Text('${p['name']}',
+                              overflow: TextOverflow.ellipsis))),
+              ],
+              onChanged: (value) => setState(() => filter = value ?? 'all'),
+            ),
+            FilledButton.icon(
+                onPressed:
+                    providers.isEmpty ? null : () => _showModel(providers),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Add model')),
+          ]),
       const SizedBox(height: 14),
       AdminDataTable(
         empty: providers.isEmpty
@@ -1389,12 +1388,9 @@ class _AdminPageContentState extends State<AdminPageContent> {
         child: Column(children: [
           DropdownButtonFormField<String>(
             initialValue: providerId.isEmpty ? null : providerId,
+            isExpanded: true,
             decoration: const InputDecoration(labelText: 'Provider'),
-            items: [
-              for (final p in providers)
-                DropdownMenuItem(
-                    value: '${p['id']}', child: Text('${p['name']}'))
-            ],
+            items: _optionItems(providers, providerId),
             onChanged: (value) {
               if (value == null) return;
               widget.onAction('llm', 'llm_decision_set',
@@ -1406,13 +1402,10 @@ class _AdminPageContentState extends State<AdminPageContent> {
             initialValue: '${setting['model_id'] ?? ''}'.isEmpty
                 ? null
                 : '${setting['model_id']}',
+            isExpanded: true,
             decoration: const InputDecoration(labelText: 'Model'),
-            items: [
-              for (final m in _decisionModels(providers, providerId))
-                DropdownMenuItem(
-                    value: '${m['id']}',
-                    child: Text('${m['name'] ?? m['id']}')),
-            ],
+            items: _optionItems(_decisionModels(providers, providerId),
+                '${setting['model_id'] ?? ''}'),
             onChanged: (value) {
               if (value == null) return;
               widget.onAction('llm', 'llm_decision_set',
@@ -1488,12 +1481,11 @@ class _AdminPageContentState extends State<AdminPageContent> {
       child: Column(children: [
         DropdownButtonFormField<String>(
           initialValue: providerId,
+          isExpanded: true,
           decoration: const InputDecoration(labelText: 'Provider'),
           items: [
             const DropdownMenuItem(value: '', child: Text('None — not used')),
-            for (final p in providers)
-              DropdownMenuItem(
-                  value: '${p['id']}', child: Text('${p['name']}')),
+            ..._optionItems(providers, providerId),
           ],
           onChanged: (value) => widget.onAction('llm', 'llm_memory_set', {
             ..._memoryBody(setting),
@@ -1506,13 +1498,11 @@ class _AdminPageContentState extends State<AdminPageContent> {
           initialValue: '${setting[modelKey] ?? ''}'.isEmpty
               ? null
               : '${setting[modelKey]}',
+          isExpanded: true,
           decoration: const InputDecoration(labelText: 'Model'),
-          items: [
-            for (final m
-                in _listOfMaps(provider?[listKey] ?? provider?['models']))
-              DropdownMenuItem(
-                  value: '${m['id']}', child: Text('${m['name'] ?? m['id']}')),
-          ],
+          items: _optionItems(
+              _listOfMaps(provider?[listKey] ?? provider?['models']),
+              '${setting[modelKey] ?? ''}'),
           onChanged: providerId.isEmpty
               ? null
               : (value) => widget.onAction('llm', 'llm_memory_set', {
@@ -1666,39 +1656,33 @@ class _AdminPageContentState extends State<AdminPageContent> {
       const SizedBox(height: 16),
       LayoutBuilder(builder: (context, constraints) {
         final narrow = constraints.maxWidth < 700;
-        final charts = [
-          Expanded(
-            child: AdminLiveChart(
-              label: 'CPU load',
-              samples: cpu,
-              value: '${(cpu.isEmpty ? 0 : cpu.last).round()}%',
-              subtitle:
-                  'load ${load.map((v) => v.toStringAsFixed(2)).join(' / ')}',
-              color: AppColors.cyan,
-            ),
+        final charts = <Widget>[
+          AdminLiveChart(
+            label: 'CPU load',
+            samples: cpu,
+            value: '${(cpu.isEmpty ? 0 : cpu.last).round()}%',
+            subtitle:
+                'load ${load.map((v) => v.toStringAsFixed(2)).join(' / ')}',
+            color: AppColors.cyan,
           ),
-          Expanded(
-            child: AdminLiveChart(
-              label: 'Memory',
-              samples: memory,
-              value: '${memoryPercent.round()}%',
-              subtitle:
-                  '${_bytes(r['mem_used_bytes'])} of ${_bytes(r['mem_total_bytes'])} · process ${_bytes(r['process_rss_bytes'])}',
-              color: AppColors.primary,
-            ),
+          AdminLiveChart(
+            label: 'Memory',
+            samples: memory,
+            value: '${memoryPercent.round()}%',
+            subtitle:
+                '${_bytes(r['mem_used_bytes'])} of ${_bytes(r['mem_total_bytes'])} · process ${_bytes(r['process_rss_bytes'])}',
+            color: AppColors.primary,
           ),
         ];
         if (narrow) {
-          return Column(children: [
-            SizedBox(height: 190, child: charts[0]),
-            const SizedBox(height: 12),
-            SizedBox(height: 190, child: charts[1]),
-          ]);
+          return Column(
+              children: [charts[0], const SizedBox(height: 12), charts[1]]);
         }
-        return SizedBox(
-            height: 190,
-            child: Row(
-                children: [charts[0], const SizedBox(width: 12), charts[1]]));
+        return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(child: charts[0]),
+          const SizedBox(width: 12),
+          Expanded(child: charts[1]),
+        ]);
       }),
       const SizedBox(height: 18),
       AdminSectionCard(
@@ -1771,7 +1755,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Column(children: [
             for (final p in group.value)
-              ListTile(
+              _adaptiveTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon('${p['type']}' == 'adapter'
                     ? Icons.cable_rounded
@@ -1787,40 +1771,34 @@ class _AdminPageContentState extends State<AdminPageContent> {
                           : 'since ${_date(p['state_changed'])}',
                       '${p['last_error'] ?? ''}',
                     ].where((x) => x.isNotEmpty).join(' · '),
-                    maxLines: 2),
-                trailing: Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 5,
-                    children: [
-                      if (p['category'] != null &&
-                          active['${p['category']}'] != p['name'])
-                        TextButton(
-                            onPressed: () => widget.onDirectAction(
-                                    'admin', 'plugins_set_active', {
-                                  'category': p['category'],
-                                  'plugin': p['name']
-                                }),
-                            child: const Text('Make active')),
-                      AdminStatusPill(
-                          '${p['last_error'] == null ? p['state'] : 'error'}'),
-                      OutlinedButton(
-                        onPressed: () {
-                          final loaded = const {
-                            'loaded',
-                            'initialized',
-                            'started'
-                          }.contains('${p['state']}');
-                          widget.onDirectAction(
-                              'admin',
-                              loaded ? 'plugins_unload' : 'plugins_load',
-                              {'name': p['name']});
-                        },
-                        child: Text(const {'loaded', 'initialized', 'started'}
-                                .contains('${p['state']}')
-                            ? 'Unload'
-                            : 'Load'),
-                      ),
-                    ]),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+                actions: [
+                  if (p['category'] != null &&
+                      active['${p['category']}'] != p['name'])
+                    TextButton(
+                        onPressed: () => widget.onDirectAction(
+                            'admin',
+                            'plugins_set_active',
+                            {'category': p['category'], 'plugin': p['name']}),
+                        child: const Text('Make active')),
+                  AdminStatusPill(
+                      '${p['last_error'] == null ? p['state'] : 'error'}'),
+                  OutlinedButton(
+                    onPressed: () {
+                      final loaded = const {'loaded', 'initialized', 'started'}
+                          .contains('${p['state']}');
+                      widget.onDirectAction(
+                          'admin',
+                          loaded ? 'plugins_unload' : 'plugins_load',
+                          {'name': p['name']});
+                    },
+                    child: Text(const {'loaded', 'initialized', 'started'}
+                            .contains('${p['state']}')
+                        ? 'Unload'
+                        : 'Load'),
+                  ),
+                ],
               ),
           ]),
         ),
@@ -1850,33 +1828,33 @@ class _AdminPageContentState extends State<AdminPageContent> {
       return '${_date(line['time'])} $level ${line['logger'] == null ? '' : '[${line['logger']}] '}${line['message'] ?? ''}';
     }).join('\n');
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Expanded(
-            child: Wrap(spacing: 8, children: [
-          _filterChip('All', 'all'),
-          _filterChip('Info', 'log'),
-          _filterChip('Warnings', 'warn'),
-          _filterChip('Errors', 'error'),
-        ])),
-        FilterChip(
-          selected: live,
-          label: Text(live ? 'Live' : 'Paused'),
-          avatar: Icon(live ? Icons.play_arrow_rounded : Icons.pause_rounded,
-              size: 17),
-          onSelected: (value) => setState(() => live = value),
-        ),
-        const SizedBox(width: 8),
-        OutlinedButton.icon(
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: dump));
-            if (mounted)
-              ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Filtered log copied')));
-          },
-          icon: const Icon(Icons.copy_rounded, size: 17),
-          label: const Text('Copy'),
-        ),
-      ]),
+      _toolbar(
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            _filterChip('All', 'all'),
+            _filterChip('Info', 'log'),
+            _filterChip('Warnings', 'warn'),
+            _filterChip('Errors', 'error'),
+          ]),
+          [
+            FilterChip(
+              selected: live,
+              label: Text(live ? 'Live' : 'Paused'),
+              avatar: Icon(
+                  live ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                  size: 17),
+              onSelected: (value) => setState(() => live = value),
+            ),
+            OutlinedButton.icon(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: dump));
+                if (mounted)
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Filtered log copied')));
+              },
+              icon: const Icon(Icons.copy_rounded, size: 17),
+              label: const Text('Copy'),
+            ),
+          ]),
       const SizedBox(height: 12),
       AdminSearchField(
           controller: search,
@@ -1939,7 +1917,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
             ? Padding(padding: const EdgeInsets.all(8), child: Text(empty))
             : Column(children: [
                 for (final row in values)
-                  ListTile(
+                  _adaptiveTile(
                     contentPadding: EdgeInsets.zero,
                     leading:
                         const CircleAvatar(child: Icon(Icons.computer_rounded)),
@@ -1948,17 +1926,13 @@ class _AdminPageContentState extends State<AdminPageContent> {
                         style: const TextStyle(fontWeight: FontWeight.w800)),
                     subtitle: SelectableText(
                         '${row['id']} · started ${_date(row['started_at'] ?? row['created_at'])}'),
-                    trailing: Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 7,
-                        children: [
-                          const AdminStatusPill('running'),
-                          if (_map(row['project']).isNotEmpty)
-                            TextButton(
-                                onPressed: () =>
-                                    _showProject(_map(row['project'])),
-                                child: const Text('Open project')),
-                        ]),
+                    actions: [
+                      const AdminStatusPill('running'),
+                      if (_map(row['project']).isNotEmpty)
+                        TextButton(
+                            onPressed: () => _showProject(_map(row['project'])),
+                            child: const Text('Open project')),
+                    ],
                   ),
               ]);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2010,7 +1984,7 @@ class _AdminPageContentState extends State<AdminPageContent> {
             ? Padding(padding: const EdgeInsets.all(8), child: Text(empty))
             : Column(children: [
                 for (final v in values)
-                  ListTile(
+                  _adaptiveTile(
                     contentPadding: EdgeInsets.zero,
                     leading:
                         const CircleAvatar(child: Icon(Icons.storage_outlined)),
@@ -2022,11 +1996,12 @@ class _AdminPageContentState extends State<AdminPageContent> {
                       v['id'],
                       'created ${_date(v['created_at'])}'
                     ].where((x) => x != null && '$x'.isNotEmpty).join(' · ')),
-                    trailing: _map(v['project']).isEmpty
-                        ? null
-                        : TextButton(
+                    actions: [
+                      if (_map(v['project']).isNotEmpty)
+                        TextButton(
                             onPressed: () => _showProject(_map(v['project'])),
                             child: const Text('Open project')),
+                    ],
                   ),
               ]);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2252,6 +2227,61 @@ class _AdminPageContentState extends State<AdminPageContent> {
         onSelected: (_) => setState(() => filter = value),
       );
 
+  /// A toolbar whose [actions] sit beside [main] on wide screens and wrap
+  /// below it on narrow ones, so neither side gets squeezed.
+  Widget _toolbar(Widget main, List<Widget> actions) =>
+      LayoutBuilder(builder: (context, constraints) {
+        if (constraints.maxWidth >= 640) {
+          return Row(children: [
+            Expanded(child: main),
+            for (final action in actions) ...[const SizedBox(width: 8), action],
+          ]);
+        }
+        return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              main,
+              const SizedBox(height: 10),
+              Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: actions),
+            ]);
+      });
+
+  /// A list row whose actions trail on wide screens and move under the text
+  /// on narrow ones, so the title keeps its width.
+  Widget _adaptiveTile({
+    Widget? leading,
+    required Widget title,
+    Widget? subtitle,
+    required List<Widget> actions,
+    EdgeInsetsGeometry? contentPadding,
+  }) =>
+      LayoutBuilder(builder: (context, constraints) {
+        final buttons = Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 4,
+            runSpacing: 4,
+            children: actions);
+        final wide = constraints.maxWidth >= 560;
+        return ListTile(
+          contentPadding: contentPadding,
+          leading: leading,
+          title: title,
+          subtitle: wide || actions.isEmpty
+              ? subtitle
+              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  if (subtitle != null) subtitle,
+                  const SizedBox(height: 6),
+                  buttons,
+                ]),
+          trailing: wide && actions.isNotEmpty ? buttons : null,
+        );
+      });
+
   Widget _settingStatus(Map<String, dynamic> setting) {
     final active = setting['active'] == true;
     return Container(
@@ -2307,6 +2337,24 @@ class _AdminPageContentState extends State<AdminPageContent> {
         'embedding_model_id': setting['embedding_model_id'] ?? '',
       };
 
+  /// Dropdown items for [options], plus one for [value] when the node no
+  /// longer offers it (a disabled provider, a removed model): a dropdown whose
+  /// value has no matching item fails to build.
+  List<DropdownMenuItem<String>> _optionItems(
+          List<Map<String, dynamic>> options, String value) =>
+      [
+        for (final o in options)
+          DropdownMenuItem(
+              value: '${o['id']}',
+              child: Text('${o['name'] ?? o['id']}',
+                  overflow: TextOverflow.ellipsis)),
+        if (value.isNotEmpty && !options.any((o) => '${o['id']}' == value))
+          DropdownMenuItem(
+              value: value,
+              child: Text('$value (unavailable)',
+                  overflow: TextOverflow.ellipsis)),
+      ];
+
   List<Map<String, dynamic>> _decisionModels(
       List<Map<String, dynamic>> providers, String providerId) {
     final provider = providers
@@ -2314,19 +2362,6 @@ class _AdminPageContentState extends State<AdminPageContent> {
         .firstWhere((p) => '${p?['id']}' == providerId, orElse: () => null);
     return _listOfMaps(provider?['decision_models'] ?? provider?['models']);
   }
-
-  Widget _statGrid(List<Widget> cards) =>
-      LayoutBuilder(builder: (context, constraints) {
-        final count = constraints.maxWidth >= 900
-            ? 4
-            : constraints.maxWidth >= 540
-                ? 2
-                : 1;
-        final width = (constraints.maxWidth - 12 * (count - 1)) / count;
-        return Wrap(spacing: 12, runSpacing: 12, children: [
-          for (final card in cards) SizedBox(width: width, child: card)
-        ]);
-      });
 
   TextStyle _eyebrow() => TextStyle(
       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -2502,13 +2537,15 @@ class _ModelEditorDialogState extends State<_ModelEditorDialog> {
               const SizedBox(height: 18),
               DropdownButtonFormField<String>(
                 initialValue: providerId,
+                isExpanded: true,
                 decoration: const InputDecoration(
                     labelText: 'Provider', border: OutlineInputBorder()),
                 items: [
                   for (final p in widget.providers)
                     DropdownMenuItem(
                         value: '${p['id']}',
-                        child: Text('${p['name']} · ${p['kind']}'))
+                        child: Text('${p['name']} · ${p['kind']}',
+                            overflow: TextOverflow.ellipsis))
                 ],
                 onChanged: editing
                     ? null
@@ -2536,19 +2573,22 @@ class _ModelEditorDialogState extends State<_ModelEditorDialog> {
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1)),
               const SizedBox(height: 8),
-              SegmentedButton<String>(
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(value: 'chat', label: Text('Agent model')),
-                  ButtonSegment(
-                      value: 'decision', label: Text('Decision model')),
-                  ButtonSegment(
-                      value: 'embedding', label: Text('Embedding model')),
-                ],
-                selected: {purpose},
-                onSelectionChanged: (value) =>
-                    setState(() => purpose = value.first),
-              ),
+              // Three long labels do not fit side by side on a phone.
+              SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SegmentedButton<String>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: 'chat', label: Text('Agent model')),
+                      ButtonSegment(
+                          value: 'decision', label: Text('Decision model')),
+                      ButtonSegment(
+                          value: 'embedding', label: Text('Embedding model')),
+                    ],
+                    selected: {purpose},
+                    onSelectionChanged: (value) =>
+                        setState(() => purpose = value.first),
+                  )),
               const SizedBox(height: 8),
               Text(
                   purpose == 'chat'
@@ -3055,33 +3095,24 @@ class _UserDialogState extends State<_UserDialog> {
         ? _map(finance['summary'])
         : finance;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Wrap(spacing: 12, runSpacing: 12, children: [
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Balance',
-                value: _money(m['balance']),
-                hint:
-                    '${_credits(m['balance'])}${_number(m['locked']) > 0 ? ' · ${_credits(m['locked'])} locked' : ''}')),
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Bought',
-                value: _money(m['bought']),
-                hint:
-                    '${m['bought_count'] ?? 0} packs · ${_credits(m['bought'])}')),
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Added by admin',
-                value: _money(m['granted']),
-                hint: _credits(m['granted']))),
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Spent',
-                value: _money(m['spent']),
-                hint: _credits(m['spent']))),
+      _statGrid([
+        AdminStatCard(
+            label: 'Balance',
+            value: _money(m['balance']),
+            hint:
+                '${_credits(m['balance'])}${_number(m['locked']) > 0 ? ' · ${_credits(m['locked'])} locked' : ''}'),
+        AdminStatCard(
+            label: 'Bought',
+            value: _money(m['bought']),
+            hint: '${m['bought_count'] ?? 0} packs · ${_credits(m['bought'])}'),
+        AdminStatCard(
+            label: 'Added by admin',
+            value: _money(m['granted']),
+            hint: _credits(m['granted'])),
+        AdminStatCard(
+            label: 'Spent',
+            value: _money(m['spent']),
+            hint: _credits(m['spent'])),
       ]),
       const SizedBox(height: 18),
       AdminSectionCard(
@@ -3339,33 +3370,24 @@ class _ProjectDialogState extends State<_ProjectDialog> {
   Widget _overview() {
     final machine = _map(detail['machine']);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Wrap(spacing: 12, runSpacing: 12, children: [
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Machine',
-                value: '${machine['state'] ?? 'none'}',
-                hint: '${machine['provider'] ?? ''}',
-                icon: Icons.computer_outlined)),
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Agents',
-                value: '${detail['agents'] ?? _list(detail['workers']).length}',
-                icon: Icons.smart_toy_outlined)),
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Rooms',
-                value: '${_list(detail['rooms']).length}',
-                icon: Icons.forum_outlined)),
-        SizedBox(
-            width: 210,
-            child: AdminStatCard(
-                label: 'Budget',
-                value:
-                    _credits(_map(detail['budget'])['cap'] ?? detail['budget']),
-                icon: Icons.account_balance_wallet_outlined)),
+      _statGrid([
+        AdminStatCard(
+            label: 'Machine',
+            value: '${machine['state'] ?? 'none'}',
+            hint: '${machine['provider'] ?? ''}',
+            icon: Icons.computer_outlined),
+        AdminStatCard(
+            label: 'Agents',
+            value: '${detail['agents'] ?? _list(detail['workers']).length}',
+            icon: Icons.smart_toy_outlined),
+        AdminStatCard(
+            label: 'Rooms',
+            value: '${_list(detail['rooms']).length}',
+            icon: Icons.forum_outlined),
+        AdminStatCard(
+            label: 'Budget',
+            value: _credits(_map(detail['budget'])['cap'] ?? detail['budget']),
+            icon: Icons.account_balance_wallet_outlined),
       ]),
       const SizedBox(height: 18),
       AdminSectionCard(
@@ -3620,6 +3642,22 @@ String _uptime(dynamic value) {
           ? '${hours}h ${minutes}m'
           : '${minutes}m';
 }
+
+/// Stat cards laid out four, two or one per row depending on the width.
+Widget _statGrid(List<Widget> cards) =>
+    LayoutBuilder(builder: (context, constraints) {
+      final count = math.min(
+          cards.length,
+          constraints.maxWidth >= 900
+              ? 4
+              : constraints.maxWidth >= 540
+                  ? 2
+                  : 1);
+      final width = (constraints.maxWidth - 12 * (count - 1)) / count;
+      return Wrap(spacing: 12, runSpacing: 12, children: [
+        for (final card in cards) SizedBox(width: width, child: card)
+      ]);
+    });
 
 Widget _primaryCell(String primary, String secondary) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,

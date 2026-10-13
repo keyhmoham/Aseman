@@ -429,32 +429,44 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                       for (var i = 0; i < rows.length; i++)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(children: [
-                            Expanded(
-                                flex: 3,
-                                child: _field('Model id', rows[i].id,
-                                    hint: 'e.g. gpt-5.4')),
-                            const SizedBox(width: 8),
-                            Expanded(
-                                flex: 2,
-                                child: _field('Input price', rows[i].input,
-                                    number: true)),
-                            const SizedBox(width: 8),
-                            Expanded(
-                                flex: 2,
-                                child: _field('Output price', rows[i].output,
-                                    number: true)),
-                            IconButton(
-                              tooltip: 'Remove model',
-                              onPressed: rows.length == 1
-                                  ? null
-                                  : () => setState(() {
-                                        rows.removeAt(i).dispose();
-                                      }),
-                              icon: const Icon(Icons.remove_circle_outline,
-                                  size: 18),
-                            ),
-                          ]),
+                          child: LayoutBuilder(builder: (context, box) {
+                            final id = _field('Model id', rows[i].id,
+                                hint: 'e.g. gpt-5.4');
+                            final prices = [
+                              Expanded(
+                                  flex: 2,
+                                  child: _field('Input price', rows[i].input,
+                                      number: true)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                  flex: 2,
+                                  child: _field('Output price', rows[i].output,
+                                      number: true)),
+                              IconButton(
+                                tooltip: 'Remove model',
+                                onPressed: rows.length == 1
+                                    ? null
+                                    : () => setState(() {
+                                          rows.removeAt(i).dispose();
+                                        }),
+                                icon: const Icon(Icons.remove_circle_outline,
+                                    size: 18),
+                              ),
+                            ];
+                            // On phones the id gets its own line.
+                            if (box.maxWidth < 440) {
+                              return Column(children: [
+                                id,
+                                const SizedBox(height: 8),
+                                Row(children: prices),
+                              ]);
+                            }
+                            return Row(children: [
+                              Expanded(flex: 3, child: id),
+                              const SizedBox(width: 8),
+                              ...prices,
+                            ]);
+                          }),
                         ),
                       Align(
                         alignment: Alignment.centerLeft,

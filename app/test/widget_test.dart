@@ -265,7 +265,8 @@ void main() {
     await tester.ensureVisible(find.text('Admin console'));
     await tester.tap(find.text('Admin console'));
     await tester.pumpAndSettle();
-    expect(find.text('Admin console'), findsOneWidget);
+    // On phones the app bar names the current admin page.
+    expect(find.text('What needs attention'), findsOneWidget);
     expect(find.text('Overview'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Open navigation menu'));

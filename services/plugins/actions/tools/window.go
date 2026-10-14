@@ -13,7 +13,6 @@ import (
 
 	"github.com/tradera/tradera/internal/plugins/api"
 	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/a2ui"
 	"github.com/tradera/tradera/pkg/errs"
 	"github.com/tradera/tradera/plugins/actions/tools/models"
 )
@@ -23,12 +22,10 @@ const maxSample = 4000
 
 // windowTemplate reads a desk window's own template.
 func windowTemplate(raw map[string]any) (*Template, error) {
-	b, _ := json.Marshal(raw)
-	var t Template
-	if err := json.Unmarshal(b, &t); err != nil {
+	t, err := templateOf(raw)
+	if err != nil {
 		return nil, errs.InvalidArgument("the window's frontend is not a template")
 	}
-	a2ui.Normalize(t.Components)
 	if err := t.validate(nil); err != nil {
 		return nil, err
 	}

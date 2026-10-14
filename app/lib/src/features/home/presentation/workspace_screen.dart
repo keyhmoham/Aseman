@@ -8,6 +8,7 @@ import '../../../data/models/bot.dart';
 import '../../../data/models/post.dart';
 import '../../../data/models/profile.dart';
 import '../../../data/models/space.dart';
+import '../../../elpian/core/media.dart' show ElpianMediaScope;
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
@@ -31,6 +32,7 @@ import '../../tools/domain/tool_models.dart';
 import '../../tools/presentation/a2ui_view.dart';
 import '../../tools/presentation/tool_frontend_view.dart';
 import '../../tools/presentation/tool_screen.dart';
+import '../../tools/runtime/tool_media.dart';
 import 'space_settings_panel.dart';
 
 class WorkspaceScreen extends StatefulWidget {
@@ -1844,57 +1846,63 @@ class _CenterDesk extends StatelessWidget {
                 child:
                     CustomPaint(painter: _WorkspacePatternPainter(workspace)))),
         Positioned.fill(
-          child: FloatingDesk(
-            controller: controller,
-            topInset: topContentInset,
-            windowContent: (context, w) => w.isComposed
-                ? _composed(w.id, w.widget)
-                : w.isDesigned
-                    // Designed for the request: kept with the window.
-                    ? DesignedWindowContent(
-                        key: ValueKey('designed-${w.id}'),
-                        windowId: w.id,
-                        request: w.request,
-                        template: w.template,
-                        status: w.status,
-                        controller: controller,
-                        ready: (t) => _frontend(w.tool, w.shown, template: t))
-                    : _frontend(w.tool, w.shown),
-            pinPreview: (p) => p.isComposed
-                ? _composed(p.id, p.widget)
-                : p.isDesigned
-                    ? DesignedWindowContent(
-                        windowId: p.id,
-                        request: p.request,
-                        template: p.template,
-                        status: p.status,
-                        ready: (t) => _frontend(p.tool, p.shown, template: t))
-                    : _frontend(p.tool, p.shown),
-            emptyState: Center(
-              child: SingleChildScrollView(
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  SizedBox(height: 150, child: _MachineFace(pointer: pointer)),
-                  const SizedBox(height: 8),
-                  Text(room == null ? 'My trading desk' : '$room desk',
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 6),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 360),
-                    child: Text(
-                        'Tool results open here as windows. Ask an agent, or open a tool from the library.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 13, color: scheme.onSurfaceVariant)),
-                  ),
-                ]),
+          // Every window's images, videos and audio load from the space's
+          // project files, stored files and the node, as this person.
+          child: ElpianMediaScope(
+            resolver: ToolMedia.forSpace(dependencies.service, spaceId).call,
+            child: FloatingDesk(
+              controller: controller,
+              topInset: topContentInset,
+              windowContent: (context, w) => w.isComposed
+                  ? _composed(w.id, w.widget)
+                  : w.isDesigned
+                      // Designed for the request: kept with the window.
+                      ? DesignedWindowContent(
+                          key: ValueKey('designed-${w.id}'),
+                          windowId: w.id,
+                          request: w.request,
+                          template: w.template,
+                          status: w.status,
+                          controller: controller,
+                          ready: (t) => _frontend(w.tool, w.shown, template: t))
+                      : _frontend(w.tool, w.shown),
+              pinPreview: (p) => p.isComposed
+                  ? _composed(p.id, p.widget)
+                  : p.isDesigned
+                      ? DesignedWindowContent(
+                          windowId: p.id,
+                          request: p.request,
+                          template: p.template,
+                          status: p.status,
+                          ready: (t) => _frontend(p.tool, p.shown, template: t))
+                      : _frontend(p.tool, p.shown),
+              emptyState: Center(
+                child: SingleChildScrollView(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    SizedBox(
+                        height: 150, child: _MachineFace(pointer: pointer)),
+                    const SizedBox(height: 8),
+                    Text(room == null ? 'My trading desk' : '$room desk',
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 6),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 360),
+                      child: Text(
+                          'Tool results open here as windows. Ask an agent, or open a tool from the library.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 13, color: scheme.onSurfaceVariant)),
+                    ),
+                  ]),
+                ),
               ),
-            ),
-            commandBar: _CommandBar(
-              controller: command,
-              room: room,
-              openSearch: openSearch,
-              onSubmit: onSubmit,
+              commandBar: _CommandBar(
+                controller: command,
+                room: room,
+                openSearch: openSearch,
+                onSubmit: onSubmit,
+              ),
             ),
           ),
         ),

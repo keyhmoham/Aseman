@@ -47,6 +47,11 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 	if len(in.Components) == 0 || len(in.Components) > maxComposedComponents {
 		return "", errs.InvalidArgument("ui_compose needs 1..200 components")
 	}
+	list := make([]any, len(in.Components))
+	for i, c := range in.Components {
+		list[i] = c
+	}
+	in.Components = a2ui.Flatten(list)
 	a2ui.Normalize(in.Components)
 	tools, err := s.SpaceTools(ctx, spaceID, identity.ID{})
 	if err != nil {

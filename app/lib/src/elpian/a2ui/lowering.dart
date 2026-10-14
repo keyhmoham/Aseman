@@ -659,8 +659,8 @@ class _Lowerer {
             {
               'src': _str(ctx, c['url']),
               'controls': true,
+              // The player keeps the picture's aspect ratio itself.
               'style': _st({
-                'height': 220,
                 'margin': _leafMargin,
                 'objectFit': 'contain',
               }),

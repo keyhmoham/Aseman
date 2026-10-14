@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import '../core/media.dart';
+import '../core/media_file.dart';
 import '../models/elpian_node.dart';
 import '../css/css_properties.dart';
 import 'html_source.dart';
@@ -42,10 +44,21 @@ class _HtmlVideoPlayerState extends State<_HtmlVideoPlayer> {
   bool get _loop => widget.node.props['loop'] == true;
   bool get _muted => widget.node.props['muted'] == true;
 
+  ElpianMediaResolver? _resolver;
+  bool _started = false;
+  String _label = '';
+  int _generation = 0;
+
   @override
-  void initState() {
-    super.initState();
-    _initController();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final resolver = ElpianMediaScope.maybeOf(context);
+    if (!_started || resolver != _resolver) {
+      _started = true;
+      _resolver = resolver;
+      _disposeController();
+      _initController();
+    }
   }
 
   @override
@@ -63,7 +76,7 @@ class _HtmlVideoPlayerState extends State<_HtmlVideoPlayer> {
     if (_src.isEmpty) {
       return;
     }
-
+    final generation = ++_generation;
     final track = _track;
     final captions = track == null
         ? null
@@ -71,13 +84,30 @@ class _HtmlVideoPlayerState extends State<_HtmlVideoPlayer> {
             debugPrint('Elpian video: caption track failed: $e');
             return HtmlTrack.parse('WEBVTT\n');
           });
-    final controller = _src.startsWith('http://') || _src.startsWith('https://')
-        ? VideoPlayerController.networkUrl(Uri.parse(_src),
-            closedCaptionFile: captions)
-        : VideoPlayerController.asset(_src, closedCaptionFile: captions);
-
-    _controller = controller;
-    _initializeFuture = controller.initialize().then((_) async {
+    // The source is resolved first (the host's files and credentials, bytes,
+    // data: URIs); the controller exists once it is.
+    _initializeFuture = () async {
+      final media = await resolveElpianMedia(_resolver, _src);
+      if (media == null) throw StateError('nothing to play');
+      final VideoPlayerController controller;
+      if (media.bytes != null) {
+        controller = await videoControllerForBytes(media.bytes!,
+            media.mime.isEmpty ? ElpianMedia.sniff(media.bytes!) : media.mime);
+      } else if (media.asset) {
+        controller =
+            VideoPlayerController.asset(media.url, closedCaptionFile: captions);
+      } else {
+        controller = VideoPlayerController.networkUrl(Uri.parse(media.url),
+            httpHeaders: media.headers, closedCaptionFile: captions);
+      }
+      if (!mounted || generation != _generation) {
+        controller.dispose();
+        return;
+      }
+      _controller = controller;
+      _label = media.label;
+      if (mounted) setState(() {});
+      await controller.initialize();
       await controller.setLooping(_loop);
       await controller.setVolume(_muted ? 0 : 1);
       if (_autoplay) {
@@ -86,7 +116,7 @@ class _HtmlVideoPlayerState extends State<_HtmlVideoPlayer> {
       if (mounted) {
         setState(() {});
       }
-    });
+    }();
   }
 
   void _disposeController() {
@@ -106,7 +136,7 @@ class _HtmlVideoPlayerState extends State<_HtmlVideoPlayer> {
   Widget build(BuildContext context) {
     final controller = _controller;
 
-    if (_src.isEmpty || controller == null) {
+    if (_src.isEmpty) {
       return const ColoredBox(
         color: Colors.black,
         child: Center(
@@ -121,7 +151,23 @@ class _HtmlVideoPlayerState extends State<_HtmlVideoPlayer> {
     return FutureBuilder<void>(
       future: _initializeFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
+        if (snapshot.hasError) {
+          return ColoredBox(
+            color: Colors.black,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  'video failed to load: ${snapshot.error}',
+                  style: const TextStyle(color: Colors.white70),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          );
+        }
+        if (snapshot.connectionState != ConnectionState.done ||
+            controller == null) {
           return const ColoredBox(
             color: Colors.black,
             child: Center(child: CircularProgressIndicator()),
@@ -141,74 +187,89 @@ class _HtmlVideoPlayerState extends State<_HtmlVideoPlayer> {
           );
         }
 
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  controller.value.isPlaying
-                      ? controller.pause()
-                      : controller.play();
-                });
-              },
-              child: AspectRatio(
-                aspectRatio: controller.value.aspectRatio == 0
-                    ? (16 / 9)
-                    : controller.value.aspectRatio,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    VideoPlayer(controller),
-                    if (_track != null && _showCaptions)
-                      ValueListenableBuilder<VideoPlayerValue>(
-                        valueListenable: controller,
-                        builder: (_, value, __) =>
-                            ClosedCaption(text: value.caption.text),
+        return LayoutBuilder(builder: (context, constraints) {
+          // The picture keeps its aspect ratio within the room it has (the
+          // controls below it included); in an unbounded column, within a
+          // sensible height.
+          final maxPicture = constraints.hasBoundedHeight
+              ? (constraints.maxHeight - 96).clamp(48.0, double.infinity)
+              : 420.0;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxPicture),
+                child: Center(
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        controller.value.isPlaying
+                            ? controller.pause()
+                            : controller.play();
+                      });
+                    },
+                    child: AspectRatio(
+                      aspectRatio: controller.value.aspectRatio == 0
+                          ? (16 / 9)
+                          : controller.value.aspectRatio,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          VideoPlayer(controller),
+                          if (_track != null && _showCaptions)
+                            ValueListenableBuilder<VideoPlayerValue>(
+                              valueListenable: controller,
+                              builder: (_, value, __) =>
+                                  ClosedCaption(text: value.caption.text),
+                            ),
+                        ],
                       ),
-                  ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-            VideoProgressIndicator(
-              controller,
-              allowScrubbing: true,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            ),
-            Row(
-              children: [
-                IconButton(
-                  icon: Icon(
-                    controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      controller.value.isPlaying
-                          ? controller.pause()
-                          : controller.play();
-                    });
-                  },
-                ),
-                if (_track != null)
+              VideoProgressIndicator(
+                controller,
+                allowScrubbing: true,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              ),
+              Row(
+                children: [
                   IconButton(
-                    tooltip: _track!.props['label']?.toString() ?? 'Captions',
-                    icon: Icon(_showCaptions
-                        ? Icons.closed_caption
-                        : Icons.closed_caption_off),
-                    onPressed: () =>
-                        setState(() => _showCaptions = !_showCaptions),
+                    icon: Icon(
+                      controller.value.isPlaying
+                          ? Icons.pause
+                          : Icons.play_arrow,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        controller.value.isPlaying
+                            ? controller.pause()
+                            : controller.play();
+                      });
+                    },
                   ),
-                Expanded(
-                  child: Text(
-                    _src,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  if (_track != null)
+                    IconButton(
+                      tooltip: _track!.props['label']?.toString() ?? 'Captions',
+                      icon: Icon(_showCaptions
+                          ? Icons.closed_caption
+                          : Icons.closed_caption_off),
+                      onPressed: () =>
+                          setState(() => _showCaptions = !_showCaptions),
+                    ),
+                  Expanded(
+                    child: Text(
+                      _label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
-        );
+                ],
+              ),
+            ],
+          );
+        });
       },
     );
   }

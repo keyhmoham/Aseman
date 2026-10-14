@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/elpian_node.dart';
+import '../core/media.dart';
 import '../css/css_properties.dart';
 
 class ElpianImage {
@@ -8,27 +9,14 @@ class ElpianImage {
     final fit = parseBoxFit(node.props['fit']) ?? BoxFit.contain;
     final alt = node.props['alt'] as String?;
 
-    // D5: decode at the styled display size when known (see html_img.dart).
-    final w = node.style?.width;
-    final h = node.style?.height;
-    final cacheWidth = (w != null && w > 0) ? w.round() : null;
-    final cacheHeight = (h != null && h > 0) ? h.round() : null;
-
-    Widget result = src.startsWith('http')
-        ? Image.network(src,
-            fit: fit,
-            semanticLabel: alt,
-            cacheWidth: cacheWidth,
-            cacheHeight: cacheHeight,
-            // A broken URL renders an empty box of the requested size rather
-            // than throwing into the frame.
-            errorBuilder: (context, error, stack) =>
-                SizedBox(width: w, height: h))
-        : Image.asset(src,
-            fit: fit,
-            semanticLabel: alt,
-            cacheWidth: cacheWidth,
-            cacheHeight: cacheHeight);
+    // Any source the engine or its host loads (network with the host's
+    // credentials, the host's own files, data: URIs, SVG, assets).
+    Widget result = ElpianMediaImage(
+        src: src,
+        fit: fit,
+        width: node.style?.width,
+        height: node.style?.height,
+        alt: alt);
 
     if (node.style != null) {
       result = CSSProperties.applyStyle(result, node.style);

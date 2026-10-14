@@ -65,3 +65,20 @@ func TestWindowTemplatesAreReadAndChecked(t *testing.T) {
 		t.Fatal("an empty template is refused")
 	}
 }
+
+func TestParseTemplateRepairsNestedComponents(t *testing.T) {
+	reply := "```json\n" + `{"title":"Painting","components":[{"type":"Column","children":[
+		{"type":"Text","text":"Your painting"},
+		{"type":"Card","child":{"type":"Image","url":"{/image}"}}]}],
+		"data":[{"path":"/","microtool":"export","args":{}}]}` + "\n```"
+	tpl, err := parseTemplate(reply)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tpl.validate(map[string]bool{"export": true}); err != nil {
+		t.Fatalf("%v: %v", err, tpl.Components)
+	}
+	if len(tpl.Components) != 4 {
+		t.Fatalf("%v", tpl.Components)
+	}
+}

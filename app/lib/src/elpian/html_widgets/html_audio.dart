@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import '../core/media.dart';
+import '../core/media_file.dart';
 import '../models/elpian_node.dart';
 import '../css/css_properties.dart';
 import 'html_source.dart';
@@ -39,11 +41,24 @@ class _HtmlAudioPlayerState extends State<_HtmlAudioPlayer> {
   bool get _loop => widget.node.props['loop'] == true;
   bool get _muted => widget.node.props['muted'] == true;
 
+  ElpianMediaResolver? _resolver;
+  bool _started = false;
+
   @override
   void initState() {
     super.initState();
     _attachListeners();
-    _loadSource();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final resolver = ElpianMediaScope.maybeOf(context);
+    if (!_started || resolver != _resolver) {
+      _started = true;
+      _resolver = resolver;
+      _loadSource();
+    }
   }
 
   @override
@@ -77,22 +92,29 @@ class _HtmlAudioPlayerState extends State<_HtmlAudioPlayer> {
   }
 
   Future<void> _loadSource() async {
-    setState(() {
-      _error = null;
-      _isReady = false;
-      _duration = Duration.zero;
-      _position = Duration.zero;
-    });
+    // Called while (re)building: the next build shows the reset state.
+    _error = null;
+    _isReady = false;
+    _duration = Duration.zero;
+    _position = Duration.zero;
 
     if (_src.isEmpty) {
       return;
     }
 
     try {
-      if (_src.startsWith('http://') || _src.startsWith('https://')) {
-        await _player.setUrl(_src);
+      // The host's files and credentials, bytes and data: URIs too.
+      final media = await resolveElpianMedia(_resolver, _src);
+      if (media == null) throw StateError('nothing to play');
+      if (media.bytes != null) {
+        final uri = await mediaUriForBytes(media.bytes!,
+            media.mime.isEmpty ? ElpianMedia.sniff(media.bytes!) : media.mime);
+        await _player.setUrl(uri.toString());
+      } else if (media.asset) {
+        await _player.setAsset(media.url);
       } else {
-        await _player.setAsset(_src);
+        await _player.setUrl(media.url,
+            headers: media.headers.isEmpty ? null : media.headers);
       }
       await _player.setLoopMode(_loop ? LoopMode.one : LoopMode.off);
       await _player.setVolume(_muted ? 0 : 1);

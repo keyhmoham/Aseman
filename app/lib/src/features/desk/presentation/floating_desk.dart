@@ -12,8 +12,8 @@ import 'tool_avatar.dart';
 
 /// The desk of a room: tools' frontends float on it as card windows that
 /// people and agents open, move, resize and close; it pans and scrolls when
-/// windows lie beyond the screen. The dock is pinned to its bottom, the
-/// command bar above it; the pinned desk opens over it from the dock.
+/// windows lie beyond the screen. The dock is pinned to its bottom; the
+/// pinned desk opens over it from the dock.
 class FloatingDesk extends StatefulWidget {
   const FloatingDesk({
     super.key,
@@ -21,7 +21,6 @@ class FloatingDesk extends StatefulWidget {
     required this.windowContent,
     required this.pinPreview,
     this.emptyState,
-    this.commandBar,
     this.topInset = 0,
   });
 
@@ -35,9 +34,6 @@ class FloatingDesk extends StatefulWidget {
 
   /// Shown on an empty desk.
   final Widget? emptyState;
-
-  /// Above the dock.
-  final Widget? commandBar;
 
   /// Room at the top for something drawn over the desk (mobile tabs).
   final double topInset;
@@ -359,18 +355,6 @@ class _FloatingDeskState extends State<FloatingDesk>
               ),
             ),
           ),
-          if (widget.commandBar != null)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: compact ? 84 : 96,
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 640),
-                  child: widget.commandBar,
-                ),
-              ),
-            ),
           Positioned(
             left: 12,
             right: 12,

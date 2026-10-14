@@ -61,6 +61,65 @@ void main() {
     expect(find.text('Balance'), findsOneWidget);
   });
 
+  testWidgets('projects choose the space every platform admin joins',
+      (tester) async {
+    final calls = <String>[];
+    Map<String, dynamic> project(String id, String name) => {
+          'id': id,
+          'name': name,
+          'owner': {'handle': 'ada'},
+          'created_at': '2026-01-01T00:00:00Z',
+        };
+    await pumpWide(
+      tester,
+      AdminPageContent(
+        page: 'Projects',
+        loading: false,
+        results: {
+          'spaces.space_list_all': {
+            'spaces': [
+              project('space-1', 'Operations'),
+              project('space-2', 'Admins HQ'),
+              {...project('space-3', 'Direct chat'), 'direct_key': 'a:b'},
+            ]
+          },
+          'spaces.admins_space_get': {
+            'space': {'id': 'space-1', 'name': 'Operations'}
+          },
+          'admin.admins_list': {
+            'admins': [
+              {'id': 'a1', 'handle': 'ada'},
+              {'id': 'a2', 'handle': 'bob'},
+            ]
+          },
+        },
+        onRefresh: () async {},
+        onAction: (_, __, ___) async {},
+        onDirectAction: (namespace, action, body) async {
+          calls.add('$namespace.$action ${body['space']}');
+          return null;
+        },
+        onNavigate: (_) {},
+      ),
+    );
+
+    expect(find.text('Platform admins space'), findsOneWidget);
+    expect(find.textContaining('2 admins are members'), findsOneWidget);
+    expect(find.textContaining('Admins space · '), findsOneWidget);
+
+    await tester.tap(find.text('Change'));
+    await tester.pumpAndSettle();
+    final picker = find.byType(AlertDialog);
+    expect(find.text('Choose the admins space'), findsOneWidget);
+    // Direct conversations cannot take members.
+    expect(find.descendant(of: picker, matching: find.text('Direct chat')),
+        findsNothing);
+    await tester
+        .tap(find.descendant(of: picker, matching: find.text('Admins HQ')));
+    await tester.pumpAndSettle();
+    expect(calls, ['spaces.admins_space_set space-2']);
+  });
+
   testWidgets('finance overview presents KPIs and visual breakdown',
       (tester) async {
     await pumpWide(

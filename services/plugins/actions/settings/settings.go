@@ -6,7 +6,9 @@
 //   - pricing: what execution costs — the sandbox, tools and miniapps, and
 //     agents' time (read by bots through Pricing);
 //   - machine: the size of a project's computer — sold size, idle reserve and
-//     ceiling (read by spaces and the Modal adapter through Machine).
+//     ceiling (read by spaces and the Modal adapter through Machine);
+//   - admins_space: the project every platform administrator is kept a member
+//     of (read and set by spaces through AdminsSpace and SetAdminsSpace).
 package settings
 
 import (
@@ -14,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/tradera/tradera/internal/plugins/api"
+	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/internal/plugins/module"
 	"github.com/tradera/tradera/pkg/errs"
 	"github.com/tradera/tradera/plugins/actions/settings/models"
@@ -30,11 +33,11 @@ type Service struct {
 	R *repo.Repo
 }
 
-var allowedKeys = map[string]bool{"categories": true, "universal_system_prompt": true, "pricing": true, "machine": true}
+var allowedKeys = map[string]bool{"categories": true, "universal_system_prompt": true, "pricing": true, "machine": true, "admins_space": true}
 
 func (s *Service) id() string { return s.K.NodeID().String() + "0000000000000001" }
 func defaults() map[string]any {
-	return map[string]any{"categories": []string{"general", "research", "coding", "design", "marketing", "operations", "finance", "education", "support"}, "universal_system_prompt": "", "pricing": models.DefaultPricing(), "machine": models.Machine{}}
+	return map[string]any{"categories": []string{"general", "research", "coding", "design", "marketing", "operations", "finance", "education", "support"}, "universal_system_prompt": "", "pricing": models.DefaultPricing(), "machine": models.Machine{}, "admins_space": ""}
 }
 
 // Pricing returns the node's execution price list.
@@ -157,6 +160,21 @@ func parseMachine(v any) (models.Machine, error) {
 	return m, nil
 }
 
+// AdminsSpace returns the id of the platform administrators' project, or "".
+func (s *Service) AdminsSpace(ctx context.Context) (string, error) {
+	row, e := s.Get(ctx)
+	if e != nil {
+		return "", e
+	}
+	id, _ := row.Values["admins_space"].(string)
+	return id, nil
+}
+
+// SetAdminsSpace stores the platform administrators' project ("" clears it).
+func (s *Service) SetAdminsSpace(ctx context.Context, id string) error {
+	return s.save(ctx, map[string]any{"admins_space": id})
+}
+
 func (s *Service) Get(ctx context.Context) (*models.Settings, error) {
 	var row models.Settings
 	e := s.R.GetString(ctx, "platform_settings", s.id(), &row)
@@ -217,41 +235,64 @@ func (s *Service) updateAction(ctx context.Context, req *api.ActionRequest) (*ap
 	if e := helper.Decode(req, &in); e != nil {
 		return nil, e
 	}
+	if _, ok := in["admins_space"]; ok {
+		// Choosing it also adds the administrators to the project.
+		return nil, errs.InvalidArgument("set the admins space with spaces/admins_space_set")
+	}
+	if e := s.save(ctx, in); e != nil {
+		return nil, e
+	}
+	return s.getAction(ctx, req)
+}
+
+// save validates and stores the given policy keys over the current ones.
+func (s *Service) save(ctx context.Context, in map[string]any) error {
 	row, e := s.Get(ctx)
 	if e != nil {
-		return nil, e
+		return e
 	}
 	old := row.Version
 	for k, v := range in {
 		if !allowedKeys[k] {
-			return nil, errs.InvalidArgument("unknown setting " + k)
+			return errs.InvalidArgument("unknown setting " + k)
 		}
 		switch k {
 		case "universal_system_prompt":
 			t, ok := v.(string)
 			if !ok || len(t) > 64000 {
-				return nil, errs.InvalidArgument("invalid universal system prompt")
+				return errs.InvalidArgument("invalid universal system prompt")
 			}
 		case "pricing":
 			p, err := parsePricing(v)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			v = p
 		case "machine":
 			m, err := parseMachine(v)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			v = m
+		case "admins_space":
+			id, ok := v.(string)
+			if !ok {
+				return errs.InvalidArgument("invalid admins space")
+			}
+			if id = strings.TrimSpace(id); id != "" {
+				if _, err := identity.Parse(id); err != nil {
+					return errs.InvalidArgument("invalid admins space")
+				}
+			}
+			v = id
 		case "categories":
 			list, ok := v.([]any)
 			if !ok || len(list) == 0 || len(list) > 100 {
-				return nil, errs.InvalidArgument("categories must be a non-empty list")
+				return errs.InvalidArgument("categories must be a non-empty list")
 			}
 			for _, c := range list {
 				if name, ok := c.(string); !ok || strings.TrimSpace(name) == "" || len(name) > 64 {
-					return nil, errs.InvalidArgument("invalid category")
+					return errs.InvalidArgument("invalid category")
 				}
 			}
 		}
@@ -259,7 +300,7 @@ func (s *Service) updateAction(ctx context.Context, req *api.ActionRequest) (*ap
 	}
 	raw, _ := json.Marshal(row.Values)
 	if len(raw) > 128000 {
-		return nil, errs.InvalidArgument("settings too large")
+		return errs.InvalidArgument("settings too large")
 	}
 	row.Version++
 	row.UpdatedAt = time.Now().UTC()
@@ -272,10 +313,7 @@ func (s *Service) updateAction(ctx context.Context, req *api.ActionRequest) (*ap
 			e = errs.Conflict("settings changed; reload before saving")
 		}
 	}
-	if e != nil {
-		return nil, e
-	}
-	return s.getAction(ctx, req)
+	return e
 }
 func NewPlugin() api.Plugin {
 	return module.New(api.Info{Name: "settings-ns", Version: "1.0.0", Provides: []string{"service/settings"}}, func(ctx context.Context, d *api.Dependencies) (module.Instance, error) {

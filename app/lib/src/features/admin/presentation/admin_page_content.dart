@@ -644,7 +644,11 @@ class _AppPageContentState extends State<AdminPageContent> {
     final totalSpend = spaces.fold<double>(
         0, (sum, s) => sum + _number(s['spent'] ?? _map(s['usage'])['spent']));
     final palette = adminPalette(context);
+    final adminsSpace = _map(widget.results['spaces.admins_space_get']);
+    final adminsSpaceId = '${_map(adminsSpace['space'])['id'] ?? ''}';
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _adminsSpaceCard(spaces, adminsSpace),
+      const SizedBox(height: 18),
       AdminGrid(maxColumns: 2, minTileWidth: 340, children: [
         AdminSectionCard(
           title: 'Computers',
@@ -744,13 +748,15 @@ class _AppPageContentState extends State<AdminPageContent> {
               Row(children: [
                 AdminAvatar('${s['name'] ?? s['id']}',
                     size: 34,
-                    icon: s['home'] == true
-                        ? Icons.home_rounded
-                        : Icons.folder_rounded),
+                    icon: '${s['id']}' == adminsSpaceId
+                        ? Icons.admin_panel_settings_rounded
+                        : s['home'] == true
+                            ? Icons.home_rounded
+                            : Icons.folder_rounded),
                 const SizedBox(width: 10),
                 Expanded(
                     child: _primaryCell('${s['name'] ?? s['id']}',
-                        '${s['home'] == true ? 'Home · ' : ''}${_shortId(s['id'])}')),
+                        '${'${s['id']}' == adminsSpaceId ? 'Admins space · ' : ''}${s['home'] == true ? 'Home · ' : ''}${_shortId(s['id'])}')),
               ]),
               Text(_owner(s)),
               Text('${s['agents'] ?? _list(s['workers']).length}',
@@ -767,6 +773,90 @@ class _AppPageContentState extends State<AdminPageContent> {
           '${rows.length} projects · tap a row for overview, machine, cost, storage, logs, and people',
           style: _muted()),
     ]);
+  }
+
+  /// The project every platform administrator is kept a member of: the node
+  /// adds each admin to it when it is chosen and whenever someone becomes one.
+  Widget _adminsSpaceCard(
+      List<Map<String, dynamic>> spaces, Map<String, dynamic> current) {
+    final scheme = Theme.of(context).colorScheme;
+    final chosen = _map(current['space']);
+    final missing = '${current['missing'] ?? ''}';
+    final admins =
+        _listOfMaps(_map(widget.results['admin.admins_list'])['admins']);
+    final name = '${chosen['name'] ?? chosen['id'] ?? ''}';
+    final choose = FilledButton.tonalIcon(
+      onPressed: () => _pickAdminsSpace(spaces, '${chosen['id'] ?? ''}'),
+      icon: Icon(chosen.isEmpty ? Icons.add_rounded : Icons.swap_horiz_rounded,
+          size: 18),
+      label: Text(chosen.isEmpty ? 'Choose project' : 'Change'),
+    );
+    return AdminSectionCard(
+      title: 'Platform admins space',
+      icon: Icons.admin_panel_settings_rounded,
+      subtitle:
+          'Every platform admin is added to this project automatically, now and whenever someone is made an admin.',
+      child: _toolbar(
+        Row(children: [
+          AdminAvatar(chosen.isEmpty ? '?' : name,
+              size: 40,
+              icon: chosen.isEmpty
+                  ? Icons.folder_off_outlined
+                  : Icons.admin_panel_settings_rounded),
+          const SizedBox(width: 12),
+          Expanded(
+            child: chosen.isEmpty
+                ? Text(
+                    missing.isNotEmpty
+                        ? 'The chosen project was deleted. Choose another one.'
+                        : 'No project chosen. Admins are not added anywhere.',
+                    style: missing.isNotEmpty
+                        ? TextStyle(color: scheme.error)
+                        : _muted())
+                : _primaryCell(name,
+                    '${admins.isEmpty ? 'Admins' : '${admins.length} ${admins.length == 1 ? 'admin' : 'admins'}'} are members · ${_shortId(chosen['id'])}'),
+          ),
+        ]),
+        [
+          if (chosen.isNotEmpty)
+            OutlinedButton(
+                onPressed: () => _showProject({...chosen}),
+                child: const Text('Open')),
+          if (chosen.isNotEmpty || missing.isNotEmpty)
+            TextButton(
+                onPressed: () async {
+                  if (await _confirm(
+                      'Stop using an admins space?',
+                      'Admins already in ${chosen.isEmpty ? 'the project' : name} stay members; new admins are no longer added.',
+                      'Stop')) {
+                    await widget.onDirectAction(
+                        'spaces', 'admins_space_set', {'space': ''});
+                  }
+                },
+                child: const Text('Clear')),
+          choose,
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickAdminsSpace(
+      List<Map<String, dynamic>> spaces, String currentId) async {
+    // Direct conversations are between two accounts and cannot take members.
+    final candidates = spaces
+        .where((s) => '${s['direct_key'] ?? ''}'.isEmpty)
+        .toList()
+      ..sort((a, b) => '${a['name'] ?? a['id']}'
+          .toLowerCase()
+          .compareTo('${b['name'] ?? b['id']}'.toLowerCase()));
+    final picked = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) =>
+          _AdminsSpacePicker(projects: candidates, currentId: currentId),
+    );
+    if (picked == null || '${picked['id']}' == currentId) return;
+    await widget.onDirectAction(
+        'spaces', 'admins_space_set', {'space': '${picked['id']}'});
   }
 
   Widget _agents() {
@@ -5159,3 +5249,83 @@ Widget _primaryCell(String primary, String secondary) => Column(
                         fontSize: 10,
                         color: Theme.of(context).colorScheme.onSurfaceVariant)))
         ]);
+
+/// Searchable list of the projects that can be the platform admins space; it
+/// pops the chosen one.
+class _AdminsSpacePicker extends StatefulWidget {
+  const _AdminsSpacePicker({required this.projects, required this.currentId});
+  final List<Map<String, dynamic>> projects;
+  final String currentId;
+
+  @override
+  State<_AdminsSpacePicker> createState() => _AdminsSpacePickerState();
+}
+
+class _AdminsSpacePickerState extends State<_AdminsSpacePicker> {
+  final query = TextEditingController();
+
+  @override
+  void dispose() {
+    query.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final q = query.text.trim().toLowerCase();
+    final rows = widget.projects
+        .where((s) =>
+            q.isEmpty ||
+            '${s['name']} ${s['id']} ${_map(s['owner'])['handle']}'
+                .toLowerCase()
+                .contains(q))
+        .toList();
+    return AlertDialog(
+      icon: const Icon(Icons.admin_panel_settings_rounded),
+      title: const Text('Choose the admins space'),
+      content: SizedBox(
+        width: 440,
+        height: 420,
+        child: Column(children: [
+          TextField(
+            controller: query,
+            autofocus: true,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search_rounded),
+                hintText: 'Search title, id, or owner handle'),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: rows.isEmpty
+                ? Center(
+                    child: Text(widget.projects.isEmpty
+                        ? 'No projects created yet.'
+                        : 'No projects match.'))
+                : ListView.builder(
+                    itemCount: rows.length,
+                    itemBuilder: (context, i) {
+                      final s = rows[i];
+                      final selected = '${s['id']}' == widget.currentId;
+                      return ListTile(
+                        leading: AdminAvatar('${s['name'] ?? s['id']}',
+                            size: 34, icon: Icons.folder_rounded),
+                        title: Text('${s['name'] ?? s['id']}'),
+                        subtitle: Text('${_owner(s)} · ${_shortId(s['id'])}'),
+                        trailing:
+                            selected ? const Icon(Icons.check_rounded) : null,
+                        selected: selected,
+                        onTap: () => Navigator.pop(context, s),
+                      );
+                    }),
+          ),
+        ]),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
+      ],
+    );
+  }
+}

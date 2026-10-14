@@ -57,8 +57,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   static const hallRoom = 'Hall room';
   final scaffoldKey = GlobalKey<ScaffoldState>();
   final mobilePages = PageController();
-  final command = TextEditingController();
-  final drafts = <String, String>{};
   String workspace = 'Home';
   String? room;
   int libraryTab = 0;
@@ -74,9 +72,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   late final DeskController deskController =
       DeskController(DeskApi.of(widget.dependencies.service));
   Timer? _roomTimer;
-  String? _commandAgent;
-  String? _commandReply;
-  bool _commandReplying = false;
   int _fileRevision = 0;
   String _workingAgent = '';
   String _workingDetail = '';
@@ -106,7 +101,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   void dispose() {
     deskController.dispose();
     _roomTimer?.cancel();
-    command.dispose();
     mobilePages.dispose();
     workspaceMotion.dispose();
     super.dispose();
@@ -289,43 +283,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     }
   }
 
-  Future<void> _askCommand(String text) async {
-    if (text.trim().isEmpty) return;
-    final agent = bots.where((b) => b.isAgent).toList();
-    if (agent.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('No agents yet — create one in My bots.')));
-      }
-      return;
-    }
-    command.clear();
-    setState(() {
-      _commandAgent = agent.first.name;
-      _commandReply = null;
-      _commandReplying = true;
-    });
-    try {
-      final spaceId = _spaceFor(workspace)?.id;
-      final reply = spaceId == null || spaceId.isEmpty
-          ? await widget.dependencies.service
-              .askBot(agent.first.id, text.trim())
-          : await widget.dependencies.service
-              .askBotInSpace(spaceId, agent.first.id, text.trim());
-      if (!mounted) return;
-      setState(() {
-        _commandReply = reply.trim().isEmpty ? 'No reply.' : reply;
-        _commandReplying = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _commandReply = 'Agent error: $e';
-        _commandReplying = false;
-      });
-    }
-  }
-
   void openMiniapp(Bot bot) {
     final spaceId = _spaceFor(workspace)?.id ?? '';
     if (bot.isUnifiedTool && spaceId.isNotEmpty) {
@@ -414,31 +371,26 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       goHome();
       return;
     }
-    drafts[scopeKey] = command.text;
     setState(() {
       room = value;
       _workingAgent = '';
       _workingDetail = '';
-      command.text = drafts[scopeKey] ?? '';
     });
     _loadRoomMessages(value);
     _attachDesk();
   }
 
   void goHome() {
-    drafts[scopeKey] = command.text;
     setState(() {
       room = null;
       _workingAgent = '';
       _workingDetail = '';
-      command.text = drafts[scopeKey] ?? '';
     });
     _attachDesk();
   }
 
   Future<void> switchWorkspace(String value) async {
     if (value == workspace || workspaceMotion.isAnimating) return;
-    drafts[scopeKey] = command.text;
     // Refresh the spaces list so a freshly created workspace resolves to its
     // id (otherwise the desk feed falls back to the global feed and hides the
     // composer because _spaceFor() cannot find the new workspace).
@@ -454,7 +406,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       room = null;
       _workingAgent = '';
       _workingDetail = '';
-      command.text = drafts['$value/home'] ?? '';
     });
     widget.onWorkspaceChanged?.call(value);
     await _loadRooms();
@@ -577,14 +528,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                   child: _CenterDesk(
                                       workspace: workspace,
                                       room: room,
-                                      command: command,
                                       pointer: pointer,
                                       controller: deskController,
                                       dependencies: widget.dependencies,
                                       spaceId: _spaceFor(workspace)?.id ?? '',
-                                      roomId: _currentRoomId,
-                                      openSearch: () => _search(context),
-                                      onSubmit: _askCommand))),
+                                      roomId: _currentRoomId))),
                           const SizedBox(width: 16),
                           _WorkspacePanelMotion(
                               animation: workspaceMotion,
@@ -623,19 +571,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                         ]));
               }))
             ])),
-            if (_commandReplying || _commandReply != null)
-              Positioned(
-                  top: compact ? 66 : 60,
-                  left: 16,
-                  right: 16,
-                  child: Align(
-                      alignment: Alignment.topCenter,
-                      child: _CommandReplyBubble(
-                          agent: _commandAgent,
-                          replying: _commandReplying,
-                          reply: _commandReply,
-                          onClose: () =>
-                              setState(() => _commandReply = null)))),
           ])),
     );
   }
@@ -649,15 +584,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               _CenterDesk(
                   workspace: workspace,
                   room: room,
-                  command: command,
                   pointer: pointer,
                   controller: deskController,
                   dependencies: widget.dependencies,
                   spaceId: _spaceFor(workspace)?.id ?? '',
                   roomId: _currentRoomId,
-                  topContentInset: 62,
-                  openSearch: () => _search(context),
-                  onSubmit: _askCommand),
+                  topContentInset: 62),
               room == null
                   ? _SocialFeed(
                       workspace: workspace,
@@ -1706,107 +1638,27 @@ class _LibraryToolCard extends StatelessWidget {
               ]))));
 }
 
-class _CommandReplyBubble extends StatelessWidget {
-  const _CommandReplyBubble({
-    this.agent,
-    required this.replying,
-    this.reply,
-    required this.onClose,
-  });
-
-  final String? agent;
-  final bool replying;
-  final String? reply;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final title = agent == null ? 'Agent' : agent!;
-    return Material(
-        color: Colors.transparent,
-        child: Container(
-            constraints: const BoxConstraints(maxWidth: 620),
-            padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
-            decoration: BoxDecoration(
-                color: scheme.surfaceContainerHigh.withValues(alpha: .98),
-                borderRadius: BorderRadius.circular(18),
-                border:
-                    Border.all(color: scheme.primary.withValues(alpha: .45)),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withValues(alpha: .22),
-                      blurRadius: 26,
-                      offset: const Offset(0, 10))
-                ]),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Icon(Icons.smart_toy_outlined, size: 18),
-              const SizedBox(width: 10),
-              Expanded(
-                  child: replying
-                      ? const Row(children: [
-                          SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2)),
-                          SizedBox(width: 10),
-                          Flexible(
-                              child: Text('Thinking…',
-                                  style: TextStyle(fontSize: 12)))
-                        ])
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                              Text(title,
-                                  style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w800,
-                                      color: scheme.primary)),
-                              const SizedBox(height: 4),
-                              ConstrainedBox(
-                                  constraints:
-                                      const BoxConstraints(maxHeight: 220),
-                                  child: SingleChildScrollView(
-                                      child: SelectableText(reply ?? '',
-                                          style: const TextStyle(
-                                              fontSize: 12, height: 1.45)))),
-                            ])),
-              IconButton(
-                  tooltip: 'Dismiss',
-                  onPressed: onClose,
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.close_rounded, size: 18)),
-            ])));
-  }
-}
-
 /// The room's desk: tools' frontends as floating card windows (opened by
-/// people from the library and by agents showing results), the dock and the
-/// command bar. An empty desk shows the machine.
+/// people from the library and by agents showing results) and the dock. An
+/// empty desk shows the machine.
 class _CenterDesk extends StatelessWidget {
   const _CenterDesk(
       {required this.workspace,
       required this.room,
-      required this.command,
       required this.pointer,
       required this.controller,
       required this.dependencies,
       required this.spaceId,
       required this.roomId,
-      this.topContentInset = 0,
-      required this.openSearch,
-      this.onSubmit});
+      this.topContentInset = 0});
   final String workspace;
   final String? room;
-  final TextEditingController command;
   final Offset pointer;
   final DeskController controller;
   final AppDependencies dependencies;
   final String spaceId;
   final String roomId;
   final double topContentInset;
-  final VoidCallback openSearch;
-  final ValueChanged<String>? onSubmit;
 
   Widget _frontend(String tool, ShownResult? shown,
           {Map<String, dynamic>? template}) =>
@@ -1912,12 +1764,6 @@ class _CenterDesk extends StatelessWidget {
                   ]),
                 ),
               ),
-              commandBar: _CommandBar(
-                controller: command,
-                room: room,
-                openSearch: openSearch,
-                onSubmit: onSubmit,
-              ),
             ),
           ),
         ),
@@ -1976,68 +1822,6 @@ class _MachineFace extends StatelessWidget {
                     ]),
                     child: Image.asset('assets/images/only_orb.png')))));
   }
-}
-
-class _CommandBar extends StatelessWidget {
-  const _CommandBar(
-      {required this.controller,
-      required this.room,
-      required this.openSearch,
-      this.onSubmit});
-  final TextEditingController controller;
-  final String? room;
-  final VoidCallback openSearch;
-  final ValueChanged<String>? onSubmit;
-  @override
-  Widget build(BuildContext context) => Container(
-      padding: const EdgeInsets.fromLTRB(8, 7, 8, 7),
-      decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: .2), blurRadius: 30)
-          ],
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(
-              color: Theme.of(context)
-                  .colorScheme
-                  .primary
-                  .withValues(alpha: .35))),
-      child: Row(children: [
-        IconButton(
-            onPressed: openSearch,
-            icon: const Icon(Icons.travel_explore_rounded)),
-        Expanded(
-            child: TextField(
-                controller: controller,
-                minLines: 1,
-                maxLines: 5,
-                keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.newline,
-                decoration: InputDecoration(
-                    fillColor: Colors.transparent,
-                    filled: true,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    hintMaxLines: 1,
-                    hintStyle: TextStyle(
-                        overflow: TextOverflow.ellipsis,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    hintText: room == null
-                        ? 'Ask ONLY to research, trade, or build a strategy…'
-                        : 'Command agents or message $room…'))),
-        IconButton(
-            onPressed: openSearch,
-            tooltip: 'Voice search',
-            icon: const Icon(Icons.mic_none_rounded)),
-        IconButton(
-            onPressed: openSearch,
-            tooltip: 'Talk to agents',
-            icon: const Icon(Icons.headset_mic_outlined)),
-        IconButton(
-            onPressed:
-                onSubmit == null ? null : () => onSubmit!(controller.text),
-            icon: const Icon(Icons.arrow_upward_rounded))
-      ]));
 }
 
 class _SocialFeed extends StatefulWidget {

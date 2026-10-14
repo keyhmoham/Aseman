@@ -13,6 +13,7 @@ import (
 	"github.com/tradera/tradera/internal/plugins/bridge"
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/errs"
+	"github.com/tradera/tradera/plugins/actions/support/a2ui"
 	"github.com/tradera/tradera/plugins/actions/support/helper"
 	"github.com/tradera/tradera/plugins/actions/tools/models"
 	"github.com/tradera/tradera/plugins/actions/usage/models/usage"
@@ -107,6 +108,7 @@ func (t *Template) validate(microtools map[string]bool) error {
 // Messages renders the template, filled with [data], as the A2UI messages
 // that create its surface.
 func (t *Template) Messages(surfaceID string, data map[string]any) []map[string]any {
+	a2ui.Normalize(t.Components) // templates cached before generation normalized
 	return []map[string]any{
 		{"version": A2UIVersion, "createSurface": map[string]any{"surfaceId": surfaceID, "catalogId": BasicCatalog}},
 		{"version": A2UIVersion, "updateComponents": map[string]any{"surfaceId": surfaceID, "components": t.Components}},
@@ -470,13 +472,14 @@ Reply with ONE JSON object, no prose, of this shape:
 Components (each has "id" and "component"; children are ids):
 - Column / Row: {"children": [ids], "justify": "start|center|end|spaceBetween", "align": "start|center|end|stretch"}
 - Card: {"child": id}   List: {"children": {"componentId": templateId, "path": "/list"}} repeats templateId per item; inside it, paths are relative to the item ("name" not "/name")
-- Text: {"text": string or {"path": "/x"}, "variant": "h1|h2|h3|h4|h5|body|caption"}; text may use ${/path} interpolation
+- Text: {"text": "literal" or {"path": "/x"} or {"call": "formatString", "args": {"value": "High ${/x}°"}, "returnType": "string"}, "variant": "h1|h2|h3|h4|h5|body|caption"}
 - Image: {"url": string or {"path": ...}}   Icon: {"name": "refresh|search|info|..."}   Divider: {}
 - Button: {"child": textId, "action": {"event": {"name": "<event>", "context": {"key": {"path": "/form/x"} or literal}}}, "variant": "primary|borderless"}
 - TextField: {"label": "...", "value": {"path": "/form/x"}}   CheckBox: {"label": "...", "value": {"path": ...}}
 - Slider: {"value": {"path": ...}, "min": 0, "max": 100}   ChoicePicker: {"label": "...", "options": [{"label": "...", "value": "..."}], "value": {"path": ...}}
 - Tabs: {"tabs": [{"title": "...", "child": id}]}
-Rules: every value shown from the tool comes from the data model, filled by "data" bindings that call the tool's microtools (only those listed, with arguments matching their schemas); buttons send events that "actions" map to microtools. In action args, {"$context": "key"} takes the event context's value and {"$data": "/pointer"} the data model's. Bind inputs under /form. Keep it compact and useful; no invented data.`
+Rules: every value shown from the tool comes from the data model, filled by "data" bindings that call the tool's microtools (only those listed, with arguments matching their schemas); buttons send events that "actions" map to microtools. In action args, {"$context": "key"} takes the event context's value and {"$data": "/pointer"} the data model's. Bind inputs under /form.
+Data in text: a plain string is shown exactly as written, never filled in. Show a value with {"path": "/x"}; mix text and values only with formatString, whose value interpolates ${/path} (or ${name} relative to a List item). Never write {{...}} or ${...} in a plain string. Repeat rows (days, hours, results) with a List over an array, not numbered paths. Keep it compact and useful; no invented data.`
 
 // generate asks the node's default model for a frontend, and bills the
 // tokens to the caller.
@@ -519,6 +522,7 @@ func (s *Service) generate(ctx context.Context, c caller, tool *models.Tool, ski
 		t = Template{}
 		lastErr = json.Unmarshal([]byte(jsonObject(content)), &t)
 		if lastErr == nil {
+			a2ui.Normalize(t.Components)
 			lastErr = t.validate(microtools)
 		}
 		if lastErr == nil {

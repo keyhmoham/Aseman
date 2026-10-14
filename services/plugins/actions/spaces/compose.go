@@ -8,6 +8,7 @@ import (
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/errs"
 	"github.com/tradera/tradera/plugins/actions/message/models/message"
+	"github.com/tradera/tradera/plugins/actions/support/a2ui"
 	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
 )
 
@@ -42,6 +43,7 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 	if len(in.Components) == 0 || len(in.Components) > maxComposedComponents {
 		return "", errs.InvalidArgument("ui_compose needs 1..200 components")
 	}
+	a2ui.Normalize(in.Components)
 	tools, err := s.SpaceTools(ctx, spaceID, identity.ID{})
 	if err != nil {
 		return "", err

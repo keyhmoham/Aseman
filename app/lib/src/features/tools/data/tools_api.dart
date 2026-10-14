@@ -77,7 +77,8 @@ class ToolsApi {
       {required String spaceId,
       String roomId = '',
       bool regenerate = false,
-      ShownResult? shown}) async {
+      ShownResult? shown,
+      bool auto = false}) async {
     final body = _map(await _call(
         'tools',
         'frontend_get',
@@ -86,6 +87,7 @@ class ToolsApi {
           'space': spaceId,
           if (roomId.isNotEmpty) 'room': roomId,
           if (regenerate) 'regenerate': true,
+          if (auto) 'auto': true,
           ...?shown?.toJson(),
         },
         timeout: generationTimeout));
@@ -98,7 +100,8 @@ class ToolsApi {
       String roomId = '',
       Map<String, dynamic> context = const {},
       Map<String, dynamic> data = const {},
-      ShownResult? shown}) async {
+      ShownResult? shown,
+      bool auto = false}) async {
     final body = _map(await _call('tools', 'frontend_action', {
       'bot': botId,
       'space': spaceId,
@@ -106,6 +109,7 @@ class ToolsApi {
       'action': action,
       'context': context,
       'data': data,
+      if (auto) 'auto': true,
       ...?shown?.toJson(),
     }));
     return (body['data'] as Map?)?.cast<String, dynamic>() ?? const {};

@@ -382,11 +382,13 @@ def _platform_tool(ctx: TurnContext, platform_name: str, name: str, spec: dict[s
 
 def presentation_hint(spec: dict[str, Any], function: str | None = None) -> str:
     """How to show people what this tool returns (see prompts.COMMON)."""
-    if spec.get("frontend") == "generative":
+    if spec.get("frontend") or spec.get("commands"):
         call = f"microtool={function!r}, args=<the same arguments>" if function else "microtool=<the function>, args=<its arguments>"
-        return (f"Show people its result in its own interface, as a card window on the desk: "
+        where = ("its own generative frontend" if spec.get("frontend") == "generative"
+                 else "an interface generated for it automatically")
+        return (f"Show people its result as a card window on the desk, in {where}: "
                 f"frontend_show(tool={spec['bot_id']!r}, {call}); do not restate the result as text.")
-    return "It has no generative frontend: present its result to people in Markdown."
+    return "It has no interface to show results in: present its result to people in Markdown."
 
 
 def _bot_tool(ctx: TurnContext, name: str, spec: dict[str, Any]) -> BaseTool:

@@ -31,16 +31,18 @@ func deskRoom(roomID identity.ID, room string) (identity.ID, error) {
 func windowJSON(d Desktop, id string) map[string]any {
 	for _, w := range d.Windows {
 		if w.ID == id {
-			return map[string]any{"id": w.ID, "title": w.Title, "x": w.X, "y": w.Y, "w": w.W, "h": w.H}
+			return map[string]any{"id": w.ID, "title": w.Title, "frontend": w.Frontend, "x": w.X, "y": w.Y, "w": w.W, "h": w.H}
 		}
 	}
 	return nil
 }
 
-// showTool implements frontend_show: the tool's own generative frontend,
-// filled with the result the agent got (the microtool it called, with the
-// same arguments), opened as a card window on the room's desk. People see it
-// live and keep using it; it stays until someone closes it.
+// showTool implements frontend_show: a tool's interface as a card window on
+// the room's desk, filled with the result the agent got (the microtool it
+// called, with the same arguments) or, without one, the tool itself. A tool
+// without a generative frontend gets one the node generates for it (see
+// resolveDeskOpens). People see it live and keep using it; it stays until
+// someone closes it.
 func (s *Service) showTool(ctx context.Context, spaceID, roomID identity.ID, agentName, argsJSON string) (string, error) {
 	var in struct {
 		Tool      string         `json:"tool"`
@@ -61,7 +63,7 @@ func (s *Service) showTool(ctx context.Context, spaceID, roomID identity.ID, age
 		return "", err
 	}
 	ops := []DeskOp{{Op: "open", Tool: in.Tool, Title: in.Title, Microtool: in.Microtool, Args: in.Args, X: in.X, Y: in.Y, W: in.W, H: in.H}}
-	if err := s.resolveDeskOpens(ctx, spaceID, ops, true); err != nil {
+	if err := s.resolveDeskOpens(ctx, spaceID, ops); err != nil {
 		return "", err
 	}
 	d, ids, err := s.UpdateDesk(ctx, spaceID, target, agentName, ops)

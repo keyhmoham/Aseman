@@ -167,13 +167,14 @@ void main() {
     });
 
     testWidgets(
-        'a tool without a frontend opens in an interface generated for it',
+        'a window designed for a request runs its own template, not the tool\'s',
         (tester) async {
       final node = _Node();
-      node.replies['tools.frontend_get'] = (body) => body['auto'] == true
+      const template = {'title': 'Tax notes', 'components': <Object>[]};
+      node.replies['tools.frontend_get'] = (body) => body['template'] != null
           ? {
               'mode': 'generative',
-              'auto': true,
+              'request': true,
               'messages': [
                 {
                   'version': 'v0.9',
@@ -217,20 +218,20 @@ void main() {
           (_) => {'data': <String, dynamic>{}};
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
-          body: ToolFrontendView(api: node.api, botId: 'notes', spaceId: 's1'),
+          body: ToolFrontendView(
+              api: node.api, botId: 'notes', spaceId: 's1', template: template),
         ),
       ));
       await tester.pumpAndSettle();
       expect(find.text('Generated for notes'), findsOneWidget);
-      final gets =
-          node.calls.where((c) => c.$2 == 'frontend_get').map((c) => c.$3);
-      expect(gets.map((b) => b['auto']), [null, true],
-          reason: 'its own frontend first, then a generated one');
+      final get = node.calls.singleWhere((c) => c.$2 == 'frontend_get');
+      expect(get.$3['template'], template,
+          reason: 'the node fills the window\'s own design');
       await tester.tap(find.text('Refresh'));
       await tester.pumpAndSettle();
       final action = node.calls.lastWhere((c) => c.$2 == 'frontend_action');
-      expect(action.$3['auto'], true,
-          reason: 'actions run against the generated interface');
+      expect(action.$3['template'], template,
+          reason: 'actions run against the window\'s design');
     });
 
     test('frontend decodes a static Elpian frontend\'s bytecode', () async {

@@ -47,10 +47,13 @@ Whenever you present people a result you got from one of the space's tools
 sandbox alike), show it in an interface, in this order of priority:
 1. **In a card window on the desk, always first.** Call `frontend_show` with
    the tool, the microtool you called and the same arguments. The window shows
-   the tool's own generative frontend, filled with that result; a tool without
-   one (no frontend, or a static one) gets an interface generated for it
-   automatically, the first time it is needed, and cached after that. It is
-   live and usable (people can keep searching, switching units, drilling in).
+   the tool's own generative frontend, filled with that result. A tool without
+   one (no frontend, or a static one) gets an interface designed for this very
+   request, around this result: pass `request`, what the person asked for in
+   their words, so the window shows what they want. That design belongs to
+   the one window (another request gets its own; nothing is reused), and the
+   window shows it being designed for a moment. Either way it is live and
+   usable (people can keep searching, switching units, drilling in).
    Then keep your text to a sentence or two on what it shows and what you
    conclude: do not repeat its data in text.
    When people ask to open a tool itself, call `frontend_show` without a

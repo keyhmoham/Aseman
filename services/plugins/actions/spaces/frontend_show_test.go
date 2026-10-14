@@ -33,7 +33,7 @@ func TestFrontendShowNeedsSomethingToBuildFrom(t *testing.T) {
 	for _, tool := range tools {
 		if tool.BotID == botID.String() {
 			listed = true
-			if !strings.Contains(tool.Description, "frontend_show") || !strings.Contains(tool.Description, "generated for it automatically") {
+			if !strings.Contains(tool.Description, "frontend_show") || !strings.Contains(tool.Description, "designed for the person's request") {
 				t.Fatalf("listing: %q", tool.Description)
 			}
 		}

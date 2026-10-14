@@ -164,3 +164,63 @@ func TestComposedWidgetsOpenOnTheDeskNotInTheChat(t *testing.T) {
 		t.Fatalf("composed widgets reached the chat: %v", msgs)
 	}
 }
+
+func TestDesignedWindowsBelongToTheirRequest(t *testing.T) {
+	d := Desktop{}
+	now := time.Now()
+	open := func(request string) string {
+		id, err := d.Apply(DeskOp{Op: "open", Tool: "notes", Frontend: DeskAutoFrontend, Status: DeskDesigning,
+			Request: request, Microtool: "search", Args: map[string]any{"q": "tax"}}, "agent", now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	a := open("Which notes mention tax?")
+	b := open("Summarize my tax notes as a timeline")
+	if a == b || len(d.Windows) != 2 {
+		t.Fatal("another request for the same result is another window, designed for it")
+	}
+	if again := open("which notes mention tax? "); again != a {
+		t.Fatal("the same request again is the same window")
+	}
+	tpl := map[string]any{"title": "Tax notes", "components": []any{map[string]any{"id": "root", "component": "Text", "text": "x"}}}
+	if _, err := d.Apply(DeskOp{Op: "designed", ID: a, Template: tpl, Status: "ready"}, "tradera", now); err != nil {
+		t.Fatal(err)
+	}
+	if w := d.window(a); w.Status != "ready" || w.Template["title"] != "Tax notes" {
+		t.Fatalf("design saved with the window: %+v", w)
+	}
+	if !strings.Contains(d.Summary(), "designed for: Summarize my tax notes as a timeline [designing]") {
+		t.Fatalf("agents see what each window was designed for:\n%s", d.Summary())
+	}
+	if _, err := d.Apply(DeskOp{Op: "redesign", ID: a}, "ann", now); err != nil || d.window(a).Status != DeskDesigning || d.window(a).Template != nil {
+		t.Fatal("redesign starts over", err)
+	}
+	// Pinned with its design, so reopening it needs no new one.
+	d.Apply(DeskOp{Op: "designed", ID: b, Template: tpl, Status: "ready"}, "tradera", now)
+	p, _ := d.Apply(DeskOp{Op: "pin", ID: b}, "ann", now)
+	if pin := d.Pins[0]; pin.ID != p || pin.Request == "" || pin.Template == nil {
+		t.Fatalf("pin: %+v", pin)
+	}
+}
+
+func TestADesignThatCannotBeMadeSaysWhy(t *testing.T) {
+	s, ctx := messageToolHarness(t)
+	sp, err := s.CreateSpace(ctx, idFromHex(t, "00000000000000010000000000000001"), "design space", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	room := identity.ID{Node: 1, Entity: 9}
+	d, ids, err := s.UpdateDesk(ctx, sp.ID, room, "agent", []DeskOp{{Op: "open", Tool: "notes", Frontend: DeskAutoFrontend,
+		Status: DeskDesigning, Request: "Which notes mention tax?"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No tools namespace in this node: the design fails, and the window says so.
+	s.designWindow(ctx, sp.ID, room, *d.window(ids[0]), "")
+	d, _ = s.Desk(ctx, sp.ID, room)
+	if w := d.window(ids[0]); !strings.HasPrefix(w.Status, "failed: ") || w.Template != nil {
+		t.Fatalf("status: %+v", w)
+	}
+}

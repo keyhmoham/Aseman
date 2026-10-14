@@ -291,9 +291,10 @@ func (s *Service) frontendGet(ctx context.Context, req *api.ActionRequest) (*api
 		Regenerate bool `json:"regenerate"`
 		// Shown fills a generated frontend with one result (see Shown).
 		Shown
-		// Auto: a tool without a generative frontend gets one generated (see
-		// autoSpec).
-		Auto bool `json:"auto"`
+		// Template is a frontend designed for one request (a desk window's,
+		// see GenerateWindowFrontend): filled and served instead of the
+		// tool's own.
+		Template map[string]any `json:"template"`
 	}
 	if e := helper.Decode(req, &in); e != nil {
 		return nil, e
@@ -302,10 +303,18 @@ func (s *Service) frontendGet(ctx context.Context, req *api.ActionRequest) (*api
 	if err != nil {
 		return nil, err
 	}
+	if len(in.Template) > 0 {
+		t, err := windowTemplate(in.Template)
+		if err != nil {
+			return nil, err
+		}
+		data := s.fill(ctx, c, tool.BotID, t, in.Shown)
+		return helper.JSON(map[string]any{"bot_id": tool.BotID, "mode": models.FrontendGenerative, "request": true,
+			"title": t.Title, "messages": t.Messages("tool-"+tool.BotID, data), "actions": actionNames(t)})
+	}
 	var spec models.FrontendSpec
 	_ = json.Unmarshal([]byte(tool.Frontend), &spec)
-	spec = autoSpec(spec, in.Auto)
-	out := map[string]any{"bot_id": tool.BotID, "mode": spec.Mode, "version": spec.Version, "auto": isAuto(spec)}
+	out := map[string]any{"bot_id": tool.BotID, "mode": spec.Mode, "version": spec.Version}
 	switch spec.Mode {
 	case models.FrontendStatic:
 		out["runtime"], out["language"] = spec.Runtime, spec.Language
@@ -338,9 +347,9 @@ func (s *Service) frontendGet(ctx context.Context, req *api.ActionRequest) (*api
 		out["component_id"], out["cached"], out["title"] = component.ID, cached, t.Title
 		out["messages"] = t.Messages("tool-"+tool.BotID, data)
 		out["actions"] = actionNames(&t)
-	default:
-		return nil, errs.NotFound("this tool has no frontend")
 	}
+	// No frontend: the mode says so (people get one designed for their
+	// request on the desk).
 	return helper.JSON(out)
 }
 
@@ -368,7 +377,8 @@ func (s *Service) frontendAction(ctx context.Context, req *api.ActionRequest) (*
 		Data    map[string]any `json:"data"`
 		// Shown: the result the frontend was opened on, kept by reloads.
 		Shown
-		Auto bool `json:"auto"`
+		// Template: the window's own frontend (see frontend_get).
+		Template map[string]any `json:"template"`
 	}
 	if e := helper.Decode(req, &in); e != nil {
 		return nil, e
@@ -377,19 +387,25 @@ func (s *Service) frontendAction(ctx context.Context, req *api.ActionRequest) (*
 	if err != nil {
 		return nil, err
 	}
-	var spec models.FrontendSpec
-	_ = json.Unmarshal([]byte(tool.Frontend), &spec)
-	spec = autoSpec(spec, in.Auto)
-	if spec.Mode != models.FrontendGenerative {
-		return nil, errs.InvalidArgument("only a generated frontend has actions")
-	}
-	component, _, err := s.component(ctx, c, tool, spec, false)
-	if err != nil {
-		return nil, err
-	}
-	var t Template
-	if err := json.Unmarshal([]byte(component.Template), &t); err != nil {
-		return nil, err
+	var t *Template
+	if len(in.Template) > 0 {
+		if t, err = windowTemplate(in.Template); err != nil {
+			return nil, err
+		}
+	} else {
+		var spec models.FrontendSpec
+		_ = json.Unmarshal([]byte(tool.Frontend), &spec)
+		if spec.Mode != models.FrontendGenerative {
+			return nil, errs.InvalidArgument("only a generated frontend has actions")
+		}
+		component, _, err := s.component(ctx, c, tool, spec, false)
+		if err != nil {
+			return nil, err
+		}
+		t = &Template{}
+		if err := json.Unmarshal([]byte(component.Template), t); err != nil {
+			return nil, err
+		}
 	}
 	action, ok := t.Actions[in.Action]
 	if !ok {
@@ -410,7 +426,7 @@ func (s *Service) frontendAction(ctx context.Context, req *api.ActionRequest) (*
 		}
 	}
 	if action.Reload {
-		for k, v := range s.fill(ctx, c, tool.BotID, &t, in.Shown) {
+		for k, v := range s.fill(ctx, c, tool.BotID, t, in.Shown) {
 			data[k] = v
 		}
 	}
@@ -443,32 +459,6 @@ func (s *Service) componentsList(ctx context.Context, req *api.ActionRequest) (*
 
 // --- the component registry -----------------------------------------------------
 
-// autoVersion marks the frontends the node generates for tools that have no
-// generative frontend of their own (no frontend, or a static one that cannot
-// show a given result). They live in the component registry like any other
-// generated frontend: generated on first use, served from there afterwards,
-// generated again when the tool's microtools change.
-const autoVersion = "auto-1"
-
-// autoSpec is the frontend to serve: the tool's own, or (auto requested and
-// the tool has no generative frontend) one the node generates.
-func autoSpec(spec models.FrontendSpec, auto bool) models.FrontendSpec {
-	if !auto || spec.Mode == models.FrontendGenerative {
-		return spec
-	}
-	return models.FrontendSpec{Mode: models.FrontendGenerative, Version: autoVersion}
-}
-
-func isAuto(spec models.FrontendSpec) bool { return spec.Version == autoVersion }
-
-// autoSkill stands in for the deployer's skill when the node designs a
-// tool's interface by itself.
-const autoSkill = `This tool has no interface of its own: design one from its microtools alone, general enough for anyone using the tool.
-- Lead with what the tool is for (its description) and its most useful microtool's result, shown the way its data deserves: Stat tiles for headline figures, a Chart for series, a Table for records, KeyValue for a single record, Markdown text for prose.
-- Add a "data" binding for each microtool people would look at, with sensible example arguments (they are replaced by the real arguments when the interface opens on a result).
-- For microtools that take input, add a compact form (TextField / ChoicePicker bound under /form) and a Button whose action calls the microtool with those inputs and puts its result where the view shows it.
-- Keep it to one screen of essentials; group the rest in Tabs or Expandable sections.`
-
 // componentKey identifies what a frontend is generated from: the frontend's
 // version (its skill) and the microtools it may call.
 func componentKey(spec models.FrontendSpec, commands []map[string]any) string {
@@ -495,10 +485,8 @@ func (s *Service) component(ctx context.Context, c caller, tool *models.Tool, sp
 			return &row, true, nil
 		}
 	}
-	var skill string
-	if isAuto(spec) {
-		skill = autoSkill
-	} else if skill, err = s.entity(ctx, tool.BotID, models.EntityFrontendSkill); err != nil {
+	skill, err := s.entity(ctx, tool.BotID, models.EntityFrontendSkill)
+	if err != nil {
 		return nil, false, err
 	}
 	t, model, err := s.generate(ctx, c, tool, skill, commands)

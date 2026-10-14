@@ -342,7 +342,7 @@ def test_every_agent_is_told_to_show_tool_results_in_the_tools_frontend_first() 
         assert rule.index("frontend_show") < rule.index("Markdown")
         assert "external MCP" in rule and "managed" in rule and "installed" in rule
         assert "never go into the chat" in rule and "`compose_ui`" in rule
-        assert "generated for it" in rule and "without a" in rule
+        assert "designed for this very" in rule and "`request`" in rule and "nothing is reused" in rule
 
 
 def test_tool_descriptions_say_how_to_present_their_results() -> None:
@@ -354,7 +354,8 @@ def test_tool_descriptions_say_how_to_present_their_results() -> None:
     # No generative frontend: still a window, in an interface generated for it.
     for spec in ({"bot_id": "bot-n", "commands": [{"name": "search"}]}, {"bot_id": "bot-n", "frontend": "static"}):
         hint = presentation_hint(spec, "search")
-        assert "frontend_show(tool='bot-n', microtool='search'" in hint and "generated" in hint
+        assert "frontend_show(tool='bot-n', microtool='search'" in hint and "designed for their request" in hint
+        assert "request=" in hint
     # Nothing to build an interface from: Markdown.
     assert "Markdown" in presentation_hint({"bot_id": "bot-m"}, None)
 

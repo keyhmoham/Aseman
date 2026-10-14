@@ -18,6 +18,7 @@ import '../../../shared/widgets/workspace_header.dart';
 import '../../admin/presentation/admin_screen.dart';
 import '../../desk/data/desk_api.dart';
 import '../../desk/domain/desk_models.dart';
+import '../../desk/presentation/designed_window.dart';
 import '../../desk/presentation/desk_controller.dart';
 import '../../desk/presentation/floating_desk.dart';
 import '../../miniapps/domain/sandbox_explorer_frontend.dart';
@@ -1804,10 +1805,14 @@ class _CenterDesk extends StatelessWidget {
   final VoidCallback openSearch;
   final ValueChanged<String>? onSubmit;
 
-  Widget _frontend(String tool, ShownResult? shown, {bool auto = false}) =>
+  Widget _frontend(String tool, ShownResult? shown,
+          {Map<String, dynamic>? template}) =>
       ToolFrontendView(
-          key: ValueKey('$tool/${shown?.microtool}/${shown?.args}/$auto'),
-          auto: auto,
+          // A redesign unmounts it (back to designing), so the template is not
+          // part of its identity: polls do not reload it.
+          key: ValueKey(
+              '$tool/${shown?.microtool}/${shown?.args}/${template != null}'),
+          template: template,
           api: ToolsApi.of(dependencies.service),
           botId: tool,
           spaceId: spaceId,
@@ -1844,10 +1849,27 @@ class _CenterDesk extends StatelessWidget {
             topInset: topContentInset,
             windowContent: (context, w) => w.isComposed
                 ? _composed(w.id, w.widget)
-                : _frontend(w.tool, w.shown, auto: w.frontend == 'auto'),
+                : w.isDesigned
+                    // Designed for the request: kept with the window.
+                    ? DesignedWindowContent(
+                        key: ValueKey('designed-${w.id}'),
+                        windowId: w.id,
+                        request: w.request,
+                        template: w.template,
+                        status: w.status,
+                        controller: controller,
+                        ready: (t) => _frontend(w.tool, w.shown, template: t))
+                    : _frontend(w.tool, w.shown),
             pinPreview: (p) => p.isComposed
                 ? _composed(p.id, p.widget)
-                : _frontend(p.tool, p.shown, auto: p.frontend == 'auto'),
+                : p.isDesigned
+                    ? DesignedWindowContent(
+                        windowId: p.id,
+                        request: p.request,
+                        template: p.template,
+                        status: p.status,
+                        ready: (t) => _frontend(p.tool, p.shown, template: t))
+                    : _frontend(p.tool, p.shown),
             emptyState: Center(
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [

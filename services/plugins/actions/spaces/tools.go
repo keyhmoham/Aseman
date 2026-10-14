@@ -115,9 +115,9 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 			case "generative":
 				tool.Description += " It has a generative frontend." + show + ", in that frontend."
 			case "static":
-				tool.Description += " It has a static frontend (frontend_show without a microtool opens and runs it)." + show + ", in an interface generated for it automatically."
+				tool.Description += " It has a static frontend (frontend_show without a microtool opens and runs it)." + show + ", in an interface designed for the person's request (pass request)."
 			default:
-				tool.Description += " It has no frontend of its own." + show + ", in an interface generated for it automatically."
+				tool.Description += " It has no frontend of its own." + show + ", in an interface designed for the person's request (pass request)."
 			}
 		}
 		tools = append(tools, tool)

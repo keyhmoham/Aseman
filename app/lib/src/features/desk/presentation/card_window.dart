@@ -77,8 +77,9 @@ class _CardWindowState extends State<CardWindow>
     final appear = CurvedAnimation(
         parent: _life, curve: Curves.easeOutBack, reverseCurve: Curves.easeIn);
     final subtitle = [
-      if (w.argsSummary.isNotEmpty) w.argsSummary,
-      if (w.frontend == 'auto') 'generated interface',
+      if (w.argsSummary.isNotEmpty && !w.isDesigned) w.argsSummary,
+      if (w.isDesigned && w.request.trim().isNotEmpty)
+        'for “${w.request.trim()}”',
       if (w.openedBy.isNotEmpty &&
           !RegExp(r'^[0-9a-f]{20,}$').hasMatch(w.openedBy))
         'by ${w.openedBy}',

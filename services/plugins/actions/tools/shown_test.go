@@ -2,9 +2,8 @@ package tools
 
 import (
 	"reflect"
+	"strings"
 	"testing"
-
-	"github.com/tradera/tradera/plugins/actions/tools/models"
 )
 
 func TestShownPointsTheBindingsAtOneResult(t *testing.T) {
@@ -33,23 +32,36 @@ func TestShownPointsTheBindingsAtOneResult(t *testing.T) {
 	}
 }
 
-func TestAutoSpecStandsInForMissingGenerativeFrontends(t *testing.T) {
-	generative := models.FrontendSpec{Mode: models.FrontendGenerative, Version: "v7"}
-	static := models.FrontendSpec{Mode: models.FrontendStatic, Runtime: "quickjs"}
-	if got := autoSpec(generative, true); got != generative {
-		t.Fatalf("a generative frontend is served as it is: %+v", got)
-	}
-	for _, spec := range []models.FrontendSpec{static, {}} {
-		got := autoSpec(spec, true)
-		if got.Mode != models.FrontendGenerative || !isAuto(got) {
-			t.Fatalf("auto for %+v: %+v", spec, got)
-		}
-		if autoSpec(spec, false) != spec {
-			t.Fatal("without auto, the tool's own frontend")
+func TestAWindowFrontendIsDesignedForItsRequest(t *testing.T) {
+	skill := requestSkill("How hot will it get in Paris this week?", "daily_forecast",
+		map[string]any{"city": "Paris"}, `{"days":[{"high":24}]}`)
+	for _, want := range []string{
+		"How hot will it get in Paris this week?", // the request, in the person's words
+		"not a general interface",
+		`daily_forecast called with {"city":"Paris"}`, // bound to the very result
+		`"high":24`, // designed around its shape
+	} {
+		if !strings.Contains(skill, want) {
+			t.Errorf("design brief lacks %q:\n%s", want, skill)
 		}
 	}
-	// Its own registry entry, apart from any skill's.
-	if componentKey(autoSpec(static, true), nil) == componentKey(generative, nil) {
-		t.Fatal("auto frontends share a registry key with a skill's")
+}
+
+func TestWindowTemplatesAreReadAndChecked(t *testing.T) {
+	tpl, err := windowTemplate(map[string]any{
+		"title": "Paris this week",
+		"components": []any{
+			map[string]any{"id": "root", "component": "Text", "text": "High {{/report/high}}"},
+		},
+		"data": []any{map[string]any{"path": "/report", "microtool": "daily_forecast", "args": map[string]any{"city": "Paris"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := tpl.Components[0]["text"].(map[string]any); !ok {
+		t.Fatal("placeholders are normalized like any generated frontend")
+	}
+	if _, err := windowTemplate(map[string]any{"components": []any{}}); err == nil {
+		t.Fatal("an empty template is refused")
 	}
 }

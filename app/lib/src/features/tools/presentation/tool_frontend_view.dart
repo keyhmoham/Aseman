@@ -25,6 +25,7 @@ class ToolFrontendView extends StatefulWidget {
     this.roomId = '',
     this.userId = '',
     this.regenerate = false,
+    this.shown,
     this.onLoaded,
   });
 
@@ -37,6 +38,9 @@ class ToolFrontendView extends StatefulWidget {
   /// Generate the frontend again rather than take it from the registry (the
   /// tool's owner only).
   final bool regenerate;
+
+  /// The result a generated frontend opens on (an agent's frontend_show).
+  final ShownResult? shown;
   final ValueChanged<ToolFrontendPayload>? onLoaded;
 
   @override
@@ -76,7 +80,8 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
       final payload = await widget.api.frontend(widget.botId,
           spaceId: widget.spaceId,
           roomId: widget.roomId,
-          regenerate: widget.regenerate);
+          regenerate: widget.regenerate,
+          shown: widget.shown);
       if (!mounted) return;
       setState(() {
         _payload = payload;
@@ -98,7 +103,8 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
           spaceId: widget.spaceId,
           roomId: widget.roomId,
           context: action.context,
-          data: data);
+          data: data,
+          shown: widget.shown);
 
   @override
   Widget build(BuildContext context) {
@@ -143,14 +149,15 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
           child: A2UIView(
             messages: payload.messages,
             onAction: _action,
-            toolFrontend: (context, botId, height) => SizedBox(
+            toolFrontend: (context, botId, height, shown) => SizedBox(
               height: height,
               child: ToolFrontendView(
                   api: widget.api,
                   botId: botId,
                   spaceId: widget.spaceId,
                   roomId: widget.roomId,
-                  userId: widget.userId),
+                  userId: widget.userId,
+                  shown: shown),
             ),
           ),
         );

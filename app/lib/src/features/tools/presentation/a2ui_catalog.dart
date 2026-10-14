@@ -146,6 +146,9 @@ final Map<String, ComponentSpec> traderaComponents = {
   'ToolFrontend': const ComponentSpec({
     'tool': PropSpec('string'),
     'height': PropSpec('number'),
+    // The result to open it on (frontend_show): a microtool and its args.
+    'microtool': PropSpec('string'),
+    'args': PropSpec('any'),
     // Filled in by the node when an agent composes the widget.
     'frontend': PropSpec('string'),
     'name': PropSpec('string'),

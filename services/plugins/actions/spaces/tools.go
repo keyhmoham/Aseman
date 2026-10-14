@@ -48,6 +48,8 @@ func toolDetail(toolName string) string {
 		return "opening a gateway proxy…"
 	case "ui_compose":
 		return "composing a widget…"
+	case "frontend_show":
+		return "showing the result…"
 	default:
 		return "using tool " + toolName + "…"
 	}
@@ -105,8 +107,13 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 		if rec.IsToolBackend() {
 			tool.Commands = s.appCommands(ctx, spaceID, rec)
 			tool.Frontend = s.toolFrontend(ctx, rec)
-			if tool.Frontend != "" {
-				tool.Description += " It has a " + tool.Frontend + " frontend: show it to people with ui_compose ({\"component\": \"ToolFrontend\", \"tool\": \"" + rec.ID.String() + "\"})."
+			switch tool.Frontend {
+			case "generative":
+				tool.Description += " It has a generative frontend: show people the results you get from it with frontend_show ({\"tool\": \"" + rec.ID.String() + "\", \"microtool\": <the one you called>, \"args\": <the same arguments>}), not as text."
+			case "":
+				tool.Description += " It has no generative frontend: present its results in Markdown."
+			default:
+				tool.Description += " It has a " + tool.Frontend + " frontend (embed it with ui_compose: {\"component\": \"ToolFrontend\", \"tool\": \"" + rec.ID.String() + "\"}); present its results in Markdown."
 			}
 		}
 		tools = append(tools, tool)
@@ -341,6 +348,8 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 		result, terr = s.proxyCreateTool(ctx, id, argsJSON)
 	case toolName == "ui_compose":
 		result, terr = s.composeUI(ctx, id, roomID, agentName, argsJSON)
+	case toolName == "frontend_show":
+		result, terr = s.showTool(ctx, id, roomID, agentName, argsJSON)
 	default:
 		var tools []vmm.Tool
 		tools, terr = s.SpaceTools(ctx, id, roomID)

@@ -137,6 +137,61 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 	return string(raw), nil
 }
 
+// showInput is an agent's frontend_show call.
+type showInput struct {
+	Tool      string         `json:"tool"`
+	Microtool string         `json:"microtool"`
+	Args      map[string]any `json:"args"`
+	Title     string         `json:"title"`
+	Height    float64        `json:"height"`
+	Room      string         `json:"room"`
+}
+
+// showTool implements the frontend_show agent tool: a tool's own generative
+// frontend, filled with the result an agent got from it (the microtool it
+// called, with the same arguments), posted in the room as the agent's
+// widget. It stays live: people open the tool's interface on that result and
+// keep using it from there.
+func (s *Service) showTool(ctx context.Context, spaceID, roomID identity.ID, agentName, argsJSON string) (string, error) {
+	var in showInput
+	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
+		return "", errs.InvalidArgument("frontend_show arguments must be a JSON object")
+	}
+	tools, err := s.SpaceTools(ctx, spaceID, identity.ID{})
+	if err != nil {
+		return "", err
+	}
+	var t *vmm.Tool
+	for i := range tools {
+		if tools[i].BotID != "" && (tools[i].BotID == in.Tool || strings.EqualFold(tools[i].Name, in.Tool)) {
+			t = &tools[i]
+			break
+		}
+	}
+	if t == nil {
+		return "", errs.InvalidArgument("frontend_show: " + in.Tool + " is no tool of this space")
+	}
+	if t.Frontend != "generative" {
+		return "", errs.InvalidArgument(t.Name + " has no generative frontend: present its result in your message, in Markdown")
+	}
+	if in.Height <= 0 {
+		in.Height = 560
+	}
+	title := in.Title
+	if title == "" {
+		title = t.Name
+	}
+	frontend := map[string]any{"id": "root", "component": "ToolFrontend", "tool": t.BotID, "height": in.Height}
+	if in.Microtool != "" {
+		frontend["microtool"] = in.Microtool
+	}
+	if len(in.Args) > 0 {
+		frontend["args"] = in.Args
+	}
+	compose, _ := json.Marshal(map[string]any{"title": title, "components": []any{frontend}, "room": in.Room})
+	return s.composeUI(ctx, spaceID, roomID, agentName, string(compose))
+}
+
 // agentAccount is the account a composing agent posts as: the execution's
 // agent, else the space's lead.
 func (s *Service) agentAccount(ctx context.Context, agentName string) (identity.ID, error) {

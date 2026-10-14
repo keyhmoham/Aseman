@@ -328,3 +328,55 @@ async def test_a_connected_apps_functions_are_tools_of_their_own(platform: Platf
     sent = next(run for run in platform.tool_runs if run.get("bot") == "bot-wiki")
     assert json.loads(sent["body"]) == {"function": "ask_question", "payload": {"repoName": "vercel/next.js", "question": "What is it?"}}
     assert tool_results(model)["deepwiki__ask_question"] == "It is a web framework."
+
+
+def test_every_agent_is_told_to_show_tool_results_in_the_tools_frontend_first() -> None:
+    from tradera_agents.context import AgentDef
+    from tradera_agents.prompts import system_prompt
+
+    for lead in (True, False):
+        agent = AgentDef(name="a", bot_id="b", account_id="c", vm_id="d", role="lead" if lead else "")
+        prompt = system_prompt(agent, "")
+        rule = prompt[prompt.index("## Showing what tools return"):]
+        # Generative frontend first, Markdown second, for every kind of tool.
+        assert rule.index("frontend_show") < rule.index("Markdown")
+        assert "external MCP" in rule and "managed" in rule and "installed" in rule
+
+
+def test_tool_descriptions_say_how_to_present_their_results() -> None:
+    from tradera_agents.tools import presentation_hint
+
+    shown = presentation_hint({"bot_id": "bot-wx", "frontend": "generative"}, "weather_report")
+    assert "frontend_show(tool='bot-wx', microtool='weather_report'" in shown
+    for spec in ({"bot_id": "bot-n"}, {"bot_id": "bot-n", "frontend": "static"}):
+        assert "Markdown" in presentation_hint(spec, "search")
+
+
+async def test_a_result_is_shown_in_the_tools_own_frontend(platform: Platform, tmp_path: Path) -> None:
+    platform.apps = [{"name": "Weather", "kind": "tool", "bot_id": "bot-wx", "frontend": "generative",
+                      "description": "Weather anywhere.", "commands": [
+                          {"name": "weather_report", "description": "Weather for a city.",
+                           "schema": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}]}]
+    platform.app_reply = '{"content": [{"type": "text", "text": "{\\"temp\\": 21}"}]}'
+    r, model = runner(platform, tmp_path, [
+        call("weather__weather_report", {"city": "New York"}),
+        call("frontend_show", {"tool": "bot-wx", "microtool": "weather_report", "args": {"city": "New York"}}),
+        AIMessage(content="Here is New York's weather: mild, 21°."),
+    ])
+    out = await r.prompt(turn_request(LEAD, "weather in new york?", token="tok-lead", role="lead", message_id="m0"))
+    assert out.status == "done", out
+    assert {"tool": "frontend_show", "args": {"tool": "bot-wx", "microtool": "weather_report", "args": {"city": "New York"}},
+            "by": LEAD["account_id"]} in platform.tool_runs
+    # The model was given the rule.
+    assert "## Showing what tools return" in str(model.seen[0][0].content)
+
+
+def test_frontend_show_survives_an_allow_list() -> None:
+    from langchain_core.tools import StructuredTool
+    from tradera_agents.tools import filter_allowed
+
+    def tool(name: str) -> StructuredTool:
+        return StructuredTool.from_function(func=lambda: "", name=name, description=name)
+
+    kept = filter_allowed([tool("frontend_show"), tool("compose_ui")], ["file_send"])
+    assert [t.name for t in kept] == ["frontend_show"]

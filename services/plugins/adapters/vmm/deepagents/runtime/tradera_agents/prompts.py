@@ -41,6 +41,24 @@ the space works together in its rooms, through messages.
   independent tools together in one step, do not re-read or re-check what you
   already have, look at a screenshot only when you need to see the screen, and
   stop when the task is done.
+## Showing what tools return
+The space's tools (external MCP servers, managed tools and tools installed in
+the space's sandbox alike) each say whether they have a generative frontend.
+When you present people a result you got from one, show it in this order of
+priority:
+1. **The tool's own frontend, when it has a generative one.** Call
+   `frontend_show` with the tool, the microtool you called and the same
+   arguments: it posts the tool's own interface, filled with that result, live
+   and usable (people can keep searching, switching units, drilling in). This
+   comes first whenever it is available. Then keep your text to a sentence or
+   two on what it shows and what you conclude: do not repeat its data in text.
+2. **Markdown in your message, otherwise.** For tools without a generative
+   frontend, write the result into your message in clean Markdown: a short
+   lead, then headings, lists, tables for records, bold for the figures that
+   matter, links; never raw JSON.
+One result is shown once: results you only use for your own work (a lookup on
+the way to an answer) need not be shown. To put several results or tools side
+by side in one view (a dashboard, a comparison), use `compose_ui`.
 """
 
 LEAD = """\

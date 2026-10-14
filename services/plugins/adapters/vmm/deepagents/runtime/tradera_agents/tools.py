@@ -47,12 +47,14 @@ PLATFORM_TOOLS = {
     "routine_delete": "routine_delete",
     # Widgets: A2UI composed from the space's tools' data and frontends.
     "ui_compose": "compose_ui",
+    # A tool's own generative frontend, filled with a result the agent got.
+    "frontend_show": "frontend_show",
 }
 
 # Tools every agent keeps whatever its allowed_tools say: without them it can
 # neither talk nor report.
 CORE_TOOLS = {"send_message", "read_room", "list_team", "ask_user", "send_direct_message", "read_direct_messages",
-              "start_task", "check_tasks", "wait_tasks"}
+              "start_task", "check_tasks", "wait_tasks", "frontend_show"}
 
 _SLUG = re.compile(r"[^a-z0-9_]+")
 # How long check_tasks waits for a first answer before reporting all still running.
@@ -338,7 +340,7 @@ def _app_command_tool(ctx: TurnContext, name: str, spec: dict[str, Any], command
     raw = command.get("schema") if isinstance(command.get("schema"), dict) else {}
     schema = {"type": "object", "properties": raw.get("properties") or {}, "required": raw.get("required") or []}
     description = (str(command.get("description") or "").strip() or f"{function} of {spec.get('name')}.")
-    description = f"[{spec.get('name')}] {description}"
+    description = f"[{spec.get('name')}] {description}\n{presentation_hint(spec, function)}"
 
     async def run(**kwargs: Any) -> str:
         try:
@@ -374,10 +376,19 @@ def _platform_tool(ctx: TurnContext, platform_name: str, name: str, spec: dict[s
     return StructuredTool(name=name, description=description[:4000] or name, args_schema=schema, coroutine=run)
 
 
+def presentation_hint(spec: dict[str, Any], function: str | None = None) -> str:
+    """How to show people what this tool returns (see prompts.COMMON)."""
+    if spec.get("frontend") == "generative":
+        call = f"microtool={function!r}, args=<the same arguments>" if function else "microtool=<the function>, args=<its arguments>"
+        return (f"Show people its result in its own interface: frontend_show(tool={spec['bot_id']!r}, {call}); "
+                "do not restate the result as text.")
+    return "It has no generative frontend: present its result to people in Markdown."
+
+
 def _bot_tool(ctx: TurnContext, name: str, spec: dict[str, Any]) -> BaseTool:
     bot_id = spec["bot_id"]
     description = (spec.get("description") or f"The {spec.get('name')} tool of this space.") + (
-        "\nSend it a request in natural language or its command syntax; returns its reply.")
+        "\nSend it a request in natural language or its command syntax; returns its reply.\n" + presentation_hint(spec))
 
     async def run(request: str) -> str:
         try:

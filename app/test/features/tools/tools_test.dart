@@ -146,6 +146,25 @@ void main() {
       });
     });
 
+    test('a frontend opened on a shown result asks for it, and keeps it',
+        () async {
+      final node = _Node();
+      node.replies['tools.frontend_get'] =
+          (_) => {'mode': 'generative', 'messages': <Object>[]};
+      node.replies['tools.frontend_action'] =
+          (_) => {'data': <String, dynamic>{}};
+      const shown =
+          ShownResult(microtool: 'weather_report', args: {'city': 'New York'});
+      await node.api.frontend('b1', spaceId: 's1', shown: shown);
+      await node.api
+          .frontendAction('b1', 'metric', spaceId: 's1', shown: shown);
+      for (final call in node.calls) {
+        expect(call.$3['microtool'], 'weather_report');
+        expect(call.$3['args'], {'city': 'New York'});
+      }
+      expect(ShownResult.fromProps({'tool': 'b1'}), isNull);
+    });
+
     test('frontend decodes a static Elpian frontend\'s bytecode', () async {
       final node = _Node()
         ..replies['tools.frontend_get'] = (_) => {
@@ -290,7 +309,7 @@ void main() {
         home: Scaffold(
           body: A2UIView(
             messages: surface({'greeting': 'Dashboard'}, embed: true),
-            toolFrontend: (context, botId, height) {
+            toolFrontend: (context, botId, height, shown) {
               embedded.add(botId);
               return SizedBox(
                   height: height, child: Text('frontend of $botId'));
@@ -377,6 +396,53 @@ void main() {
       expect(find.text('Feels like 21°'), findsOneWidget);
       expect(find.text('Mon: 24°'), findsOneWidget);
       expect(find.text('Tue: 19°'), findsOneWidget);
+    });
+
+    testWidgets('a ToolFrontend opens on the result an agent showed',
+        (tester) async {
+      ShownResult? got;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: A2UIView(
+            messages: [
+              {
+                'version': 'v0.9',
+                'createSurface': {
+                  'surfaceId': 'w',
+                  'catalogId':
+                      'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'
+                }
+              },
+              {
+                'version': 'v0.9',
+                'updateComponents': {
+                  'surfaceId': 'w',
+                  'components': [
+                    {
+                      'id': 'root',
+                      'component': 'ToolFrontend',
+                      'tool': 'bot-wx',
+                      'microtool': 'weather_report',
+                      'args': {'city': 'New York'},
+                      'height': 200,
+                    }
+                  ]
+                }
+              },
+            ],
+            toolFrontend: (context, botId, height, shown) {
+              got = shown;
+              return SizedBox(
+                  height: height, child: Text('frontend of $botId'));
+            },
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('frontend of bot-wx'), findsOneWidget);
+      expect(got?.microtool, 'weather_report');
+      expect(got?.args, {'city': 'New York'});
+      expect(find.textContaining('Unknown'), findsNothing);
     });
 
     test('a composed widget message is read from its body', () {

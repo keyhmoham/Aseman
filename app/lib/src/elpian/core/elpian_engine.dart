@@ -289,8 +289,9 @@ class ElpianEngine {
   /// `Dismissible`, `FloatingActionButton`). The generic event wrapper still
   /// registers these nodes for dispatch, but must not add a competing
   /// GestureDetector around them — it would fight theirs in the gesture
-  /// arena and report taps twice.
-  static const Set<String> selfDispatchingTypes = {
+  /// arena and report taps twice. Embedders add the types of their own
+  /// widgets that dispatch their events themselves.
+  static final Set<String> selfDispatchingTypes = {
     'InkWell',
     'GestureDetector',
     'Draggable',

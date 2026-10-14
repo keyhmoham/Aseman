@@ -89,6 +89,7 @@ class LoweringOptions {
     this.showAttribution = true,
     this.expandAll = false,
     this.customComponents = const {},
+    this.dark = false,
   });
 
   final LoweringHooks hooks;
@@ -106,11 +107,113 @@ class LoweringOptions {
   /// Components of a host's own catalog, by type: each lowers a component
   /// (with its node key) to an Elpian node the host's engine renders.
   final Map<String, A2UICustomLowering> customComponents;
+
+  /// Render for a dark surface (the embedding app's dark theme).
+  final bool dark;
 }
 
-/// Lowers a host-defined component to an Elpian node.
+/// Lowers a host-defined component to an Elpian node, with [ctx] for its
+/// data (bindings, function calls), its children and its actions.
 typedef A2UICustomLowering = LoweredNode Function(
-    Map<String, dynamic> component, String key);
+    Map<String, dynamic> component, String key, A2UICustomContext ctx);
+
+/// What a host-defined component sees while it is lowered: the data context
+/// of where it stands (a List item resolves relative paths against its
+/// item), its children, and the surface's action and write hooks.
+class A2UICustomContext {
+  A2UICustomContext._(this._lowerer, this._ctx, this.componentId, this._key);
+
+  final _Lowerer _lowerer;
+  final _Ctx _ctx;
+  final String _key;
+
+  /// The component's id.
+  final String componentId;
+
+  String get surfaceId => _lowerer.surface.id;
+
+  /// The data scope the component stands in ('/' at the top).
+  String get scope => _ctx.scope;
+
+  A2UIPalette get palette => _lowerer.palette;
+
+  /// Evaluates a dynamic value: a {"path"} binding reads the data model, a
+  /// function call runs; anything else is returned as is.
+  Object? value(Object? v) =>
+      _lowerer._eval(_ctx, () => _ctx.dc.evaluate(v), null);
+
+  /// [value], applied through maps and lists too: every binding and call
+  /// inside a literal structure is evaluated (what was read from the data
+  /// model is not evaluated again).
+  Object? resolve(Object? v) {
+    if (isBinding(v) || isFunctionCall(v)) return value(v);
+    if (v is Map) {
+      return <String, dynamic>{
+        for (final e in v.entries) '${e.key}': resolve(e.value)
+      };
+    }
+    if (v is List) return [for (final x in v) resolve(x)];
+    return v;
+  }
+
+  String string(Object? v) => _lowerer._str(_ctx, v);
+
+  num? number(Object? v) =>
+      _lowerer._eval<num?>(_ctx, () => _ctx.dc.number(v), null);
+
+  bool boolean(Object? v, [bool fallback = false]) => v == null
+      ? fallback
+      : _lowerer._eval<bool>(_ctx, () => _ctx.dc.boolean(v), fallback);
+
+  /// The absolute data path of a {"path"} binding (null for other values).
+  String? bindingPath(Object? v) => _ctx.dc.bindingPath(v);
+
+  /// The absolute path of item [key] of the list or map bound by [v] (null
+  /// when [v] is not a binding): the scope actions on that item run in.
+  String? itemScope(Object? v, Object key) {
+    final base = bindingPath(v);
+    if (base == null) return null;
+    return base == '/' ? '/$key' : '$base/$key';
+  }
+
+  /// Lowers the child component [id].
+  LoweredNode child(String id, {String? parent}) => _lowerer.child(
+      id, _ctx.copy(parent: parent ?? 'Custom', interceptPress: null));
+
+  /// Lowers a ChildList: a list of ids, or {componentId, path} repeated per
+  /// item of the bound list.
+  List<LoweredNode> children(Object? spec, {String? parent}) => _lowerer
+      ._children({'component': parent ?? 'Custom', 'children': spec}, _ctx);
+
+  /// Lowers child [id] in the scope of [itemScope] (as a List template).
+  LoweredNode childIn(String id, String itemScope) => _lowerer.child(
+      id,
+      _ctx.copy(
+          dc: _ctx.dc.child(itemScope),
+          scope: itemScope,
+          parent: 'Custom',
+          interceptPress: null));
+
+  /// Fires an A2UI [action] (its context resolved in [scope], default the
+  /// component's).
+  void action(Object? action, {String? scope}) => _lowerer.hooks
+      .action(surfaceId, componentId, action, scope ?? _ctx.scope);
+
+  /// Two-way binding: writes [v] where the binding [binding] points.
+  void write(Object? binding, Object? v) {
+    final path = bindingPath(binding);
+    if (path != null) _lowerer.hooks.write(surfaceId, path, v);
+  }
+
+  /// UI-local state of this component that survives re-lowering.
+  T state<T>(String what, T fallback) =>
+      _lowerer.options.state.get('$_key#$what', fallback);
+
+  void setState(String what, Object? v) {
+    _lowerer.options.state.set('$_key#$what', v);
+    _lowerer.hooks.invalidate();
+  }
+}
 
 class LoweringPlaceholder {
   const LoweringPlaceholder(this.id, this.reason);
@@ -129,36 +232,52 @@ class LoweringResult {
   final List<LoweringPlaceholder> placeholders;
 }
 
-/// The surface palette: Material 3 baseline with the theme's primary color.
+/// The surface palette: Material 3 baseline (light or dark) with the theme's
+/// primary color.
 class A2UIPalette {
   const A2UIPalette({
     required this.primary,
     required this.onPrimary,
     required this.primaryContainer,
+    this.dark = false,
   });
 
   final String primary;
   final String onPrimary;
   final String primaryContainer;
-  final String onSurface = '#1D1B20';
-  final String onSurfaceVariant = '#49454F';
-  final String outline = '#79747E';
-  final String outlineVariant = '#CAC4D0';
-  final String surfaceContainer = '#F7F2FA';
-  final String surfaceContainerHigh = '#ECE6F0';
-  final String error = '#B3261E';
+
+  /// Rendered on a dark surface (the embedding app's dark theme).
+  final bool dark;
+
+  String get onSurface => dark ? '#E6E0E9' : '#1D1B20';
+  String get onSurfaceVariant => dark ? '#CAC4D0' : '#49454F';
+  String get outline => dark ? '#938F99' : '#79747E';
+  String get outlineVariant => dark ? '#49454F' : '#CAC4D0';
+  String get surfaceContainer => dark ? '#211F26' : '#F7F2FA';
+  String get surfaceContainerHigh => dark ? '#2B2930' : '#ECE6F0';
+
+  /// Card faces.
+  String get surface => dark ? '#1D1B20' : '#FFFFFF';
+  String get error => dark ? '#F2B8B5' : '#B3261E';
+  String get errorContainer => dark ? '#601410' : '#FDECEA';
+
+  /// Inline code background.
+  String get codeBackground => dark ? '#2B2930' : '#F1EDF4';
 }
 
 final RegExp _hexColor = RegExp(r'^#[0-9a-fA-F]{6}$');
 
-A2UIPalette paletteFor(Map<String, dynamic> theme) {
+A2UIPalette paletteFor(Map<String, dynamic> theme, {bool dark = false}) {
   final pc = theme['primaryColor'];
-  final primary =
-      pc is String && _hexColor.hasMatch(pc) ? pc.toUpperCase() : '#6750A4';
+  final primary = pc is String && _hexColor.hasMatch(pc)
+      ? pc.toUpperCase()
+      : (dark ? '#D0BCFF' : '#6750A4');
   return A2UIPalette(
     primary: primary,
     onPrimary: _luminance(primary) > 0.5 ? '#1D1B20' : '#FFFFFF',
-    primaryContainer: _mix(primary, '#FFFFFF', 0.82),
+    primaryContainer:
+        _mix(primary, dark ? '#000000' : '#FFFFFF', dark ? 0.6 : 0.82),
+    dark: dark,
   );
 }
 
@@ -323,7 +442,7 @@ LoweringResult lowerSurface(
 
 class _Lowerer {
   _Lowerer(this.surface, this.options)
-      : palette = paletteFor(surface.theme),
+      : palette = paletteFor(surface.theme, dark: options.dark),
         prefix = '${options.keyPrefix ?? 'a2ui'}:${surface.id}';
 
   final A2UISurfaceModel surface;
@@ -443,7 +562,7 @@ class _Lowerer {
           'style': _st({
             'padding': 8,
             'margin': _leafMargin,
-            'backgroundColor': '#FDECEA',
+            'backgroundColor': palette.errorContainer,
             'borderRadius': 8,
           })
         },
@@ -585,7 +704,7 @@ class _Lowerer {
                 'padding': 16,
                 'margin': _leafMargin,
                 'borderRadius': 12,
-                'backgroundColor': '#FFFFFF',
+                'backgroundColor': palette.surface,
                 'borderColor': palette.outlineVariant,
                 'borderWidth': 1,
               }),
@@ -639,7 +758,10 @@ class _Lowerer {
         return _dateTime(c, key, ctx);
       default:
         final custom = options.customComponents[c['component']];
-        if (custom != null) return custom(Map<String, dynamic>.of(c), key);
+        if (custom != null) {
+          return custom(Map<String, dynamic>.of(c), key,
+              A2UICustomContext._(this, ctx, '${c['id']}', key));
+        }
         return _placeholder(
             '${c['id']}', 'Unknown component: ${c['component']}', key);
     }
@@ -727,7 +849,7 @@ class _Lowerer {
     if (i.strike) style['textDecoration'] = 'line-through';
     if (i.code) {
       style['fontFamily'] = 'monospace';
-      style['backgroundColor'] = '#F1EDF4';
+      style['backgroundColor'] = palette.codeBackground;
     }
     if (i.href != null &&
         RegExp(r'^https?://', caseSensitive: false).hasMatch(i.href!)) {

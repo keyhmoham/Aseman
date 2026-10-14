@@ -12,8 +12,8 @@ import (
 	"github.com/tradera/tradera/internal/plugins/api"
 	"github.com/tradera/tradera/internal/plugins/bridge"
 	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/tradera/tradera/pkg/a2ui"
 	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/support/a2ui"
 	"github.com/tradera/tradera/plugins/actions/support/helper"
 	"github.com/tradera/tradera/plugins/actions/tools/models"
 	"github.com/tradera/tradera/plugins/actions/usage/models/usage"
@@ -74,20 +74,8 @@ type Action struct {
 // validate checks a template is something the device can render and the node
 // can run: a root, ids on every component, and microtools the tool has.
 func (t *Template) validate(microtools map[string]bool) error {
-	if len(t.Components) == 0 {
-		return errs.InvalidArgument("the generated frontend has no components")
-	}
-	ids := map[string]bool{}
-	for _, c := range t.Components {
-		id, _ := c["id"].(string)
-		kind, _ := c["component"].(string)
-		if id == "" || kind == "" {
-			return errs.InvalidArgument("every generated component needs an id and a component type")
-		}
-		ids[id] = true
-	}
-	if !ids["root"] {
-		return errs.InvalidArgument("the generated frontend has no root component")
+	if err := a2ui.Check(t.Components); err != nil {
+		return errs.InvalidArgument("the generated frontend: " + err.Error())
 	}
 	for _, b := range t.Data {
 		if !strings.HasPrefix(b.Path, "/") {
@@ -459,9 +447,9 @@ func (s *Service) component(ctx context.Context, c caller, tool *models.Tool, sp
 
 // --- generation -------------------------------------------------------------------
 
-// generationPrompt teaches the model the Template format and the A2UI basic
-// catalog it is written in.
-const generationPrompt = `You design the user interface of a tool, as A2UI v0.9 (basic catalog) components.
+// generationPrompt teaches the model the Template format and the components
+// devices render (a2ui.CatalogPrompt).
+var generationPrompt = `You design the user interface of a tool, as A2UI v0.9 components: rich, clean and useful — charts for series, tables for records, stat tiles for headline numbers, laid out in grids and sections.
 Reply with ONE JSON object, no prose, of this shape:
 {
   "title": "short title",
@@ -469,17 +457,8 @@ Reply with ONE JSON object, no prose, of this shape:
   "data": [ {"path": "/pointer", "microtool": "<name>", "args": {...}} ],
   "actions": { "<event name>": {"microtool": "<name>", "args": {...}, "result": "/pointer", "reload": true} }
 }
-Components (each has "id" and "component"; children are ids):
-- Column / Row: {"children": [ids], "justify": "start|center|end|spaceBetween", "align": "start|center|end|stretch"}
-- Card: {"child": id}   List: {"children": {"componentId": templateId, "path": "/list"}} repeats templateId per item; inside it, paths are relative to the item ("name" not "/name")
-- Text: {"text": "literal" or {"path": "/x"} or {"call": "formatString", "args": {"value": "High ${/x}°"}, "returnType": "string"}, "variant": "h1|h2|h3|h4|h5|body|caption"}
-- Image: {"url": string or {"path": ...}}   Icon: {"name": "refresh|search|info|..."}   Divider: {}
-- Button: {"child": textId, "action": {"event": {"name": "<event>", "context": {"key": {"path": "/form/x"} or literal}}}, "variant": "primary|borderless"}
-- TextField: {"label": "...", "value": {"path": "/form/x"}}   CheckBox: {"label": "...", "value": {"path": ...}}
-- Slider: {"value": {"path": ...}, "min": 0, "max": 100}   ChoicePicker: {"label": "...", "options": [{"label": "...", "value": "..."}], "value": {"path": ...}}
-- Tabs: {"tabs": [{"title": "...", "child": id}]}
-Rules: every value shown from the tool comes from the data model, filled by "data" bindings that call the tool's microtools (only those listed, with arguments matching their schemas); buttons send events that "actions" map to microtools. In action args, {"$context": "key"} takes the event context's value and {"$data": "/pointer"} the data model's. Bind inputs under /form.
-Data in text: a plain string is shown exactly as written, never filled in. Show a value with {"path": "/x"}; mix text and values only with formatString, whose value interpolates ${/path} (or ${name} relative to a List item). Never write {{...}} or ${...} in a plain string. Repeat rows (days, hours, results) with a List over an array, not numbered paths. Keep it compact and useful; no invented data.`
+` + a2ui.CatalogPrompt + `
+Rules: every value shown from the tool comes from the data model, filled by "data" bindings that call the tool's microtools (only those listed, with arguments matching their schemas); buttons (and tappable views' "action") send events that "actions" map to microtools. In action args, {"$context": "key"} takes the event context's value and {"$data": "/pointer"} the data model's. Bind inputs under /form. Repeat rows (days, hours, results) with a List, a Table or a Chart over an array, never numbered paths. Pick the view that fits the data: a Chart for values over time or categories, a Table for records with several fields, Stat tiles for the few numbers that matter most. No invented data.`
 
 // generate asks the node's default model for a frontend, and bills the
 // tokens to the caller.

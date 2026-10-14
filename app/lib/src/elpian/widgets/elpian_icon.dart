@@ -42,6 +42,15 @@ class ElpianIcon {
   /// Whether [name] names a known icon (others render as a star).
   static bool hasIcon(String name) => _iconMap.containsKey(name.toLowerCase());
 
+  /// The icon [name] names (snake_case or camelCase), or null.
+  static IconData? iconData(String name) {
+    final lower = name.toLowerCase();
+    return _iconMap[lower] ??
+        _iconMap[name
+            .replaceAllMapped(RegExp('[A-Z]'), (m) => '_${m[0]}')
+            .toLowerCase()];
+  }
+
   static IconData _getIcon(String name) {
     return _iconMap[name.toLowerCase()] ?? Icons.star;
   }

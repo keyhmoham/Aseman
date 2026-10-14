@@ -16,9 +16,11 @@ A clean, rich weather view for one place at a time.
   `feels_like_text`, `humidity_text`, `wind_text`, `gusts_text`,
   `pressure_text`, `cloud_cover_text`, `precipitation_text`), `today`
   (`range_text`, `precipitation_text`, `uv_index`, `sunrise`, `sunset`),
-  `hours` (a list of `label`, `emoji`, `temperature_text`,
+  `hours` (a list of `label`, `emoji`, `temperature` (a number),
+  `temperature_text`, `precipitation_chance` (a number, %),
   `precipitation_chance_text`) and `days` (a list of `label`, `emoji`,
-  `condition`, `range_text`, `precipitation_text`, `wind_max_text`).
+  `condition`, `high` and `low` (numbers), `range_text`,
+  `precipitation_chance`, `precipitation_text`, `wind_max_text`).
 
 ## Layout (top to bottom, in one Column)
 
@@ -32,18 +34,24 @@ A clean, rich weather view for one place at a time.
      of `temperature_text` (h1) and `condition` (h5);
    - `feels_like_text` and today's `range_text` as captions;
    - `summary` as body text.
-3. **Details** — a Card with two Rows of three small Columns each (a caption
-   label over a value): Humidity / Wind / Gusts, then Pressure / Cloud cover /
-   UV index (`today/uv_index`). Under them, a caption row with the
-   `today` sunrise and sunset (formatString "🌅 ${/report/today/sunrise} · 🌇 ${/report/today/sunset}").
-4. **Next hours** — a Card titled "Next hours" (h5) holding a List over
-   `/report/hours`; each item is a Row: `label` (weight 1), `emoji`,
-   `temperature_text`, and `precipitation_chance_text` as a caption.
-5. **7 days** — a Card titled "7-day forecast" (h5) holding a List over
-   `/report/days`; each item is a Row: `label` (weight 2), `emoji`,
-   `condition` (weight 2, caption), `range_text`; and under the row the
-   `precipitation_text` and `wind_max_text` as one caption (formatString
-   "${precipitation_text} · ${wind_max_text}").
+3. **Details** — a Grid (minColumnWidth 140) of compact Stat tiles, each
+   with its icon: Humidity (`humidity_text`), Wind (`wind_text`), Gusts
+   (`gusts_text`), Pressure (`pressure_text`), Cloud cover
+   (`cloud_cover_text`), and a Gauge for the UV index (`today/uv_index`,
+   min 0, max 11, thresholds 3 → warning, 8 → critical). Under them, a
+   caption with the sunrise and sunset (formatString
+   "🌅 ${/report/today/sunrise} · 🌇 ${/report/today/sunset}").
+4. **Next hours** — a Section titled "Next hours" with an area Chart over
+   `/report/hours`: x `label`, one series `temperature` labelled
+   "Temperature", smooth, height 180; under it a horizontal List over
+   `/report/hours` of small Columns: `label` (caption), `emoji`,
+   `temperature_text`, and `precipitation_chance_text` (caption).
+5. **7 days** — a Section titled "7-day forecast" with a bar Chart over
+   `/report/days` (x `label`, series `high` "High" and `low` "Low", height
+   200), then a Table over `/report/days`, dense, columns: `label` "Day",
+   `emoji` "", `condition`, `range_text` "Temp" (end-aligned),
+   `precipitation_chance` "Rain" (type progress, max 100), `wind_max_text`
+   "Wind".
 6. **Units** — a Row of two borderless Buttons, "°C" and "°F", sending the
    events `metric` and `imperial` with context `{"city": {"path": "/report/place/name"}}`.
 7. A caption at the bottom: "Weather data: Open-Meteo".
@@ -57,5 +65,5 @@ A clean, rich weather view for one place at a time.
 - `imperial`: `weather_report` with `{"city": {"$context": "city"}, "units": "imperial"}`,
   result at `/report`.
 
-Keep it calm and readable: generous spacing, one card per section, no
+Keep it calm and readable: generous spacing, one Card or Section per block, no
 decoration beyond the weather emoji.

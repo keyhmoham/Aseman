@@ -5,7 +5,7 @@ A ready-made Tradera tool, deployed with one script:
 | | |
 |---|---|
 | **Backend** | managed, QuickJS — [`backend.js`](backend.js), run by the node as a Nomad service of the tool runtime image. Weather from [Open-Meteo](https://open-meteo.com) (free, no API key), reached through the runtime's `tradera.fetch`. |
-| **Frontend** | generative — A2UI generated from [`frontend-skill.md`](frontend-skill.md) the first time the tool is opened, kept in the component registry, filled with a fresh `weather_report` on every open: a search row, current conditions, details, the next hours, a 7-day forecast and a °C/°F switch. |
+| **Frontend** | generative — A2UI generated from [`frontend-skill.md`](frontend-skill.md) the first time the tool is opened, kept in the component registry, filled with a fresh `weather_report` on every open: a search row, current conditions, detail tiles with a UV gauge, an hourly temperature chart, a 7-day chart and table, and a °C/°F switch. |
 
 Microtools (agents get them as tools too): `weather_report`, `current_weather`,
 `daily_forecast`, `hourly_forecast`, `search_places`. Each takes a `city` (or

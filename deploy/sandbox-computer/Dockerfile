@@ -5,7 +5,12 @@
 # spaces.ask), so the lead and every specialist work on the same files under
 # /workspace. The deep agents file tools run python3 in the sandbox.
 #
+#   docker build -t tradera/tool-runtime:v1 deploy/tool-runtime
 #   docker build -t tradera/sandbox-computer:latest deploy/sandbox-computer
+# The tool runtime (deploy/tool-runtime), whose files are copied in below.
+ARG TOOL_RUNTIME_IMAGE=tradera/tool-runtime:v1
+FROM ${TOOL_RUNTIME_IMAGE} AS tool-runtime
+
 # The official node image from Amazon's public mirror of Docker Hub: anonymous
 # pulls from Docker Hub itself are rate limited per IP, and CI runners share theirs.
 FROM public.ecr.aws/docker/library/node:22-bookworm
@@ -29,6 +34,9 @@ RUN apt-get update \
 # also writes onto older machines).
 COPY tradera-desktop /usr/local/bin/tradera-desktop
 RUN chmod +x /usr/local/bin/tradera-desktop
+# The tool runtime: tools installed into a space run here, one process per
+# tool, started by the node.
+COPY --from=tool-runtime /opt/tradera-tool-runtime /opt/tradera-tool-runtime
 # /workspace is the space's shared working tree.
 RUN mkdir -p /workspace && git config --system init.defaultBranch main \
  && git config --system --add safe.directory '*'

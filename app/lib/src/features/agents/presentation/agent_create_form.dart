@@ -1,14 +1,12 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../../../core/formatting/billing_units.dart';
 import '../../../data/models/llm_provider.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/app_inputs.dart';
-import '../../miniapps/presentation/miniapp_sandbox_screen.dart';
 
-/// Result of the structured bot creation form. Sent to the backend which
+/// Result of the structured agent creation form (tools have their own form:
+/// features/tools/presentation/tool_create_form.dart). Sent to the backend which
 /// validates it and renders the VM configuration server-side.
 class BotFormResult {
   const BotFormResult({
@@ -64,8 +62,8 @@ class _CreateBotDialog extends StatefulWidget {
 }
 
 class _CreateBotDialogState extends State<_CreateBotDialog> {
-  String kind = 'agent';
-  String vmType = 'langchain';
+  final String kind = 'agent';
+  final String vmType = 'langchain';
 
   final name = TextEditingController();
   final description = TextEditingController();
@@ -82,17 +80,10 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
   int maxTokens = 2000;
   final Set<String> capabilities = {};
 
-  // Miniapp / tool fields.
-  final module = TextEditingController();
-  final customFrontend = TextEditingController();
-  final widgetDsl = TextEditingController();
-  bool useStarterFrontend = true;
-
   // Resources.
   int cpu = 1;
   int memory = 512;
   int disk = 512;
-  bool advanced = false;
 
   @override
   void initState() {
@@ -148,24 +139,13 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
     name.dispose();
     description.dispose();
     instructions.dispose();
-    module.dispose();
-    customFrontend.dispose();
-    widgetDsl.dispose();
     super.dispose();
-  }
-
-  void _selectKind(String value) {
-    setState(() {
-      kind = value;
-      vmType = value == 'agent' ? 'langchain' : 'wasm';
-    });
   }
 
   bool _validate() {
     if (name.text.trim().isEmpty) return false;
     if (kind == 'agent' && instructions.text.trim().isEmpty) return false;
     if (kind == 'agent' && catalog.isNotEmpty && _model == null) return false;
-    if (kind == 'miniapp' && module.text.trim().isEmpty) return false;
     return true;
   }
 
@@ -189,65 +169,21 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
             'tools': const <String>[],
           },
       ],
-      module: kind == 'miniapp' ? module.text.trim() : '',
-      frontend: kind == 'miniapp'
-          ? (useStarterFrontend
-              ? _starterFrontend(name.text.trim())
-              : customFrontend.text.trim())
-          : '',
-      widgetDsl: kind == 'miniapp'
-          ? (widgetDsl.text.trim().isEmpty
-              ? _starterWidgetDsl(name.text.trim())
-              : widgetDsl.text.trim())
-          : '',
       cpu: cpu,
       memoryMb: memory,
       diskMb: disk,
     );
   }
 
-  static String _starterFrontend(String name) {
-    final manifest = {'name': name, 'version': '0.1.0', 'runtime': 'quickjs'};
-    final bundle = kDefaultMiniappTemplate.replaceAll(
-        'Hello from elpian', 'Hello from $name');
-    return jsonEncode({'manifest': manifest, 'source': bundle});
-  }
-
-  static String _starterWidgetDsl(String name) => jsonEncode({
-        'version': 1,
-        'title': name,
-        'refresh_sec': 10,
-        'rows': [
-          {
-            'type': 'status',
-            'label': 'Status',
-            'value': 'pending',
-            'color': 'info'
-          },
-          {'type': 'metric', 'label': 'Backend', 'value': 'wasm'},
-          {
-            'type': 'button',
-            'text': 'Ping backend',
-            'action': {
-              'op': 'ping',
-              'args': {'echo': true}
-            }
-          },
-        ],
-      });
-
   static String _mb(int mb) =>
       mb >= 1024 ? '${compactDecimal(mb / 1024)} GB' : '$mb MB';
 
   @override
   Widget build(BuildContext context) => AppFormFrame(
-        icon: kind == 'agent'
-            ? Icons.smart_toy_outlined
-            : Icons.extension_outlined,
-        title: kind == 'agent' ? 'Create agent' : 'Create miniapp',
-        subtitle: kind == 'agent'
-            ? 'An assistant that works in your rooms with its own model and instructions.'
-            : 'A small app with a backend module and a desk widget.',
+        icon: Icons.smart_toy_outlined,
+        title: 'Create agent',
+        subtitle:
+            'An assistant that works in your rooms with its own model and instructions.',
         submit: 'Create',
         onSubmit: () {
           final result = _submit();
@@ -259,23 +195,11 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
           Navigator.pop(context, result);
         },
         children: [
-          AppSegmentedField<String>(
-            label: 'What are you making?',
-            value: kind,
-            onChanged: _selectKind,
-            choices: const [
-              AppChoice('agent', 'Agent', icon: Icons.smart_toy_outlined),
-              AppChoice('miniapp', 'Miniapp', icon: Icons.extension_outlined),
-            ],
-          ),
           _field(context, 'Name', name,
               hint: 'e.g. Nova Quant', autofocus: true),
           _field(context, 'Description', description,
               hint: 'What does it do?', maxLines: 2),
-          if (kind == 'agent')
-            ..._agentFields(context)
-          else
-            ..._miniappFields(context),
+          ..._agentFields(context),
           _resourcesFields(context),
         ],
       );
@@ -391,35 +315,6 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
       ),
     ];
   }
-
-  List<Widget> _miniappFields(BuildContext context) => [
-        _field(context, 'Wasm module', module,
-            hint: 'module path, e.g. miniapp.wasm',
-            autofocus: kind == 'miniapp'),
-        AppSwitchCard(
-          icon: Icons.auto_awesome_rounded,
-          title: 'Use the starter frontend',
-          subtitle: 'Generates a working app screen that talks to the backend.',
-          value: useStarterFrontend,
-          onChanged: (v) => setState(() => useStarterFrontend = v),
-        ),
-        AppSwitchCard(
-          icon: Icons.code_rounded,
-          title: 'Advanced',
-          subtitle: 'Provide your own frontend bundle and desk widget layout.',
-          value: advanced || !useStarterFrontend,
-          onChanged: (v) => setState(() => advanced = v),
-        ),
-        if (advanced || !useStarterFrontend) ...[
-          if (!useStarterFrontend)
-            _field(context, 'Frontend bundle', customFrontend,
-                hint: 'JSON {manifest, source}', maxLines: 4, mono: true),
-          _field(context, 'Desk widget layout (optional)', widgetDsl,
-              hint: 'JSON widget layout for the room desk',
-              maxLines: 3,
-              mono: true),
-        ],
-      ];
 
   Widget _resourcesFields(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,

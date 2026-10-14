@@ -44,4 +44,18 @@ type CreateBotRequest struct {
 	Skills       []SkillConfig `json:"skills,omitempty"`
 	Module       string        `json:"module,omitempty"`     // miniapp/tool wasm module
 	WidgetDSL    string        `json:"widget_dsl,omitempty"` // miniapp desk-widget DSL
+
+	// Service runs the VM as a service other parts of the node reach by name
+	// (a managed tool backend). Set only by namespaces of this node: the
+	// bots.bot_create action clears it, since a name on the node's network is
+	// not something a user may claim.
+	Service *ServiceSpec `json:"service,omitempty"`
+}
+
+// ServiceSpec names a service VM on a docker network.
+type ServiceSpec struct {
+	// ID is the VM's stable id and its alias on Network.
+	ID      string `json:"id"`
+	Network string `json:"network,omitempty"`
+	Port    int    `json:"port"`
 }

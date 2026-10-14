@@ -11,9 +11,10 @@ RUN --mount=type=secret,id=extra_ca,required=false \
       cp /run/secrets/extra_ca /usr/local/share/ca-certificates/extra_ca.crt && update-ca-certificates; \
     fi
 WORKDIR /src
-# Resolve dependencies first (the elpian path dependency is needed for it).
+# Resolve dependencies first (the native Elpian VM plugin is a path
+# dependency; the web build runs the VM as WebAssembly from assets/elpian).
 COPY pubspec.yaml pubspec.lock* ./
-COPY third_party ./third_party
+COPY packages ./packages
 
 RUN flutter config --no-analytics >/dev/null && flutter pub get
 COPY . .

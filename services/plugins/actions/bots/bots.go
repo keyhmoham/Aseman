@@ -115,7 +115,7 @@ func (s *Service) EnsureVM(ctx context.Context, rec *bot.Bot) error {
 	if rec == nil || rec.VMID == "" {
 		return errs.InvalidArgument("bot has no vm id")
 	}
-	if rec.VMType == bot.VMTypeDeepAgents || rec.VMType == bot.VMType("mcp") {
+	if rec.VMType == bot.VMTypeDeepAgents || rec.VMType == bot.VMTypeMCP || rec.VMType == bot.VMTypeInstalled {
 		vm := s.K.VMMFor(vmm.Type(rec.VMType))
 		if vm == nil {
 			return errs.New(errs.CodeUnavailable, "no "+string(rec.VMType)+" VMM adapter active")
@@ -312,10 +312,22 @@ func (s *Service) CreateBot(ctx context.Context, owner identity.ID, req CreateBo
 		Environment: req.Env, Args: req.Args, YML: req.SpecYML,
 		Labels: map[string]string{"tradera.bot_id": botID.String()},
 	}
+	if sv := req.Service; sv != nil {
+		// Only tool backends get a name on the node's network, and only in
+		// their own namespace of names.
+		if !strings.HasPrefix(sv.ID, "tool-") || sv.Port <= 0 || sv.Port > 65535 {
+			return nil, errs.InvalidArgument("invalid service")
+		}
+		vspec.Labels[vmm.LabelServiceID] = sv.ID
+		vspec.Labels[vmm.LabelNetworkAlias] = sv.ID
+		vspec.Labels[vmm.LabelServicePort] = fmt.Sprint(sv.Port)
+		vspec.Resources.Network = sv.Network
+	}
 	created, err := vm.CreateVM(ctx, vspec)
 	if err != nil {
 		return nil, errs.Wrap(errs.CodeVMM, err, "create bot VM")
 	}
+
 	rec.VMID = created.ID
 	rec.Status = bot.StatusFromVMM(string(created.Status))
 	rec.StartedAt = &now
@@ -518,7 +530,7 @@ func (s *Service) SendMessage(ctx context.Context, botID identity.ID, body strin
 			return "", errs.New(errs.CodeUnavailable, "agent routing not wired")
 		}
 		return s.Agents.AskDirect(ctx, helper.Actor(ctx), botID, body, attachments)
-	case bot.VMTypeWASM, bot.VMType("mcp"):
+	case bot.VMTypeWASM, bot.VMTypeMCP, bot.VMTypeInstalled:
 		// A wasm miniapp's ask host function, or a remote MCP tool's call.
 		if wm, ok := vm.(interface {
 			Send(ctx context.Context, vmID, message string) (string, error)
@@ -602,6 +614,8 @@ func (a *botCreateAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
 	}
+	// A name on the node's network is the node's to give (see ServiceSpec).
+	in.Service = nil
 	rec, err := a.s.CreateBot(ctx, req.Caller.ID, in)
 	if err != nil {
 		return nil, err

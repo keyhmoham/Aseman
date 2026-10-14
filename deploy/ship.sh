@@ -40,6 +40,7 @@ IMAGES=(
   "web|./app|tradera/flutter-web:latest"
   "agents|./services/plugins/adapters/vmm/deepagents/runtime|tradera/deepagents:v1"
   "sandbox|./deploy/sandbox-computer|tradera/sandbox-computer:latest"
+  "tools|./deploy/tool-runtime|tradera/tool-runtime:v1"
   "memory|./deploy/openviking|tradera/openviking:v1"
   "db|./deploy/postgres|tradera/postgres:16-pgvector"
 )
@@ -49,15 +50,21 @@ pids=()
 build() { # name context
   local name="$1" ctx="$2"
   local start=$SECONDS
-  if docker build --platform "$PLATFORM" -t "$REGISTRY/tradera-prod-$name:$TAG" "$ctx" >"$logdir/$name.log" 2>&1; then
+  local args=()
+  # The sandbox computer carries the tool runtime, built first.
+  [ "$name" = sandbox ] && args=(--build-arg "TOOL_RUNTIME_IMAGE=$REGISTRY/tradera-prod-tools:$TAG")
+  if docker build --platform "$PLATFORM" ${args[@]+"${args[@]}"} -t "$REGISTRY/tradera-prod-$name:$TAG" "$ctx" >"$logdir/$name.log" 2>&1; then
     echo "    built $name in $((SECONDS - start))s"
   else
     echo "    BUILD FAILED: $name" >&2; tail -30 "$logdir/$name.log" >&2; return 1
   fi
 }
+echo "==> building the tool runtime (the sandbox computer copies it)"
+build tools ./deploy/tool-runtime || exit 1
 echo "==> building (in parallel)"
 for entry in "${IMAGES[@]}"; do
   IFS='|' read -r name ctx _ <<<"$entry"
+  [ "$name" = tools ] && continue
   build "$name" "$ctx" & pids+=($!)
 done
 fail=0; for p in "${pids[@]}"; do wait "$p" || fail=1; done

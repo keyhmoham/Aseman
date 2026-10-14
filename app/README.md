@@ -27,7 +27,12 @@ the backend always sees the signed-in user's identity.
 
 ## Elpian miniapps
 
-The `elpian_ui` package is vendored under `third_party/elpian`. A miniapp is a
+The Elpian engine is part of the app, not a dependency: its Flutter host is
+copied into `lib/src/elpian` (rendering engine, Elpian VM and QuickJS
+runtimes, miniapp host, A2UI renderer, the Godot `Scene3D` widget — see its
+README), its native VM library into `packages/elpian_vm_native`, the
+embedded Godot engine into `packages/elpian_godot_native`, and its web
+runtimes into `assets/elpian`. A miniapp is a
 bot whose `frontend` field holds a `{ manifest, source }` bundle. The
 `MiniappSandboxScreen` runs the bundle inside an `ElpianVmWidget` (QuickJS
 runtime) with host handlers wired by `features/miniapps/elpian/miniapp_bridge.dart`:
@@ -38,6 +43,24 @@ runtime) with host handlers wired by `features/miniapps/elpian/miniapp_bridge.da
 | `host.request`  | `message.ask` (alias)                |
 | `host.send`     | `message.send` (fire-and-forget)     |
 | `ctx.user`      | the signed-in user context           |
+
+## Tools
+
+Tools are created from one form (`features/tools/presentation/tool_create_form.dart`,
+"My bots → Create → Tool") with a **backend** — external (an MCP server),
+managed (an Elpian VM, QuickJS or docker backend the node runs) or installed
+(into each space's sandbox) — and a **frontend**:
+
+* **static** — an Elpian miniapp the app runs on the Elpian VM (bytecode) or
+  QuickJS, with `ToolFrontendHost` as its host: `tool.call(microtool, args)`,
+  `tool.microtools()`, `tool.context()`;
+* **generative** — A2UI the node generated from the deployer's skill (cached
+  in its component registry) rendered by `A2UIView`, its buttons running
+  microtools through `tools.frontend_action`.
+
+`ToolScreen` opens a tool in a space; agents' composed widgets (`ui` room
+messages) render with `ComposedWidgetCard`, whose `ToolFrontend` components
+embed tools' own frontends.
 
 ## Architecture
 

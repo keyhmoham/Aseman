@@ -24,6 +24,7 @@ import '../../miniapps/presentation/widget_dsl_renderer.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import '../../search_feed/presentation/post_editor.dart';
 import '../../search_feed/presentation/rich_post_content.dart';
+import '../../tools/presentation/tool_screen.dart';
 import 'space_settings_panel.dart';
 
 class WorkspaceScreen extends StatefulWidget {
@@ -505,11 +506,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   }
 
   void openMiniapp(Bot bot) {
+    final spaceId = _spaceFor(workspace)?.id ?? '';
     Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => MiniappSandboxScreen(
-            dependencies: widget.dependencies,
-            bot: bot,
-            spaceId: _spaceFor(workspace)?.id ?? '')));
+        builder: (_) => bot.isUnifiedTool
+            // A tool, through its static or generated frontend, in this space.
+            ? ToolScreen(
+                dependencies: widget.dependencies, bot: bot, spaceId: spaceId)
+            : MiniappSandboxScreen(
+                dependencies: widget.dependencies,
+                bot: bot,
+                spaceId: spaceId)));
   }
 
   /// Opens the shared per-space sandbox as a full file-explorer miniapp. The
@@ -1304,14 +1310,12 @@ class _LibraryPanel extends StatelessWidget {
             final bot = tools[index];
             return _LibraryToolCard(
                 label: bot.name,
-                subtitle:
-                    '${bot.isMiniapp ? 'Miniapp' : 'Tool'} · ${bot.status}',
+                subtitle: '${bot.toolModeLabel} · ${bot.status}',
                 icon: Icons.widgets_outlined,
                 dependencies: dependencies,
                 spaceId: spaceId,
                 onTap: () => onOpenMiniapp?.call(bot),
-                onRemove:
-                    onRemoveBot == null ? null : () => onRemoveBot!(bot));
+                onRemove: onRemoveBot == null ? null : () => onRemoveBot!(bot));
           });
     }
     return const _LibraryEmpty(

@@ -1,0 +1,5 @@
+# Elpian's own tests for the engine copied into lib/src/elpian, analyzed the
+# way the engine is (see lib/src/elpian/analysis_options.yaml).
+analyzer:
+  errors:
+    deprecated_member_use: ignore

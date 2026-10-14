@@ -45,6 +45,7 @@ Run the entire platform with a single command. Docker with the Compose plugin is
 | **`nomad`** | Nomad agent executing bot and agent workloads | Internal |
 | **`sandbox-computer`** | Builds the base sandbox image for spaces, then exits | — |
 | **`deepagents`** | Builds the LangChain/LangGraph agent runtime image, then exits | — |
+| **`tool-runtime`** | Runs tool backends written for the Elpian VM or QuickJS (Nomad runs its image for managed tools, sandboxes carry it for installed ones); this service is the node's tool compiler | Internal |
 | **`openviking`** | Self-hosted [OpenViking](https://openviking.ai): the agents' long-term memory | Internal |
 | **`timeline-db`** | Creates the timelines' database on `postgres` if it is missing, then exits | — |
 | **`timeline`** | Self-hosted [Utopia](https://github.com/deeplethe/utopia): each project's dated timeline, on `postgres` | Internal |
@@ -111,6 +112,25 @@ Every project keeps a dated timeline of its work and events, and every agent can
 - **Isolation:** each project is a knowledge base of its own in Utopia; an agent never names the project or holds a Utopia key.
 - **No models needed:** events go in as structured statements, so building and reading the timeline uses no LLM.
 - **Setup:** nothing to configure: the node's Utopia password (`TRADERA_TIMELINE_PASSWORD`) is generated into `.env` on first start, and the node creates its account, each project's knowledge base and its read token itself. Set `TRADERA_TIMELINE_URL=` (empty) in `.env` to turn timelines off. Admins see each feed's progress with `timeline.status`.
+
+## Tools
+
+Users create tools in the Tools panel from one form with a **backend** and a
+**frontend**:
+
+- **Backend:** *external* (an MCP server), *managed* (an Elpian VM, QuickJS or
+  docker backend the node runs as a Nomad service, aware of which person or
+  agent calls it from which space and room) or *installed* (installed into the
+  sandbox of each space that adds it, serving only that space, wired through
+  the sandbox proxy). Every backend's microtools are agents' tools and the
+  frontend's API alike.
+- **Frontend:** *static* (an Elpian miniapp on the Elpian VM or QuickJS) or
+  *generative* (A2UI generated from a skill on first use, cached in the
+  component registry and filled with fresh data). Agents combine tools'
+  frontends and data into bigger widgets (`ui_compose`).
+
+The Elpian engine is part of the app (`app/lib/src/elpian`), not a
+dependency. See [`services/README.md`](services/README.md#tools-one-form-three-backends-two-frontends).
 
 ## LLM Providers & Billing
 

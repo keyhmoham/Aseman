@@ -9,6 +9,8 @@ analyzer:
     - ios/**
     - web/**
     - linux/**
+    # The native Elpian VM plugin (Rust; its guest-side Dart is VM input).
+    - packages/**
   errors:
     deprecated_member_use: ignore
 linter:

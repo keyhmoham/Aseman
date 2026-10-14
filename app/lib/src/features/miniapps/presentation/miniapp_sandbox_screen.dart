@@ -1,11 +1,11 @@
 import 'dart:convert';
 
-import 'package:elpian_ui/elpian_ui.dart';
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/bot.dart';
+import '../../../elpian/elpian.dart';
 import '../elpian/miniapp_bridge.dart';
 import 'miniapp_theme.dart';
 

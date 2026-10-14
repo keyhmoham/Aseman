@@ -260,17 +260,34 @@ func (a *Adapter) createContainer(ctx context.Context, spec vmm.VMSpec) (vmm.VM,
 		}
 		hostConfig["NetworkMode"] = a.network
 	}
+	labels := map[string]string{
+		"tradera.vm":    spec.Name,
+		"tradera.image": spec.ImageRef,
+		"tradera.type":  string(spec.Type),
+		"tradera.vmid":  vmID, // enables restart rehydration by label
+	}
 	create := map[string]any{
-		"Image": spec.ImageRef,
-		"Cmd":   spec.Args,
-		"Env":   envSlice(spec.Environment),
-		"Labels": map[string]string{
-			"tradera.vm":    spec.Name,
-			"tradera.image": spec.ImageRef,
-			"tradera.type":  string(spec.Type),
-			"tradera.vmid":  vmID, // enables restart rehydration by label
-		},
+		"Image":      spec.ImageRef,
+		"Cmd":        spec.Args,
+		"Env":        envSlice(spec.Environment),
+		"Labels":     labels,
 		"HostConfig": hostConfig,
+	}
+	// A service VM (a managed tool backend) answers by name on its network.
+	if alias := spec.Labels[vmm.LabelNetworkAlias]; alias != "" {
+		network := spec.Resources.Network
+		if network == "" {
+			network = a.network
+		}
+		if network != "" {
+			if err := a.ensureNetwork(ctx, network); err != nil {
+				return vmm.VM{}, err
+			}
+			hostConfig["NetworkMode"] = network
+			create["NetworkingConfig"] = map[string]any{"EndpointsConfig": map[string]any{network: map[string]any{"Aliases": []string{alias}}}}
+		}
+		labels[vmm.LabelNetworkAlias] = alias
+		labels[vmm.LabelServicePort] = spec.Labels[vmm.LabelServicePort]
 	}
 	b, err := a.do(ctx, http.MethodPost, "/containers/create?name=tradera-"+spec.Name, create)
 	if err != nil {
@@ -287,7 +304,7 @@ func (a *Adapter) createContainer(ctx context.Context, spec vmm.VMSpec) (vmm.VM,
 	a.specs[vmID] = spec
 	a.mu.Unlock()
 	return vmm.VM{ID: vmID, Name: spec.Name, Type: spec.Type, Status: vmm.StatusCreating,
-		ImageRef: spec.ImageRef, Resources: spec.Resources, CreatedAt: time.Now().UTC()}, nil
+		ImageRef: spec.ImageRef, Address: vmm.ServiceAddress(labels), Resources: spec.Resources, CreatedAt: time.Now().UTC()}, nil
 }
 
 // ensureNetwork creates a user-defined docker network when it does not exist,
@@ -428,7 +445,7 @@ func (a *Adapter) GetVM(ctx context.Context, id string) (vmm.VM, error) {
 	}
 	status := statusFromDocker(spec.State.Status)
 	return vmm.VM{ID: id, Name: spec.Config.Labels["tradera.vm"], Type: vmm.Type(spec.Config.Labels["tradera.type"]),
-		Status: status, ImageRef: spec.Config.Image, CreatedAt: time.Now().UTC()}, nil
+		Status: status, ImageRef: spec.Config.Image, Address: vmm.ServiceAddress(spec.Config.Labels), CreatedAt: time.Now().UTC()}, nil
 }
 
 // ListVMs implements vmm.VMM.

@@ -105,18 +105,18 @@ void main() {
     expect(bridge.buildHostHandlers().containsKey('server.call'), isTrue);
   });
 
-  test('web index.html includes the elpian QuickJS/wasm runtimes', () {
+  test('web index.html includes the Elpian VM and QuickJS web runtimes', () {
     // Without these the browser throws "QuickJS web runtime not loaded" and
     // miniapps (Sandbox Explorer included) cannot boot on the web target.
     final index = File('web/index.html').readAsStringSync();
-    expect(
-        index,
-        contains(
-            'assets/packages/elpian_ui/assets/web_runtime/quickjs_web_runtime.js'));
-    expect(
-        index,
-        contains(
-            'assets/packages/elpian_ui/assets/web_runtime/elpian_wasm_loader.js'));
+    for (final runtime in const [
+      'elpian/web_runtime/quickjs_web_runtime.js',
+      'elpian/web_runtime/elpian_wasm_loader.js',
+    ]) {
+      expect(index, contains('assets/assets/$runtime'));
+      // Served from the app's own assets (lib/src/elpian is part of the app).
+      expect(File('assets/$runtime').existsSync(), isTrue, reason: runtime);
+    }
     expect(index, contains('script type="module"'));
   });
 }

@@ -220,8 +220,13 @@ func (s *Service) BillUsage(ctx context.Context, customer, botID identity.ID, se
 	}
 	// A connected app (a remote MCP server) runs on its provider's machines,
 	// not this node's: calling it costs the project nothing here.
-	if rec.VMType == bot.VMType("mcp") {
+	if rec.VMType == bot.VMTypeMCP {
 		return nil
+	}
+	// A tool installed into a space runs on that space's computer, which is
+	// billed for the time it is awake: only its flat price per call is due.
+	if rec.VMType == bot.VMTypeInstalled {
+		seconds = 0
 	}
 	// An agent on the deep agents runtime bills each of its turns where the
 	// turn runs (with its own duration and tokens); billing it again here
@@ -256,8 +261,11 @@ func (s *Service) BillAndRecordUsage(ctx context.Context, customer, botID identi
 	if rec.IsSandbox() {
 		return usage.Delta{}, nil // billed by awake time, see BillUsage
 	}
-	if rec.VMType == bot.VMType("mcp") {
+	if rec.VMType == bot.VMTypeMCP {
 		return usage.Delta{}, nil // a connected app is free to call, see BillUsage
+	}
+	if rec.VMType == bot.VMTypeInstalled {
+		seconds = 0 // runs on the space's computer, see BillUsage
 	}
 	cost := s.costFor(ctx, rec)
 	res, err := rec.ParseResources()

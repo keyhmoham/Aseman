@@ -58,10 +58,29 @@ services:
   # shell and files of a space's agents). Built here so the node can create
   # sandboxes from it; the container itself exits immediately.
   sandbox-computer:
-    build: ./deploy/sandbox-computer
+    build:
+      context: ./deploy/sandbox-computer
+      # The tool runtime below, copied into the image: tools installed into a
+      # space run inside its sandbox on it.
+      additional_contexts:
+        tool-runtime-image: service:tool-runtime
+      args:
+        TOOL_RUNTIME_IMAGE: tool-runtime-image
     image: tradera/sandbox-computer:latest
     command: ["true"]
     restart: "no"
+
+  # The tool runtime: runs tool backends written for the Elpian VM (Dart or
+  # the Elpian JS subset) or QuickJS and serves their microtools over MCP. The
+  # node runs it as Nomad services for managed tools; the sandbox computer
+  # carries it for installed tools; and this service runs it as the node's
+  # compiler (Elpian frontends to bytecode, backends' microtool lists). The
+  # tag is pinned because Nomad always pulls ":latest" images.
+  tool-runtime:
+    build: ./deploy/tool-runtime
+    image: tradera/tool-runtime:v1
+    command: ["node", "server.mjs", "--compiler"]
+    restart: unless-stopped
 
   # The deep agents runtime (LangChain deepagents on LangGraph) that runs every
   # agent. Built here; the node runs it as a Nomad service on the stack's
@@ -145,6 +164,8 @@ services:
         condition: service_completed_successfully
       deepagents:
         condition: service_completed_successfully
+      tool-runtime:
+        condition: service_started
       openviking:
         condition: service_healthy
       timeline:
@@ -188,6 +209,13 @@ services:
       TRADERA_TIMELINE_URL: ${TRADERA_TIMELINE_URL-http://timeline:1516}
       TRADERA_TIMELINE_EMAIL: ${TRADERA_TIMELINE_EMAIL:-timeline@tradera.local}
       TRADERA_TIMELINE_PASSWORD: ${TRADERA_TIMELINE_PASSWORD:?set TRADERA_TIMELINE_PASSWORD in .env (./tradera.sh up generates one)}
+      # Tools: the image managed Elpian VM / QuickJS backends run in, the
+      # network they join (where the node reaches them by name), the node as
+      # they reach it, and the compiler above.
+      TRADERA_TOOL_RUNTIME_IMAGE: ${TRADERA_TOOL_RUNTIME_IMAGE:-tradera/tool-runtime:v1}
+      TRADERA_TOOL_RUNTIME_NETWORK: ${TRADERA_TOOL_RUNTIME_NETWORK:-tradera_default}
+      TRADERA_TOOL_NODE_URL: ${TRADERA_TOOL_NODE_URL:-http://tradera:8080}
+      TRADERA_TOOL_COMPILER_URL: ${TRADERA_TOOL_COMPILER_URL-http://tool-runtime:8790}
       # Allow MCP tools on private addresses (e.g. MCP servers on this stack's
       # network). Off by default: tool URLs are user-supplied.
       TRADERA_MCP_ALLOW_PRIVATE: ${TRADERA_MCP_ALLOW_PRIVATE:-false}

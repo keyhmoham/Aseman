@@ -26,7 +26,7 @@ class ToolFrontendView extends StatefulWidget {
     this.userId = '',
     this.regenerate = false,
     this.shown,
-    this.auto = false,
+    this.template,
     this.onLoaded,
   });
 
@@ -43,9 +43,9 @@ class ToolFrontendView extends StatefulWidget {
   /// The result a generated frontend opens on (an agent's frontend_show).
   final ShownResult? shown;
 
-  /// A tool without a generative frontend shows one the node generates for
-  /// it (on first use; from the component registry after that).
-  final bool auto;
+  /// A frontend designed for one request (a desk window's own), shown
+  /// instead of the tool's.
+  final Map<String, dynamic>? template;
   final ValueChanged<ToolFrontendPayload>? onLoaded;
 
   @override
@@ -59,10 +59,6 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
   ToolFrontendPayload? _payload;
   Object? _error;
   bool _loading = true;
-
-  /// Showing an interface the node generated: asked for, or the tool turned
-  /// out to have no frontend of its own.
-  late bool _auto = widget.auto;
 
   @override
   void initState() {
@@ -91,14 +87,8 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
           roomId: widget.roomId,
           regenerate: widget.regenerate,
           shown: widget.shown,
-          auto: _auto);
+          template: widget.template);
       if (!mounted) return;
-      if (payload.mode == FrontendMode.none && !_auto) {
-        // No frontend of its own: an interface is generated for it.
-        _auto = true;
-        await _load();
-        return;
-      }
       setState(() {
         _payload = payload;
         _loading = false;
@@ -121,7 +111,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
           context: action.context,
           data: data,
           shown: widget.shown,
-          auto: _auto);
+          template: widget.template);
 
   @override
   Widget build(BuildContext context) {
@@ -135,10 +125,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 const CircularProgressIndicator(),
                 const SizedBox(height: 14),
-                Text(
-                    _auto
-                        ? 'Generating an interface for this tool…'
-                        : 'Opening…',
+                Text('Opening…',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: scheme.onSurfaceVariant)),
               ])));

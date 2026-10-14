@@ -318,12 +318,15 @@ acts only in the space it was called from.
 | `generative` | A2UI generated from the deployer's skill the first time anyone opens it, kept in the **component registry** (`tool_components`, keyed by the skill's version and the backend's microtools) and served from there afterwards, filled with fresh microtool data per request; its buttons map to microtools |
 
 A tool without a generative frontend still gets an interface where one is
-needed: `tools.frontend_get` with `auto` generates one from the tool's own
-microtools (cached in the component registry like any generated frontend).
-Agents' results always open in an interface on the desk: the tool's
-generative frontend, else an auto one; opening a tool itself runs its static
-frontend, serves its generative one (generated the first time) or, without
-either, an auto one.
+needed, designed for the request at hand rather than for the tool: when an
+agent shows a result (`frontend_show` with the person's `request`), or a
+person opens such a tool on the desk, the node designs a template for that
+request around the actual result (`tools.GenerateWindowFrontend`) and keeps
+it with that one desk window; nothing is cached for the tool, and another
+request gets its own. `tools.frontend_get` / `frontend_action` fill and run
+a window's own template. Opening a tool itself runs its static frontend or
+serves its generative one (from the component registry, generated the
+first time).
 
 Agents get every tool's microtools as tools (`spaces.tools_list`, through
 `spaces.ask`). Tools' interfaces never go into the chat: they open as card

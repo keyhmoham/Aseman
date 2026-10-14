@@ -2,6 +2,8 @@ package spaces
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 
 	"github.com/tradera/tradera/internal/plugins/api"
 	"github.com/tradera/tradera/internal/plugins/identity"
@@ -70,8 +72,25 @@ func (s *Service) resolveDeskOpens(ctx context.Context, spaceID identity.ID, ops
 			return errs.InvalidArgument(t.Name + " has no microtools to build an interface from; present its result in your message, in Markdown")
 		}
 		ops[i].Tool, ops[i].Name, ops[i].Frontend = t.BotID, t.Name, deskFrontend(t.Frontend, ops[i])
+		if ops[i].Frontend == DeskAutoFrontend && len(ops[i].Template) == 0 {
+			// Designed for the request once the window is on the desk.
+			if strings.TrimSpace(ops[i].Request) == "" {
+				ops[i].Request = defaultRequest(t.Name, ops[i])
+			}
+			ops[i].Status = DeskDesigning
+		}
 	}
 	return nil
+}
+
+// defaultRequest stands for a request nobody put in words: showing the
+// result, or the tool itself.
+func defaultRequest(tool string, op DeskOp) string {
+	if op.Microtool == "" {
+		return "Open " + tool + ": what it offers and its most useful results."
+	}
+	args, _ := json.Marshal(op.Args)
+	return "Show the result of " + tool + "'s " + op.Microtool + " for " + string(args) + "."
 }
 
 // deskFrontend is the frontend a window opened by [op] shows, for a tool
@@ -138,6 +157,11 @@ func (a *deskUpdateAction) Handle(ctx context.Context, req *api.ActionRequest) (
 	if err != nil {
 		return nil, err
 	}
+	for _, op := range in.Ops {
+		if op.Op == "designed" {
+			return nil, errs.InvalidArgument("designs are the node's to save")
+		}
+	}
 	if err := a.s.resolveDeskOpens(ctx, spaceID, in.Ops); err != nil {
 		return nil, err
 	}
@@ -145,5 +169,6 @@ func (a *deskUpdateAction) Handle(ctx context.Context, req *api.ActionRequest) (
 	if err != nil {
 		return nil, err
 	}
+	a.s.designOpened(ctx, spaceID, roomID, d, ids, req.Caller.ID.String())
 	return helper.JSON(map[string]any{"desktop": d, "ids": ids})
 }

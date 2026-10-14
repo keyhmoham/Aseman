@@ -10,6 +10,7 @@ import (
 
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/errs"
+	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
 )
 
 // deskRoom is the desk an agent tool acts on: the room it names, else the
@@ -31,7 +32,11 @@ func deskRoom(roomID identity.ID, room string) (identity.ID, error) {
 func windowJSON(d Desktop, id string) map[string]any {
 	for _, w := range d.Windows {
 		if w.ID == id {
-			return map[string]any{"id": w.ID, "title": w.Title, "frontend": w.Frontend, "x": w.X, "y": w.Y, "w": w.W, "h": w.H}
+			out := map[string]any{"id": w.ID, "title": w.Title, "frontend": w.Frontend, "x": w.X, "y": w.Y, "w": w.W, "h": w.H}
+			if w.Frontend == DeskAutoFrontend {
+				out["designed_for"], out["status"] = w.Request, w.Status
+			}
+			return out
 		}
 	}
 	return nil
@@ -49,6 +54,7 @@ func (s *Service) showTool(ctx context.Context, spaceID, roomID identity.ID, age
 		Microtool string         `json:"microtool"`
 		Args      map[string]any `json:"args"`
 		Title     string         `json:"title"`
+		Request   string         `json:"request"`
 		X         *float64       `json:"x"`
 		Y         *float64       `json:"y"`
 		W         *float64       `json:"w"`
@@ -62,7 +68,7 @@ func (s *Service) showTool(ctx context.Context, spaceID, roomID identity.ID, age
 	if err != nil {
 		return "", err
 	}
-	ops := []DeskOp{{Op: "open", Tool: in.Tool, Title: in.Title, Microtool: in.Microtool, Args: in.Args, X: in.X, Y: in.Y, W: in.W, H: in.H}}
+	ops := []DeskOp{{Op: "open", Tool: in.Tool, Title: in.Title, Request: in.Request, Microtool: in.Microtool, Args: in.Args, X: in.X, Y: in.Y, W: in.W, H: in.H}}
 	if err := s.resolveDeskOpens(ctx, spaceID, ops); err != nil {
 		return "", err
 	}
@@ -70,6 +76,7 @@ func (s *Service) showTool(ctx context.Context, spaceID, roomID identity.ID, age
 	if err != nil {
 		return "", err
 	}
+	s.designOpened(ctx, spaceID, target, d, ids, s.turnPayer(ctx))
 	out, _ := json.Marshal(map[string]any{"ok": true, "window": windowJSON(d, ids[0]), "desk": d.Summary()})
 	return string(out), nil
 }
@@ -158,4 +165,19 @@ func (s *Service) deskNote(ctx context.Context, spaceID, roomID identity.ID) str
 		return ""
 	}
 	return d.Summary()
+}
+
+// turnPayer is who pays for what an agent's turn has designed: the person
+// whose request it is, else the agent's own account.
+func (s *Service) turnPayer(ctx context.Context) string {
+	e := vmm.ExecutionFrom(ctx)
+	if _, err := identity.Parse(e.ActorID); err == nil {
+		return e.ActorID
+	}
+	if id, err := identity.Parse(e.AgentID); err == nil && s.Bots != nil {
+		if rec, err := s.Bots.GetBot(ctx, id); err == nil {
+			return rec.AccountID.String()
+		}
+	}
+	return ""
 }

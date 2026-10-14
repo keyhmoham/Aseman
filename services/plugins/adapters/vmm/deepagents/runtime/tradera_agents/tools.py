@@ -384,10 +384,12 @@ def presentation_hint(spec: dict[str, Any], function: str | None = None) -> str:
     """How to show people what this tool returns (see prompts.COMMON)."""
     if spec.get("frontend") or spec.get("commands"):
         call = f"microtool={function!r}, args=<the same arguments>" if function else "microtool=<the function>, args=<its arguments>"
-        where = ("its own generative frontend" if spec.get("frontend") == "generative"
-                 else "an interface generated for it automatically")
-        return (f"Show people its result as a card window on the desk, in {where}: "
-                f"frontend_show(tool={spec['bot_id']!r}, {call}); do not restate the result as text.")
+        if spec.get("frontend") == "generative":
+            return (f"Show people its result as a card window on the desk, in its own generative frontend: "
+                    f"frontend_show(tool={spec['bot_id']!r}, {call}); do not restate the result as text.")
+        return (f"Show people its result as a card window on the desk, in an interface designed for their request: "
+                f"frontend_show(tool={spec['bot_id']!r}, {call}, request=<what they asked, in their words>); "
+                "do not restate the result as text.")
     return "It has no interface to show results in: present its result to people in Markdown."
 
 

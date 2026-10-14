@@ -133,6 +133,8 @@ class DeskController extends ChangeNotifier {
   Future<String?> open(String tool,
       {String kind = '',
       Map<String, dynamic> widget = const {},
+      String request = '',
+      Map<String, dynamic> template = const {},
       String title = '',
       String microtool = '',
       Map<String, dynamic> args = const {},
@@ -142,6 +144,8 @@ class DeskController extends ChangeNotifier {
       DeskOps.open(tool,
           kind: kind,
           widget: widget,
+          request: request,
+          template: template,
           title: title,
           microtool: microtool,
           args: args,
@@ -155,6 +159,8 @@ class DeskController extends ChangeNotifier {
   Future<String?> openPin(DeskPin pin) => open(pin.tool,
       kind: pin.kind,
       widget: pin.widget,
+      request: pin.request,
+      template: pin.template,
       title: pin.title,
       microtool: pin.microtool,
       args: pin.args,
@@ -179,6 +185,9 @@ class DeskController extends ChangeNotifier {
             x.id == id ? x.copyWith(z: top + 1) : x
         ]));
   }
+
+  /// Designs a designed window again (after it failed, or to start over).
+  Future<void> redesign(String id) => _send([DeskOps.redesign(id)]);
 
   Future<void> close(String id) {
     if (_maximized == id) _maximized = null;

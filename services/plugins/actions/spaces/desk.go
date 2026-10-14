@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tradera/tradera/internal/plugins/bridge"
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/errs"
 	"github.com/tradera/tradera/pkg/jsonpatch"
@@ -49,14 +50,23 @@ const (
 )
 
 // DeskAutoFrontend is the frontend of a window that shows an interface the
-// node generated for a tool without a generative one (tools.frontend_get
-// with auto).
+// node designed for one request, for a tool without a generative frontend
+// of its own (see designWindow). The design is the window's alone: kept
+// with it, never cached for the tool.
 const DeskAutoFrontend = "auto"
+
+// DeskDesigning is the status of a designed window whose design is under way.
+const DeskDesigning = "designing"
 
 // DeskWindow is a tool's frontend open on the desk, optionally on one result
 // (the microtool called and its arguments).
 type DeskWindow struct {
-	ID        string         `json:"id"`
+	ID string `json:"id"`
+	// Request, Template, Status: an interface designed for one request (see
+	// designWindow); Status is designing, ready or failed: <why>.
+	Request   string         `json:"request,omitempty"`
+	Template  map[string]any `json:"template,omitempty"`
+	Status    string         `json:"status,omitempty"`
 	Kind      string         `json:"kind,omitempty"`
 	Widget    map[string]any `json:"widget,omitempty"`
 	Tool      string         `json:"tool"`
@@ -76,7 +86,12 @@ type DeskWindow struct {
 
 // DeskPin is a card window kept as a shortcut on the pinned desk.
 type DeskPin struct {
-	ID        string         `json:"id"`
+	ID string `json:"id"`
+	// Request, Template, Status: an interface designed for one request (see
+	// designWindow); Status is designing, ready or failed: <why>.
+	Request   string         `json:"request,omitempty"`
+	Template  map[string]any `json:"template,omitempty"`
+	Status    string         `json:"status,omitempty"`
 	Kind      string         `json:"kind,omitempty"`
 	Widget    map[string]any `json:"widget,omitempty"`
 	Tool      string         `json:"tool"`
@@ -111,6 +126,9 @@ type DeskOp struct {
 	ID        string         `json:"id,omitempty"`
 	Kind      string         `json:"kind,omitempty"`
 	Widget    map[string]any `json:"widget,omitempty"`
+	Request   string         `json:"request,omitempty"`
+	Template  map[string]any `json:"template,omitempty"`
+	Status    string         `json:"status,omitempty"`
 	Tool      string         `json:"tool,omitempty"`
 	Name      string         `json:"name,omitempty"`
 	Title     string         `json:"title,omitempty"`
@@ -213,11 +231,13 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 		} else if op.Tool == "" {
 			return "", errs.InvalidArgument("open needs a tool")
 		}
-		// The same result twice is one window, brought to the front; a
-		// widget composed again under its title is refreshed in place.
+		// The same result twice is one window, brought to the front (for a
+		// designed one, only for the same request); a widget composed again
+		// under its title is refreshed in place.
 		for i := range d.Windows {
 			w := &d.Windows[i]
-			same := w.Kind == op.Kind && w.Tool == op.Tool && w.Microtool == op.Microtool && sameArgs(w.Args, op.Args)
+			same := w.Kind == op.Kind && w.Tool == op.Tool && w.Microtool == op.Microtool && sameArgs(w.Args, op.Args) &&
+				(op.Frontend != DeskAutoFrontend || strings.EqualFold(strings.TrimSpace(w.Request), strings.TrimSpace(op.Request)))
 			if op.Kind == DeskComposed {
 				same = w.Kind == DeskComposed && strings.EqualFold(w.Title, op.Title)
 			}
@@ -235,7 +255,7 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 		}
 		_, _, uw, uh := d.Usable()
 		w := DeskWindow{
-			ID: newDeskID(), Kind: op.Kind, Widget: op.Widget, Tool: op.Tool, Name: op.Name, Title: op.Title, Frontend: op.Frontend,
+			ID: newDeskID(), Kind: op.Kind, Widget: op.Widget, Request: op.Request, Template: op.Template, Status: op.Status, Tool: op.Tool, Name: op.Name, Title: op.Title, Frontend: op.Frontend,
 			Microtool: op.Microtool, Args: op.Args,
 			W: math.Min(460, uw), H: math.Min(560, uh),
 			OpenedBy: actor, OpenedAt: now.UTC().Format(time.RFC3339),
@@ -285,7 +305,7 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 			return "", errs.NotFound("window " + op.ID)
 		}
 		for _, p := range d.Pins {
-			same := p.Kind == w.Kind && p.Tool == w.Tool && p.Microtool == w.Microtool && sameArgs(p.Args, w.Args)
+			same := p.Kind == w.Kind && p.Tool == w.Tool && p.Microtool == w.Microtool && sameArgs(p.Args, w.Args) && p.Request == w.Request
 			if w.Kind == DeskComposed {
 				same = p.Kind == DeskComposed && strings.EqualFold(p.Title, w.Title)
 			}
@@ -296,7 +316,7 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 		if len(d.Pins) >= deskMaxPins {
 			return "", errs.InvalidArgument(fmt.Sprintf("%d pins at most; unpin some first", deskMaxPins))
 		}
-		p := DeskPin{ID: newDeskID(), Kind: w.Kind, Widget: w.Widget, Tool: w.Tool, Name: w.Name, Title: w.Title, Frontend: w.Frontend,
+		p := DeskPin{ID: newDeskID(), Kind: w.Kind, Widget: w.Widget, Request: w.Request, Template: w.Template, Status: w.Status, Tool: w.Tool, Name: w.Name, Title: w.Title, Frontend: w.Frontend,
 			Microtool: w.Microtool, Args: w.Args, W: w.W, H: w.H, PinnedAt: now.UTC().Format(time.RFC3339)}
 		d.Pins = append(d.Pins, p)
 		return p.ID, nil
@@ -313,6 +333,21 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 		}
 		d.Pins = kept
 		return op.ID, nil
+	case "designed":
+		// The node's own: a design finished (Template) or failed (Status).
+		w := d.window(op.ID)
+		if w == nil {
+			return "", errs.NotFound("window " + op.ID)
+		}
+		w.Template, w.Status = op.Template, op.Status
+		return w.ID, nil
+	case "redesign":
+		w := d.window(op.ID)
+		if w == nil || w.Frontend != DeskAutoFrontend {
+			return "", errs.InvalidArgument("only a designed window can be designed again")
+		}
+		w.Template, w.Status = nil, DeskDesigning
+		return w.ID, nil
 	case "viewport":
 		if op.W != nil && op.H != nil && *op.W >= 200 && *op.H >= 200 {
 			d.Viewport = DeskViewport{W: math.Round(*op.W), H: math.Round(*op.H)}
@@ -384,6 +419,12 @@ func (d *Desktop) Summary() string {
 			what := w.Microtool + args
 			if w.Kind == DeskComposed {
 				what = "composed widget"
+			}
+			if w.Frontend == DeskAutoFrontend {
+				what += ", designed for: " + strings.TrimSpace(w.Request)
+				if w.Status != "" && w.Status != "ready" {
+					what += " [" + w.Status + "]"
+				}
 			}
 			fmt.Fprintf(&b, "\n- %s %q (%s) at x %.0f, y %.0f, %.0f×%.0f", w.ID, w.Title, what, w.X, w.Y, w.W, w.H)
 		}
@@ -497,3 +538,40 @@ func (s *Service) UpdateDesk(ctx context.Context, spaceID, roomID identity.ID, a
 }
 
 func equalFoldName(a, b string) bool { return strings.EqualFold(a, b) }
+
+// designWindow designs the interface of a window opened for a tool without a
+// generative frontend: the tools namespace designs it for the window's
+// request, around the result it shows, and the design is kept with the
+// window (never cached for the tool). It runs after the window is on the
+// desk, which shows it designing meanwhile; [payer] is billed for the model.
+func (s *Service) designWindow(ctx context.Context, spaceID, roomID identity.ID, w DeskWindow, payer string) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
+	defer cancel()
+	room := ""
+	if !roomID.IsZero() {
+		room = roomID.String()
+	}
+	var raw string
+	op := DeskOp{Op: "designed", ID: w.ID, Status: "ready"}
+	err := bridge.Invoke(ctx, s.K, "tools", "GenerateWindowFrontend",
+		[]any{ctx, payer, spaceID.String(), room, w.Tool, w.Request, w.Microtool, w.Args}, &raw)
+	if err == nil {
+		err = json.Unmarshal([]byte(raw), &op.Template)
+	}
+	if err != nil {
+		op.Template, op.Status = nil, "failed: "+err.Error()
+	}
+	if _, _, err := s.UpdateDesk(ctx, spaceID, roomID, "tradera", []DeskOp{op}); err != nil && s.L != nil {
+		s.L.Warn("desk window design not saved", "window", w.ID, "err", err.Error())
+	}
+}
+
+// designOpened starts the designs the windows [ids] wait for.
+func (s *Service) designOpened(ctx context.Context, spaceID, roomID identity.ID, d Desktop, ids []string, payer string) {
+	for _, id := range ids {
+		w := d.window(id)
+		if w != nil && w.Frontend == DeskAutoFrontend && w.Status == DeskDesigning && len(w.Template) == 0 {
+			go s.designWindow(ctx, spaceID, roomID, *w, payer)
+		}
+	}
+}

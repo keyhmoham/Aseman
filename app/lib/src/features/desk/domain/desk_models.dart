@@ -33,6 +33,9 @@ List<Map<String, dynamic>> surfaceOf(Map<String, dynamic> widget) => [
 /// rather than one tool's frontend; such windows share the dock entry
 /// [composedTool].
 const String composedKind = 'composed';
+
+/// The frontend of a window whose interface was designed for one request.
+const String designedFrontend = 'auto';
 const String composedTool = 'widgets';
 
 class DeskWindow {
@@ -41,6 +44,9 @@ class DeskWindow {
     required this.tool,
     this.kind = '',
     this.widget = const {},
+    this.request = '',
+    this.template = const {},
+    this.status = '',
     this.name = '',
     this.title = '',
     this.frontend = '',
@@ -56,6 +62,9 @@ class DeskWindow {
         tool: '${j['tool'] ?? ''}',
         kind: '${j['kind'] ?? ''}',
         widget: _map(j['widget']),
+        request: '${j['request'] ?? ''}',
+        template: _map(j['template']),
+        status: '${j['status'] ?? ''}',
         name: '${j['name'] ?? ''}',
         title: '${j['title'] ?? ''}',
         frontend: '${j['frontend'] ?? ''}',
@@ -82,6 +91,16 @@ class DeskWindow {
   final Map<String, dynamic> widget;
 
   bool get isComposed => kind == composedKind;
+
+  /// What the person asked for: an interface designed for it is shown
+  /// (frontend `auto`), its [template] kept with the window.
+  final String request;
+  final Map<String, dynamic> template;
+
+  /// designing, ready, or `failed: why`.
+  final String status;
+
+  bool get isDesigned => frontend == designedFrontend;
   final String name;
   final String title;
 
@@ -111,6 +130,9 @@ class DeskWindow {
         tool: tool,
         kind: kind,
         widget: widget,
+        request: request,
+        template: template,
+        status: status,
         name: name,
         title: title,
         frontend: frontend,
@@ -128,6 +150,9 @@ class DeskPin {
     required this.tool,
     this.kind = '',
     this.widget = const {},
+    this.request = '',
+    this.template = const {},
+    this.status = '',
     this.name = '',
     this.title = '',
     this.frontend = '',
@@ -141,6 +166,9 @@ class DeskPin {
         tool: '${j['tool'] ?? ''}',
         kind: '${j['kind'] ?? ''}',
         widget: _map(j['widget']),
+        request: '${j['request'] ?? ''}',
+        template: _map(j['template']),
+        status: '${j['status'] ?? ''}',
         name: '${j['name'] ?? ''}',
         title: '${j['title'] ?? ''}',
         frontend: '${j['frontend'] ?? ''}',
@@ -162,6 +190,16 @@ class DeskPin {
   final Size size;
 
   bool get isComposed => kind == composedKind;
+
+  /// What the person asked for: an interface designed for it is shown
+  /// (frontend `auto`), its [template] kept with the window.
+  final String request;
+  final Map<String, dynamic> template;
+
+  /// designing, ready, or `failed: why`.
+  final String status;
+
+  bool get isDesigned => frontend == designedFrontend;
 
   String get label => title.isNotEmpty ? title : name;
 

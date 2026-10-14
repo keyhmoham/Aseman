@@ -42,6 +42,8 @@ abstract final class DeskOps {
   static Map<String, dynamic> open(String tool,
           {String kind = '',
           Map<String, dynamic> widget = const {},
+          String request = '',
+          Map<String, dynamic> template = const {},
           String title = '',
           String microtool = '',
           Map<String, dynamic> args = const {},
@@ -52,6 +54,8 @@ abstract final class DeskOps {
         'tool': tool,
         if (kind.isNotEmpty) 'kind': kind,
         if (widget.isNotEmpty) 'widget': widget,
+        if (request.isNotEmpty) 'request': request,
+        if (template.isNotEmpty) 'template': template,
         if (title.isNotEmpty) 'title': title,
         if (microtool.isNotEmpty) 'microtool': microtool,
         if (args.isNotEmpty) 'args': args,
@@ -77,6 +81,8 @@ abstract final class DeskOps {
       {'op': 'close_tool', 'tool': tool};
   static Map<String, dynamic> pin(String id) => {'op': 'pin', 'id': id};
   static Map<String, dynamic> unpin(String id) => {'op': 'unpin', 'id': id};
+  static Map<String, dynamic> redesign(String id) =>
+      {'op': 'redesign', 'id': id};
   static Map<String, dynamic> viewport(Size s) =>
       {'op': 'viewport', 'w': s.width, 'h': s.height};
 }

@@ -772,7 +772,7 @@ func NewPlugin() api.Plugin {
 			helper.Action{Namespace: "tools", Name: "components_list", Summary: "The generated frontends the component registry holds for a tool", Handler: s.componentsList},
 		)
 		var release func()
-		return module.Instance{Service: s, Models: append(schema.Models(), models.Models()...), Actions: append(actions, oauthActions(s)...),
+		return module.Instance{Service: s, Models: append(schema.Models(), models.Models()...), Actions: append(append(actions, oauthActions(s)...), evaluatorActions(s)...),
 			Mount: func(context.Context) error {
 				// The gateway managed and installed backends reach the node by.
 				binder, ok := d.Kernel.(api.NetworkBindings)

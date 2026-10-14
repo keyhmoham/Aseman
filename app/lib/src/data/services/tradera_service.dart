@@ -1386,6 +1386,24 @@ class TraderaService implements BackendService {
     return list.whereType<Map<String, dynamic>>().toList();
   }
 
+  /// The traders leaderboard the admins space's evaluator tool keeps: traders
+  /// ranked by the reliability scores it measured from their CoinMarketCap
+  /// posts. [board] is overall, technical, fundamental, accuracy,
+  /// consistency, risk or timing.
+  Future<Map<String, dynamic>> fetchTraderLeaderboard(
+      {String board = 'overall', int limit = 100}) async {
+    final resp = await client.call('tools', 'traders_leaderboard',
+        body: {'board': board, 'limit': limit});
+    return (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+  }
+
+  /// One trader's full reliability report from the evaluator.
+  Future<Map<String, dynamic>> fetchTraderProfile(String handle) async {
+    final resp = await client
+        .call('tools', 'trader_profile', body: {'handle': handle});
+    return (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+  }
+
   // ── metadata / preferences ───────────────────────────────────────────────
 
   /// Load the signed-in user's metadata tree (for preferences/profile edits).

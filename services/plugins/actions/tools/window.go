@@ -46,7 +46,7 @@ func requestSkill(request, microtool string, args map[string]any, sample string)
 	if sample != "" {
 		b.WriteString("The result looks like this (a sample, possibly cut short):\n" + sample + "\n")
 	}
-	b.WriteString(`Show what the request is about first and most prominently, the way the data deserves (Stat tiles for the figures asked for, a Chart for series, a Table for records, KeyValue for one record); leave out what the request does not need. Add controls only where they serve the request (refining it, e.g. another city or period), mapped to the microtools by actions. Keep it to one compact window.`)
+	b.WriteString(`Show what the request is about first and most prominently, the way the data deserves (Stat tiles for the figures asked for, a Chart for series, a Table for records, KeyValue for one record); leave out what the request does not need. Add controls only where they serve the request (refining it, e.g. another city or period), mapped to the microtools by actions. Keep it to one compact window. Use Image, Video or AudioPlayer only for media the result actually carries (bind their url to it, e.g. a url, a file path or an item of "media"); never invent a url or show an empty picture, and when the result holds no media show what it does hold.`)
 	return b.String()
 }
 

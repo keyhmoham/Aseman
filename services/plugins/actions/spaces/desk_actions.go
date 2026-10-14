@@ -72,6 +72,10 @@ func (s *Service) resolveDeskOpens(ctx context.Context, spaceID identity.ID, ops
 			return errs.InvalidArgument(t.Name + " has no microtools to build an interface from; present its result in your message, in Markdown")
 		}
 		ops[i].Tool, ops[i].Name, ops[i].Frontend = t.BotID, t.Name, deskFrontend(t.Frontend, ops[i])
+		if appUI(t, ops[i].Microtool) != "" && len(ops[i].Template) == 0 {
+			// The tool shows this result with its own app (MCP Apps).
+			ops[i].Frontend = DeskAppFrontend
+		}
 		if ops[i].Frontend == DeskAutoFrontend && len(ops[i].Template) == 0 {
 			// Designed for the request once the window is on the desk.
 			if strings.TrimSpace(ops[i].Request) == "" {
@@ -91,6 +95,20 @@ func defaultRequest(tool string, op DeskOp) string {
 	}
 	args, _ := json.Marshal(op.Args)
 	return "Show the result of " + tool + "'s " + op.Microtool + " for " + string(args) + "."
+}
+
+// appUI is the ui:// resource (an MCP App) [microtool] of [t] shows its
+// results with, if it has one.
+func appUI(t *vmm.Tool, microtool string) string {
+	if microtool == "" {
+		return ""
+	}
+	for _, c := range t.Commands {
+		if c.Name == microtool {
+			return c.UI
+		}
+	}
+	return ""
 }
 
 // deskFrontend is the frontend a window opened by [op] shows, for a tool

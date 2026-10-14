@@ -55,6 +55,10 @@ const (
 // with it, never cached for the tool.
 const DeskAutoFrontend = "auto"
 
+// DeskAppFrontend: the window shows the result with the tool's own app (an
+// MCP App: the ui:// resource the microtool declares), run on the device.
+const DeskAppFrontend = "app"
+
 // DeskDesigning is the status of a designed window whose design is under way.
 const DeskDesigning = "designing"
 

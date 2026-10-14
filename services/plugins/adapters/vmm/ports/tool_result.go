@@ -72,12 +72,60 @@ func ToolResultValue(reply string) (any, error) {
 	if isErr, _ := result["isError"].(bool); isErr {
 		return nil, errs.New(CodeToolExecutionFailed, "the tool reported an error: "+text)
 	}
+	var v any = text
 	if sc, ok := result["structuredContent"]; ok && sc != nil {
-		return sc, nil
+		v = sc
+	} else if json.Unmarshal([]byte(text), &v) != nil {
+		v = text
 	}
-	var v any
-	if json.Unmarshal([]byte(text), &v) == nil {
-		return v, nil
+	return withMedia(v, result["content"]), nil
+}
+
+// withMedia adds the images, audio and linked files of a result's content
+// blocks to its value (as "media": [{url, mime, name?}], urls being data:
+// URIs or links), so frontends can show them; a value that is no object
+// becomes {"text": value, "media": [...]}.
+func withMedia(v any, content any) any {
+	blocks, _ := content.([]any)
+	var media []any
+	for _, b := range blocks {
+		block, _ := b.(map[string]any)
+		switch block["type"] {
+		case "image", "audio":
+			data, _ := block["data"].(string)
+			mime, _ := block["mimeType"].(string)
+			if data != "" && mime != "" {
+				media = append(media, map[string]any{"url": "data:" + mime + ";base64," + data, "mime": mime})
+			}
+		case "resource_link":
+			if uri, _ := block["uri"].(string); uri != "" {
+				media = append(media, map[string]any{"url": uri, "mime": block["mimeType"], "name": block["name"]})
+			}
+		case "resource":
+			r, _ := block["resource"].(map[string]any)
+			blob, _ := r["blob"].(string)
+			mime, _ := r["mimeType"].(string)
+			if blob != "" && mime != "" {
+				media = append(media, map[string]any{"url": "data:" + mime + ";base64," + blob, "mime": mime, "name": r["uri"]})
+			}
+		}
 	}
-	return text, nil
+	if len(media) == 0 {
+		return v
+	}
+	if m, ok := v.(map[string]any); ok {
+		if _, taken := m["media"]; !taken {
+			out := make(map[string]any, len(m)+1)
+			for k, x := range m {
+				out[k] = x
+			}
+			out["media"] = media
+			return out
+		}
+		return m
+	}
+	if s, ok := v.(string); ok && s == "" {
+		return map[string]any{"media": media}
+	}
+	return map[string]any{"text": v, "media": media}
 }

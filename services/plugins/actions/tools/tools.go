@@ -86,6 +86,35 @@ func (s *Service) CommandsFor(ctx context.Context, botID, actorID, spaceID strin
 				}
 			}
 		}
+	} else if tool.Auth != "user" && len(commands) > 0 {
+		// A shared server's list was saved when it was registered; it is
+		// asked again now and then (what it offers, and how its results are
+		// shown, change), keeping the saved list if it does not answer.
+		live := func() []map[string]any {
+			listCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+			defer cancel()
+			h, e := s.headers(listCtx, &tool, identity.ID{}, spaceID)
+			if e != nil {
+				return nil
+			}
+			if h, e = s.Client.Session(listCtx, tool.URL, h); e != nil {
+				return nil
+			}
+			result, e := s.Client.RPC(listCtx, tool.URL, h, "tools/list", map[string]any{})
+			if e != nil {
+				return nil
+			}
+			return commandDefs(result)
+		}()
+		if len(live) > 0 {
+			before, _ := json.Marshal(tool.Commands)
+			after, _ := json.Marshal(live)
+			if string(before) != string(after) {
+				tool.Commands = live
+				_ = s.R.UpdateString(ctx, "tool_registry", tool.ID, tool)
+			}
+			commands = live
+		}
 	} else if tool.Auth == "user" || len(commands) == 0 {
 		actor, _ := identity.Parse(actorID)
 		h, e := s.headers(ctx, &tool, actor, spaceID)
@@ -108,9 +137,15 @@ func (s *Service) CommandsFor(ctx context.Context, botID, actorID, spaceID strin
 		if len(description) > 600 {
 			description = description[:600]
 		}
+		if appOnly(c) {
+			continue // its app's own (MCP Apps): not for agents
+		}
 		row := map[string]any{"name": name, "description": description}
 		if schema, ok := c["schema"].(map[string]any); ok && schema != nil {
 			row["schema"] = schema
+		}
+		if ui, ok := c["ui"].(string); ok && ui != "" {
+			row["ui"] = ui
 		}
 		rows = append(rows, row)
 	}
@@ -178,9 +213,66 @@ func commandDefs(result map[string]any) []map[string]any {
 		}
 		schema, _ := r["inputSchema"].(map[string]any)
 		props, _ := schema["properties"].(map[string]any)
-		defs = append(defs, map[string]any{"name": r["name"], "description": r["description"], "args": props, "schema": schema, "annotations": r["annotations"], "widget": r["widget"]})
+		def := map[string]any{"name": r["name"], "description": r["description"], "args": props, "schema": schema, "annotations": r["annotations"], "widget": r["widget"]}
+		if uri, visibility := appUI(r["_meta"]); uri != "" || len(visibility) > 0 {
+			if uri != "" {
+				def["ui"] = uri
+			}
+			if len(visibility) > 0 {
+				def["visibility"] = visibility
+			}
+		}
+		defs = append(defs, def)
 	}
 	return defs
+}
+
+// appUI reads an MCP tool's app metadata (MCP Apps): the ui:// resource its
+// results are shown with, and who may call it ("model", "app"; both when
+// unsaid).
+func appUI(meta any) (string, []string) {
+	m, _ := meta.(map[string]any)
+	ui, _ := m["ui"].(map[string]any)
+	uri, _ := ui["resourceUri"].(string)
+	if uri == "" {
+		uri, _ = m["ui/resourceUri"].(string)
+	}
+	if !strings.HasPrefix(uri, "ui://") {
+		uri = ""
+	}
+	var visibility []string
+	if list, ok := ui["visibility"].([]any); ok {
+		for _, v := range list {
+			if s, ok := v.(string); ok {
+				visibility = append(visibility, s)
+			}
+		}
+	}
+	return uri, visibility
+}
+
+// appOnly is whether a microtool is for its app alone (hidden from agents).
+func appOnly(c map[string]any) bool {
+	var visibility []string
+	switch v := c["visibility"].(type) {
+	case []string:
+		visibility = v
+	case []any:
+		for _, x := range v {
+			if s, ok := x.(string); ok {
+				visibility = append(visibility, s)
+			}
+		}
+	}
+	if len(visibility) == 0 {
+		return false
+	}
+	for _, v := range visibility {
+		if v == "model" {
+			return false
+		}
+	}
+	return true
 }
 
 // mcpInput is a remote MCP server to register as a tool.
@@ -676,6 +768,7 @@ func NewPlugin() api.Plugin {
 			helper.Action{Namespace: "tools", Name: "tool_microtools", Summary: "List a tool's microtools, asking its backend", Handler: s.toolMicrotools},
 			helper.Action{Namespace: "tools", Name: "frontend_get", Summary: "A tool's frontend: its static program, or its generated surface filled with data", Handler: s.frontendGet},
 			helper.Action{Namespace: "tools", Name: "frontend_action", Summary: "Run an action of a tool's generated frontend", Handler: s.frontendAction},
+			helper.Action{Namespace: "tools", Name: "app_rpc", Summary: "A tool's app (MCP Apps) asks its server: resources/read or tools/call, as the person in the space", Handler: s.appRPC},
 			helper.Action{Namespace: "tools", Name: "components_list", Summary: "The generated frontends the component registry holds for a tool", Handler: s.componentsList},
 		)
 		var release func()

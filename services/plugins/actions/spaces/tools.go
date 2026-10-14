@@ -119,6 +119,15 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 			default:
 				tool.Description += " It has no frontend of its own." + show + ", in an interface designed for the person's request (pass request)."
 			}
+			var apps []string
+			for _, c := range tool.Commands {
+				if c.UI != "" {
+					apps = append(apps, c.Name)
+				}
+			}
+			if len(apps) > 0 {
+				tool.Description += " The results of " + strings.Join(apps, ", ") + " are shown in the tool's own app instead (frontend_show with exactly the arguments you called it with)."
+			}
 		}
 		tools = append(tools, tool)
 	}
@@ -155,7 +164,8 @@ func (s *Service) appCommands(ctx context.Context, spaceID identity.ID, rec *bot
 		}
 		description, _ := r["description"].(string)
 		schema, _ := r["schema"].(map[string]any)
-		out = append(out, vmm.ToolCommand{Name: name, Description: description, Schema: schema})
+		ui, _ := r["ui"].(string)
+		out = append(out, vmm.ToolCommand{Name: name, Description: description, Schema: schema, UI: ui})
 	}
 	return out
 }

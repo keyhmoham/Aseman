@@ -99,6 +99,25 @@ class ToolsApi {
     return ToolFrontendPayload.fromJson(body);
   }
 
+  /// A request of a tool's app (MCP Apps) to its server, through the node
+  /// as this person: `tools/call`, `resources/read`, or `app` (the app a
+  /// microtool's results are shown with: `{uri, resource}`).
+  Future<Map<String, dynamic>> appRpc(String botId, String method,
+          {required String spaceId,
+          String roomId = '',
+          Map<String, dynamic> params = const {}}) async =>
+      _map(await _call(
+          'tools',
+          'app_rpc',
+          {
+            'bot': botId,
+            'space': spaceId,
+            if (roomId.isNotEmpty) 'room': roomId,
+            'method': method,
+            'params': params,
+          },
+          timeout: const Duration(minutes: 2)));
+
   /// Runs an action of a generated frontend; returns the updated data model.
   Future<Map<String, dynamic>> frontendAction(String botId, String action,
       {required String spaceId,

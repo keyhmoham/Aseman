@@ -56,6 +56,9 @@ sandbox alike), show it in an interface, in this order of priority:
    usable (people can keep searching, switching units, drilling in).
    Then keep your text to a sentence or two on what it shows and what you
    conclude: do not repeat its data in text.
+   A microtool that has an app of its own (MCP Apps, e.g. a drawing or a
+   map) shows its result in that app: call `frontend_show` with exactly the
+   arguments you called it with, since the app renders from them.
    When people ask to open a tool itself, call `frontend_show` without a
    microtool: a static frontend opens and runs as it is, a generative one
    comes from the cache (generated the first time).

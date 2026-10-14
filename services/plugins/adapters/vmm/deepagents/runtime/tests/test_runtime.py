@@ -399,3 +399,23 @@ def test_agents_are_told_how_to_keep_the_desk() -> None:
     desk = prompt[prompt.index("## The desk"):]
     for words in ("card windows", "dock", "durable", "x`, `y`, `w`, `h`", "desk_arrange", "desk_close", "usable area", "animat"):
         assert words in desk, words
+
+
+async def test_admins_space_agents_read_the_platform_database(platform: Platform, tmp_path: Path) -> None:
+    # The node lists db_tables and db_read only in the platform admins space.
+    platform.apps.extend([
+        {"name": "db_tables", "kind": "tool", "description": "List the platform database's tables.",
+         "parameters": {"type": "object", "properties": {"model": {"type": "string"}}}},
+        {"name": "db_read", "kind": "tool", "description": "Read records from the platform database.",
+         "parameters": {"type": "object", "properties": {"model": {"type": "string"}, "limit": {"type": "integer"}},
+                        "required": ["model"]}},
+    ])
+    r, model = runner(platform, tmp_path, [
+        call("db_tables", {}),
+        call("db_read", {"model": "accounts", "limit": 5}),
+        AIMessage(content="There are accounts."),
+    ])
+    out = await r.prompt(turn_request(LEAD, "how many accounts?", token="tok-lead", role="lead", message_id="m0"))
+    assert out.status == "done", out
+    assert {"tool": "db_tables", "args": {}, "by": LEAD["account_id"]} in platform.tool_runs
+    assert {"tool": "db_read", "args": {"model": "accounts", "limit": 5}, "by": LEAD["account_id"]} in platform.tool_runs

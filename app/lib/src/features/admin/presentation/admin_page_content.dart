@@ -795,7 +795,7 @@ class _AppPageContentState extends State<AdminPageContent> {
       title: 'Platform admins space',
       icon: Icons.admin_panel_settings_rounded,
       subtitle:
-          'Every platform admin is added to this project automatically, now and whenever someone is made an admin.',
+          'Every platform admin is added to this project automatically, now and whenever someone is made an admin. Its agents and tools can read the platform database when they work for an admin.',
       child: _toolbar(
         Row(children: [
           AdminAvatar(chosen.isEmpty ? '?' : name,

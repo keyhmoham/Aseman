@@ -42,6 +42,8 @@ func toolDetail(toolName string) string {
 		return "checking the room…"
 	case "ask_user":
 		return "asking the user…"
+	case "db_tables", "db_read":
+		return "reading the platform database…"
 	case "routine_create":
 		return "scheduling a routine…"
 	case "proxy_create":
@@ -81,6 +83,9 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 	toolBots := map[string]bool{}
 	for _, name := range vmm.Names() {
 		used[name] = true
+	}
+	for _, t := range dbTools() {
+		used[t.Name] = true
 	}
 	sandboxID, hasSandbox := s.sandboxBotID(ctx, spaceID)
 	for i := range mems {
@@ -139,6 +144,10 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 			t.BotID = sandboxID.String()
 		}
 		tools = append(tools, t)
+	}
+	// The admins space's agents read the platform database.
+	if s.dbToolsAllowed(ctx, spaceID) {
+		tools = append(tools, dbTools()...)
 	}
 
 	return tools, nil
@@ -354,6 +363,8 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 		}
 	case toolName == "room_info":
 		result, terr = s.roomInfoTool(ctx, id, argsJSON)
+	case toolName == "db_tables" || toolName == "db_read":
+		result, terr = s.dbTool(ctx, id, toolName, argsJSON)
 	case toolName == "ask_user":
 		result, terr = s.askUserTool(ctx, id, argsJSON)
 	case toolName == "proxy_list" || toolName == "proxy_get" || toolName == "proxy_delete":

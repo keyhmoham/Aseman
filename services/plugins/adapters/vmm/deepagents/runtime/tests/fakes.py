@@ -118,6 +118,9 @@ class Platform:
             {"name": "file_send", "kind": "tool", "description": "Attach a sandbox file.",
              "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "caption": {"type": "string"}}}},
             {"name": "weather", "kind": "miniapp", "bot_id": "bot-weather", "description": "Weather forecasts."},
+            {"name": "frontend_show", "kind": "tool", "description": "Open a result in the tool's own interface on the desk.",
+             "parameters": {"type": "object", "properties": {"tool": {"type": "string"}, "microtool": {"type": "string"},
+                                                              "args": {"type": "object"}}, "required": ["tool"]}},
             *self.apps,
         ]}
 

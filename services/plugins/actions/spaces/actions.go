@@ -36,6 +36,7 @@ func BuildActions(s *Service) []api.Action {
 		&botAddAction{s: s}, &botRemoveAction{s: s}, &botsListAction{s: s},
 		&spaceAskAction{s: s},
 		&widgetListAction{s: s}, &widgetActionAction{s: s},
+		&deskGetAction{s: s}, &deskUpdateAction{s: s},
 		&sandboxExecAction{s: s}, &sandboxStatusAction{s: s},
 		&sandboxStartAction{s: s}, &sandboxStopAction{s: s},
 		&toolsListAction{s: s},

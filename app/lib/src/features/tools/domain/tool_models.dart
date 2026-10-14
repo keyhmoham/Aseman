@@ -323,3 +323,29 @@ class MicrotoolException implements Exception {
   @override
   String toString() => message;
 }
+
+/// One result a tool's generated frontend is opened on: the microtool an
+/// agent called and the arguments it called it with (frontend_show). The
+/// node points the frontend's data bindings at them.
+class ShownResult {
+  const ShownResult({this.microtool = '', this.args = const {}});
+
+  /// Read from a `ToolFrontend` component's props (null when it has none).
+  static ShownResult? fromProps(Map<String, dynamic> props) {
+    final microtool =
+        props['microtool'] is String ? props['microtool'] as String : '';
+    final args = props['args'] is Map
+        ? (props['args'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    if (microtool.isEmpty && args.isEmpty) return null;
+    return ShownResult(microtool: microtool, args: args);
+  }
+
+  final String microtool;
+  final Map<String, dynamic> args;
+
+  Map<String, dynamic> toJson() => {
+        if (microtool.isNotEmpty) 'microtool': microtool,
+        if (args.isNotEmpty) 'args': args,
+      };
+}

@@ -87,7 +87,7 @@ class ComposedWidgetCard extends StatelessWidget {
                   style: TextStyle(color: scheme.onSurfaceVariant))
               : A2UIView(
                   messages: widgetSpec.messages,
-                  toolFrontend: (context, botId, height) => SizedBox(
+                  toolFrontend: (context, botId, height, shown) => SizedBox(
                     height: height,
                     child: api == null
                         ? const Center(
@@ -99,7 +99,8 @@ class ComposedWidgetCard extends StatelessWidget {
                             roomId: roomId,
                             userId:
                                 deps?.sessionController.session?.accountId ??
-                                    ''),
+                                    '',
+                            shown: shown),
                   ),
                 ),
         ),

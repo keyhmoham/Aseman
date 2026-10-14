@@ -151,11 +151,44 @@ func resolveArgs(args map[string]any, context, data map[string]any) map[string]a
 	return out
 }
 
-// fill runs a template's data bindings for a caller. A binding that fails
-// leaves an {"error": ...} at its place rather than failing the frontend.
-func (s *Service) fill(ctx context.Context, c caller, botID string, t *Template) map[string]any {
+// Shown points a generative frontend at one result: the arguments a
+// microtool was called with (by an agent showing what it found, e.g.
+// weather_report for {"city": "New York"}). Bindings to that microtool take
+// the arguments over their own; every other binding takes those of the
+// arguments it already has (the same city for the forecast next to it).
+type Shown struct {
+	Microtool string         `json:"microtool,omitempty"`
+	Args      map[string]any `json:"args,omitempty"`
+}
+
+// bindings are the template's data bindings with [shown] applied.
+func (t *Template) bindings(shown Shown) []Binding {
+	if len(shown.Args) == 0 {
+		return t.Data
+	}
+	out := make([]Binding, len(t.Data))
+	for i, b := range t.Data {
+		args := map[string]any{}
+		for k, v := range b.Args {
+			args[k] = v
+		}
+		for k, v := range shown.Args {
+			if _, has := b.Args[k]; has || b.Microtool == shown.Microtool {
+				args[k] = v
+			}
+		}
+		b.Args = args
+		out[i] = b
+	}
+	return out
+}
+
+// fill runs a template's data bindings for a caller (pointed at [shown]). A
+// binding that fails leaves an {"error": ...} at its place rather than
+// failing the frontend.
+func (s *Service) fill(ctx context.Context, c caller, botID string, t *Template, shown Shown) map[string]any {
 	data := map[string]any{}
-	for _, b := range t.Data {
+	for _, b := range t.bindings(shown) {
 		v, err := s.call(ctx, c, botID, b.Microtool, b.Args)
 		if err != nil {
 			v = map[string]any{"error": err.Error()}
@@ -256,6 +289,8 @@ func (s *Service) frontendGet(ctx context.Context, req *api.ActionRequest) (*api
 		Room  string `json:"room"`
 		// Regenerate replaces the registry's generated frontend (its owner only).
 		Regenerate bool `json:"regenerate"`
+		// Shown fills a generated frontend with one result (see Shown).
+		Shown
 	}
 	if e := helper.Decode(req, &in); e != nil {
 		return nil, e
@@ -295,7 +330,7 @@ func (s *Service) frontendGet(ctx context.Context, req *api.ActionRequest) (*api
 		if err := json.Unmarshal([]byte(component.Template), &t); err != nil {
 			return nil, err
 		}
-		data := s.fill(ctx, c, tool.BotID, &t)
+		data := s.fill(ctx, c, tool.BotID, &t, in.Shown)
 		out["component_id"], out["cached"], out["title"] = component.ID, cached, t.Title
 		out["messages"] = t.Messages("tool-"+tool.BotID, data)
 		out["actions"] = actionNames(&t)
@@ -327,6 +362,8 @@ func (s *Service) frontendAction(ctx context.Context, req *api.ActionRequest) (*
 		Action  string         `json:"action"`
 		Context map[string]any `json:"context"`
 		Data    map[string]any `json:"data"`
+		// Shown: the result the frontend was opened on, kept by reloads.
+		Shown
 	}
 	if e := helper.Decode(req, &in); e != nil {
 		return nil, e
@@ -367,7 +404,7 @@ func (s *Service) frontendAction(ctx context.Context, req *api.ActionRequest) (*
 		}
 	}
 	if action.Reload {
-		for k, v := range s.fill(ctx, c, tool.BotID, &t) {
+		for k, v := range s.fill(ctx, c, tool.BotID, &t, in.Shown) {
 			data[k] = v
 		}
 	}

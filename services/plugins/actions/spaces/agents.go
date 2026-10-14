@@ -182,6 +182,10 @@ func (s *Service) prepareTurn(ctx context.Context, spaceID, roomID identity.ID, 
 	}
 	turn.Context = s.agentContext(ctx, spaceID, roomID, rec)
 	turn.Note = s.senderClock(ctx, turn.SenderID)
+	// The desk as it is now: agents place, move and close card windows on it.
+	if desk := s.deskNote(ctx, spaceID, roomID); desk != "" {
+		turn.Note = strings.TrimSpace(turn.Note + "\n" + desk)
+	}
 	turn.Sandbox = ref
 	return rt, release, nil
 }

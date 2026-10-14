@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
-import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/post.dart';
@@ -17,13 +16,17 @@ import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../admin/presentation/admin_screen.dart';
+import '../../desk/data/desk_api.dart';
+import '../../desk/presentation/desk_controller.dart';
+import '../../desk/presentation/floating_desk.dart';
 import '../../miniapps/domain/sandbox_explorer_frontend.dart';
-import '../../miniapps/domain/widget_dsl.dart';
 import '../../miniapps/presentation/miniapp_sandbox_screen.dart';
-import '../../miniapps/presentation/widget_dsl_renderer.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import '../../search_feed/presentation/post_editor.dart';
 import '../../search_feed/presentation/rich_post_content.dart';
+import '../../tools/data/tools_api.dart';
+import '../../tools/domain/tool_models.dart';
+import '../../tools/presentation/tool_frontend_view.dart';
 import '../../tools/presentation/tool_screen.dart';
 import 'space_settings_panel.dart';
 
@@ -55,15 +58,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   int libraryTab = 0;
   int mobilePage = 0;
   Offset pointer = Offset.zero;
-  final desks = <String, List<_MosaicItem>>{};
   List<Bot> bots = [];
   final Map<String, List<Bot>> _spaceBots = {};
   List<Workspace> spaces = [];
   List<WorkspaceRoom> currentRooms = [];
   final Map<String, List<RoomMessage>> roomMessages = {};
-  final Map<String, List<DeskWidgetDsl>> roomWidgets = {};
-  _DeskData desk = const _DeskData();
-  Timer? _deskTimer;
+
+  /// The desk of the room on screen: tools' card windows.
+  late final DeskController deskController =
+      DeskController(DeskApi.of(widget.dependencies.service));
   Timer? _roomTimer;
   String? _commandAgent;
   String? _commandReply;
@@ -84,12 +87,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     workspace = widget.initialWorkspace;
     _loadWorkspaces();
     _loadBots();
-    _loadDesk();
     _loadSpaceBots();
-    _deskTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      _loadDesk();
-      _loadRoomWidgets();
-    });
     // Async messaging: agent replies (and tradera's message/log flow) arrive
     // after a message is sent, so the open room is polled frequently and new
     // content shows up live without needing another message to trigger it.
@@ -100,193 +98,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
 
   @override
   void dispose() {
-    _deskTimer?.cancel();
+    deskController.dispose();
     _roomTimer?.cancel();
     command.dispose();
     mobilePages.dispose();
     workspaceMotion.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadDesk() async {
-    final requestedWorkspace = workspace;
-    final deps = widget.dependencies;
-    final sp = _spaceFor(workspace);
-    final spaceId = sp?.id ?? '';
-    try {
-      final results = await Future.wait<Object>([
-        deps.service.fetchWallet(),
-        deps.service.fetchBots(),
-        deps.service.fetchMarket(limit: 8),
-        deps.service.fetchLedger(limit: 12),
-        spaceId.isEmpty
-            ? Future.value(const <SocialPost>[])
-            : deps.service.fetchFeed(spaceId: spaceId, limit: 12),
-      ]);
-      if (!mounted || workspace != requestedWorkspace) return;
-      final wallet = results[0] as Wallet;
-      final bots = results[1] as List<Bot>;
-      final market = results[2] as List<MarketListing>;
-      final ledger = results[3] as List<Map<String, dynamic>>;
-      final feed = results[4] as List<SocialPost>;
-      setState(() {
-        desk = _DeskData(
-            wallet: wallet,
-            bots: bots,
-            market: market,
-            ledger: ledger,
-            feed: feed);
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _loadRoomWidgets() async {
-    final sp = _spaceFor(workspace);
-    final r = room == null
-        ? null
-        : currentRooms.where((x) => x.name == room).toList();
-    if (sp == null || r == null || r.isEmpty) return;
-    final requestedScope = scopeKey;
-    try {
-      final widgets =
-          await widget.dependencies.service.fetchRoomWidgets(sp.id, r.first.id);
-      if (!mounted ||
-          requestedScope != scopeKey ||
-          _currentRoomId != r.first.id) return;
-      setState(() {
-        roomWidgets[requestedScope] = widgets;
-        _syncDeskWdigets();
-      });
-    } catch (_) {}
-  }
-
-  /// Reconciles the desk mosaic with the miniapps currently installed in the
-  /// room: removes tiles whose miniapp was removed and appends new ones.
-  void _syncDeskWdigets() {
-    final key = scopeKey;
-    final current = desks[key] ?? [];
-    final botsInDesk =
-        current.where((m) => m.isMiniapp).map((m) => m.botId).toSet();
-    final widgets = roomWidgets[scopeKey] ?? const <DeskWidgetDsl>[];
-    final widgetBotIds = widgets.map((w) => w.botId).toSet();
-    var changed = false;
-    final kept = current.where((m) {
-      if (!m.isMiniapp) return true;
-      if (!widgetBotIds.contains(m.botId)) {
-        changed = true;
-        return false;
-      }
-      return true;
-    }).toList();
-    for (final w in widgets) {
-      if (botsInDesk.contains(w.botId)) continue;
-      kept.add(_MosaicItem(w.name, 2, 2, _WidgetKind.miniapp, w.botId));
-      changed = true;
-    }
-    if (changed) desks[key] = kept;
-    if (changed) _saveDeskLayout();
-  }
-
-  /// Loads the saved desk layout (widgets + order/positions) for the current
-  /// room from the space's metadata tree (`desk/{roomKey}`). Falls back to the
-  /// seed layout when nothing is stored yet.
-  Future<void> _loadDeskLayout() async {
-    final sp = _spaceFor(workspace);
-    if (sp == null) return;
-    final key = scopeKey;
-    final roomKey = room ?? 'home';
-    try {
-      final tree = await widget.dependencies.service.fetchSpaceMetadata(sp.id);
-      final deskNode = tree['desk'];
-      final raw = deskNode is Map<dynamic, dynamic> ? deskNode[roomKey] : null;
-      if (!mounted || key != scopeKey || _spaceFor(workspace)?.id != sp.id)
-        return;
-      if (raw is List) {
-        final items = raw
-            .whereType<Map<dynamic, dynamic>>()
-            .map((e) => _MosaicItem.fromJson(e.cast<String, dynamic>()))
-            .toList();
-        setState(() {
-          desks[key] = items.isEmpty ? _seedDesk(key) : items;
-        });
-        if (items.isEmpty) unawaited(_saveDeskLayout());
-      } else {
-        setState(() => desks.putIfAbsent(key, () => _seedDesk(key)));
-        unawaited(_saveDeskLayout());
-      }
-      _syncDeskWdigets();
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => desks.putIfAbsent(key, () => _seedDesk(key)));
-    }
-  }
-
-  /// Persists the current desk layout for the room into the space metadata.
-  Future<void> _saveDeskLayout() async {
-    final sp = _spaceFor(workspace);
-    if (sp == null) return;
-    final items = desks[scopeKey];
-    if (items == null) return;
-    final path =
-        'desk/${(room ?? 'home').replaceAll('~', '~0').replaceAll('/', '~1')}';
-    try {
-      await widget.dependencies.service.patchSpaceMetadata(sp.id, [
-        {
-          'op': 'set',
-          'path': path,
-          'value': [for (final m in items) m.toJson()],
-        },
-      ]);
-    } catch (_) {}
-  }
-
-  Map<String, DeskWidgetDsl> get _roomWidgetDsl {
-    if (room == null) return const {};
-    final list = roomWidgets[scopeKey] ?? const [];
-    return {for (final w in list) w.botId: w};
-  }
-
-  Future<String> _runWidgetAction(
-      String botId, DslAction action, Map<String, dynamic> inline) async {
-    final sp = _spaceFor(workspace);
-    if (sp == null) return '';
-    final resolved = action.withInlineArgs(inline);
-    return widget.dependencies.service
-        .widgetAction(sp.id, botId, resolved.op, resolved.args);
-  }
-
-  void _addDeskWdiget() {
-    final kinds = [
-      ('Market pulse', _WidgetKind.market, Icons.candlestick_chart),
-      ('Portfolio', _WidgetKind.portfolio, Icons.donut_large),
-      ('Agent activity', _WidgetKind.agents, Icons.smart_toy_outlined),
-      ('Watchlist', _WidgetKind.watchlist, Icons.star_outline),
-      ('Recent activity', _WidgetKind.activity, Icons.query_stats),
-      ('Room feed', _WidgetKind.feed, Icons.dynamic_feed_outlined),
-    ];
-    showMenu<String>(
-      context: context,
-      position: const RelativeRect.fromLTRB(200, 120, 40, 0),
-      items: [
-        for (final kind in kinds)
-          PopupMenuItem(
-              value: kind.$1,
-              child: Row(children: [
-                Icon(kind.$3,
-                    size: 18, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 10),
-                Text(kind.$1, style: const TextStyle(fontSize: 12)),
-              ])),
-      ],
-    ).then((value) {
-      if (value == null) return;
-      final kind = kinds.firstWhere((k) => k.$1 == value);
-      final key = scopeKey;
-      final list = desks.putIfAbsent(key, () => _seedDesk(key));
-      if (list.any((m) => m.kind == kind.$2)) return;
-      setState(() => list.add(_MosaicItem(value, 1, 1, kind.$2)));
-      _saveDeskLayout();
-    });
   }
 
   Future<void> _loadBots() async {
@@ -316,7 +133,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     try {
       await widget.dependencies.service.addBotToSpace(sp.id, bot.id);
       await _loadSpaceBots();
-      await _loadDesk();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -330,7 +146,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     try {
       await widget.dependencies.service.removeBotFromSpace(sp.id, bot.id);
       await _loadSpaceBots();
-      await _loadDesk();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -350,7 +165,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         }
       });
       await _loadRooms();
-      await _loadDeskLayout();
+      _attachDesk();
       await _loadSpaceBots();
     } catch (_) {
       // Spaces failed to load; the workspace keeps its current name.
@@ -367,7 +182,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         currentRooms = rooms;
         roomMessages.removeWhere((key, _) => key.startsWith('$workspace/'));
       });
-      await _loadDeskLayout();
+      _attachDesk();
     } catch (_) {}
   }
 
@@ -507,6 +322,17 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
 
   void openMiniapp(Bot bot) {
     final spaceId = _spaceFor(workspace)?.id ?? '';
+    if (bot.isUnifiedTool && bot.hasFrontend && spaceId.isNotEmpty) {
+      // On the desk, as a card window (its dock entry gathers it).
+      deskController.open(bot.id, title: bot.name);
+      if (MediaQuery.sizeOf(context).width < 820 && mobilePage != 0) {
+        setState(() => mobilePage = 0);
+        mobilePages.animateToPage(0,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic);
+      }
+      return;
+    }
     Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (_) => bot.isUnifiedTool
             // A tool, through its static or generated frontend, in this space.
@@ -564,8 +390,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     return const [hallRoom];
   }
 
-  List<_MosaicItem> get widgets =>
-      desks.putIfAbsent(scopeKey, () => _seedDesk(scopeKey));
+  /// Shows the desk of the room on screen (the space's own on the hall).
+  void _attachDesk() => deskController.attach(_spaceFor(workspace)?.id ?? '',
+      _currentRoomId.isEmpty ? 'home' : _currentRoomId);
   List<RoomMessage> get chatMessages => roomMessages[scopeKey] ?? const [];
 
   String get _currentRoomId {
@@ -587,8 +414,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       command.text = drafts[scopeKey] ?? '';
     });
     _loadRoomMessages(value);
-    _loadRoomWidgets();
-    _loadDeskLayout();
+    _attachDesk();
   }
 
   void goHome() {
@@ -599,7 +425,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       _workingDetail = '';
       command.text = drafts[scopeKey] ?? '';
     });
-    _loadDeskLayout();
+    _attachDesk();
   }
 
   Future<void> switchWorkspace(String value) async {
@@ -624,10 +450,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     });
     widget.onWorkspaceChanged?.call(value);
     await _loadRooms();
-    await _loadDesk();
     await _loadSpaceBots();
-    await _loadRoomWidgets();
-    await _loadDeskLayout();
+    _attachDesk();
     await workspaceMotion.forward();
   }
 
@@ -745,26 +569,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                   child: _CenterDesk(
                                       workspace: workspace,
                                       room: room,
-                                      widgets: widgets,
                                       command: command,
                                       pointer: pointer,
-                                      desk: desk,
-                                      widgetDslByBot: _roomWidgetDsl,
-                                      onWidgetAction: _runWidgetAction,
+                                      controller: deskController,
+                                      dependencies: widget.dependencies,
+                                      spaceId: _spaceFor(workspace)?.id ?? '',
+                                      roomId: _currentRoomId,
                                       openSearch: () => _search(context),
-                                      onSubmit: _askCommand,
-                                      remove: (v) {
-                                        setState(() => widgets.remove(v));
-                                        _saveDeskLayout();
-                                      },
-                                      reorder: (a, b) {
-                                        setState(() {
-                                          final x = widgets.removeAt(a);
-                                          widgets.insert(b, x);
-                                        });
-                                        _saveDeskLayout();
-                                      },
-                                      add: () => _addDeskWdiget()))),
+                                      onSubmit: _askCommand))),
                           const SizedBox(width: 16),
                           _WorkspacePanelMotion(
                               animation: workspaceMotion,
@@ -829,27 +641,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               _CenterDesk(
                   workspace: workspace,
                   room: room,
-                  widgets: widgets,
                   command: command,
                   pointer: pointer,
-                  desk: desk,
-                  widgetDslByBot: _roomWidgetDsl,
-                  onWidgetAction: _runWidgetAction,
+                  controller: deskController,
+                  dependencies: widget.dependencies,
+                  spaceId: _spaceFor(workspace)?.id ?? '',
+                  roomId: _currentRoomId,
                   topContentInset: 62,
                   openSearch: () => _search(context),
-                  onSubmit: _askCommand,
-                  remove: (v) {
-                    setState(() => widgets.remove(v));
-                    _saveDeskLayout();
-                  },
-                  reorder: (a, b) {
-                    setState(() {
-                      final x = widgets.removeAt(a);
-                      widgets.insert(b, x);
-                    });
-                    _saveDeskLayout();
-                  },
-                  add: () => _addDeskWdiget()),
+                  onSubmit: _askCommand),
               room == null
                   ? _SocialFeed(
                       workspace: workspace,
@@ -923,7 +723,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                     onExit: () {
                       Navigator.of(context).pop();
                       _loadWorkspaces();
-                      _loadDesk();
                     }),
                 maxWidth: 720);
           });
@@ -958,59 +757,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
             onExit: () {
               Navigator.of(context).pop();
               _loadWorkspaces();
-              _loadDesk();
             }),
         maxWidth: 720);
   }
-}
-
-List<_MosaicItem> _seedDesk(String key) => [
-      const _MosaicItem('Market pulse', 2, 2, _WidgetKind.market),
-      const _MosaicItem('Portfolio', 2, 1, _WidgetKind.portfolio),
-      const _MosaicItem('Agent activity', 1, 1, _WidgetKind.agents),
-      const _MosaicItem('Watchlist', 1, 2, _WidgetKind.watchlist),
-      const _MosaicItem('Recent activity', 2, 1, _WidgetKind.activity),
-      const _MosaicItem('Room feed', 3, 1, _WidgetKind.feed),
-    ];
-
-enum _WidgetKind {
-  miniapp,
-  market,
-  portfolio,
-  agents,
-  watchlist,
-  activity,
-  feed,
-}
-
-class _MosaicItem {
-  const _MosaicItem(this.title, this.columns, this.rows,
-      [this.kind = _WidgetKind.feed, this.botId]);
-  final String title;
-  final int columns, rows;
-  final _WidgetKind kind;
-  final String? botId; // miniapp widget bot id
-
-  bool get isMiniapp => kind == _WidgetKind.miniapp;
-
-  Map<String, dynamic> toJson() => {
-        'title': title,
-        'columns': columns,
-        'rows': rows,
-        'kind': kind.name,
-        if (botId != null) 'bot_id': botId,
-      };
-
-  factory _MosaicItem.fromJson(Map<String, dynamic> json) => _MosaicItem(
-        json['title'] as String? ?? 'Widget',
-        (json['columns'] as num?)?.toInt() ?? 1,
-        (json['rows'] as num?)?.toInt() ?? 1,
-        _kindFromName(json['kind'] as String?),
-        json['bot_id'] as String?,
-      );
-
-  static _WidgetKind _kindFromName(String? name) => _WidgetKind.values
-      .firstWhere((k) => k.name == name, orElse: () => _WidgetKind.feed);
 }
 
 class _WorkspacePanelMotion extends StatelessWidget {
@@ -2023,205 +1772,90 @@ class _CommandReplyBubble extends StatelessWidget {
   }
 }
 
+/// The room's desk: tools' frontends as floating card windows (opened by
+/// people from the library and by agents showing results), the dock and the
+/// command bar. An empty desk shows the machine.
 class _CenterDesk extends StatelessWidget {
   const _CenterDesk(
       {required this.workspace,
       required this.room,
-      required this.widgets,
       required this.command,
       required this.pointer,
-      this.desk = const _DeskData(),
-      this.widgetDslByBot = const {},
-      this.onWidgetAction,
+      required this.controller,
+      required this.dependencies,
+      required this.spaceId,
+      required this.roomId,
       this.topContentInset = 0,
       required this.openSearch,
-      this.onSubmit,
-      required this.remove,
-      required this.reorder,
-      required this.add});
+      this.onSubmit});
   final String workspace;
   final String? room;
-  final List<_MosaicItem> widgets;
   final TextEditingController command;
   final Offset pointer;
-  final _DeskData desk;
-  final Map<String, DeskWidgetDsl> widgetDslByBot;
-  final Future<String> Function(
-          String botId, DslAction action, Map<String, dynamic> inline)?
-      onWidgetAction;
+  final DeskController controller;
+  final AppDependencies dependencies;
+  final String spaceId;
+  final String roomId;
   final double topContentInset;
-  final VoidCallback openSearch, add;
+  final VoidCallback openSearch;
   final ValueChanged<String>? onSubmit;
-  final ValueChanged<_MosaicItem> remove;
-  final ReorderCallback reorder;
-  @override
-  Widget build(BuildContext context) => Material(
-        type: MaterialType.transparency,
-        child: Stack(children: [
-          Positioned.fill(
-              child: IgnorePointer(
-                  child: CustomPaint(
-                      painter: _WorkspacePatternPainter(workspace)))),
-          Positioned.fill(
-              child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(18, topContentInset, 18, 104),
-                  child: Column(children: [
-                    SizedBox(
-                        height: 150, child: _MachineFace(pointer: pointer)),
-                    Row(children: [
-                      Expanded(
-                          child: Text(
-                              room == null ? 'My trading desk' : '$room desk',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.w900))),
-                      IconButton(
-                          onPressed: add, icon: const Icon(Icons.add_rounded)),
-                      IconButton(
-                          onPressed: openSearch,
-                          tooltip: 'Discover widgets & tools',
-                          icon: const Icon(Icons.tune_rounded)),
-                    ]),
-                    _MosaicGrid(
-                        items: widgets,
-                        onMove: reorder,
-                        onDelete: remove,
-                        desk: desk,
-                        widgetDslByBot: widgetDslByBot,
-                        onWidgetAction: onWidgetAction),
-                  ]))),
-          Positioned(
-              left: 18,
-              right: 18,
-              bottom: 18,
-              child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: FractionallySizedBox(
-                      widthFactor:
-                          MediaQuery.sizeOf(context).width < 820 ? 1 : .82,
-                      child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 640),
-                          child: _CommandBar(
-                            controller: command,
-                            room: room,
-                            openSearch: openSearch,
-                            onSubmit: onSubmit,
-                          ))))),
-        ]),
-      );
-}
 
-class _MosaicGrid extends StatelessWidget {
-  const _MosaicGrid(
-      {required this.items,
-      required this.onMove,
-      required this.onDelete,
-      this.desk = const _DeskData(),
-      this.widgetDslByBot = const {},
-      this.onWidgetAction});
-  final List<_MosaicItem> items;
-  final ReorderCallback onMove;
-  final ValueChanged<_MosaicItem> onDelete;
-  final _DeskData desk;
-  final Map<String, DeskWidgetDsl> widgetDslByBot;
-  final Future<String> Function(
-          String botId, DslAction action, Map<String, dynamic> inline)?
-      onWidgetAction;
-  static const gap = 7.0;
+  Widget _frontend(String tool, ShownResult? shown) => ToolFrontendView(
+      key: ValueKey('$tool/${shown?.microtool}/${shown?.args}'),
+      api: ToolsApi.of(dependencies.service),
+      botId: tool,
+      spaceId: spaceId,
+      roomId: roomId,
+      userId: dependencies.sessionController.session?.accountId ?? '',
+      shown: shown);
+
   @override
-  Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
-        final columns = math.max(
-            2, math.min(6, ((box.maxWidth + gap) / (118 + gap)).floor()));
-        final unit = (box.maxWidth - gap * (columns - 1)) / columns;
-        final cells = <List<bool>>[];
-        final positions = <({int column, int row})>[];
-        for (final item in items) {
-          final columnSpan = math.min(item.columns, columns);
-          var row = 0;
-          while (true) {
-            while (cells.length < row + item.rows) {
-              cells.add(List.filled(columns, false));
-            }
-            var placed = false;
-            for (var column = 0; column <= columns - columnSpan; column++) {
-              var free = true;
-              for (var y = row; y < row + item.rows; y++)
-                for (var x = column; x < column + columnSpan; x++) {
-                  if (cells[y][x]) free = false;
-                }
-              if (!free) continue;
-              for (var y = row; y < row + item.rows; y++)
-                for (var x = column; x < column + columnSpan; x++) {
-                  cells[y][x] = true;
-                }
-              positions.add((column: column, row: row));
-              placed = true;
-              break;
-            }
-            if (placed) break;
-            row++;
-          }
-        }
-        final height =
-            cells.length * unit + math.max(0, cells.length - 1) * gap;
-        return SizedBox(
-            height: height,
-            child: Stack(children: [
-              for (var i = 0; i < items.length; i++)
-                Positioned(
-                  left: positions[i].column * (unit + gap),
-                  top: positions[i].row * (unit + gap),
-                  width: math.min(items[i].columns, columns) * unit +
-                      (math.min(items[i].columns, columns) - 1) * gap,
-                  height: items[i].rows * unit + (items[i].rows - 1) * gap,
-                  child: DragTarget<int>(
-                    onWillAcceptWithDetails: (d) => d.data != i,
-                    onAcceptWithDetails: (d) => onMove(d.data, i),
-                    builder: (context, candidates, _) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        transform: Matrix4.diagonal3Values(
-                            candidates.isEmpty ? 1 : .96,
-                            candidates.isEmpty ? 1 : .96,
-                            1),
-                        child: LongPressDraggable<int>(
-                          data: i,
-                          feedback: Material(
-                              color: Colors.transparent,
-                              child: SizedBox(
-                                  width: math.min(items[i].columns, columns) *
-                                      unit,
-                                  height: items[i].rows * unit,
-                                  child: Opacity(
-                                      opacity: .86,
-                                      child: _DeskWidget(
-                                          item: items[i],
-                                          index: i,
-                                          desk: desk,
-                                          widgetDslByBot: widgetDslByBot,
-                                          onWidgetAction: onWidgetAction,
-                                          onDelete: () {})))),
-                          childWhenDragging: Opacity(
-                              opacity: .18,
-                              child: _DeskWidget(
-                                  item: items[i],
-                                  index: i,
-                                  desk: desk,
-                                  widgetDslByBot: widgetDslByBot,
-                                  onWidgetAction: onWidgetAction,
-                                  onDelete: () {})),
-                          child: _DeskWidget(
-                              item: items[i],
-                              index: i,
-                              desk: desk,
-                              widgetDslByBot: widgetDslByBot,
-                              onWidgetAction: onWidgetAction,
-                              onDelete: () => onDelete(items[i])),
-                        )),
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(children: [
+        Positioned.fill(
+            child: IgnorePointer(
+                child:
+                    CustomPaint(painter: _WorkspacePatternPainter(workspace)))),
+        Positioned.fill(
+          child: FloatingDesk(
+            controller: controller,
+            topInset: topContentInset,
+            windowContent: (context, w) => _frontend(w.tool, w.shown),
+            pinPreview: (p) => _frontend(p.tool, p.shown),
+            emptyState: Center(
+              child: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  SizedBox(height: 150, child: _MachineFace(pointer: pointer)),
+                  const SizedBox(height: 8),
+                  Text(room == null ? 'My trading desk' : '$room desk',
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 360),
+                    child: Text(
+                        'Tool results open here as windows. Ask an agent, or open a tool from the library.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 13, color: scheme.onSurfaceVariant)),
                   ),
-                ),
-            ]));
-      });
+                ]),
+              ),
+            ),
+            commandBar: _CommandBar(
+              controller: command,
+              room: room,
+              openSearch: openSearch,
+              onSubmit: onSubmit,
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
 }
 
 class _MachineFace extends StatelessWidget {
@@ -2314,294 +1948,6 @@ class _CommandBar extends StatelessWidget {
                 onSubmit == null ? null : () => onSubmit!(controller.text),
             icon: const Icon(Icons.arrow_upward_rounded))
       ]));
-}
-
-class _DeskData {
-  const _DeskData({
-    this.wallet,
-    this.bots = const [],
-    this.market = const [],
-    this.ledger = const [],
-    this.feed = const [],
-  });
-  final Wallet? wallet;
-  final List<Bot> bots;
-  final List<MarketListing> market;
-  final List<Map<String, dynamic>> ledger;
-  final List<SocialPost> feed;
-}
-
-class _DeskWidget extends StatefulWidget {
-  const _DeskWidget(
-      {required this.item,
-      required this.index,
-      required this.onDelete,
-      this.desk = const _DeskData(),
-      this.widgetDslByBot = const {},
-      this.onWidgetAction});
-  final _MosaicItem item;
-  final int index;
-  final VoidCallback onDelete;
-  final _DeskData desk;
-  final Map<String, DeskWidgetDsl> widgetDslByBot;
-  final Future<String> Function(
-          String botId, DslAction action, Map<String, dynamic> inline)?
-      onWidgetAction;
-  @override
-  State<_DeskWidget> createState() => _DeskWidgetState();
-}
-
-class _DeskWidgetState extends State<_DeskWidget> {
-  @override
-  Widget build(BuildContext context) {
-    final item = widget.item;
-    final index = widget.index;
-    final accent = [
-      Colors.purpleAccent,
-      Colors.cyanAccent,
-      Colors.greenAccent,
-      Colors.orangeAccent
-    ][index % 4];
-    final large = item.columns > 1 || item.rows > 1;
-    final icon = _kindIcon(item.kind);
-    return Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-            gradient: index % 3 == 0
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                        accent.withValues(alpha: .22),
-                        Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest
-                            .withValues(alpha: .5)
-                      ])
-                : null,
-            color: index % 3 == 0
-                ? null
-                : Theme.of(context)
-                    .colorScheme
-                    .surfaceContainerHighest
-                    .withValues(alpha: .55),
-            borderRadius: BorderRadius.circular(18)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Icon(icon, color: accent, size: large ? 21 : 17),
-            const Spacer(),
-            PopupMenuButton<void>(
-                itemBuilder: (_) => [
-                      PopupMenuItem<void>(
-                          onTap: widget.onDelete, child: const Text('Remove'))
-                    ],
-                iconSize: 17)
-          ]),
-          Text(item.isMiniapp ? _widgetDsl()?.title ?? item.title : item.title,
-              style:
-                  const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 3),
-          Expanded(child: _body(context, accent, large)),
-        ]));
-  }
-
-  DeskWidgetDsl? _widgetDsl() {
-    final botId = widget.item.botId;
-    if (botId == null) return null;
-    return widget.widgetDslByBot[botId];
-  }
-
-  static IconData _kindIcon(_WidgetKind kind) => switch (kind) {
-        _WidgetKind.miniapp => Icons.extension_rounded,
-        _WidgetKind.market => Icons.candlestick_chart,
-        _WidgetKind.portfolio => Icons.donut_large,
-        _WidgetKind.agents => Icons.smart_toy_outlined,
-        _WidgetKind.watchlist => Icons.star_outline,
-        _WidgetKind.activity => Icons.query_stats,
-        _WidgetKind.feed => Icons.dynamic_feed_outlined,
-      };
-
-  Widget _body(BuildContext context, Color accent, bool large) {
-    final kind = widget.item.kind;
-    if (kind == _WidgetKind.miniapp) {
-      final dsl = _widgetDsl();
-      if (dsl == null) {
-        return const Center(
-            child: Text('Waiting for widget…', style: TextStyle(fontSize: 9)));
-      }
-      return SingleChildScrollView(
-          child: WidgetDslRenderer(
-        dsl: dsl,
-        accent: accent,
-        dense: !large,
-        onAction: (action, inline) {
-          final fn = widget.onWidgetAction;
-          if (fn == null) return Future.value('');
-          return fn(dsl.botId, action, inline);
-        },
-      ));
-    }
-    switch (kind) {
-      case _WidgetKind.market:
-        final listings = widget.desk.market;
-        if (listings.isEmpty) {
-          return const Center(
-              child: Text('No market listings yet',
-                  style: TextStyle(fontSize: 9)));
-        }
-        return Column(children: [
-          for (final l in listings.take(4))
-            Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(children: [
-                  Expanded(
-                      child: Text(l.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 9))),
-                  Text('${l.installs}',
-                      style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          color: accent)),
-                ])),
-        ]);
-      case _WidgetKind.portfolio:
-        final wallet = widget.desk.wallet;
-        if (wallet == null) {
-          return const Center(
-              child: Text('No wallet', style: TextStyle(fontSize: 9)));
-        }
-        return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('AVAILABLE',
-                  style: TextStyle(
-                      fontSize: 8,
-                      letterSpacing: .6,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              Text(formatLedgerCredits(wallet.available),
-                  style: TextStyle(
-                      fontSize: large ? 20 : 15,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.success)),
-              const SizedBox(height: 3),
-              Text('${formatLedgerCredits(wallet.locked)} locked',
-                  style: TextStyle(
-                      fontSize: 8,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            ]);
-      case _WidgetKind.agents:
-        final bots = widget.desk.bots.where((b) => b.isAgent).toList();
-        if (bots.isEmpty) {
-          return const Center(
-              child: Text('No agents yet', style: TextStyle(fontSize: 9)));
-        }
-        return Column(children: [
-          for (final b in bots.take(4))
-            Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(children: [
-                  Icon(Icons.smart_toy_outlined,
-                      size: 13,
-                      color: b.status == 'running'
-                          ? AppColors.success
-                          : Theme.of(context).colorScheme.onSurfaceVariant),
-                  const SizedBox(width: 5),
-                  Expanded(
-                      child: Text(b.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 9))),
-                  Text(b.status,
-                      style: TextStyle(
-                          fontSize: 8,
-                          color: b.status == 'running'
-                              ? AppColors.success
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant)),
-                ])),
-        ]);
-      case _WidgetKind.watchlist:
-        final listings = widget.desk.market.take(4).toList();
-        if (listings.isEmpty) {
-          return const Center(
-              child: Text('Watchlist empty', style: TextStyle(fontSize: 9)));
-        }
-        return Column(children: [
-          for (final l in listings)
-            Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(children: [
-                  Expanded(
-                      child: Text(l.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 9))),
-                  Text('${l.price}',
-                      style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          color: accent)),
-                ])),
-        ]);
-      case _WidgetKind.activity:
-        final ledger = widget.desk.ledger;
-        if (ledger.isEmpty) {
-          return const Center(
-              child: Text('No activity yet', style: TextStyle(fontSize: 9)));
-        }
-        return Column(children: [
-          for (final entry in ledger.take(5))
-            Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(children: [
-                  Expanded(
-                      child: Text(
-                          (entry['description'] as String?) ??
-                              entry['type'] as String? ??
-                              '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 9))),
-                  Text(_amount(entry),
-                      style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          color: _amountSign(entry) == '-'
-                              ? AppColors.danger
-                              : AppColors.success)),
-                ])),
-        ]);
-      case _WidgetKind.feed:
-        final feed = widget.desk.feed;
-        if (feed.isEmpty) {
-          return const Center(
-              child: Text('No posts yet', style: TextStyle(fontSize: 9)));
-        }
-        return Column(children: [
-          for (final p in feed.take(3))
-            Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Text(p.body,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 9, height: 1.3))),
-        ]);
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  static String _amount(Map<String, dynamic> entry) {
-    final amount = (entry['amount'] as num?)?.toInt() ?? 0;
-    return '${amount >= 0 ? '+' : '-'}${amount.abs()}';
-  }
-
-  static String _amountSign(Map<String, dynamic> entry) =>
-      ((entry['amount'] as num?)?.toInt() ?? 0) >= 0 ? '+' : '-';
 }
 
 class _SocialFeed extends StatefulWidget {

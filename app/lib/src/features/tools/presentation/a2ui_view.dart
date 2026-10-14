@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../../../elpian/elpian.dart';
+import '../domain/tool_models.dart';
 import '../ui_kit/kit.dart' show registerUiKit;
 import 'a2ui_catalog.dart';
 import 'a2ui_normalize.dart';
@@ -9,8 +10,9 @@ import 'a2ui_normalize.dart';
 export 'a2ui_catalog.dart' show traderaCatalog, toolFrontendNodeType;
 
 /// Builds the embedded frontend of [botId] at [height].
+/// [shown]: the result to open it on, when an agent showed one.
 typedef ToolFrontendBuilder = Widget Function(
-    BuildContext context, String botId, double height);
+    BuildContext context, String botId, double height, ShownResult? shown);
 
 /// Renders A2UI messages — a tool's generated frontend, or a widget an agent
 /// composed — with Elpian's A2UI renderer and engine. Buttons' events go to
@@ -52,7 +54,8 @@ class _A2UIViewState extends State<A2UIView> {
       final height = (props['height'] as num?)?.toDouble() ?? 320;
       return Builder(
           builder: (context) =>
-              widget.toolFrontend?.call(context, tool, height) ??
+              widget.toolFrontend
+                  ?.call(context, tool, height, ShownResult.fromProps(props)) ??
               SizedBox(height: height));
     });
     _load();
@@ -141,7 +144,12 @@ class _A2UIViewState extends State<A2UIView> {
       {
         'type': toolFrontendNodeType,
         'key': key,
-        'props': {'tool': component['tool'], 'height': component['height']},
+        'props': {
+          'tool': component['tool'],
+          'height': component['height'],
+          'microtool': ctx.resolve(component['microtool']),
+          'args': ctx.resolve(component['args']),
+        },
       };
 
   @override

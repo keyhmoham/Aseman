@@ -1,6 +1,7 @@
 package a2ui
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -46,11 +47,17 @@ func Check(components []map[string]any) error {
 	root := false
 	var unknown []string
 	seen := map[string]bool{}
-	for _, c := range components {
+	for i, c := range components {
 		id, _ := c["id"].(string)
 		kind, _ := c["component"].(string)
 		if id == "" || kind == "" {
-			return errs.InvalidArgument("every component needs an id and a component type")
+			keys := make([]string, 0, len(c))
+			for k := range c {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			return errs.InvalidArgument(fmt.Sprintf("component #%d (keys: %s) needs an \"id\" and a \"component\" type; "+
+				"every component is a flat entry of the list and children are referenced by id", i+1, strings.Join(keys, ", ")))
 		}
 		root = root || id == "root"
 		if !known[kind] && !seen[kind] {

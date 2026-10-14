@@ -550,31 +550,59 @@ func (s *Service) generate(ctx context.Context, c caller, tool *models.Tool, ski
 	var tokensIn, tokensOut int64
 	var lastErr error
 	messages := []map[string]any{{"role": "system", "content": generationPrompt}, {"role": "user", "content": user}}
-	for attempt := 0; attempt < 2; attempt++ {
+	for attempt := 0; attempt < 3; attempt++ {
 		content, in, out, err := s.complete(ctx, provider, messages)
 		tokensIn, tokensOut = tokensIn+in, tokensOut+out
 		if err != nil {
 			lastErr = err
 			break
 		}
-		t = Template{}
-		lastErr = json.Unmarshal([]byte(jsonObject(content)), &t)
+		t, lastErr = parseTemplate(content)
 		if lastErr == nil {
-			a2ui.Normalize(t.Components)
 			lastErr = t.validate(microtools)
 		}
 		if lastErr == nil {
 			break
 		}
-		// One repair round: the model is told what was wrong.
+		// Repair rounds: the model is told what was wrong.
 		messages = append(messages, map[string]any{"role": "assistant", "content": content},
-			map[string]any{"role": "user", "content": "That is not valid: " + lastErr.Error() + ". Reply with the corrected JSON object only."})
+			map[string]any{"role": "user", "content": "That is not valid: " + lastErr.Error() +
+				". Reply with the corrected JSON object only: {\"title\", \"components\": [flat list, each {\"id\", \"component\", ...props}, children as ids, one with id \"root\"], \"data\", \"actions\"}."})
 	}
 	s.billGeneration(ctx, c, rec.ID, tokensIn, tokensOut)
 	if lastErr != nil {
 		return nil, "", errs.New(errs.CodeUnavailable, "could not generate the frontend: "+lastErr.Error())
 	}
 	return &t, provider.Model, nil
+}
+
+// parseTemplate reads a template from a model's reply, repairing the shapes
+// models get wrong in the component list (inline children, missing ids, the
+// type under another key, no root) before it is checked.
+func parseTemplate(content string) (Template, error) {
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(jsonObject(content)), &raw); err != nil {
+		return Template{}, err
+	}
+	return templateOf(raw)
+}
+
+// templateOf reads a template from its JSON object, repairing its
+// components (see parseTemplate).
+func templateOf(raw map[string]any) (Template, error) {
+	if raw == nil {
+		return Template{}, errs.InvalidArgument("the template is empty")
+	}
+	if c, ok := raw["components"]; ok {
+		raw["components"] = a2ui.Flatten(c)
+	}
+	b, _ := json.Marshal(raw)
+	var t Template
+	if err := json.Unmarshal(b, &t); err != nil {
+		return Template{}, err
+	}
+	a2ui.Normalize(t.Components)
+	return t, nil
 }
 
 func asString(v any) string { s, _ := v.(string); return s }

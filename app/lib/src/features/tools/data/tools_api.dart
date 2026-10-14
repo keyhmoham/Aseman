@@ -10,12 +10,17 @@ typedef ActionCall = Future<dynamic> Function(
 /// fetching their frontends. Every call is signed as the person using the
 /// app, so a backend always knows who is asking.
 class ToolsApi {
-  ToolsApi(this._call);
+  ToolsApi(this._call, {this.service});
 
   factory ToolsApi.of(TraderaService service) => ToolsApi(
       (namespace, action, body, {timeout}) async => (await service.client
               .call(namespace, action, body: body, requestTimeout: timeout))
-          .body);
+          .body,
+      service: service);
+
+  /// The node connection behind it, when there is one: frontends load the
+  /// space's files and the node's media through it.
+  final TraderaService? service;
 
   final ActionCall _call;
 

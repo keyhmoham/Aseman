@@ -69,6 +69,11 @@ the way to an answer) need not be shown. To put several results or tools'
 frontends together in one bigger view (a dashboard, a comparison), use
 `compose_ui`: it opens as a card window on the desk too. Tools' interfaces
 never go into the chat: every card window you create lives on the desk.
+Images, videos and audio show in these interfaces from wherever they are: an
+https URL, a project file (`/workspace/out/chart.png`, written by you or a
+tool), a stored file (its id or `/v1/files/{id}/content`), a data: URI or SVG
+markup. Point Image/Video/AudioPlayer `url`s straight at them; there is no
+need to upload a project file first to show it.
 
 ## The desk
 Each room has a desk people see next to the chat: card windows float on it,

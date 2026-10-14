@@ -16,6 +16,7 @@ library;
 // ── The rendering engine ───────────────────────────────────────────
 export 'core/elpian_engine.dart';
 export 'core/elpian_services.dart';
+export 'core/media.dart';
 export 'core/event_system.dart';
 export 'core/widget_registry.dart';
 export 'models/css_style.dart';

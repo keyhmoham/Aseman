@@ -5,6 +5,7 @@ import '../../miniapps/presentation/miniapp_theme.dart';
 import '../data/tools_api.dart';
 import '../domain/tool_models.dart';
 import '../runtime/tool_frontend_host.dart';
+import '../runtime/tool_media.dart';
 import '../ui_kit/kit.dart' show kitEngine;
 import 'a2ui_view.dart';
 
@@ -115,6 +116,17 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
 
   @override
   Widget build(BuildContext context) {
+    final service = widget.api.service;
+    final content = _content(context);
+    if (service == null || widget.spaceId.isEmpty) return content;
+    // Images, videos and audio load from the space's project files, the
+    // node's stored files and the node itself as this person.
+    return ElpianMediaScope(
+        resolver: ToolMedia.forSpace(service, widget.spaceId).call,
+        child: content);
+  }
+
+  Widget _content(BuildContext context) {
     if (_loading) {
       // A generated interface takes a moment the first time; it is cached
       // after that.

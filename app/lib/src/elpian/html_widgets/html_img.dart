@@ -5,7 +5,9 @@ import '../core/event_dispatcher.dart';
 import '../core/node_events.dart';
 import '../core/resources.dart';
 import '../models/elpian_node.dart';
+import '../core/media.dart';
 import '../css/css_properties.dart';
+import '../widgets/elpian_image.dart' show parseBoxFit;
 
 class HtmlImg {
   static Widget build(ElpianNode node, List<Widget> children) {
@@ -18,23 +20,13 @@ class HtmlImg {
     // target the Flutter asset bundle.
     final src = ElpianResources.resolve(rawSrc);
 
-    // D5: when a display size is known from the style, decode the image at that
-    // size instead of full resolution — large source images otherwise decode at
-    // their native pixel dimensions, wasting decode CPU and image-cache memory.
-    final w = node.style?.width;
-    final h = node.style?.height;
-    final cacheWidth = (w != null && w > 0) ? w.round() : null;
-    final cacheHeight = (h != null && h > 0) ? h.round() : null;
-
-    Widget result = ElpianResources.isNetwork(src)
-        ? Image.network(src,
-            cacheWidth: cacheWidth,
-            cacheHeight: cacheHeight,
-            errorBuilder: (_, __, ___) => Text(alt))
-        : Image.asset(src.startsWith('asset:') ? src.substring(6) : src,
-            cacheWidth: cacheWidth,
-            cacheHeight: cacheHeight,
-            errorBuilder: (_, __, ___) => Text(alt));
+    final fit = parseBoxFit(node.props['fit'] ?? node.props['object-fit']);
+    Widget result = ElpianMediaImage(
+        src: rawSrc,
+        fit: fit ?? BoxFit.contain,
+        width: node.style?.width,
+        height: node.style?.height,
+        alt: alt);
 
     // `<img usemap="#name">`: clickable regions from `<map name="name">`.
     final services = ElpianServices.current;

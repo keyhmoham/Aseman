@@ -90,6 +90,8 @@ Layout
 - List {children: {componentId: templateId, path: "/array"}} repeats templateId per item; inside it paths are relative to the item ("name", not "/name")
 Content
 - Text {text, variant: h1|h2|h3|h4|h5|body|caption} (Markdown)   Image {url, fit?, variant?}   Icon {name}
+- Video {url}   AudioPlayer {url, description?}
+  Media urls (Image, Video, AudioPlayer) may be: an https URL; a data: URI or inline <svg> markup; a project file path ("/workspace/out/chart.png", or relative "out/chart.png"); a stored file ("/v1/files/{id}/content" or the bare file id). Bind them like any value ({"path": "/image"}) when the result carries them.
 - Badge {text, status?: good|warning|serious|critical | color?, variant?: tonal|filled|outline, icon?}   Avatar {name, url?}
 - Callout {title?, text, severity: info|good|warning|critical}   CodeBlock {code, language?}   JsonView {value}
 Data

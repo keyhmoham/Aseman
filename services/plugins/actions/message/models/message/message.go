@@ -82,14 +82,12 @@ type Packet struct {
 // replies, tradera's final answers); KindLog is agentic-flow content (plans,
 // dispatches, tool/sandbox outputs) that the client renders as a collapsible
 // log section instead of a chat bubble. KindTool is a tool's reply to a
-// command a person ran in the room (body: JSON {command, result}). KindUI is
-// a widget an agent composed (ui_compose): body is JSON {title, messages},
-// A2UI messages the client renders, which may embed tools' own frontends.
+// command a person ran in the room (body: JSON {command, result}). Tools'
+// interfaces never go into the chat: they open on the room's desk.
 const (
 	KindMessage = "message"
 	KindLog     = "log"
 	KindTool    = "tool"
-	KindUI      = "ui"
 )
 
 // Message is a message inside a room of a space.

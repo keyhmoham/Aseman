@@ -304,5 +304,49 @@ void main() {
       expect(c.pinnedOpen, isFalse);
       c.dispose();
     });
+
+    testWidgets(
+        'what agents change on the desk moves, closes and opens with animation',
+        (tester) async {
+      final (c, node) = await pump(
+          tester,
+          _Node([
+            _window('a', 'wx', 'Weather', 40, 40),
+            _window('b', 'mk', 'Markets', 420, 40, z: 2),
+          ]));
+      Offset at(String id) => tester.getTopLeft(find.byKey(ValueKey(id)));
+      Future<void> agent(void Function() change) async {
+        change();
+        node.version++;
+        await c.refresh(force: true);
+        await tester.pump();
+      }
+
+      // An agent moves a window: it glides there.
+      await agent(() => node.windows.first
+        ..['x'] = 640
+        ..['y'] = 200);
+      await tester.pump(const Duration(milliseconds: 200));
+      final mid = at('a');
+      expect(mid.dx > 40 && mid.dx < 640, isTrue, reason: 'on its way: $mid');
+      await tester.pumpAndSettle();
+      expect(at('a'), const Offset(640, 200));
+
+      // An agent closes one: it fades out, then is gone.
+      await agent(() => node.windows.removeWhere((w) => w['id'] == 'b'));
+      expect(find.text('content of b'), findsOneWidget, reason: 'still fading');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(find.text('content of b'), findsNothing);
+
+      // An agent opens one below the fold: the desk glides down to it.
+      await agent(() =>
+          node.windows.add(_window('c', 'mk', 'Markets', 60, 1400, z: 3)));
+      await tester.pumpAndSettle();
+      final c3 = tester.getRect(find.byKey(const ValueKey('c')));
+      expect(c3.top >= 0 && c3.bottom <= 800, isTrue,
+          reason: 'scrolled into view: $c3');
+      c.dispose();
+    });
   });
 }

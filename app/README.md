@@ -58,9 +58,12 @@ managed (an Elpian VM, QuickJS or docker backend the node runs) or installed
   in its component registry) rendered by `A2UIView`, its buttons running
   microtools through `tools.frontend_action`.
 
-`ToolScreen` opens a tool in a space; agents' composed widgets (`ui` room
-messages) render with `ComposedWidgetCard`, whose `ToolFrontend` components
-embed tools' own frontends.
+Tools open as card windows on the room's desk (`features/desk`): a
+floating, scrollable desk of windows people and agents open, move, resize,
+pin and close (all animated), with a dock of the open tools pinned to its
+bottom and a pinned desk of shortcuts. Agents' composed widgets are desk
+windows too, their `ToolFrontend` components embedding tools' own
+frontends; nothing of a tool's interface goes into the chat.
 
 ## Architecture
 

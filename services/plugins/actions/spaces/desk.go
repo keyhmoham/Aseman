@@ -39,10 +39,21 @@ const (
 	deskMaxPins        = 60
 )
 
+// Window kinds: a tool's own frontend (the default), or a widget an agent
+// composed (ui_compose) from the space's tools' data and frontends, whose
+// A2UI surface the window holds. Composed windows share the dock entry
+// DeskComposedTool.
+const (
+	DeskComposed     = "composed"
+	DeskComposedTool = "widgets"
+)
+
 // DeskWindow is a tool's frontend open on the desk, optionally on one result
 // (the microtool called and its arguments).
 type DeskWindow struct {
 	ID        string         `json:"id"`
+	Kind      string         `json:"kind,omitempty"`
+	Widget    map[string]any `json:"widget,omitempty"`
 	Tool      string         `json:"tool"`
 	Name      string         `json:"name"`
 	Title     string         `json:"title"`
@@ -61,6 +72,8 @@ type DeskWindow struct {
 // DeskPin is a card window kept as a shortcut on the pinned desk.
 type DeskPin struct {
 	ID        string         `json:"id"`
+	Kind      string         `json:"kind,omitempty"`
+	Widget    map[string]any `json:"widget,omitempty"`
 	Tool      string         `json:"tool"`
 	Name      string         `json:"name"`
 	Title     string         `json:"title"`
@@ -91,6 +104,8 @@ type Desktop struct {
 type DeskOp struct {
 	Op        string         `json:"op"` // open, move, focus, close, close_tool, pin, unpin, viewport
 	ID        string         `json:"id,omitempty"`
+	Kind      string         `json:"kind,omitempty"`
+	Widget    map[string]any `json:"widget,omitempty"`
 	Tool      string         `json:"tool,omitempty"`
 	Name      string         `json:"name,omitempty"`
 	Title     string         `json:"title,omitempty"`
@@ -185,13 +200,26 @@ func newDeskID() string {
 func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) {
 	switch op.Op {
 	case "open":
-		if op.Tool == "" {
+		if op.Kind == DeskComposed {
+			if len(op.Widget) == 0 {
+				return "", errs.InvalidArgument("a composed window needs its widget")
+			}
+			op.Tool, op.Name, op.Frontend, op.Microtool, op.Args = DeskComposedTool, "Widgets", "generative", "", nil
+		} else if op.Tool == "" {
 			return "", errs.InvalidArgument("open needs a tool")
 		}
-		// The same result twice is one window, brought to the front.
+		// The same result twice is one window, brought to the front; a
+		// widget composed again under its title is refreshed in place.
 		for i := range d.Windows {
 			w := &d.Windows[i]
-			if w.Tool == op.Tool && w.Microtool == op.Microtool && sameArgs(w.Args, op.Args) {
+			same := w.Kind == op.Kind && w.Tool == op.Tool && w.Microtool == op.Microtool && sameArgs(w.Args, op.Args)
+			if op.Kind == DeskComposed {
+				same = w.Kind == DeskComposed && strings.EqualFold(w.Title, op.Title)
+			}
+			if same {
+				if op.Kind == DeskComposed {
+					w.Widget = op.Widget
+				}
 				w.Z = d.topZ() + 1
 				move(w, op)
 				return w.ID, nil
@@ -202,7 +230,7 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 		}
 		_, _, uw, uh := d.Usable()
 		w := DeskWindow{
-			ID: newDeskID(), Tool: op.Tool, Name: op.Name, Title: op.Title, Frontend: op.Frontend,
+			ID: newDeskID(), Kind: op.Kind, Widget: op.Widget, Tool: op.Tool, Name: op.Name, Title: op.Title, Frontend: op.Frontend,
 			Microtool: op.Microtool, Args: op.Args,
 			W: math.Min(460, uw), H: math.Min(560, uh),
 			OpenedBy: actor, OpenedAt: now.UTC().Format(time.RFC3339),
@@ -252,14 +280,18 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 			return "", errs.NotFound("window " + op.ID)
 		}
 		for _, p := range d.Pins {
-			if p.Tool == w.Tool && p.Microtool == w.Microtool && sameArgs(p.Args, w.Args) {
+			same := p.Kind == w.Kind && p.Tool == w.Tool && p.Microtool == w.Microtool && sameArgs(p.Args, w.Args)
+			if w.Kind == DeskComposed {
+				same = p.Kind == DeskComposed && strings.EqualFold(p.Title, w.Title)
+			}
+			if same {
 				return p.ID, nil
 			}
 		}
 		if len(d.Pins) >= deskMaxPins {
 			return "", errs.InvalidArgument(fmt.Sprintf("%d pins at most; unpin some first", deskMaxPins))
 		}
-		p := DeskPin{ID: newDeskID(), Tool: w.Tool, Name: w.Name, Title: w.Title, Frontend: w.Frontend,
+		p := DeskPin{ID: newDeskID(), Kind: w.Kind, Widget: w.Widget, Tool: w.Tool, Name: w.Name, Title: w.Title, Frontend: w.Frontend,
 			Microtool: w.Microtool, Args: w.Args, W: w.W, H: w.H, PinnedAt: now.UTC().Format(time.RFC3339)}
 		d.Pins = append(d.Pins, p)
 		return p.ID, nil
@@ -344,7 +376,11 @@ func (d *Desktop) Summary() string {
 				raw, _ := json.Marshal(w.Args)
 				args = string(raw)
 			}
-			fmt.Fprintf(&b, "\n- %s %q (%s%s) at x %.0f, y %.0f, %.0f×%.0f", w.ID, w.Title, w.Microtool, args, w.X, w.Y, w.W, w.H)
+			what := w.Microtool + args
+			if w.Kind == DeskComposed {
+				what = "composed widget"
+			}
+			fmt.Fprintf(&b, "\n- %s %q (%s) at x %.0f, y %.0f, %.0f×%.0f", w.ID, w.Title, what, w.X, w.Y, w.W, w.H)
 		}
 	}
 	if len(d.Pins) > 0 {

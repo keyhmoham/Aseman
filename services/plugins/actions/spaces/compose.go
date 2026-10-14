@@ -8,7 +8,6 @@ import (
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/a2ui"
 	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
 	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
 )
 
@@ -22,7 +21,11 @@ type composeInput struct {
 		Microtool string         `json:"microtool"`
 		Args      map[string]any `json:"args"`
 	} `json:"data"`
-	Room string `json:"room"`
+	Room string   `json:"room"`
+	X    *float64 `json:"x"`
+	Y    *float64 `json:"y"`
+	W    *float64 `json:"w"`
+	H    *float64 `json:"h"`
 }
 
 // maxComposedComponents bounds one composed widget.
@@ -30,8 +33,9 @@ const maxComposedComponents = 200
 
 // composeUI implements the ui_compose agent tool: an agent puts together a
 // widget from A2UI components, data its microtool calls return, and the
-// frontends of the space's tools (ToolFrontend components), and posts it as
-// its message in the room. Every call and every embedded tool is checked to
+// frontends of the space's tools (ToolFrontend components), and opens it as
+// a card window on the room's desk (the same title again refreshes that
+// window). Every call and every embedded tool is checked to
 // belong to the space; the data is fetched now, in the agent's scope, so the
 // widget shows what was true when it was made, and embedded frontends fetch
 // their own data for whoever opens them.
@@ -108,46 +112,29 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 			{"version": "v0.9", "updateDataModel": map[string]any{"surfaceId": surface, "path": "/", "value": data}},
 		},
 	})
-	target := roomID
-	if in.Room != "" {
-		if target, err = identity.Parse(in.Room); err != nil {
-			return "", errs.InvalidArgument("invalid room")
-		}
-	}
-	sender, err := s.agentAccount(ctx, agentName)
+	target, err := deskRoom(roomID, in.Room)
 	if err != nil {
 		return "", err
 	}
-	if target.IsZero() {
-		room, err := s.generalRoom(ctx, spaceID)
-		if err != nil {
-			return "", err
-		}
-		target = room.ID
+	title := strings.TrimSpace(in.Title)
+	if title == "" {
+		title = "Widget"
 	}
-	id, err := s.storeRoomMessage(ctx, spaceID, target, sender, string(body), message.KindUI, "")
+	var widget map[string]any
+	_ = json.Unmarshal(body, &widget)
+	d, ids, err := s.UpdateDesk(ctx, spaceID, target, agentName, []DeskOp{{
+		Op: "open", Kind: DeskComposed, Title: title, Widget: widget,
+		X: in.X, Y: in.Y, W: in.W, H: in.H,
+	}})
 	if err != nil {
 		return "", err
 	}
-	out := map[string]any{"ok": true, "message_id": id.String(), "data_paths": len(in.Data)}
+	out := map[string]any{"ok": true, "window": windowJSON(d, ids[0]), "data_paths": len(in.Data), "desk": d.Summary()}
 	if len(failed) > 0 {
 		out["failed"] = failed
 	}
 	raw, _ := json.Marshal(out)
 	return string(raw), nil
-}
-
-// agentAccount is the account a composing agent posts as: the execution's
-// agent, else the space's lead.
-func (s *Service) agentAccount(ctx context.Context, agentName string) (identity.ID, error) {
-	if id := vmm.ExecutionFrom(ctx).AgentID; id != "" {
-		if botID, err := identity.Parse(id); err == nil {
-			if rec, err := s.Bots.GetBot(ctx, botID); err == nil {
-				return rec.AccountID, nil
-			}
-		}
-	}
-	return s.TraderaAccount(ctx)
 }
 
 func setDataPointer(model map[string]any, path string, value any) {

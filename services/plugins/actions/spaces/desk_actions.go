@@ -37,6 +37,10 @@ func (s *Service) resolveDeskOpens(ctx context.Context, spaceID identity.ID, ops
 		if ops[i].Op != "open" {
 			continue
 		}
+		if ops[i].Kind == DeskComposed {
+			// People reopen a composed widget (from a pin) as it was.
+			continue
+		}
 		if tools == nil {
 			var err error
 			if tools, err = s.SpaceTools(ctx, spaceID, identity.ID{}); err != nil {

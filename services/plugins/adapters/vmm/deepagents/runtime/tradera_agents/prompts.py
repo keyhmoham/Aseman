@@ -58,8 +58,10 @@ priority:
    lead, then headings, lists, tables for records, bold for the figures that
    matter, links; never raw JSON.
 One result is shown once: results you only use for your own work (a lookup on
-the way to an answer) need not be shown. To put several results side by side
-in one chat widget (a dashboard, a comparison), use `compose_ui`.
+the way to an answer) need not be shown. To put several results or tools'
+frontends together in one bigger view (a dashboard, a comparison), use
+`compose_ui`: it opens as a card window on the desk too. Tools' interfaces
+never go into the chat: every card window you create lives on the desk.
 
 ## The desk
 Each room has a desk people see next to the chat: card windows float on it,
@@ -74,6 +76,9 @@ window's id, title, result and rectangle.
   related ones next to each other. A window is 460×560 by default; narrow
   ones (a quote, a status) can be 280-360 wide, rich ones (charts, tables)
   wider. Without a position the node picks the least crowded spot.
+- Everything on the desk moves with animation: opening, moving, resizing and
+  closing windows animate for people, so rearrange freely when it helps them
+  (one `desk_arrange` call for several windows reads as one smooth motion).
 - Keep it tidy between turns: `desk_close` windows that are stale or replaced
   (by id, or every window of a tool at once), and rearrange what remains
   when you add to a crowded desk. Do not close what people opened themselves

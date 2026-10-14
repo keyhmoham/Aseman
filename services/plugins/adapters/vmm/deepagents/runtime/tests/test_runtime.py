@@ -341,6 +341,7 @@ def test_every_agent_is_told_to_show_tool_results_in_the_tools_frontend_first() 
         # Generative frontend first, Markdown second, for every kind of tool.
         assert rule.index("frontend_show") < rule.index("Markdown")
         assert "external MCP" in rule and "managed" in rule and "installed" in rule
+        assert "never go into the chat" in rule and "`compose_ui`" in rule
 
 
 def test_tool_descriptions_say_how_to_present_their_results() -> None:
@@ -389,5 +390,5 @@ def test_agents_are_told_how_to_keep_the_desk() -> None:
 
     prompt = system_prompt(AgentDef(name="a", bot_id="b", account_id="c", vm_id="d"), "")
     desk = prompt[prompt.index("## The desk"):]
-    for words in ("card windows", "dock", "durable", "x`, `y`, `w`, `h`", "desk_arrange", "desk_close", "usable area"):
+    for words in ("card windows", "dock", "durable", "x`, `y`, `w`, `h`", "desk_arrange", "desk_close", "usable area", "animat"):
         assert words in desk, words

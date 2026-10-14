@@ -126,8 +126,10 @@ Users create tools in the Tools panel from one form with a **backend** and a
   frontend's API alike.
 - **Frontend:** *static* (an Elpian miniapp on the Elpian VM or QuickJS) or
   *generative* (A2UI generated from a skill on first use, cached in the
-  component registry and filled with fresh data). Agents combine tools'
-  frontends and data into bigger widgets (`ui_compose`).
+  component registry and filled with fresh data). Results open as floating
+  card windows on the room's desk, placed and arranged by agents and people;
+  agents combine tools' frontends and data into bigger widgets
+  (`ui_compose`) on the desk too.
 
 The Elpian engine is part of the app (`app/lib/src/elpian`), not a
 dependency. See [`services/README.md`](services/README.md#tools-one-form-three-backends-two-frontends).

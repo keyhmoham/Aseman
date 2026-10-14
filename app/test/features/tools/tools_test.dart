@@ -3,10 +3,10 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tradera/src/features/desk/domain/desk_models.dart';
 import 'package:tradera/src/features/tools/data/tools_api.dart';
 import 'package:tradera/src/features/tools/domain/tool_models.dart';
 import 'package:tradera/src/features/tools/presentation/a2ui_view.dart';
-import 'package:tradera/src/features/tools/presentation/composed_widget.dart';
 import 'package:tradera/src/features/tools/presentation/tool_create_form.dart';
 import 'package:tradera/src/features/tools/runtime/tool_frontend_host.dart';
 
@@ -445,15 +445,20 @@ void main() {
       expect(find.textContaining('Unknown'), findsNothing);
     });
 
-    test('a composed widget message is read from its body', () {
-      final body = jsonEncode({
+    test('a composed desk window holds its widget\'s surface', () {
+      final w = DeskWindow.fromJson({
+        'id': 'w1',
+        'tool': composedTool,
+        'kind': composedKind,
         'title': 'Portfolio',
-        'messages': surface({'greeting': 'x'})
+        'widget': {
+          'title': 'Portfolio',
+          'messages': surface({'greeting': 'x'})
+        },
       });
-      final parsed = ComposedWidgetCard.parse(body)!;
-      expect(parsed.title, 'Portfolio');
-      expect(parsed.messages, hasLength(3));
-      expect(ComposedWidgetCard.parse('plain text'), isNull);
+      expect(w.isComposed, isTrue);
+      expect(surfaceOf(w.widget), hasLength(3));
+      expect(surfaceOf(const {}), isEmpty);
     });
   });
 

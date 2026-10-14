@@ -131,13 +131,17 @@ class DeskController extends ChangeNotifier {
   int get _topZ => _state.windows.fold(0, (z, w) => w.z > z ? w.z : z);
 
   Future<String?> open(String tool,
-      {String title = '',
+      {String kind = '',
+      Map<String, dynamic> widget = const {},
+      String title = '',
       String microtool = '',
       Map<String, dynamic> args = const {},
       Rect? rect,
       Size? size}) async {
     final ids = await _send([
       DeskOps.open(tool,
+          kind: kind,
+          widget: widget,
           title: title,
           microtool: microtool,
           args: args,
@@ -149,6 +153,8 @@ class DeskController extends ChangeNotifier {
   }
 
   Future<String?> openPin(DeskPin pin) => open(pin.tool,
+      kind: pin.kind,
+      widget: pin.widget,
       title: pin.title,
       microtool: pin.microtool,
       args: pin.args,
@@ -189,16 +195,18 @@ class DeskController extends ChangeNotifier {
             windows: _state.windows.where((w) => w.tool != tool).toList()));
   }
 
-  bool isPinned(DeskWindow w) => _state.pins.any((p) =>
-      p.tool == w.tool &&
-      p.microtool == w.microtool &&
-      mapEquals(p.args, w.args));
+  /// The pin keeping [w] (a composed widget is kept by its title).
+  bool _pins(DeskPin p, DeskWindow w) => w.isComposed
+      ? p.isComposed && p.title.toLowerCase() == w.title.toLowerCase()
+      : !p.isComposed &&
+          p.tool == w.tool &&
+          p.microtool == w.microtool &&
+          mapEquals(p.args, w.args);
+
+  bool isPinned(DeskWindow w) => _state.pins.any((p) => _pins(p, w));
 
   Future<void> togglePin(DeskWindow w) {
-    final pin = _state.pins.where((p) =>
-        p.tool == w.tool &&
-        p.microtool == w.microtool &&
-        mapEquals(p.args, w.args));
+    final pin = _state.pins.where((p) => _pins(p, w));
     if (pin.isNotEmpty) return unpin(pin.first.id);
     return _send([DeskOps.pin(w.id)]);
   }

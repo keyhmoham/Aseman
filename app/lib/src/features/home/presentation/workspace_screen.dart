@@ -17,6 +17,7 @@ import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../admin/presentation/admin_screen.dart';
 import '../../desk/data/desk_api.dart';
+import '../../desk/domain/desk_models.dart';
 import '../../desk/presentation/desk_controller.dart';
 import '../../desk/presentation/floating_desk.dart';
 import '../../miniapps/domain/sandbox_explorer_frontend.dart';
@@ -26,6 +27,7 @@ import '../../search_feed/presentation/post_editor.dart';
 import '../../search_feed/presentation/rich_post_content.dart';
 import '../../tools/data/tools_api.dart';
 import '../../tools/domain/tool_models.dart';
+import '../../tools/presentation/a2ui_view.dart';
 import '../../tools/presentation/tool_frontend_view.dart';
 import '../../tools/presentation/tool_screen.dart';
 import 'space_settings_panel.dart';
@@ -1809,6 +1811,19 @@ class _CenterDesk extends StatelessWidget {
       userId: dependencies.sessionController.session?.accountId ?? '',
       shown: shown);
 
+  /// A widget an agent composed (ui_compose): A2UI over the space's tools'
+  /// data, embedding tools' own frontends.
+  Widget _composed(String id, Map<String, dynamic> widget) =>
+      SingleChildScrollView(
+        key: ValueKey('composed-$id'),
+        padding: const EdgeInsets.all(16),
+        child: A2UIView(
+          messages: ComposedSurfaces.of(widget),
+          toolFrontend: (context, botId, height, shown) =>
+              SizedBox(height: height, child: _frontend(botId, shown)),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -1823,8 +1838,12 @@ class _CenterDesk extends StatelessWidget {
           child: FloatingDesk(
             controller: controller,
             topInset: topContentInset,
-            windowContent: (context, w) => _frontend(w.tool, w.shown),
-            pinPreview: (p) => _frontend(p.tool, p.shown),
+            windowContent: (context, w) => w.isComposed
+                ? _composed(w.id, w.widget)
+                : _frontend(w.tool, w.shown),
+            pinPreview: (p) => p.isComposed
+                ? _composed(p.id, p.widget)
+                : _frontend(p.tool, p.shown),
             emptyState: Center(
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [

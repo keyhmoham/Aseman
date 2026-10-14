@@ -1,11 +1,13 @@
 package spaces
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/tradera/tradera/plugins/adapters/database/ports"
 )
 
 func f(v float64) *float64 { return &v }
@@ -105,5 +107,60 @@ func TestDeskPersistsAndDescribesItself(t *testing.T) {
 		if !strings.Contains(sum, want) {
 			t.Errorf("summary lacks %q:\n%s", want, sum)
 		}
+	}
+}
+
+func TestComposedWidgetsOpenOnTheDeskNotInTheChat(t *testing.T) {
+	s, ctx := messageToolHarness(t)
+	sp, err := s.CreateSpace(ctx, idFromHex(t, "00000000000000010000000000000001"), "compose space", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	room := identity.ID{Node: 1, Entity: 9}
+	compose := func(text string) string {
+		out, err := s.composeUI(ctx, sp.ID, room, "tradera",
+			`{"title":"Portfolio","x":30,"y":40,"components":[{"id":"root","component":"Text","text":"`+text+`"}]}`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	first := compose("v1")
+	if !strings.Contains(first, `"window"`) || !strings.Contains(first, "composed widget") {
+		t.Fatalf("compose result: %s", first)
+	}
+	compose("v2") // the same title: the same window, refreshed
+	d, _ := s.Desk(ctx, sp.ID, room)
+	if len(d.Windows) != 1 {
+		t.Fatalf("windows: %+v", d.Windows)
+	}
+	w := d.Windows[0]
+	if w.Kind != DeskComposed || w.Tool != DeskComposedTool || w.X != 30 || w.Y != 40 {
+		t.Fatalf("window: %+v", w)
+	}
+	raw, _ := json.Marshal(w.Widget)
+	if !strings.Contains(string(raw), "v2") || strings.Contains(string(raw), "v1") {
+		t.Fatalf("widget not refreshed: %s", raw)
+	}
+	// Pinned and reopened as it was.
+	d, ids, err := s.UpdateDesk(ctx, sp.ID, room, "ann", []DeskOp{{Op: "pin", ID: w.ID}, {Op: "close", ID: w.ID}})
+	if err != nil || len(d.Pins) != 1 || d.Pins[0].Kind != DeskComposed || ids[0] == "" {
+		t.Fatalf("pin: %+v %v", d.Pins, err)
+	}
+	pin := d.Pins[0]
+	ops := []DeskOp{{Op: "open", Kind: pin.Kind, Title: pin.Title, Widget: pin.Widget}}
+	if err := s.resolveDeskOpens(ctx, sp.ID, ops, false); err != nil {
+		t.Fatal(err)
+	}
+	if d, _, err = s.UpdateDesk(ctx, sp.ID, room, "ann", ops); err != nil || len(d.Windows) != 1 || d.Windows[0].Kind != DeskComposed {
+		t.Fatalf("reopen: %+v %v", d.Windows, err)
+	}
+	// Nothing was posted to the room.
+	var msgs []map[string]any
+	if err := s.R.List(ctx, "messages", database.Filter{}, &msgs); err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 0 {
+		t.Fatalf("composed widgets reached the chat: %v", msgs)
 	}
 }

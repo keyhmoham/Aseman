@@ -40,7 +40,9 @@ class DeskApi {
 /// The ops of [DeskApi.update].
 abstract final class DeskOps {
   static Map<String, dynamic> open(String tool,
-          {String title = '',
+          {String kind = '',
+          Map<String, dynamic> widget = const {},
+          String title = '',
           String microtool = '',
           Map<String, dynamic> args = const {},
           Rect? rect,
@@ -48,6 +50,8 @@ abstract final class DeskOps {
       {
         'op': 'open',
         'tool': tool,
+        if (kind.isNotEmpty) 'kind': kind,
+        if (widget.isNotEmpty) 'widget': widget,
         if (title.isNotEmpty) 'title': title,
         if (microtool.isNotEmpty) 'microtool': microtool,
         if (args.isNotEmpty) 'args': args,

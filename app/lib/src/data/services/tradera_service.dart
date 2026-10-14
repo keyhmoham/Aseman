@@ -359,6 +359,9 @@ class TraderaService implements BackendService {
     return (
       messages: list
           .whereType<Map<String, dynamic>>()
+          // Widgets agents once posted into the chat (kind "ui"): tools'
+          // interfaces now open on the room's desk instead.
+          .where((m) => m['kind'] != 'ui')
           .map(RoomMessage.fromJson)
           .toList(),
       working: body['working'] as String? ?? '',

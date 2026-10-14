@@ -46,7 +46,8 @@ class FloatingDesk extends StatefulWidget {
   State<FloatingDesk> createState() => _FloatingDeskState();
 }
 
-class _FloatingDeskState extends State<FloatingDesk> {
+class _FloatingDeskState extends State<FloatingDesk>
+    with SingleTickerProviderStateMixin {
   static const _motion = Duration(milliseconds: 520);
   static const _curve = Curves.easeInOutCubicEmphasized;
   static const _gap = 16.0;
@@ -55,6 +56,29 @@ class _FloatingDeskState extends State<FloatingDesk> {
 
   /// Rects of windows being dragged or resized, ahead of the node.
   final Map<String, Rect> _live = {};
+
+  /// Windows that just closed (here, by an agent or by someone else),
+  /// fading out where they were.
+  final Map<String, (DeskWindow, Rect)> _leaving = {};
+  static const _leave = Duration(milliseconds: 320);
+
+  /// The windows and where they were drawn, as of the last change.
+  Map<String, DeskWindow> _seen = {};
+  Map<String, Rect> _placed = {};
+  String _scope = '';
+  Size _viewport = Size.zero;
+
+  /// Glides the desk to a window that opened out of sight.
+  late final AnimationController _pan = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 560))
+    ..addListener(() {
+      final a = _panTween;
+      if (a != null) {
+        setState(() => _scroll =
+            a.transform(Curves.easeInOutCubicEmphasized.transform(_pan.value)));
+      }
+    });
+  Tween<Offset>? _panTween;
 
   DeskController get c => widget.controller;
 
@@ -76,11 +100,59 @@ class _FloatingDeskState extends State<FloatingDesk> {
   @override
   void dispose() {
     c.removeListener(_changed);
+    _pan.dispose();
     super.dispose();
   }
 
   void _changed() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final now = {for (final w in c.state.windows) w.id: w};
+    final scope = '${c.spaceId}/${c.room}';
+    if (scope != _scope) {
+      // Another room's desk: nothing leaves or arrives, it is just shown.
+      _scope = scope;
+      _leaving.clear();
+      _scroll = Offset.zero;
+      _seen = c.loaded ? now : {};
+      setState(() {});
+      return;
+    }
+    if (_seen.isNotEmpty || c.loaded) {
+      for (final id in _seen.keys) {
+        if (now.containsKey(id) || !_placed.containsKey(id)) continue;
+        _leaving[id] = (_seen[id]!, _placed[id]!);
+        Future<void>.delayed(_leave, () {
+          if (mounted) setState(() => _leaving.remove(id));
+        });
+      }
+      final opened = [
+        for (final w in now.values)
+          if (!_seen.containsKey(w.id)) w
+      ];
+      if (_seen.isNotEmpty && opened.isNotEmpty) _reveal(opened.last.rect);
+    }
+    _seen = c.loaded ? now : _seen;
+    setState(() {});
+  }
+
+  /// Scrolls the desk, animated, until [rect] is in view.
+  void _reveal(Rect rect) {
+    if (_viewport == Size.zero || c.focusTool != null) return;
+    final visible = Rect.fromLTWH(
+        _scroll.dx,
+        _scroll.dy + widget.topInset,
+        _viewport.width,
+        _viewport.height - widget.topInset - DeskGeometry.bottomReserve);
+    if (visible.contains(rect.topLeft) &&
+        visible.contains(rect.bottomRight.translate(-1, -1))) {
+      return;
+    }
+    final target = Offset(
+      math.max(0, rect.left - DeskGeometry.margin),
+      math.max(0, rect.top - widget.topInset - DeskGeometry.margin),
+    );
+    _panTween = Tween(begin: _scroll, end: target);
+    _pan.forward(from: 0);
   }
 
   /// Where windows go to be seen at once, in desk coordinates.
@@ -144,6 +216,7 @@ class _FloatingDeskState extends State<FloatingDesk> {
   }
 
   void _scrollBy(Offset delta, Size viewport, Size canvas) {
+    if (_pan.isAnimating) _pan.stop();
     final next = Offset(
       (_scroll.dx + delta.dx)
           .clamp(0.0, math.max(0.0, canvas.width - viewport.width)),
@@ -187,6 +260,8 @@ class _FloatingDeskState extends State<FloatingDesk> {
           placed[w.id] = gathered[w.id] ?? _live[w.id] ?? w.rect;
         }
       }
+      _placed = placed;
+      _viewport = viewport;
       final canvas = _canvas(viewport, [
         for (final w in windows)
           if (!hidden.contains(w.id) && maximized != w.id) _live[w.id] ?? w.rect
@@ -241,6 +316,11 @@ class _FloatingDeskState extends State<FloatingDesk> {
               for (final w in order)
                 _window(w, placed[w.id]!, hidden.contains(w.id), w.z == topZ,
                     maximized, focus),
+              // Closed windows fade out where they were.
+              for (final e in _leaving.entries)
+                if (!placed.containsKey(e.key))
+                  _window(e.value.$1, e.value.$2, false, false, null, null,
+                      leaving: true),
             ]),
           ),
           if (canvas.height > viewport.height + 1)
@@ -333,7 +413,8 @@ class _FloatingDeskState extends State<FloatingDesk> {
   }
 
   Widget _window(DeskWindow w, Rect rect, bool hidden, bool front,
-      String? maximized, String? focus) {
+      String? maximized, String? focus,
+      {bool leaving = false}) {
     final live = _live.containsKey(w.id);
     final movable = focus == null && maximized == null;
     return AnimatedPositioned(
@@ -345,15 +426,19 @@ class _FloatingDeskState extends State<FloatingDesk> {
       width: rect.width,
       height: rect.height,
       child: IgnorePointer(
-        ignoring: hidden,
+        ignoring: hidden || leaving,
         child: AnimatedOpacity(
-          opacity: hidden ? 0 : 1,
-          duration: _motion,
-          curve: _curve,
+          opacity: hidden || leaving ? 0 : 1,
+          duration: leaving ? _leave : _motion,
+          curve: leaving ? Curves.easeIn : _curve,
           child: AnimatedScale(
-            scale: hidden ? .25 : 1,
-            duration: _motion,
-            curve: _curve,
+            scale: hidden
+                ? .25
+                : leaving
+                    ? .92
+                    : 1,
+            duration: leaving ? _leave : _motion,
+            curve: leaving ? Curves.easeIn : _curve,
             child: CardWindow(
               window: w,
               front: front && !hidden,

@@ -318,9 +318,14 @@ acts only in the space it was called from.
 | `generative` | A2UI generated from the deployer's skill the first time anyone opens it, kept in the **component registry** (`tool_components`, keyed by the skill's version and the backend's microtools) and served from there afterwards, filled with fresh microtool data per request; its buttons map to microtools |
 
 Agents get every tool's microtools as tools (`spaces.tools_list`, through
-`spaces.ask`), and with `ui_compose` they post widgets built from A2UI,
-microtool data and tools' own frontends (`ToolFrontend` components) —
-combining several tools into one view.
+`spaces.ask`). Tools' interfaces never go into the chat: they open as card
+windows on the room's **desk** (`spaces/desk.go`, kept in the space's
+metadata under `desktop/<room>`; `spaces.desktop_get` / `desktop_update`).
+`frontend_show` opens a tool's generative frontend on a result,
+`ui_compose` a widget built from A2UI, microtool data and tools' own
+frontends (`ToolFrontend` components), and `desk_state`, `desk_arrange`
+and `desk_close` let agents lay the desk out; each turn's note describes it
+(size, usable area, open windows).
 
 | Action | |
 |---|---|

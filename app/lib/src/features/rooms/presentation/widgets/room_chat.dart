@@ -13,7 +13,6 @@ import '../../../../shared/widgets/mini_tag.dart';
 import '../../../home/presentation/widgets/routines_panel.dart';
 import '../../../search_feed/presentation/post_editor.dart';
 import '../../../search_feed/presentation/rich_post_content.dart';
-import '../../../tools/presentation/composed_widget.dart';
 import '../../../workflows/presentation/workflow_panel.dart';
 import 'attachment_bubble.dart';
 import 'workspace_links.dart';
@@ -778,17 +777,6 @@ class _RoomChatState extends State<RoomChat> {
         expanded: _expandedLogs.contains(m.id),
         onToggle: () => _toggleLog(m.id),
         dependencies: widget.dependencies,
-      );
-    }
-    // A widget an agent composed from the space's tools (ui_compose).
-    if (m.kind == 'ui') {
-      return ComposedWidgetCard(
-        body: m.body,
-        spaceId: m.spaceId,
-        roomId: m.roomId,
-        dependencies: widget.dependencies,
-        senderName:
-            m.senderName.isNotEmpty ? m.senderName : _sender(m.senderId).name,
       );
     }
     final scheme = Theme.of(context).colorScheme;

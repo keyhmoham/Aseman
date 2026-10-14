@@ -3,6 +3,7 @@
 /// as last shown. Coordinates are logical pixels from the desk's top-left.
 library;
 
+import 'dart:convert';
 import 'dart:ui';
 
 import '../../tools/domain/tool_models.dart';
@@ -22,10 +23,24 @@ Map<String, dynamic> _map(Object? v) =>
     v is Map ? v.cast<String, dynamic>() : <String, dynamic>{};
 double _num(Object? v, double fallback) => v is num ? v.toDouble() : fallback;
 
+/// A2UI messages a composed window holds (`{title, messages}`), or none.
+List<Map<String, dynamic>> surfaceOf(Map<String, dynamic> widget) => [
+      for (final m in (widget['messages'] as List?) ?? const <dynamic>[])
+        if (m is Map) m.cast<String, dynamic>(),
+    ];
+
+/// The kind of a window that holds a widget an agent composed (ui_compose)
+/// rather than one tool's frontend; such windows share the dock entry
+/// [composedTool].
+const String composedKind = 'composed';
+const String composedTool = 'widgets';
+
 class DeskWindow {
   const DeskWindow({
     required this.id,
     required this.tool,
+    this.kind = '',
+    this.widget = const {},
     this.name = '',
     this.title = '',
     this.frontend = '',
@@ -39,6 +54,8 @@ class DeskWindow {
   factory DeskWindow.fromJson(Map<String, dynamic> j) => DeskWindow(
         id: '${j['id'] ?? ''}',
         tool: '${j['tool'] ?? ''}',
+        kind: '${j['kind'] ?? ''}',
+        widget: _map(j['widget']),
         name: '${j['name'] ?? ''}',
         title: '${j['title'] ?? ''}',
         frontend: '${j['frontend'] ?? ''}',
@@ -55,8 +72,16 @@ class DeskWindow {
 
   final String id;
 
-  /// The tool's bot id.
+  /// The tool's bot id ([composedTool] for composed widgets).
   final String tool;
+
+  /// Empty for a tool's frontend; [composedKind] for a composed widget.
+  final String kind;
+
+  /// A composed widget's `{title, messages}`.
+  final Map<String, dynamic> widget;
+
+  bool get isComposed => kind == composedKind;
   final String name;
   final String title;
 
@@ -84,6 +109,8 @@ class DeskWindow {
   DeskWindow copyWith({Rect? rect, int? z}) => DeskWindow(
         id: id,
         tool: tool,
+        kind: kind,
+        widget: widget,
         name: name,
         title: title,
         frontend: frontend,
@@ -99,6 +126,8 @@ class DeskPin {
   const DeskPin({
     required this.id,
     required this.tool,
+    this.kind = '',
+    this.widget = const {},
     this.name = '',
     this.title = '',
     this.frontend = '',
@@ -110,6 +139,8 @@ class DeskPin {
   factory DeskPin.fromJson(Map<String, dynamic> j) => DeskPin(
         id: '${j['id'] ?? ''}',
         tool: '${j['tool'] ?? ''}',
+        kind: '${j['kind'] ?? ''}',
+        widget: _map(j['widget']),
         name: '${j['name'] ?? ''}',
         title: '${j['title'] ?? ''}',
         frontend: '${j['frontend'] ?? ''}',
@@ -121,12 +152,16 @@ class DeskPin {
 
   final String id;
   final String tool;
+  final String kind;
+  final Map<String, dynamic> widget;
   final String name;
   final String title;
   final String frontend;
   final String microtool;
   final Map<String, dynamic> args;
   final Size size;
+
+  bool get isComposed => kind == composedKind;
 
   String get label => title.isNotEmpty ? title : name;
 
@@ -189,4 +224,19 @@ class DeskState {
           viewport: viewport,
           windows: windows ?? this.windows,
           pins: pins ?? this.pins);
+}
+
+/// [surfaceOf], the same list for the same content: what renders a composed
+/// window reloads only when its widget really changed, not on every poll.
+abstract final class ComposedSurfaces {
+  static final Expando<String> _signatures = Expando();
+  static final Map<String, List<Map<String, dynamic>>> _cache = {};
+
+  static List<Map<String, dynamic>> of(Map<String, dynamic> widget) {
+    final signature = _signatures[widget] ??= jsonEncode(widget);
+    final cached = _cache[signature];
+    if (cached != null) return cached;
+    if (_cache.length > 64) _cache.remove(_cache.keys.first);
+    return _cache[signature] = surfaceOf(widget);
+  }
 }

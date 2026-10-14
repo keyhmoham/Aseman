@@ -4,6 +4,8 @@
 #   fresh     nothing yet            → space, admins space, build, tool, add, routine
 #   again     everything exists      → kept: tool restarted, routine updated
 #   other     "evaluator" runs another image → refused without --replace
+#   legacy    "evaluator" was created with :latest (Nomad never ran it) → replaced
+#   down      the backend never answers → a clear error, nothing more is sent
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK="$(mktemp -d)"
@@ -29,14 +31,17 @@ case "$action" in
     if [ "$STUB_SCENARIO" = fresh ]; then echo '{"bots":[]}'
     else echo '{"bots":[{"id":"bot-ev","name":"evaluator","kind":"tool"}]}'; fi ;;
   tools.tool_get)
-    if [ "$STUB_SCENARIO" = again ]; then echo '{"bot_id":"bot-ev","mode":"managed","runtime":"docker","image":"tradera/evaluator-tool:latest"}'
+    if [ "$STUB_SCENARIO" = again ] || [ "$STUB_SCENARIO" = down ]; then echo '{"bot_id":"bot-ev","mode":"managed","runtime":"docker","image":"tradera/evaluator-tool:v1"}'
+    elif [ "$STUB_SCENARIO" = legacy ]; then echo '{"bot_id":"bot-ev","mode":"managed","runtime":"docker","image":"tradera/evaluator-tool:latest"}'
     else echo '{"bot_id":"bot-ev","mode":"managed","runtime":"docker","image":"acme/other:1"}'; fi ;;
   tools.tool_create) echo '{"bot_id":"bot-new"}' ;;
   spaces.bots_list)
     if [ "$STUB_SCENARIO" = again ]; then echo '{"bots":[{"id":"bot-ev"}]}'; else echo '{"bots":[]}'; fi ;;
   routines.list)
     if [ "$STUB_SCENARIO" = again ]; then echo '{"routines":[{"id":"rt-1","name":"evaluator heartbeat"}]}'; else echo '{"routines":[]}'; fi ;;
-  tools.invoke) echo '{"result":{"isError":false,"structuredContent":{"cookies":3,"logged_in":true}}}' ;;
+  tools.invoke)
+    if [ "$STUB_SCENARIO" = down ]; then echo 'error: http 503: the tool'"'"'s backend is not answering' >&2; exit 1; fi
+    echo '{"result":{"isError":false,"structuredContent":{"cookies":3,"logged_in":true}}}' ;;
   *) echo '{"ok":true}' ;;
 esac
 STUB
@@ -63,9 +68,9 @@ want="login spaces.space_list spaces.space_create spaces.admins_space_set docker
 grep -q $'^login\tnode-a changeme$' "$WORK/fresh.log" || fail "signs in as node-a"
 [ "$(body fresh spaces.space_create | jq -r .name)" = "admins space" ] || fail "space name"
 [ "$(body fresh spaces.admins_space_set | jq -r .space)" = sp-new ] || fail "admins space set"
-grep -q $'^docker\tbuild -t tradera/evaluator-tool:latest ' "$WORK/fresh.log" || fail "image build"
+grep -q $'^docker\tbuild -t tradera/evaluator-tool:v1 ' "$WORK/fresh.log" || fail "image build"
 create="$(body fresh tools.tool_create)"
-[ "$(jq -r '.name + " " + .backend.mode + "/" + .backend.runtime + " " + .backend.image + " " + .backend.path' <<<"$create")" = "evaluator managed/docker tradera/evaluator-tool:latest /mcp" ] || fail "create: $create"
+[ "$(jq -r '.name + " " + .backend.mode + "/" + .backend.runtime + " " + .backend.image + " " + .backend.path' <<<"$create")" = "evaluator managed/docker tradera/evaluator-tool:v1 /mcp" ] || fail "create: $create"
 jq -e '.frontend.mode == "generative" and (.frontend.skill | contains("trader_add"))' <<<"$create" >/dev/null || fail "frontend"
 [ "$(body fresh spaces.bot_add | jq -r '.bot + "@" + .space')" = bot-new@sp-new ] || fail "added to space"
 routine="$(body fresh routines.create)"
@@ -90,4 +95,17 @@ grep -q -- "--replace" "$WORK/other.err" || fail "other: no hint"
 got="$(run other --replace)"
 case "$got" in *"tools.tool_delete tools.tool_create"*) ;; *) fail "replace: $got" ;; esac
 
-echo "ok: fresh install, re-run in place and replace"
+got="$(run legacy)"
+case "$got" in *"tools.tool_get tools.tool_delete tools.tool_create"*) ;; *) fail "legacy: $got" ;; esac
+grep -q "never runs from a local build" "$WORK/legacy.err" || fail "legacy: no reason given"
+
+if run other --image acme/evaluator:latest >/dev/null; then fail "accepted a :latest image"; fi
+grep -q "fixed tag" "$WORK/other.err" || fail "no hint for a :latest image"
+if run other --image acme/evaluator >/dev/null; then fail "accepted an untagged image"; fi
+[ -s "$WORK/other.log" ] && fail "called the node for a refused image"
+
+if EVALUATOR_WAIT_TRIES=1 run down --no-build --cmc-session "$WORK/session.json" >/dev/null; then fail "down: succeeded"; fi
+grep -q "did not answer" "$WORK/down.err" || fail "down: no explanation"
+grep -q "tools.invoke:set_session" "$WORK/down.log" && fail "down: kept going"
+
+echo "ok: fresh install, re-run in place, replace, :latest images and a backend that never answers"

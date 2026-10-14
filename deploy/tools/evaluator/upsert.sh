@@ -29,7 +29,8 @@
 #   --handle NAME        the admin account (default $TRADERA_HANDLE or node-a)
 #   --password PW        its password (default $TRADERA_PASSWORD, $TRADERA_ADMIN_PASSWORD, else changeme)
 #   --space-name NAME    the admins space's name (default "admins space")
-#   --image REF          the backend image (default tradera/evaluator-tool:latest)
+#   --image REF          the backend image (default tradera/evaluator-tool:v1); never
+#                        :latest or untagged: Nomad always pulls those from a registry
 #   --no-build           use --image as it is (e.g. pulled from a registry)
 #   --replace            replace an "evaluator" tool that runs another image
 #   --interval SEC       how often the routine calls tick (default 600)
@@ -57,7 +58,7 @@ SERVER="${TRADERA_SERVER:-http://localhost:8080}"
 HANDLE="${TRADERA_HANDLE:-node-a}"
 PASSWORD="${TRADERA_PASSWORD:-${TRADERA_ADMIN_PASSWORD:-changeme}}"
 SPACE_NAME="${EVALUATOR_SPACE_NAME:-admins space}"
-IMAGE="${EVALUATOR_IMAGE:-tradera/evaluator-tool:latest}"
+IMAGE="${EVALUATOR_IMAGE:-tradera/evaluator-tool:v1}"
 BUILD=1
 REPLACE=""
 INTERVAL=600
@@ -96,6 +97,19 @@ while [ $# -gt 0 ]; do
 done
 
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
+
+# floating_tag <image>: whether the image is :latest or untagged. Nomad's docker
+# driver always pulls those from a registry (whatever force_pull says), so a
+# locally built one never starts.
+floating_tag() {
+  local name="${1%@*}" tag=""
+  case "${name##*/}" in *:*) tag="${name##*:}" ;; esac
+  [ -z "$tag" ] || [ "$tag" = latest ]
+}
+if floating_tag "$IMAGE" && [[ "$IMAGE" != *@* ]]; then
+  echo "--image $IMAGE: use a fixed tag (e.g. tradera/evaluator-tool:v1). Nomad always pulls :latest or untagged images from a registry, so a local build of one never runs." >&2
+  exit 2
+fi
 if [ -n "$CMC_SESSION" ] && ! jq -e 'type == "object" or type == "array"' "$CMC_SESSION" >/dev/null 2>&1; then
   echo "--cmc-session: $CMC_SESSION is not a JSON storage_state or cookie list" >&2
   exit 1
@@ -136,7 +150,7 @@ call() {
 invoke() {
   local out
   out="$(call tools.invoke "$(jq -nc --arg bot "${bot:-<evaluator>}" --arg space "${space:-<admins-space>}" --arg fn "$1" --argjson payload "$2" \
-    '{bot: $bot, space: $space, function: $fn, payload: $payload}')")"
+    '{bot: $bot, space: $space, function: $fn, payload: $payload}')")" || return 1
   if [ -z "$DRY_RUN" ] && [ "$(jq -r '.result.isError // false' <<<"$out")" = "true" ]; then
     echo "evaluator $1 failed: $(jq -r '[.result.content[]?.text] | join(" ")' <<<"$out")" >&2
     return 1
@@ -224,6 +238,12 @@ if [ -n "$bot" ]; then
     call tools.tool_update "$(jq -nc --arg bot "$bot" --arg skill "$skill" '{bot: $bot, frontend: {mode: "generative", skill: $skill}}')" >/dev/null
     call bots.bot_lifecycle "$(jq -nc --arg bot "$bot" '{bot: $bot, op: "stop"}')" >/dev/null || true
     call bots.bot_lifecycle "$(jq -nc --arg bot "$bot" '{bot: $bot, op: "start"}')" >/dev/null
+  elif [ "$mode" = "managed" ] && [ "$runtime" = "docker" ] && floating_tag "$image" && [[ "$image" != *@* ]]; then
+    # Nomad pulled its :latest image from a registry instead of the local
+    # build, so it never started and holds no traders or scores yet.
+    say "replacing $NAME ($bot): it was created with $image, which Nomad never runs from a local build"
+    call tools.tool_delete "$(jq -nc --arg bot "$bot" '{bot: $bot}')" >/dev/null
+    bot=""
   elif [ -n "$REPLACE" ]; then
     say "replacing $NAME ($bot): it runs ${mode:-?}/${runtime:-?} ${image:-}; its stored traders and scores go with it"
     call tools.tool_delete "$(jq -nc --arg bot "$bot" '{bot: $bot}')" >/dev/null
@@ -278,10 +298,18 @@ fi
 
 if [ -z "$DRY_RUN" ]; then
   # A new backend takes a moment to start serving.
-  for _ in $(seq 1 60); do
-    invoke status '{}' >/dev/null 2>&1 && break
+  say "waiting for $NAME's backend to answer"
+  answered=""
+  for _ in $(seq 1 "${EVALUATOR_WAIT_TRIES:-60}"); do
+    if invoke status '{}' >/dev/null 2>&1; then answered=1; break; fi
     sleep 3
   done
+  if [ -z "$answered" ]; then
+    echo "$NAME's backend did not answer within 3 minutes: its container is not running on the node." >&2
+    echo "Check the Nomad job of bot $bot (e.g. \`docker compose exec nomad nomad job status\`, then \`nomad alloc status <alloc>\`)" >&2
+    echo "and that $IMAGE exists on the docker host Nomad uses (\`docker image ls ${IMAGE%%:*}\`). Then run this script again." >&2
+    exit 1
+  fi
 fi
 
 config="$(jq -nc --arg hours "$EVAL_HOURS" --arg base "$LLM_BASE_URL" --arg key "$LLM_API_KEY" --arg model "$LLM_MODEL" --arg proxy "$PROXY" '

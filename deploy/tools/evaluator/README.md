@@ -79,12 +79,19 @@ deploy/tools/evaluator/upsert.sh \
 ```
 
 It signs in as `node-a`, upserts the **"admins space"** project, makes it the
-platform's admins space, builds `tradera/evaluator-tool:latest`, upserts the
+platform's admins space, builds `tradera/evaluator-tool:v1`, upserts the
 `evaluator` tool (a re-run restarts it on the new build and keeps its
 traders and scores), adds it to the space, upserts the heartbeat routine,
 and uploads the session and traders. `--help` lists every option
 (`--llm-base-url/--llm-api-key/--llm-model`, `--proxy`, `--eval-hours`,
 `--image … --no-build` for a registry image, `--dry-run`).
+
+Use a fixed image tag, never `:latest` or none: Nomad's docker driver always
+pulls those from a registry, so a local build of one never starts (the node
+then reports *the tool's backend is not answering … lookup tool-…*). The
+script refuses such an `--image`, and replaces an `evaluator` created with
+one (it never ran, so it holds no traders or scores). Re-running it rebuilds
+the same tag and restarts the tool on the new build.
 
 Admins add more traders later from the tool's console on the admins space
 desk, by asking the space's agent ("add this trader: <link>"), or with:

@@ -32,6 +32,7 @@ const zeroRoom = "00000000000000000000000000000000"
 // Service implements space operations and permission resolution.
 type Service struct {
 	turnCancels     sync.Map
+	desks           deskStore
 	botMembershipMu sync.Mutex
 	K               api.Kernel
 	R               *repo.Repo

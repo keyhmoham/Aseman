@@ -47,14 +47,18 @@ PLATFORM_TOOLS = {
     "routine_delete": "routine_delete",
     # Widgets: A2UI composed from the space's tools' data and frontends.
     "ui_compose": "compose_ui",
-    # A tool's own generative frontend, filled with a result the agent got.
+    # The room's desk: a tool's own generative frontend, filled with a result
+    # the agent got, opens as a card window; agents arrange and close them.
     "frontend_show": "frontend_show",
+    "desk_state": "desk_state",
+    "desk_arrange": "desk_arrange",
+    "desk_close": "desk_close",
 }
 
 # Tools every agent keeps whatever its allowed_tools say: without them it can
 # neither talk nor report.
 CORE_TOOLS = {"send_message", "read_room", "list_team", "ask_user", "send_direct_message", "read_direct_messages",
-              "start_task", "check_tasks", "wait_tasks", "frontend_show"}
+              "start_task", "check_tasks", "wait_tasks", "frontend_show", "desk_state", "desk_arrange", "desk_close"}
 
 _SLUG = re.compile(r"[^a-z0-9_]+")
 # How long check_tasks waits for a first answer before reporting all still running.
@@ -380,8 +384,8 @@ def presentation_hint(spec: dict[str, Any], function: str | None = None) -> str:
     """How to show people what this tool returns (see prompts.COMMON)."""
     if spec.get("frontend") == "generative":
         call = f"microtool={function!r}, args=<the same arguments>" if function else "microtool=<the function>, args=<its arguments>"
-        return (f"Show people its result in its own interface: frontend_show(tool={spec['bot_id']!r}, {call}); "
-                "do not restate the result as text.")
+        return (f"Show people its result in its own interface, as a card window on the desk: "
+                f"frontend_show(tool={spec['bot_id']!r}, {call}); do not restate the result as text.")
     return "It has no generative frontend: present its result to people in Markdown."
 
 

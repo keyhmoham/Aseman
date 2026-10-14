@@ -48,17 +48,36 @@ When you present people a result you got from one, show it in this order of
 priority:
 1. **The tool's own frontend, when it has a generative one.** Call
    `frontend_show` with the tool, the microtool you called and the same
-   arguments: it posts the tool's own interface, filled with that result, live
-   and usable (people can keep searching, switching units, drilling in). This
-   comes first whenever it is available. Then keep your text to a sentence or
-   two on what it shows and what you conclude: do not repeat its data in text.
+   arguments: it opens the tool's own interface, filled with that result, as
+   a floating card window on the room's desk, live and usable (people can
+   keep searching, switching units, drilling in). This comes first whenever
+   it is available. Then keep your text to a sentence or two on what it shows
+   and what you conclude: do not repeat its data in text.
 2. **Markdown in your message, otherwise.** For tools without a generative
    frontend, write the result into your message in clean Markdown: a short
    lead, then headings, lists, tables for records, bold for the figures that
    matter, links; never raw JSON.
 One result is shown once: results you only use for your own work (a lookup on
-the way to an answer) need not be shown. To put several results or tools side
-by side in one view (a dashboard, a comparison), use `compose_ui`.
+the way to an answer) need not be shown. To put several results side by side
+in one chat widget (a dashboard, a comparison), use `compose_ui`.
+
+## The desk
+Each room has a desk people see next to the chat: card windows float on it,
+and a dock at its bottom lists the tools whose windows are open. It is durable:
+windows stay, where they were put, across turns and sessions, until someone
+closes them. Your turn's note describes it as the turn begins: its size in
+pixels (origin top-left), the usable area above the dock, and each open
+window's id, title, result and rectangle.
+- Place windows deliberately: pass `x`, `y`, `w`, `h` to `frontend_show` (or
+  move them later with `desk_arrange`) so they sit inside the usable area,
+  side by side without covering each other, the most important top-left and
+  related ones next to each other. A window is 460×560 by default; narrow
+  ones (a quote, a status) can be 280-360 wide, rich ones (charts, tables)
+  wider. Without a position the node picks the least crowded spot.
+- Keep it tidy between turns: `desk_close` windows that are stale or replaced
+  (by id, or every window of a tool at once), and rearrange what remains
+  when you add to a crowded desk. Do not close what people opened themselves
+  unless they ask.
 """
 
 LEAD = """\

@@ -378,5 +378,16 @@ def test_frontend_show_survives_an_allow_list() -> None:
     def tool(name: str) -> StructuredTool:
         return StructuredTool.from_function(func=lambda: "", name=name, description=name)
 
-    kept = filter_allowed([tool("frontend_show"), tool("compose_ui")], ["file_send"])
-    assert [t.name for t in kept] == ["frontend_show"]
+    desk = ["frontend_show", "desk_state", "desk_arrange", "desk_close"]
+    kept = filter_allowed([tool(n) for n in [*desk, "compose_ui"]], ["file_send"])
+    assert [t.name for t in kept] == desk
+
+
+def test_agents_are_told_how_to_keep_the_desk() -> None:
+    from tradera_agents.context import AgentDef
+    from tradera_agents.prompts import system_prompt
+
+    prompt = system_prompt(AgentDef(name="a", bot_id="b", account_id="c", vm_id="d"), "")
+    desk = prompt[prompt.index("## The desk"):]
+    for words in ("card windows", "dock", "durable", "x`, `y`, `w`, `h`", "desk_arrange", "desk_close", "usable area"):
+        assert words in desk, words

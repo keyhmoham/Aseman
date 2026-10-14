@@ -49,7 +49,9 @@ func toolDetail(toolName string) string {
 	case "ui_compose":
 		return "composing a widget…"
 	case "frontend_show":
-		return "showing the result…"
+		return "opening the result on the desk…"
+	case "desk_state", "desk_arrange", "desk_close":
+		return "arranging the desk…"
 	default:
 		return "using tool " + toolName + "…"
 	}
@@ -109,7 +111,7 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 			tool.Frontend = s.toolFrontend(ctx, rec)
 			switch tool.Frontend {
 			case "generative":
-				tool.Description += " It has a generative frontend: show people the results you get from it with frontend_show ({\"tool\": \"" + rec.ID.String() + "\", \"microtool\": <the one you called>, \"args\": <the same arguments>}), not as text."
+				tool.Description += " It has a generative frontend: show people the results you get from it with frontend_show ({\"tool\": \"" + rec.ID.String() + "\", \"microtool\": <the one you called>, \"args\": <the same arguments>}), which opens them as a card window on the desk, not as text."
 			case "":
 				tool.Description += " It has no generative frontend: present its results in Markdown."
 			default:
@@ -350,6 +352,12 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 		result, terr = s.composeUI(ctx, id, roomID, agentName, argsJSON)
 	case toolName == "frontend_show":
 		result, terr = s.showTool(ctx, id, roomID, agentName, argsJSON)
+	case toolName == "desk_state":
+		result, terr = s.deskStateTool(ctx, id, roomID, argsJSON)
+	case toolName == "desk_arrange":
+		result, terr = s.deskArrangeTool(ctx, id, roomID, agentName, argsJSON)
+	case toolName == "desk_close":
+		result, terr = s.deskCloseTool(ctx, id, roomID, agentName, argsJSON)
 	default:
 		var tools []vmm.Tool
 		tools, terr = s.SpaceTools(ctx, id, roomID)

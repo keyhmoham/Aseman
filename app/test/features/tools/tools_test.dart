@@ -305,6 +305,80 @@ void main() {
       expect(find.textContaining('Unknown component'), findsNothing);
     });
 
+    testWidgets('fills {{…}} and \${…} placeholders agents write as plain text',
+        (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(
+          body: A2UIView(messages: [
+            {
+              'version': 'v0.9',
+              'createSurface': {
+                'surfaceId': 'w',
+                'catalogId':
+                    'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'
+              }
+            },
+            {
+              'version': 'v0.9',
+              'updateComponents': {
+                'surfaceId': 'w',
+                'components': [
+                  {
+                    'id': 'root',
+                    'component': 'Column',
+                    'children': ['emoji', 'temp', 'days']
+                  },
+                  {
+                    'id': 'emoji',
+                    'component': 'Text',
+                    'text': '{{/forecast/current/emoji}}'
+                  },
+                  {
+                    'id': 'temp',
+                    'component': 'Text',
+                    'text': 'Feels like {{ /forecast/current/feels_like }}°',
+                  },
+                  {
+                    'id': 'days',
+                    'component': 'List',
+                    'children': {'componentId': 'day', 'path': '/forecast/days'}
+                  },
+                  {
+                    'id': 'day',
+                    'component': 'Text',
+                    'text': r'${label}: ${high_text}'
+                  },
+                ]
+              }
+            },
+            {
+              'version': 'v0.9',
+              'updateDataModel': {
+                'surfaceId': 'w',
+                'path': '/',
+                'value': {
+                  'forecast': {
+                    'current': {'emoji': '☀️', 'feels_like': 21},
+                    'days': [
+                      {'label': 'Mon', 'high_text': '24°'},
+                      {'label': 'Tue', 'high_text': '19°'},
+                    ],
+                  }
+                },
+              }
+            },
+          ]),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('{{'), findsNothing);
+      expect(find.textContaining(r'${'), findsNothing);
+      expect(find.text('☀️'), findsOneWidget);
+      expect(find.text('Feels like 21°'), findsOneWidget);
+      expect(find.text('Mon: 24°'), findsOneWidget);
+      expect(find.text('Tue: 19°'), findsOneWidget);
+    });
+
     test('a composed widget message is read from its body', () {
       final body = jsonEncode({
         'title': 'Portfolio',

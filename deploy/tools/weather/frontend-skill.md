@@ -6,6 +6,11 @@ A clean, rich weather view for one place at a time.
 
 - Fill `/report` with the `weather_report` microtool for `{"city": "{{DEFAULT_CITY}}"}`.
   Everything shown comes from `/report`; never invent a value.
+- Show a value with a binding (`{"path": "/report/current/condition"}`; inside a
+  List item, relative: `{"path": "label"}`). Text that mixes words and values is
+  a `formatString` call, e.g. `{"call": "formatString", "args": {"value":
+  "Updated ${/report/updated}"}, "returnType": "string"}`. A plain string is shown
+  as written, so never put `${…}` or `{{…}}` in one.
 - `/report` holds: `place` (`name`, `region`, `label`), `summary`, `updated`,
   `unit_labels`, `current` (`emoji`, `temperature_text`, `condition`,
   `feels_like_text`, `humidity_text`, `wind_text`, `gusts_text`,
@@ -22,7 +27,7 @@ A clean, rich weather view for one place at a time.
    `search` with context `{"city": {"path": "/form/city"}}`.
 2. **Now** — a Card:
    - the place `label` (variant h4) and, under it, `updated` as a caption
-     ("Updated ${/report/updated}");
+     (formatString "Updated ${/report/updated}");
    - a Row with the current `emoji` in a large heading (h1) next to a Column
      of `temperature_text` (h1) and `condition` (h5);
    - `feels_like_text` and today's `range_text` as captions;
@@ -30,14 +35,15 @@ A clean, rich weather view for one place at a time.
 3. **Details** — a Card with two Rows of three small Columns each (a caption
    label over a value): Humidity / Wind / Gusts, then Pressure / Cloud cover /
    UV index (`today/uv_index`). Under them, a caption row with the
-   `today` sunrise and sunset ("🌅 ${/report/today/sunrise} · 🌇 ${/report/today/sunset}").
+   `today` sunrise and sunset (formatString "🌅 ${/report/today/sunrise} · 🌇 ${/report/today/sunset}").
 4. **Next hours** — a Card titled "Next hours" (h5) holding a List over
    `/report/hours`; each item is a Row: `label` (weight 1), `emoji`,
    `temperature_text`, and `precipitation_chance_text` as a caption.
 5. **7 days** — a Card titled "7-day forecast" (h5) holding a List over
    `/report/days`; each item is a Row: `label` (weight 2), `emoji`,
    `condition` (weight 2, caption), `range_text`; and under the row the
-   `precipitation_text` and `wind_max_text` as one caption.
+   `precipitation_text` and `wind_max_text` as one caption (formatString
+   "${precipitation_text} · ${wind_max_text}").
 6. **Units** — a Row of two borderless Buttons, "°C" and "°F", sending the
    events `metric` and `imperial` with context `{"city": {"path": "/report/place/name"}}`.
 7. A caption at the bottom: "Weather data: Open-Meteo".

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../../../elpian/elpian.dart';
+import 'a2ui_normalize.dart';
 
 /// Tradera's A2UI catalog: the basic catalog plus `ToolFrontend`, a tool's own
 /// frontend embedded in a surface (how agents compose bigger widgets out of
@@ -82,7 +83,7 @@ class _A2UIViewState extends State<A2UIView> {
     _conversation =
         A2UIConversation(processor: A2UIProcessor(catalogs: [traderaCatalog]));
     _unsubscribe = _conversation.on(_onEvent);
-    _conversation.ingest(widget.messages);
+    _conversation.ingest(normalizeA2uiMessages(widget.messages));
   }
 
   @override

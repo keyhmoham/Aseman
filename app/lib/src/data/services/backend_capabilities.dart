@@ -228,6 +228,8 @@ abstract final class BackendCapabilities {
       'mcp_update',
       'oauth_exchange',
       'oauth_prepare',
+      'trader_profile',
+      'traders_leaderboard',
     ],
     'usage': [
       'list',

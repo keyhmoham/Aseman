@@ -204,11 +204,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Traders'));
     await tester.pumpAndSettle();
+    // Ranked by the admins space's evaluator: two evaluated, one queued.
     expect(find.text('Traders leaderboard'), findsOneWidget);
     expect(find.text('#1'), findsOneWidget);
     expect(find.text('#2'), findsOneWidget);
-    expect(find.text('#3'), findsOneWidget);
-    expect(find.text('Maya Chen'), findsOneWidget);
+    expect(find.text('Daniel Markson'), findsOneWidget);
+    expect(find.text('Vlad Anderson'), findsOneWidget);
+    expect(find.text('Awaiting evaluation'), findsOneWidget);
   });
 
   testWidgets('profile menu opens market and my bots', (tester) async {

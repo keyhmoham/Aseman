@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/post.dart';
 import '../../../data/models/space.dart';
@@ -30,6 +33,14 @@ class SearchFeedViewModel extends ChangeNotifier {
   Map<String, String> _spaceNames = {};
   List<Trader> _serverTraders = const [];
 
+  /// The traders leaderboard (kept by the admins space's evaluator tool).
+  TraderBoard board = TraderBoard.overall;
+  bool tradersLoading = false;
+  String? tradersError;
+  int tradersTotal = 0;
+  int tradersEvaluated = 0;
+  DateTime? tradersUpdatedAt;
+
   String get workspace => _workspace;
 
   /// Loads the first page of every feed tab from the server.
@@ -39,12 +50,12 @@ class SearchFeedViewModel extends ChangeNotifier {
     loading = true;
     error = null;
     notifyListeners();
+    unawaited(loadTraders());
     try {
       final me = dependencies?.sessionController.session?.accountId ?? '';
       final results = await Future.wait([
         deps.fetchFeed(following: false, limit: pageSize),
         deps.fetchFeed(following: true, limit: pageSize),
-        deps.fetchLeaderboard(limit: 10),
         deps.fetchSpacesFeed(limit: pageSize),
         me.isEmpty
             ? Future.value(const <SocialPost>[])
@@ -53,13 +64,10 @@ class SearchFeedViewModel extends ChangeNotifier {
       ]);
       _serverGlobal = (results[0] as List).cast<SocialPost>();
       _serverFollowing = (results[1] as List).cast<SocialPost>();
-      _serverTraders = (results[2] as List<Map<String, dynamic>>)
-          .map(_traderFromServer)
-          .toList();
-      _serverSpaces = (results[3] as List).cast<SocialPost>();
-      _serverMine = (results[4] as List).cast<SocialPost>();
+      _serverSpaces = (results[2] as List).cast<SocialPost>();
+      _serverMine = (results[3] as List).cast<SocialPost>();
       _spaceNames = {
-        for (final sp in (results[5] as List).cast<Workspace>()) sp.id: sp.name,
+        for (final sp in (results[4] as List).cast<Workspace>()) sp.id: sp.name,
       };
       _offsets[0] = _serverGlobal.length;
       _offsets[1] = _serverFollowing.length;
@@ -161,39 +169,52 @@ class SearchFeedViewModel extends ChangeNotifier {
         _ => myPosts,
       };
 
-  /// All leaderboard traders, ranked by score.
+  /// The leaderboard's traders, ranked on [board].
   List<Trader> get traders => _serverTraders;
 
-  /// Map a server leaderboard entry onto the UI trader model.
-  Trader _traderFromServer(Map<String, dynamic> e) {
-    final handle = (e['handle'] as String?) ?? 'user';
-    final likes = (e['likes'] as num?)?.toInt() ?? 0;
-    final posts = (e['posts'] as num?)?.toInt() ?? 0;
-    final score = (e['score'] as num?)?.toDouble() ?? 0;
-    const palette = [
-      Color(0xFF14B8A6),
-      AppColors.primary,
-      Color(0xFF6366F1),
-      AppColors.cyan,
-      Color(0xFF3B82F6),
-      Color(0xFFEC4899),
-      Color(0xFFF97316),
-      AppColors.success,
-      AppColors.warning,
-      Color(0xFF8B5CF6),
-    ];
-    return Trader(
-      initials: handle.length >= 2 ? handle.substring(0, 2).toUpperCase() : 'U',
-      name: handle,
-      handle: '@$handle',
-      score: score <= 0 ? 0 : (score / 100).clamp(0, 100),
-      roi: '+$posts posts',
-      accuracy: '$likes likes',
-      followers: '$posts',
-      color: palette[handle.hashCode.abs() % palette.length],
-      change: '+${likes % 10}.${(posts % 10)}',
-      verified: false,
-    );
+  /// Loads the traders leaderboard for [board] from the evaluator.
+  Future<void> loadTraders() async {
+    final deps = dependencies?.service;
+    if (deps == null) return;
+    tradersLoading = true;
+    tradersError = null;
+    notifyListeners();
+    try {
+      final out = await deps.fetchTraderLeaderboard(board: board.api);
+      _serverTraders = [
+        for (final row in (out['traders'] as List? ?? const []))
+          if (row is Map) Trader.fromJson(Map<String, dynamic>.from(row)),
+      ];
+      tradersTotal = (out['total'] as num?)?.toInt() ?? _serverTraders.length;
+      tradersEvaluated = (out['evaluated'] as num?)?.toInt() ??
+          _serverTraders.where((t) => t.evaluated).length;
+      tradersUpdatedAt = DateTime.tryParse('${out['updated_at'] ?? ''}');
+    } on ApiException catch (e) {
+      _serverTraders = const [];
+      tradersError = e.isNotFound
+          ? 'The traders leaderboard is not set up yet: an administrator deploys the evaluator in the admins space.'
+          : e.message;
+    } catch (e) {
+      _serverTraders = const [];
+      tradersError = e.toString();
+    }
+    tradersLoading = false;
+    notifyListeners();
+  }
+
+  /// Ranks the leaderboard on another board.
+  Future<void> setBoard(TraderBoard value) async {
+    if (board == value && _serverTraders.isNotEmpty) return;
+    board = value;
+    notifyListeners();
+    await loadTraders();
+  }
+
+  /// One trader's full reliability report.
+  Future<TraderReport?> traderReport(String handle) async {
+    final deps = dependencies?.service;
+    if (deps == null) return null;
+    return TraderReport.fromJson(await deps.fetchTraderProfile(handle));
   }
 
   List<Trader> searchTraders(List<Trader> source) {
@@ -202,7 +223,8 @@ class SearchFeedViewModel extends ChangeNotifier {
     return source
         .where((t) =>
             t.name.toLowerCase().contains(q) ||
-            t.handle.toLowerCase().contains(q))
+            t.handle.toLowerCase().contains(q) ||
+            t.rating.toLowerCase().contains(q))
         .toList();
   }
 

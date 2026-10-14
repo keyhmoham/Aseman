@@ -131,6 +131,13 @@ Users create tools in the Tools panel from one form with a **backend** and a
   agents combine tools' frontends and data into bigger widgets
   (`ui_compose`) on the desk too.
 
+Ready-made tools live in [`deploy/tools`](deploy/tools): the
+[weather](deploy/tools/weather) tool and the **traders
+[evaluator](deploy/tools/evaluator)**, a docker tool in the admins space that
+crawls traders' CoinMarketCap profiles with a headless browser, scores their
+reliability against market data and keeps the app's Traders leaderboard
+(`deploy/tools/evaluator/upsert.sh` sets it all up as `node-a`).
+
 The Elpian engine is part of the app (`app/lib/src/elpian`), not a
 dependency. See [`services/README.md`](services/README.md#tools-one-form-three-backends-two-frontends).
 

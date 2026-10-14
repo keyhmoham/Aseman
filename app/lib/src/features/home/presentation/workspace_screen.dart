@@ -30,6 +30,7 @@ import '../../search_feed/presentation/rich_post_content.dart';
 import '../../tools/data/tools_api.dart';
 import '../../tools/domain/tool_models.dart';
 import '../../tools/presentation/a2ui_view.dart';
+import '../../tools/presentation/mcp_app_view.dart';
 import '../../tools/presentation/tool_frontend_view.dart';
 import '../../tools/presentation/tool_screen.dart';
 import '../../tools/runtime/tool_media.dart';
@@ -1855,27 +1856,41 @@ class _CenterDesk extends StatelessWidget {
               topInset: topContentInset,
               windowContent: (context, w) => w.isComposed
                   ? _composed(w.id, w.widget)
-                  : w.isDesigned
-                      // Designed for the request: kept with the window.
-                      ? DesignedWindowContent(
-                          key: ValueKey('designed-${w.id}'),
-                          windowId: w.id,
-                          request: w.request,
-                          template: w.template,
-                          status: w.status,
-                          controller: controller,
-                          ready: (t) => _frontend(w.tool, w.shown, template: t))
-                      : _frontend(w.tool, w.shown),
+                  : w.isApp
+                      // The tool's own app shows the result.
+                      ? McpAppView(
+                          key: ValueKey('app-${w.id}'),
+                          api: ToolsApi.of(dependencies.service),
+                          botId: w.tool,
+                          spaceId: spaceId,
+                          roomId: roomId,
+                          microtool: w.microtool,
+                          args: w.args)
+                      : w.isDesigned
+                          // Designed for the request: kept with the window.
+                          ? DesignedWindowContent(
+                              key: ValueKey('designed-${w.id}'),
+                              windowId: w.id,
+                              request: w.request,
+                              template: w.template,
+                              status: w.status,
+                              controller: controller,
+                              ready: (t) =>
+                                  _frontend(w.tool, w.shown, template: t))
+                          : _frontend(w.tool, w.shown),
               pinPreview: (p) => p.isComposed
                   ? _composed(p.id, p.widget)
-                  : p.isDesigned
-                      ? DesignedWindowContent(
-                          windowId: p.id,
-                          request: p.request,
-                          template: p.template,
-                          status: p.status,
-                          ready: (t) => _frontend(p.tool, p.shown, template: t))
-                      : _frontend(p.tool, p.shown),
+                  : p.isApp
+                      ? _AppPinPreview(name: p.name)
+                      : p.isDesigned
+                          ? DesignedWindowContent(
+                              windowId: p.id,
+                              request: p.request,
+                              template: p.template,
+                              status: p.status,
+                              ready: (t) =>
+                                  _frontend(p.tool, p.shown, template: t))
+                          : _frontend(p.tool, p.shown),
               emptyState: Center(
                 child: SingleChildScrollView(
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1906,6 +1921,28 @@ class _CenterDesk extends StatelessWidget {
             ),
           ),
         ),
+      ]),
+    );
+  }
+}
+
+/// A pinned result shown with a tool's app: the app runs once the pin is
+/// opened, not in the preview.
+class _AppPinPreview extends StatelessWidget {
+  const _AppPinPreview({required this.name});
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.widgets_outlined, color: scheme.primary, size: 32),
+        const SizedBox(height: 8),
+        Text(name.isEmpty ? 'The tool\'s app' : '$name app',
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        Text('Opens with the tool\'s own interface',
+            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
       ]),
     );
   }

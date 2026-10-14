@@ -36,6 +36,10 @@ const String composedKind = 'composed';
 
 /// The frontend of a window whose interface was designed for one request.
 const String designedFrontend = 'auto';
+
+/// The frontend of a window that shows its result with the tool's own app
+/// (MCP Apps).
+const String appFrontend = 'app';
 const String composedTool = 'widgets';
 
 class DeskWindow {
@@ -101,6 +105,9 @@ class DeskWindow {
   final String status;
 
   bool get isDesigned => frontend == designedFrontend;
+
+  /// Shown with the tool's own app (MCP Apps).
+  bool get isApp => frontend == appFrontend;
   final String name;
   final String title;
 
@@ -200,6 +207,9 @@ class DeskPin {
   final String status;
 
   bool get isDesigned => frontend == designedFrontend;
+
+  /// Shown with the tool's own app (MCP Apps).
+  bool get isApp => frontend == appFrontend;
 
   String get label => title.isNotEmpty ? title : name;
 

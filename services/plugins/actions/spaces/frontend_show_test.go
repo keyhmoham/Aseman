@@ -8,6 +8,7 @@ import (
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
 	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
+	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
 )
 
 // Every tool's listing tells agents to show results with frontend_show; a
@@ -70,5 +71,12 @@ func TestDeskFrontend(t *testing.T) {
 		if got := deskFrontend(c.own, c.op); got != c.want {
 			t.Errorf("own %q, result %v: %q, want %q", c.own, c.op.Microtool != "", got, c.want)
 		}
+	}
+}
+
+func TestAppUI(t *testing.T) {
+	tool := &vmm.Tool{Commands: []vmm.ToolCommand{{Name: "create_view", UI: "ui://excalidraw/mcp-app.html"}, {Name: "read_me"}}}
+	if appUI(tool, "create_view") != "ui://excalidraw/mcp-app.html" || appUI(tool, "read_me") != "" || appUI(tool, "") != "" {
+		t.Fatal("appUI")
 	}
 }

@@ -27,6 +27,8 @@ type ToolCommand struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description,omitempty"`
 	Schema      map[string]any `json:"schema,omitempty"`
+	// UI is the ui:// resource (an MCP App) its results are shown with.
+	UI string `json:"ui,omitempty"`
 }
 
 func str(description string) map[string]any {

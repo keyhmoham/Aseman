@@ -51,7 +51,7 @@ Map forecast(Map args) {
 | Host API | |
 |---|---|
 | `tradera.context` | `{tool, actor, space, room, agent}` of the call — the person asking, and the agent when one asks for them |
-| `tradera.call` | `{namespace, action, body}`: a platform action run as the tool, inside the call's space and room (`spaces.message_send`, `spaces.ask`, `spaces.message_list`, `spaces.tools_list`, `spaces.members_list`, `spaces.room_get`, `users.account_get`, `bots.kv_*`) |
+| `tradera.call` | `{namespace, action, body}`: a platform action run as the tool, inside the call's space and room (`spaces.message_send`, `spaces.ask`, `spaces.message_list`, `spaces.tools_list`, `spaces.members_list`, `spaces.room_get`, `users.account_get`, `bots.kv_*`; in the platform admins space, when the call is made for a platform administrator, also `spaces.db_tables` and `spaces.db_read`: read-only access to the node's database, credentials redacted) |
 | `tradera.send` | `{body, room?}`: post into the room the tool was called from |
 | `tradera.ask` | `{bot, body}`: ask another tool or agent of the space |
 | `tradera.kv.get` / `.set` / `.delete` | the tool's own key-value store |

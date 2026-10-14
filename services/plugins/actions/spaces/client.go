@@ -51,7 +51,7 @@ func clientActions(s *Service) []api.Action {
 		helper.Action{Namespace: "spaces", Name: "admin_work_log", Summary: "Admin: a project's recent runs with their events", Handler: s.adminWorkLog},
 		helper.Action{Namespace: "spaces", Name: "admin_sandboxes", Summary: "Admin: the machines the sandbox provider is running now", Handler: s.adminSandboxes},
 		helper.Action{Namespace: "spaces", Name: "admin_storage", Summary: "Admin: the volumes the sandbox provider stores", Handler: s.adminStorage},
-	}, append(append(append(append(turnActions(s), computerActions(s)...), updatesActions(s)...), seenActions(s)...), adminsSpaceActions(s)...)...)
+	}, append(append(append(append(append(turnActions(s), computerActions(s)...), updatesActions(s)...), seenActions(s)...), adminsSpaceActions(s)...), dbActions(s)...)...)
 }
 func (s *Service) roomUpdate(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireUser(req); err != nil {

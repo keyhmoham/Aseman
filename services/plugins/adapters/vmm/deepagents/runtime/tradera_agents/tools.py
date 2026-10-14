@@ -53,6 +53,10 @@ PLATFORM_TOOLS = {
     "desk_state": "desk_state",
     "desk_arrange": "desk_arrange",
     "desk_close": "desk_close",
+    # The platform database, read only: offered in the platform admins space
+    # when the turn is for a platform administrator.
+    "db_tables": "db_tables",
+    "db_read": "db_read",
 }
 
 # Tools every agent keeps whatever its allowed_tools say: without them it can

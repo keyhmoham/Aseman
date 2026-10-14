@@ -57,6 +57,8 @@ var hostActions = map[string]bool{
 	"spaces.message_send": true, "spaces.message_list": true,
 	"spaces.ask": true, "spaces.tools_list": true,
 	"spaces.members_list": true, "spaces.room_get": true,
+	// Read only, and only in the platform admins space for an administrator.
+	"spaces.db_tables": true, "spaces.db_read": true,
 	"users.account_get": true,
 	"bots.kv_get":       true, "bots.kv_set": true, "bots.kv_list": true, "bots.kv_delete": true,
 }

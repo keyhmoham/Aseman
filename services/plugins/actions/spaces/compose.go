@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/tradera/tradera/pkg/a2ui"
 	"github.com/tradera/tradera/pkg/errs"
 	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	"github.com/tradera/tradera/plugins/actions/support/a2ui"
 	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
 )
 
@@ -54,14 +54,12 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 			inSpace[t.BotID] = t
 		}
 	}
-	hasRoot := false
+	if err := a2ui.Check(in.Components); err != nil {
+		return "", err
+	}
 	for _, c := range in.Components {
 		id, _ := c["id"].(string)
 		kind, _ := c["component"].(string)
-		if id == "" || kind == "" {
-			return "", errs.InvalidArgument("every component needs an id and a component type")
-		}
-		hasRoot = hasRoot || id == "root"
 		if kind == "ToolFrontend" {
 			tool, _ := c["tool"].(string)
 			t, ok := inSpace[tool]
@@ -74,9 +72,6 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 			c["frontend"] = t.Frontend
 			c["name"] = t.Name
 		}
-	}
-	if !hasRoot {
-		return "", errs.InvalidArgument("one component must have id \"root\"")
 	}
 	data := map[string]any{}
 	var failed []string

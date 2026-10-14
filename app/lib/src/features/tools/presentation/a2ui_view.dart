@@ -2,32 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../../../elpian/elpian.dart';
+import '../ui_kit/kit.dart' show registerUiKit;
+import 'a2ui_catalog.dart';
 import 'a2ui_normalize.dart';
 
-/// Tradera's A2UI catalog: the basic catalog plus `ToolFrontend`, a tool's own
-/// frontend embedded in a surface (how agents compose bigger widgets out of
-/// the space's tools).
-final A2UICatalog traderaCatalog = A2UICatalog(
-  id: basicCatalog.id,
-  aliases: basicCatalog.aliases,
-  components: {
-    ...basicCatalog.components,
-    'ToolFrontend': const ComponentSpec({
-      'tool': PropSpec('string'),
-      'height': PropSpec('number'),
-      // Filled in by the node when an agent composes the widget.
-      'frontend': PropSpec('string'),
-      'name': PropSpec('string'),
-    }, [
-      'tool'
-    ]),
-  },
-  functions: basicCatalog.functions,
-  implementations: basicCatalog.implementations,
-);
-
-/// The Elpian node type a `ToolFrontend` component lowers to.
-const String toolFrontendNodeType = 'TraderaToolFrontend';
+export 'a2ui_catalog.dart' show traderaCatalog, toolFrontendNodeType;
 
 /// Builds the embedded frontend of [botId] at [height].
 typedef ToolFrontendBuilder = Widget Function(
@@ -66,6 +45,7 @@ class _A2UIViewState extends State<A2UIView> {
   void initState() {
     super.initState();
     _engine = ElpianEngine();
+    registerUiKit(_engine);
     _engine.registerWidget(toolFrontendNodeType, (node, children) {
       final props = node.props;
       final tool = '${props['tool'] ?? ''}';
@@ -157,7 +137,7 @@ class _A2UIViewState extends State<A2UIView> {
   }
 
   Map<String, dynamic> _lowerToolFrontend(
-          Map<String, dynamic> component, String key) =>
+          Map<String, dynamic> component, String key, A2UICustomContext ctx) =>
       {
         'type': toolFrontendNodeType,
         'key': key,
@@ -177,7 +157,11 @@ class _A2UIViewState extends State<A2UIView> {
             state: _conversation.ui,
             keyPrefix: 'tradera',
             showAttribution: false,
-            customComponents: {'ToolFrontend': _lowerToolFrontend},
+            dark: Theme.of(context).brightness == Brightness.dark,
+            customComponents: {
+              ...traderaLowerings(),
+              'ToolFrontend': _lowerToolFrontend,
+            },
           ),
         ).node,
     ];

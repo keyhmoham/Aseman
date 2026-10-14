@@ -5,6 +5,7 @@ import '../../miniapps/presentation/miniapp_theme.dart';
 import '../data/tools_api.dart';
 import '../domain/tool_models.dart';
 import '../runtime/tool_frontend_host.dart';
+import '../ui_kit/kit.dart' show kitEngine;
 import 'a2ui_view.dart';
 
 /// A tool's frontend, in a space: a static frontend runs its program on the
@@ -43,6 +44,9 @@ class ToolFrontendView extends StatefulWidget {
 }
 
 class _ToolFrontendViewState extends State<ToolFrontendView> {
+  /// Renders static frontends: every Elpian node plus the UI kit's charts,
+  /// tables and data views.
+  final ElpianEngine _engine = kitEngine();
   ToolFrontendPayload? _payload;
   Object? _error;
   bool _loading = true;
@@ -120,6 +124,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
           return ElpianVmWidget.fromBytecode(
             machineId: machineId,
             bytecode: payload.bytecode!,
+            engine: _engine,
             stylesheet: stylesheet,
             hostHandlers: host.handlers(),
           );
@@ -128,6 +133,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
           machineId: machineId,
           code: payload.source,
           runtime: ElpianRuntime.quickJs,
+          engine: _engine,
           stylesheet: stylesheet,
           hostHandlers: host.handlers(),
         );

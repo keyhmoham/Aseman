@@ -348,21 +348,32 @@ class _ToolFormState extends State<_ToolForm> {
           ],
           _program('Frontend program', frontendSource,
               onUpload: () => _upload(frontendSource,
-                  frontendLanguage == 'dart' ? ['dart'] : ['js', 'mjs'])),
+                  frontendLanguage == 'dart' ? ['dart'] : ['js', 'mjs']),
+              example: frontendLanguage == 'js'
+                  ? IconButton(
+                      tooltip: 'Use the dashboard example (charts, a table)',
+                      onPressed: () => setState(() => frontendSource.text =
+                          ToolTemplates.jsDashboardFrontend),
+                      icon: const Icon(Icons.insights_rounded, size: 20),
+                    )
+                  : null),
         ];
     }
   }
 
   Widget _program(String label, TextEditingController controller,
-          {String? hint, required VoidCallback onUpload}) =>
+          {String? hint, required VoidCallback onUpload, Widget? example}) =>
       Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         AppFieldLabel(label,
             hint: hint,
-            trailing: TextButton.icon(
-              onPressed: onUpload,
-              icon: const Icon(Icons.upload_file_rounded, size: 18),
-              label: const Text('Upload'),
-            )),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (example != null) example,
+              TextButton.icon(
+                onPressed: onUpload,
+                icon: const Icon(Icons.upload_file_rounded, size: 18),
+                label: const Text('Upload'),
+              ),
+            ])),
         TextField(
           controller: controller,
           minLines: 6,

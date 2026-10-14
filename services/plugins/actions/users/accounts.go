@@ -208,6 +208,13 @@ func (s *Service) accountUpdate(ctx context.Context, req *api.ActionRequest) (*a
 	if e = s.R.Update(ctx, "accounts", id, a); e != nil {
 		return nil, e
 	}
+	if (in.Role != "" || in.Status != "") && a.Role == "admin" && a.Status == account.StatusActive {
+		// Platform administrators are kept members of the admins space.
+		var added int
+		if e := bridge.Invoke(ctx, s.K, "spaces", "SyncAdminsSpace", []any{ctx}, &added); e != nil && s.L != nil {
+			s.L.Warn("add administrator to the admins space", "account", a.ID.String(), "error", e)
+		}
+	}
 	if in.Profile != nil {
 		m, e := s.M.Get(ctx, id)
 		if e != nil {

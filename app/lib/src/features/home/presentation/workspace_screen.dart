@@ -324,8 +324,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
 
   void openMiniapp(Bot bot) {
     final spaceId = _spaceFor(workspace)?.id ?? '';
-    if (bot.isUnifiedTool && bot.hasFrontend && spaceId.isNotEmpty) {
-      // On the desk, as a card window (its dock entry gathers it).
+    if (bot.isUnifiedTool && spaceId.isNotEmpty) {
+      // On the desk, as a card window (its dock entry gathers it): a static
+      // frontend runs, a generative one comes from the cache (generated the
+      // first time), and a tool without one gets a generated interface.
       deskController.open(bot.id, title: bot.name);
       if (MediaQuery.sizeOf(context).width < 820 && mobilePage != 0) {
         setState(() => mobilePage = 0);
@@ -1802,14 +1804,16 @@ class _CenterDesk extends StatelessWidget {
   final VoidCallback openSearch;
   final ValueChanged<String>? onSubmit;
 
-  Widget _frontend(String tool, ShownResult? shown) => ToolFrontendView(
-      key: ValueKey('$tool/${shown?.microtool}/${shown?.args}'),
-      api: ToolsApi.of(dependencies.service),
-      botId: tool,
-      spaceId: spaceId,
-      roomId: roomId,
-      userId: dependencies.sessionController.session?.accountId ?? '',
-      shown: shown);
+  Widget _frontend(String tool, ShownResult? shown, {bool auto = false}) =>
+      ToolFrontendView(
+          key: ValueKey('$tool/${shown?.microtool}/${shown?.args}/$auto'),
+          auto: auto,
+          api: ToolsApi.of(dependencies.service),
+          botId: tool,
+          spaceId: spaceId,
+          roomId: roomId,
+          userId: dependencies.sessionController.session?.accountId ?? '',
+          shown: shown);
 
   /// A widget an agent composed (ui_compose): A2UI over the space's tools'
   /// data, embedding tools' own frontends.
@@ -1840,10 +1844,10 @@ class _CenterDesk extends StatelessWidget {
             topInset: topContentInset,
             windowContent: (context, w) => w.isComposed
                 ? _composed(w.id, w.widget)
-                : _frontend(w.tool, w.shown),
+                : _frontend(w.tool, w.shown, auto: w.frontend == 'auto'),
             pinPreview: (p) => p.isComposed
                 ? _composed(p.id, p.widget)
-                : _frontend(p.tool, p.shown),
+                : _frontend(p.tool, p.shown, auto: p.frontend == 'auto'),
             emptyState: Center(
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [

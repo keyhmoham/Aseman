@@ -3,6 +3,8 @@ package tools
 import (
 	"reflect"
 	"testing"
+
+	"github.com/tradera/tradera/plugins/actions/tools/models"
 )
 
 func TestShownPointsTheBindingsAtOneResult(t *testing.T) {
@@ -28,5 +30,26 @@ func TestShownPointsTheBindingsAtOneResult(t *testing.T) {
 	}
 	if !reflect.DeepEqual(tpl.bindings(Shown{}), tpl.Data) {
 		t.Fatal("no result shown: the template's own bindings")
+	}
+}
+
+func TestAutoSpecStandsInForMissingGenerativeFrontends(t *testing.T) {
+	generative := models.FrontendSpec{Mode: models.FrontendGenerative, Version: "v7"}
+	static := models.FrontendSpec{Mode: models.FrontendStatic, Runtime: "quickjs"}
+	if got := autoSpec(generative, true); got != generative {
+		t.Fatalf("a generative frontend is served as it is: %+v", got)
+	}
+	for _, spec := range []models.FrontendSpec{static, {}} {
+		got := autoSpec(spec, true)
+		if got.Mode != models.FrontendGenerative || !isAuto(got) {
+			t.Fatalf("auto for %+v: %+v", spec, got)
+		}
+		if autoSpec(spec, false) != spec {
+			t.Fatal("without auto, the tool's own frontend")
+		}
+	}
+	// Its own registry entry, apart from any skill's.
+	if componentKey(autoSpec(static, true), nil) == componentKey(generative, nil) {
+		t.Fatal("auto frontends share a registry key with a skill's")
 	}
 }

@@ -26,6 +26,7 @@ class ToolFrontendView extends StatefulWidget {
     this.userId = '',
     this.regenerate = false,
     this.shown,
+    this.auto = false,
     this.onLoaded,
   });
 
@@ -41,6 +42,10 @@ class ToolFrontendView extends StatefulWidget {
 
   /// The result a generated frontend opens on (an agent's frontend_show).
   final ShownResult? shown;
+
+  /// A tool without a generative frontend shows one the node generates for
+  /// it (on first use; from the component registry after that).
+  final bool auto;
   final ValueChanged<ToolFrontendPayload>? onLoaded;
 
   @override
@@ -54,6 +59,10 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
   ToolFrontendPayload? _payload;
   Object? _error;
   bool _loading = true;
+
+  /// Showing an interface the node generated: asked for, or the tool turned
+  /// out to have no frontend of its own.
+  late bool _auto = widget.auto;
 
   @override
   void initState() {
@@ -81,8 +90,15 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
           spaceId: widget.spaceId,
           roomId: widget.roomId,
           regenerate: widget.regenerate,
-          shown: widget.shown);
+          shown: widget.shown,
+          auto: _auto);
       if (!mounted) return;
+      if (payload.mode == FrontendMode.none && !_auto) {
+        // No frontend of its own: an interface is generated for it.
+        _auto = true;
+        await _load();
+        return;
+      }
       setState(() {
         _payload = payload;
         _loading = false;
@@ -104,14 +120,28 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
           roomId: widget.roomId,
           context: action.context,
           data: data,
-          shown: widget.shown);
+          shown: widget.shown,
+          auto: _auto);
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(
+      // A generated interface takes a moment the first time; it is cached
+      // after that.
+      final scheme = Theme.of(context).colorScheme;
+      return Center(
           child: Padding(
-              padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
+              padding: const EdgeInsets.all(24),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 14),
+                Text(
+                    _auto
+                        ? 'Generating an interface for this tool…'
+                        : 'Opening…',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: scheme.onSurfaceVariant)),
+              ])));
     }
     if (_error != null) {
       return _FrontendError(error: _error!, onRetry: _load);

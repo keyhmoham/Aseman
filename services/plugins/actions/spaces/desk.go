@@ -48,6 +48,11 @@ const (
 	DeskComposedTool = "widgets"
 )
 
+// DeskAutoFrontend is the frontend of a window that shows an interface the
+// node generated for a tool without a generative one (tools.frontend_get
+// with auto).
+const DeskAutoFrontend = "auto"
+
 // DeskWindow is a tool's frontend open on the desk, optionally on one result
 // (the microtool called and its arguments).
 type DeskWindow struct {

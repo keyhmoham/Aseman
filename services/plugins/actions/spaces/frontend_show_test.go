@@ -10,9 +10,10 @@ import (
 	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
 )
 
-// A tool without a generative frontend is not shown in one: the agent is told
-// to present its result in Markdown, by the listing and by frontend_show.
-func TestFrontendShowNeedsAGenerativeFrontend(t *testing.T) {
+// Every tool's listing tells agents to show results with frontend_show; a
+// tool the node cannot reach (no microtools, no frontend) has nothing to
+// build an interface from, and the agent falls back to Markdown.
+func TestFrontendShowNeedsSomethingToBuildFrom(t *testing.T) {
 	s, ctx := messageToolHarness(t)
 	spaceID := identity.ID{Node: 1, Entity: 99}
 	botID := identity.ID{Node: 1, Entity: 7}
@@ -32,7 +33,7 @@ func TestFrontendShowNeedsAGenerativeFrontend(t *testing.T) {
 	for _, tool := range tools {
 		if tool.BotID == botID.String() {
 			listed = true
-			if !strings.Contains(tool.Description, "present its results in Markdown") {
+			if !strings.Contains(tool.Description, "frontend_show") || !strings.Contains(tool.Description, "generated for it automatically") {
 				t.Fatalf("listing: %q", tool.Description)
 			}
 		}
@@ -42,10 +43,32 @@ func TestFrontendShowNeedsAGenerativeFrontend(t *testing.T) {
 	}
 	_, err = s.showTool(ctx, spaceID, identity.ID{}, "tradera", `{"tool":"`+botID.String()+`","microtool":"search","args":{"q":"x"}}`)
 	if err == nil || !strings.Contains(err.Error(), "Markdown") {
-		t.Fatalf("a tool without a generative frontend: %v", err)
+		t.Fatalf("a tool without microtools: %v", err)
 	}
 	_, err = s.showTool(ctx, spaceID, identity.ID{}, "tradera", `{"tool":"nope"}`)
 	if err == nil || !strings.Contains(err.Error(), "no tool of this space") {
 		t.Fatalf("an unknown tool: %v", err)
+	}
+}
+
+// Which frontend a desk window shows, by what the tool has and what is shown.
+func TestDeskFrontend(t *testing.T) {
+	result := DeskOp{Op: "open", Microtool: "report", Args: map[string]any{"city": "NY"}}
+	itself := DeskOp{Op: "open"}
+	for _, c := range []struct {
+		own  string
+		op   DeskOp
+		want string
+	}{
+		{"generative", result, "generative"}, // the tool's own, on the result
+		{"static", result, DeskAutoFrontend}, // a static program cannot take a result
+		{"", result, DeskAutoFrontend},       // nothing of its own: generated
+		{"generative", itself, "generative"}, // cached, or generated the first time
+		{"static", itself, "static"},         // opened and run as it is
+		{"", itself, DeskAutoFrontend},
+	} {
+		if got := deskFrontend(c.own, c.op); got != c.want {
+			t.Errorf("own %q, result %v: %q, want %q", c.own, c.op.Microtool != "", got, c.want)
+		}
 	}
 }

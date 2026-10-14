@@ -109,13 +109,15 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 		if rec.IsToolBackend() {
 			tool.Commands = s.appCommands(ctx, spaceID, rec)
 			tool.Frontend = s.toolFrontend(ctx, rec)
+			// Every result of a tool is shown in an interface on the desk.
+			show := " Show people the results you get from it with frontend_show ({\"tool\": \"" + rec.ID.String() + "\", \"microtool\": <the one you called>, \"args\": <the same arguments>}): it opens them as a card window on the desk, not as text"
 			switch tool.Frontend {
 			case "generative":
-				tool.Description += " It has a generative frontend: show people the results you get from it with frontend_show ({\"tool\": \"" + rec.ID.String() + "\", \"microtool\": <the one you called>, \"args\": <the same arguments>}), which opens them as a card window on the desk, not as text."
-			case "":
-				tool.Description += " It has no generative frontend: present its results in Markdown."
+				tool.Description += " It has a generative frontend." + show + ", in that frontend."
+			case "static":
+				tool.Description += " It has a static frontend (frontend_show without a microtool opens and runs it)." + show + ", in an interface generated for it automatically."
 			default:
-				tool.Description += " It has a " + tool.Frontend + " frontend (embed it with ui_compose: {\"component\": \"ToolFrontend\", \"tool\": \"" + rec.ID.String() + "\"}); present its results in Markdown."
+				tool.Description += " It has no frontend of its own." + show + ", in an interface generated for it automatically."
 			}
 		}
 		tools = append(tools, tool)

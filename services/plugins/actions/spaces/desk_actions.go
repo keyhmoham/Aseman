@@ -28,10 +28,19 @@ func (s *Service) deskScope(ctx context.Context, caller identity.ID, space, room
 	return spaceID, roomID, nil
 }
 
-// resolveDeskOpens fills each open op from the space's tools (name, frontend
-// mode) and refuses tools that are not the space's or have no frontend.
-// generative limits opens to generative frontends (what agents show).
-func (s *Service) resolveDeskOpens(ctx context.Context, spaceID identity.ID, ops []DeskOp, generative bool) error {
+// resolveDeskOpens fills each open op from the space's tools (name, and the
+// frontend the window shows) and refuses tools that are not the space's.
+//
+// The frontend a window shows:
+//   - a result (microtool or args given): the tool's generative frontend, or,
+//     when it has none (no frontend, or a static one that cannot take a
+//     result), one the node generates for it ("auto");
+//   - the tool itself: its own frontend, static or generative, or an "auto"
+//     one when it has none.
+//
+// Generated frontends come from the component registry, and are generated
+// there the first time.
+func (s *Service) resolveDeskOpens(ctx context.Context, spaceID identity.ID, ops []DeskOp) error {
 	var tools []vmm.Tool
 	for i := range ops {
 		if ops[i].Op != "open" {
@@ -57,15 +66,22 @@ func (s *Service) resolveDeskOpens(ctx context.Context, spaceID identity.ID, ops
 		if t == nil {
 			return errs.InvalidArgument(ops[i].Tool + " is no tool of this space")
 		}
-		switch {
-		case generative && t.Frontend != "generative":
-			return errs.InvalidArgument(t.Name + " has no generative frontend: present its result in your message, in Markdown")
-		case t.Frontend == "":
-			return errs.InvalidArgument(t.Name + " has no frontend to open")
+		if t.Frontend == "" && len(t.Commands) == 0 {
+			return errs.InvalidArgument(t.Name + " has no microtools to build an interface from; present its result in your message, in Markdown")
 		}
-		ops[i].Tool, ops[i].Name, ops[i].Frontend = t.BotID, t.Name, t.Frontend
+		ops[i].Tool, ops[i].Name, ops[i].Frontend = t.BotID, t.Name, deskFrontend(t.Frontend, ops[i])
 	}
 	return nil
+}
+
+// deskFrontend is the frontend a window opened by [op] shows, for a tool
+// whose own frontend is [own] (see resolveDeskOpens).
+func deskFrontend(own string, op DeskOp) string {
+	result := op.Microtool != "" || len(op.Args) > 0
+	if own == "" || (result && own != "generative") {
+		return DeskAutoFrontend
+	}
+	return own
 }
 
 // deskGetAction implements spaces.desktop_get: a room's desk (room omitted
@@ -122,7 +138,7 @@ func (a *deskUpdateAction) Handle(ctx context.Context, req *api.ActionRequest) (
 	if err != nil {
 		return nil, err
 	}
-	if err := a.s.resolveDeskOpens(ctx, spaceID, in.Ops, false); err != nil {
+	if err := a.s.resolveDeskOpens(ctx, spaceID, in.Ops); err != nil {
 		return nil, err
 	}
 	d, ids, err := a.s.UpdateDesk(ctx, spaceID, roomID, req.Caller.ID.String(), in.Ops)

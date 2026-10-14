@@ -8,6 +8,7 @@ import 'package:tradera/src/features/tools/data/tools_api.dart';
 import 'package:tradera/src/features/tools/domain/tool_models.dart';
 import 'package:tradera/src/features/tools/presentation/a2ui_view.dart';
 import 'package:tradera/src/features/tools/presentation/tool_create_form.dart';
+import 'package:tradera/src/features/tools/presentation/tool_frontend_view.dart';
 import 'package:tradera/src/features/tools/runtime/tool_frontend_host.dart';
 
 /// Records node actions and answers them from [replies].
@@ -163,6 +164,73 @@ void main() {
         expect(call.$3['args'], {'city': 'New York'});
       }
       expect(ShownResult.fromProps({'tool': 'b1'}), isNull);
+    });
+
+    testWidgets(
+        'a tool without a frontend opens in an interface generated for it',
+        (tester) async {
+      final node = _Node();
+      node.replies['tools.frontend_get'] = (body) => body['auto'] == true
+          ? {
+              'mode': 'generative',
+              'auto': true,
+              'messages': [
+                {
+                  'version': 'v0.9',
+                  'createSurface': {
+                    'surfaceId': 'g',
+                    'catalogId':
+                        'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'
+                  }
+                },
+                {
+                  'version': 'v0.9',
+                  'updateComponents': {
+                    'surfaceId': 'g',
+                    'components': [
+                      {
+                        'id': 'root',
+                        'component': 'Column',
+                        'children': ['t', 'b']
+                      },
+                      {
+                        'id': 't',
+                        'component': 'Text',
+                        'text': 'Generated for notes'
+                      },
+                      {
+                        'id': 'b',
+                        'component': 'Button',
+                        'child': 'bl',
+                        'action': {
+                          'event': {'name': 'refresh'}
+                        }
+                      },
+                      {'id': 'bl', 'component': 'Text', 'text': 'Refresh'},
+                    ]
+                  }
+                },
+              ],
+            }
+          : {'mode': ''};
+      node.replies['tools.frontend_action'] =
+          (_) => {'data': <String, dynamic>{}};
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: ToolFrontendView(api: node.api, botId: 'notes', spaceId: 's1'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Generated for notes'), findsOneWidget);
+      final gets =
+          node.calls.where((c) => c.$2 == 'frontend_get').map((c) => c.$3);
+      expect(gets.map((b) => b['auto']), [null, true],
+          reason: 'its own frontend first, then a generated one');
+      await tester.tap(find.text('Refresh'));
+      await tester.pumpAndSettle();
+      final action = node.calls.lastWhere((c) => c.$2 == 'frontend_action');
+      expect(action.$3['auto'], true,
+          reason: 'actions run against the generated interface');
     });
 
     test('frontend decodes a static Elpian frontend\'s bytecode', () async {

@@ -149,7 +149,7 @@ func TestComposedWidgetsOpenOnTheDeskNotInTheChat(t *testing.T) {
 	}
 	pin := d.Pins[0]
 	ops := []DeskOp{{Op: "open", Kind: pin.Kind, Title: pin.Title, Widget: pin.Widget}}
-	if err := s.resolveDeskOpens(ctx, sp.ID, ops, false); err != nil {
+	if err := s.resolveDeskOpens(ctx, sp.ID, ops); err != nil {
 		t.Fatal(err)
 	}
 	if d, _, err = s.UpdateDesk(ctx, sp.ID, room, "ann", ops); err != nil || len(d.Windows) != 1 || d.Windows[0].Kind != DeskComposed {

@@ -64,16 +64,10 @@ class _FloatingDeskState extends State<FloatingDesk>
   String _scope = '';
   Size _viewport = Size.zero;
 
-  /// Glides the desk to a window that opened out of sight.
-  late final AnimationController _pan = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 560))
-    ..addListener(() {
-      final a = _panTween;
-      if (a != null) {
-        setState(() => _scroll =
-            a.transform(Curves.easeInOutCubicEmphasized.transform(_pan.value)));
-      }
-    });
+  /// Glides the desk to a window that opened out of sight. Made in
+  /// initState: made lazily, a desk that never glided made it in dispose(),
+  /// when its ticker can no longer look up the tree.
+  late final AnimationController _pan;
   Tween<Offset>? _panTween;
 
   DeskController get c => widget.controller;
@@ -81,6 +75,15 @@ class _FloatingDeskState extends State<FloatingDesk>
   @override
   void initState() {
     super.initState();
+    _pan = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 560))
+      ..addListener(() {
+        final a = _panTween;
+        if (a != null) {
+          setState(() => _scroll = a.transform(
+              Curves.easeInOutCubicEmphasized.transform(_pan.value)));
+        }
+      });
     c.addListener(_changed);
   }
 

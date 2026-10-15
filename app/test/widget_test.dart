@@ -455,8 +455,8 @@ void main() {
     await tester.tap(find.text('Atlas Capital'));
     await tester.pumpAndSettle();
 
-    // Open the search/discover panel.
-    await tester.tap(find.byIcon(Icons.travel_explore_rounded).first);
+    // Open the search/discover panel (the left panel's search button).
+    await tester.tap(find.byIcon(Icons.search_rounded).first);
     await tester.pumpAndSettle();
     expect(find.text('In Atlas Capital'), findsOneWidget);
     expect(find.text('Explore Tradera'), findsOneWidget);

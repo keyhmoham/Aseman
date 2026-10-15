@@ -528,6 +528,10 @@ class CompactDeskState extends State<CompactDesk> {
               display: FrontendDisplay.compact,
               shape: shape,
               size: size,
+              title: w.label,
+              accent: ToolAvatar.schemeFor(
+                      w.tool, Theme.of(context).brightness)
+                  .primary,
               onHint: (hint) {
                 if (_hints[w.id] != hint && mounted) {
                   setState(() => _hints[w.id] = hint);
@@ -572,6 +576,7 @@ class CompactWidgetTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final tool = ToolAvatar.schemeFor(window.tool, Theme.of(context).brightness);
     final border = boardShape(shape);
     final round = shape == 'circle';
     final pill = shape == 'pill';
@@ -579,7 +584,8 @@ class CompactWidgetTile extends StatelessWidget {
     final inset = round
         ? 18.0
         : pill
-            ? 22.0
+            // (A capsule's ends curve in deep: keep clear of them.)
+            ? 34.0
             : 14.0;
     final header = Row(
       children: [
@@ -591,9 +597,9 @@ class CompactWidgetTile extends StatelessWidget {
               window.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurfaceVariant),
             ),
           ),
         ] else
@@ -642,11 +648,24 @@ class CompactWidgetTile extends StatelessWidget {
         ),
         child: ClipPath(
           clipper: ShapeBorderClipper(shape: border),
-          child: Padding(
+          child: DecoratedBox(
+            // A wash of the tool's color, strongest behind its mark.
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  tool.primaryContainer.withValues(alpha: .55),
+                  scheme.surfaceContainerLow.withValues(alpha: 0),
+                ],
+                stops: const [0, .7],
+              ),
+            ),
+            child: Padding(
             padding: EdgeInsets.fromLTRB(
               inset,
-              round ? 14 : 10,
-              round ? inset : 8,
+              round || pill ? 14 : 10,
+              round || pill ? inset : 8,
               round ? 14 : inset - 2,
             ),
             child: Column(
@@ -682,8 +701,8 @@ class CompactWidgetTile extends StatelessWidget {
                     ),
                   )
                 else
-                  SizedBox(height: 30, child: header),
-                const SizedBox(height: 6),
+                  SizedBox(height: 26, child: header),
+                const SizedBox(height: 8),
                 Expanded(
                   // A glance: taps open the widget, they do not reach in.
                   child: IgnorePointer(
@@ -695,6 +714,7 @@ class CompactWidgetTile extends StatelessWidget {
                 ),
               ],
             ),
+          ),
           ),
         ),
       ),

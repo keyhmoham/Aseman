@@ -84,7 +84,7 @@ void main() {
   testWidgets('a surface without a compact component is summed up from its '
       'components', (tester) async {
     await pumpAs(tester, FrontendDisplay.compact, surface(_dashboard, _data));
-    expect(find.text('Total value'), findsOneWidget);
+    expect(find.text('TOTAL VALUE'), findsOneWidget);
     expect(find.text(r'$15,234.50'), findsOneWidget);
     expect(find.text('+3.4%'), findsOneWidget);
     // The second KPI as a metric; the chart's trend as a sparkline.
@@ -138,7 +138,7 @@ void main() {
     expect(hints.last, const CompactHint(shape: 'circle', size: 'small'));
   });
 
-  test('summaries are derived from quotes, gauges and charts', () {
+  test('summaries are derived from quotes, gauges, charts and lists', () {
     SurfaceDefinition def(List<Map<String, dynamic>> components) =>
         SurfaceDefinition(surfaceId: 's', components: {
           for (final c in components) c['id'] as String: Component.fromJson(c)
@@ -154,13 +154,15 @@ void main() {
         'change': 0.01
       },
     ]));
-    expect(quote['title'], 'AAPL');
-    expect(quote['value'], {'path': '/p'});
-    expect(quote['format'], 'currency:USD');
+    final hero = quote['hero'] as Map;
+    expect(hero['label'], 'AAPL');
+    expect(hero['value'], {'path': '/p'});
+    expect(hero['format'], 'currency:USD');
     final gauge = deriveCompactSpec(def([
       {'id': 'root', 'component': 'Gauge', 'value': 72, 'label': 'Risk'},
     ]));
-    expect(gauge['progress'], {'value': 72, 'min': 0, 'max': 100});
+    expect((gauge['hero'] as Map)['progress'],
+        {'value': 72, 'min': 0, 'max': 100});
     final chart = deriveCompactSpec(def([
       {
         'id': 'root',
@@ -170,24 +172,46 @@ void main() {
         'data': {'path': '/ohlc'},
       },
     ]));
-    expect(chart['trend'], {
-      'rows': {'path': '/ohlc'},
-      'field': 'close'
-    });
+    expect((chart['chart'] as Map)['field'], 'close');
+    expect((chart['chart'] as Map)['rows'], {'path': '/ohlc'});
     expect(chart['title'], 'BTC');
-    // Templates are an item's scope: not summed up from the root.
+    // A template is an item's scope: it shapes the list, not the hero.
     final list = deriveCompactSpec(def([
       {
         'id': 'root',
         'component': 'List',
         'children': {'componentId': 'row', 'path': '/rows'}
       },
-      {'id': 'row', 'component': 'Stat', 'label': 'x', 'value': {'path': 'v'}},
+      {
+        'id': 'row',
+        'component': 'Stat',
+        'label': {'path': 'name'},
+        'value': {'path': 'v'}
+      },
     ]));
-    expect(list.containsKey('value'), isFalse);
+    expect(list.containsKey('hero'), isFalse);
+    expect(list['list'],
+        {'rows': {'path': '/rows'}, 'title': 'name', 'value': 'v'});
+    // A table's columns name the row fields.
+    final table = deriveCompactSpec(def([
+      {
+        'id': 'root',
+        'component': 'Table',
+        'data': {'path': '/t'},
+        'columns': [
+          {'field': 'sym'},
+          {'field': 'px', 'type': 'number', 'format': 'currency'},
+          {'field': 'chg', 'type': 'trend'},
+        ]
+      },
+    ]));
+    expect((table['list'] as Map)['title'], 'sym');
+    expect((table['list'] as Map)['value'], 'px');
+    expect((table['list'] as Map)['delta'], 'chg');
   });
 
-  test('summary JSON: trends from rows, progress from a range', () {
+  test('summary JSON: hero, chart, list, metrics, chips and the data model',
+      () {
     final s = CompactSummary.fromJson({
       'title': 'BTC',
       'value': 65000,
@@ -202,11 +226,39 @@ void main() {
       'metrics': [
         {'label': 'Vol', 'value': 3}
       ],
+      'chips': [
+        {'text': 'Live', 'status': 'good'}
+      ],
     });
-    expect(s.trend, [1, 2]);
-    expect(s.progress, .5);
+    expect(s.hero!.shown, '65,000');
+    expect(s.hero!.progress, .5);
+    expect(s.chart!.values, [1, 2]);
     expect(s.metrics.single.label, 'Vol');
-    expect(s.shownValue, '65,000');
+    expect(s.chips.single.text, 'Live');
+
+    final list = CompactSummary.fromJson({
+      'list': {
+        'rows': [
+          {'symbol': 'AAPL', 'price': 190.5, 'change': 0.012},
+          {'symbol': 'NVDA', 'price': 120, 'change': -0.02},
+        ],
+      },
+    });
+    expect(list.list!.rows.first.title, 'AAPL');
+    expect(list.list!.total, 2);
+
+    // Nothing said: the data model fills it in.
+    final data = CompactSummary.fromJson({
+      'data': {
+        'balance': 1200,
+        'fee': 3,
+        'history': [1, 3, 2],
+      },
+    });
+    expect(data.hero!.label, 'Balance');
+    expect(data.metrics.single.label, 'Fee');
+    expect(data.chart!.values, [1, 3, 2]);
+    expect(data.richness, greaterThanOrEqualTo(2));
   });
 
   test('static programs publish their summary and see how they are shown',

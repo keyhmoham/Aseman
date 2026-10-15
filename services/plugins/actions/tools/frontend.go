@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -89,6 +90,33 @@ func (t *Template) validate(microtools map[string]bool) error {
 		if len(microtools) > 0 && a.Microtool != "" && !microtools[a.Microtool] {
 			return errs.InvalidArgument("action " + name + " calls an unknown microtool " + a.Microtool)
 		}
+	}
+	return nil
+}
+
+// checkEvents verifies every event a component sends (a Button's, or a
+// tappable view's "action") has an entry in Actions, so no generated button
+// is dead. Only generation asks for it: templates already served keep
+// working as they are.
+func (t *Template) checkEvents() error {
+	var missing []string
+	seen := map[string]bool{}
+	for _, c := range t.Components {
+		action, _ := c["action"].(map[string]any)
+		event, _ := action["event"].(map[string]any)
+		name, _ := event["name"].(string)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		if _, ok := t.Actions[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return errs.InvalidArgument("events " + strings.Join(missing, ", ") + " are sent by components but have no entry in \"actions\"; " +
+			"map each to a microtool (an entry without \"microtool\" does nothing) or remove the button")
 	}
 	return nil
 }
@@ -540,7 +568,8 @@ Reply with ONE JSON object, no prose, of this shape:
   "actions": { "<event name>": {"microtool": "<name>", "args": {...}, "result": "/pointer", "reload": true} }
 }
 ` + a2ui.CatalogPrompt + `
-Rules: every value shown from the tool comes from the data model, filled by "data" bindings that call the tool's microtools (only those listed, with arguments matching their schemas); buttons (and tappable views' "action") send events that "actions" map to microtools. In action args, {"$context": "key"} takes the event context's value and {"$data": "/pointer"} the data model's. Bind inputs under /form. Repeat rows (days, hours, results) with a List, a Table or a Chart over an array, never numbered paths. Pick the view that fits the data: a Chart for values over time or categories, a Table for records with several fields, Stat tiles for the few numbers that matter most. No invented data.`
+Rules: every value shown from the tool comes from the data model, filled by "data" bindings that call the tool's microtools (only those listed, with arguments matching their schemas); buttons (and tappable views' "action") send events that "actions" map to microtools. In action args, {"$context": "key"} takes the event context's value and {"$data": "/pointer"} the data model's. Bind inputs under /form. Repeat rows (days, hours, results) with a List, a Table or a Chart over an array, never numbered paths. Pick the view that fits the data: a Chart for values over time or categories, a Table for records with several fields, Stat tiles for the few numbers that matter most. No invented data.
+Fully functional: every event a component sends has an entry in "actions", and every entry is sent by some component. An action runs ONE microtool; to also refresh what is shown, put its result where the view reads it ("result") and/or set "reload": true (re-runs every "data" binding). Inputs a microtool needs reach it through {"$data": "/form/…"} or the event context; required arguments are never left unbound. Every microtool the skill asks for is reachable from the view (a binding or an action); a binding's path is exactly where the components read it, and field names match the microtool's result. A tappable view's selection ("selection": {"path": "/selected"}) with a detail block bound to /selected/… and its buttons (context {"path": "/selected/id"}) is how per-row actions are done: a Table has no buttons inside its rows. Follow the deployer's skill for what to show and do; the layout and quality rules above still hold where the skill is silent or asks for something that would break on a phone.`
 
 // generate asks the node's default model for a frontend, and bills the
 // tokens to the caller.
@@ -583,6 +612,9 @@ func (s *Service) generate(ctx context.Context, c caller, tool *models.Tool, ski
 		t, lastErr = parseTemplate(content)
 		if lastErr == nil {
 			lastErr = t.validate(microtools)
+		}
+		if lastErr == nil {
+			lastErr = t.checkEvents()
 		}
 		if lastErr == nil {
 			break

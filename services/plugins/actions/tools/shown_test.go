@@ -114,3 +114,23 @@ func TestParseTemplateRepairsNestedComponents(t *testing.T) {
 		t.Fatalf("%v", tpl.Components)
 	}
 }
+
+func TestGeneratedButtonsAreHandled(t *testing.T) {
+	button := func(event string) map[string]any {
+		return map[string]any{"id": event, "component": "Button", "child": "label",
+			"action": map[string]any{"event": map[string]any{"name": event}}}
+	}
+	tpl := Template{Components: []map[string]any{
+		{"id": "root", "component": "Column", "children": []any{"add", "remove"}},
+		button("add"), button("remove"),
+		{"id": "t", "component": "Table", "action": map[string]any{"event": map[string]any{"name": "open"}}},
+	}, Actions: map[string]Action{"add": {Microtool: "add"}}}
+	err := tpl.checkEvents()
+	if err == nil || !strings.Contains(err.Error(), "open, remove") {
+		t.Fatalf("the unhandled events are named: %v", err)
+	}
+	tpl.Actions["remove"], tpl.Actions["open"] = Action{Microtool: "remove"}, Action{}
+	if err := tpl.checkEvents(); err != nil {
+		t.Fatal(err)
+	}
+}

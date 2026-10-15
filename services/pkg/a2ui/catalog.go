@@ -77,8 +77,32 @@ func Check(components []map[string]any) error {
 }
 
 // CatalogPrompt teaches a model the components, how data reaches them and
-// how they respond to taps.
-const CatalogPrompt = `Components (flat list; each has "id" and "component"; children are ids; the root has id "root"; "weight": n in a Row/Column takes n shares of the space):
+// how they respond to taps, and how to lay them out (DesignPrompt). Every
+// A2UI generator gets it: tools' generated frontends (cached or designed per
+// request, desk windows) and agents' ui_compose widgets.
+const CatalogPrompt = catalogPrompt + "\n" + DesignPrompt
+
+// DesignPrompt is the quality bar for every generated surface: a clean,
+// standard, responsive layout that works on a phone and a desktop alike,
+// with nothing on screen that does not work.
+const DesignPrompt = `Design (every surface must meet this on a phone, ~360 px wide, and on a desktop, ~1400 px):
+Structure
+- One root Column; blocks top to bottom in order of importance: a header (title h4 or h3 + one caption line, its one or two main actions at the end), then headline numbers, then the main view (chart/table), then details and secondary blocks. Group each block in one Card or Section with a short title; never nest Cards in Cards.
+- One heading level per depth (page h3/h4, block = Section title or h5); body text for content, caption for help, units and timestamps. Short, specific labels in sentence case; no lorem, emoji decoration or filler text.
+Responsive layout
+- Anything that should sit side by side on a desktop and stack on a phone goes in a Grid with minColumnWidth (Stat tiles 150–180, form fields 240–280, cards/charts 300–360) — never a fixed "columns" for more than 2. A Row only for at most 2–3 short items that fit 360 px (a title and a button, an icon and a label); give its flexible child "weight": 1. Groups of buttons, chips or filters go in a Wrap so they wrap instead of overflowing.
+- No fixed widths; no heights except a Chart's height (220–320) and a Scroll's maxHeight. Long text wraps; long lists are a Table (search, pageSize 10–25) or a List in a Scroll, not an endless column. Tables: at most ~6–8 columns, most important first (they scroll sideways on a phone); details belong in a selection detail block, not more columns.
+- Consistent spacing: gap 12–16 in Grids and Wraps; let Cards and Sections provide padding instead of Boxes and Spacers.
+Data display
+- Format every number (integer, number:1, compact, percent, currency, date/datetime) and give units in the label. State as Badge with status, trends as delta/trend, scores against a max as Progress or Gauge. One chart per measure scale, with a title, axis formats and a sensible type.
+- Show what the data model will hold, never placeholders or sample values; a block that depends on a selection or an action says so in a caption ("Tap a row to see details").
+Interaction
+- Every Button, input and tappable view does something that works: a Button's event is handled, an input is bound under /form and read by the action that submits it, a selection is shown by a detail block. No decorative or dead controls. One primary Button per block (the main action), the rest borderless; destructive actions labelled plainly ("Delete trader") and kept apart from the primary.
+- Forms: labelled fields, the submit Button after them at the end; optional fields say "(optional)".
+Style
+- Calm and consistent: neutral surfaces, series colors for data, status colors only for state; no gradients, shadows or Elpian styling unless asked. Prefer the catalog components over the Elpian escape hatch.`
+
+const catalogPrompt = `Components (flat list; each has "id" and "component"; children are ids; the root has id "root"; "weight": n in a Row/Column takes n shares of the space):
 Layout
 - Column / Row {children:[ids], justify: start|center|end|spaceBetween|spaceAround|stretch, align: start|center|end|stretch}
 - Grid {children, columns?: n, minColumnWidth?: 220, gap?: 12} responsive equal columns (dashboards, tiles)

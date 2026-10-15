@@ -60,7 +60,10 @@ var hostActions = map[string]bool{
 	// Read only, and only in the platform admins space for an administrator.
 	"spaces.db_tables": true, "spaces.db_read": true,
 	"users.account_get": true,
-	"bots.kv_get":       true, "bots.kv_set": true, "bots.kv_list": true, "bots.kv_delete": true,
+	// Only in the platform admins space for an administrator, and a tool
+	// deletes only the accounts it made (users/managed.go).
+	"users.account_create": true, "users.account_delete": true,
+	"bots.kv_get": true, "bots.kv_set": true, "bots.kv_list": true, "bots.kv_delete": true,
 }
 
 // Scope is the execution scope of one call to a backend.

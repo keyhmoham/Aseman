@@ -6,11 +6,16 @@ tools.traders_leaderboard / tools.trader_profile forward only these):
 
 Admin microtools (only from a space the tool was added to — the admins
 space):
-  trader_add, trader_remove, evaluate_now, configure, set_session, tick
+  trader_add, trader_remove, trader_credentials, evaluate_now, configure,
+  set_session, tick
 
-The worker iterates the traders: each one whose last evaluation is older than
-`interval_hours` (or that an admin queued) is crawled with the browser,
-measured against market data, analysed with decifi's prompt and stored.
+Adding a trader makes them an ordinary account on this platform (their
+CoinMarketCap handle or a username the admin picks, a random password the
+evaluator keeps). The worker iterates the traders: each one whose last
+evaluation is older than `interval_hours` (or that an admin queued) is
+crawled with the browser, signed in as on the platform to upsert their
+latest posts, measured against market data, analysed with decifi's prompt
+and stored.
 """
 
 from __future__ import annotations
@@ -25,7 +30,9 @@ from typing import Any, Callable
 from . import crawler as crawler_mod
 from . import llm as llm_mod
 from . import market as market_mod
+from . import platform as platform_mod
 from .host import HostError, Node, Scope, ScopeKeeper
+from .platform import Platform, PlatformError
 from .prompt import build_objective, normalize_profile_url
 from .scoring import BOARDS, extract_json, normalize
 from .store import CONFIG, DEFAULT_CONFIG, SESSION, TRADER, TRADERS, Store, handle_of, valid_profile_link
@@ -61,9 +68,13 @@ TOOLS = [
     {"name": "traders_list", "description": "Every trader on the list with its evaluation status.", "inputSchema": _obj({})},
     {"name": "status", "description": "The evaluator's worker, queue, settings and browser session state.", "inputSchema": _obj({})},
     {"name": "trader_add",
-     "description": "Admin: add a trader by their CoinMarketCap community profile link (https://coinmarketcap.com/community/profile/<handle>/); it is evaluated right away.",
-     "inputSchema": _obj({"profile_link": S, "name": S}, ["profile_link"])},
-    {"name": "trader_remove", "description": "Admin: remove a trader and their scores.", "inputSchema": _obj({"handle": S}, ["handle"])},
+     "description": "Admin: add a trader by their CoinMarketCap community profile link (https://coinmarketcap.com/community/profile/<handle>/). It makes them a platform account (username: their CoinMarketCap handle, or `username`; a random password, see trader_credentials) and evaluates them right away.",
+     "inputSchema": _obj({"profile_link": S, "name": S, "username": S}, ["profile_link"])},
+    {"name": "trader_remove",
+     "description": "Admin: remove a trader and their scores, and the platform account the evaluator made for them with the posts it published (keep_account: true keeps the account and its posts).",
+     "inputSchema": _obj({"handle": S, "keep_account": {"type": "boolean"}}, ["handle"])},
+    {"name": "trader_credentials", "description": "Admin: a trader's platform account: username, account id and password.",
+     "inputSchema": _obj({"handle": S}, ["handle"])},
     {"name": "evaluate_now", "description": "Admin: queue a trader (or every trader, without handle) for evaluation now.",
      "inputSchema": _obj({"handle": S})},
     {"name": "configure",
@@ -84,6 +95,7 @@ def summary_entry(rec: dict) -> dict:
     analyst = rec.get("analyst") or {}
     report = rec.get("report") or {}
     hist = rec.get("history") or []
+    account = rec.get("account") or {}
     change = None
     if len(hist) >= 2 and isinstance(hist[-1].get("overall_score"), (int, float)) and isinstance(hist[-2].get("overall_score"), (int, float)):
         change = round(hist[-1]["overall_score"] - hist[-2]["overall_score"], 1)
@@ -98,6 +110,8 @@ def summary_entry(rec: dict) -> dict:
                                                               "timing", "confidence")},
         "rating": s.get("rating") or "Unrated",
         "strengths": (report.get("strengths") or [])[:3], "warnings": (report.get("warnings") or [])[:3],
+        # The trader's account here (never its password).
+        "platform_account": {k: account.get(k) for k in ("id", "handle")} if account else None,
     }
 
 
@@ -120,8 +134,10 @@ class Evaluator:
                  crawl: Callable[..., dict] = crawler_mod.crawl,
                  market: Callable[[list[dict]], dict] = market_mod.market_context,
                  analyse: Callable[..., tuple[str, str]] = llm_mod.analyse,
-                 clock: Callable[[], float] = time.time):
+                 clock: Callable[[], float] = time.time,
+                 platform: Platform | None = None):
         self.node = node or Node()
+        self.platform = platform or Platform()
         self.scopes = ScopeKeeper()
         self.store = Store(self.node, self.scopes.kv)
         self.crawl, self.market, self.analyse, self.clock = crawl, market, analyse, clock
@@ -166,12 +182,13 @@ class Evaluator:
             raise ToolError(f"no trader {handle!r}")
         out = summary_entry(rec)
         out.update({"report": rec.get("report"), "history": rec.get("history") or [], "analyst": rec.get("analyst"),
-                    "added_at": rec.get("added_at"), "analysed_by": rec.get("analysed_by")})
+                    "added_at": rec.get("added_at"), "analysed_by": rec.get("analysed_by"),
+                    "posts_sync": rec.get("posts_sync")})
         return out
 
     def t_traders_list(self, store: Store, args: dict, scope: Scope) -> dict:
         return {"traders": [{k: summary_entry(r)[k] for k in ("handle", "name", "profile_link", "status",
-                                                               "last_evaluated_at", "last_error")}
+                                                               "last_evaluated_at", "last_error", "platform_account")}
                             for r in store.traders()]}
 
     def t_status(self, store: Store, args: dict, scope: Scope) -> dict:
@@ -190,6 +207,9 @@ class Evaluator:
         if not valid_profile_link(link):
             raise ToolError("profile_link must be a CoinMarketCap community profile, e.g. https://coinmarketcap.com/community/profile/<handle>/")
         handle = handle_of(link)
+        wanted = str(args.get("username") or "").strip().lstrip("@").lower()
+        if wanted and (platform_mod.username_for(wanted) != wanted or not platform_mod.valid_username(wanted)):
+            raise ToolError("username: 3-30 letters, digits, '.', '_' or '-', starting and ending with a letter or digit")
         rec = store.trader(handle)
         created = rec is None
         if rec is None:
@@ -197,23 +217,107 @@ class Evaluator:
         rec.update({"profile_link": link, "status": "queued"})
         if args.get("name"):
             rec["name"] = str(args["name"])[:80]
+        account_note = None
+        if rec.get("account") and wanted and wanted != rec["account"].get("handle"):
+            account_note = f"kept the existing account @{rec['account']['handle']}"
+        if not rec.get("account"):
+            # Made before the trader is listed: a taken username fails the add.
+            rec["account"] = self.make_account(scope, wanted or platform_mod.username_for(handle), rec.get("name") or "")
         store.put_trader(rec)
         handles = store.handles()
         if handle not in handles:
             store.set(TRADERS, handles + [handle])
         self.enqueue(handle)
-        return {"ok": True, "created": created, "trader": summary_entry(rec)}
+        out = {"ok": True, "created": created, "trader": summary_entry(rec)}
+        if account_note:
+            out["note"] = account_note
+        return out
 
     def t_trader_remove(self, store: Store, args: dict, scope: Scope) -> dict:
         handle = str(args.get("handle") or "").strip().lstrip("@").lower()
         handles = store.handles()
-        if handle not in handles and store.trader(handle) is None:
+        rec = store.trader(handle)
+        if handle not in handles and rec is None:
             raise ToolError(f"no trader {handle!r}")
+        account = (rec or {}).get("account") or {}
+        out: dict[str, Any] = {"ok": True, "removed": handle}
+        if account and args.get("keep_account"):
+            out["kept_account"] = dict(account)  # its password is not kept anywhere else
+        elif account:
+            out.update(self.delete_account(scope, account, (rec or {}).get("platform_posts") or {}))
         store.set(TRADERS, [h for h in handles if h != handle])
         store.delete(TRADER + handle)
         with self._lock:
             self.queue = [h for h in self.queue if h != handle]
-        return {"ok": True, "removed": handle}
+        return out
+
+    def t_trader_credentials(self, store: Store, args: dict, scope: Scope) -> dict:
+        handle = str(args.get("handle") or "").strip().lstrip("@").lower()
+        rec = store.trader(handle)
+        if rec is None:
+            raise ToolError(f"no trader {handle!r}")
+        account = rec.get("account")
+        if not account:
+            raise ToolError(f"{handle} has no platform account yet: it is made on their next evaluation")
+        return {"trader": handle, "username": account.get("handle"), "account_id": account.get("id"),
+                "password": account.get("password"), "created_at": account.get("created_at")}
+
+    # --- the traders' platform accounts -----------------------------------------
+
+    def make_account(self, scope: Scope, username: str, name: str = "") -> dict:
+        """A new platform account for a trader (users.account_create)."""
+        password = platform_mod.new_password()
+        try:
+            out = self.node.call(scope, "users", "account_create",
+                                 {"handle": username, "password": password, "display_name": name}, timeout=60)
+        except HostError as e:
+            if e.status == 409 or e.code.upper() == "ALREADY_EXISTS":
+                raise ToolError(f"the username @{username} is taken on this platform: add the trader again with another `username`") from None
+            raise ToolError(f"could not make the trader's account: {e}") from None
+        return {"id": out.get("id"), "handle": out.get("handle") or username, "password": password, "created_at": now_iso()}
+
+    def delete_account(self, scope: Scope, account: dict, published: dict) -> dict:
+        """Deletes what the evaluator published as the trader, then their account."""
+        out: dict[str, Any] = {}
+        try:
+            session = self.platform.login(account["handle"], account["password"])
+            try:
+                out["posts_deleted"] = platform_mod.delete_posts(self.platform, session, published)
+            finally:
+                self.platform.logout(session)
+        except PlatformError as e:
+            out["posts_error"] = str(e)
+        try:
+            self.node.call(scope, "users", "account_delete", {"account": account.get("id")}, timeout=60)
+            out["account_deleted"] = account.get("handle")
+        except HostError as e:
+            if not e.not_found:
+                raise ToolError(f"removed nothing: the trader's account @{account.get('handle')} could not be deleted ({e}); "
+                                "remove with keep_account: true to keep it") from None
+            out["account_deleted"] = account.get("handle")
+        return out
+
+    def sync_platform_posts(self, rec: dict, posts: list[dict]) -> dict:
+        """Signs in as the trader and upserts their latest posts; the outcome."""
+        account = rec.get("account") or {}
+        if not account:
+            scope = self.scopes.space()
+            if scope is None:
+                return {"at": now_iso(), "error": "the trader has no platform account yet (needs the admins space routine's scope)"}
+            try:
+                rec["account"] = account = self.make_account(scope, platform_mod.username_for(rec["handle"]), rec.get("name") or "")
+            except ToolError as e:
+                return {"at": now_iso(), "error": str(e)}
+        try:
+            session = self.platform.login(account["handle"], account["password"])
+        except PlatformError as e:
+            return {"at": now_iso(), "error": f"sign-in as @{account['handle']} failed: {e}"}
+        try:
+            published, counts = platform_mod.sync_posts(self.platform, session, posts, rec.get("platform_posts") or {})
+        finally:
+            self.platform.logout(session)
+        rec["platform_posts"] = published
+        return {"at": now_iso(), **counts}
 
     def t_evaluate_now(self, store: Store, args: dict, scope: Scope) -> dict:
         handle = str(args.get("handle") or "").strip().lstrip("@").lower()
@@ -339,6 +443,9 @@ class Evaluator:
                 raise ToolError("the profile showed nothing: " + ("; ".join(crawl.get("errors") or []) or "empty page"))
             if crawl.get("logged_out_or_missing"):
                 raise ToolError("CoinMarketCap says this account doesn't exist — the browser session is logged out or expired; upload a fresh one with set_session")
+            # The trader's latest posts, the ones this round reads, on their platform account.
+            rec["posts_sync"] = self.sync_platform_posts(rec, posts)
+            store.put_trader(rec)
             market = self.market(posts)
             prompt = self.prompt(rec["profile_link"], crawl, posts, market)
             reply, by = self.analyse(self.node, self.scopes.space(), cfg, prompt)

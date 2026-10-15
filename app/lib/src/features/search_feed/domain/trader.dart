@@ -87,6 +87,7 @@ class Trader {
     this.lastError,
     this.strengths = const [],
     this.warnings = const [],
+    this.platformHandle,
   });
 
   factory Trader.fromJson(Map<String, dynamic> json) {
@@ -110,6 +111,9 @@ class Trader {
       lastError: json['last_error'] as String?,
       strengths: _strings(json['strengths']),
       warnings: _strings(json['warnings']),
+      platformHandle: json['platform_account'] is Map
+          ? (json['platform_account'] as Map)['handle'] as String?
+          : null,
     );
   }
 
@@ -134,6 +138,10 @@ class Trader {
   final String? lastError;
   final List<String> strengths;
   final List<String> warnings;
+
+  /// The trader's account on this platform, where the evaluator publishes
+  /// their latest posts.
+  final String? platformHandle;
 
   bool get evaluated => scores.overall != null;
 

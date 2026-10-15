@@ -1006,17 +1006,7 @@ class TraderaService implements BackendService {
     return list.whereType<Map<String, dynamic>>().map((j) {
       final p = SocialPost.fromJson(j);
       final liked = _likedBy(j['liked_by']).contains(me);
-      return SocialPost(
-        id: p.id,
-        authorId: p.authorId,
-        spaceId: p.spaceId,
-        parentId: p.parentId,
-        body: p.body,
-        createdAt: p.createdAt,
-        tags: p.tags,
-        likes: p.likes,
-        likedByMe: liked,
-      );
+      return p.withLike(likes: p.likes, likedByMe: liked);
     }).toList();
   }
 

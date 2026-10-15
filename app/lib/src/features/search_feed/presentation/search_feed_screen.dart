@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
+import '../../../data/services/tradera_service.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/mini_tag.dart';
@@ -19,6 +20,7 @@ import '../../../shared/widgets/workspace_header.dart';
 import '../../admin/presentation/admin_screen.dart';
 import '../domain/feed_post.dart';
 import 'post_editor.dart';
+import 'post_media_grid.dart';
 import 'rich_post_content.dart';
 import 'search_feed_view_model.dart';
 import 'traders_leaderboard.dart';
@@ -226,6 +228,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                 itemCount: posts.length,
                 itemBuilder: (context, index) => _FeedPostCard(
                     post: posts[index],
+                    service: widget.dependencies.service,
                     onToggleLike: () => _toggleLike(posts[index])))),
       if (model.loadingMore)
         const SliverToBoxAdapter(
@@ -541,8 +544,10 @@ class _FeedHeader extends StatelessWidget {
 }
 
 class _FeedPostCard extends StatelessWidget {
-  const _FeedPostCard({required this.post, this.onToggleLike});
+  const _FeedPostCard(
+      {required this.post, required this.service, this.onToggleLike});
   final FeedPost post;
+  final TraderaService service;
   final VoidCallback? onToggleLike;
 
   void _copy(BuildContext context, String message) {
@@ -615,6 +620,17 @@ class _FeedPostCard extends StatelessWidget {
                   style: const TextStyle(fontSize: 15, height: 1.45),
                   child: RichPostContent(post.body)),
             ),
+            if (post.media.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: PostMediaGrid(
+                    media: post.media,
+                    resolveUrl: (f) => service.fileContentUrl(f.id),
+                    headers: service.authHeaders(),
+                    download: (f) => service.downloadFile(f.id)),
+              ),
+            ],
             if (post.chart) ...[
               const SizedBox(height: 12),
               Padding(

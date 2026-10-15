@@ -94,3 +94,25 @@ func TestGlobalFeedShowsTradersLatestImportedPostsFirst(t *testing.T) {
 		t.Fatalf("paging showed %d posts", len(seen))
 	}
 }
+
+func TestImportedMediaAreImagesOrVideos(t *testing.T) {
+	s, ctx := feedHarness(t)
+	trader, _ := identity.New(1)
+	item := importItems(0, 1)[0]
+	item.Media = []ImportMedia{{Name: "a.html", Mime: "text/html", Data: []byte("<html>")}}
+	res, err := s.Import(ctx, trader, []ImportItem{item})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res[0].Created || res[0].Error == "" {
+		t.Fatalf("a post whose media are not images or videos is not published: %+v", res[0])
+	}
+	item.Media = make([]ImportMedia, maxImportMedia+1)
+	if res, _ := s.Import(ctx, trader, []ImportItem{item}); res[0].Created {
+		t.Fatal("too many media are refused")
+	}
+	feed, _ := s.Feed(ctx, trader, identity.ID{}, false, 10, 0)
+	if len(feed) != 0 {
+		t.Fatalf("nothing was published: %d", len(feed))
+	}
+}

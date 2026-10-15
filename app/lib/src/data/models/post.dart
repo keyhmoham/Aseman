@@ -1,6 +1,8 @@
 /// A social feed post as returned by the posts namespace.
 import 'dart:convert';
 
+import 'uploaded_file.dart';
+
 class SocialPost {
   const SocialPost({
     required this.id,
@@ -12,6 +14,8 @@ class SocialPost {
     this.tags = const [],
     this.likes = 0,
     this.likedByMe = false,
+    this.attachments = const [],
+    this.source = '',
   });
 
   final String id;
@@ -23,6 +27,14 @@ class SocialPost {
   final List<String> tags;
   final int likes;
   final bool likedByMe;
+
+  /// The post's images, GIFs and videos (stored files, streamed from their
+  /// content url).
+  final List<UploadedFile> attachments;
+
+  /// Where an imported post was first published ("coinmarketcap"); empty for
+  /// posts made here.
+  final String source;
 
   bool get isComment => parentId.isNotEmpty;
 
@@ -39,8 +51,29 @@ class SocialPost {
       tags: _strings(json['tags']),
       likes: (json['likes'] as num?)?.toInt() ?? likedBy.length,
       likedByMe: false,
+      attachments: [
+        for (final a in json['attachments'] as List? ?? const [])
+          if (a is Map<String, dynamic>) UploadedFile.fromJson(a),
+      ],
+      source: json['source'] as String? ?? '',
     );
   }
+
+  /// This post with another like state.
+  SocialPost withLike({required int likes, required bool likedByMe}) =>
+      SocialPost(
+        id: id,
+        authorId: authorId,
+        body: body,
+        createdAt: createdAt,
+        spaceId: spaceId,
+        parentId: parentId,
+        tags: tags,
+        likes: likes,
+        likedByMe: likedByMe,
+        attachments: attachments,
+        source: source,
+      );
 
   static List<String> _strings(dynamic raw) {
     if (raw is List) {

@@ -101,9 +101,10 @@ class FakeNode:
                             if p["author"] == body["author"] and p.get("source_id") == item["source_id"]), None)
                 if pid is None:
                     pid = f"post-{len(self.posts) + len(self.imports) * 100}"
+                    media = [base64.b64decode(m["data"]) and m["name"] for m in item.get("media") or []]
                     self.posts[pid] = {"author": body["author"], "body": item["body"], "tags": item.get("tags"),
-                                       "source_id": item["source_id"], "at": item.get("at")}
-                    results.append({"source_id": item["source_id"], "post_id": pid, "created": True})
+                                       "source_id": item["source_id"], "at": item.get("at"), "media": media}
+                    results.append({"source_id": item["source_id"], "post_id": pid, "created": True, "media": media})
                 else:
                     results.append({"source_id": item["source_id"], "post_id": pid, "created": False})
             created = sum(r["created"] for r in results)
@@ -350,6 +351,53 @@ class AccountsTest(Harness):
         stored = json.loads(self.node.kv["evaluator/trader/daniel_crypto365"])
         self.assertEqual(len(stored["platform_posts"]), 11)
 
+    def test_a_new_post_carries_all_its_content_and_media(self):
+        self.add()
+        post = cmc_posts(1)[0]
+        post.update({"rich_text": "Long $BTC, chart below @alice #macro (https://example.com/a)",
+                     "media": [{"url": "https://s3.coinmarketcap.com/a.png", "kind": "image"},
+                               {"url": "https://s3.coinmarketcap.com/b.mp4", "kind": "video"},
+                               {"url": "https://s3.coinmarketcap.com/too-big.png", "kind": "image"}],
+                     "link": {"url": "https://example.com/news", "title": "BTC ETF flows", "description": "Record week"},
+                     "quote": {"author": "bob", "id": "77", "text": "BTC to 100k", "media": []},
+                     "poll": ["Up", "Down"]})
+        fetched = []
+
+        def fetch(url, kind, proxy=""):
+            fetched.append(url)
+            if "too-big" in url:
+                return None
+            return {"name": url.rsplit("/", 1)[1], "mime": "video/mp4" if kind == "video" else "image/png",
+                    "data": base64.b64encode(b"bytes").decode()}
+
+        self.ev.fetch_media = fetch
+        self.ev.crawl = crawl_with([post])
+        self.ev.run_due()
+        (published,) = self.node.posts.values()
+        self.assertEqual(published["media"], ["a.png", "b.mp4"])
+        body = published["body"]
+        for part in ("Long $BTC, chart below @alice #macro (https://example.com/a)", "Poll:\n• Up\n• Down",
+                     "BTC ETF flows", "https://example.com/news", "Quoting @bob:\n> BTC to 100k",
+                     "https://coinmarketcap.com/community/post/77/",
+                     "Media:\nhttps://s3.coinmarketcap.com/too-big.png", "Posted on CoinMarketCap"):
+            self.assertIn(part, body)
+        sync = self.ev.call("trader_get", {"handle": "daniel_crypto365"}, scope(space=""))["posts_sync"]
+        self.assertEqual((sync["created"], sync["media"]), (1, 2))
+        # A post already published is not downloaded or sent with media again.
+        fetched.clear()
+        self.ev.call("evaluate_now", {"handle": "daniel_crypto365"}, scope())
+        self.ev.run_due()
+        self.assertEqual(fetched, [])
+        self.assertEqual(len(self.node.posts), 1)
+
+    def test_a_long_post_fits_the_node_limit(self):
+        from evaluator import platform as platform_mod
+        post = cmc_posts(1)[0]
+        post["text"] = "x" * 5000
+        body = platform_mod.post_body(post)
+        self.assertLessEqual(len(body), platform_mod.MAX_BODY)
+        self.assertIn("Posted on CoinMarketCap", body)
+
     def test_without_the_admins_space_scope_posts_wait(self):
         self.add()
         self.ev.scopes.space_scope = Scope()
@@ -433,10 +481,71 @@ class PartsTest(unittest.TestCase):
         ], "owner": {"handle": "abc", "followers": 99, "postCount": 12}}}
         posts = crawler.extract_posts([payload], "ABC")
         self.assertEqual(len(posts), 1)
+        self.assertEqual(posts[0]["media"], [])
         self.assertEqual(posts[0]["symbols"], ["ETH", "SOL"])
         self.assertTrue(posts[0]["timestamp"].startswith("2025-09-01"))
         analyst = crawler.extract_analyst([payload], "abc")
         self.assertEqual((analyst["followers"], analyst["total_posts"]), (99, 12))
+
+    def test_extract_a_posts_whole_content(self):
+        payload = {"data": {"list": [{
+            "gravityId": "9", "postTime": "1756728000000", "owner": {"handle": "abc"},
+            "textContent": "Long BTC here, see chart and the news link",
+            "originalContent": json.dumps([
+                [{"type": "text", "content": "Long "}, {"type": "token", "content": {"symbol": "BTC"}},
+                 {"type": "text", "content": " here, cc "}, {"type": "mention", "content": {"handle": "alice"}},
+                 {"type": "text", "content": " "}, {"type": "hashtag", "content": "macro"}],
+                [{"type": "link", "content": "the news", "url": "https://example.com/n"}],
+                [{"type": "image", "content": {"url": "https://s3.coinmarketcap.com/inline.png"}}]]),
+            "images": ["https://s3.coinmarketcap.com/chart.png", {"url": "https://s3.coinmarketcap.com/chart2.jpg"}],
+            "video": {"videoUrl": "https://s3.coinmarketcap.com/clip.mp4"},
+            "linkCard": {"url": "https://example.com/n", "title": "News"},
+            "repostOriginal": {"gravityId": "5", "textContent": "BTC to 100k soon", "owner": {"handle": "bob"},
+                               "images": ["https://s3.coinmarketcap.com/q.png"]},
+            "poll": {"options": [{"text": "Up"}, {"text": "Down"}]},
+        }]}}
+        (post,) = [p for p in crawler.extract_posts([payload], "abc") if p["id"] == "9"]
+        self.assertEqual(post["rich_text"], "Long $BTC here, cc @alice #macro\nthe news (https://example.com/n)")
+        self.assertEqual([(m["url"].rsplit("/", 1)[1], m["kind"]) for m in post["media"]],
+                         [("chart.png", "image"), ("chart2.jpg", "image"), ("clip.mp4", "video"), ("inline.png", "image")])
+        self.assertEqual(post["link"]["title"], "News")
+        self.assertEqual((post["quote"]["author"], post["quote"]["text"]), ("bob", "BTC to 100k soon"))
+        self.assertEqual(post["quote"]["media"][0]["url"], "https://s3.coinmarketcap.com/q.png")
+        self.assertEqual(post["poll"], ["Up", "Down"])
+
+    def test_fetch_media(self):
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        from evaluator import platform as platform_mod
+
+        class H(BaseHTTPRequestHandler):
+            def do_GET(self):
+                kind, body = {"/a.png": ("image/png", b"png"), "/page": ("text/html", b"<html>"),
+                              "/big.png": ("image/png", b"x" * 64)}[self.path]
+                self.send_response(200)
+                self.send_header("Content-Type", kind)
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+
+        srv = HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{srv.server_port}"
+        try:
+            got = platform_mod.fetch_media(base + "/a.png", "image")
+            self.assertEqual((got["name"], got["mime"], base64.b64decode(got["data"])), ("a.png", "image/png", b"png"))
+            self.assertIsNone(platform_mod.fetch_media(base + "/page", "image"))  # not a medium
+            limits = dict(platform_mod.MAX_MEDIA_BYTES)
+            platform_mod.MAX_MEDIA_BYTES["image"] = 10
+            try:
+                self.assertIsNone(platform_mod.fetch_media(base + "/big.png", "image"))  # too large
+            finally:
+                platform_mod.MAX_MEDIA_BYTES.update(limits)
+        finally:
+            srv.shutdown()
+            srv.server_close()
 
     def test_session_formats(self):
         jar = [{"name": "Authorization", "value": "t", "domain": ".coinmarketcap.com", "path": "/"}]

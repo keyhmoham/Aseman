@@ -273,6 +273,8 @@ class SearchFeedViewModel extends ChangeNotifier {
         liked: p.likedByMe,
         serverId: p.id,
         workspace: _spaceNames[p.spaceId],
+        media: p.attachments,
+        source: p.source,
       );
 
   String _initialsOf(String id) {

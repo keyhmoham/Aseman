@@ -8,6 +8,7 @@ import (
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/plugins/actions/auth/models/account"
 	"github.com/tradera/tradera/plugins/actions/posts/models"
+	"github.com/tradera/tradera/plugins/actions/spaces/models/filedata"
 	"github.com/tradera/tradera/plugins/actions/support/metasvc"
 	"github.com/tradera/tradera/plugins/adapters/database/ports"
 )
@@ -52,6 +53,12 @@ func (s *Service) Views(ctx context.Context, caller identity.ID, list []post.Pos
 			"likes": p.Likes, "liked": !caller.IsZero() && p.HasLiked(caller),
 			"comments": comments, "created_at": p.CreatedAt, "updated_at": p.UpdatedAt,
 		}
+		if media := p.ParseMedia(); len(media) > 0 {
+			view["attachments"] = s.attachments(ctx, media)
+		}
+		if p.Source != "" {
+			view["source"] = p.Source
+		}
 		if !p.SpaceID.IsZero() {
 			view["space_id"] = p.SpaceID.String()
 		}
@@ -91,4 +98,23 @@ func nonNil(v []string) []string {
 		return []string{}
 	}
 	return v
+}
+
+// attachments describes a post's media files so a client can show each as
+// what it is (image, GIF, video) and stream it from content_url.
+func (s *Service) attachments(ctx context.Context, ids []string) []map[string]any {
+	out := make([]map[string]any, 0, len(ids))
+	for _, id := range ids {
+		fid, err := identity.Parse(id)
+		if err != nil {
+			continue
+		}
+		var f filedata.File
+		if s.R.Get(ctx, "files", fid, &f) != nil {
+			continue
+		}
+		out = append(out, map[string]any{"id": id, "name": f.Name, "mime": f.Mime, "size": f.Size,
+			"public": f.Public, "content_url": "/v1/files/" + id + "/content"})
+	}
+	return out
 }

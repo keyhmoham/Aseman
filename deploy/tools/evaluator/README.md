@@ -55,11 +55,18 @@ posts** — the ones that round reads — as the trader's account, through the
 tool gateway's `posts.post_import` (allowed only from the platform admins
 space, and only as an account the tool made). Each CoinMarketCap post is
 published once, as a global post; a post already on the platform is never
-edited or replaced, even if it changed at the source. Each post keeps its
-coins as tags and ends with its CoinMarketCap date and link. The node
+edited or replaced, even if it changed at the source. A post carries all of
+its content: its text with links, mentions, hashtags and coins; its images,
+GIFs and videos, downloaded (through the configured proxy) and attached as
+public files of the trader's account — one too large (images 8 MB, GIFs
+12 MB, videos 24 MB) or unreachable is linked in the post instead; its poll;
+its link preview; and the post it quotes or reposts (author, text, media
+links). Each keeps its coins as tags and ends with its CoinMarketCap date and
+link. The app's feed shows the media under the text; tapping one opens it
+full screen, where videos play. The node
 features each trader's 10 latest imported posts **at the top of the global
 feed**, above every other post (newest at CoinMarketCap first). The outcome
-is the report's `posts_sync` (`created`, `existing`, `failed`).
+is the report's `posts_sync` (`created`, `existing`, `failed`, `media`).
 
 **Removing a trader** (`trader_remove`, or **Remove trader** in the app)
 deletes their scores, the posts the evaluator published as them and their

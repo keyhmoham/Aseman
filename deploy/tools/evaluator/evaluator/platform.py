@@ -19,8 +19,10 @@ and the body's sha256).
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
+import mimetypes
 import os
 import re
 import secrets
@@ -132,9 +134,36 @@ class Platform:
         return self._post(namespace, action, body, session)
 
 
-def post_body(post: dict) -> str:
-    """A CoinMarketCap post as published on the platform."""
-    text = (post.get("text") or "").strip()
+# The node's limit on a post's body.
+MAX_BODY = 4000
+# A medium larger than this is linked in the post instead of attached.
+MAX_MEDIA_BYTES = {"image": 8 << 20, "gif": 12 << 20, "video": 24 << 20}
+_MEDIA_TYPES = ("image/", "video/")
+
+
+def post_body(post: dict, unattached: list[str] | None = None) -> str:
+    """A CoinMarketCap post as published on the platform: all of its text
+    (with its links, mentions, hashtags and coins), its poll, its link
+    preview, the post it quotes, links to any media that could not be
+    attached, and where it was posted."""
+    text = (post.get("rich_text") or post.get("text") or "").strip()
+    extra: list[str] = []
+    poll = [o for o in (post.get("poll") or []) if isinstance(o, str) and o.strip()]
+    if poll:
+        extra.append("Poll:\n" + "\n".join(f"• {o}" for o in poll))
+    card = post.get("link") or {}
+    if card.get("url") and card["url"] not in text:
+        extra.append("\n".join(x for x in ("🔗 " + (card.get("title") or card["url"]), card.get("description") or "",
+                                            card["url"] if card.get("title") else "") if x))
+    quote = post.get("quote") or {}
+    if (quote.get("text") or "").strip():
+        who = f"@{quote['author']}" if quote.get("author") else "a post"
+        quoted = "\n".join("> " + line for line in quote["text"].strip().splitlines())
+        qlink = f"\n> https://coinmarketcap.com/community/post/{quote['id']}/" if str(quote.get("id", "")).isdigit() else ""
+        qmedia = "".join(f"\n> {m['url']}" for m in quote.get("media") or [] if m.get("url"))
+        extra.append(f"Quoting {who}:\n{quoted}{qmedia}{qlink}")
+    if unattached:
+        extra.append("Media:\n" + "\n".join(unattached))
     when = post.get("timestamp") or ""
     try:
         when = datetime.fromisoformat(when).strftime("%d %b %Y %H:%M UTC")
@@ -142,7 +171,38 @@ def post_body(post: dict) -> str:
         pass
     link = f"https://coinmarketcap.com/community/post/{post['id']}/" if str(post.get("id", "")).isdigit() else ""
     tail = f"— Posted on CoinMarketCap · {when}" + (f"\n{link}" if link else "")
-    return f"{text}\n\n{tail}".strip()
+    rest = "\n\n".join(extra + [tail])
+    room = MAX_BODY - len(rest) - 2
+    if len(text) > room:
+        text = text[:max(0, room - 1)].rstrip() + "…"
+    return f"{text}\n\n{rest}".strip()[:MAX_BODY]
+
+
+def fetch_media(url: str, kind: str, proxy: str = "", timeout: float = 60.0) -> dict | None:
+    """One medium as a posts.post_import attachment {name, mime, data
+    (base64)}, or None when it cannot be downloaded or is too large."""
+    limit = MAX_MEDIA_BYTES.get(kind, MAX_MEDIA_BYTES["image"])
+    handlers = [urllib.request.ProxyHandler({"http": proxy, "https": proxy})] if proxy else []
+    opener = urllib.request.build_opener(*handlers)
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; TraderaEvaluator/1.0)",
+                                               "Referer": "https://coinmarketcap.com/"})
+    try:
+        with opener.open(req, timeout=timeout) as res:
+            mime = (res.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            data = res.read(limit + 1)
+    except Exception:
+        return None
+    if not data or len(data) > limit:
+        return None
+    if not mime.startswith(_MEDIA_TYPES):
+        guess = mimetypes.guess_type(url.split("?")[0])[0] or ""
+        if not guess.startswith(_MEDIA_TYPES):
+            return None
+        mime = guess
+    name = os.path.basename(url.split("?")[0].rstrip("/")) or "media"
+    if "." not in name:
+        name += mimetypes.guess_extension(mime) or ""
+    return {"name": name[:120], "mime": mime, "data": base64.b64encode(data).decode()}
 
 
 def post_tags(post: dict) -> list[str]:
@@ -152,17 +212,25 @@ def post_tags(post: dict) -> list[str]:
 SOURCE = "coinmarketcap"
 
 
-def import_items(posts: list[dict], limit: int = POSTS_PER_ROUND) -> list[dict]:
-    """The newest [limit] posts as posts.post_import items."""
-    newest = sorted(posts, key=lambda p: p.get("timestamp") or "", reverse=True)[:limit]
-    items = []
-    for post in newest:
-        cmc_id = str(post.get("id") or "")
-        if not cmc_id or not (post.get("text") or "").strip():
-            continue
-        items.append({"source": SOURCE, "source_id": cmc_id, "body": post_body(post),
-                      "tags": post_tags(post), "at": post.get("timestamp") or ""})
-    return items
+def newest(posts: list[dict], limit: int = POSTS_PER_ROUND) -> list[dict]:
+    """The newest [limit] posts that can be published."""
+    out = sorted(posts, key=lambda p: p.get("timestamp") or "", reverse=True)[:limit]
+    return [p for p in out if str(p.get("id") or "") and (p.get("text") or "").strip()]
+
+
+def import_item(post: dict, fetch=None) -> dict:
+    """A post as a posts.post_import item, with its media attached ([fetch]
+    downloads one: url, kind -> attachment or None; without it, media are
+    linked in the body)."""
+    media, unattached = [], []
+    for m in post.get("media") or []:
+        got = fetch(m["url"], m.get("kind") or "image") if fetch else None
+        if got:
+            media.append(got)
+        else:
+            unattached.append(m["url"])
+    return {"source": SOURCE, "source_id": str(post["id"]), "body": post_body(post, unattached),
+            "tags": post_tags(post), "at": post.get("timestamp") or "", "media": media}
 
 
 def remember(published: dict[str, Any], items: list[dict], results: list[dict]) -> dict[str, Any]:

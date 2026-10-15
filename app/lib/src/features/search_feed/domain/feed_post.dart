@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../data/models/uploaded_file.dart';
+
 /// A normalized signal/post shown in the search feed.
 class FeedPost {
   const FeedPost({
@@ -19,6 +21,8 @@ class FeedPost {
     this.liked = false,
     this.serverId,
     this.workspace,
+    this.media = const [],
+    this.source = '',
   });
 
   final String initials;
@@ -43,4 +47,10 @@ class FeedPost {
 
   /// The name of the workspace this post belongs to (private workspace posts).
   final String? workspace;
+
+  /// The post's images, GIFs and videos.
+  final List<UploadedFile> media;
+
+  /// Where an imported post was first published ("coinmarketcap").
+  final String source;
 }

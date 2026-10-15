@@ -1971,17 +1971,8 @@ class _SocialFeedState extends State<_SocialFeed> {
     if (index < 0) return;
     final liked = !post.likedByMe;
     setState(() {
-      posts[index] = SocialPost(
-        id: post.id,
-        authorId: post.authorId,
-        body: post.body,
-        createdAt: post.createdAt,
-        spaceId: post.spaceId,
-        parentId: post.parentId,
-        tags: post.tags,
-        likes: post.likes + (liked ? 1 : -1),
-        likedByMe: liked,
-      );
+      posts[index] =
+          post.withLike(likes: post.likes + (liked ? 1 : -1), likedByMe: liked);
     });
     try {
       if (liked) {

@@ -1,7 +1,9 @@
 package posts
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"sort"
 	"strings"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/errs"
 	"github.com/tradera/tradera/plugins/actions/posts/models"
+	"github.com/tradera/tradera/plugins/actions/spaces/models/filedata"
 	"github.com/tradera/tradera/plugins/actions/support/helper"
 	"github.com/tradera/tradera/plugins/adapters/database/ports"
 )
@@ -31,6 +34,20 @@ const maxFeatured = 500
 // maxImport bounds one import.
 const maxImport = 50
 
+// maxImportMedia and maxMediaBytes bound one imported post's media.
+const (
+	maxImportMedia = 9
+	maxMediaBytes  = 25 << 20
+)
+
+// ImportMedia is an image, GIF or video of an imported post, stored as a
+// public file of its author and attached to the post.
+type ImportMedia struct {
+	Name string `json:"name"`
+	Mime string `json:"mime"`
+	Data []byte `json:"data"` // base64 in JSON
+}
+
 // ImportItem is one post to import.
 type ImportItem struct {
 	Source   string   `json:"source"`
@@ -39,6 +56,9 @@ type ImportItem struct {
 	Tags     []string `json:"tags,omitempty"`
 	// At is when it was published at its source (RFC 3339).
 	At string `json:"at,omitempty"`
+	// Media are attached when the post is published (never to one already
+	// here).
+	Media []ImportMedia `json:"media,omitempty"`
 }
 
 // ImportResult is what one item came to.
@@ -46,7 +66,9 @@ type ImportResult struct {
 	SourceID string `json:"source_id"`
 	PostID   string `json:"post_id,omitempty"`
 	Created  bool   `json:"created"`
-	Error    string `json:"error,omitempty"`
+	// Media are the stored files attached to a post this import published.
+	Media []string `json:"media,omitempty"`
+	Error string   `json:"error,omitempty"`
 }
 
 // Import publishes, as author, each item not imported before (by source and
@@ -76,7 +98,13 @@ func (s *Service) Import(ctx context.Context, author identity.ID, items []Import
 			out = append(out, res)
 			continue
 		}
-		p, err := s.Create(ctx, author, identity.ID{}, identity.ID{}, it.Body, it.Tags, nil)
+		media, err := s.storeMedia(ctx, author, it.Media)
+		if err != nil {
+			res.Error = err.Error()
+			out = append(out, res)
+			continue
+		}
+		p, err := s.Create(ctx, author, identity.ID{}, identity.ID{}, it.Body, it.Tags, media)
 		if err != nil {
 			res.Error = err.Error()
 			out = append(out, res)
@@ -90,10 +118,42 @@ func (s *Service) Import(ctx context.Context, author identity.ID, items []Import
 		if err := s.R.Update(ctx, "posts", p.ID, p); err != nil {
 			return nil, err
 		}
-		res.PostID, res.Created = p.ID.String(), true
+		res.PostID, res.Created, res.Media = p.ID.String(), true, media
 		out = append(out, res)
 	}
 	return out, s.feature(ctx, author)
+}
+
+// storeMedia stores an imported post's media as public files of its author
+// (everyone who sees the post sees them); their ids.
+func (s *Service) storeMedia(ctx context.Context, author identity.ID, media []ImportMedia) ([]string, error) {
+	if len(media) > maxImportMedia {
+		return nil, errs.InvalidArgument("a post carries at most 9 media")
+	}
+	ids := make([]string, 0, len(media))
+	for _, m := range media {
+		mime := strings.ToLower(strings.TrimSpace(m.Mime))
+		if !strings.HasPrefix(mime, "image/") && !strings.HasPrefix(mime, "video/") {
+			return nil, errs.InvalidArgument("media are images or videos, not " + mime)
+		}
+		if len(m.Data) == 0 || len(m.Data) > maxMediaBytes {
+			return nil, errs.InvalidArgument("a medium is 1 byte to 25 MB")
+		}
+		var file *filedata.File
+		if err := bridge.Invoke(ctx, s.K, "users", "UploadFile", []any{ctx, author, strings.TrimSpace(m.Name), mime,
+			int64(len(m.Data)), io.Reader(bytes.NewReader(m.Data)), ""}, &file); err != nil {
+			return nil, err
+		}
+		if file == nil {
+			return nil, errs.New(errs.CodeUnavailable, "the medium could not be stored")
+		}
+		file.Public = true
+		if err := s.R.Update(ctx, "files", file.ID, file); err != nil {
+			return nil, err
+		}
+		ids = append(ids, file.ID.String())
+	}
+	return ids, nil
 }
 
 // feature marks the author's newest FeaturedPerAuthor imported posts

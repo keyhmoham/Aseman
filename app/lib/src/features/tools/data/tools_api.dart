@@ -39,12 +39,15 @@ class ToolsApi {
 
   /// Replaces the backend program and/or the frontend.
   Future<ToolInfo> update(String botId,
-          {String? source, FrontendDraft? frontend}) async =>
-      ToolInfo.fromJson(_map(await _call('tools', 'tool_update', {
-        'bot': botId,
-        if (source != null) 'source': source,
-        if (frontend != null) 'frontend': frontend.toJson(),
-      })));
+          {String? source, FrontendDraft? frontend}) =>
+      edit(botId, ToolEdit(source: source, frontend: frontend));
+
+  /// Changes what the tool form changed: its name and description, how an
+  /// external backend is reached, its backend program and its frontend.
+  Future<ToolInfo> edit(String botId, ToolEdit changes) async =>
+      ToolInfo.fromJson(_map(await _call(
+          'tools', 'tool_update', {'bot': botId, ...changes.toJson()},
+          timeout: const Duration(minutes: 2))));
 
   Future<void> delete(String botId) =>
       _call('tools', 'tool_delete', {'bot': botId});
@@ -83,7 +86,8 @@ class ToolsApi {
       String roomId = '',
       bool regenerate = false,
       ShownResult? shown,
-      Map<String, dynamic>? template}) async {
+      Map<String, dynamic>? template,
+      String request = ''}) async {
     final body = _map(await _call(
         'tools',
         'frontend_get',
@@ -92,6 +96,9 @@ class ToolsApi {
           'space': spaceId,
           if (roomId.isNotEmpty) 'room': roomId,
           if (regenerate) 'regenerate': true,
+          // What the person asked for: a frontend generated for each request
+          // (not cached) is designed for it.
+          if (request.isNotEmpty) 'request': request,
           if (template != null) 'template': template,
           ...?shown?.toJson(),
         },

@@ -132,6 +132,7 @@ class FrontendDraft {
     this.source = '',
     this.bytecode,
     this.skill = '',
+    this.cache = true,
   });
 
   final FrontendMode mode;
@@ -144,6 +145,11 @@ class FrontendDraft {
   final Uint8List? bytecode;
   final String skill;
 
+  /// A generative frontend: keep the first one generated and serve it to
+  /// everyone (true), or generate one for every request, designed for what
+  /// the person asked while following [skill] (false).
+  final bool cache;
+
   Map<String, dynamic> toJson() => {
         'mode': mode.wire,
         if (mode == FrontendMode.static) ...{
@@ -152,7 +158,10 @@ class FrontendDraft {
           if (source.isNotEmpty) 'source': source,
           if (bytecode != null) 'bytecode': base64Encode(bytecode!),
         },
-        if (mode == FrontendMode.generative) 'skill': skill,
+        if (mode == FrontendMode.generative) ...{
+          'skill': skill,
+          'cache': cache,
+        },
       };
 }
 
@@ -183,6 +192,51 @@ class ToolDraft {
       };
 }
 
+/// What the tool form changed of an existing tool; only what is set changes.
+class ToolEdit {
+  const ToolEdit({
+    this.name,
+    this.description,
+    this.source,
+    this.frontend,
+    this.url,
+    this.auth,
+    this.token,
+  });
+
+  final String? name;
+  final String? description;
+
+  /// A new backend program (elpian/quickjs).
+  final String? source;
+  final FrontendDraft? frontend;
+
+  /// An external backend's server URL, who signs in ('' shared, 'user' each
+  /// person) and a new shared token.
+  final String? url;
+  final String? auth;
+  final String? token;
+
+  bool get isEmpty =>
+      name == null &&
+      description == null &&
+      source == null &&
+      frontend == null &&
+      url == null &&
+      auth == null &&
+      token == null;
+
+  Map<String, dynamic> toJson() => {
+        if (name != null) 'name': name,
+        if (description != null) 'description': description,
+        if (source != null) 'source': source,
+        if (frontend != null) 'frontend': frontend!.toJson(),
+        if (url != null) 'url': url,
+        if (auth != null) 'auth': auth,
+        if (token != null) 'token': token,
+      };
+}
+
 /// One function a tool's backend offers.
 class Microtool {
   const Microtool(
@@ -199,26 +253,62 @@ class Microtool {
       );
 }
 
-/// A tool as tools.tool_get reports it.
+/// A tool as tools.tool_get reports it. Its owner also gets what it was made
+/// from ([editable]), so the tool can be edited.
 class ToolInfo {
   const ToolInfo({
     required this.botId,
     this.name = '',
+    this.description = '',
     this.status = '',
     this.mode = BackendMode.external,
     this.runtime,
+    this.language = '',
+    this.url = '',
+    this.auth = '',
+    this.image = '',
+    this.port = 0,
+    this.path = '',
+    this.source = '',
     this.frontendMode = FrontendMode.none,
     this.frontendRuntime,
+    this.frontendLanguage = '',
+    this.frontendSource = '',
+    this.frontendSkill = '',
+    this.frontendCache = true,
+    this.editable = false,
     this.microtools = const [],
   });
 
   final String botId;
   final String name;
+  final String description;
   final String status;
   final BackendMode mode;
   final ToolRuntime? runtime;
+  final String language;
+  // external
+  final String url;
+  final String auth;
+  // docker
+  final String image;
+  final int port;
+  final String path;
+
+  /// The backend program (elpian/quickjs), for its owner.
+  final String source;
   final FrontendMode frontendMode;
   final ToolRuntime? frontendRuntime;
+  final String frontendLanguage;
+
+  /// The static frontend's program and the generative frontend's skill, for
+  /// its owner.
+  final String frontendSource;
+  final String frontendSkill;
+
+  /// Whether a generative frontend is cached (see [FrontendDraft.cache]).
+  final bool frontendCache;
+  final bool editable;
   final List<Microtool> microtools;
 
   bool get hasFrontend => frontendMode != FrontendMode.none;
@@ -228,11 +318,24 @@ class ToolInfo {
     return ToolInfo(
       botId: j['bot_id'] as String? ?? '',
       name: j['name'] as String? ?? '',
+      description: j['description'] as String? ?? '',
       status: j['status'] as String? ?? '',
       mode: BackendMode.parse(j['mode'] as String?),
       runtime: ToolRuntime.parse(j['runtime'] as String?),
+      language: j['language'] as String? ?? '',
+      url: j['url'] as String? ?? '',
+      auth: j['auth'] as String? ?? '',
+      image: j['image'] as String? ?? '',
+      port: (j['port'] as num?)?.toInt() ?? 0,
+      path: j['path'] as String? ?? '',
+      source: j['source'] as String? ?? '',
       frontendMode: FrontendMode.parse(frontend['mode'] as String?),
       frontendRuntime: ToolRuntime.parse(frontend['runtime'] as String?),
+      frontendLanguage: frontend['language'] as String? ?? '',
+      frontendSource: j['frontend_source'] as String? ?? '',
+      frontendSkill: j['frontend_skill'] as String? ?? '',
+      frontendCache: frontend['cache'] as bool? ?? true,
+      editable: j['editable'] as bool? ?? false,
       microtools: [
         for (final c in (j['commands'] as List?) ?? const <dynamic>[])
           if (c is Map) Microtool.fromJson(c.cast<String, dynamic>()),
@@ -252,6 +355,7 @@ class ToolFrontendPayload {
     this.title = '',
     this.cached = false,
     this.version = '',
+    this.template,
   });
 
   final FrontendMode mode;
@@ -272,6 +376,10 @@ class ToolFrontendPayload {
   final bool cached;
   final String version;
 
+  /// A generated frontend that is not cached: the template it was generated
+  /// as, which its actions and reloads pass back (nobody else keeps it).
+  final Map<String, dynamic>? template;
+
   factory ToolFrontendPayload.fromJson(Map<String, dynamic> j) {
     final bytecode = j['bytecode'] as String?;
     return ToolFrontendPayload(
@@ -287,6 +395,7 @@ class ToolFrontendPayload {
       title: j['title'] as String? ?? '',
       cached: j['cached'] as bool? ?? false,
       version: j['version'] as String? ?? '',
+      template: (j['template'] as Map?)?.cast<String, dynamic>(),
     );
   }
 }

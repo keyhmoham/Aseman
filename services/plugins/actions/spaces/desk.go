@@ -51,7 +51,7 @@ const (
 
 // DeskAutoFrontend is the frontend of a window that shows an interface the
 // node designed for one request, for a tool without a generative frontend
-// of its own (see designWindow). The design is the window's alone: kept
+// of its own or whose generative frontend is not cached (see designWindow). The design is the window's alone: kept
 // with it, never cached for the tool.
 const DeskAutoFrontend = "auto"
 

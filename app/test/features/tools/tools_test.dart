@@ -10,6 +10,7 @@ import 'package:tradera/src/features/tools/presentation/a2ui_view.dart';
 import 'package:tradera/src/features/tools/presentation/tool_create_form.dart';
 import 'package:tradera/src/features/tools/presentation/tool_frontend_view.dart';
 import 'package:tradera/src/features/tools/runtime/tool_frontend_host.dart';
+import 'package:tradera/src/shared/widgets/app_inputs.dart';
 
 /// Records node actions and answers them from [replies].
 class _Node {
@@ -94,7 +95,8 @@ void main() {
       final generative =
           const FrontendDraft(mode: FrontendMode.generative, skill: 'show it')
               .toJson();
-      expect(generative, {'mode': 'generative', 'skill': 'show it'});
+      expect(generative,
+          {'mode': 'generative', 'skill': 'show it', 'cache': true});
     });
   });
 
@@ -232,6 +234,64 @@ void main() {
       final action = node.calls.lastWhere((c) => c.$2 == 'frontend_action');
       expect(action.$3['template'], template,
           reason: 'actions run against the window\'s design');
+    });
+
+    testWidgets(
+        'a frontend generated for each request sends its own template back with its actions',
+        (tester) async {
+      final node = _Node();
+      const generated = {'title': 'For you', 'components': <Object>[]};
+      node.replies['tools.frontend_get'] = (_) => {
+            'mode': 'generative',
+            'cached': false,
+            'template': generated,
+            'messages': [
+              {
+                'version': 'v0.9',
+                'createSurface': {
+                  'surfaceId': 'g',
+                  'catalogId':
+                      'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'
+                }
+              },
+              {
+                'version': 'v0.9',
+                'updateComponents': {
+                  'surfaceId': 'g',
+                  'components': [
+                    {
+                      'id': 'root',
+                      'component': 'Button',
+                      'child': 'bl',
+                      'action': {
+                        'event': {'name': 'refresh'}
+                      }
+                    },
+                    {'id': 'bl', 'component': 'Text', 'text': 'Refresh'},
+                  ]
+                }
+              },
+            ],
+          };
+      node.replies['tools.frontend_action'] =
+          (_) => {'data': <String, dynamic>{}};
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: ToolFrontendView(
+              api: node.api,
+              botId: 'weather',
+              spaceId: 's1',
+              request: 'Compare Paris and Rome'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      final get = node.calls.singleWhere((c) => c.$2 == 'frontend_get');
+      expect(get.$3['request'], 'Compare Paris and Rome');
+      expect(get.$3.containsKey('template'), isFalse);
+      await tester.tap(find.text('Refresh'));
+      await tester.pumpAndSettle();
+      final action = node.calls.lastWhere((c) => c.$2 == 'frontend_action');
+      expect(action.$3['template'], generated);
     });
 
     test('frontend decodes a static Elpian frontend\'s bytecode', () async {
@@ -562,5 +622,186 @@ void main() {
     expect((json['backend'] as Map)['runtime'], 'quickjs');
     expect((json['backend'] as Map)['source'], contains('function tools()'));
     expect((json['frontend'] as Map)['mode'], 'static');
+  });
+
+  testWidgets('a generative frontend offers the Cache frontend switch',
+      (tester) async {
+    ToolDraft? draft;
+    tester.view.physicalSize = const Size(900, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async => draft = await showCreateToolForm(context),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cache frontend'), findsNothing,
+        reason: 'only a generative frontend is cached');
+    await tester.ensureVisible(find.text('Generative'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Generative'));
+    await tester.pumpAndSettle();
+    final cache = find.widgetWithText(AppSwitchCard, 'Cache frontend');
+    expect(cache, findsOneWidget);
+    expect(tester.widget<AppSwitchCard>(cache).value, isTrue);
+    await tester.ensureVisible(cache);
+    await tester.pumpAndSettle();
+    await tester.tap(cache);
+    await tester.pump();
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Weather');
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle();
+    final frontend = draft!.toJson()['frontend'] as Map;
+    expect(frontend['mode'], 'generative');
+    expect(frontend['cache'], isFalse);
+    expect(
+        ToolInfo.fromJson({
+          'frontend': {'mode': 'generative', 'cache': false}
+        }).frontendCache,
+        isFalse);
+    expect(ToolInfo.fromJson({}).frontendCache, isTrue);
+  });
+
+  group('editing a tool', () {
+    const managed = ToolInfo(
+      botId: 'b1',
+      name: 'Greeter',
+      description: 'Says hello',
+      mode: BackendMode.managed,
+      runtime: ToolRuntime.quickjs,
+      language: 'js',
+      source: 'function tools() { return []; }',
+      frontendMode: FrontendMode.generative,
+      frontendSkill: 'Show a greeting.',
+      editable: true,
+    );
+
+    test('tool_get carries what the tool was made from', () {
+      final info = ToolInfo.fromJson({
+        'bot_id': 'b1',
+        'name': 'Greeter',
+        'description': 'Says hello',
+        'mode': 'external',
+        'url': 'https://mcp.example.com/mcp',
+        'auth': 'user',
+        'frontend': {'mode': 'static', 'runtime': 'quickjs', 'language': 'js'},
+        'frontend_source': 'app()',
+        'editable': true,
+      });
+      expect(info.description, 'Says hello');
+      expect(info.url, 'https://mcp.example.com/mcp');
+      expect(info.auth, 'user');
+      expect(info.frontendSource, 'app()');
+      expect(info.frontendLanguage, 'js');
+      expect(info.editable, isTrue);
+    });
+
+    test('edit sends only what changed', () async {
+      final node = _Node()
+        ..replies['tools.tool_update'] = (_) => <String, dynamic>{};
+      await node.api.edit(
+          'b1', const ToolEdit(name: 'Hello desk', url: 'https://x.dev/mcp'));
+      expect(node.calls.single.$2, 'tool_update');
+      expect(node.calls.single.$3,
+          {'bot': 'b1', 'name': 'Hello desk', 'url': 'https://x.dev/mcp'});
+      expect(const ToolEdit().isEmpty, isTrue);
+    });
+
+    Future<ToolEdit?> edit(WidgetTester tester, ToolInfo tool,
+        Future<void> Function() change) async {
+      ToolEdit? result;
+      tester.view.physicalSize = const Size(900, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () async =>
+                  result = await showEditToolForm(context, tool),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await change();
+      await tester.tap(find.text('Save changes'));
+      await tester.pumpAndSettle();
+      return result;
+    }
+
+    testWidgets('the form opens filled and returns only the changes',
+        (tester) async {
+      final result = await edit(tester, managed, () async {
+        expect(find.text('Edit tool'), findsOneWidget);
+        expect(find.text('Greeter'), findsOneWidget);
+        expect(find.text('Show a greeting.'), findsOneWidget);
+        // Where it runs is shown, not offered.
+        expect(find.text('Where it runs'), findsNothing);
+        await tester.enterText(
+            find.widgetWithText(TextField, 'Description'), 'Greets people');
+        await tester.enterText(
+            find.widgetWithText(TextField, 'function tools() { return []; }'),
+            'function tools() { return [1]; }');
+      });
+      expect(result, isNotNull);
+      expect(result!.toJson(), {
+        'description': 'Greets people',
+        'source': 'function tools() { return [1]; }',
+      });
+    });
+
+    testWidgets('turning the frontend cache off sends the frontend with it',
+        (tester) async {
+      final result = await edit(tester, managed, () async {
+        final cache = find.widgetWithText(AppSwitchCard, 'Cache frontend');
+        expect(cache, findsOneWidget);
+        await tester.ensureVisible(cache);
+        await tester.pumpAndSettle();
+        await tester.tap(cache);
+        await tester.pump();
+      });
+      expect(result!.toJson(), {
+        'frontend': {
+          'mode': 'generative',
+          'skill': 'Show a greeting.',
+          'cache': false
+        },
+      });
+    });
+
+    testWidgets('saving an unchanged tool changes nothing', (tester) async {
+      final result = await edit(tester, managed, () async {});
+      expect(result, isNull);
+    });
+
+    testWidgets('an external tool changes its server, not its program',
+        (tester) async {
+      const external = ToolInfo(
+          botId: 'b2',
+          name: 'Search',
+          mode: BackendMode.external,
+          url: 'https://old.dev/mcp',
+          editable: true);
+      final result = await edit(tester, external, () async {
+        expect(find.text('Backend program'), findsNothing);
+        await tester.enterText(find.widgetWithText(TextField, 'MCP server URL'),
+            'https://new.dev/mcp');
+        await tester.enterText(
+            find.widgetWithText(TextField, 'New access token (optional)'),
+            'secret');
+      });
+      expect(
+          result!.toJson(), {'url': 'https://new.dev/mcp', 'token': 'secret'});
+    });
   });
 }

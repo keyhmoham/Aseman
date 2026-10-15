@@ -20,6 +20,9 @@ type Tool struct {
 	// Frontend is the mode of a tool's frontend (static or generative), which
 	// ui_compose can show people; empty when it has none.
 	Frontend string `json:"frontend,omitempty"`
+	// FrontendPerRequest: the generative frontend is not cached but
+	// generated for every request, designed for what the person asked.
+	FrontendPerRequest bool `json:"frontend_per_request,omitempty"`
 }
 
 // ToolCommand is one function of a connected app.

@@ -38,15 +38,18 @@ class DesignedWindowContent extends StatefulWidget {
 
 class _DesignedWindowContentState extends State<DesignedWindowContent>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1400))
-    ..repeat(reverse: true);
+  // Made in initState, not lazily: a window that never showed its pulse
+  // would otherwise make it in dispose(), off the tree.
+  late final AnimationController _pulse;
   Timer? _stale;
   bool _late = false;
 
   @override
   void initState() {
     super.initState();
+    _pulse = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1400))
+      ..repeat(reverse: true);
     _watch();
   }
 

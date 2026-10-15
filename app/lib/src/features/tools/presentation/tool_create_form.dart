@@ -14,8 +14,18 @@ import '../domain/tool_templates.dart';
 Future<ToolDraft?> showCreateToolForm(BuildContext context) =>
     showAppForm<ToolDraft>(context, const _ToolForm());
 
+/// Opens the tool form on an existing tool (as tools.tool_get reports it to
+/// its owner) and returns what was changed, or null when cancelled or
+/// nothing changed. Where its backend runs stays: that is a new tool.
+Future<ToolEdit?> showEditToolForm(BuildContext context, ToolInfo tool) =>
+    showAppForm<ToolEdit>(context, _ToolForm(initial: tool));
+
 class _ToolForm extends StatefulWidget {
-  const _ToolForm();
+  const _ToolForm({this.initial});
+
+  /// The tool being edited; null when creating one.
+  final ToolInfo? initial;
+
   @override
   State<_ToolForm> createState() => _ToolFormState();
 }
@@ -46,6 +56,39 @@ class _ToolFormState extends State<_ToolForm> {
   Uint8List? frontendBytecode;
   String bytecodeName = '';
   final skill = TextEditingController(text: ToolTemplates.skill);
+  bool cacheFrontend = true;
+
+  bool get editing => widget.initial != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final t = widget.initial;
+    if (t == null) return;
+    name.text = t.name;
+    description.text = t.description;
+    mode = t.mode;
+    url.text = t.url;
+    perPerson = t.auth == 'user';
+    runtime = t.runtime ?? ToolRuntime.quickjs;
+    if (t.language.isNotEmpty) language = t.language;
+    backendSource.text = t.source;
+    image.text = t.image;
+    if (t.port > 0) port.text = '${t.port}';
+    if (t.path.isNotEmpty) path.text = t.path;
+    frontendMode = t.frontendMode;
+    if (t.frontendRuntime != null) frontendRuntime = t.frontendRuntime!;
+    if (t.frontendLanguage.isNotEmpty) frontendLanguage = t.frontendLanguage;
+    // An empty program or skill is shown empty, not as the starter template,
+    // so leaving it alone never replaces what the tool runs.
+    if (t.frontendMode == FrontendMode.static) {
+      frontendSource.text = t.frontendSource;
+    }
+    if (t.frontendMode == FrontendMode.generative) {
+      skill.text = t.frontendSkill;
+    }
+    cacheFrontend = t.frontendCache;
+  }
 
   @override
   void dispose() {
@@ -107,6 +150,14 @@ class _ToolFormState extends State<_ToolForm> {
 
   String? _problem() {
     if (name.text.trim().isEmpty) return 'Name the tool.';
+    final initial = widget.initial;
+    if (initial != null && initial.mode != BackendMode.external) {
+      // Its runtime cannot change; only its program can.
+      if (runtime != ToolRuntime.docker && backendSource.text.trim().isEmpty) {
+        return 'Upload or write the backend program.';
+      }
+      return _frontendProblem(initial);
+    }
     switch (mode) {
       case BackendMode.external:
         final u = Uri.tryParse(url.text.trim());
@@ -125,9 +176,20 @@ class _ToolFormState extends State<_ToolForm> {
           return 'Upload or write the backend program.';
         }
     }
+    return _frontendProblem(initial);
+  }
+
+  String? _frontendProblem(ToolInfo? initial) {
     switch (frontendMode) {
       case FrontendMode.static:
-        if (frontendSource.text.trim().isEmpty && frontendBytecode == null) {
+        // An Elpian frontend uploaded only as bytecode keeps it when it is
+        // left as it is.
+        final kept = initial != null &&
+            !_frontendChanged(initial) &&
+            initial.frontendMode == FrontendMode.static;
+        if (frontendSource.text.trim().isEmpty &&
+            frontendBytecode == null &&
+            !kept) {
           return 'Upload or write the frontend program.';
         }
       case FrontendMode.generative:
@@ -136,6 +198,43 @@ class _ToolFormState extends State<_ToolForm> {
       case FrontendMode.none:
     }
     return null;
+  }
+
+  bool _frontendChanged(ToolInfo t) {
+    if (frontendMode != t.frontendMode) return true;
+    switch (frontendMode) {
+      case FrontendMode.none:
+        return false;
+      case FrontendMode.generative:
+        return skill.text != t.frontendSkill ||
+            cacheFrontend != t.frontendCache;
+      case FrontendMode.static:
+        final language =
+            frontendRuntime == ToolRuntime.quickjs ? 'js' : frontendLanguage;
+        return frontendRuntime != t.frontendRuntime ||
+            (t.frontendLanguage.isNotEmpty && language != t.frontendLanguage) ||
+            frontendSource.text != t.frontendSource ||
+            frontendBytecode != null;
+    }
+  }
+
+  /// What was changed of the tool being edited.
+  ToolEdit _edit(ToolInfo t) {
+    String? changed(String now, String before) => now == before ? null : now;
+    final external = t.mode == BackendMode.external;
+    final hosted = !external && t.runtime != ToolRuntime.docker;
+    return ToolEdit(
+      name: changed(name.text.trim(), t.name),
+      description: changed(description.text.trim(), t.description),
+      source: hosted ? changed(backendSource.text, t.source) : null,
+      frontend: _frontendChanged(t) ? _draft().frontend : null,
+      url: external ? changed(url.text.trim(), t.url) : null,
+      auth: external ? changed(perPerson ? 'user' : '', t.auth) : null,
+      // A token is never shown back: a new one replaces it, blank keeps it.
+      token: external && !perPerson && token.text.trim().isNotEmpty
+          ? token.text.trim()
+          : null,
+    );
   }
 
   ToolDraft _draft() => ToolDraft(
@@ -162,16 +261,18 @@ class _ToolFormState extends State<_ToolForm> {
           source: frontendSource.text,
           bytecode: frontendBytecode,
           skill: skill.text,
+          cache: cacheFrontend,
         ),
       );
 
   @override
   Widget build(BuildContext context) => AppFormFrame(
-        icon: Icons.widgets_outlined,
-        title: 'Create tool',
-        subtitle:
-            'A backend whose microtools agents and people use, and a frontend people use it through.',
-        submit: 'Create',
+        icon: editing ? Icons.edit_outlined : Icons.widgets_outlined,
+        title: editing ? 'Edit tool' : 'Create tool',
+        subtitle: editing
+            ? 'Change its name, description, backend program or frontend. Where it runs stays as it is.'
+            : 'A backend whose microtools agents and people use, and a frontend people use it through.',
+        submit: editing ? 'Save changes' : 'Create',
         onSubmit: () {
           final problem = _problem();
           if (problem != null) {
@@ -179,33 +280,43 @@ class _ToolFormState extends State<_ToolForm> {
                 ?.showSnackBar(SnackBar(content: Text(problem)));
             return;
           }
-          Navigator.pop(context, _draft());
+          final initial = widget.initial;
+          if (initial == null) {
+            Navigator.pop(context, _draft());
+            return;
+          }
+          final edit = _edit(initial);
+          Navigator.pop(context, edit.isEmpty ? null : edit);
         },
         children: [
           _field('Name', name, hint: 'e.g. Weather desk', autofocus: true),
           _field('Description', description,
               hint: 'What it does — agents read this too', maxLines: 2),
           const _Section('Backend'),
-          AppSegmentedField<BackendMode>(
-            label: 'Where it runs',
-            value: mode,
-            onChanged: (v) => setState(() => mode = v),
-            choices: const [
-              AppChoice(BackendMode.external, 'External',
-                  icon: Icons.public_rounded,
-                  hint:
-                      'An MCP server you already run. Its tools become this tool’s microtools.'),
-              AppChoice(BackendMode.managed, 'Managed',
-                  icon: Icons.cloud_outlined,
-                  hint:
-                      'Runs on this node as a service of its own, for every space it is added to; it knows which person or agent asks, from which space and room.'),
-              AppChoice(BackendMode.installed, 'Installed',
-                  icon: Icons.inventory_2_outlined,
-                  hint:
-                      'Installed into the sandbox of each space that adds it, and serves only that space.'),
-            ],
-          ),
-          ..._backendFields(context),
+          if (editing)
+            ..._editedBackendFields(context)
+          else ...[
+            AppSegmentedField<BackendMode>(
+              label: 'Where it runs',
+              value: mode,
+              onChanged: (v) => setState(() => mode = v),
+              choices: const [
+                AppChoice(BackendMode.external, 'External',
+                    icon: Icons.public_rounded,
+                    hint:
+                        'An MCP server you already run. Its tools become this tool’s microtools.'),
+                AppChoice(BackendMode.managed, 'Managed',
+                    icon: Icons.cloud_outlined,
+                    hint:
+                        'Runs on this node as a service of its own, for every space it is added to; it knows which person or agent asks, from which space and room.'),
+                AppChoice(BackendMode.installed, 'Installed',
+                    icon: Icons.inventory_2_outlined,
+                    hint:
+                        'Installed into the sandbox of each space that adds it, and serves only that space.'),
+              ],
+            ),
+            ..._backendFields(context),
+          ],
           const _Section('Frontend'),
           AppSegmentedField<FrontendMode>(
             label: 'What people see',
@@ -299,6 +410,61 @@ class _ToolFormState extends State<_ToolForm> {
     ];
   }
 
+  /// The backend of a tool being edited: where it runs is shown, not
+  /// offered; how an external one is reached and a hosted one's program can
+  /// change.
+  List<Widget> _editedBackendFields(BuildContext context) {
+    final t = widget.initial!;
+    final scheme = Theme.of(context).colorScheme;
+    final where = switch (t.mode) {
+      BackendMode.external => 'External MCP server',
+      BackendMode.managed => 'Managed · ${t.runtime?.label ?? ''}',
+      BackendMode.installed => 'Installed · ${t.runtime?.label ?? ''}',
+    };
+    final docker = t.runtime == ToolRuntime.docker;
+    return [
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest.withValues(alpha: .45),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(children: [
+          Icon(Icons.dns_outlined, size: 18, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              docker
+                  ? '$where — ${t.image}:${t.port}${t.path}. '
+                      'To run it elsewhere or from another image, create a new tool.'
+                  : '$where. To run it elsewhere, create a new tool.',
+              style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
+            ),
+          ),
+        ]),
+      ),
+      if (t.mode == BackendMode.external) ...[
+        _field('MCP server URL', url, hint: 'https://mcp.example.com/mcp'),
+        AppSwitchCard(
+          icon: Icons.person_outline_rounded,
+          title: 'Each person signs in',
+          subtitle: 'Otherwise everyone uses the credential below.',
+          value: perPerson,
+          onChanged: (v) => setState(() => perPerson = v),
+        ),
+        if (!perPerson)
+          _field('New access token (optional)', token,
+              hint: 'Leave blank to keep the current one', obscure: true),
+      ] else if (!docker)
+        _program('Backend program', backendSource,
+            onUpload: () => _upload(
+                backendSource,
+                runtime == ToolRuntime.elpian && language == 'dart'
+                    ? ['dart']
+                    : ['js', 'mjs'])),
+    ];
+  }
+
   List<Widget> _frontendFields(BuildContext context) {
     switch (frontendMode) {
       case FrontendMode.none:
@@ -309,6 +475,15 @@ class _ToolFormState extends State<_ToolForm> {
               hint:
                   'What to show, what each part does, which microtools fill it.',
               onUpload: () => _upload(skill, ['md', 'txt'])),
+          AppSwitchCard(
+            icon: Icons.cached_rounded,
+            title: 'Cache frontend',
+            subtitle: cacheFrontend
+                ? 'The first frontend generated is kept and shown to everyone after that.'
+                : 'A new frontend is generated each time it is opened, designed for what the person asked while following the skill.',
+            value: cacheFrontend,
+            onChanged: (v) => setState(() => cacheFrontend = v),
+          ),
         ];
       case FrontendMode.static:
         return [

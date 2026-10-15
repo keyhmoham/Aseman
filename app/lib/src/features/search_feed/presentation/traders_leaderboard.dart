@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -900,7 +901,7 @@ class _AdminActions extends StatelessWidget {
     final navigator = Navigator.of(context);
     try {
       await model.removeTrader(trader.handle, keepAccount: !deleteAccount);
-      navigator.maybePop();
+      unawaited(navigator.maybePop());
       messenger
           ?.showSnackBar(SnackBar(content: Text('${trader.name} was removed')));
     } catch (e) {

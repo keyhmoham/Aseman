@@ -83,7 +83,15 @@ type FrontendSpec struct {
 	// Version changes whenever the frontend's program or skill changes, so a
 	// generated frontend cached for an older one is not served again.
 	Version string `json:"version,omitempty"`
+	// Cache, for a generative frontend, keeps the first frontend generated
+	// in the component registry and serves it to everyone after that. Off,
+	// a frontend is generated for every request, designed for what the
+	// person asked, following the skill. Unset means on.
+	Cache *bool `json:"cache,omitempty"`
 }
+
+// Cached reports whether a generated frontend is kept and served again.
+func (f FrontendSpec) Cached() bool { return f.Cache == nil || *f.Cache }
 
 // Bot entity keys of a tool's programs.
 const (

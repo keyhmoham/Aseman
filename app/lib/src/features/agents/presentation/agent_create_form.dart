@@ -44,19 +44,62 @@ class BotFormResult {
   final int cpu;
   final int memoryMb;
   final int diskMb;
+
+  /// An agent as bots.bot_detail reports it to its owner: what its form was
+  /// filled with, so it opens in the editor as it is configured today.
+  factory BotFormResult.fromDetail(Map<String, dynamic> detail) {
+    final agent = (detail['agent'] as Map?)?.cast<String, dynamic>() ?? {};
+    final resources =
+        (detail['resources'] as Map?)?.cast<String, dynamic>() ?? {};
+    String text(Object? v) => v is String ? v : '';
+    int number(Object? v, int fallback) =>
+        v is num && v > 0 ? v.round() : fallback;
+    final description = text(agent['description']);
+    return BotFormResult(
+      name: text(detail['name']),
+      kind: text(detail['kind']).isEmpty ? 'agent' : text(detail['kind']),
+      vmType: text(detail['vm_type']),
+      description:
+          description.isEmpty ? text(detail['description']) : description,
+      instructions: text(agent['instructions']),
+      provider: text(agent['provider']),
+      model: text(agent['model']),
+      // Unset, they read as the form's defaults: saving it unchanged then
+      // changes nothing.
+      maxTurns: number(agent['max_turns'], 6),
+      maxTokens: number(agent['max_tokens'], 2000),
+      skills: [
+        for (final s in (agent['skills'] as List?) ?? const [])
+          if (s is Map) s.cast<String, dynamic>(),
+      ],
+      cpu: number(resources['cpu'], 1),
+      memoryMb: number(resources['memory_mb'], 512),
+      diskMb: number(resources['disk_mb'], 512),
+    );
+  }
 }
 
 /// Opens the structured create-bot dialog and returns the filled form result,
 /// or null when cancelled. [loadLlmCatalog] lists the LLM providers + models
-/// the node admin configured; the agent picks its backbone from them.
+/// the node admin configured; the agent picks its backbone from them. With
+/// [initial] it edits an existing agent: the form opens filled with it.
 Future<BotFormResult?> showCreateBotForm(BuildContext context,
-        {Future<List<LlmProvider>> Function()? loadLlmCatalog}) =>
-    showAppForm<BotFormResult>(
-        context, _CreateBotDialog(loadLlmCatalog: loadLlmCatalog));
+        {Future<List<LlmProvider>> Function()? loadLlmCatalog,
+        BotFormResult? initial}) =>
+    showAppForm<BotFormResult>(context,
+        _CreateBotDialog(loadLlmCatalog: loadLlmCatalog, initial: initial));
+
+/// Opens the agent form on an existing agent; returns the edited form.
+Future<BotFormResult?> showEditBotForm(BuildContext context,
+        {required BotFormResult initial,
+        Future<List<LlmProvider>> Function()? loadLlmCatalog}) =>
+    showCreateBotForm(context,
+        loadLlmCatalog: loadLlmCatalog, initial: initial);
 
 class _CreateBotDialog extends StatefulWidget {
-  const _CreateBotDialog({this.loadLlmCatalog});
+  const _CreateBotDialog({this.loadLlmCatalog, this.initial});
   final Future<List<LlmProvider>> Function()? loadLlmCatalog;
+  final BotFormResult? initial;
   @override
   State<_CreateBotDialog> createState() => _CreateBotDialogState();
 }
@@ -85,9 +128,28 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
   int memory = 512;
   int disk = 512;
 
+  bool get editing => widget.initial != null;
+
   @override
   void initState() {
     super.initState();
+    final initial = widget.initial;
+    if (initial != null) {
+      name.text = initial.name;
+      description.text = initial.description;
+      instructions.text = initial.instructions;
+      providerId = initial.provider;
+      model = initial.model;
+      if (initial.maxTurns > 0) maxTurns = initial.maxTurns.clamp(1, 30);
+      if (initial.maxTokens > 0) maxTokens = initial.maxTokens;
+      capabilities.addAll([
+        for (final s in initial.skills)
+          if (s['name'] is String) s['name'] as String,
+      ]);
+      cpu = initial.cpu;
+      memory = initial.memoryMb;
+      disk = initial.diskMb;
+    }
     _loadCatalog();
   }
 
@@ -103,7 +165,8 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
       setState(() {
         catalog = list.where((p) => p.models.isNotEmpty).toList();
         catalogLoading = false;
-        if (catalog.isNotEmpty) {
+        // An agent being edited keeps its model while it is still offered.
+        if (catalog.isNotEmpty && _model == null) {
           final def = catalog.firstWhere((p) => p.isDefault,
               orElse: () => catalog.first);
           providerId = def.id;
@@ -163,11 +226,13 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
       maxTokens: maxTokens,
       skills: [
         for (final c in capabilities)
-          {
-            'name': c,
-            'description': 'Agent capability: $c',
-            'tools': const <String>[],
-          },
+          // A capability it already had keeps what it was configured with.
+          widget.initial?.skills.where((s) => s['name'] == c).firstOrNull ??
+              {
+                'name': c,
+                'description': 'Agent capability: $c',
+                'tools': const <String>[],
+              },
       ],
       cpu: cpu,
       memoryMb: memory,
@@ -175,16 +240,22 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
     );
   }
 
+  /// The offered sizes, plus the one an edited agent has when it is not
+  /// among them.
+  static List<int> _withCurrent(List<int> offered, int current) =>
+      offered.contains(current) ? offered : ([...offered, current]..sort());
+
   static String _mb(int mb) =>
       mb >= 1024 ? '${compactDecimal(mb / 1024)} GB' : '$mb MB';
 
   @override
   Widget build(BuildContext context) => AppFormFrame(
-        icon: Icons.smart_toy_outlined,
-        title: 'Create agent',
-        subtitle:
-            'An assistant that works in your rooms with its own model and instructions.',
-        submit: 'Create',
+        icon: editing ? Icons.edit_outlined : Icons.smart_toy_outlined,
+        title: editing ? 'Edit agent' : 'Create agent',
+        subtitle: editing
+            ? 'Changes apply to its next conversation; its computer is recreated with them.'
+            : 'An assistant that works in your rooms with its own model and instructions.',
+        submit: editing ? 'Save changes' : 'Create',
         onSubmit: () {
           final result = _submit();
           if (result == null) {
@@ -227,11 +298,13 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
           hint: 'The most tokens one reply may use.',
           value: maxTokens,
           onChanged: (v) => setState(() => maxTokens = v),
-          choices: const [
-            AppChoice(1000, 'Short · 1K'),
-            AppChoice(2000, 'Normal · 2K'),
-            AppChoice(4000, 'Long · 4K'),
-            AppChoice(8000, 'Very long · 8K'),
+          choices: [
+            const AppChoice(1000, 'Short · 1K'),
+            const AppChoice(2000, 'Normal · 2K'),
+            const AppChoice(4000, 'Long · 4K'),
+            const AppChoice(8000, 'Very long · 8K'),
+            if (!const [1000, 2000, 4000, 8000].contains(maxTokens))
+              AppChoice(maxTokens, 'Custom · $maxTokens'),
           ],
         ),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -240,7 +313,13 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final (label, icon) in _capabilityPool)
+              for (final (label, icon) in [
+                ..._capabilityPool,
+                // Capabilities it was given elsewhere stay choosable.
+                for (final c in capabilities)
+                  if (!_capabilityPool.any((p) => p.$1 == c))
+                    (c, Icons.extension_outlined),
+              ])
                 FilterChip(
                   avatar: Icon(icon, size: 17),
                   label: Text(label),
@@ -325,10 +404,9 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
                 'What its machine is created with; bigger costs more per minute.',
             value: cpu,
             onChanged: (v) => setState(() => cpu = v),
-            choices: const [
-              AppChoice(1, '1 vCPU'),
-              AppChoice(2, '2 vCPU'),
-              AppChoice(4, '4 vCPU'),
+            choices: [
+              for (final n in _withCurrent(const [1, 2, 4], cpu))
+                AppChoice(n, '$n vCPU'),
             ],
           ),
           const SizedBox(height: 18),
@@ -337,7 +415,8 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
             value: memory,
             onChanged: (v) => setState(() => memory = v),
             choices: [
-              for (final mb in const [256, 512, 1024, 2048, 4096])
+              for (final mb
+                  in _withCurrent(const [256, 512, 1024, 2048, 4096], memory))
                 AppChoice(mb, _mb(mb)),
             ],
           ),
@@ -347,7 +426,8 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
             value: disk,
             onChanged: (v) => setState(() => disk = v),
             choices: [
-              for (final mb in const [512, 1024, 4096, 10240])
+              for (final mb
+                  in _withCurrent(const [512, 1024, 4096, 10240], disk))
                 AppChoice(mb, _mb(mb)),
             ],
           ),

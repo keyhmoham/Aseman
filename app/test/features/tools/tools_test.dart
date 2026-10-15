@@ -563,4 +563,120 @@ void main() {
     expect((json['backend'] as Map)['source'], contains('function tools()'));
     expect((json['frontend'] as Map)['mode'], 'static');
   });
+
+  group('editing a tool', () {
+    const managed = ToolInfo(
+      botId: 'b1',
+      name: 'Greeter',
+      description: 'Says hello',
+      mode: BackendMode.managed,
+      runtime: ToolRuntime.quickjs,
+      language: 'js',
+      source: 'function tools() { return []; }',
+      frontendMode: FrontendMode.generative,
+      frontendSkill: 'Show a greeting.',
+      editable: true,
+    );
+
+    test('tool_get carries what the tool was made from', () {
+      final info = ToolInfo.fromJson({
+        'bot_id': 'b1',
+        'name': 'Greeter',
+        'description': 'Says hello',
+        'mode': 'external',
+        'url': 'https://mcp.example.com/mcp',
+        'auth': 'user',
+        'frontend': {'mode': 'static', 'runtime': 'quickjs', 'language': 'js'},
+        'frontend_source': 'app()',
+        'editable': true,
+      });
+      expect(info.description, 'Says hello');
+      expect(info.url, 'https://mcp.example.com/mcp');
+      expect(info.auth, 'user');
+      expect(info.frontendSource, 'app()');
+      expect(info.frontendLanguage, 'js');
+      expect(info.editable, isTrue);
+    });
+
+    test('edit sends only what changed', () async {
+      final node = _Node()..replies['tools.tool_update'] = (_) => <String, dynamic>{};
+      await node.api.edit(
+          'b1', const ToolEdit(name: 'Hello desk', url: 'https://x.dev/mcp'));
+      expect(node.calls.single.$2, 'tool_update');
+      expect(node.calls.single.$3,
+          {'bot': 'b1', 'name': 'Hello desk', 'url': 'https://x.dev/mcp'});
+      expect(const ToolEdit().isEmpty, isTrue);
+    });
+
+    Future<ToolEdit?> edit(WidgetTester tester, ToolInfo tool,
+        Future<void> Function() change) async {
+      ToolEdit? result;
+      tester.view.physicalSize = const Size(900, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () async =>
+                  result = await showEditToolForm(context, tool),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await change();
+      await tester.tap(find.text('Save changes'));
+      await tester.pumpAndSettle();
+      return result;
+    }
+
+    testWidgets('the form opens filled and returns only the changes',
+        (tester) async {
+      final result = await edit(tester, managed, () async {
+        expect(find.text('Edit tool'), findsOneWidget);
+        expect(find.text('Greeter'), findsOneWidget);
+        expect(find.text('Show a greeting.'), findsOneWidget);
+        // Where it runs is shown, not offered.
+        expect(find.text('Where it runs'), findsNothing);
+        await tester.enterText(
+            find.widgetWithText(TextField, 'Description'), 'Greets people');
+        await tester.enterText(
+            find.widgetWithText(TextField, 'function tools() { return []; }'),
+            'function tools() { return [1]; }');
+      });
+      expect(result, isNotNull);
+      expect(result!.toJson(), {
+        'description': 'Greets people',
+        'source': 'function tools() { return [1]; }',
+      });
+    });
+
+    testWidgets('saving an unchanged tool changes nothing', (tester) async {
+      final result = await edit(tester, managed, () async {});
+      expect(result, isNull);
+    });
+
+    testWidgets('an external tool changes its server, not its program',
+        (tester) async {
+      const external = ToolInfo(
+          botId: 'b2',
+          name: 'Search',
+          mode: BackendMode.external,
+          url: 'https://old.dev/mcp',
+          editable: true);
+      final result = await edit(tester, external, () async {
+        expect(find.text('Backend program'), findsNothing);
+        await tester.enterText(find.widgetWithText(TextField, 'MCP server URL'),
+            'https://new.dev/mcp');
+        await tester.enterText(
+            find.widgetWithText(TextField, 'New access token (optional)'),
+            'secret');
+      });
+      expect(
+          result!.toJson(), {'url': 'https://new.dev/mcp', 'token': 'secret'});
+    });
+  });
 }

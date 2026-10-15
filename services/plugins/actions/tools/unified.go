@@ -398,21 +398,68 @@ func (s *Service) toolGet(ctx context.Context, req *api.ActionRequest) (*api.Act
 	if e := s.R.GetString(ctx, "tool_registry", in.Bot, &tool); e != nil {
 		return nil, e
 	}
-	return helper.JSON(s.toolView(ctx, &tool))
+	out := s.toolView(ctx, &tool)
+	descriptor := s.descriptor(ctx, req.Caller, tool.BotID)
+	out["description"], _ = descriptor["description"].(string)
+	// Its owner gets what it was made from, so the tool can be edited.
+	if _, err := s.ownedTool(ctx, req, in.Bot); err == nil {
+		out["editable"] = true
+		if tool.EffectiveMode() != models.ModeExternal && tool.Runtime != models.RuntimeDocker {
+			out["source"], _ = s.entity(ctx, tool.BotID, models.EntityBackendSource)
+		}
+		out["frontend_source"], _ = s.entity(ctx, tool.BotID, models.EntityFrontendSource)
+		out["frontend_skill"], _ = s.entity(ctx, tool.BotID, models.EntityFrontendSkill)
+	}
+	return helper.JSON(out)
 }
 
-// toolUpdate implements tools.tool_update: a new backend program and/or a new
-// frontend. A managed backend is restarted to load its new program; an
-// installed one is reinstalled by the next call in each space (its version
-// no longer matches); a generative frontend is regenerated on next use.
+// descriptor is a tool's public profile (name, description, ...), as bot_edit
+// last recorded it; empty when it cannot be read.
+func (s *Service) descriptor(ctx context.Context, caller api.Caller, botID string) map[string]any {
+	b, _ := json.Marshal(map[string]any{"bot": botID})
+	resp, err := s.K.Actions().Dispatch(ctx, "bots", "bot_detail", &api.ActionRequest{Caller: caller, Body: b})
+	if err != nil || resp == nil {
+		return map[string]any{}
+	}
+	var view struct {
+		Description string `json:"description"`
+		Metadata    struct {
+			Descriptor map[string]any `json:"descriptor"`
+		} `json:"metadata"`
+	}
+	_ = json.Unmarshal(resp.Body, &view)
+	out := view.Metadata.Descriptor
+	if out == nil {
+		out = map[string]any{}
+	}
+	if d, _ := out["description"].(string); d == "" && view.Description != "" {
+		out["description"] = view.Description
+	}
+	return out
+}
+
+// toolUpdate implements tools.tool_update: a new name or description, how an
+// external backend is reached, a new backend program and/or a new frontend.
+// A managed backend is restarted to load its new program; an installed one is
+// reinstalled by the next call in each space (its version no longer
+// matches); a generative frontend is regenerated on next use. Where it runs
+// (its mode and runtime) stays: that is a new tool.
 func (s *Service) toolUpdate(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if e := helper.RequireUser(req); e != nil {
 		return nil, e
 	}
 	var in struct {
-		Bot      string         `json:"bot"`
-		Source   *string        `json:"source"`
-		Frontend *frontendInput `json:"frontend"`
+		Bot         string         `json:"bot"`
+		Name        *string        `json:"name"`
+		Description *string        `json:"description"`
+		Source      *string        `json:"source"`
+		Frontend    *frontendInput `json:"frontend"`
+		// An external backend: its MCP server URL, who signs in to it ("" for
+		// shared credentials, "user" for each person) and the shared token
+		// ("" removes it; absent keeps it).
+		URL   *string `json:"url"`
+		Auth  *string `json:"auth"`
+		Token *string `json:"token"`
 	}
 	if e := helper.Decode(req, &in); e != nil {
 		return nil, e
@@ -424,6 +471,35 @@ func (s *Service) toolUpdate(ctx context.Context, req *api.ActionRequest) (*api.
 	botID, err := identity.Parse(tool.BotID)
 	if err != nil {
 		return nil, err
+	}
+	if in.Name != nil {
+		if *in.Name = strings.TrimSpace(*in.Name); *in.Name == "" {
+			return nil, errs.InvalidArgument("name required")
+		}
+	}
+	access := in.URL != nil || in.Auth != nil || in.Token != nil
+	if access {
+		if tool.EffectiveMode() != models.ModeExternal {
+			return nil, errs.InvalidArgument("only an external backend has a server URL and credentials")
+		}
+		url := ""
+		if in.URL != nil {
+			url = strings.TrimSpace(*in.URL)
+			if url == "" {
+				return nil, errs.InvalidArgument("an external backend needs its MCP server URL")
+			}
+		}
+		if err := s.setMCPAccess(tool, url, in.Auth, in.Token, nil); err != nil {
+			return nil, err
+		}
+		// Like registering it: a server everyone shares must answer.
+		if tool.Auth != "user" {
+			commands, err := s.listExternal(ctx, tool)
+			if err != nil {
+				return nil, err
+			}
+			tool.Commands = commands
+		}
 	}
 	if in.Source != nil {
 		if tool.Runtime != models.RuntimeElpian && tool.Runtime != models.RuntimeQuickJS {
@@ -471,7 +547,61 @@ func (s *Service) toolUpdate(ctx context.Context, req *api.ActionRequest) (*api.
 		return nil, err
 	}
 	s.forgetCommands(tool.BotID)
+	if in.Name != nil || in.Description != nil || access {
+		if err := s.redescribe(ctx, req.Caller, tool, in.Name, in.Description); err != nil {
+			return nil, err
+		}
+	}
 	return helper.JSON(s.toolView(ctx, tool))
+}
+
+// listExternal asks an external server, with its shared credentials, what it
+// offers.
+func (s *Service) listExternal(ctx context.Context, tool *models.Tool) ([]map[string]any, error) {
+	secret, err := s.open(tool.Secrets)
+	if err != nil {
+		return nil, err
+	}
+	headers := map[string]string{}
+	if raw, ok := secret["headers"].(map[string]any); ok {
+		for k, v := range raw {
+			if text, ok := v.(string); ok {
+				headers[k] = text
+			}
+		}
+	}
+	session, err := s.Client.Session(ctx, tool.URL, headers)
+	if err != nil {
+		return nil, errs.New(errs.CodeUnavailable, err.Error())
+	}
+	listed, err := s.Client.RPC(ctx, tool.URL, session, "tools/list", map[string]any{})
+	if err != nil {
+		return nil, err
+	}
+	return commandDefs(listed), nil
+}
+
+// redescribe records a renamed or redescribed tool: its bot's name and the
+// profile people and agents read, keeping the rest of that profile.
+func (s *Service) redescribe(ctx context.Context, caller api.Caller, tool *models.Tool, name, description *string) error {
+	descriptor := s.descriptor(ctx, caller, tool.BotID)
+	body := map[string]any{"bot": tool.BotID, "descriptor": descriptor}
+	if name != nil {
+		descriptor["name"] = *name
+		body["name"] = *name
+	}
+	if description != nil {
+		d := strings.TrimSpace(*description)
+		descriptor["description"] = d
+		body["description"] = d
+	}
+	if tool.EffectiveMode() == models.ModeExternal {
+		descriptor["mcp_url"] = tool.URL
+		descriptor["mcp_auth"] = tool.Auth
+	}
+	b, _ := json.Marshal(body)
+	_, err := s.K.Actions().Dispatch(ctx, "bots", "bot_edit", &api.ActionRequest{Caller: caller, Body: b})
+	return err
 }
 
 // toolDelete implements tools.tool_delete for every backend mode (and

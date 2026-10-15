@@ -1,21 +1,25 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/bot.dart';
+import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/status_tag.dart';
 import '../../miniapps/presentation/miniapp_sandbox_screen.dart';
 import '../../tools/data/tools_api.dart';
+import '../../tools/domain/tool_models.dart';
 import '../../tools/presentation/tool_create_form.dart';
 import '../../tools/presentation/tool_screen.dart';
 import 'agent_create_form.dart';
 
 /// "My bots" — a modal panel (dialog on desktop, bottom sheet on mobile) that
-/// shows the agents and tools (miniapps) the signed-in user created. Follows
-/// the app's panel convention: icon + title header, TabBar, and tabbed content.
+/// shows the agents and tools (miniapps) the signed-in user created, and
+/// keeps them editable after they were created. Follows the app's panel
+/// convention: icon + title header, TabBar, and tabbed content.
 class AgentsScreen extends StatefulWidget {
   const AgentsScreen({super.key, required this.dependencies});
 
@@ -110,6 +114,126 @@ class _AgentsScreenState extends State<AgentsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Create failed: $e')));
+    }
+  }
+
+  /// Opens an agent's form filled with how it is configured today and saves
+  /// what was changed.
+  Future<void> _editAgent(Bot bot) async {
+    final service = widget.dependencies.service;
+    final messenger = ScaffoldMessenger.of(context);
+    final BotFormResult before;
+    try {
+      before = BotFormResult.fromDetail(await service.fetchBotDetail(bot.id));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not load: $e')));
+      return;
+    }
+    if (!mounted) return;
+    final after = await showEditBotForm(context,
+        initial: before, loadLlmCatalog: service.fetchLlmCatalog);
+    if (after == null || !mounted) return;
+    T? changed<T>(T now, T was) => now == was ? null : now;
+    final skills = [for (final s in after.skills) s['name']];
+    final skillsBefore = [for (final s in before.skills) s['name']];
+    final resized = after.cpu != before.cpu ||
+        after.memoryMb != before.memoryMb ||
+        after.diskMb != before.diskMb;
+    final backbone =
+        after.provider != before.provider || after.model != before.model;
+    final reskilled = !listEquals(skills, skillsBefore);
+    if (after.name == before.name &&
+        after.description == before.description &&
+        after.instructions == before.instructions &&
+        after.maxTurns == before.maxTurns &&
+        after.maxTokens == before.maxTokens &&
+        !backbone &&
+        !reskilled &&
+        !resized) {
+      return;
+    }
+    try {
+      await service.editBot(
+        bot.id,
+        name: changed(after.name, before.name),
+        description: changed(after.description, before.description),
+        instructions: changed(after.instructions, before.instructions),
+        provider: backbone ? after.provider : null,
+        model: backbone ? after.model : null,
+        maxTurns: changed(after.maxTurns, before.maxTurns),
+        maxTokens: changed(after.maxTokens, before.maxTokens),
+        skills: reskilled ? after.skills : null,
+        cpu: resized ? after.cpu : null,
+        memoryMb: resized ? after.memoryMb : null,
+        diskMb: resized ? after.diskMb : null,
+      );
+      messenger.showSnackBar(SnackBar(content: Text('${after.name} saved')));
+      await _load();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Save failed: $e')));
+    }
+  }
+
+  /// A tool: its form filled with what it was made from; a tool made before
+  /// tools had one form: its name and description.
+  Future<void> _editTool(Bot bot) async {
+    final service = widget.dependencies.service;
+    final messenger = ScaffoldMessenger.of(context);
+    if (!bot.isUnifiedTool) {
+      await _editProfile(bot);
+      return;
+    }
+    final api = ToolsApi.of(service);
+    final ToolInfo tool;
+    try {
+      tool = await api.get(bot.id);
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not load: $e')));
+      return;
+    }
+    if (!mounted) return;
+    if (!tool.editable) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Only the tool’s owner can edit it.')));
+      return;
+    }
+    final changes = await showEditToolForm(context, tool);
+    if (changes == null || !mounted) return;
+    try {
+      final saved = await api.edit(bot.id, changes);
+      messenger.showSnackBar(SnackBar(
+          content:
+              Text('${saved.name.isEmpty ? tool.name : saved.name} saved')));
+      await _load();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Save failed: $e')));
+    }
+  }
+
+  Future<void> _editProfile(Bot bot) async {
+    final service = widget.dependencies.service;
+    final messenger = ScaffoldMessenger.of(context);
+    final String description;
+    try {
+      description =
+          '${(await service.fetchBotDetail(bot.id))['description'] ?? ''}';
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not load: $e')));
+      return;
+    }
+    if (!mounted) return;
+    final edited = await showAppForm<(String, String)>(
+        context, _ProfileForm(name: bot.name, description: description));
+    if (edited == null || !mounted) return;
+    final (name, about) = edited;
+    try {
+      await service.editBot(bot.id,
+          name: name == bot.name ? null : name,
+          description: about == description ? null : about);
+      messenger.showSnackBar(SnackBar(content: Text('$name saved')));
+      await _load();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Save failed: $e')));
     }
   }
 
@@ -235,10 +359,14 @@ class _AgentsScreenState extends State<AgentsScreen> {
                         _AgentsTab(
                           agents: _agents,
                           onChat: _chat,
+                          onEdit: _editAgent,
                           onToggle: (b) => _lifecycle(
                               b, b.status == 'running' ? 'stop' : 'start'),
                         ),
-                        _ToolsTab(tools: _tools, onOpen: _openMiniapp),
+                        _ToolsTab(
+                            tools: _tools,
+                            onOpen: _openMiniapp,
+                            onEdit: _editTool),
                       ]),
           ),
         ]),
@@ -251,11 +379,13 @@ class _AgentsTab extends StatelessWidget {
   const _AgentsTab({
     required this.agents,
     required this.onChat,
+    required this.onEdit,
     required this.onToggle,
   });
 
   final List<Bot> agents;
   final ValueChanged<Bot> onChat;
+  final ValueChanged<Bot> onEdit;
   final ValueChanged<Bot> onToggle;
 
   @override
@@ -279,6 +409,7 @@ class _AgentsTab extends StatelessWidget {
         ...agents.map((b) => _AgentCard(
               bot: b,
               onChat: () => onChat(b),
+              onEdit: () => onEdit(b),
               onToggle: () => onToggle(b),
             )),
       ],
@@ -287,10 +418,12 @@ class _AgentsTab extends StatelessWidget {
 }
 
 class _ToolsTab extends StatelessWidget {
-  const _ToolsTab({required this.tools, required this.onOpen});
+  const _ToolsTab(
+      {required this.tools, required this.onOpen, required this.onEdit});
 
   final List<Bot> tools;
   final ValueChanged<Bot> onOpen;
+  final ValueChanged<Bot> onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -324,7 +457,10 @@ class _ToolsTab extends StatelessWidget {
             for (final bot in tools)
               SizedBox(
                   width: width,
-                  child: _ToolCard(bot: bot, onOpen: () => onOpen(bot))),
+                  child: _ToolCard(
+                      bot: bot,
+                      onOpen: () => onOpen(bot),
+                      onEdit: () => onEdit(bot))),
           ]),
         ],
       );
@@ -395,11 +531,13 @@ class _AgentCard extends StatelessWidget {
   const _AgentCard({
     required this.bot,
     required this.onChat,
+    required this.onEdit,
     required this.onToggle,
   });
 
   final Bot bot;
   final VoidCallback onChat;
+  final VoidCallback onEdit;
   final VoidCallback onToggle;
 
   @override
@@ -442,6 +580,10 @@ class _AgentCard extends StatelessWidget {
             onPressed: onChat,
             icon: const Icon(Icons.chat_bubble_outline_rounded)),
         IconButton(
+            tooltip: 'Edit',
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined)),
+        IconButton(
           tooltip: bot.status == 'running' ? 'Stop' : 'Start',
           onPressed: onToggle,
           icon: Icon(bot.status == 'running'
@@ -454,10 +596,12 @@ class _AgentCard extends StatelessWidget {
 }
 
 class _ToolCard extends StatelessWidget {
-  const _ToolCard({required this.bot, required this.onOpen});
+  const _ToolCard(
+      {required this.bot, required this.onOpen, required this.onEdit});
 
   final Bot bot;
   final VoidCallback onOpen;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -481,6 +625,12 @@ class _ToolCard extends StatelessWidget {
                 const AppAvatar('T', color: AppColors.cyan, radius: 17),
                 const Spacer(),
                 if (bot.hasFrontend) const StatusTag('ELPIAN', AppColors.cyan),
+                IconButton(
+                  tooltip: 'Edit',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                ),
               ]),
               const SizedBox(height: 10),
               Text(bot.name,
@@ -506,6 +656,58 @@ class _ToolCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The name and description of a bot that has no form of its own (a tool
+/// made before tools had one form).
+class _ProfileForm extends StatefulWidget {
+  const _ProfileForm({required this.name, required this.description});
+
+  final String name;
+  final String description;
+
+  @override
+  State<_ProfileForm> createState() => _ProfileFormState();
+}
+
+class _ProfileFormState extends State<_ProfileForm> {
+  late final name = TextEditingController(text: widget.name);
+  late final description = TextEditingController(text: widget.description);
+
+  @override
+  void dispose() {
+    name.dispose();
+    description.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AppFormFrame(
+        icon: Icons.edit_outlined,
+        title: 'Edit tool',
+        subtitle: 'Its name and what people and agents read about it.',
+        submit: 'Save changes',
+        onSubmit: () {
+          if (name.text.trim().isEmpty) {
+            ScaffoldMessenger.maybeOf(context)
+                ?.showSnackBar(const SnackBar(content: Text('Name the tool.')));
+            return;
+          }
+          Navigator.pop(context, (name.text.trim(), description.text.trim()));
+        },
+        children: [
+          TextField(
+              controller: name,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Name')),
+          TextField(
+              controller: description,
+              minLines: 2,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                  labelText: 'Description', alignLabelWithHint: true)),
+        ],
+      );
 }
 
 /// Chat sheet for talking to an agent (message.ask).

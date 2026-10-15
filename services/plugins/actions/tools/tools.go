@@ -458,42 +458,56 @@ func (s *Service) mcpUpdate(ctx context.Context, req *api.ActionRequest) (*api.A
 	if tool.Owner != req.Caller.ID.String() && helper.RequireNodeAdmin(ctx, s.R, req, s.K.Env()["admin_handle"]) != nil {
 		return nil, errs.Permission("tool owner or administrator required")
 	}
-	if in.URL != "" {
-		if e := mcp.ValidURL(in.URL); e != nil {
-			return nil, e
-		}
-		tool.URL = in.URL
-	}
-	if in.Auth != nil {
-		tool.Auth = *in.Auth
-	}
-	secret, e := s.open(tool.Secrets)
-	if e != nil {
-		return nil, e
-	}
-	headers := map[string]any{}
-	if raw, ok := secret["headers"].(map[string]any); ok {
-		headers = raw
-	}
-	for k, v := range in.Headers {
-		headers[k] = v
-	}
-	if in.Token != nil {
-		headers["Authorization"] = "Bearer " + *in.Token
-	}
-	// Everything else kept with the server (its sign-in client) stays.
-	secret["headers"] = headers
-	tool.Secrets, e = s.seal(secret)
-	if e != nil {
+	if e := s.setMCPAccess(&tool, in.URL, in.Auth, in.Token, in.Headers); e != nil {
 		return nil, e
 	}
 	tool.UpdatedAt = time.Now().UTC()
-	if e = s.R.UpdateString(ctx, "tool_registry", tool.ID, &tool); e != nil {
+	if e := s.R.UpdateString(ctx, "tool_registry", tool.ID, &tool); e != nil {
 		return nil, e
 	}
 	s.forgetCommands(tool.BotID)
 	return helper.JSON(map[string]any{"ok": true})
 }
+
+// setMCPAccess changes how an external server is reached: its URL (when
+// given), who signs in to it and the shared credential. Everything else kept
+// with the server (its sign-in client) stays.
+func (s *Service) setMCPAccess(tool *models.Tool, url string, auth, token *string, extra map[string]string) error {
+	if url != "" {
+		if e := mcp.ValidURL(url); e != nil {
+			return errs.InvalidArgument(e.Error())
+		}
+		tool.URL = url
+	}
+	if auth != nil {
+		if *auth != "" && *auth != "user" {
+			return errs.InvalidArgument("auth is empty (shared credentials) or user (each person signs in)")
+		}
+		tool.Auth = *auth
+	}
+	secret, e := s.open(tool.Secrets)
+	if e != nil {
+		return e
+	}
+	headers := map[string]any{}
+	if raw, ok := secret["headers"].(map[string]any); ok {
+		headers = raw
+	}
+	for k, v := range extra {
+		headers[k] = v
+	}
+	if token != nil {
+		if *token == "" {
+			delete(headers, "Authorization")
+		} else {
+			headers["Authorization"] = "Bearer " + *token
+		}
+	}
+	secret["headers"] = headers
+	tool.Secrets, e = s.seal(secret)
+	return e
+}
+
 func (s *Service) connectionSet(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if e := helper.RequireUser(req); e != nil {
 		return nil, e

@@ -39,12 +39,15 @@ class ToolsApi {
 
   /// Replaces the backend program and/or the frontend.
   Future<ToolInfo> update(String botId,
-          {String? source, FrontendDraft? frontend}) async =>
-      ToolInfo.fromJson(_map(await _call('tools', 'tool_update', {
-        'bot': botId,
-        if (source != null) 'source': source,
-        if (frontend != null) 'frontend': frontend.toJson(),
-      })));
+          {String? source, FrontendDraft? frontend}) =>
+      edit(botId, ToolEdit(source: source, frontend: frontend));
+
+  /// Changes what the tool form changed: its name and description, how an
+  /// external backend is reached, its backend program and its frontend.
+  Future<ToolInfo> edit(String botId, ToolEdit changes) async =>
+      ToolInfo.fromJson(_map(await _call(
+          'tools', 'tool_update', {'bot': botId, ...changes.toJson()},
+          timeout: const Duration(minutes: 2))));
 
   Future<void> delete(String botId) =>
       _call('tools', 'tool_delete', {'bot': botId});

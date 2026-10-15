@@ -661,6 +661,48 @@ class TraderaService implements BackendService {
     await client.call('bots', 'bot_lifecycle', body: {'bot': botId, 'op': op});
   }
 
+  /// A bot's descriptor and, for its owner, its configuration (an agent's
+  /// form fields under `agent`), as bots.bot_detail reports it.
+  Future<Map<String, dynamic>> fetchBotDetail(String botId) async {
+    final resp = await client.call('bots', 'bot_detail', body: {'bot': botId});
+    return (resp.body as Map?)?.cast<String, dynamic>() ?? {};
+  }
+
+  /// Changes an existing bot; only what is given changes. An agent whose
+  /// configuration or computer changes is redeployed with it.
+  Future<void> editBot(
+    String botId, {
+    String? name,
+    String? description,
+    String? instructions,
+    String? provider,
+    String? model,
+    int? maxTurns,
+    int? maxTokens,
+    List<Map<String, dynamic>>? skills,
+    int? cpu,
+    int? memoryMb,
+    int? diskMb,
+  }) async {
+    await client.call('bots', 'bot_edit', body: {
+      'bot': botId,
+      if (name != null) 'name': name,
+      if (description != null) 'description': description,
+      if (instructions != null) 'instructions': instructions,
+      if (provider != null && provider.isNotEmpty) 'provider': provider,
+      if (model != null && model.isNotEmpty) 'model': model,
+      if (maxTurns != null) 'max_turns': maxTurns,
+      if (maxTokens != null) 'max_tokens': maxTokens,
+      if (skills != null) 'skills': skills,
+      if (cpu != null && cpu > 0)
+        'resources': {
+          'cpu': cpu,
+          'memory': memoryMb ?? 512,
+          'disk': diskMb ?? 512,
+        },
+    });
+  }
+
   Future<Bot> fetchBot(String botId) async {
     final resp = await client.call('bots', 'bot_get', body: {'bot': botId});
     return Bot.fromJson(resp.body as Map<String, dynamic>);

@@ -7,6 +7,7 @@ import (
 	"github.com/tradera/tradera/internal/plugins/bridge"
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/errs"
+	"github.com/tradera/tradera/pkg/jsonpatch"
 	"github.com/tradera/tradera/plugins/actions/auth/models/account"
 	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
 	"github.com/tradera/tradera/plugins/actions/support/helper"
@@ -58,6 +59,9 @@ func (s *Service) detailAction(ctx context.Context, req *api.ActionRequest) (*ap
 	if s.canEdit(ctx, req, rec) == nil {
 		viewer = rec.AccountID
 		view["spec_yml"] = rec.SpecYML
+		if rec.Kind == bot.KindAgent {
+			view["agent"] = agentConfig(rec.SpecYML)
+		}
 	}
 	if m, e := s.M.View(ctx, viewer, rec.AccountID); e == nil {
 		view["metadata"] = m.Tree
@@ -73,6 +77,14 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 		Model        *string        `json:"model"`
 		Cost         *bot.CostModel `json:"cost"`
 		Descriptor   map[string]any `json:"descriptor"`
+		// The rest of the agent form, so an agent stays editable after it
+		// was created: what it is, how far it goes, what it can do and the
+		// computer it runs on.
+		Description *string              `json:"description"`
+		MaxTurns    *int                 `json:"max_turns"`
+		MaxTokens   *int                 `json:"max_tokens"`
+		Skills      *[]SkillConfig       `json:"skills"`
+		Resources   *bot.ResourceProfile `json:"resources"`
 	}
 	if e := helper.Decode(req, &in); e != nil {
 		return nil, e
@@ -91,6 +103,21 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 	builtin := IsTradera(rec)
 	if builtin && in.Instructions != nil {
 		return nil, errs.Permission("the built-in lead's instructions are managed by the node; you can change its name, avatar, username, model and price")
+	}
+	if builtin && in.Resources != nil {
+		return nil, errs.Permission("the built-in lead runs on the node's shared runtime; its computer is managed by the node")
+	}
+	if (in.MaxTurns != nil || in.MaxTokens != nil || in.Skills != nil) && rec.Kind != bot.KindAgent {
+		return nil, errs.InvalidArgument("only an agent has steps, reply length and capabilities")
+	}
+	if in.MaxTurns != nil && (*in.MaxTurns < 0 || *in.MaxTurns > 100) {
+		return nil, errs.InvalidArgument("steps per task must be within 0..100")
+	}
+	if in.MaxTokens != nil && (*in.MaxTokens < 0 || *in.MaxTokens > 200000) {
+		return nil, errs.InvalidArgument("reply length must be within 0..200000 tokens")
+	}
+	if in.Resources != nil && (in.Resources.CPU <= 0 || in.Resources.Memory <= 0 || in.Resources.Disk <= 0) {
+		return nil, errs.InvalidArgument("cpu, memory and disk must be positive")
 	}
 	if in.Descriptor != nil {
 		if u, _ := in.Descriptor["username"].(string); strings.TrimSpace(u) != "" {
@@ -117,8 +144,17 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 		b, _ := json.Marshal(in.Cost)
 		rec.Cost = string(b)
 	}
+	if in.Resources != nil {
+		b, _ := json.Marshal(in.Resources)
+		rec.Resources = string(b)
+	}
+	if in.Description != nil {
+		d := strings.TrimSpace(*in.Description)
+		in.Description = &d
+	}
 	oldVM := rec.VMID
-	changedSpec := in.Instructions != nil || in.Provider != nil || in.Model != nil || in.Name != nil
+	changedSpec := in.Instructions != nil || in.Provider != nil || in.Model != nil || in.Name != nil ||
+		in.Description != nil || in.MaxTurns != nil || in.MaxTokens != nil || in.Skills != nil
 	var created vmm.VM
 	if changedSpec && rec.Kind == bot.KindAgent {
 		var spec map[string]any
@@ -134,6 +170,22 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 				return nil, errs.InvalidArgument("agent instructions required")
 			}
 			spec["instructions"] = *in.Instructions
+		}
+		if in.Description != nil {
+			setOrDrop(spec, "description", *in.Description, *in.Description != "")
+		}
+		if in.MaxTurns != nil {
+			setOrDrop(spec, "max_turns", *in.MaxTurns, *in.MaxTurns > 0)
+		}
+		if in.MaxTokens != nil {
+			setOrDrop(spec, "max_tokens", *in.MaxTokens, *in.MaxTokens > 0)
+		}
+		if in.Skills != nil {
+			if len(*in.Skills) == 0 {
+				delete(spec, "skills")
+			} else {
+				spec["skills"] = skillsSpec(*in.Skills)
+			}
 		}
 		provider, model := AgentBackbone(rec.SpecYML)
 		if in.Provider != nil {
@@ -157,7 +209,7 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 		}
 		rec.SpecYML = string(b)
 	}
-	if changedSpec && rec.Kind == bot.KindAgent && !builtin {
+	if (changedSpec || in.Resources != nil) && rec.Kind == bot.KindAgent && !builtin {
 		// The built-in lead runs on the shared deep agents runtime: its spec is
 		// read per turn, so it keeps its VM and image.
 		vm := s.K.VMMFor(vmm.Type(rec.VMType))
@@ -188,6 +240,11 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 		}
 		return nil, errs.Conflict("bot changed; reload before saving")
 	}
+	if in.Description != nil {
+		if e = s.M.Patch(ctx, rec.AccountID, jsonpatch.Patch{{Op: "set", Path: "profile/description", Value: *in.Description}}); e != nil {
+			return nil, e
+		}
+	}
 	if in.Descriptor != nil {
 		m, e := s.M.Get(ctx, rec.AccountID)
 		if e != nil {
@@ -207,6 +264,57 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 		}
 	}
 	return helper.JSON(map[string]any{"ok": true, "bot_id": rec.ID.String(), "status": rec.Status})
+}
+
+// setOrDrop sets a spec key, or removes it when it no longer has a value.
+func setOrDrop(spec map[string]any, key string, value any, keep bool) {
+	if keep {
+		spec[key] = value
+	} else {
+		delete(spec, key)
+	}
+}
+
+// skillsSpec renders agent capabilities the way renderAgentSpec does.
+func skillsSpec(skills []SkillConfig) []map[string]any {
+	out := make([]map[string]any, 0, len(skills))
+	for _, sk := range skills {
+		m := map[string]any{"name": sk.Name}
+		if sk.Description != "" {
+			m["description"] = sk.Description
+		}
+		if sk.Instructions != "" {
+			m["instructions"] = sk.Instructions
+		}
+		if len(sk.Tools) > 0 {
+			m["tools"] = sk.Tools
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// agentConfig reads the agent form's fields back out of an agent spec, so
+// its editor opens on what the agent is configured with today.
+func agentConfig(specYML string) map[string]any {
+	var spec struct {
+		Description  string        `yaml:"description"`
+		Instructions string        `yaml:"instructions"`
+		Provider     string        `yaml:"provider"`
+		Model        string        `yaml:"model"`
+		MaxTurns     int           `yaml:"max_turns"`
+		MaxTokens    int           `yaml:"max_tokens"`
+		Skills       []SkillConfig `yaml:"skills"`
+	}
+	_ = yaml.Unmarshal([]byte(specYML), &spec)
+	if spec.Skills == nil {
+		spec.Skills = []SkillConfig{}
+	}
+	return map[string]any{
+		"description": spec.Description, "instructions": strings.TrimRight(spec.Instructions, "\n"),
+		"provider": spec.Provider, "model": spec.Model,
+		"max_turns": spec.MaxTurns, "max_tokens": spec.MaxTokens, "skills": spec.Skills,
+	}
 }
 
 // Rebuild replaces a stopped VM while preserving the bot identity and its

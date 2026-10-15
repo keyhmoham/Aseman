@@ -210,6 +210,26 @@ class SearchFeedViewModel extends ChangeNotifier {
     await loadTraders();
   }
 
+  /// Whether the signed-in person administers the platform (and so the
+  /// evaluator's traders).
+  bool get isAdmin => dependencies?.sessionController.isAdmin ?? false;
+
+  /// Admin: a trader's Tradera account: username and password.
+  Future<Map<String, dynamic>> traderCredentials(String handle) async =>
+      await dependencies!.service
+          .evaluatorAdmin('trader_credentials', {'handle': handle});
+
+  /// Admin: removes a trader from the evaluator's list — with their Tradera
+  /// account and the posts published there unless [keepAccount] — and
+  /// reloads the leaderboard.
+  Future<Map<String, dynamic>> removeTrader(String handle,
+      {bool keepAccount = false}) async {
+    final out = await dependencies!.service.evaluatorAdmin('trader_remove',
+        {'handle': handle, if (keepAccount) 'keep_account': true});
+    await loadTraders();
+    return out;
+  }
+
   /// One trader's full reliability report.
   Future<TraderReport?> traderReport(String handle) async {
     final deps = dependencies?.service;

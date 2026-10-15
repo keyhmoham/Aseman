@@ -20,6 +20,7 @@ func accountActions(s *Service) []api.Action {
 		helper.Action{Namespace: "users", Name: "account_update", Summary: "Admin account status/profile management", Handler: s.accountUpdate},
 		helper.Action{Namespace: "users", Name: "account_password", Summary: "Admin password recovery preserving identity", Handler: s.accountPassword},
 		helper.Action{Namespace: "users", Name: "account_delete", Summary: "Admin account deletion", Handler: s.accountDelete},
+		helper.Action{Namespace: "users", Name: "account_create", Summary: "Admin: create an active user account for someone (also the admins space's tools, for an administrator)", Handler: s.accountCreate},
 		helper.Action{Namespace: "users", Name: "hireable_list", Summary: "Approved people available for hire", Handler: s.hireableList},
 	}
 }
@@ -260,8 +261,13 @@ func (s *Service) accountPassword(ctx context.Context, req *api.ActionRequest) (
 }
 
 func (s *Service) accountDelete(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+	// An administrator deletes any account; an admins space tool working for
+	// one deletes only the accounts it made (users.account_create).
+	tool := ""
 	if e := helper.RequireNodeAdmin(ctx, s.R, req, s.K.Env()["admin_handle"]); e != nil {
-		return nil, e
+		if tool = s.adminsSpaceTool(ctx, req); tool == "" {
+			return nil, e
+		}
 	}
 	var in struct {
 		Account string `json:"account"`
@@ -279,6 +285,9 @@ func (s *Service) accountDelete(ctx context.Context, req *api.ActionRequest) (*a
 	}
 	if a.ID == req.Caller.ID || a.Handle == s.K.Env()["admin_handle"] {
 		return nil, errs.Permission("cannot delete the active node administrator")
+	}
+	if tool != "" && s.managedBy(ctx, id) != tool {
+		return nil, errs.Permission("a tool deletes only the accounts it created")
 	}
 
 	// Clean up related records: sessions, challenges, follows, and files

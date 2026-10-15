@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/overlay_panels.dart';
@@ -683,6 +685,10 @@ class _ReportPanelState extends State<_ReportPanel> {
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
             children: [
               _ReportHeader(trader: trader, bio: full?.bio),
+              if (widget.model.isAdmin) ...[
+                const SizedBox(height: 10),
+                _AdminActions(model: widget.model, trader: trader),
+              ],
               const SizedBox(height: 18),
               _ScoreOverview(
                   trader: trader, history: full?.history ?? const []),
@@ -790,6 +796,160 @@ class _ReportHeader extends StatelessWidget {
             icon: const Icon(Icons.open_in_new_rounded, size: 16),
             label: const Text('CoinMarketCap profile')),
       ],
+      if (trader.platformHandle != null) ...[
+        const SizedBox(height: 8),
+        Row(children: [
+          Icon(Icons.person_outline_rounded,
+              size: 15, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Expanded(
+              child: Text(
+                  '@${trader.platformHandle} on Tradera · their latest posts are published there',
+                  style:
+                      TextStyle(fontSize: 11, color: scheme.onSurfaceVariant))),
+        ]),
+      ],
+    ]);
+  }
+}
+
+/// Admin: the trader's Tradera account credentials, and removing the trader.
+class _AdminActions extends StatelessWidget {
+  const _AdminActions({required this.model, required this.trader});
+  final SearchFeedViewModel model;
+  final Trader trader;
+
+  Future<void> _credentials(BuildContext context) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final creds = await model.traderCredentials(trader.handle);
+      if (!context.mounted) return;
+      await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+                title: const Text('Tradera account'),
+                content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _Credential(
+                          label: 'Username',
+                          value: '${creds['username'] ?? ''}'),
+                      const SizedBox(height: 10),
+                      _Credential(
+                          label: 'Password',
+                          value: '${creds['password'] ?? ''}'),
+                      const SizedBox(height: 12),
+                      Text(
+                          'The evaluator signs in with this account each round to publish the trader\'s latest CoinMarketCap posts.',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant)),
+                    ]),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Close')),
+                ],
+              ));
+    } catch (e) {
+      messenger?.showSnackBar(SnackBar(content: Text(_message(e))));
+    }
+  }
+
+  Future<void> _remove(BuildContext context) async {
+    var deleteAccount = true;
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+            builder: (context, setState) => AlertDialog(
+                  title: Text('Remove ${trader.name}?'),
+                  content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                            'They leave the leaderboard and their scores are deleted.'),
+                        if (trader.platformHandle != null)
+                          CheckboxListTile(
+                              key: const ValueKey('remove-delete-account'),
+                              contentPadding: EdgeInsets.zero,
+                              value: deleteAccount,
+                              onChanged: (v) =>
+                                  setState(() => deleteAccount = v ?? true),
+                              title: Text(
+                                  'Also delete @${trader.platformHandle} and the posts published there')),
+                      ]),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('Cancel')),
+                    FilledButton(
+                        key: const ValueKey('remove-confirm'),
+                        style: FilledButton.styleFrom(
+                            backgroundColor:
+                                Theme.of(context).colorScheme.error),
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: const Text('Remove')),
+                  ],
+                )));
+    if (confirmed != true || !context.mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final navigator = Navigator.of(context);
+    try {
+      await model.removeTrader(trader.handle, keepAccount: !deleteAccount);
+      navigator.maybePop();
+      messenger
+          ?.showSnackBar(SnackBar(content: Text('${trader.name} was removed')));
+    } catch (e) {
+      messenger?.showSnackBar(SnackBar(content: Text(_message(e))));
+    }
+  }
+
+  static String _message(Object e) =>
+      e is ApiException ? e.message : e.toString();
+
+  @override
+  Widget build(BuildContext context) =>
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        OutlinedButton.icon(
+            key: const ValueKey('trader-credentials'),
+            onPressed: () => _credentials(context),
+            icon: const Icon(Icons.key_rounded, size: 16),
+            label: const Text('Credentials')),
+        OutlinedButton.icon(
+            key: const ValueKey('trader-remove'),
+            style: OutlinedButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => _remove(context),
+            icon: const Icon(Icons.person_remove_alt_1_rounded, size: 16),
+            label: const Text('Remove trader')),
+      ]);
+}
+
+class _Credential extends StatelessWidget {
+  const _Credential({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label,
+          style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
+      Row(children: [
+        Expanded(
+            child: SelectableText(value,
+                style: const TextStyle(
+                    fontFamily: 'monospace', fontWeight: FontWeight.w700))),
+        IconButton(
+            tooltip: 'Copy $label',
+            onPressed: () => Clipboard.setData(ClipboardData(text: value)),
+            icon: const Icon(Icons.copy_rounded, size: 18)),
+      ]),
     ]);
   }
 }

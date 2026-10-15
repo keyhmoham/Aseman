@@ -258,6 +258,7 @@ class FakeTraderaService extends TraderaService {
       'rating': 'Advanced',
       'change': 2.5,
       'last_evaluated_at': '2026-10-14T10:00:00+00:00',
+      'platform_account': {'id': 'acc-1', 'handle': 'daniel_crypto365'},
       'scores': {
         'overall_score': 84.5,
         'technical_score': 71,
@@ -293,6 +294,29 @@ class FakeTraderaService extends TraderaService {
   ];
 
   final List<String> boardsAsked = [];
+
+  /// The evaluator admin microtools called, with their payloads.
+  final List<(String, Map<String, dynamic>)> evaluatorCalls = [];
+
+  @override
+  Future<Map<String, dynamic>> evaluatorAdmin(
+      String function, Map<String, dynamic> payload) async {
+    evaluatorCalls.add((function, payload));
+    return switch (function) {
+      'trader_credentials' => {
+          'trader': payload['handle'],
+          'username': 'daniel_crypto365',
+          'account_id': 'acc-1',
+          'password': 'Pw-7xQ2mK9vL4rT8nZ1a',
+        },
+      'trader_remove' => {
+          'ok': true,
+          'removed': payload['handle'],
+          'account_deleted': 'daniel_crypto365',
+        },
+      _ => const <String, dynamic>{},
+    };
+  }
 
   @override
   Future<Map<String, dynamic>> fetchTraderLeaderboard(

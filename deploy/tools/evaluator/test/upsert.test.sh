@@ -62,8 +62,8 @@ run() { # scenario [args] → prints the actions called, one per line
 }
 body() { grep "^$2	" "$WORK/$1.log" | head -1 | cut -f2; }
 
-got="$(run fresh --cmc-session "$WORK/session.json" --trader https://coinmarketcap.com/community/profile/daniel_crypto365/ --eval-hours 6)"
-want="login spaces.space_list spaces.space_create spaces.admins_space_set docker bots.bot_list tools.tool_create spaces.bots_list spaces.bot_add routines.list routines.create tools.invoke:status tools.invoke:configure tools.invoke:set_session tools.invoke:trader_add tools.invoke:tick "
+got="$(run fresh --cmc-session "$WORK/session.json" --trader https://coinmarketcap.com/community/profile/daniel_crypto365/ --trader https://coinmarketcap.com/community/profile/vlad/,vlad.trades --eval-hours 6)"
+want="login spaces.space_list spaces.space_create spaces.admins_space_set docker bots.bot_list tools.tool_create spaces.bots_list spaces.bot_add routines.list routines.create tools.invoke:status tools.invoke:configure tools.invoke:set_session tools.invoke:trader_add tools.invoke:trader_add tools.invoke:tick "
 [ "$got" = "$want" ] || fail "fresh: $got"
 grep -q $'^login\tnode-a changeme$' "$WORK/fresh.log" || fail "signs in as node-a"
 [ "$(body fresh spaces.space_create | jq -r .name)" = "admins space" ] || fail "space name"
@@ -79,6 +79,8 @@ routine="$(body fresh routines.create)"
 [ "$(body fresh tools.invoke:configure | jq -c .payload)" = '{"interval_hours":6}' ] || fail "configure"
 [ "$(body fresh tools.invoke:set_session | jq -r '.payload.storage_state.cookies[0].name + "@" + .space')" = Authorization@sp-new ] || fail "session"
 [ "$(body fresh tools.invoke:trader_add | jq -r .payload.profile_link)" = https://coinmarketcap.com/community/profile/daniel_crypto365/ ] || fail "trader"
+[ "$(body fresh tools.invoke:trader_add | jq -c .payload)" = '{"profile_link":"https://coinmarketcap.com/community/profile/daniel_crypto365/"}' ] || fail "trader without a username"
+[ "$(grep $'^tools.invoke:trader_add\t' "$WORK/fresh.log" | sed -n 2p | cut -f2 | jq -c .payload)" = '{"profile_link":"https://coinmarketcap.com/community/profile/vlad/","username":"vlad.trades"}' ] || fail "trader with a username"
 [ "$(cat "$WORK/fresh.out")" = bot-new ] || fail "fresh printed $(cat "$WORK/fresh.out")"
 
 got="$(TRADERA_HANDLE=root TRADERA_PASSWORD=pw run again --no-build --interval 300)"

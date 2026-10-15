@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tradera/src/app_dependencies.dart';
 import 'package:tradera/src/core/network/api_client.dart';
+import 'package:tradera/src/core/network/session_store.dart';
 import 'package:tradera/src/features/search_feed/domain/trader.dart';
 import 'package:tradera/src/features/search_feed/presentation/search_feed_view_model.dart';
 import 'package:tradera/src/features/search_feed/presentation/traders_leaderboard.dart';
@@ -98,8 +99,10 @@ void main() {
     expect(find.text('Clear invalidation levels'), findsOneWidget);
     expect(find.text('Mostly bullish calls'), findsOneWidget);
     expect(find.text('CoinMarketCap profile'), findsOneWidget);
-    expect(find.text('Technical analysis'), findsOneWidget);
     expect(find.textContaining('Confidence 66.0%'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Technical analysis'), 200,
+        scrollable: find.byType(Scrollable).last);
+    expect(find.text('Technical analysis'), findsOneWidget);
   });
 
   testWidgets('fits a phone', (tester) async {
@@ -122,5 +125,78 @@ void main() {
         scrollable: find.byType(Scrollable).last);
     expect(find.text('Clear invalidation levels'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  Future<(FakeTraderaService, SearchFeedViewModel)> openReport(
+      WidgetTester tester,
+      {required bool admin}) async {
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 1;
+    final fake = FakeTraderaService(admin: admin);
+    final deps = AppDependencies.withService(fake);
+    deps.sessionController.setSession(const Session(
+        accountId: 'me',
+        handle: 'test',
+        token: 'x',
+        privateKey: '',
+        publicKey: ''));
+    final model = SearchFeedViewModel(dependencies: deps);
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: ListenableBuilder(
+                listenable: model,
+                builder: (context, _) => CustomScrollView(
+                    slivers: traderLeaderboardSlivers(context, model, 16))))));
+    await model.loadTraders();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('trader-daniel_crypto365')));
+    await tester.pumpAndSettle();
+    return (fake, model);
+  }
+
+  testWidgets(
+      'everyone sees the trader\'s Tradera account, only admins manage it',
+      (tester) async {
+    await openReport(tester, admin: false);
+    expect(find.textContaining('@daniel_crypto365 on Tradera'), findsOneWidget);
+    expect(find.byKey(const ValueKey('trader-credentials')), findsNothing);
+    expect(find.byKey(const ValueKey('trader-remove')), findsNothing);
+  });
+
+  testWidgets('an admin reads a trader\'s credentials', (tester) async {
+    final (fake, _) = await openReport(tester, admin: true);
+    await tester.tap(find.byKey(const ValueKey('trader-credentials')));
+    await tester.pumpAndSettle();
+    expect(fake.evaluatorCalls.single.$1, 'trader_credentials');
+    expect(fake.evaluatorCalls.single.$2, {'handle': 'daniel_crypto365'});
+    expect(find.text('Tradera account'), findsOneWidget);
+    expect(find.text('Pw-7xQ2mK9vL4rT8nZ1a'), findsOneWidget);
+  });
+
+  testWidgets('an admin removes a trader, with or without their account',
+      (tester) async {
+    final (fake, _) = await openReport(tester, admin: true);
+    await tester.tap(find.byKey(const ValueKey('trader-remove')));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove Daniel Markson?'), findsOneWidget);
+    // Keep the account this time.
+    await tester.tap(find.byKey(const ValueKey('remove-delete-account')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('remove-confirm')));
+    await tester.pumpAndSettle();
+    expect(fake.evaluatorCalls.single.$1, 'trader_remove');
+    expect(fake.evaluatorCalls.single.$2,
+        {'handle': 'daniel_crypto365', 'keep_account': true});
+    expect(find.text('Daniel Markson was removed'), findsOneWidget);
+    expect(find.text('Strengths'), findsNothing); // the report closed
+
+    await tester.tap(find.byKey(const ValueKey('trader-daniel_crypto365')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('trader-remove')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('remove-confirm')));
+    await tester.pumpAndSettle();
+    expect(fake.evaluatorCalls.last.$1, 'trader_remove');
+    expect(fake.evaluatorCalls.last.$2, {'handle': 'daniel_crypto365'});
   });
 }

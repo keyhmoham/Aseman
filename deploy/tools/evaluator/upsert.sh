@@ -37,8 +37,11 @@
 #   --cmc-session FILE   CoinMarketCap session: a Playwright storage_state
 #                        (decifi's capture_cmc_session.py) or a cookie jar
 #                        (decifi's cmc_cookiejar.json)
-#   --trader URL         a trader's CoinMarketCap community profile link to add
-#                        (repeatable)
+#   --trader URL[,NAME]  a trader's CoinMarketCap community profile link to add
+#                        (repeatable); NAME picks their Tradera username (else
+#                        their CoinMarketCap handle). Each trader gets a Tradera
+#                        account with a random password (shown by the
+#                        evaluator's trader_credentials)
 #   --eval-hours N       re-evaluate each trader every N hours
 #   --llm-base-url URL   OpenAI-compatible endpoint (else the space's lead agent analyses)
 #   --llm-api-key KEY    its key (default $EVALUATOR_LLM_API_KEY)
@@ -329,9 +332,14 @@ if [ -n "$CMC_SESSION" ]; then
     | jq -r '.result.structuredContent // {} | "    \(.cookies // 0) cookies, logged in: \(.logged_in // false), expires: \(.authorization_expires // "unknown")"' >&2
 fi
 
-for link in "${TRADERS[@]+"${TRADERS[@]}"}"; do
-  say "adding trader $link"
-  invoke trader_add "$(jq -nc --arg link "$link" '{profile_link: $link}')" >/dev/null
+for entry in "${TRADERS[@]+"${TRADERS[@]}"}"; do
+  link="${entry%%,*}"
+  username=""
+  [ "$link" != "$entry" ] && username="${entry#*,}"
+  say "adding trader $link${username:+ as @$username}"
+  invoke trader_add "$(jq -nc --arg link "$link" --arg username "$username" \
+    '{profile_link: $link} + (if $username != "" then {username: $username} else {} end)')" \
+    | jq -r '.result.structuredContent // {} | "    Tradera account @\(.trader.platform_account.handle // "?")\(if .note then " (\(.note))" else "" end)"' >&2
 done
 
 if [ -z "$DRY_RUN" ]; then

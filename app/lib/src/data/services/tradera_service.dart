@@ -1399,9 +1399,56 @@ class TraderaService implements BackendService {
 
   /// One trader's full reliability report from the evaluator.
   Future<Map<String, dynamic>> fetchTraderProfile(String handle) async {
-    final resp = await client
-        .call('tools', 'trader_profile', body: {'handle': handle});
+    final resp =
+        await client.call('tools', 'trader_profile', body: {'handle': handle});
     return (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+  }
+
+  /// Admin: runs one of the admins space evaluator's admin microtools
+  /// (trader_credentials, trader_remove, …) in the admins space and returns
+  /// its result. Throws the evaluator's message when it reports an error.
+  Future<Map<String, dynamic>> evaluatorAdmin(
+      String function, Map<String, dynamic> payload) async {
+    final admins = (await client.call('spaces', 'admins_space_get')).body;
+    final space = ((admins as Map?)?['space'] as Map?)?['id'] as String?;
+    if (space == null || space.isEmpty) {
+      throw const ApiException('NOT_FOUND', 'No admins space is chosen.',
+          status: 404);
+    }
+    final bots =
+        (await client.call('spaces', 'bots_list', body: {'space': space})).body;
+    final evaluator = ((bots as Map?)?['bots'] as List? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .firstWhere(
+            (b) =>
+                '${b['name']}'.toLowerCase() == 'evaluator' &&
+                b['kind'] == 'tool',
+            orElse: () => const <String, dynamic>{});
+    if (evaluator['id'] == null) {
+      throw const ApiException(
+          'NOT_FOUND', 'The admins space has no evaluator tool.',
+          status: 404);
+    }
+    final resp = await client.call('tools', 'invoke',
+        body: {
+          'bot': evaluator['id'],
+          'space': space,
+          'function': function,
+          'payload': payload,
+        },
+        requestTimeout: const Duration(minutes: 2));
+    final result = ((resp.body as Map?)?['result'] as Map?) ?? const {};
+    if (result['isError'] == true) {
+      final text = (result['content'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map((c) => '${c['text'] ?? ''}')
+          .join(' ');
+      throw ApiException(
+          'TOOL_ERROR', text.isEmpty ? 'The evaluator failed.' : text,
+          status: 400);
+    }
+    final value = result['structuredContent'] ?? result;
+    return value is Map ? value.cast<String, dynamic>() : const {};
   }
 
   // ── metadata / preferences ───────────────────────────────────────────────

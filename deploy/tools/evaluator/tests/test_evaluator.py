@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from evaluator import crawler, market, scoring  # noqa: E402
 from evaluator.host import HostError, Scope, token_expiry  # noqa: E402
+from evaluator.platform import PlatformError, Session, username_for  # noqa: E402
 from evaluator.prompt import build_objective  # noqa: E402
 from evaluator.server import handle  # noqa: E402
 from evaluator.service import Evaluator, ToolError  # noqa: E402
@@ -41,6 +42,8 @@ class FakeNode:
     def __init__(self):
         self.kv: dict[str, str] = {}
         self.asks: list[dict] = []
+        self.accounts: dict[str, dict] = {}  # handle -> {id, password}
+        self.posts: dict[str, dict] = {}     # post id -> {author, body, tags}
         self.reply = json.dumps({"overall_score": 82, "technical_score": 88, "fundamental_score": 61,
                                  "historical_accuracy": 70, "consistency": 75, "risk_management": 55,
                                  "timing": 64, "confidence": 58, "strengths": ["clear invalidation"],
@@ -71,10 +74,60 @@ class FakeNode:
                 raise HostError("not from a space", status=403)
             return {"members": [{"handle": "node-a", "kind": "user"},
                                 {"handle": "tradera", "kind": "bot", "bot_id": "lead-bot"}]}
+        if name == "users.account_create":
+            if not sc.space:
+                raise HostError("only in the admins space", status=403, code="PERMISSION")
+            if body["handle"] in self.accounts:
+                raise HostError("handle taken", status=409, code="ALREADY_EXISTS")
+            acc = {"id": f"acc-{len(self.accounts) + 1}", "password": body["password"], "name": body.get("display_name")}
+            self.accounts[body["handle"]] = acc
+            return {"id": acc["id"], "handle": body["handle"]}
+        if name == "users.account_delete":
+            handle = next((h for h, a in self.accounts.items() if a["id"] == body["account"]), None)
+            if handle is None:
+                raise HostError("no account", status=404, code="NOT_FOUND")
+            del self.accounts[handle]
+            return {"ok": True}
         if name == "spaces.ask":
             self.asks.append(body)
             return {"bot_id": body["bot"], "reply": "Here is the report:\n```json\n" + self.reply + "\n```"}
         raise HostError(f"{name} not allowed", status=403)
+
+
+class FakePlatform:
+    """The node's public API as a signed-in trader: auth and posts."""
+
+    def __init__(self, node: FakeNode):
+        self.node = node
+        self.logins: list[str] = []
+        self.calls: list[tuple[str, str]] = []
+        self.seq = 0
+
+    def login(self, handle, password):
+        acc = self.node.accounts.get(handle)
+        if not acc or acc["password"] != password:
+            raise PlatformError("invalid credentials", status=401, code="UNAUTHENTICATED")
+        self.logins.append(handle)
+        return Session(acc["id"], handle, "tok", "00" * 64)
+
+    def logout(self, session):
+        pass
+
+    def call(self, session, namespace, action, body):
+        self.calls.append((namespace, action))
+        posts = self.node.posts
+        if action == "post_create":
+            self.seq += 1
+            pid = f"post-{self.seq}"
+            posts[pid] = {"author": session.account_id, "body": body["body"], "tags": body.get("tags")}
+            return {"post_id": pid, "ok": True}
+        if action in ("post_get", "post_delete"):
+            if body["post"] not in posts:
+                raise PlatformError("post not found", status=404, code="NOT_FOUND")
+            if action == "post_delete":
+                del posts[body["post"]]
+            return {"ok": True}
+        raise PlatformError(f"{namespace}.{action}?", status=400)
 
 
 POST_TIME = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
@@ -90,16 +143,20 @@ def fake_market(posts):
     return {"posts": {"p1": {"BTC": {"return_7d_pct": 4.2}}}}
 
 
-class EvaluatorTest(unittest.TestCase):
+class Harness(unittest.TestCase):
     def setUp(self):
         self.node = FakeNode()
         from evaluator import llm
-        self.ev = Evaluator(node=self.node, crawl=fake_crawl, market=fake_market, analyse=llm.analyse)
+        self.platform = FakePlatform(self.node)
+        self.ev = Evaluator(node=self.node, crawl=fake_crawl, market=fake_market, analyse=llm.analyse,
+                            platform=self.platform)
         self.ev.ensure_worker = lambda: None  # run the worker by hand
 
     def add(self, link="https://coinmarketcap.com/community/profile/Daniel_Crypto365"):
         return self.ev.call("trader_add", {"profile_link": link}, scope())
 
+
+class EvaluatorTest(Harness):
     def test_add_requires_admins_space_and_valid_link(self):
         with self.assertRaises(ToolError):
             self.ev.call("trader_add", {"profile_link": "https://coinmarketcap.com/community/profile/x/"}, scope(space=""))
@@ -194,6 +251,117 @@ class EvaluatorTest(unittest.TestCase):
         self.add()
         self.ev.call("trader_remove", {"handle": "daniel_crypto365"}, scope())
         self.assertEqual(self.ev.call("leaderboard", {}, scope(space=""))["total"], 0)
+
+
+def crawl_with(posts):
+    def crawl(url, handle, session, proxy, scrolls=8):
+        return {"url": url, "analyst": {"username": handle, "followers": 10}, "posts": [dict(p) for p in posts],
+                "page_text": "", "errors": [], "logged_out_or_missing": False}
+    return crawl
+
+
+def cmc_posts(n, start=POST_TIME):
+    return [{"id": str(1000 + i), "text": f"$BTC call number {i}: long, stop below support",
+             "timestamp": (start + timedelta(hours=i)).isoformat(), "symbols": ["BTC"]} for i in range(n)]
+
+
+class AccountsTest(Harness):
+    def test_adding_a_trader_makes_their_account(self):
+        out = self.add()
+        acc = self.node.accounts["daniel_crypto365"]
+        self.assertEqual(out["trader"]["platform_account"], {"id": acc["id"], "handle": "daniel_crypto365"})
+        self.assertGreaterEqual(len(acc["password"]), 20)
+        creds = self.ev.call("trader_credentials", {"handle": "daniel_crypto365"}, scope())
+        self.assertEqual((creds["username"], creds["password"]), ("daniel_crypto365", acc["password"]))
+        # Nothing public shows the password.
+        for name, args in (("leaderboard", {}), ("trader_get", {"handle": "daniel_crypto365"}), ("traders_list", {})):
+            self.assertNotIn(acc["password"], json.dumps(self.ev.call(name, args, scope(space=""))), name)
+        with self.assertRaises(ToolError):  # an admin microtool
+            self.ev.call("trader_credentials", {"handle": "daniel_crypto365"}, scope(space=""))
+        # Adding them again keeps the account.
+        self.assertFalse(self.add()["created"])
+        self.assertEqual(len(self.node.accounts), 1)
+
+    def test_custom_and_taken_usernames(self):
+        link = "https://coinmarketcap.com/community/profile/vlad_anderson/"
+        with self.assertRaises(ToolError):
+            self.ev.call("trader_add", {"profile_link": link, "username": "bad name!"}, scope())
+        self.node.accounts["vlad_anderson"] = {"id": "someone-else", "password": "x"}
+        with self.assertRaises(ToolError) as taken:
+            self.ev.call("trader_add", {"profile_link": link}, scope())
+        self.assertIn("another `username`", str(taken.exception))
+        self.assertEqual(self.ev.call("leaderboard", {}, scope(space=""))["total"], 0)  # not listed
+        out = self.ev.call("trader_add", {"profile_link": link, "username": "vlad.trades", "name": "Vlad A"}, scope())
+        self.assertEqual(out["trader"]["platform_account"]["handle"], "vlad.trades")
+        self.assertEqual(self.node.accounts["vlad.trades"]["name"], "Vlad A")
+
+    def test_each_round_upserts_the_ten_latest_posts_as_the_trader(self):
+        self.add()
+        posts = cmc_posts(12)
+        self.ev.crawl = crawl_with(posts)
+        self.ev.run_due()
+        acc = self.node.accounts["daniel_crypto365"]
+        self.assertEqual(self.platform.logins, ["daniel_crypto365"])
+        mine = [p for p in self.node.posts.values() if p["author"] == acc["id"]]
+        self.assertEqual(len(mine), 10)
+        bodies = "\n".join(p["body"] for p in mine)
+        self.assertNotIn("call number 0:", bodies)  # the two oldest are not among the latest ten
+        self.assertNotIn("call number 1:", bodies)
+        self.assertIn("call number 11:", bodies)
+        self.assertIn("https://coinmarketcap.com/community/post/1011/", bodies)
+        self.assertEqual(mine[0]["tags"], ["btc", "coinmarketcap"])
+        rec = self.ev.call("trader_get", {"handle": "daniel_crypto365"}, scope(space=""))
+        self.assertEqual(rec["posts_sync"]["created"], 10)
+
+        # Next round: unchanged ones stay, an edited one is replaced, a deleted one comes back.
+        posts[11]["text"] = "$BTC call number 11, edited: target hit"
+        stored = json.loads(self.node.kv["evaluator/trader/daniel_crypto365"])
+        gone = stored["platform_posts"]["1005"]["post_id"]
+        del self.node.posts[gone]
+        self.ev.call("evaluate_now", {"handle": "daniel_crypto365"}, scope())
+        self.ev.run_due()
+        sync = self.ev.call("trader_get", {"handle": "daniel_crypto365"}, scope(space=""))["posts_sync"]
+        self.assertEqual((sync["created"], sync["updated"], sync["unchanged"]), (0, 2, 8))
+        mine = [p for p in self.node.posts.values() if p["author"] == acc["id"]]
+        self.assertEqual(len(mine), 10)
+        self.assertTrue(any("edited: target hit" in p["body"] for p in mine))
+        self.assertEqual(self.platform.logins, ["daniel_crypto365"] * 2)
+
+    def test_a_trader_added_before_accounts_gets_one_on_evaluation(self):
+        self.add()
+        stored = json.loads(self.node.kv["evaluator/trader/daniel_crypto365"])
+        stored.pop("account")
+        self.node.kv["evaluator/trader/daniel_crypto365"] = json.dumps(stored)
+        self.node.accounts.clear()
+        self.ev.run_due()
+        self.assertIn("daniel_crypto365", self.node.accounts)
+        self.assertEqual(self.ev.call("trader_credentials", {"handle": "daniel_crypto365"}, scope())["username"], "daniel_crypto365")
+
+    def test_removing_a_trader_deletes_their_posts_and_account(self):
+        self.add()
+        self.ev.crawl = crawl_with(cmc_posts(3))
+        self.ev.run_due()
+        self.assertEqual(len(self.node.posts), 3)
+        out = self.ev.call("trader_remove", {"handle": "daniel_crypto365"}, scope())
+        self.assertEqual((out["posts_deleted"], out["account_deleted"]), (3, "daniel_crypto365"))
+        self.assertEqual((self.node.posts, self.node.accounts), ({}, {}))
+        self.assertEqual(self.ev.call("leaderboard", {}, scope(space=""))["total"], 0)
+
+    def test_removing_a_trader_can_keep_the_account(self):
+        self.add()
+        password = self.node.accounts["daniel_crypto365"]["password"]
+        out = self.ev.call("trader_remove", {"handle": "daniel_crypto365", "keep_account": True}, scope())
+        self.assertEqual(out["kept_account"]["password"], password)
+        self.assertIn("daniel_crypto365", self.node.accounts)
+        self.assertEqual(self.ev.call("leaderboard", {}, scope(space=""))["total"], 0)
+
+    def test_usernames_from_cmc_handles(self):
+        self.assertEqual(username_for("Daniel_Crypto365"), "daniel_crypto365")
+        self.assertEqual(username_for("ab"), "ab_trader")
+        self.assertEqual(username_for("_x.y-"), "x.y")
+        self.assertEqual(username_for("_x-"), "x_trader")
+        self.assertEqual(len(username_for("a" * 40)), 30)
+        self.assertEqual(username_for("crypto king!"), "crypto_king")
 
 
 class PartsTest(unittest.TestCase):

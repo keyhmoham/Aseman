@@ -37,13 +37,42 @@ link), the evaluator's background worker:
    technical, fundamental, historical accuracy, consistency, risk management,
    timing, confidence), the STEP 13 rating and a score history in KV.
 
+## Each trader's Tradera account
+
+Adding a trader makes them an ordinary **user account on this platform**
+([`evaluator/platform.py`](evaluator/platform.py)): their CoinMarketCap
+handle as the username (or one the admin picks with `username`), and a random
+20-character password the evaluator keeps in its KV store. Admins read it with
+`trader_credentials` (or **Credentials** in the app's trader report). The
+account is made by the node's `users.account_create`, which a tool may call
+only from the platform admins space while working for a platform
+administrator; it is active and verified at once, never an administrator, and
+tagged as the evaluator's, so the evaluator can later delete it and no other.
+A taken username fails the add: add the trader again with another `username`.
+
+In **every evaluation round** the evaluator signs in as the trader through the
+node's public API (`auth.login`, then Ed25519-signed requests like the app's)
+and **upserts their 10 latest posts** — the ones that round reads: new ones
+are published, an edited one is replaced, one deleted on the platform is
+published again, unchanged ones are left alone. Each post keeps its coins as
+tags and ends with its CoinMarketCap date and link. The outcome is the
+report's `posts_sync`.
+
+**Removing a trader** (`trader_remove`, or **Remove trader** in the app)
+deletes their scores, the posts the evaluator published as them and their
+account; `keep_account: true` keeps the account and its posts and returns the
+credentials one last time.
+
 Each trader is evaluated again every `interval_hours` (12 by default). The
 admins space's **"evaluator heartbeat"** routine calls the `tick` microtool
 every 10 minutes: a backend acts on the platform only with the scope a call
 gave it (15 minutes), and the heartbeat keeps one fresh for the worker.
 
 KV keys: `evaluator/config`, `evaluator/session`, `evaluator/traders` (the
-handles in order) and `evaluator/trader/<handle>` (one trader's record).
+handles in order) and `evaluator/trader/<handle>` (one trader's record,
+with their account's credentials and the posts published for them). Only
+the admin microtools return a password; `leaderboard` and `trader_get`
+show the account's username alone.
 
 ## Microtools
 
@@ -52,8 +81,9 @@ handles in order) and `evaluator/trader/<handle>` (one trader's record).
 | `leaderboard {board?, limit?}` | anyone | ranked traders; `board`: overall, technical, fundamental, accuracy, consistency, risk, timing |
 | `trader_get {handle}` | anyone | a trader's full report and history |
 | `traders_list`, `status` | anyone | the list with statuses; the worker, settings and session (no secrets) |
-| `trader_add {profile_link, name?}` | admins space | add a trader by link; evaluated right away |
-| `trader_remove {handle}` | admins space | remove a trader and their scores |
+| `trader_add {profile_link, name?, username?}` | admins space | add a trader by link: makes their Tradera account, evaluates them right away |
+| `trader_remove {handle, keep_account?}` | admins space | remove a trader, their scores, posts and account (`keep_account` keeps the last two) |
+| `trader_credentials {handle}` | admins space | the trader's Tradera username, account id and password |
 | `evaluate_now {handle?}` | admins space | queue one trader, or all |
 | `configure {…}` | admins space | `interval_hours`, `max_posts`, `proxy`, `agent_bot`, `llm_base_url`, `llm_api_key`, `llm_model` |
 | `set_session {storage_state \| cookies}` | admins space | the logged-in CoinMarketCap session |

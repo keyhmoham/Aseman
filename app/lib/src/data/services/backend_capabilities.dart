@@ -141,6 +141,8 @@ abstract final class BackendCapabilities {
       'admin_sandboxes',
       'admin_storage',
       'admin_work_log',
+      'admins_space_get',
+      'admins_space_set',
       'agent_answer',
       'agent_questions',
       'ask',

@@ -1,4 +1,5 @@
-/// A2UI inside Elpian: the `A2UISurface` widget (also `a2ui-surface`), the
+/// A2UI inside Elpian, rendered by genui with Tradera's catalog: the
+/// `A2UISurface` widget (also `a2ui-surface`), the
 /// per-app conversation registry it and the host APIs share, and the guest
 /// host APIs `agent.send`, `agent.action` and `a2ui.dataModel`.
 ///
@@ -24,15 +25,15 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/widgets.dart';
 
-import '../core/elpian_engine.dart';
+import '../../genui/runtime/host.dart';
+import '../../genui/widgets/surface_view.dart';
 import '../core/elpian_services.dart';
 import '../core/event_system.dart';
 import '../models/elpian_node.dart';
 import 'conversation.dart';
-import 'lowering.dart';
 import 'transport.dart';
 
 /// The guest host APIs this module serves.
@@ -58,9 +59,6 @@ class A2UIRegistry extends ChangeNotifier {
 
   /// The transport new conversations use (tests and custom hosts replace it).
   AgentFetchStream fetch = httpFetchStream;
-
-  /// The engine `A2UISurface` widgets render their lowered trees with.
-  ElpianEngine? engine;
 
   final Map<String, A2UIConversation> _conversations = {};
   bool _disposed = false;
@@ -130,145 +128,6 @@ String _conversationKey(Map<String, dynamic> props, String elementId) {
   return 'agent:${props['agent'] is String ? props['agent'] : ''}';
 }
 
-typedef _Node = Map<String, dynamic>;
-
-List<_Node> _chatParts(A2UIConversation conversation,
-    Map<String, dynamic> props, String key, void Function() invalidate) {
-  final parts = <_Node>[];
-  final palette = paletteFor(const {});
-  if (props['showText'] == true) {
-    for (var i = 0; i < conversation.transcript.length; i++) {
-      final t = conversation.transcript[i];
-      final mine = t.role == 'user';
-      parts.add({
-        'type': 'Row',
-        'key': '$key/t$i',
-        'props': {
-          'style': {'justifyContent': mine ? 'flex-end' : 'flex-start'}
-        },
-        'children': [
-          {
-            'type': 'Flexible',
-            'props': {'flex': 1, 'fit': 'loose'},
-            'children': [
-              {
-                'type': 'Container',
-                'props': {
-                  'style': {
-                    'padding': '8 12',
-                    'margin': 4,
-                    'borderRadius': 16,
-                    'backgroundColor': mine
-                        ? palette.primaryContainer
-                        : palette.surfaceContainer,
-                  }
-                },
-                'children': [
-                  {
-                    'type': 'Text',
-                    'props': {
-                      'text': t.text,
-                      'style': {
-                        'fontSize': 15,
-                        'lineHeight': 1.45,
-                        'color': palette.onSurface
-                      }
-                    }
-                  }
-                ],
-              }
-            ],
-          }
-        ],
-      });
-    }
-  }
-  if (conversation.busy) {
-    parts.add({
-      'type': 'LinearProgressIndicator',
-      'key': '$key/busy',
-      'props': {
-        'style': {'color': palette.primary, 'margin': '4 0'}
-      },
-    });
-  }
-  if (props['chat'] == true) {
-    final draftKey = '$key#draft';
-    final draft = conversation.ui.get<String>(draftKey, '');
-    void submit() {
-      final text = conversation.ui.get<String>(draftKey, '').trim();
-      if (text.isEmpty || conversation.endpoint == null) return;
-      conversation.ui.set(draftKey, '');
-      conversation.send(text);
-      invalidate();
-    }
-
-    parts.add({
-      'type': 'Row',
-      'key': '$key/chat',
-      'props': {
-        'style': {'alignItems': 'center', 'margin': '8 0 0 0'}
-      },
-      'children': [
-        {
-          'type': 'Expanded',
-          'props': {'flex': 1},
-          'children': [
-            {
-              'type': 'TextField',
-              'key': '$key/chat/input',
-              'props': {
-                'value': draft,
-                'hint': 'Message the agent',
-                'style': {'color': palette.onSurface, 'margin': '0 8 0 4'},
-              },
-              'events': {
-                'input': (ElpianEvent e) {
-                  e.stopPropagation();
-                  conversation.ui.set(draftKey, '${eventValue(e) ?? ''}');
-                },
-                'submit': (ElpianEvent e) {
-                  e.stopPropagation();
-                  submit();
-                },
-              },
-            }
-          ],
-        },
-        {
-          'type': 'Button',
-          'key': '$key/chat/send',
-          'props': {
-            'text': 'Send',
-            'disabled': conversation.busy,
-            'style': {
-              'backgroundColor': palette.primary,
-              'color': palette.onPrimary
-            },
-          },
-          'events': {
-            'click': (ElpianEvent e) {
-              e.stopPropagation();
-              submit();
-            },
-          },
-          'children': [
-            {
-              'type': 'Icon',
-              'props': {
-                'icon': 'send',
-                'size': 20.0,
-                'style': {'color': palette.onPrimary}
-              }
-            }
-          ],
-        },
-      ],
-    });
-  }
-  return parts;
-}
-
 /// The conversation an `A2UISurface` element with [props] shows (created on
 /// first use, endpoint resolved from the registry defaults).
 A2UIConversation a2uiConversationFor(
@@ -298,45 +157,6 @@ A2UIConversation a2uiConversationFor(
   return conversation;
 }
 
-/// Build the Elpian node tree an `A2UISurface` element shows (exported for
-/// previews and tests).
-Map<String, dynamic> a2uiSurfaceTree(
-    A2UIRegistry registry, Map<String, dynamic> props, String elementId) {
-  final conversation = a2uiConversationFor(registry, props, elementId);
-  final prompt = props['prompt'];
-  if (prompt is String &&
-      prompt.isNotEmpty &&
-      !conversation.prompted &&
-      conversation.endpoint != null) {
-    conversation.prompted = true;
-    // Not during a build: the turn emits events.
-    scheduleMicrotask(() => conversation.send(prompt));
-  }
-  final hooks = conversation.loweringHooks(registry.invalidate);
-  final parts = <_Node>[];
-  final only = props['surfaceId'];
-  for (final surface in conversation.processor.surfaces) {
-    if (only is String && only.isNotEmpty && surface.id != only) continue;
-    parts.add(lowerSurface(
-        surface,
-        LoweringOptions(
-          hooks: hooks,
-          state: conversation.ui,
-          keyPrefix: elementId,
-          showAttribution: props['showAttribution'] != false,
-        )).node);
-  }
-  parts.addAll(_chatParts(conversation, props, elementId, registry.invalidate));
-  return {
-    'type': 'Column',
-    'key': '$elementId/a2ui',
-    'props': {
-      'style': {'alignItems': 'stretch'}
-    },
-    'children': parts,
-  };
-}
-
 /// The engine builder for `A2UISurface` / `a2ui-surface`.
 Widget buildA2UISurface(ElpianNode node, List<Widget> children) {
   final services = ElpianServices.current;
@@ -347,9 +167,10 @@ Widget buildA2UISurface(ElpianNode node, List<Widget> children) {
   );
 }
 
-/// The widget behind an `A2UISurface` node: renders the lowered surfaces of
-/// its conversation through the app's engine, rebuilds when the conversation
-/// changes, and delivers conversation events to the node's `events`.
+/// The widget behind an `A2UISurface` node: renders the surfaces of its
+/// conversation with genui (Tradera's catalog), rebuilds when the
+/// conversation changes, and delivers conversation events to the node's
+/// `events`.
 class A2UISurfaceView extends StatefulWidget {
   const A2UISurfaceView(
       {super.key, required this.node, required this.services});
@@ -467,12 +288,48 @@ class _A2UISurfaceViewState extends State<A2UISurfaceView> {
     _building = true;
     try {
       final props = widget.node.props;
-      _bind(a2uiConversationFor(_registry, props, _elementId));
-      final tree = a2uiSurfaceTree(_registry, props, _elementId);
-      final engine = _registry.engine ??
-          (_registry.engine = ElpianEngine(services: widget.services));
-      Widget result =
-          engine.render(ElpianNode.fromJson(tree), parentId: widget.node.key);
+      final conversation = a2uiConversationFor(_registry, props, _elementId);
+      _bind(conversation);
+      final prompt = props['prompt'];
+      if (prompt is String &&
+          prompt.isNotEmpty &&
+          !conversation.prompted &&
+          conversation.endpoint != null) {
+        conversation.prompted = true;
+        // Not during a build: the turn emits events.
+        scheduleMicrotask(() => conversation.send(prompt));
+      }
+      final only = props['surfaceId'];
+      final surfaces = [
+        for (final id in conversation.surfaces.surfaceIds)
+          if (only is! String || only.isEmpty || id == only) id
+      ];
+      Widget result = GenUiHost(
+        elpianServices: widget.services,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          spacing: 8,
+          children: [
+            for (final id in surfaces)
+              GenUiSurfaceView(
+                key: ValueKey('$_elementId/$id'),
+                surfaces: conversation.surfaces,
+                surfaceId: id,
+                onAction: conversation.reportAction,
+                showAttribution: props['showAttribution'] != false,
+              ),
+            if (props['showText'] == true)
+              for (final t in conversation.transcript) _Bubble(entry: t),
+            if (conversation.busy) const LinearProgressIndicator(minHeight: 2),
+            if (props['chat'] == true)
+              _ChatRow(
+                key: ValueKey('$_elementId/chat'),
+                conversation: conversation,
+              ),
+          ],
+        ),
+      );
       final style = props['style'];
       if (style is Map && style['padding'] != null) {
         final p = style['padding'];
@@ -481,10 +338,92 @@ class _A2UISurfaceViewState extends State<A2UISurfaceView> {
               Padding(padding: EdgeInsets.all(p.toDouble()), child: result);
         }
       }
-      return result;
+      return Material(type: MaterialType.transparency, child: result);
     } finally {
       _building = false;
     }
+  }
+}
+
+/// One transcript entry: the person's on the right, the agent's on the left.
+class _Bubble extends StatelessWidget {
+  const _Bubble({required this.entry});
+  final A2UITranscriptEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final mine = entry.role == 'user';
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 560),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: mine ? scheme.primaryContainer : scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Text(entry.text,
+            style: TextStyle(
+                fontSize: 15,
+                height: 1.45,
+                color: mine ? scheme.onPrimaryContainer : scheme.onSurface)),
+      ),
+    );
+  }
+}
+
+/// The input row for messaging the agent.
+class _ChatRow extends StatefulWidget {
+  const _ChatRow({super.key, required this.conversation});
+  final A2UIConversation conversation;
+
+  @override
+  State<_ChatRow> createState() => _ChatRowState();
+}
+
+class _ChatRowState extends State<_ChatRow> {
+  late final _controller =
+      TextEditingController(text: widget.conversation.draft);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final conversation = widget.conversation;
+    final text = _controller.text.trim();
+    if (text.isEmpty || conversation.endpoint == null) return;
+    _controller.clear();
+    conversation.draft = '';
+    conversation.send(text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final busy = widget.conversation.busy;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(children: [
+        Expanded(
+          child: TextField(
+            controller: _controller,
+            textInputAction: TextInputAction.send,
+            decoration: const InputDecoration(hintText: 'Message the agent'),
+            onChanged: (v) => widget.conversation.draft = v,
+            onSubmitted: (_) => _submit(),
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton.filled(
+          tooltip: 'Send',
+          onPressed: busy ? null : _submit,
+          icon: const Icon(Icons.send_rounded),
+        ),
+      ]),
+    );
   }
 }
 

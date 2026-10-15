@@ -18,7 +18,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import 'validator.dart';
+import '../../genui/runtime/messages.dart' show a2uiMessageKind;
 
 /// Where an agent lives.
 class AgentEndpoint {
@@ -66,7 +66,7 @@ class AgentStreamLine {
 AgentStreamLine? classifyLine(Object? value) {
   if (value is! Map) return null;
   final v = Map<String, dynamic>.from(value);
-  if (messageKind(v) != null) return AgentStreamLine('a2ui', message: v);
+  if (a2uiMessageKind(v) != null) return AgentStreamLine('a2ui', message: v);
   switch (v['type']) {
     case 'conversation':
       return v['conversationId'] is String

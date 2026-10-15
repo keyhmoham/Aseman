@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tradera/src/elpian/elpian.dart';
-import 'package:tradera/src/features/tools/presentation/a2ui_view.dart';
 import 'package:tradera/src/features/tools/ui_kit/kit.dart';
 
 const _catalog =
@@ -389,7 +388,7 @@ void main() {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
-            child: A2UIView(
+            child: GenUiView(
               messages: _dashboard,
               onAction: (a, data) async {
                 actions.add((a.name, a.context));
@@ -433,7 +432,7 @@ void main() {
     testWidgets('sorting a table by a column', (tester) async {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
-          body: A2UIView(
+          body: GenUiView(
               messages: surface([
             {
               'id': 'root',

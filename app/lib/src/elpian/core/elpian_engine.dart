@@ -36,9 +36,6 @@ class ElpianEngine {
   ElpianEngine({ElpianServices? services})
       : services = services ?? ElpianServices.shared {
     _registerDefaultWidgets();
-    // `A2UISurface` widgets render their lowered agent UI with this app's
-    // engine (the first one created for these services).
-    a2uiRegistry(this.services).engine ??= this;
   }
 
   WidgetRegistry get _registry => services.registry;

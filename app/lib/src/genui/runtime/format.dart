@@ -1,41 +1,9 @@
-/// The basic catalog's client-side functions, implemented as the basic catalog
-/// implementation guide describes them: validation (`required`, `regex`,
-/// `length`, `numeric`, `email`), formatting (`formatString`, `formatNumber`,
-/// `formatCurrency`, `formatDate`, `pluralize`), logic (`and`, `or`, `not`)
-/// and the `openUrl` side effect.
-///
-/// A function receives its arguments already resolved (bindings read, nested
-/// calls evaluated) and a [FunctionContext]; only `formatString` reaches back
-/// into the context, to evaluate the expressions inside its template.
-///
-/// Dart has no `Intl` in this package's dependencies, so number, currency,
-/// date and plural formatting follow the `en-US` conventions whatever the
-/// locale (the web renderer uses the platform's `Intl` for other locales).
+/// Value conversion and formatting the A2UI basic catalog prescribes
+/// (`en-US` number, currency, date and plural conventions, `openUrl`'s URL
+/// checks), shared by Tradera's client functions and components.
 library;
 
 import 'dart:convert';
-
-import 'errors.dart';
-import 'expressions.dart';
-
-abstract class FunctionContext {
-  String get locale;
-
-  /// Resolve a data path (relative paths against the current scope).
-  Object? read(String path);
-
-  /// Evaluate a function call with unresolved (expression) arguments.
-  Object? call(String name, Map<String, dynamic> args);
-
-  /// Open a URL (already validated); does nothing when the host cannot.
-  void openUrl(String url);
-
-  /// The base for resolving relative URLs in `openUrl`.
-  String? get baseUrl;
-}
-
-typedef A2UIFunction = Object? Function(
-    Map<String, dynamic> args, FunctionContext ctx);
 
 /// A number the way JavaScript's `String(n)` prints it (`1.0` → `1`).
 String numberToString(num n) {
@@ -70,17 +38,7 @@ num? toNum(Object? value) {
   return null;
 }
 
-final RegExp _email = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
-
-/// Evaluate one parsed template value against [ctx].
-Object? evaluateTemplateValue(Object? value, FunctionContext ctx) {
-  if (value is Map) {
-    if (value.containsKey('path')) return ctx.read(value['path'] as String);
-    return ctx.call(value['call'] as String,
-        Map<String, dynamic>.from(value['args'] as Map? ?? const {}));
-  }
-  return value;
-}
+final RegExp _emailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
 /// Group the integer digits of [digits] with commas.
 String _group(String digits) {
@@ -116,7 +74,7 @@ String formatDecimal(num n,
   return negative && !isZero ? '-$body' : body;
 }
 
-({int min, int max})? _decimals(Map<String, dynamic> args) {
+({int min, int max})? _decimalsArg(Map<String, dynamic> args) {
   final decimals = toNum(args['decimals']);
   if (decimals == null) return null;
   final d = decimals.truncate().clamp(0, 20);
@@ -146,145 +104,29 @@ const Map<String, String> _currencySymbols = {
 /// Currencies whose minor unit has no digits.
 const Set<String> _zeroDecimalCurrencies = {'JPY', 'KRW', 'VND', 'CLP', 'ISK'};
 
-final Map<String, A2UIFunction> basicFunctions = {
-  'required': (args, _) {
-    final value = args['value'];
-    return !(value == null || value == '' || (value is List && value.isEmpty));
-  },
-  'regex': (args, _) {
-    final pattern = args['pattern'];
-    if (pattern is! String) {
-      throw expressionError('regex: "pattern" must be a string');
-    }
-    RegExp re;
-    try {
-      re = RegExp(pattern);
-    } catch (_) {
-      throw expressionError('regex: invalid pattern "$pattern"');
-    }
-    return re.hasMatch(stringifyValue(args['value']));
-  },
-  'length': (args, _) {
-    final n = stringifyValue(args['value']).length;
-    final min = toNum(args['min']);
-    final max = toNum(args['max']);
-    if (min != null && n < min) return false;
-    if (max != null && n > max) return false;
-    return true;
-  },
-  'numeric': (args, _) {
-    final n = toNum(args['value']);
-    if (n == null) return false;
-    final min = toNum(args['min']);
-    final max = toNum(args['max']);
-    if (min != null && n < min) return false;
-    if (max != null && n > max) return false;
-    return true;
-  },
-  'email': (args, _) {
-    final value = args['value'];
-    return value is String && _email.hasMatch(value);
-  },
-  'formatString': (args, ctx) {
-    final value = args['value'];
-    if (value == null) return '';
-    final parts = parseTemplate(stringifyValue(value));
-    return parts
-        .map((p) => stringifyValue(evaluateTemplateValue(p, ctx)))
-        .join();
-  },
-  'formatNumber': (args, ctx) {
-    final n = toNum(args['value']);
-    if (n == null) return '';
-    final d = _decimals(args);
-    return formatDecimal(n,
-        minFraction: d?.min ?? 0,
-        maxFraction: d?.max ?? 3,
-        grouping: args['grouping'] != false);
-  },
-  'formatCurrency': (args, ctx) {
-    final n = toNum(args['value']);
-    if (n == null) return '';
-    final raw = args['currency'];
-    final currency = raw is String && RegExp(r'^[A-Za-z]{3}$').hasMatch(raw)
-        ? raw.toUpperCase()
-        : 'USD';
-    final standard = _zeroDecimalCurrencies.contains(currency) ? 0 : 2;
-    final d = _decimals(args);
-    final body = formatDecimal(n.abs(),
-        minFraction: d?.min ?? standard,
-        maxFraction: d?.max ?? standard,
-        grouping: args['grouping'] != false);
-    final symbol = _currencySymbols[currency] ?? '$currency ';
-    final negative = n < 0 && double.parse(body.replaceAll(',', '')) != 0;
-    return '${negative ? '-' : ''}$symbol$body';
-  },
-  'formatDate': (args, ctx) {
-    final date = parseDate(args['value']);
-    if (date == null) return '';
-    final format = args['format'];
-    return formatDatePattern(
-        date, format is String && format.isNotEmpty ? format : 'yyyy-MM-dd',
-        locale: ctx.locale);
-  },
-  'pluralize': (args, ctx) {
-    final n = toNum(args['value']);
-    if (n == null) return stringifyValue(args['other']);
-    var category = n == 1 ? 'one' : 'other';
-    // English reports 0 as "other"; an explicit zero form wins.
-    if (n == 0 && args.containsKey('zero') && args['zero'] != null) {
-      category = 'zero';
-    }
-    final chosen = args[category] ?? args['other'];
-    return stringifyValue(chosen);
-  },
-  'openUrl': (args, ctx) {
-    final resolved = validateOpenUrl(args['url'], ctx.baseUrl);
-    ctx.openUrl(resolved);
-    return null;
-  },
-  'and': (args, _) {
-    final values = args['values'];
-    if (values is! List) throw expressionError('and: "values" must be a list');
-    for (final v in values) {
-      if (!toBool(v)) return false;
-    }
-    return true;
-  },
-  'or': (args, _) {
-    final values = args['values'];
-    if (values is! List) throw expressionError('or: "values" must be a list');
-    for (final v in values) {
-      if (toBool(v)) return true;
-    }
-    return false;
-  },
-  'not': (args, _) => !toBool(args['value']),
-};
-
 final RegExp _scheme = RegExp(r'^([a-zA-Z][a-zA-Z0-9+.-]*):');
 
 /// `openUrl`'s mandatory checks: resolve relative URLs against [base], then
 /// allow only `http:` and `https:` (no `javascript:`, `data:`, …).
 String validateOpenUrl(Object? url, String? base) {
   if (url is! String || url.trim().isEmpty) {
-    throw expressionError('openUrl: "url" must be a non-empty string');
+    throw const FormatException('openUrl: "url" must be a non-empty string');
   }
   final raw = url.trim();
   var resolved = raw;
   if (!_scheme.hasMatch(raw)) {
     if (base == null) {
-      throw expressionError('openUrl: cannot resolve relative URL "$raw"');
+      throw FormatException('openUrl: cannot resolve relative URL "$raw"');
     }
     try {
       resolved = Uri.parse(base).resolve(raw).toString();
     } catch (_) {
-      throw expressionError('openUrl: invalid URL "$raw"');
+      throw FormatException('openUrl: invalid URL "$raw"');
     }
   }
   final protocol = (_scheme.firstMatch(resolved)?.group(1) ?? '').toLowerCase();
   if (protocol != 'http' && protocol != 'https') {
-    throw expressionError(
+    throw FormatException(
         'openUrl: the "$protocol:" scheme is not allowed (http and https only)');
   }
   return resolved;
@@ -433,4 +275,113 @@ String _field(DateTime d, String ch, int n) {
     default:
       return ch * n;
   }
+}
+
+// ----------------------------------------------------------------------------
+// The basic catalog's functions, on resolved arguments. The A2UI spelling of
+// each argument is read first, then the one genui's own functions use
+// (`decimalPlaces`, `useGrouping`, `currencyCode`, `pattern`).
+// ----------------------------------------------------------------------------
+
+bool specRequired(Map<String, Object?> args) {
+  final value = args['value'];
+  return !(value == null ||
+      value == '' ||
+      (value is List && value.isEmpty) ||
+      (value is Map && value.isEmpty));
+}
+
+bool specRegex(Map<String, Object?> args) {
+  final pattern = args['pattern'];
+  if (pattern is! String) {
+    throw const FormatException('regex: "pattern" must be a string');
+  }
+  final RegExp re;
+  try {
+    re = RegExp(pattern);
+  } catch (_) {
+    throw FormatException('regex: invalid pattern "$pattern"');
+  }
+  return re.hasMatch(stringifyValue(args['value']));
+}
+
+bool specLength(Map<String, Object?> args) {
+  final v = args['value'];
+  final n = v is List
+      ? v.length
+      : v is Map
+          ? v.length
+          : stringifyValue(v).length;
+  final min = toNum(args['min']);
+  final max = toNum(args['max']);
+  if (min != null && n < min) return false;
+  if (max != null && n > max) return false;
+  return true;
+}
+
+bool specNumeric(Map<String, Object?> args) {
+  final n = toNum(args['value']);
+  if (n == null) return false;
+  final min = toNum(args['min']);
+  final max = toNum(args['max']);
+  if (min != null && n < min) return false;
+  if (max != null && n > max) return false;
+  return true;
+}
+
+bool specEmail(Map<String, Object?> args) {
+  final value = args['value'];
+  return value is String && _emailPattern.hasMatch(value.trim());
+}
+
+Map<String, dynamic> _decimalArgs(Map<String, Object?> args) => {
+      'decimals': args['decimals'] ?? args['decimalPlaces'],
+    };
+
+bool _grouping(Map<String, Object?> args) =>
+    (args['grouping'] ?? args['useGrouping']) != false;
+
+String specFormatNumber(Map<String, Object?> args) {
+  final n = toNum(args['value']);
+  if (n == null) return '';
+  final d = _decimalsArg(_decimalArgs(args));
+  return formatDecimal(n,
+      minFraction: d?.min ?? 0,
+      maxFraction: d?.max ?? 3,
+      grouping: _grouping(args));
+}
+
+String specFormatCurrency(Map<String, Object?> args) {
+  final n = toNum(args['value']);
+  if (n == null) return '';
+  final raw = args['currency'] ?? args['currencyCode'];
+  final currency = raw is String && RegExp(r'^[A-Za-z]{3}$').hasMatch(raw)
+      ? raw.toUpperCase()
+      : 'USD';
+  final standard = _zeroDecimalCurrencies.contains(currency) ? 0 : 2;
+  final d = _decimalsArg(_decimalArgs(args));
+  final body = formatDecimal(n.abs(),
+      minFraction: d?.min ?? standard,
+      maxFraction: d?.max ?? standard,
+      grouping: _grouping(args));
+  final symbol = _currencySymbols[currency] ?? '$currency ';
+  final negative = n < 0 && double.parse(body.replaceAll(',', '')) != 0;
+  return '${negative ? '-' : ''}$symbol$body';
+}
+
+String specFormatDate(Map<String, Object?> args) {
+  final date = parseDate(args['value']);
+  if (date == null) return '';
+  final format = args['format'] ?? args['pattern'];
+  return formatDatePattern(
+      date, format is String && format.isNotEmpty ? format : 'yyyy-MM-dd');
+}
+
+String specPluralize(Map<String, Object?> args) {
+  final n = toNum(args['value'] ?? args['count']);
+  if (n == null) return stringifyValue(args['other']);
+  var category = n == 1 ? 'one' : 'other';
+  // English reports 0 as "other"; an explicit zero form wins.
+  if (n == 0 && args['zero'] != null) category = 'zero';
+  return stringifyValue(args[category] ?? args['other']);
 }

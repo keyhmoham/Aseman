@@ -32,13 +32,16 @@ func TestCheck(t *testing.T) {
 	}
 }
 
-// The node's list is the app's: both catalogs, read from the Dart sources.
+// The node's list is the app's: every component of its genui catalog, read
+// from the Dart sources.
 func TestComponentsMatchTheApp(t *testing.T) {
-	spec := regexp.MustCompile(`(?m)^\s*'([A-Za-z]+)':\s*(?:const )?(?:_spec\(|ComponentSpec\()`)
+	spec := regexp.MustCompile(`(?:traderaItem|_kit|_container)\(\s*'([A-Za-z]+)'`)
 	var app []string
 	for _, f := range []string{
-		"../../../app/lib/src/elpian/a2ui/catalog.dart",
-		"../../../app/lib/src/features/tools/presentation/a2ui_catalog.dart",
+		"../../../app/lib/src/genui/catalog/basic.dart",
+		"../../../app/lib/src/genui/catalog/tradera.dart",
+		"../../../app/lib/src/genui/catalog/extended.dart",
+		"../../../app/lib/src/genui/catalog/markets.dart",
 	} {
 		src, err := os.ReadFile(f)
 		if err != nil {

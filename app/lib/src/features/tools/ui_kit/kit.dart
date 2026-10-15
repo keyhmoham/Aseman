@@ -7,7 +7,8 @@
 ///   Flutter and HTML node the engine already has; taps arrive as the node's
 ///   `select` (or `change`) event, its data the tapped row or point;
 /// * a **generative** frontend (A2UI) uses them as components of Tradera's
-///   catalog (see `a2ui_catalog.dart`), lowered to the same nodes.
+///   genui catalog (see `lib/src/genui/catalog/tradera.dart`), which builds
+///   the same widgets.
 ///
 /// Props for each type are documented in `README.md` next to this file.
 library;

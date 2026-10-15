@@ -6,10 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tradera/src/features/desk/domain/desk_models.dart';
 import 'package:tradera/src/features/tools/data/tools_api.dart';
 import 'package:tradera/src/features/tools/domain/tool_models.dart';
-import 'package:tradera/src/features/tools/presentation/a2ui_view.dart';
 import 'package:tradera/src/features/tools/presentation/tool_create_form.dart';
 import 'package:tradera/src/features/tools/presentation/tool_frontend_view.dart';
 import 'package:tradera/src/features/tools/runtime/tool_frontend_host.dart';
+import 'package:tradera/src/genui/genui.dart';
 import 'package:tradera/src/shared/widgets/app_inputs.dart';
 
 /// Records node actions and answers them from [replies].
@@ -412,7 +412,7 @@ void main() {
       Map<String, dynamic>? context;
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
-          body: A2UIView(
+          body: GenUiView(
             messages: surface({'greeting': 'Press the button'}),
             onAction: (a, data) async {
               action = a.name;
@@ -436,9 +436,9 @@ void main() {
       final embedded = <String>[];
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
-          body: A2UIView(
+          body: GenUiView(
             messages: surface({'greeting': 'Dashboard'}, embed: true),
-            toolFrontend: (context, botId, height, shown) {
+            toolFrontend: (context, botId, height, props) {
               embedded.add(botId);
               return SizedBox(
                   height: height, child: Text('frontend of $botId'));
@@ -457,7 +457,7 @@ void main() {
         (tester) async {
       await tester.pumpWidget(const MaterialApp(
         home: Scaffold(
-          body: A2UIView(messages: [
+          body: GenUiView(messages: [
             {
               'version': 'v0.9',
               'createSurface': {
@@ -532,7 +532,7 @@ void main() {
       ShownResult? got;
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
-          body: A2UIView(
+          body: GenUiView(
             messages: [
               {
                 'version': 'v0.9',
@@ -559,8 +559,8 @@ void main() {
                 }
               },
             ],
-            toolFrontend: (context, botId, height, shown) {
-              got = shown;
+            toolFrontend: (context, botId, height, props) {
+              got = ShownResult.fromProps(props);
               return SizedBox(
                   height: height, child: Text('frontend of $botId'));
             },

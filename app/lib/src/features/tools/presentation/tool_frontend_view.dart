@@ -7,7 +7,6 @@ import '../domain/tool_models.dart';
 import '../runtime/tool_frontend_host.dart';
 import '../runtime/tool_media.dart';
 import '../ui_kit/kit.dart' show kitEngine;
-import 'a2ui_view.dart';
 
 /// A tool's frontend, in a space: a static frontend runs its program on the
 /// Elpian VM (bytecode) or QuickJS (source) with [ToolFrontendHost] as its
@@ -111,7 +110,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
   }
 
   Future<Map<String, dynamic>?> _action(
-          A2UIClientAction action, Map<String, dynamic> data) =>
+          GenUiAction action, Map<String, dynamic> data) =>
       widget.api.frontendAction(widget.botId, action.name,
           spaceId: widget.spaceId,
           roomId: widget.roomId,
@@ -183,10 +182,10 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
       case FrontendMode.generative:
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: A2UIView(
+          child: GenUiView(
             messages: payload.messages,
             onAction: _action,
-            toolFrontend: (context, botId, height, shown) => SizedBox(
+            toolFrontend: (context, botId, height, props) => SizedBox(
               height: height,
               child: ToolFrontendView(
                   api: widget.api,
@@ -194,7 +193,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
                   spaceId: widget.spaceId,
                   roomId: widget.roomId,
                   userId: widget.userId,
-                  shown: shown),
+                  shown: ShownResult.fromProps(props)),
             ),
           ),
         );

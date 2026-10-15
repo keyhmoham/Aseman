@@ -55,8 +55,9 @@ managed (an Elpian VM, QuickJS or docker backend the node runs) or installed
   QuickJS, with `ToolFrontendHost` as its host: `tool.call(microtool, args)`,
   `tool.microtools()`, `tool.context()`;
 * **generative** — A2UI the node generated from the deployer's skill (cached
-  in its component registry) rendered by `A2UIView`, its buttons running
-  microtools through `tools.frontend_action`.
+  in its component registry) rendered with Flutter's genui by `GenUiView`
+  (`lib/src/genui`: Tradera's catalog in the app's design language), its
+  buttons running microtools through `tools.frontend_action`.
 
 Tools open as card windows on the room's desk (`features/desk`): a
 floating, scrollable desk of windows people and agents open, move, resize,

@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tradera/src/elpian/core/media.dart';
-import 'package:tradera/src/features/tools/presentation/a2ui_view.dart';
 import 'package:tradera/src/features/tools/runtime/tool_media.dart';
+import 'package:tradera/src/genui/genui.dart';
 
 /// A 1x1 transparent PNG.
 final _png = base64.decode(
@@ -140,7 +140,7 @@ void main() {
           body: ElpianMediaScope(
             resolver: media.call,
             child:
-                SingleChildScrollView(child: A2UIView(messages: _surface(url))),
+                SingleChildScrollView(child: GenUiView(messages: _surface(url))),
           ),
         ),
       ));

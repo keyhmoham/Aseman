@@ -100,8 +100,7 @@ void main() {
     test('refuses what it does not know; ignores responses and junk', () async {
       await host.receive({'jsonrpc': '2.0', 'id': 3, 'method': 'sampling/x'});
       expect((sent.single['error'] as Map)['code'], -32601);
-      await host
-          .receive({'jsonrpc': '2.0', 'id': 4, 'result': <String, Object>{}});
+      await host.receive({'jsonrpc': '2.0', 'id': 4, 'result': <String, Object>{}});
       await host.receive('not json-rpc');
       expect(sent, hasLength(1));
     });

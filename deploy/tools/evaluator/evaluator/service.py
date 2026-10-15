@@ -298,26 +298,32 @@ class Evaluator:
         return out
 
     def sync_platform_posts(self, rec: dict, posts: list[dict]) -> dict:
-        """Signs in as the trader and upserts their latest posts; the outcome."""
+        """Publishes the trader's latest posts as their account (each once,
+        never changing one already there); the outcome."""
+        scope = self.scopes.space()
+        if scope is None:
+            return {"at": now_iso(), "error": "publishing the trader's posts needs the admins space routine's scope"}
         account = rec.get("account") or {}
         if not account:
-            scope = self.scopes.space()
-            if scope is None:
-                return {"at": now_iso(), "error": "the trader has no platform account yet (needs the admins space routine's scope)"}
             try:
                 rec["account"] = account = self.make_account(scope, platform_mod.username_for(rec["handle"]), rec.get("name") or "")
             except ToolError as e:
                 return {"at": now_iso(), "error": str(e)}
+        items = platform_mod.import_items(posts)
+        if not items:
+            return {"at": now_iso(), "created": 0, "existing": 0, "failed": 0}
         try:
-            session = self.platform.login(account["handle"], account["password"])
-        except PlatformError as e:
-            return {"at": now_iso(), "error": f"sign-in as @{account['handle']} failed: {e}"}
-        try:
-            published, counts = platform_mod.sync_posts(self.platform, session, posts, rec.get("platform_posts") or {})
-        finally:
-            self.platform.logout(session)
-        rec["platform_posts"] = published
-        return {"at": now_iso(), **counts}
+            out = self.node.call(scope, "posts", "post_import", {"author": account.get("id"), "posts": items}, timeout=120)
+        except HostError as e:
+            return {"at": now_iso(), "error": f"publishing as @{account.get('handle')} failed: {e}"}
+        results = out.get("posts") or []
+        rec["platform_posts"] = platform_mod.remember(rec.get("platform_posts") or {}, items, results)
+        sync = {"at": now_iso(), "created": int(out.get("created") or 0), "existing": int(out.get("existing") or 0),
+                "failed": int(out.get("failed") or 0)}
+        errors = [r["error"] for r in results if r.get("error")]
+        if errors:
+            sync["error"] = errors[0][:300]
+        return sync
 
     def t_evaluate_now(self, store: Store, args: dict, scope: Scope) -> dict:
         handle = str(args.get("handle") or "").strip().lstrip("@").lower()

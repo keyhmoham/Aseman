@@ -31,6 +31,17 @@ type Post struct {
 	Likes int64 `db:"likes" json:"likes"`
 	// EditedAt is set when the post body changes after publication.
 	EditedAt time.Time `db:"edited_at" json:"edited_at,omitempty"`
+	// Source names where an imported post was first published
+	// ("coinmarketcap"); "" for a post made here.
+	Source string `db:"source" json:"source,omitempty"`
+	// SourceID is the post's id at its source: an import publishes each
+	// source post once and never changes it afterwards.
+	SourceID string `db:"source_id" json:"source_id,omitempty"`
+	// SourceAt is when the post was published at its source.
+	SourceAt time.Time `db:"source_at" json:"source_at,omitempty"`
+	// Featured (1) puts the post above the others in the global feed: an
+	// imported trader's latest posts (see Import).
+	Featured int64 `db:"featured" json:"featured,omitempty"`
 }
 
 // ParseTags decodes the tags JSON column.

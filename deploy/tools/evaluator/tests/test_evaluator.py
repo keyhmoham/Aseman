@@ -43,7 +43,8 @@ class FakeNode:
         self.kv: dict[str, str] = {}
         self.asks: list[dict] = []
         self.accounts: dict[str, dict] = {}  # handle -> {id, password}
-        self.posts: dict[str, dict] = {}     # post id -> {author, body, tags}
+        self.posts: dict[str, dict] = {}     # post id -> {author, body, tags, source_id}
+        self.imports: list[dict] = []
         self.reply = json.dumps({"overall_score": 82, "technical_score": 88, "fundamental_score": 61,
                                  "historical_accuracy": 70, "consistency": 75, "risk_management": 55,
                                  "timing": 64, "confidence": 58, "strengths": ["clear invalidation"],
@@ -88,6 +89,25 @@ class FakeNode:
                 raise HostError("no account", status=404, code="NOT_FOUND")
             del self.accounts[handle]
             return {"ok": True}
+        if name == "posts.post_import":
+            if not sc.space:
+                raise HostError("only in the admins space", status=403, code="PERMISSION")
+            if body["author"] not in {a["id"] for a in self.accounts.values()}:
+                raise HostError("not a managed account", status=403, code="PERMISSION")
+            self.imports.append(body)
+            results = []
+            for item in body["posts"]:
+                pid = next((k for k, p in self.posts.items()
+                            if p["author"] == body["author"] and p.get("source_id") == item["source_id"]), None)
+                if pid is None:
+                    pid = f"post-{len(self.posts) + len(self.imports) * 100}"
+                    self.posts[pid] = {"author": body["author"], "body": item["body"], "tags": item.get("tags"),
+                                       "source_id": item["source_id"], "at": item.get("at")}
+                    results.append({"source_id": item["source_id"], "post_id": pid, "created": True})
+                else:
+                    results.append({"source_id": item["source_id"], "post_id": pid, "created": False})
+            created = sum(r["created"] for r in results)
+            return {"ok": True, "created": created, "existing": len(results) - created, "failed": 0, "posts": results}
         if name == "spaces.ask":
             self.asks.append(body)
             return {"bot_id": body["bot"], "reply": "Here is the report:\n```json\n" + self.reply + "\n```"}
@@ -295,13 +315,14 @@ class AccountsTest(Harness):
         self.assertEqual(out["trader"]["platform_account"]["handle"], "vlad.trades")
         self.assertEqual(self.node.accounts["vlad.trades"]["name"], "Vlad A")
 
-    def test_each_round_upserts_the_ten_latest_posts_as_the_trader(self):
+    def test_each_round_publishes_the_ten_latest_posts_as_the_trader(self):
         self.add()
         posts = cmc_posts(12)
         self.ev.crawl = crawl_with(posts)
         self.ev.run_due()
         acc = self.node.accounts["daniel_crypto365"]
-        self.assertEqual(self.platform.logins, ["daniel_crypto365"])
+        self.assertEqual(self.platform.logins, [])  # through the gateway, not by signing in
+        self.assertEqual(self.node.imports[0]["author"], acc["id"])
         mine = [p for p in self.node.posts.values() if p["author"] == acc["id"]]
         self.assertEqual(len(mine), 10)
         bodies = "\n".join(p["body"] for p in mine)
@@ -310,22 +331,31 @@ class AccountsTest(Harness):
         self.assertIn("call number 11:", bodies)
         self.assertIn("https://coinmarketcap.com/community/post/1011/", bodies)
         self.assertEqual(mine[0]["tags"], ["btc", "coinmarketcap"])
+        self.assertEqual({i["source"] for i in self.node.imports[0]["posts"]}, {"coinmarketcap"})
         rec = self.ev.call("trader_get", {"handle": "daniel_crypto365"}, scope(space=""))
         self.assertEqual(rec["posts_sync"]["created"], 10)
 
-        # Next round: unchanged ones stay, an edited one is replaced, a deleted one comes back.
+        # Next round: a new post is published; the ones already there are left
+        # exactly as they are, even one edited at the source.
+        before = {k: dict(v) for k, v in self.node.posts.items()}
         posts[11]["text"] = "$BTC call number 11, edited: target hit"
-        stored = json.loads(self.node.kv["evaluator/trader/daniel_crypto365"])
-        gone = stored["platform_posts"]["1005"]["post_id"]
-        del self.node.posts[gone]
+        posts.append(cmc_posts(13)[12])
         self.ev.call("evaluate_now", {"handle": "daniel_crypto365"}, scope())
         self.ev.run_due()
         sync = self.ev.call("trader_get", {"handle": "daniel_crypto365"}, scope(space=""))["posts_sync"]
-        self.assertEqual((sync["created"], sync["updated"], sync["unchanged"]), (0, 2, 8))
-        mine = [p for p in self.node.posts.values() if p["author"] == acc["id"]]
-        self.assertEqual(len(mine), 10)
-        self.assertTrue(any("edited: target hit" in p["body"] for p in mine))
-        self.assertEqual(self.platform.logins, ["daniel_crypto365"] * 2)
+        self.assertEqual((sync["created"], sync["existing"]), (1, 9))
+        for pid, p in before.items():
+            self.assertEqual(self.node.posts[pid], p)
+        self.assertFalse(any("edited: target hit" in p["body"] for p in self.node.posts.values()))
+        stored = json.loads(self.node.kv["evaluator/trader/daniel_crypto365"])
+        self.assertEqual(len(stored["platform_posts"]), 11)
+
+    def test_without_the_admins_space_scope_posts_wait(self):
+        self.add()
+        self.ev.scopes.space_scope = Scope()
+        self.ev.crawl = crawl_with(cmc_posts(3))
+        self.ev.sync_platform_posts(json.loads(self.node.kv["evaluator/trader/daniel_crypto365"]), cmc_posts(3))
+        self.assertEqual(self.node.posts, {})
 
     def test_a_trader_added_before_accounts_gets_one_on_evaluation(self):
         self.add()

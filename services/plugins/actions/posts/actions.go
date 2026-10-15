@@ -304,6 +304,7 @@ func BuildActions(s *Service) []api.Action {
 		&postLikeAction{s: s}, &postUnlikeAction{s: s},
 		&postCommentAction{s: s}, &postCommentsAction{s: s},
 		&postSearchAction{s: s}, &postLeaderboardAction{s: s},
+		&postImportAction{s: s},
 	}
 }
 

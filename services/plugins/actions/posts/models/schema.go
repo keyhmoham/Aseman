@@ -17,6 +17,8 @@ func posts() database.Model {
 			f("body", database.KindString), f("tags", database.KindString),
 			f("media", database.KindString), f("liked_by", database.KindString),
 			f("likes", database.KindInt64), f("edited_at", database.KindTime),
+			f("source", database.KindString), f("source_id", database.KindString),
+			f("source_at", database.KindTime), f("featured", database.KindInt64),
 			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		},
 	}

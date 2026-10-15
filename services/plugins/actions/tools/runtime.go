@@ -64,6 +64,9 @@ var hostActions = map[string]bool{
 	// deletes only the accounts it made (users/managed.go).
 	"users.account_create": true, "users.account_delete": true,
 	"bots.kv_get": true, "bots.kv_set": true, "bots.kv_list": true, "bots.kv_delete": true,
+	// Only as the accounts the tool made, under the same rule
+	// (posts/import.go, users.MayPublishFor).
+	"posts.post_import": true,
 }
 
 // Scope is the execution scope of one call to a backend.

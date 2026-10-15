@@ -86,7 +86,8 @@ class ToolsApi {
       String roomId = '',
       bool regenerate = false,
       ShownResult? shown,
-      Map<String, dynamic>? template}) async {
+      Map<String, dynamic>? template,
+      String request = ''}) async {
     final body = _map(await _call(
         'tools',
         'frontend_get',
@@ -95,6 +96,9 @@ class ToolsApi {
           'space': spaceId,
           if (roomId.isNotEmpty) 'room': roomId,
           if (regenerate) 'regenerate': true,
+          // What the person asked for: a frontend generated for each request
+          // (not cached) is designed for it.
+          if (request.isNotEmpty) 'request': request,
           if (template != null) 'template': template,
           ...?shown?.toJson(),
         },

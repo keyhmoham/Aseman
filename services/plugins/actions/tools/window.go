@@ -34,10 +34,14 @@ func windowTemplate(raw map[string]any) (*Template, error) {
 
 // requestSkill is what the design follows: the person's request, the result
 // to show and its shape.
-func requestSkill(request, microtool string, args map[string]any, sample string) string {
+func requestSkill(request, microtool string, args map[string]any, sample, skill string) string {
 	var b strings.Builder
 	b.WriteString("Design a card window for exactly this request, not a general interface for the tool:\n")
 	b.WriteString(strings.TrimSpace(request) + "\n\n")
+	if strings.TrimSpace(skill) != "" {
+		b.WriteString("The tool's deployer describes its frontend with this skill; respect it while designing for the request:\n")
+		b.WriteString(strings.TrimSpace(skill) + "\n\n")
+	}
 	if microtool != "" {
 		rawArgs, _ := json.Marshal(args)
 		b.WriteString("It shows the result of the microtool " + microtool + " called with " + string(rawArgs) + ". ")
@@ -63,7 +67,19 @@ func (s *Service) GenerateWindowFrontend(ctx context.Context, payer, space, room
 		return "", errs.NotFound("tool " + botID)
 	}
 	c := caller{Caller: api.Caller{ID: payerID}, Space: space, Room: room}
-	commands, err := s.CommandsFor(ctx, tool.BotID, payer, space)
+	t, err := s.designFor(ctx, c, &tool, request, microtool, args)
+	if err != nil {
+		return "", err
+	}
+	raw, _ := json.Marshal(t)
+	return string(raw), nil
+}
+
+// designFor designs a frontend for one request to [tool], around the result
+// of [microtool] when one is given, following the tool's generative skill
+// when it has one. Nothing of it is kept.
+func (s *Service) designFor(ctx context.Context, c caller, tool *models.Tool, request, microtool string, args map[string]any) (*Template, error) {
+	commands, err := s.CommandsFor(ctx, tool.BotID, c.Caller.ID.String(), c.Space)
 	if err != nil || len(commands) == 0 {
 		commands = tool.Commands
 	}
@@ -77,10 +93,18 @@ func (s *Service) GenerateWindowFrontend(ctx context.Context, payer, space, room
 			}
 		}
 	}
-	t, _, err := s.generate(ctx, c, &tool, requestSkill(request, microtool, args, sample), commands)
-	if err != nil {
-		return "", err
+	skill := ""
+	var spec models.FrontendSpec
+	if json.Unmarshal([]byte(tool.Frontend), &spec) == nil && spec.Mode == models.FrontendGenerative {
+		skill, _ = s.entity(ctx, tool.BotID, models.EntityFrontendSkill)
 	}
-	raw, _ := json.Marshal(t)
-	return string(raw), nil
+	if strings.TrimSpace(request) == "" {
+		request = "Open the tool: what it offers and its most useful results."
+		if microtool != "" {
+			raw, _ := json.Marshal(args)
+			request = "Show the result of " + microtool + " for " + string(raw) + "."
+		}
+	}
+	t, _, err := s.generate(ctx, c, tool, requestSkill(request, microtool, args, sample, skill), commands)
+	return t, err
 }

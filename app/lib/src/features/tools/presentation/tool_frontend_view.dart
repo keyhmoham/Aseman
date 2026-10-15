@@ -28,6 +28,7 @@ class ToolFrontendView extends StatefulWidget {
     this.regenerate = false,
     this.shown,
     this.template,
+    this.request = '',
     this.onLoaded,
   });
 
@@ -47,6 +48,10 @@ class ToolFrontendView extends StatefulWidget {
   /// A frontend designed for one request (a desk window's own), shown
   /// instead of the tool's.
   final Map<String, dynamic>? template;
+
+  /// What the person asked for, which a frontend generated for each request
+  /// (its tool does not cache it) is designed for.
+  final String request;
   final ValueChanged<ToolFrontendPayload>? onLoaded;
 
   @override
@@ -88,7 +93,8 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
           roomId: widget.roomId,
           regenerate: widget.regenerate,
           shown: widget.shown,
-          template: widget.template);
+          template: widget.template,
+          request: widget.request);
       if (!mounted) return;
       setState(() {
         _payload = payload;
@@ -112,7 +118,9 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
           context: action.context,
           data: data,
           shown: widget.shown,
-          template: widget.template);
+          // A frontend generated for this request only exists here: its
+          // actions carry it back to the node.
+          template: widget.template ?? _payload?.template);
 
   @override
   Widget build(BuildContext context) {
@@ -128,8 +136,8 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
 
   Widget _content(BuildContext context) {
     if (_loading) {
-      // A generated interface takes a moment the first time; it is cached
-      // after that.
+      // A generated interface takes a moment the first time (every time
+      // when its tool does not cache it).
       final scheme = Theme.of(context).colorScheme;
       return Center(
           child: Padding(

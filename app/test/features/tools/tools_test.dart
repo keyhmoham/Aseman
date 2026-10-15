@@ -10,6 +10,7 @@ import 'package:tradera/src/features/tools/presentation/a2ui_view.dart';
 import 'package:tradera/src/features/tools/presentation/tool_create_form.dart';
 import 'package:tradera/src/features/tools/presentation/tool_frontend_view.dart';
 import 'package:tradera/src/features/tools/runtime/tool_frontend_host.dart';
+import 'package:tradera/src/shared/widgets/app_inputs.dart';
 
 /// Records node actions and answers them from [replies].
 class _Node {
@@ -94,7 +95,8 @@ void main() {
       final generative =
           const FrontendDraft(mode: FrontendMode.generative, skill: 'show it')
               .toJson();
-      expect(generative, {'mode': 'generative', 'skill': 'show it'});
+      expect(generative,
+          {'mode': 'generative', 'skill': 'show it', 'cache': true});
     });
   });
 
@@ -232,6 +234,64 @@ void main() {
       final action = node.calls.lastWhere((c) => c.$2 == 'frontend_action');
       expect(action.$3['template'], template,
           reason: 'actions run against the window\'s design');
+    });
+
+    testWidgets(
+        'a frontend generated for each request sends its own template back with its actions',
+        (tester) async {
+      final node = _Node();
+      const generated = {'title': 'For you', 'components': <Object>[]};
+      node.replies['tools.frontend_get'] = (_) => {
+            'mode': 'generative',
+            'cached': false,
+            'template': generated,
+            'messages': [
+              {
+                'version': 'v0.9',
+                'createSurface': {
+                  'surfaceId': 'g',
+                  'catalogId':
+                      'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'
+                }
+              },
+              {
+                'version': 'v0.9',
+                'updateComponents': {
+                  'surfaceId': 'g',
+                  'components': [
+                    {
+                      'id': 'root',
+                      'component': 'Button',
+                      'child': 'bl',
+                      'action': {
+                        'event': {'name': 'refresh'}
+                      }
+                    },
+                    {'id': 'bl', 'component': 'Text', 'text': 'Refresh'},
+                  ]
+                }
+              },
+            ],
+          };
+      node.replies['tools.frontend_action'] =
+          (_) => {'data': <String, dynamic>{}};
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: ToolFrontendView(
+              api: node.api,
+              botId: 'weather',
+              spaceId: 's1',
+              request: 'Compare Paris and Rome'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      final get = node.calls.singleWhere((c) => c.$2 == 'frontend_get');
+      expect(get.$3['request'], 'Compare Paris and Rome');
+      expect(get.$3.containsKey('template'), isFalse);
+      await tester.tap(find.text('Refresh'));
+      await tester.pumpAndSettle();
+      final action = node.calls.lastWhere((c) => c.$2 == 'frontend_action');
+      expect(action.$3['template'], generated);
     });
 
     test('frontend decodes a static Elpian frontend\'s bytecode', () async {
@@ -564,6 +624,51 @@ void main() {
     expect((json['frontend'] as Map)['mode'], 'static');
   });
 
+  testWidgets('a generative frontend offers the Cache frontend switch',
+      (tester) async {
+    ToolDraft? draft;
+    tester.view.physicalSize = const Size(900, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async => draft = await showCreateToolForm(context),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cache frontend'), findsNothing,
+        reason: 'only a generative frontend is cached');
+    await tester.ensureVisible(find.text('Generative'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Generative'));
+    await tester.pumpAndSettle();
+    final cache = find.widgetWithText(AppSwitchCard, 'Cache frontend');
+    expect(cache, findsOneWidget);
+    expect(tester.widget<AppSwitchCard>(cache).value, isTrue);
+    await tester.ensureVisible(cache);
+    await tester.pumpAndSettle();
+    await tester.tap(cache);
+    await tester.pump();
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Weather');
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle();
+    final frontend = draft!.toJson()['frontend'] as Map;
+    expect(frontend['mode'], 'generative');
+    expect(frontend['cache'], isFalse);
+    expect(
+        ToolInfo.fromJson({
+          'frontend': {'mode': 'generative', 'cache': false}
+        }).frontendCache,
+        isFalse);
+    expect(ToolInfo.fromJson({}).frontendCache, isTrue);
+  });
+
   group('editing a tool', () {
     const managed = ToolInfo(
       botId: 'b1',
@@ -599,7 +704,8 @@ void main() {
     });
 
     test('edit sends only what changed', () async {
-      final node = _Node()..replies['tools.tool_update'] = (_) => <String, dynamic>{};
+      final node = _Node()
+        ..replies['tools.tool_update'] = (_) => <String, dynamic>{};
       await node.api.edit(
           'b1', const ToolEdit(name: 'Hello desk', url: 'https://x.dev/mcp'));
       expect(node.calls.single.$2, 'tool_update');
@@ -651,6 +757,25 @@ void main() {
       expect(result!.toJson(), {
         'description': 'Greets people',
         'source': 'function tools() { return [1]; }',
+      });
+    });
+
+    testWidgets('turning the frontend cache off sends the frontend with it',
+        (tester) async {
+      final result = await edit(tester, managed, () async {
+        final cache = find.widgetWithText(AppSwitchCard, 'Cache frontend');
+        expect(cache, findsOneWidget);
+        await tester.ensureVisible(cache);
+        await tester.pumpAndSettle();
+        await tester.tap(cache);
+        await tester.pump();
+      });
+      expect(result!.toJson(), {
+        'frontend': {
+          'mode': 'generative',
+          'skill': 'Show a greeting.',
+          'cache': false
+        },
       });
     });
 

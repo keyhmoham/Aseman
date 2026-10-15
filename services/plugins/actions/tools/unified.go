@@ -67,6 +67,10 @@ type frontendInput struct {
 	// node without a tool compiler.
 	Bytecode string `json:"bytecode,omitempty"`
 	Skill    string `json:"skill,omitempty"`
+	// Cache: a generative frontend is generated once and served from the
+	// component registry (true or absent), or generated for every request
+	// (false). See models.FrontendSpec.Cache.
+	Cache *bool `json:"cache,omitempty"`
 }
 
 type toolInput struct {
@@ -345,6 +349,10 @@ func (s *Service) prepareFrontend(ctx context.Context, f frontendInput) (models.
 	case models.FrontendGenerative:
 		entities[models.EntityFrontendSkill] = []byte(f.Skill)
 		spec.Version = fingerprint("generative", f.Skill)
+		if f.Cache != nil && !*f.Cache {
+			off := false
+			spec.Cache = &off
+		}
 	}
 	return spec, entities, nil
 }
@@ -681,4 +689,16 @@ func (s *Service) FrontendMode(ctx context.Context, botID string) (string, error
 	var spec models.FrontendSpec
 	_ = json.Unmarshal([]byte(tool.Frontend), &spec)
 	return spec.Mode, nil
+}
+
+// FrontendPerRequest reports whether a tool's generative frontend is
+// generated for every request rather than cached (its Cache is off).
+func (s *Service) FrontendPerRequest(ctx context.Context, botID string) (bool, error) {
+	var tool models.Tool
+	if err := s.R.GetString(ctx, "tool_registry", botID, &tool); err != nil {
+		return false, err
+	}
+	var spec models.FrontendSpec
+	_ = json.Unmarshal([]byte(tool.Frontend), &spec)
+	return spec.Mode == models.FrontendGenerative && !spec.Cached(), nil
 }

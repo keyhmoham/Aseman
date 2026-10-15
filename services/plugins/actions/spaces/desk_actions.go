@@ -72,6 +72,11 @@ func (s *Service) resolveDeskOpens(ctx context.Context, spaceID identity.ID, ops
 			return errs.InvalidArgument(t.Name + " has no microtools to build an interface from; present its result in your message, in Markdown")
 		}
 		ops[i].Tool, ops[i].Name, ops[i].Frontend = t.BotID, t.Name, deskFrontend(t.Frontend, ops[i])
+		if t.FrontendPerRequest && len(ops[i].Template) == 0 {
+			// Its generative frontend is not cached: designed for this
+			// window's request (following its skill), kept with the window.
+			ops[i].Frontend = DeskAutoFrontend
+		}
 		if appUI(t, ops[i].Microtool) != "" && len(ops[i].Template) == 0 {
 			// The tool shows this result with its own app (MCP Apps).
 			ops[i].Frontend = DeskAppFrontend

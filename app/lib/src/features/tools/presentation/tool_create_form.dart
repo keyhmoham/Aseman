@@ -56,6 +56,7 @@ class _ToolFormState extends State<_ToolForm> {
   Uint8List? frontendBytecode;
   String bytecodeName = '';
   final skill = TextEditingController(text: ToolTemplates.skill);
+  bool cacheFrontend = true;
 
   bool get editing => widget.initial != null;
 
@@ -86,6 +87,7 @@ class _ToolFormState extends State<_ToolForm> {
     if (t.frontendMode == FrontendMode.generative) {
       skill.text = t.frontendSkill;
     }
+    cacheFrontend = t.frontendCache;
   }
 
   @override
@@ -204,7 +206,8 @@ class _ToolFormState extends State<_ToolForm> {
       case FrontendMode.none:
         return false;
       case FrontendMode.generative:
-        return skill.text != t.frontendSkill;
+        return skill.text != t.frontendSkill ||
+            cacheFrontend != t.frontendCache;
       case FrontendMode.static:
         final language =
             frontendRuntime == ToolRuntime.quickjs ? 'js' : frontendLanguage;
@@ -258,6 +261,7 @@ class _ToolFormState extends State<_ToolForm> {
           source: frontendSource.text,
           bytecode: frontendBytecode,
           skill: skill.text,
+          cache: cacheFrontend,
         ),
       );
 
@@ -471,6 +475,15 @@ class _ToolFormState extends State<_ToolForm> {
               hint:
                   'What to show, what each part does, which microtools fill it.',
               onUpload: () => _upload(skill, ['md', 'txt'])),
+          AppSwitchCard(
+            icon: Icons.cached_rounded,
+            title: 'Cache frontend',
+            subtitle: cacheFrontend
+                ? 'The first frontend generated is kept and shown to everyone after that.'
+                : 'A new frontend is generated each time it is opened, designed for what the person asked while following the skill.',
+            value: cacheFrontend,
+            onChanged: (v) => setState(() => cacheFrontend = v),
+          ),
         ];
       case FrontendMode.static:
         return [

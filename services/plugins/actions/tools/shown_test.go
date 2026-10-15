@@ -1,9 +1,12 @@
 package tools
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/tradera/tradera/plugins/actions/tools/models"
 )
 
 func TestShownPointsTheBindingsAtOneResult(t *testing.T) {
@@ -34,7 +37,7 @@ func TestShownPointsTheBindingsAtOneResult(t *testing.T) {
 
 func TestAWindowFrontendIsDesignedForItsRequest(t *testing.T) {
 	skill := requestSkill("How hot will it get in Paris this week?", "daily_forecast",
-		map[string]any{"city": "Paris"}, `{"days":[{"high":24}]}`)
+		map[string]any{"city": "Paris"}, `{"days":[{"high":24}]}`, "")
 	for _, want := range []string{
 		"How hot will it get in Paris this week?", // the request, in the person's words
 		"not a general interface",
@@ -44,6 +47,35 @@ func TestAWindowFrontendIsDesignedForItsRequest(t *testing.T) {
 		if !strings.Contains(skill, want) {
 			t.Errorf("design brief lacks %q:\n%s", want, skill)
 		}
+	}
+}
+
+// A frontend generated for each request (cache off) is designed for the
+// request while respecting the deployer's skill.
+func TestAPerRequestFrontendFollowsTheSkill(t *testing.T) {
+	brief := requestSkill("Compare Paris and Rome", "", nil, "", "Always show temperatures in Celsius.")
+	for _, want := range []string{"Compare Paris and Rome", "respect it", "Always show temperatures in Celsius."} {
+		if !strings.Contains(brief, want) {
+			t.Errorf("design brief lacks %q:\n%s", want, brief)
+		}
+	}
+	if strings.Contains(requestSkill("x", "", nil, "", " "), "skill") {
+		t.Error("no skill, no skill section")
+	}
+}
+
+func TestFrontendCacheDefaultsOn(t *testing.T) {
+	off := false
+	if !(models.FrontendSpec{}).Cached() || (models.FrontendSpec{Cache: &off}).Cached() {
+		t.Fatal("cache is on unless turned off")
+	}
+	spec, _, err := (&Service{}).prepareFrontend(context.Background(), frontendInput{Mode: models.FrontendGenerative, Skill: "s", Cache: &off})
+	if err != nil || spec.Cached() {
+		t.Fatalf("cache off must be kept: %+v %v", spec, err)
+	}
+	on := true
+	if spec, _, _ = (&Service{}).prepareFrontend(context.Background(), frontendInput{Mode: models.FrontendGenerative, Skill: "s", Cache: &on}); spec.Cache != nil {
+		t.Fatal("cache on is the default and not stored")
 	}
 }
 

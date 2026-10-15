@@ -132,6 +132,7 @@ class FrontendDraft {
     this.source = '',
     this.bytecode,
     this.skill = '',
+    this.cache = true,
   });
 
   final FrontendMode mode;
@@ -144,6 +145,11 @@ class FrontendDraft {
   final Uint8List? bytecode;
   final String skill;
 
+  /// A generative frontend: keep the first one generated and serve it to
+  /// everyone (true), or generate one for every request, designed for what
+  /// the person asked while following [skill] (false).
+  final bool cache;
+
   Map<String, dynamic> toJson() => {
         'mode': mode.wire,
         if (mode == FrontendMode.static) ...{
@@ -152,7 +158,10 @@ class FrontendDraft {
           if (source.isNotEmpty) 'source': source,
           if (bytecode != null) 'bytecode': base64Encode(bytecode!),
         },
-        if (mode == FrontendMode.generative) 'skill': skill,
+        if (mode == FrontendMode.generative) ...{
+          'skill': skill,
+          'cache': cache,
+        },
       };
 }
 
@@ -266,6 +275,7 @@ class ToolInfo {
     this.frontendLanguage = '',
     this.frontendSource = '',
     this.frontendSkill = '',
+    this.frontendCache = true,
     this.editable = false,
     this.microtools = const [],
   });
@@ -295,6 +305,9 @@ class ToolInfo {
   /// its owner.
   final String frontendSource;
   final String frontendSkill;
+
+  /// Whether a generative frontend is cached (see [FrontendDraft.cache]).
+  final bool frontendCache;
   final bool editable;
   final List<Microtool> microtools;
 
@@ -321,6 +334,7 @@ class ToolInfo {
       frontendLanguage: frontend['language'] as String? ?? '',
       frontendSource: j['frontend_source'] as String? ?? '',
       frontendSkill: j['frontend_skill'] as String? ?? '',
+      frontendCache: frontend['cache'] as bool? ?? true,
       editable: j['editable'] as bool? ?? false,
       microtools: [
         for (final c in (j['commands'] as List?) ?? const <dynamic>[])
@@ -341,6 +355,7 @@ class ToolFrontendPayload {
     this.title = '',
     this.cached = false,
     this.version = '',
+    this.template,
   });
 
   final FrontendMode mode;
@@ -361,6 +376,10 @@ class ToolFrontendPayload {
   final bool cached;
   final String version;
 
+  /// A generated frontend that is not cached: the template it was generated
+  /// as, which its actions and reloads pass back (nobody else keeps it).
+  final Map<String, dynamic>? template;
+
   factory ToolFrontendPayload.fromJson(Map<String, dynamic> j) {
     final bytecode = j['bytecode'] as String?;
     return ToolFrontendPayload(
@@ -376,6 +395,7 @@ class ToolFrontendPayload {
       title: j['title'] as String? ?? '',
       cached: j['cached'] as bool? ?? false,
       version: j['version'] as String? ?? '',
+      template: (j['template'] as Map?)?.cast<String, dynamic>(),
     );
   }
 }

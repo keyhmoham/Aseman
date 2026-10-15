@@ -295,6 +295,9 @@ func (s *Service) frontendGet(ctx context.Context, req *api.ActionRequest) (*api
 		// see GenerateWindowFrontend): filled and served instead of the
 		// tool's own.
 		Template map[string]any `json:"template"`
+		// Request is what the person asked for: a generative frontend that
+		// is not cached is designed for it.
+		Request string `json:"request"`
 	}
 	if e := helper.Decode(req, &in); e != nil {
 		return nil, e
@@ -332,6 +335,23 @@ func (s *Service) frontendGet(ctx context.Context, req *api.ActionRequest) (*api
 			out["source"] = source
 		}
 	case models.FrontendGenerative:
+		if !spec.Cached() {
+			// Generated for this request, every time, and kept by nobody but
+			// the device showing it: it passes the template back with its
+			// actions and reloads.
+			t, err := s.designFor(ctx, c, tool, in.Request, in.Microtool, in.Args)
+			if err != nil {
+				return nil, err
+			}
+			raw, _ := json.Marshal(t)
+			var template map[string]any
+			_ = json.Unmarshal(raw, &template)
+			data := s.fill(ctx, c, tool.BotID, t, in.Shown)
+			out["cached"], out["title"], out["template"] = false, t.Title, template
+			out["messages"] = t.Messages("tool-"+tool.BotID, data)
+			out["actions"] = actionNames(t)
+			return helper.JSON(out)
+		}
 		if in.Regenerate && tool.Owner != req.Caller.ID.String() {
 			return nil, errs.Permission("only the tool's owner can regenerate its frontend")
 		}
@@ -397,6 +417,9 @@ func (s *Service) frontendAction(ctx context.Context, req *api.ActionRequest) (*
 		_ = json.Unmarshal([]byte(tool.Frontend), &spec)
 		if spec.Mode != models.FrontendGenerative {
 			return nil, errs.InvalidArgument("only a generated frontend has actions")
+		}
+		if !spec.Cached() {
+			return nil, errs.InvalidArgument("this tool's frontend is generated for each request: pass the template frontend_get returned")
 		}
 		component, _, err := s.component(ctx, c, tool, spec, false)
 		if err != nil {

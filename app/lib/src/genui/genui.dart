@@ -5,7 +5,8 @@
 ///   runtime/   values resolved from the data model, actions, functions,
 ///              message parsing and the surface manager
 ///   catalog/   basic, Tradera, extended and market components
-///   widgets/   GenUiSurfaceView, GenUiView
+///   widgets/   GenUiSurfaceView, GenUiView, and the compact (phone tile)
+///              forms: GenUiCompactView, CompactSummaryView
 library;
 
 export 'catalog/catalog.dart';
@@ -16,5 +17,8 @@ export 'runtime/dynamic_values.dart'
 export 'runtime/functions.dart' show allTraderaFunctions;
 export 'runtime/host.dart';
 export 'runtime/messages.dart';
+export 'runtime/presentation.dart';
 export 'runtime/surfaces.dart';
+export 'widgets/compact_summary.dart';
+export 'widgets/compact_surface.dart';
 export 'widgets/surface_view.dart';

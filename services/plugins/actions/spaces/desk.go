@@ -62,6 +62,45 @@ const DeskAppFrontend = "app"
 // DeskDesigning is the status of a designed window whose design is under way.
 const DeskDesigning = "designing"
 
+// Compact widget shapes and sizes: on a phone the desk is a board of compact
+// widgets (a summary of each window's data; tapped, the full frontend opens in
+// a bottom sheet), arranged in Order on a grid of square cells.
+var (
+	DeskCompactShapes = []string{"card", "squircle", "pill", "circle", "leaf"}
+	DeskCompactSizes  = []string{"small", "medium", "large"} // 1×1, 2×1, 2×2 cells
+)
+
+// DeskCompact is how a window sits on the phone board. Empty fields take
+// the frontend's own hint, else a medium card.
+type DeskCompact struct {
+	Order int    `json:"order"`
+	Shape string `json:"shape,omitempty"`
+	Size  string `json:"size,omitempty"`
+}
+
+func oneOf(v string, allowed []string) bool {
+	for _, a := range allowed {
+		if v == a {
+			return true
+		}
+	}
+	return false
+}
+
+// checkCompact rejects shapes and sizes clients do not draw.
+func checkCompact(c *DeskCompact) error {
+	if c == nil {
+		return nil
+	}
+	if c.Shape != "" && !oneOf(c.Shape, DeskCompactShapes) {
+		return errs.InvalidArgument("compact shape is one of " + strings.Join(DeskCompactShapes, ", "))
+	}
+	if c.Size != "" && !oneOf(c.Size, DeskCompactSizes) {
+		return errs.InvalidArgument("compact size is one of " + strings.Join(DeskCompactSizes, ", "))
+	}
+	return nil
+}
+
 // DeskWindow is a tool's frontend open on the desk, optionally on one result
 // (the microtool called and its arguments).
 type DeskWindow struct {
@@ -84,8 +123,10 @@ type DeskWindow struct {
 	W         float64        `json:"w"`
 	H         float64        `json:"h"`
 	Z         int            `json:"z"`
-	OpenedBy  string         `json:"opened_by,omitempty"`
-	OpenedAt  string         `json:"opened_at,omitempty"`
+	// Compact: the window as a widget on the phone board.
+	Compact  *DeskCompact `json:"compact,omitempty"`
+	OpenedBy string       `json:"opened_by,omitempty"`
+	OpenedAt string       `json:"opened_at,omitempty"`
 }
 
 // DeskPin is a card window kept as a shortcut on the pinned desk.
@@ -106,7 +147,9 @@ type DeskPin struct {
 	Args      map[string]any `json:"args,omitempty"`
 	W         float64        `json:"w"`
 	H         float64        `json:"h"`
-	PinnedAt  string         `json:"pinned_at,omitempty"`
+	// Compact: the shape and size the widget had on the phone board.
+	Compact  *DeskCompact `json:"compact,omitempty"`
+	PinnedAt string       `json:"pinned_at,omitempty"`
 }
 
 // DeskViewport is the size of the desk as last shown.
@@ -126,7 +169,7 @@ type Desktop struct {
 // DeskOp is one change to a desk. Rect fields are optional: an open without
 // them is placed by the node where it overlaps least.
 type DeskOp struct {
-	Op        string         `json:"op"` // open, move, focus, close, close_tool, pin, unpin, viewport
+	Op        string         `json:"op"` // open, move, arrange, focus, close, close_tool, pin, unpin, viewport
 	ID        string         `json:"id,omitempty"`
 	Kind      string         `json:"kind,omitempty"`
 	Widget    map[string]any `json:"widget,omitempty"`
@@ -143,6 +186,39 @@ type DeskOp struct {
 	Y         *float64       `json:"y,omitempty"`
 	W         *float64       `json:"w,omitempty"`
 	H         *float64       `json:"h,omitempty"`
+	// Compact (open, arrange): the window on the phone board. On arrange,
+	// Order is the index it moves to among the board's widgets.
+	Compact *DeskCompact `json:"compact,omitempty"`
+}
+
+// compactOrder lists the windows in board order (unarranged ones after, in
+// the order they opened).
+func (d *Desktop) compactOrder() []*DeskWindow {
+	out := make([]*DeskWindow, len(d.Windows))
+	for i := range d.Windows {
+		out[i] = &d.Windows[i]
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		oi, oj := math.MaxInt32, math.MaxInt32
+		if out[i].Compact != nil {
+			oi = out[i].Compact.Order
+		}
+		if out[j].Compact != nil {
+			oj = out[j].Compact.Order
+		}
+		return oi < oj
+	})
+	return out
+}
+
+// renumber gives the board's widgets the orders 0…n-1 of [order].
+func renumber(order []*DeskWindow) {
+	for i, w := range order {
+		if w.Compact == nil {
+			w.Compact = &DeskCompact{}
+		}
+		w.Compact.Order = i
+	}
 }
 
 func (d *Desktop) viewport() DeskViewport {
@@ -249,6 +325,17 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 				if op.Kind == DeskComposed {
 					w.Widget = op.Widget
 				}
+				if op.Compact != nil && checkCompact(op.Compact) == nil {
+					if w.Compact == nil {
+						w.Compact = &DeskCompact{Order: len(d.Windows)}
+					}
+					if op.Compact.Shape != "" {
+						w.Compact.Shape = op.Compact.Shape
+					}
+					if op.Compact.Size != "" {
+						w.Compact.Size = op.Compact.Size
+					}
+				}
 				w.Z = d.topZ() + 1
 				move(w, op)
 				return w.ID, nil
@@ -277,7 +364,16 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 		w.X, w.Y = d.place(w.W, w.H)
 		move(&w, DeskOp{X: op.X, Y: op.Y})
 		w.Z = d.topZ() + 1
+		if err := checkCompact(op.Compact); err != nil {
+			return "", err
+		}
+		// New widgets join the end of the phone board.
+		w.Compact = &DeskCompact{Order: len(d.Windows)}
+		if op.Compact != nil {
+			w.Compact.Shape, w.Compact.Size = op.Compact.Shape, op.Compact.Size
+		}
 		d.Windows = append(d.Windows, w)
+		renumber(d.compactOrder())
 		return w.ID, nil
 	case "move":
 		w := d.window(op.ID)
@@ -285,6 +381,44 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 			return "", errs.NotFound("window " + op.ID)
 		}
 		move(w, op)
+		return w.ID, nil
+	case "arrange":
+		w := d.window(op.ID)
+		if w == nil {
+			return "", errs.NotFound("window " + op.ID)
+		}
+		if op.Compact == nil {
+			return "", errs.InvalidArgument("arrange needs compact: {order?, shape?, size?}")
+		}
+		if err := checkCompact(op.Compact); err != nil {
+			return "", err
+		}
+		order := d.compactOrder()
+		if w.Compact == nil {
+			w.Compact = &DeskCompact{Order: len(order)}
+		}
+		if op.Compact.Shape != "" {
+			w.Compact.Shape = op.Compact.Shape
+		}
+		if op.Compact.Size != "" {
+			w.Compact.Size = op.Compact.Size
+		}
+		// Move it to index Order among the others.
+		var rest []*DeskWindow
+		for _, o := range order {
+			if o != w {
+				rest = append(rest, o)
+			}
+		}
+		at := op.Compact.Order
+		if at < 0 {
+			at = 0
+		}
+		if at > len(rest) {
+			at = len(rest)
+		}
+		next := append(append(append([]*DeskWindow{}, rest[:at]...), w), rest[at:]...)
+		renumber(next)
 		return w.ID, nil
 	case "focus":
 		w := d.window(op.ID)
@@ -299,9 +433,11 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 		if len(d.Windows) == n {
 			return "", errs.NotFound("window " + op.ID)
 		}
+		renumber(d.compactOrder())
 		return op.ID, nil
 	case "close_tool":
 		d.Windows = filterWindows(d.Windows, func(w DeskWindow) bool { return w.Tool != op.Tool })
+		renumber(d.compactOrder())
 		return "", nil
 	case "pin":
 		w := d.window(op.ID)
@@ -322,6 +458,9 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 		}
 		p := DeskPin{ID: newDeskID(), Kind: w.Kind, Widget: w.Widget, Request: w.Request, Template: w.Template, Status: w.Status, Tool: w.Tool, Name: w.Name, Title: w.Title, Frontend: w.Frontend,
 			Microtool: w.Microtool, Args: w.Args, W: w.W, H: w.H, PinnedAt: now.UTC().Format(time.RFC3339)}
+		if w.Compact != nil && (w.Compact.Shape != "" || w.Compact.Size != "") {
+			p.Compact = &DeskCompact{Shape: w.Compact.Shape, Size: w.Compact.Size}
+		}
 		d.Pins = append(d.Pins, p)
 		return p.ID, nil
 	case "unpin":

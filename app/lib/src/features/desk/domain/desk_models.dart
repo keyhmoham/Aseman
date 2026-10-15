@@ -42,6 +42,42 @@ const String designedFrontend = 'auto';
 const String appFrontend = 'app';
 const String composedTool = 'widgets';
 
+/// How a window sits on the phone board (the desk as compact widgets).
+/// Empty [shape] / [size] take the frontend's hint, else a medium card.
+class DeskCompact {
+  const DeskCompact({this.order = 0, this.shape = '', this.size = ''});
+
+  factory DeskCompact.fromJson(Object? j) {
+    final m = _map(j);
+    return DeskCompact(
+      order: (m['order'] as num?)?.toInt() ?? 0,
+      shape: '${m['shape'] ?? ''}',
+      size: '${m['size'] ?? ''}',
+    );
+  }
+
+  static const shapes = ['card', 'squircle', 'pill', 'circle', 'leaf'];
+  static const sizes = ['small', 'medium', 'large'];
+
+  final int order;
+  final String shape;
+  final String size;
+
+  bool get isEmpty => shape.isEmpty && size.isEmpty;
+
+  DeskCompact copyWith({int? order, String? shape, String? size}) =>
+      DeskCompact(
+          order: order ?? this.order,
+          shape: shape ?? this.shape,
+          size: size ?? this.size);
+
+  Map<String, dynamic> toJson() => {
+        'order': order,
+        if (shape.isNotEmpty) 'shape': shape,
+        if (size.isNotEmpty) 'size': size,
+      };
+}
+
 class DeskWindow {
   const DeskWindow({
     required this.id,
@@ -58,6 +94,7 @@ class DeskWindow {
     this.args = const {},
     required this.rect,
     this.z = 0,
+    this.compact,
     this.openedBy = '',
   });
 
@@ -80,6 +117,8 @@ class DeskWindow {
             _num(j['w'], DeskGeometry.defaultW),
             _num(j['h'], DeskGeometry.defaultH)),
         z: (j['z'] as num?)?.toInt() ?? 0,
+        compact:
+            j['compact'] is Map ? DeskCompact.fromJson(j['compact']) : null,
         openedBy: '${j['opened_by'] ?? ''}',
       );
 
@@ -117,6 +156,9 @@ class DeskWindow {
   final Map<String, dynamic> args;
   final Rect rect;
   final int z;
+
+  /// Its place and look on the phone board (null: not arranged yet).
+  final DeskCompact? compact;
   final String openedBy;
 
   String get label => title.isNotEmpty ? title : name;
@@ -132,7 +174,8 @@ class DeskWindow {
       .map((e) => '${e.key}: ${e.value}')
       .join(' · ');
 
-  DeskWindow copyWith({Rect? rect, int? z}) => DeskWindow(
+  DeskWindow copyWith({Rect? rect, int? z, DeskCompact? compact}) =>
+      DeskWindow(
         id: id,
         tool: tool,
         kind: kind,
@@ -147,6 +190,7 @@ class DeskWindow {
         args: args,
         rect: rect ?? this.rect,
         z: z ?? this.z,
+        compact: compact ?? this.compact,
         openedBy: openedBy,
       );
 }
@@ -166,6 +210,7 @@ class DeskPin {
     this.microtool = '',
     this.args = const {},
     this.size = const Size(DeskGeometry.defaultW, DeskGeometry.defaultH),
+    this.compact,
   });
 
   factory DeskPin.fromJson(Map<String, dynamic> j) => DeskPin(
@@ -183,6 +228,8 @@ class DeskPin {
         args: _map(j['args']),
         size: Size(_num(j['w'], DeskGeometry.defaultW),
             _num(j['h'], DeskGeometry.defaultH)),
+        compact:
+            j['compact'] is Map ? DeskCompact.fromJson(j['compact']) : null,
       );
 
   final String id;
@@ -195,6 +242,9 @@ class DeskPin {
   final String microtool;
   final Map<String, dynamic> args;
   final Size size;
+
+  /// The look its widget had on the phone board.
+  final DeskCompact? compact;
 
   bool get isComposed => kind == composedKind;
 
@@ -264,6 +314,17 @@ class DeskState {
       counts[w.tool] = (counts[w.tool] ?? 0) + 1;
     }
     return [for (final t in order) (t, names[t] ?? '', counts[t]!)];
+  }
+
+  /// The windows in phone-board order (unarranged ones last, as opened).
+  List<DeskWindow> get boardOrder {
+    final indexed = [for (var i = 0; i < windows.length; i++) (i, windows[i])];
+    indexed.sort((a, b) {
+      final oa = a.$2.compact?.order ?? 1 << 30;
+      final ob = b.$2.compact?.order ?? 1 << 30;
+      return oa != ob ? oa.compareTo(ob) : a.$1.compareTo(b.$1);
+    });
+    return [for (final e in indexed) e.$2];
   }
 
   DeskState copyWith({List<DeskWindow>? windows, List<DeskPin>? pins}) =>

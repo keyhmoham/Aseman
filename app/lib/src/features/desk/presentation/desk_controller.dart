@@ -139,9 +139,11 @@ class DeskController extends ChangeNotifier {
       String microtool = '',
       Map<String, dynamic> args = const {},
       Rect? rect,
-      Size? size}) async {
+      Size? size,
+      DeskCompact? compact}) async {
     final ids = await _send([
       DeskOps.open(tool,
+          compact: compact,
           kind: kind,
           widget: widget,
           request: request,
@@ -164,12 +166,36 @@ class DeskController extends ChangeNotifier {
       title: pin.title,
       microtool: pin.microtool,
       args: pin.args,
-      size: pin.size);
+      size: pin.size,
+      compact: pin.compact);
 
   Future<void> move(String id, Rect rect) => _send([DeskOps.move(id, rect)],
       optimistic: _state.copyWith(windows: [
         for (final w in _state.windows) w.id == id ? w.copyWith(rect: rect) : w
       ]));
+
+  /// Moves window [id] on the phone board to index [order] (and gives it
+  /// [shape] / [size]), at once here and then on the node.
+  Future<void> arrange(String id, {int? order, String? shape, String? size}) {
+    final board = _state.boardOrder;
+    final w = board.where((x) => x.id == id).firstOrNull;
+    if (w == null) return Future.value();
+    final at = (order ?? board.indexOf(w)).clamp(0, board.length - 1);
+    final next = [...board]
+      ..remove(w)
+      ..insert(at, w);
+    final arranged = {
+      for (var i = 0; i < next.length; i++)
+        next[i].id: (next[i].compact ?? const DeskCompact()).copyWith(
+            order: i,
+            shape: next[i].id == id ? shape : null,
+            size: next[i].id == id ? size : null),
+    };
+    return _send([DeskOps.arrange(id, order: at, shape: shape, size: size)],
+        optimistic: _state.copyWith(windows: [
+          for (final x in _state.windows) x.copyWith(compact: arranged[x.id])
+        ]));
+  }
 
   /// Brings a window to the front.
   Future<void> raise(String id) async {

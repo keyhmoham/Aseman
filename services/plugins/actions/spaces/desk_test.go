@@ -224,3 +224,71 @@ func TestADesignThatCannotBeMadeSaysWhy(t *testing.T) {
 		t.Fatalf("status: %+v", w)
 	}
 }
+
+func TestThePhoneBoardKeepsItsArrangement(t *testing.T) {
+	var d Desktop
+	now := time.Now()
+	ids := make([]string, 3)
+	for i, tool := range []string{"a", "b", "c"} {
+		id, err := d.Apply(DeskOp{Op: "open", Tool: tool, Name: tool}, "me", now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[i] = id
+	}
+	order := func() string {
+		var out []string
+		for _, w := range d.compactOrder() {
+			out = append(out, w.Tool)
+		}
+		return strings.Join(out, "")
+	}
+	if got := order(); got != "abc" {
+		t.Fatalf("new widgets join the end: %s", got)
+	}
+	if _, err := d.Apply(DeskOp{Op: "arrange", ID: ids[2], Compact: &DeskCompact{Order: 0, Shape: "circle", Size: "small"}}, "me", now); err != nil {
+		t.Fatal(err)
+	}
+	if got := order(); got != "cab" {
+		t.Fatalf("arranged to the front: %s", got)
+	}
+	c := d.window(ids[2]).Compact
+	if c.Shape != "circle" || c.Size != "small" {
+		t.Fatalf("shape and size kept: %+v", c)
+	}
+	if _, err := d.Apply(DeskOp{Op: "arrange", ID: ids[0], Compact: &DeskCompact{Order: 9}}, "me", now); err != nil {
+		t.Fatal(err)
+	}
+	if got := order(); got != "cba" {
+		t.Fatalf("an order past the end moves it last: %s", got)
+	}
+	for _, bad := range []*DeskCompact{{Shape: "star"}, {Size: "huge"}} {
+		if _, err := d.Apply(DeskOp{Op: "arrange", ID: ids[0], Compact: bad}, "me", now); err == nil {
+			t.Errorf("accepted %+v", bad)
+		}
+	}
+	if _, err := d.Apply(DeskOp{Op: "close", ID: ids[2]}, "me", now); err != nil {
+		t.Fatal(err)
+	}
+	for i, w := range d.compactOrder() {
+		if w.Compact.Order != i {
+			t.Fatalf("orders stay 0…n-1 after a close: %s at %d", w.Tool, w.Compact.Order)
+		}
+	}
+	// A pin keeps the widget's look; opening it again restores it.
+	if _, err := d.Apply(DeskOp{Op: "pin", ID: ids[2]}, "me", now); err == nil {
+		t.Fatal("pinned a closed window")
+	}
+	if _, err := d.Apply(DeskOp{Op: "arrange", ID: ids[1], Compact: &DeskCompact{Order: 0, Shape: "leaf"}}, "me", now); err != nil {
+		t.Fatal(err)
+	}
+	pin, err := d.Apply(DeskOp{Op: "pin", ID: ids[1]}, "me", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range d.Pins {
+		if p.ID == pin && (p.Compact == nil || p.Compact.Shape != "leaf") {
+			t.Fatalf("the pin keeps the shape: %+v", p.Compact)
+		}
+	}
+}

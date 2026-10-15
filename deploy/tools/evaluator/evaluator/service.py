@@ -21,6 +21,7 @@ and stored.
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 import traceback
@@ -138,6 +139,7 @@ class Evaluator:
                  platform: Platform | None = None):
         self.node = node or Node()
         self.platform = platform or Platform()
+        self.fetch_media = platform_mod.fetch_media
         self.scopes = ScopeKeeper()
         self.store = Store(self.node, self.scopes.kv)
         self.crawl, self.market, self.analyse, self.clock = crawl, market, analyse, clock
@@ -309,18 +311,32 @@ class Evaluator:
                 rec["account"] = account = self.make_account(scope, platform_mod.username_for(rec["handle"]), rec.get("name") or "")
             except ToolError as e:
                 return {"at": now_iso(), "error": str(e)}
-        items = platform_mod.import_items(posts)
-        if not items:
-            return {"at": now_iso(), "created": 0, "existing": 0, "failed": 0}
-        try:
-            out = self.node.call(scope, "posts", "post_import", {"author": account.get("id"), "posts": items}, timeout=120)
-        except HostError as e:
-            return {"at": now_iso(), "error": f"publishing as @{account.get('handle')} failed: {e}"}
-        results = out.get("posts") or []
-        rec["platform_posts"] = platform_mod.remember(rec.get("platform_posts") or {}, items, results)
-        sync = {"at": now_iso(), "created": int(out.get("created") or 0), "existing": int(out.get("existing") or 0),
-                "failed": int(out.get("failed") or 0)}
-        errors = [r["error"] for r in results if r.get("error")]
+        known = rec.get("platform_posts") or {}
+        proxy = (self.store.config().get("proxy") or os.environ.get("BROWSER_PROXY") or "").strip()
+        fetch = lambda url, kind: self.fetch_media(url, kind, proxy)  # noqa: E731
+        sync = {"at": now_iso(), "created": 0, "existing": 0, "failed": 0, "media": 0}
+        errors: list[str] = []
+        # One post per call: a post carries its images and videos.
+        for post in platform_mod.newest(posts):
+            # A post published before is never sent again with its media: the
+            # node keeps it as it is.
+            item = platform_mod.import_item(post, None if str(post["id"]) in known else fetch)
+            try:
+                out = self.node.call(scope, "posts", "post_import", {"author": account.get("id"), "posts": [item]}, timeout=180)
+            except HostError as e:
+                sync["failed"] += 1
+                errors.append(f"publishing as @{account.get('handle')} failed: {e}")
+                continue
+            results = out.get("posts") or []
+            known = platform_mod.remember(known, [item], results)
+            for key in ("created", "existing", "failed"):
+                sync[key] += int(out.get(key) or 0)
+            for r in results:
+                if r.get("created"):
+                    sync["media"] += len(r.get("media") or [])
+                if r.get("error"):
+                    errors.append(r["error"])
+        rec["platform_posts"] = known
         if errors:
             sync["error"] = errors[0][:300]
         return sync

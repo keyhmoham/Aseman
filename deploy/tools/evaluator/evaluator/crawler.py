@@ -130,6 +130,152 @@ def _coins(post: dict) -> list[str]:
     return out
 
 
+# Where a post object keeps its media, its link preview, the post it quotes or
+# reposts, and its poll (CoinMarketCap's gravity API names vary by version).
+_MEDIA_KEYS = ("images", "imageUrls", "imageList", "pics", "pictures", "photos", "medias", "mediaList",
+               "media", "attachments", "videos", "video", "videoUrl", "videoList", "gifs", "gif")
+_URL_KEYS = ("url", "originalUrl", "originUrl", "src", "imageUrl", "imgUrl", "videoUrl", "playUrl", "fileUrl", "link")
+_LINK_KEYS = ("linkCard", "linkPreview", "card", "urlPreview", "linkInfo")
+_QUOTE_KEYS = ("repostOriginal", "originalPost", "originPost", "quotedPost", "quotePost", "repost",
+               "sharedPost", "referencedPost", "originalGravity", "forwardPost")
+_POLL_KEYS = ("poll", "vote", "voteInfo", "pollInfo")
+_VIDEO_EXT = (".mp4", ".mov", ".webm", ".m3u8", ".m4v")
+MAX_MEDIA = 9
+
+
+def _media_kind(url: str, hint: str = "") -> str:
+    low = (hint + " " + url.split("?")[0]).lower()
+    if "video" in low or low.endswith(_VIDEO_EXT):
+        return "video"
+    if "gif" in low:
+        return "gif"
+    return "image"
+
+
+def _media_in(value: Any, hint: str = "") -> list[dict]:
+    """Media {url, kind} in one media field: a URL, an object with one, or a list of either."""
+    out: list[dict] = []
+    if isinstance(value, str):
+        if value.startswith(("https://", "http://")):
+            out.append({"url": value, "kind": _media_kind(value, hint)})
+    elif isinstance(value, dict):
+        kind = str(value.get("type") or value.get("mediaType") or value.get("mime") or hint)
+        for k in _URL_KEYS:
+            url = value.get(k)
+            if isinstance(url, str) and url.startswith(("https://", "http://")):
+                out.append({"url": url, "kind": _media_kind(url, kind + " " + k)})
+                break
+    elif isinstance(value, list):
+        for v in value:
+            out.extend(_media_in(v, hint))
+    return out
+
+
+def _rich(node: dict) -> list:
+    rich = node.get("originalContent") or node.get("richContent")
+    if isinstance(rich, str):
+        try:
+            rich = json.loads(rich)
+        except Exception:
+            return []
+    return rich if isinstance(rich, list) else []
+
+
+def rich_text(node: dict, fallback: str) -> str:
+    """The post's text from its rich content, keeping what plain text loses:
+    links' URLs, mentions, hashtags and coins; else [fallback]."""
+    lines: list[str] = []
+    for line in _rich(node):
+        parts: list[str] = []
+        for tok in line if isinstance(line, list) else [line]:
+            if isinstance(tok, str):
+                parts.append(tok)
+                continue
+            if not isinstance(tok, dict):
+                continue
+            kind, content = str(tok.get("type") or ""), tok.get("content")
+            if isinstance(content, str):
+                text = content
+            elif isinstance(content, dict):
+                text = str(content.get("text") or content.get("name") or content.get("handle")
+                           or content.get("symbol") or content.get("url") or "")
+            else:
+                text = ""
+            url = tok.get("url") or tok.get("link") or (content.get("url") if isinstance(content, dict) else None)
+            if kind == "token" and isinstance(content, dict) and content.get("symbol"):
+                text = "$" + str(content["symbol"]).lstrip("$")
+            elif kind in ("mention", "user", "at") and text and not text.startswith("@"):
+                text = "@" + text
+            elif kind in ("hashtag", "topic", "tag") and text and not text.startswith("#"):
+                text = "#" + text
+            elif kind in ("link", "url") and isinstance(url, str) and url not in text:
+                text = f"{text} ({url})" if text else url
+            elif kind in ("image", "video", "gif"):
+                text = ""  # carried as media
+            parts.append(text)
+        lines.append("".join(parts))
+    text = "\n".join(lines).strip()
+    return text if len(text) >= len((fallback or "").strip()) * 0.8 else (fallback or "").strip()
+
+
+def post_media(node: dict) -> list[dict]:
+    """Every image, GIF and video of a post, in order, at most MAX_MEDIA."""
+    found: list[dict] = []
+    for k in _MEDIA_KEYS:
+        if k in node:
+            found.extend(_media_in(node[k], k))
+    for line in _rich(node):
+        for tok in line if isinstance(line, list) else []:
+            if isinstance(tok, dict) and str(tok.get("type") or "") in ("image", "video", "gif"):
+                found.extend(_media_in(tok.get("content") if tok.get("content") is not None else tok, str(tok["type"])))
+                found.extend(_media_in(tok.get("url"), str(tok["type"])))
+    out, seen = [], set()
+    for m in found:
+        if m["url"] not in seen:
+            seen.add(m["url"])
+            out.append(m)
+    return out[:MAX_MEDIA]
+
+
+def post_link(node: dict) -> dict | None:
+    for k in _LINK_KEYS:
+        card = node.get(k)
+        if isinstance(card, dict):
+            url = card.get("url") or card.get("link")
+            if isinstance(url, str) and url.startswith(("https://", "http://")):
+                return {"url": url, "title": str(card.get("title") or "").strip()[:200],
+                        "description": str(card.get("description") or card.get("desc") or "").strip()[:300]}
+    return None
+
+
+def post_quote(node: dict) -> dict | None:
+    """The post this one quotes or reposts: its author, text and media."""
+    for k in _QUOTE_KEYS:
+        q = node.get(k)
+        if isinstance(q, dict):
+            text = _first(q, _TEXT_KEYS)
+            if isinstance(text, str) and text.strip():
+                return {"author": _owner(q), "id": str(_first(q, _ID_KEYS) or ""),
+                        "text": rich_text(q, text)[:1500], "media": post_media(q)}
+    return None
+
+
+def post_poll(node: dict) -> list[str]:
+    for k in _POLL_KEYS:
+        poll = node.get(k)
+        opts = poll.get("options") or poll.get("items") or poll.get("choices") if isinstance(poll, dict) else None
+        if isinstance(opts, list):
+            out = []
+            for o in opts:
+                label = o if isinstance(o, str) else (o.get("text") or o.get("content") or o.get("name") or o.get("option")
+                                                      if isinstance(o, dict) else None)
+                if isinstance(label, str) and label.strip():
+                    out.append(label.strip())
+            if out:
+                return out[:10]
+    return []
+
+
 def _owner(node: dict) -> str:
     owner = node.get("owner")
     return str(owner.get("handle") or "").lower() if isinstance(owner, dict) else ""
@@ -150,12 +296,14 @@ def extract_posts(payloads: list[Any], handle: str = "") -> list[dict]:
             mine = not handle or not owner or owner == handle.lower()
             if isinstance(text, str) and len(text.strip()) >= 12 and when and mine:
                 pid = str(_first(node, _ID_KEYS) or hash((text[:80], when)))
-                images = [v for k, v in node.items() if k in ("images", "imageUrls", "pics") and isinstance(v, list)]
+                media = post_media(node)
                 posts.setdefault(pid, {
                     "id": pid, "text": text.strip()[:4000], "timestamp": when,
+                    "rich_text": rich_text(node, text)[:4000],
                     "symbols": symbols_in(text, _coins(node)),
-                    "images": [i if isinstance(i, str) else (i.get("url") if isinstance(i, dict) else None)
-                               for group in images for i in group][:6],
+                    "media": media,
+                    "images": [m["url"] for m in media if m["kind"] != "video"][:6],
+                    "link": post_link(node), "quote": post_quote(node), "poll": post_poll(node),
                     "likes": _first(node, ("likeCount", "likes", "reactionCount")),
                     "comments": _first(node, ("commentCount", "comments")) if not isinstance(node.get("comments"), list) else len(node["comments"]),
                     "reposts": node.get("repostCount"), "impressions": node.get("impressionCount"),

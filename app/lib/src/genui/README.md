@@ -56,10 +56,16 @@ the phone board, `features/desk/presentation/compact_desk.dart`) or
 
 - **A2UI surfaces** show, when compact, their component with id `compact`
   (`GenUiComponentView` renders it as a root, on the same data model), else
-  a `CompactSummary` derived from their components (`deriveCompactSpec`:
-  the first Quote / Stat / Gauge, further Stats as metrics, a chart's trend,
-  the heading). `createSurface`'s theme may hint the widget's look
-  (`compactShape`, `compactSize`).
+  a `CompactSummary` derived from their components (`deriveCompactSpec`):
+  a hero figure (Quote / Stat / Gauge / Progress / Trend, with its change,
+  progress ring or bar), a chart (sparkline, bars, candles or a donut), a
+  list (a Table's columns or a repeated template's fields: avatar, title,
+  subtitle, value, change, status), metrics, status chips, an image, the
+  heading and caption, and the data model for what the components leave
+  unsaid. It is laid out per size (small: ring / donut / figure; medium:
+  figure beside a chart or list; large: all of it) in the tool's colour.
+  `createSurface`'s theme may hint the widget's look (`compactShape`,
+  `compactSize`); a rich digest asks for a large widget.
 - **Static programs** read `tool.context().display` and publish their
   widget with `tool.compact(summary)` (or `{"view": "self"}` to show their
   own compact render); until they do, the widget is a live miniature.

@@ -51,6 +51,8 @@ class FrontendPresentation extends InheritedWidget {
     required this.display,
     this.shape = 'card',
     this.size = 'medium',
+    this.accent,
+    this.title = '',
     this.onHint,
     this.onExpand,
     required super.child,
@@ -61,6 +63,12 @@ class FrontendPresentation extends InheritedWidget {
   /// The tile's shape and size (compact display).
   final String shape;
   final String size;
+
+  /// The widget's accent (its tool's color).
+  final Color? accent;
+
+  /// What the widget's frame already names it (not repeated inside).
+  final String title;
 
   /// A frontend's preferred tile look.
   final ValueChanged<CompactHint>? onHint;
@@ -81,5 +89,8 @@ class FrontendPresentation extends InheritedWidget {
 
   @override
   bool updateShouldNotify(FrontendPresentation old) =>
-      old.display != display || old.shape != shape || old.size != size;
+      old.display != display ||
+      old.shape != shape ||
+      old.size != size ||
+      old.accent != accent;
 }

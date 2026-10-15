@@ -183,8 +183,9 @@ func (s *Service) Feed(ctx context.Context, caller identity.ID, spaceID identity
 		authors = append(authors, caller.String())
 		f.In = map[string][]any{"author_id": toAnyList(authors)}
 	default:
-		// Global feed: public posts not tied to any workspace.
-		f.Equal["space_id"] = zeroID
+		// Global feed: public posts not tied to any workspace, the featured
+		// ones (imported traders' latest posts) first.
+		return s.globalFeed(ctx, limit, offset)
 	}
 	var out []post.Post
 	if err := s.R.List(ctx, "posts", f, &out); err != nil {

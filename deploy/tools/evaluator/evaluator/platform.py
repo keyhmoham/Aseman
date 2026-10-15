@@ -6,12 +6,15 @@ admins space, for an administrator): the trader's CoinMarketCap handle, or a
 username an admin picks, and a random password the evaluator keeps (admins
 read it with `trader_credentials`).
 
-Every evaluation round the evaluator signs in as the trader through the node's
-public API, exactly as the app does — auth.login, then every request signed
-with the account's Ed25519 key (method, path, nonce, timestamp and the body's
-sha256) — and upserts the trader's latest posts, the ones the evaluation read:
-missing ones are published, changed ones are replaced, and one deleted on the
-platform is published again.
+Every evaluation round the evaluator publishes the trader's latest posts, the
+ones the evaluation read, through the tool gateway's posts.post_import (as the
+account it made, from the platform admins space): each CoinMarketCap post is
+published once, as a global post, and never edited or replaced afterwards;
+the node features each trader's 10 latest imported posts at the top of the
+global feed. To remove a trader's posts the evaluator signs in as them through
+the node's public API, exactly as the app does — auth.login, then every
+request signed with the account's Ed25519 key (method, path, nonce, timestamp
+and the body's sha256).
 """
 
 from __future__ import annotations
@@ -146,51 +149,35 @@ def post_tags(post: dict) -> list[str]:
     return [s.lower() for s in (post.get("symbols") or [])[:4]] + ["coinmarketcap"]
 
 
-def digest(body: str, tags: list[str]) -> str:
-    return hashlib.sha256((body + "\x00" + ",".join(tags)).encode()).hexdigest()[:16]
+SOURCE = "coinmarketcap"
 
 
-def sync_posts(platform: Platform, session: Session, posts: list[dict], published: dict[str, Any],
-               limit: int = POSTS_PER_ROUND) -> tuple[dict[str, Any], dict[str, int]]:
-    """Upserts the newest [limit] posts as the signed-in trader.
-
-    [published] maps a CoinMarketCap post id to {post_id, digest, at}: what an
-    earlier round published. Returns the updated map and counts.
-    """
-    published = dict(published or {})
-    counts = {"created": 0, "updated": 0, "unchanged": 0, "failed": 0}
+def import_items(posts: list[dict], limit: int = POSTS_PER_ROUND) -> list[dict]:
+    """The newest [limit] posts as posts.post_import items."""
     newest = sorted(posts, key=lambda p: p.get("timestamp") or "", reverse=True)[:limit]
-    # Publish oldest first, so the platform's feed keeps their order.
-    for post in reversed(newest):
+    items = []
+    for post in newest:
         cmc_id = str(post.get("id") or "")
         if not cmc_id or not (post.get("text") or "").strip():
             continue
-        body, tags = post_body(post), post_tags(post)
-        want = digest(body, tags)
-        prior = published.get(cmc_id) or {}
-        try:
-            if prior.get("post_id"):
-                exists = True
-                try:
-                    platform.call(session, "posts", "post_get", {"post": prior["post_id"]})
-                except PlatformError as e:
-                    if e.status != 404 and e.code != "NOT_FOUND":
-                        raise
-                    exists = False
-                if exists and prior.get("digest") == want:
-                    counts["unchanged"] += 1
-                    continue
-                if exists:
-                    platform.call(session, "posts", "post_delete", {"post": prior["post_id"]})
-            out = platform.call(session, "posts", "post_create", {"body": body, "tags": tags})
-            published[cmc_id] = {"post_id": out.get("post_id"), "digest": want, "at": post.get("timestamp")}
-            counts["updated" if prior.get("post_id") else "created"] += 1
-        except PlatformError:
-            counts["failed"] += 1
+        items.append({"source": SOURCE, "source_id": cmc_id, "body": post_body(post),
+                      "tags": post_tags(post), "at": post.get("timestamp") or ""})
+    return items
+
+
+def remember(published: dict[str, Any], items: list[dict], results: list[dict]) -> dict[str, Any]:
+    """[published] (a CoinMarketCap post id -> {post_id, at}: what the
+    evaluator published as the trader, to delete with them) with an import's
+    results added, keeping the newest REMEMBERED_POSTS."""
+    published = dict(published or {})
+    at = {i["source_id"]: i.get("at") for i in items}
+    for r in results or []:
+        if r.get("post_id") and r.get("source_id"):
+            published[r["source_id"]] = {"post_id": r["post_id"], "at": at.get(r["source_id"])}
     if len(published) > REMEMBERED_POSTS:
         keep = sorted(published.items(), key=lambda kv: kv[1].get("at") or "", reverse=True)[:REMEMBERED_POSTS]
         published = dict(keep)
-    return published, counts
+    return published
 
 
 def delete_posts(platform: Platform, session: Session, published: dict[str, Any]) -> int:

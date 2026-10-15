@@ -8,6 +8,7 @@ import (
 	"github.com/tradera/tradera/internal/plugins/api"
 	"github.com/tradera/tradera/internal/plugins/bridge"
 	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/tradera/tradera/pkg/errs"
 	"github.com/tradera/tradera/plugins/actions/auth/models/account"
 	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
 	"github.com/tradera/tradera/plugins/actions/support/helper"
@@ -115,4 +116,22 @@ func (s *Service) accountCreate(ctx context.Context, req *api.ActionRequest) (*a
 		}
 	}
 	return helper.JSON(map[string]any{"id": acc.ID.String(), "handle": acc.Handle, "status": acc.Status, "managed_by": tool})
+}
+
+// MayPublishFor reports whether the caller may publish as [account] without
+// signing in as it (posts.post_import): only into an account a tool made
+// (users.account_create), by a platform administrator or that tool, from the
+// platform admins space for an administrator.
+func (s *Service) MayPublishFor(ctx context.Context, req *api.ActionRequest, account identity.ID) error {
+	by := s.managedBy(ctx, account)
+	if by == "" {
+		return errs.Permission("posts are published for managed accounts only")
+	}
+	if helper.RequireNodeAdmin(ctx, s.R, req, s.K.Env()["admin_handle"]) == nil {
+		return nil
+	}
+	if tool := s.adminsSpaceTool(ctx, req); tool == "" || tool != by {
+		return errs.Permission("only an administrator, or the admins space tool that made the account, publishes for it")
+	}
+	return nil
 }

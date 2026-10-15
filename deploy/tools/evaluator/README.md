@@ -50,13 +50,16 @@ administrator; it is active and verified at once, never an administrator, and
 tagged as the evaluator's, so the evaluator can later delete it and no other.
 A taken username fails the add: add the trader again with another `username`.
 
-In **every evaluation round** the evaluator signs in as the trader through the
-node's public API (`auth.login`, then Ed25519-signed requests like the app's)
-and **upserts their 10 latest posts** — the ones that round reads: new ones
-are published, an edited one is replaced, one deleted on the platform is
-published again, unchanged ones are left alone. Each post keeps its coins as
-tags and ends with its CoinMarketCap date and link. The outcome is the
-report's `posts_sync`.
+In **every evaluation round** the evaluator **publishes their 10 latest
+posts** — the ones that round reads — as the trader's account, through the
+tool gateway's `posts.post_import` (allowed only from the platform admins
+space, and only as an account the tool made). Each CoinMarketCap post is
+published once, as a global post; a post already on the platform is never
+edited or replaced, even if it changed at the source. Each post keeps its
+coins as tags and ends with its CoinMarketCap date and link. The node
+features each trader's 10 latest imported posts **at the top of the global
+feed**, above every other post (newest at CoinMarketCap first). The outcome
+is the report's `posts_sync` (`created`, `existing`, `failed`).
 
 **Removing a trader** (`trader_remove`, or **Remove trader** in the app)
 deletes their scores, the posts the evaluator published as them and their

@@ -26,6 +26,8 @@ type composeInput struct {
 	Y    *float64 `json:"y"`
 	W    *float64 `json:"w"`
 	H    *float64 `json:"h"`
+	// Compact: the widget's look on the phone board.
+	Compact *DeskCompact `json:"compact"`
 }
 
 // maxComposedComponents bounds one composed widget.
@@ -129,7 +131,7 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 	_ = json.Unmarshal(body, &widget)
 	d, ids, err := s.UpdateDesk(ctx, spaceID, target, agentName, []DeskOp{{
 		Op: "open", Kind: DeskComposed, Title: title, Widget: widget,
-		X: in.X, Y: in.Y, W: in.W, H: in.H,
+		X: in.X, Y: in.Y, W: in.W, H: in.H, Compact: in.Compact,
 	}})
 	if err != nil {
 		return "", err

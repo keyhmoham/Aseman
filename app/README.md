@@ -53,7 +53,9 @@ managed (an Elpian VM, QuickJS or docker backend the node runs) or installed
 
 * **static** — an Elpian miniapp the app runs on the Elpian VM (bytecode) or
   QuickJS, with `ToolFrontendHost` as its host: `tool.call(microtool, args)`,
-  `tool.microtools()`, `tool.context()`;
+  `tool.microtools()`, `tool.context()` (with `display`: `full`, `compact`
+  or `sheet`), `tool.compact(summary)` (its phone widget) and
+  `tool.expand()`;
 * **generative** — A2UI the node generated from the deployer's skill (cached
   in its component registry) rendered with Flutter's genui by `GenUiView`
   (`lib/src/genui`: Tradera's catalog in the app's design language), its
@@ -65,6 +67,17 @@ pin and close (all animated), with a dock of the open tools pinned to its
 bottom and a pinned desk of shortcuts. Agents' composed widgets are desk
 windows too, their `ToolFrontend` components embedding tools' own
 frontends; nothing of a tool's interface goes into the chat.
+
+On phones (narrower than 600 px) the desk is a board of **compact
+widgets** instead (`CompactDesk`): each window shows the minimal information
+about its data — an A2UI surface's own `compact` component, or a summary
+derived from its components; a static program's `tool.compact` summary, or
+a live miniature — in one of five shapes (card, squircle, pill, circle,
+leaf) and three sizes. Long-press drags a widget to a new place; tapping
+opens the full frontend, phone-wide, in a bottom sheet. Every frontend reads
+how it is shown from `FrontendPresentation` (`lib/src/genui`), and the board
+arrangement is kept on the node with each window (`compact`, the desk's
+`arrange` op).
 
 ## Architecture
 

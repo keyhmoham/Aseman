@@ -9,7 +9,12 @@ import '../../../data/models/post.dart';
 import '../../../data/models/profile.dart';
 import '../../../data/models/space.dart';
 import '../../../elpian/core/media.dart' show ElpianMediaScope;
-import '../../../genui/genui.dart' show GenUiView;
+import '../../../genui/genui.dart'
+    show
+        CompactSummary,
+        CompactSummaryView,
+        FrontendPresentation,
+        GenUiView;
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
@@ -20,6 +25,7 @@ import '../../../shared/widgets/workspace_header.dart';
 import '../../admin/presentation/admin_screen.dart';
 import '../../desk/data/desk_api.dart';
 import '../../desk/domain/desk_models.dart';
+import '../../desk/presentation/compact_desk.dart';
 import '../../desk/presentation/designed_window.dart';
 import '../../desk/presentation/desk_controller.dart';
 import '../../desk/presentation/floating_desk.dart';
@@ -1678,20 +1684,92 @@ class _CenterDesk extends StatelessWidget {
   /// A widget an agent composed (ui_compose): A2UI over the space's tools'
   /// data, embedding tools' own frontends.
   Widget _composed(String id, Map<String, dynamic> widget) =>
-      SingleChildScrollView(
-        key: ValueKey('composed-$id'),
-        padding: const EdgeInsets.all(16),
-        child: GenUiView(
-          messages: ComposedSurfaces.of(widget),
-          toolFrontend: (context, botId, height, props) => SizedBox(
-              height: height,
-              child: _frontend(botId, ShownResult.fromProps(props))),
-        ),
-      );
+      Builder(
+          key: ValueKey('composed-$id'),
+          builder: (context) {
+            final view = GenUiView(
+              messages: ComposedSurfaces.of(widget),
+              toolFrontend: (context, botId, height, props) => SizedBox(
+                  height: height,
+                  child: _frontend(botId, ShownResult.fromProps(props))),
+            );
+            // A phone-board widget shows the compact form as it is.
+            if (FrontendPresentation.isCompact(context)) return view;
+            return SingleChildScrollView(
+                padding: const EdgeInsets.all(16), child: view);
+          });
+
+  /// A window's frontend, whatever its kind; the enclosing
+  /// [FrontendPresentation] says whether in full or as a compact widget.
+  Widget _windowContent(BuildContext context, DeskWindow w) => w.isComposed
+      ? _composed(w.id, w.widget)
+      : w.isApp
+          ? (FrontendPresentation.isCompact(context)
+              // The tool's app runs once opened, not in the widget.
+              ? CompactSummaryView(
+                  summary: CompactSummary(
+                      title: w.microtool.isEmpty ? w.name : w.microtool,
+                      caption: w.argsSummary,
+                      icon: 'apps'))
+              // The tool's own app shows the result.
+              : McpAppView(
+                  key: ValueKey('app-${w.id}'),
+                  api: ToolsApi.of(dependencies.service),
+                  botId: w.tool,
+                  spaceId: spaceId,
+                  roomId: roomId,
+                  microtool: w.microtool,
+                  args: w.args))
+          : w.isDesigned
+              // Designed for the request: kept with the window.
+              ? DesignedWindowContent(
+                  key: ValueKey('designed-${w.id}'),
+                  windowId: w.id,
+                  request: w.request,
+                  template: w.template,
+                  status: w.status,
+                  controller: controller,
+                  ready: (t) => _frontend(w.tool, w.shown, template: t))
+              : _frontend(w.tool, w.shown);
+
+  Widget _pinPreview(DeskPin p) => p.isComposed
+      ? _composed(p.id, p.widget)
+      : p.isApp
+          ? _AppPinPreview(name: p.name)
+          : p.isDesigned
+              ? DesignedWindowContent(
+                  windowId: p.id,
+                  request: p.request,
+                  template: p.template,
+                  status: p.status,
+                  ready: (t) => _frontend(p.tool, p.shown, template: t))
+              : _frontend(p.tool, p.shown);
+
+  Widget _emptyState(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(height: 150, child: _MachineFace(pointer: pointer)),
+          const SizedBox(height: 8),
+          Text(room == null ? 'My trading desk' : '$room desk',
+              style:
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: Text(
+                'Tool results open here as windows. Ask an agent, or open a tool from the library.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
+          ),
+        ]),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Material(
       type: MaterialType.transparency,
       child: Stack(children: [
@@ -1704,67 +1782,24 @@ class _CenterDesk extends StatelessWidget {
           // project files, stored files and the node, as this person.
           child: ElpianMediaScope(
             resolver: ToolMedia.forSpace(dependencies.service, spaceId).call,
-            child: FloatingDesk(
-              controller: controller,
-              topInset: topContentInset,
-              windowContent: (context, w) => w.isComposed
-                  ? _composed(w.id, w.widget)
-                  : w.isApp
-                      // The tool's own app shows the result.
-                      ? McpAppView(
-                          key: ValueKey('app-${w.id}'),
-                          api: ToolsApi.of(dependencies.service),
-                          botId: w.tool,
-                          spaceId: spaceId,
-                          roomId: roomId,
-                          microtool: w.microtool,
-                          args: w.args)
-                      : w.isDesigned
-                          // Designed for the request: kept with the window.
-                          ? DesignedWindowContent(
-                              key: ValueKey('designed-${w.id}'),
-                              windowId: w.id,
-                              request: w.request,
-                              template: w.template,
-                              status: w.status,
-                              controller: controller,
-                              ready: (t) =>
-                                  _frontend(w.tool, w.shown, template: t))
-                          : _frontend(w.tool, w.shown),
-              pinPreview: (p) => p.isComposed
-                  ? _composed(p.id, p.widget)
-                  : p.isApp
-                      ? _AppPinPreview(name: p.name)
-                      : p.isDesigned
-                          ? DesignedWindowContent(
-                              windowId: p.id,
-                              request: p.request,
-                              template: p.template,
-                              status: p.status,
-                              ready: (t) =>
-                                  _frontend(p.tool, p.shown, template: t))
-                          : _frontend(p.tool, p.shown),
-              emptyState: Center(
-                child: SingleChildScrollView(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    SizedBox(
-                        height: 150, child: _MachineFace(pointer: pointer)),
-                    const SizedBox(height: 8),
-                    Text(room == null ? 'My trading desk' : '$room desk',
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 6),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 360),
-                      child: Text(
-                          'Tool results open here as windows. Ask an agent, or open a tool from the library.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontSize: 13, color: scheme.onSurfaceVariant)),
+            // Phones: the windows as compact widgets on a board, each
+            // opened in a bottom sheet; wider screens: floating card windows.
+            child: LayoutBuilder(
+              builder: (context, box) => box.maxWidth < compactDeskWidth
+                  ? CompactDesk(
+                      controller: controller,
+                      topInset: topContentInset,
+                      windowContent: _windowContent,
+                      pinPreview: _pinPreview,
+                      emptyState: _emptyState(context),
+                    )
+                  : FloatingDesk(
+                      controller: controller,
+                      topInset: topContentInset,
+                      windowContent: _windowContent,
+                      pinPreview: _pinPreview,
+                      emptyState: _emptyState(context),
                     ),
-                  ]),
-                ),
-              ),
             ),
           ),
         ),

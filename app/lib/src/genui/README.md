@@ -45,3 +45,23 @@ a working `email` check, calls nested in list arguments (`and`'s
 the v1.0 `{name, context}` action shorthand, `.`-relative paths, and
 deleting an absent path as a no-op. `test/genui` runs the basic catalog's
 43 examples and the A2UI conformance cases against this stack.
+
+## Hybrid frontends (desktop windows, phone widgets)
+
+Every frontend — generative, designed, composed, static, a tool's app — is
+told how it is shown by the `FrontendPresentation` above it (`runtime/
+presentation.dart`): `full` (a desk card window), `compact` (a widget on
+the phone board, `features/desk/presentation/compact_desk.dart`) or
+`sheet` (the full frontend in the bottom sheet a widget opens).
+
+- **A2UI surfaces** show, when compact, their component with id `compact`
+  (`GenUiComponentView` renders it as a root, on the same data model), else
+  a `CompactSummary` derived from their components (`deriveCompactSpec`:
+  the first Quote / Stat / Gauge, further Stats as metrics, a chart's trend,
+  the heading). `createSurface`'s theme may hint the widget's look
+  (`compactShape`, `compactSize`).
+- **Static programs** read `tool.context().display` and publish their
+  widget with `tool.compact(summary)` (or `{"view": "self"}` to show their
+  own compact render); until they do, the widget is a live miniature.
+- The widget's look is the person's choice (kept on the node with the
+  window), else the frontend's hint, else a medium card.

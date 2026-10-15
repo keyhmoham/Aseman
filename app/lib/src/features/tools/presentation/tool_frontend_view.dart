@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../elpian/elpian.dart';
+import '../../../genui/genui.dart'
+    show
+        CompactHint,
+        CompactSummary,
+        CompactSummaryView,
+        FrontendDisplay,
+        FrontendPresentation;
 import '../../miniapps/presentation/miniapp_theme.dart';
 import '../data/tools_api.dart';
 import '../domain/tool_models.dart';
@@ -133,11 +140,32 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
         child: content);
   }
 
+  /// What a static program published for its compact widget.
+  Map<String, dynamic>? _summary;
+
+  void _onCompact(Map<String, dynamic> summary) {
+    if (!mounted) return;
+    setState(() => _summary = summary);
+    final hint = CompactHint.fromJson(summary);
+    if (!hint.isEmpty) {
+      FrontendPresentation.maybeOf(context)?.onHint?.call(hint);
+    }
+  }
+
   Widget _content(BuildContext context) {
+    final display = FrontendPresentation.displayOf(context);
+    final compact = display == FrontendDisplay.compact;
+    final scheme = Theme.of(context).colorScheme;
     if (_loading) {
+      if (compact) {
+        return const Center(
+            child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2.4)));
+      }
       // A generated interface takes a moment the first time (every time
       // when its tool does not cache it).
-      final scheme = Theme.of(context).colorScheme;
       return Center(
           child: Padding(
               padding: const EdgeInsets.all(24),
@@ -150,6 +178,10 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
               ])));
     }
     if (_error != null) {
+      if (compact) {
+        return Center(
+            child: Icon(Icons.error_outline_rounded, color: scheme.error));
+      }
       return _FrontendError(error: _error!, onRetry: _load);
     }
     final payload = _payload!;
@@ -159,48 +191,97 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
             botId: widget.botId,
             spaceId: widget.spaceId,
             roomId: widget.roomId,
-            userId: widget.userId);
+            userId: widget.userId,
+            display: display.name,
+            onCompact: _onCompact,
+            onExpand: FrontendPresentation.maybeOf(context)?.onExpand);
         final machineId = 'tool-${widget.botId}-${identityHashCode(this)}';
         final stylesheet = MiniappTheme.stylesheet(Theme.of(context));
-        if (payload.runtime == ToolRuntime.elpian && payload.bytecode != null) {
-          return ElpianVmWidget.fromBytecode(
-            machineId: machineId,
-            bytecode: payload.bytecode!,
-            engine: _engine,
-            stylesheet: stylesheet,
-            hostHandlers: host.handlers(),
-          );
-        }
-        return ElpianVmWidget.fromCode(
-          machineId: machineId,
-          code: payload.source,
-          runtime: ElpianRuntime.quickJs,
-          engine: _engine,
-          stylesheet: stylesheet,
-          hostHandlers: host.handlers(),
-        );
+        final Widget program =
+            payload.runtime == ToolRuntime.elpian && payload.bytecode != null
+                ? ElpianVmWidget.fromBytecode(
+                    machineId: machineId,
+                    bytecode: payload.bytecode!,
+                    engine: _engine,
+                    stylesheet: stylesheet,
+                    hostHandlers: host.handlers(),
+                  )
+                : ElpianVmWidget.fromCode(
+                    machineId: machineId,
+                    code: payload.source,
+                    runtime: ElpianRuntime.quickJs,
+                    engine: _engine,
+                    stylesheet: stylesheet,
+                    hostHandlers: host.handlers(),
+                  );
+        if (!compact) return program;
+        return _StaticCompact(summary: _summary, program: program);
       case FrontendMode.generative:
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: GenUiView(
-            messages: payload.messages,
-            onAction: _action,
-            toolFrontend: (context, botId, height, props) => SizedBox(
-              height: height,
-              child: ToolFrontendView(
-                  api: widget.api,
-                  botId: botId,
-                  spaceId: widget.spaceId,
-                  roomId: widget.roomId,
-                  userId: widget.userId,
-                  shown: ShownResult.fromProps(props)),
-            ),
+        final view = GenUiView(
+          messages: payload.messages,
+          onAction: _action,
+          toolFrontend: (context, botId, height, props) => SizedBox(
+            height: height,
+            child: ToolFrontendView(
+                api: widget.api,
+                botId: botId,
+                spaceId: widget.spaceId,
+                roomId: widget.roomId,
+                userId: widget.userId,
+                shown: ShownResult.fromProps(props)),
           ),
         );
+        if (compact) return view;
+        return SingleChildScrollView(
+            padding: const EdgeInsets.all(16), child: view);
       case FrontendMode.none:
+        if (compact) return const SizedBox.shrink();
         return const Center(child: Text('This tool has no frontend.'));
     }
   }
+}
+
+/// A static program as a compact widget: the summary it published, its own
+/// render when it draws a compact UI itself (`{"view": "self"}`), else a
+/// live miniature of its full render. The program keeps running under a
+/// summary, so the summary stays current.
+class _StaticCompact extends StatelessWidget {
+  const _StaticCompact({required this.summary, required this.program});
+
+  final Map<String, dynamic>? summary;
+  final Widget program;
+
+  @override
+  Widget build(BuildContext context) {
+    final self = summary?['view'] == 'self';
+    final shown = summary != null && !self;
+    return Stack(fit: StackFit.expand, children: [
+      Offstage(
+        offstage: shown,
+        child: self
+            ? program
+            : IgnorePointer(
+                child: ClipRect(
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                        width: DeskMiniature.width,
+                        height: DeskMiniature.height,
+                        child: program),
+                  ),
+                ),
+              ),
+      ),
+      if (shown) CompactSummaryView(summary: CompactSummary.fromJson(summary)),
+    ]);
+  }
+}
+
+/// The size a frontend is drawn at for its miniature (a desk window's).
+abstract final class DeskMiniature {
+  static const double width = 460;
+  static const double height = 560;
 }
 
 class _FrontendError extends StatelessWidget {

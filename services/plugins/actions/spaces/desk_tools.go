@@ -59,6 +59,7 @@ func (s *Service) showTool(ctx context.Context, spaceID, roomID identity.ID, age
 		Y         *float64       `json:"y"`
 		W         *float64       `json:"w"`
 		H         *float64       `json:"h"`
+		Compact   *DeskCompact   `json:"compact"`
 		Room      string         `json:"room"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
@@ -68,7 +69,7 @@ func (s *Service) showTool(ctx context.Context, spaceID, roomID identity.ID, age
 	if err != nil {
 		return "", err
 	}
-	ops := []DeskOp{{Op: "open", Tool: in.Tool, Title: in.Title, Request: in.Request, Microtool: in.Microtool, Args: in.Args, X: in.X, Y: in.Y, W: in.W, H: in.H}}
+	ops := []DeskOp{{Op: "open", Tool: in.Tool, Title: in.Title, Request: in.Request, Microtool: in.Microtool, Args: in.Args, X: in.X, Y: in.Y, W: in.W, H: in.H, Compact: in.Compact}}
 	if err := s.resolveDeskOpens(ctx, spaceID, ops); err != nil {
 		return "", err
 	}

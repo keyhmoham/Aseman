@@ -106,6 +106,8 @@ Data display
 Interaction
 - Every Button, input and tappable view does something that works: a Button's event is handled, an input is bound under /form and read by the action that submits it, a selection is shown by a detail block. No decorative or dead controls. One primary Button per block (the main action), the rest borderless; destructive actions labelled plainly ("Delete trader") and kept apart from the primary.
 - Forms: labelled fields, the submit Button after them at the end; optional fields say "(optional)".
+Phone widget
+- On phones every surface is first a compact widget on a board (tapped, the full surface opens in a bottom sheet). Add one component with id "compact", outside root's tree, for it: the one to three numbers or facts that matter most at a glance — a Stat, a Quote, a Gauge, a Trend with a Sparkline, or a Row of two Stats; no inputs, tables, long text or charts with axes. It shares the surface's data model, so bind it like the rest. Without it the app sums the surface up from its first Quote/Stat/Gauge and chart. createSurface's theme may hint its look: {"compactShape": card|squircle|pill|circle|leaf, "compactSize": small|medium|large}.
 Style
 - Calm and consistent: neutral surfaces, series colors for data, status colors only for state; no gradients, shadows or Elpian styling unless asked. Prefer the catalog components over the Elpian escape hatch.`
 

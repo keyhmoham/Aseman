@@ -48,7 +48,8 @@ abstract final class DeskOps {
           String microtool = '',
           Map<String, dynamic> args = const {},
           Rect? rect,
-          Size? size}) =>
+          Size? size,
+          DeskCompact? compact}) =>
       {
         'op': 'open',
         'tool': tool,
@@ -63,6 +64,21 @@ abstract final class DeskOps {
         if ((rect?.size ?? size) != null) ...{
           'w': (rect?.size ?? size)!.width,
           'h': (rect?.size ?? size)!.height,
+        },
+        if (compact != null && !compact.isEmpty) 'compact': compact.toJson(),
+      };
+
+  /// Places window [id] on the phone board: at index [order] among its
+  /// widgets, with [shape] and [size] when given.
+  static Map<String, dynamic> arrange(String id,
+          {required int order, String? shape, String? size}) =>
+      {
+        'op': 'arrange',
+        'id': id,
+        'compact': {
+          'order': order,
+          if (shape != null && shape.isNotEmpty) 'shape': shape,
+          if (size != null && size.isNotEmpty) 'size': size,
         },
       };
 

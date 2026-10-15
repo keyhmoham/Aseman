@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../genui/genui.dart' show FrontendPresentation;
 import 'desk_controller.dart';
 
 /// The content of a window whose interface the node designs for one request
@@ -86,6 +87,24 @@ class _DesignedWindowContentState extends State<DesignedWindowContent>
     if (widget.template.isNotEmpty) return widget.ready(widget.template);
     final failed = widget.status.startsWith('failed');
     final request = widget.request.trim();
+    if (FrontendPresentation.isCompact(context)) {
+      // A phone-board widget: the state at a glance.
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          failed
+              ? Icon(Icons.error_outline_rounded, color: scheme.error)
+              : FadeTransition(
+                  opacity: Tween(begin: .35, end: 1.0).animate(_pulse),
+                  child:
+                      Icon(Icons.auto_awesome_rounded, color: scheme.primary)),
+          const SizedBox(height: 6),
+          Text(failed ? 'Design failed' : 'Designing…',
+              textAlign: TextAlign.center,
+              style: text.labelMedium?.copyWith(
+                  color: failed ? scheme.error : scheme.onSurfaceVariant)),
+        ]),
+      );
+    }
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),

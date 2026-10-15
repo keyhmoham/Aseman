@@ -12,7 +12,9 @@ import 'package:genui/genui.dart';
 import '../../elpian/core/elpian_services.dart';
 import '../../elpian/core/media.dart';
 import '../runtime/host.dart';
+import '../runtime/presentation.dart';
 import '../runtime/surfaces.dart';
+import 'compact_surface.dart';
 
 /// A user action a surface fired: an A2UI client-to-server `action`.
 class GenUiAction {
@@ -280,6 +282,21 @@ class _GenUiViewState extends State<GenUiView> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    if (FrontendPresentation.isCompact(context)) {
+      // A phone-board widget: the first surface's compact form.
+      final ids = _surfaces.surfaceIds;
+      return GenUiHost(
+        toolFrontend: widget.toolFrontend,
+        elpianServices: widget.elpianServices,
+        child: ids.isEmpty
+            ? const SizedBox.shrink()
+            : GenUiCompactView(
+                key: ValueKey('compact:${ids.first}'),
+                surfaces: _surfaces,
+                surfaceId: ids.first,
+                onAction: _runAction),
+      );
+    }
     return GenUiHost(
       toolFrontend: widget.toolFrontend,
       elpianServices: widget.elpianServices,

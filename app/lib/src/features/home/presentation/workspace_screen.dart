@@ -9,6 +9,7 @@ import '../../../data/models/post.dart';
 import '../../../data/models/profile.dart';
 import '../../../data/models/space.dart';
 import '../../../elpian/core/media.dart' show ElpianMediaScope;
+import '../../../genui/genui.dart' show GenUiView;
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
@@ -29,7 +30,6 @@ import '../../search_feed/presentation/post_editor.dart';
 import '../../search_feed/presentation/rich_post_content.dart';
 import '../../tools/data/tools_api.dart';
 import '../../tools/domain/tool_models.dart';
-import '../../tools/presentation/a2ui_view.dart';
 import '../../tools/presentation/mcp_app_view.dart';
 import '../../tools/presentation/tool_frontend_view.dart';
 import '../../tools/presentation/tool_screen.dart';
@@ -1681,10 +1681,11 @@ class _CenterDesk extends StatelessWidget {
       SingleChildScrollView(
         key: ValueKey('composed-$id'),
         padding: const EdgeInsets.all(16),
-        child: A2UIView(
+        child: GenUiView(
           messages: ComposedSurfaces.of(widget),
-          toolFrontend: (context, botId, height, shown) =>
-              SizedBox(height: height, child: _frontend(botId, shown)),
+          toolFrontend: (context, botId, height, props) => SizedBox(
+              height: height,
+              child: _frontend(botId, ShownResult.fromProps(props))),
         ),
       );
 

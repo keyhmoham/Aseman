@@ -9,8 +9,8 @@ import (
 )
 
 // The components devices render: the A2UI v0.9 basic catalog plus Tradera's
-// (app/lib/src/features/tools/presentation/a2ui_catalog.dart, rendered by
-// the app's UI kit). Models are taught them with CatalogPrompt; what they
+// (app/lib/src/genui/catalog, rendered with Flutter's genui in the app's
+// design language). Models are taught them with CatalogPrompt; what they
 // write is checked with Check, so an invented component comes back as an
 // error the model can correct instead of a placeholder on screen.
 var basic = []string{
@@ -25,6 +25,13 @@ var tradera = []string{
 	"Progress", "Badge", "Rating", "Callout", "Avatar",
 	"Grid", "Wrap", "Stack", "Box", "Center", "Spacer", "AspectRatio",
 	"Scroll", "Section", "Expandable", "Switch", "Elpian", "ToolFrontend",
+	// Inputs, navigation, feedback and conditional UI.
+	"SegmentedControl", "Dropdown", "RangeSlider", "NumberStepper",
+	"SearchField", "Link", "IconButton", "Menu", "Steps", "Carousel",
+	"Accordion", "EmptyState", "Skeleton", "Loading", "Tooltip",
+	"AvatarGroup", "Markdown", "Show", "Countdown",
+	// Markets.
+	"Quote", "OrderBook", "TickerTape", "AllocationBar", "Trend",
 }
 
 var known = func() map[string]bool {
@@ -110,14 +117,19 @@ Layout
 - Box {child, padding?, margin?, width?, height?, maxWidth?, color?, gradient?: [colors], borderRadius?, borderColor?, elevation?, alignment?}
 - Card {child}   Center {child}   Spacer {size}   AspectRatio {child, ratio}   Divider {}
 - Section {title, subtitle?, icon?, trailing?, children}   Expandable {title, subtitle?, expanded?, children}
-- Tabs {tabs:[{title, child}]}   Modal {trigger, content}   Scroll {child|children, direction?, maxHeight?}
-- List {children: {componentId: templateId, path: "/array"}} repeats templateId per item; inside it paths are relative to the item ("name", not "/name")
+- Tabs {tabs:[{title, child, icon?}], selected?: {"path"}}   Modal {trigger, content, title?, variant?: dialog|sheet}   Scroll {child|children, direction?, maxHeight?}
+- Accordion {items: [{title, subtitle?, child}], multiple?}   Carousel {children, height?} swipeable pages
+- List {children: {componentId: templateId, path: "/array"}} repeats templateId per item; inside it paths are relative to the item ("name", not "/name"; "." is the item itself). Every container (Column, Row, Grid, Wrap, Carousel…) takes the same template form.
+- Show {when: boolean|{"path"}|call, child, fallback?} renders child only while the condition holds — switch views on the data model (e.g. when {"call": "equals", "args": {"a": {"path": "/view"}, "b": "orders"}})
 Content
 - Text {text, variant: h1|h2|h3|h4|h5|body|caption} (Markdown)   Image {url, fit?, variant?}   Icon {name}
 - Video {url}   AudioPlayer {url, description?}
   Media urls (Image, Video, AudioPlayer) may be: an https URL; a data: URI or inline <svg> markup; a project file path ("/workspace/out/chart.png", or relative "out/chart.png"); a stored file ("/v1/files/{id}/content" or the bare file id). Bind them like any value ({"path": "/image"}) when the result carries them.
 - Badge {text, status?: good|warning|serious|critical | color?, variant?: tonal|filled|outline, icon?}   Avatar {name, url?}
 - Callout {title?, text, severity: info|good|warning|critical}   CodeBlock {code, language?}   JsonView {value}
+- Markdown {text} long-form notes (headings, lists, tables)   Link {text, url? | action?}   Tooltip {message, child}   AvatarGroup {people: [{name, url?}], max?}
+- EmptyState {icon?, title, text?, child?} when a list or result is empty   Loading {text?}   Skeleton {variant?: lines|card|chart|table} placeholders while data loads
+- Steps {steps: [{title, description?, status?: done|current|todo|error}], current?, direction?} an order's lifecycle, a flow   Countdown {target: ISO time, label?, doneText?}
 Data
 - Stat {label, value, format?, delta?, deltaFormat?: "+percent:1", deltaLabel?: "vs last week", goodDirection?: up|down, trend?: [numbers], icon?} — a KPI tile; put several in a Grid
 - Chart {type: line|area|bar|scatter|bubble|candlestick|histogram|pie|donut|radar|heatmap|treemap, data: rows, x: field, series?: [{field, label?, color?}] (or y: field), title?, subtitle?, stacked?, horizontal?, smooth?, yFormat?, xFormat?, height?}
@@ -127,12 +139,21 @@ Data
 - KeyValue {items: [{label, value, format?, type?: trend|badge}]} or {data: object}   Timeline {data: rows of {title, description?, time, status?, icon?}}
 - Heatmap {data: rows of {x, y, value}} or {rows, columns, values: [[…]]}   Treemap {data, label: field, value: field, group?: field, colorBy?: signed field}
 - Graph {nodes: [{id, label?, group?}], edges: [{from, to, label?}], layout?: force|circle|tree, directed?}   TreeView {data: {label, children: [...]}}
+Markets
+- Quote {symbol, name?, price, change?: fraction, changeAbs?, currency?, trend?: [prices], logo?, caption?, size?: row|large, action?} a live price row (flashes on change); a watchlist is a List/Grid of Quotes over a bound list
+- OrderBook {bids: [{price, size}], asks: [{price, size}], levels?, priceFormat?, sizeFormat?, title?, action?} depth and spread   TickerTape {data: [{symbol, price, change}]}
+- AllocationBar {data, label: field, value: field, title?} shares of a whole as one bar   Trend {value, format?: "+percent:2", label?, goodDirection?} an inline signed change
 Inputs
 - Button {child: textId, action: {event: {name, context: {key: {"path": "/x"} or literal}}}, variant?: primary|borderless}
-- TextField {label, value: {"path": "/form/x"}}   CheckBox / Switch {label, value: {"path"}}   Slider {value, min, max}   ChoicePicker {label, options: [{label, value}], value}   DateTimeInput {value, enableDate?, enableTime?}
+- Button variant?: primary|default|borderless|tonal|destructive, icon?   IconButton {icon, tooltip, action, variant?: standard|filled|tonal|outlined}   Menu {items: [{label, icon?, action, destructive?}]} an overflow menu
+- TextField {label, value: {"path": "/form/x"}, variant?: shortText|longText|number|obscured, placeholder?, helper?}   CheckBox / Switch {label, value: {"path"}}   Slider {value, min, max, step?, format?}   ChoicePicker {label, options: [{label, value}], value}   DateTimeInput {value, enableDate?, enableTime?}
+- SegmentedControl {options: [{label, value, icon?}], value: {"path"}} periods, views, buy/sell   Dropdown {label, options, value: {"path"}}   RangeSlider {value: {"path"} → [low, high], min, max, step?, format?}   NumberStepper {value: {"path"}, min?, max?, step?} quantities   SearchField {value: {"path"}, placeholder?, action?}
+  Inputs with an "action" fire it after a change (or on submit); its context also gets {"value"}.
 Escape hatch
 - Elpian {node: {type, props: {style: {...CSS}}, children: [nodes or {"slot": componentId}]}} — any Flutter/HTML node of the Elpian engine (Container, Padding, Opacity, ClipRRect, GridView, Wrap, Tooltip, AnimatedContainer, Shimmer, div, span, table…) when no component fits.
 Data: a plain string is shown exactly as written. Show a value with {"path": "/x"}; mix text and values with {"call": "formatString", "args": {"value": "High ${/x}°"}, "returnType": "string"}. Never write {{...}} or ${...} in a plain string. Data props (data, values, value, delta, trend, nodes, items…) take a {"path"} binding to data, or literal values.
 Formats: number[:decimals], integer, compact (12.9K), percent[:decimals] (0.12 → 12%), currency[:USD[:decimals]], date, time, datetime; a leading + signs positives.
+Functions ({"call": name, "args": {...}}; args take bindings and calls too): formatString, formatNumber {value, decimals?}, formatCurrency {value, currency}, formatDate {value, format}, pluralize, format {value, format}, formatPercent {value, decimals?, signed?}, formatCompact, formatRelative {value} ("5 min ago", stays current), now {format?} (a ticking clock); add/multiply {values}, subtract/divide {a, b}, round {value, decimals?}, abs, clamp, percentChange {from, to}; sum/average/min/max {values, field?}, count {values}; equals/notEquals/greaterThan/lessThan {a, b}, isEmpty {value}, contains {value, item}, if {condition, then, else}, coalesce {values}; concat {values, separator?}, join {values, field?}, upper, lower, truncate {value, max}, get {value, path}; checks: required, regex, length, numeric, email, and/or {values}, not.
+Client-side actions — a Button's (or IconButton's, Menu item's) {"functionCall": {"call", "args"}} runs on the device, no round trip: setValue {path, value}, toggle {path}, increment {path, by?, min?, max?}, append {path, value}, removeAt {path, index}, copyToClipboard {text}, showToast {message}, openUrl {url}, closeModal. Use them with Show and bound inputs for tabs, filters, steppers and detail panels that need no backend.
 Taps: Chart, Heatmap, Treemap, Graph, Table, Timeline and TreeView take "selection": {"path": "/selected"} (the tapped row is written there — show its details elsewhere bound to /selected/…) and "action" (a Button-style action; its context paths resolve relative to the tapped row, e.g. {"symbol": {"path": "symbol"}}).
 Colors: series take blue, orange, aqua, yellow, magenta, green, violet, red (in that order) or #hex; status colors (good, warning, serious, critical) only for state, always with a label or icon.`

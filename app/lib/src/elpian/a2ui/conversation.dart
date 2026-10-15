@@ -1,20 +1,19 @@
-/// `A2UIConversation` — one conversation with one agent: the A2UI processor
-/// holding its surfaces, the transcript of prose, UI-local state, and the
-/// agent transport. Turns ([A2UIConversation.send],
+/// `A2UIConversation` — one conversation with one agent: genui surfaces
+/// ([GenUiSurfaces], over Tradera's catalog), the transcript of prose and
+/// the agent transport. Turns ([A2UIConversation.send],
 /// [A2UIConversation.sendAction]) run one at a time; each carries the
-/// conversation id, the `sendDataModel` surfaces' data models and the client's
-/// supported catalogs. Without an endpoint a conversation renders static A2UI
-/// messages ([A2UIConversation.ingest]) and actions are only reported to
-/// listeners.
+/// conversation id, the `sendDataModel` surfaces' data models and the
+/// client's supported catalogs. Without an endpoint a conversation renders
+/// static A2UI messages ([A2UIConversation.ingest]) and actions are only
+/// reported to listeners.
 library;
 
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'errors.dart';
-import 'lowering.dart';
-import 'processor.dart';
+import '../../genui/runtime/surfaces.dart';
+import '../../genui/widgets/surface_view.dart' show GenUiAction;
 import 'transport.dart';
 
 /// `conversation`, `text` ([role] `agent` / `user`), `status`, `error`,
@@ -28,7 +27,6 @@ class A2UIConversationEvent {
       this.state,
       this.tool,
       this.message,
-      this.error,
       this.stopReason,
       this.action});
 
@@ -39,9 +37,8 @@ class A2UIConversationEvent {
   final String? state;
   final String? tool;
   final String? message;
-  final A2UIError? error;
   final String? stopReason;
-  final A2UIClientAction? action;
+  final GenUiAction? action;
 }
 
 typedef A2UIConversationListener = void Function(A2UIConversationEvent event);
@@ -73,28 +70,19 @@ class A2UIConversation {
   A2UIConversation({
     this.endpoint,
     this.conversationId,
-    A2UIProcessor? processor,
+    GenUiSurfaces? surfaces,
     this.fetch = httpFetchStream,
-  }) : processor = processor ?? A2UIProcessor() {
-    this.processor.on((e) {
-      switch (e.type) {
-        case 'error':
-          _emit(A2UIConversationEvent('error',
-              message: e.error!.message, error: e.error));
-        case 'action':
-          _emit(A2UIConversationEvent('action', action: e.action));
-          if (endpoint != null) sendAction(e.action!.toJson());
-        case 'surfaceDeleted':
-          ui.clearSurface('${e.surfaceId}');
-          _emit(A2UIConversationEvent('changed'));
-        default:
-          _emit(A2UIConversationEvent('changed'));
-      }
+  }) : surfaces = surfaces ?? GenUiSurfaces() {
+    this.surfaces.addListener(_surfacesChanged);
+    _problems = this.surfaces.problems.listen((p) {
+      // Schema findings are logged; the surface renders anyway.
+      if (p.code == 'VALIDATION_FAILED') return;
+      _emit(A2UIConversationEvent('error', message: p.message));
     });
   }
 
-  final A2UIProcessor processor;
-  final A2UIUiState ui = A2UIUiState();
+  final GenUiSurfaces surfaces;
+  late final StreamSubscription<GenUiProblemReport> _problems;
   final List<A2UITranscriptEntry> transcript = [];
   AgentEndpoint? endpoint;
   String? conversationId;
@@ -106,6 +94,9 @@ class A2UIConversation {
 
   /// The `prompt` of an embedding widget was sent (once per conversation).
   bool prompted = false;
+
+  /// The unsent text of the chat row.
+  String draft = '';
 
   final List<A2UIConversationListener> _listeners = [];
   Future<void> _queue = Future.value();
@@ -128,25 +119,24 @@ class A2UIConversation {
     }
   }
 
-  /// Hooks the lowering uses for this conversation's surfaces.
-  LoweringHooks loweringHooks(void Function() invalidate) => LoweringHooks(
-        write: processor.setData,
-        action: (surfaceId, componentId, action, scope) => processor
-            .dispatchAction(surfaceId, componentId, action, scope: scope),
-        invalidate: invalidate,
-        error: (error) => _emit(A2UIConversationEvent('error',
-            message: error.message, error: error)),
-      );
+  void _surfacesChanged() => _emit(A2UIConversationEvent('changed'));
 
-  /// Render static A2UI messages (no agent).
-  List<A2UIError> ingest(Iterable<Object?> messages) =>
-      processor.processAll(messages);
+  /// A surface fired [action]: reported to listeners, and sent to the agent
+  /// when there is one.
+  void reportAction(GenUiAction action) {
+    _emit(A2UIConversationEvent('action', action: action));
+    if (endpoint != null) sendAction(action.toJson());
+  }
+
+  /// Render static A2UI messages (no agent); returns their problems.
+  List<GenUiProblemReport> ingest(Iterable<Object?> messages) =>
+      surfaces.ingest(messages);
 
   /// Static messages from a widget prop: re-applied from scratch when they change.
   void syncStatic(Iterable<Object?> messages, String key) {
     if (key == _staticKey) return;
     _staticKey = key;
-    processor.reset();
+    surfaces.reset();
     ingest(messages);
   }
 
@@ -162,19 +152,28 @@ class A2UIConversation {
       _turn({'action': Map<String, dynamic>.of(action)});
 
   /// The current data model of [surfaceId] (a copy), or null.
-  Object? dataModel(String surfaceId) => processor.dataModel(surfaceId);
+  Object? dataModel(String surfaceId) => surfaces.dataModel(surfaceId);
 
   /// A JSON summary.
   Map<String, dynamic> describe() => {
         'conversationId': conversationId,
         'busy': busy,
         'surfaces': [
-          for (final s in processor.surfaces)
+          for (final id in surfaces.surfaceIds)
             {
-              'surfaceId': s.id,
-              'catalogId': s.catalogId,
-              'components': s.components.length,
-              'ready': s.isReady,
+              'surfaceId': id,
+              'catalogId':
+                  surfaces.contextFor(id).definition.value?.catalogId,
+              'components':
+                  surfaces.contextFor(id).definition.value?.components.length ??
+                      0,
+              'ready': surfaces
+                      .contextFor(id)
+                      .definition
+                      .value
+                      ?.components
+                      .containsKey('root') ??
+                  false,
             }
         ],
         'transcript': [for (final t in transcript) t.toJson()],
@@ -210,10 +209,10 @@ class A2UIConversation {
       }
       final body = <String, dynamic>{
         ...payload,
-        'capabilities': {'supportedCatalogIds': processor.supportedCatalogIds},
+        'capabilities': {'supportedCatalogIds': surfaces.supportedCatalogIds},
       };
       if (conversationId != null) body['conversationId'] = conversationId;
-      final dataModel = processor.clientDataModel();
+      final dataModel = surfaces.clientDataModel();
       if (dataModel != null) body['dataModel'] = dataModel;
       busy = true;
       status = (state: 'working', tool: null);
@@ -244,7 +243,10 @@ class A2UIConversation {
   void handleLine(AgentStreamLine line) {
     switch (line.kind) {
       case 'a2ui':
-        processor.process(line.message);
+        final problem = surfaces.handle(line.message);
+        if (problem != null) {
+          _emit(A2UIConversationEvent('error', message: problem.message));
+        }
       case 'conversation':
         conversationId = line.conversationId;
         _emit(A2UIConversationEvent('conversation',
@@ -268,6 +270,10 @@ class A2UIConversation {
     _cancel?.call();
     _cancel = null;
     _listeners.clear();
+    _problems.cancel();
+    surfaces
+      ..removeListener(_surfacesChanged)
+      ..dispose();
   }
 }
 

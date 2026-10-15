@@ -7,7 +7,7 @@ implementation serves both frontend modes:
 | Mode | How a frontend uses the kit |
 |---|---|
 | **Static** (Elpian VM / QuickJS program) | Return kit nodes in the view tree: `{type: 'Chart', props: {...}, events: {select: 'onPick'}}`. Rendered by `kitEngine()` in `ToolFrontendView`. |
-| **Generative** (A2UI) and agent widgets (`ui_compose`) | Use the components of Tradera's catalog (`presentation/a2ui_catalog.dart`): `{"id": "c", "component": "Chart", "data": {"path": "/history"}, ...}`. Props take literals, `{"path"}` bindings or function calls at any depth. |
+| **Generative** (A2UI) and agent widgets (`ui_compose`) | Use the components of Tradera's genui catalog (`lib/src/genui/catalog`): `{"id": "c", "component": "Chart", "data": {"path": "/history"}, ...}`. Props take literals, `{"path"}` bindings or function calls at any depth. |
 
 The node (Go) knows the same component list (`services/pkg/a2ui`). It teaches it to models with `CatalogPrompt` and rejects components devices can't render. A test there checks that the two lists match.
 

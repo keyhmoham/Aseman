@@ -23,12 +23,10 @@ Changes made to the copy, so a refresh can repeat them:
 * the `wasm` runtime kind is removed;
 * asset and font paths point at the app's own (`assets/elpian/…`,
   families `serif` / `monospace`);
-* `a2ui/lowering.dart` lowers host components through
-  `LoweringOptions.customComponents`, each given an `A2UICustomContext`
-  (bindings, children, per-item actions, UI state): Tradera's catalog —
-  charts, tables, layout, `ToolFrontend` — lowers to its UI kit
-  (`features/tools/ui_kit`) that way. The palette has dark steps
-  (`LoweringOptions.dark`);
+* `a2ui/` keeps Elpian's agent transport, conversations, the `A2UISurface`
+  element and the agent host APIs, but renders with Flutter's genui and
+  Tradera's catalog (`lib/src/genui`) instead of Elpian's own A2UI
+  processor and lowering, which are removed;
 * `ElpianEngine.selfDispatchingTypes` is extensible, for host widgets that
   dispatch their own events;
 

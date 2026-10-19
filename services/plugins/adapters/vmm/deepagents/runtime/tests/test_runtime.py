@@ -419,3 +419,25 @@ async def test_admins_space_agents_read_the_platform_database(platform: Platform
     assert out.status == "done", out
     assert {"tool": "db_tables", "args": {}, "by": LEAD["account_id"]} in platform.tool_runs
     assert {"tool": "db_read", "args": {"model": "accounts", "limit": 5}, "by": LEAD["account_id"]} in platform.tool_runs
+
+
+def test_agents_build_interactive_pages_for_tools() -> None:
+    from tradera_agents.context import AgentDef
+    from tradera_agents.prompts import system_prompt
+    from tradera_agents.tools import presentation_hint
+
+    prompt = system_prompt(AgentDef(name="a", bot_id="b", account_id="c", vm_id="d"), "")
+    rule = prompt[prompt.index("## Interactive frontends for tools"):prompt.index("## The desk")]
+    for words in ("interact", "web page", "/opt/tradera/webkit/README.md", "proxy_create", "tool", "Tradera.call", "web_show"):
+        assert words in rule, words
+    # Showing a result is still frontend_show; operating a tool is a page.
+    hint = presentation_hint({"bot_id": "bot-wx", "frontend": "generative", "commands": [{"name": "forecast"}]}, "forecast")
+    assert "frontend_show(tool='bot-wx'" in hint and "proxy_create(tool='bot-wx'" in hint
+
+
+def test_web_show_survives_an_allow_list() -> None:
+    from langchain_core.tools import StructuredTool
+    from tradera_agents.tools import filter_allowed
+
+    tool = StructuredTool.from_function(func=lambda: "", name="web_show", description="web_show")
+    assert [t.name for t in filter_allowed([tool], ["file_send"])] == ["web_show"]

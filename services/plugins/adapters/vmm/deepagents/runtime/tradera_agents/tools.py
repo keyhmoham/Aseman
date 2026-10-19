@@ -50,6 +50,9 @@ PLATFORM_TOOLS = {
     # The room's desk: a tool's own generative frontend, filled with a result
     # the agent got, opens as a card window; agents arrange and close them.
     "frontend_show": "frontend_show",
+    # A web page served from the sandbox (an interactive frontend for a tool)
+    # as a card window on the desk.
+    "web_show": "web_show",
     "desk_state": "desk_state",
     "desk_arrange": "desk_arrange",
     "desk_close": "desk_close",
@@ -62,7 +65,8 @@ PLATFORM_TOOLS = {
 # Tools every agent keeps whatever its allowed_tools say: without them it can
 # neither talk nor report.
 CORE_TOOLS = {"send_message", "read_room", "list_team", "ask_user", "send_direct_message", "read_direct_messages",
-              "start_task", "check_tasks", "wait_tasks", "frontend_show", "desk_state", "desk_arrange", "desk_close"}
+              "start_task", "check_tasks", "wait_tasks", "frontend_show", "web_show", "desk_state", "desk_arrange",
+              "desk_close"}
 
 _SLUG = re.compile(r"[^a-z0-9_]+")
 # How long check_tasks waits for a first answer before reporting all still running.
@@ -388,12 +392,15 @@ def presentation_hint(spec: dict[str, Any], function: str | None = None) -> str:
     """How to show people what this tool returns (see prompts.COMMON)."""
     if spec.get("frontend") or spec.get("commands"):
         call = f"microtool={function!r}, args=<the same arguments>" if function else "microtool=<the function>, args=<its arguments>"
+        interactive = (f" To let people work with it interactively (an interactive view, dashboard or form), "
+                       f"build a web page with Tradera's web UI kit that calls its microtools and expose it with "
+                       f"proxy_create(tool={spec['bot_id']!r}, …).")
         if spec.get("frontend") == "generative":
             return (f"Show people its result as a card window on the desk, in its own generative frontend: "
-                    f"frontend_show(tool={spec['bot_id']!r}, {call}); do not restate the result as text.")
+                    f"frontend_show(tool={spec['bot_id']!r}, {call}); do not restate the result as text." + interactive)
         return (f"Show people its result as a card window on the desk, in an interface designed for their request: "
                 f"frontend_show(tool={spec['bot_id']!r}, {call}, request=<what they asked, in their words>); "
-                "do not restate the result as text.")
+                "do not restate the result as text." + interactive)
     return "It has no interface to show results in: present its result to people in Markdown."
 
 

@@ -1,7 +1,6 @@
 import 'dart:async';
-import 'dart:ui';
-
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../data/desk_api.dart';
 import '../domain/desk_models.dart';
@@ -158,6 +157,17 @@ class DeskController extends ChangeNotifier {
     return ids.isEmpty ? null : ids.first;
   }
 
+  /// Opens a web page of the space (a preview gateway path,
+  /// /v1/proxy/<id>/…) as a card window; [tool] is the tool it is a
+  /// frontend of, if any.
+  Future<String?> openPage(String page,
+          {String tool = '', String title = '', Size? size}) =>
+      open(tool,
+          kind: webKind,
+          args: {'page': page},
+          title: title,
+          size: size ?? const Size(720, 600));
+
   Future<String?> openPin(DeskPin pin) => open(pin.tool,
       kind: pin.kind,
       widget: pin.widget,
@@ -296,4 +306,18 @@ class DeskController extends ChangeNotifier {
     _viewportTimer?.cancel();
     super.dispose();
   }
+}
+
+/// The desk of the room on screen, for widgets around it (the chat opens
+/// pages agents share on it).
+class DeskScope extends InheritedWidget {
+  const DeskScope({super.key, required this.controller, required super.child});
+
+  final DeskController controller;
+
+  static DeskController? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<DeskScope>()?.controller;
+
+  @override
+  bool updateShouldNotify(DeskScope old) => old.controller != controller;
 }

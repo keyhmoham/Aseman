@@ -29,6 +29,7 @@ import '../../desk/presentation/compact_desk.dart';
 import '../../desk/presentation/designed_window.dart';
 import '../../desk/presentation/desk_controller.dart';
 import '../../desk/presentation/floating_desk.dart';
+import '../../desk/presentation/web_page_view.dart';
 import '../../miniapps/domain/sandbox_explorer_frontend.dart';
 import '../../miniapps/presentation/miniapp_sandbox_screen.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
@@ -424,7 +425,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final compact = MediaQuery.sizeOf(context).width < 820;
-    return MouseRegion(
+    // The desk is reachable from the chat (pages agents share open on it).
+    return DeskScope(
+        controller: deskController,
+        child: MouseRegion(
       onHover: (e) => setState(() => pointer = e.position),
       child: Scaffold(
           key: scaffoldKey,
@@ -578,7 +582,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               }))
             ])),
           ])),
-    );
+    ));
   }
 
   Widget _mobile() => Stack(children: [
@@ -1699,9 +1703,25 @@ class _CenterDesk extends StatelessWidget {
                 padding: const EdgeInsets.all(16), child: view);
           });
 
+  /// A web page window: the page itself, or, as a phone-board widget, a
+  /// summary that opens it.
+  Widget _page(BuildContext context, String id, String page, String title) =>
+      FrontendPresentation.isCompact(context)
+          ? CompactSummaryView(
+              summary: CompactSummary(
+                  title: title.isEmpty ? 'Web page' : title,
+                  caption: 'Tap to open',
+                  icon: 'language'))
+          : WebPageView(
+              key: ValueKey('web-$id-$page'),
+              service: dependencies.service,
+              page: page);
+
   /// A window's frontend, whatever its kind; the enclosing
   /// [FrontendPresentation] says whether in full or as a compact widget.
-  Widget _windowContent(BuildContext context, DeskWindow w) => w.isComposed
+  Widget _windowContent(BuildContext context, DeskWindow w) => w.isWeb
+      ? _page(context, w.id, w.page, w.label)
+      : w.isComposed
       ? _composed(w.id, w.widget)
       : w.isApp
           ? (FrontendPresentation.isCompact(context)
@@ -1732,7 +1752,9 @@ class _CenterDesk extends StatelessWidget {
                   ready: (t) => _frontend(w.tool, w.shown, template: t))
               : _frontend(w.tool, w.shown);
 
-  Widget _pinPreview(DeskPin p) => p.isComposed
+  Widget _pinPreview(DeskPin p) => p.isWeb
+      ? _WebPinPreview(title: p.label)
+      : p.isComposed
       ? _composed(p.id, p.widget)
       : p.isApp
           ? _AppPinPreview(name: p.name)
@@ -1810,6 +1832,27 @@ class _CenterDesk extends StatelessWidget {
 
 /// A pinned result shown with a tool's app: the app runs once the pin is
 /// opened, not in the preview.
+/// A pinned web page: it loads when opened, not in the preview.
+class _WebPinPreview extends StatelessWidget {
+  const _WebPinPreview({required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.language_rounded, color: scheme.primary, size: 32),
+        const SizedBox(height: 8),
+        Text(title.isEmpty ? 'Web page' : title,
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        Text('An interactive page of the space',
+            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+      ]),
+    );
+  }
+}
+
 class _AppPinPreview extends StatelessWidget {
   const _AppPinPreview({required this.name});
   final String name;

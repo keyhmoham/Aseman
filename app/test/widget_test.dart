@@ -565,7 +565,7 @@ void main() {
     expect(find.text('agent is working'), findsNothing);
   });
 
-  testWidgets('proxy messages render an open-in-webview button',
+  testWidgets('proxy messages render an open-on-the-desk button',
       (tester) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
@@ -594,7 +594,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Landing Page'), findsOneWidget);
-    expect(find.text('Open in webview'), findsOneWidget);
+    expect(find.text('Open on the desk'), findsOneWidget);
   });
 
   testWidgets('message designer sends a designed message to the room chat',

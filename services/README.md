@@ -338,6 +338,30 @@ frontends (`ToolFrontend` components), and `desk_state`, `desk_arrange`
 and `desk_close` let agents lay the desk out; each turn's note describes it
 (size, usable area, open windows).
 
+**Web pages on the desk.** A page an agent builds in the sandbox and exposes
+with `proxy_create` (or opens with `web_show`) is a desk window of kind `web`
+(`args: {"page": "/v1/proxy/<id>/…"}`), the frontend of the tool it names
+(`tool`) or of none (dock entry `pages`); `proxy_create` opens it itself.
+Agents are taught to answer a request to *interact* with a tool with such a
+page rather than a generated frontend. Under every preview's prefix the
+gateway answers two things itself (`plugins/adapters/network/gateway/proxy_page.go`),
+authorized like the preview (the person's session, membership of its space,
+same-origin writes):
+
+| Path | |
+|---|---|
+| `_tradera/kit/<file>` | Tradera's web UI kit (`pkg/webkit`): `tradera-ui.css`, `tradera-ui.js`, `gallery.html`, `README.md` (also public at `/v1/webkit/<file>`, and on the space's computer at `/opt/tradera/webkit`) |
+| `_tradera/api/context` | who views the page, in which space and room |
+| `_tradera/api/tools` · `microtools {tool}` | the space's tools and their microtools |
+| `_tradera/api/call {tool, microtool, args}` | calls a microtool as the person (`tools.invoke`) |
+| `_tradera/api/frontend` · `action` | a tool's own (generative) frontend and its actions |
+| `_tradera/api/show {tool, microtool, args}` | opens a tool's frontend on the desk, next to the page |
+| `_tradera/api/file/<id>` | a stored file the person may read |
+
+The kit is built from `pkg/webkit/src` with `node pkg/webkit/tools/build.mjs`;
+its tests check it covers every A2UI component and every Elpian widget the
+app renders.
+
 | Action | |
 |---|---|
 | `tools.tool_create` / `tool_update` / `tool_get` / `tool_delete` | the tool |

@@ -7,6 +7,7 @@ package spaces
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/errs"
@@ -35,6 +36,9 @@ func windowJSON(d Desktop, id string) map[string]any {
 			out := map[string]any{"id": w.ID, "title": w.Title, "frontend": w.Frontend, "x": w.X, "y": w.Y, "w": w.W, "h": w.H}
 			if w.Frontend == DeskAutoFrontend {
 				out["designed_for"], out["status"] = w.Request, w.Status
+			}
+			if w.Kind == DeskWeb {
+				out["page"], out["tool"] = w.Page(), w.Name
 			}
 			return out
 		}
@@ -181,4 +185,77 @@ func (s *Service) turnPayer(ctx context.Context) string {
 		}
 	}
 	return ""
+}
+
+// webShowInput is a web_show call (and the desk part of proxy_create's).
+type webShowInput struct {
+	// Page is a preview gateway path (what proxy_create returned), with the
+	// page's own path inside it; Proxy + Path name it by the preview's id.
+	Page    string       `json:"page"`
+	Proxy   string       `json:"proxy"`
+	Path    string       `json:"path"`
+	Tool    string       `json:"tool"`
+	Title   string       `json:"title"`
+	X       *float64     `json:"x"`
+	Y       *float64     `json:"y"`
+	W       *float64     `json:"w"`
+	H       *float64     `json:"h"`
+	Compact *DeskCompact `json:"compact"`
+	Room    string       `json:"room"`
+}
+
+func (in webShowInput) page() string {
+	page := strings.TrimSpace(in.Page)
+	if page == "" && in.Proxy != "" {
+		page = "/v1/proxy/" + strings.TrimSpace(in.Proxy) + "/"
+	}
+	if in.Path != "" {
+		page = strings.TrimRight(page, "/") + "/" + strings.TrimLeft(in.Path, "/")
+	}
+	// A page path the agent wrote with the node's origin in front.
+	if i := strings.Index(page, "/v1/proxy/"); i > 0 {
+		page = page[i:]
+	}
+	return page
+}
+
+// showPage opens a web page (a preview of the space) as a card window on a
+// room's desk, as the frontend of [in.Tool] when it names one.
+func (s *Service) showPage(ctx context.Context, spaceID, roomID identity.ID, agentName string, in webShowInput) (Desktop, string, error) {
+	target, err := deskRoom(roomID, in.Room)
+	if err != nil {
+		return Desktop{}, "", err
+	}
+	w, h := in.W, in.H
+	if w == nil && h == nil {
+		// A page needs more room than a result card.
+		dw, dh := 720.0, 600.0
+		w, h = &dw, &dh
+	}
+	ops := []DeskOp{{Op: "open", Kind: DeskWeb, Tool: in.Tool, Title: in.Title, Args: map[string]any{"page": in.page()},
+		X: in.X, Y: in.Y, W: w, H: h, Compact: in.Compact}}
+	if err := s.resolveDeskOpens(ctx, spaceID, ops); err != nil {
+		return Desktop{}, "", err
+	}
+	d, ids, err := s.UpdateDesk(ctx, spaceID, target, agentName, ops)
+	if err != nil {
+		return Desktop{}, "", err
+	}
+	return d, ids[0], nil
+}
+
+// webShowTool implements web_show: a web page served from the sandbox
+// (exposed with proxy_create) as a card window on the room's desk, like a
+// tool's frontend; with tool, it is that tool's frontend.
+func (s *Service) webShowTool(ctx context.Context, spaceID, roomID identity.ID, agentName, argsJSON string) (string, error) {
+	var in webShowInput
+	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
+		return "", errs.InvalidArgument("web_show arguments must be a JSON object")
+	}
+	d, id, err := s.showPage(ctx, spaceID, roomID, agentName, in)
+	if err != nil {
+		return "", err
+	}
+	out, _ := json.Marshal(map[string]any{"ok": true, "window": windowJSON(d, id), "desk": d.Summary()})
+	return string(out), nil
 }

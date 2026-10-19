@@ -4,6 +4,7 @@ import '../../../app_dependencies.dart';
 import '../../../shared/widgets/backend_action_ui.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
+import '../../tools/connect/mcp_connect_dialog.dart';
 import 'project_control_content.dart';
 
 class _ProjectCall {
@@ -161,6 +162,7 @@ class _ProjectControlScreenState extends State<ProjectControlScreen> {
         'MCP servers, OAuth and credentials for project tools',
         loads: [
           _ProjectCall('spaces', 'tools_list', {'space': widget.spaceId}),
+          _ProjectCall('tools', 'commands_list', {'space': widget.spaceId}),
           const _ProjectCall('tools', 'mcp_samples', {}),
         ],
         actions: [
@@ -298,6 +300,15 @@ class _ProjectControlScreenState extends State<ProjectControlScreen> {
                     results: results,
                     onAction: (namespace, action, body) =>
                         run(_ProjectCall(namespace, action, body)),
+                    onConnect: (botId, name, reconnect) async {
+                      final connected = await connectMcpTool(
+                          context, widget.dependencies.service,
+                          botId: botId,
+                          spaceId: widget.spaceId,
+                          name: name,
+                          reconnect: reconnect);
+                      if (connected && mounted) await load();
+                    },
                   )),
       ]),
     );

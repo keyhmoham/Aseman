@@ -402,6 +402,80 @@ class TraderaService implements BackendService {
         body: {'id': id, 'status': status});
   }
 
+  // ── MCP tool connections ──────────────────────────────────────────────────
+
+  /// Starts signing in to an MCP server (OAuth with PKCE). The node finds the
+  /// server's sign-in and registers itself where it can; the app only opens
+  /// the returned `authorization_url`. With [bot], the OAuth client a node
+  /// admin saved for that server is used, and its URL when [url] is empty.
+  /// `needs_client` means the provider wants a client someone creates.
+  Future<Map<String, dynamic>> mcpOAuthPrepare(
+      {String url = '',
+      String bot = '',
+      required String redirectUri,
+      String clientId = '',
+      String clientSecret = ''}) async {
+    final resp = await client.call('tools', 'oauth_prepare', body: {
+      if (url.isNotEmpty) 'url': url,
+      if (bot.isNotEmpty) 'bot': bot,
+      'redirect_uri': redirectUri,
+      if (clientId.isNotEmpty) 'client_id': clientId,
+      if (clientSecret.isNotEmpty) 'client_secret': clientSecret,
+    });
+    return (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+  }
+
+  /// Trades the code the provider sent back for tokens; the node keeps them
+  /// with the sign-in ([state]) so a connection made from it renews itself.
+  Future<Map<String, dynamic>> mcpOAuthExchange(
+      String state, String code) async {
+    final resp = await client
+        .call('tools', 'oauth_exchange', body: {'state': state, 'code': code});
+    return (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+  }
+
+  /// Stores the caller's own connection to a per-person tool in a project:
+  /// from a completed sign-in ([grant], its state) or a pasted [token].
+  Future<bool> setToolConnection(String botId, String spaceId,
+      {String token = '', String grant = ''}) async {
+    final resp = await client.call('tools', 'connection_set', body: {
+      'bot': botId,
+      'space': spaceId,
+      if (token.isNotEmpty) 'token': token,
+      if (grant.isNotEmpty) 'grant': grant,
+    });
+    return (resp.body as Map?)?['connected'] == true;
+  }
+
+  /// Whether a tool needs each person's own account ("user") and whether the
+  /// caller connected theirs in the project.
+  Future<({String auth, bool connected})> toolConnection(
+      String botId, String spaceId) async {
+    final resp = await client
+        .call('tools', 'commands_list', body: {'bot': botId, 'space': spaceId});
+    final m = (resp.body as Map?) ?? const {};
+    return (
+      auth: '${m['auth'] ?? ''}',
+      connected: m['connected'] != false,
+    );
+  }
+
+  /// Every tool's connection state in a project, by bot id.
+  Future<Map<String, ({String auth, bool connected})>> toolConnections(
+      String spaceId) async {
+    final resp =
+        await client.call('tools', 'commands_list', body: {'space': spaceId});
+    final list = (resp.body as Map?)?['tools'] as List? ?? const [];
+    return {
+      for (final t in list)
+        if (t is Map)
+          '${t['bot_id']}': (
+            auth: '${t['auth'] ?? ''}',
+            connected: t['connected'] != false,
+          ),
+    };
+  }
+
   // ── developer API console ─────────────────────────────────────────────────
 
   /// One action of the developer console (`developer.<action>`), signed in

@@ -14,11 +14,17 @@ class ProjectControlContent extends StatefulWidget {
     required this.spaceId,
     required this.results,
     required this.onAction,
+    this.onConnect,
   });
   final String area;
   final String spaceId;
   final Map<String, dynamic> results;
   final ProjectAction onAction;
+
+  /// Connects the caller's own account to a per-person tool (sign-in or
+  /// token), then reloads.
+  final Future<void> Function(String botId, String name, bool reconnect)?
+      onConnect;
   @override
   State<ProjectControlContent> createState() => _ProjectControlContentState();
 }
@@ -280,8 +286,12 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
     final widgets =
         _maps(_map(widget.results['spaces.widget_list'])['widgets']);
     final tools = _maps(_map(widget.results['spaces.tools_list'])['tools']);
-    final commands =
-        _maps(_map(widget.results['tools.commands_list'])['commands']);
+    // commands_list answers with each tool and the commands it offers here.
+    final listed = _map(widget.results['tools.commands_list']);
+    final commands = [
+      ..._maps(listed['commands']),
+      for (final t in _maps(listed['tools'])) ..._maps(t['commands']),
+    ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _cards(
           'Installed apps',
@@ -422,6 +432,12 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
 
   Widget _plugins() {
     final installed = _maps(_map(widget.results['spaces.tools_list'])['tools']);
+    // Whether each tool needs the caller's own account here, and has it.
+    final connection = {
+      for (final t
+          in _maps(_map(widget.results['tools.commands_list'])['tools']))
+        '${t['bot_id']}': t,
+    };
     final samples = _maps(_map(widget.results['tools.mcp_samples'])['samples']);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Align(
@@ -452,19 +468,32 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
                             spacing: 5,
                             children: [
                               AdminStatusPill('${p['status'] ?? 'ready'}'),
-                              IconButton(
-                                  tooltip: 'Connection',
-                                  onPressed: () => widget.onAction(
-                                          'tools', 'connection_set', {
-                                        'space': widget.spaceId,
-                                        'bot': p['id']
-                                      }),
-                                  icon: const Icon(Icons.link_rounded)),
-                              IconButton(
-                                  tooltip: 'OAuth',
-                                  onPressed: () => widget.onAction('tools',
-                                      'oauth_prepare', {'bot': p['id']}),
-                                  icon: const Icon(Icons.login_rounded))
+                              if (_map(connection['${p['id']}'])['auth'] ==
+                                  'user') ...[
+                                if (_map(connection['${p['id']}'])[
+                                        'connected'] ==
+                                    true) ...[
+                                  const AdminStatusPill('connected'),
+                                  TextButton(
+                                      onPressed: widget.onConnect == null
+                                          ? null
+                                          : () => widget.onConnect!(
+                                              '${p['id']}',
+                                              '${p['name'] ?? 'this app'}',
+                                              true),
+                                      child: const Text('Reconnect')),
+                                ] else
+                                  FilledButton.tonalIcon(
+                                      onPressed: widget.onConnect == null
+                                          ? null
+                                          : () => widget.onConnect!(
+                                              '${p['id']}',
+                                              '${p['name'] ?? 'this app'}',
+                                              false),
+                                      icon: const Icon(Icons.login_rounded,
+                                          size: 18),
+                                      label: const Text('Connect')),
+                              ],
                             ]))
                 ])),
       if (samples.isNotEmpty) ...[

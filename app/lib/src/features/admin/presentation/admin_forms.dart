@@ -127,6 +127,7 @@ String adminActionDone(String namespace, String action) =>
       'tools.mcp_register': 'Server added',
       'tools.mcp_update': 'Server saved',
       'tools.mcp_delete': 'Deleted',
+      'tools.mcp_oauth_set': 'Sign-in client saved',
       'market.publish': 'Listed in the market',
       'market.approve': 'Listing approved',
       'market.deny': 'Listing denied',

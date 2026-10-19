@@ -30,6 +30,7 @@ class AdminPageContent extends StatefulWidget {
     required this.onDirectAction,
     required this.onNavigate,
     this.onQuery,
+    this.oauthRedirectUri = '',
   });
 
   final String page;
@@ -47,6 +48,10 @@ class AdminPageContent extends StatefulWidget {
   /// Re-requests one call of the page with extra request fields, e.g. the
   /// period of the finance overview.
   final Future<void> Function(String call, Map<String, dynamic> body)? onQuery;
+
+  /// Where providers send people back after signing in to an MCP server: the
+  /// redirect an OAuth client for one has to be created with.
+  final String oauthRedirectUri;
 
   @override
   State<AdminPageContent> createState() => _AppPageContentState();
@@ -1223,6 +1228,11 @@ class _AppPageContentState extends State<AdminPageContent> {
                                   '_kind': '${b['kind'] ?? 'tool'}',
                                 }),
                           icon: const Icon(Icons.edit_outlined, size: 18)),
+                      if (server)
+                        IconButton(
+                            tooltip: 'Sign-in client',
+                            onPressed: () => _mcpClient(b, name),
+                            icon: const Icon(Icons.key_outlined, size: 18)),
                       IconButton(
                           tooltip: listed ? 'Unlist' : 'List',
                           onPressed: () => listed
@@ -1252,6 +1262,107 @@ class _AppPageContentState extends State<AdminPageContent> {
                 }),
             ]),
     );
+  }
+
+  /// The OAuth client people sign in to an MCP server with, for providers
+  /// that will not register Tradera by themselves. Its secret is never shown;
+  /// leaving it empty keeps the saved one.
+  Future<void> _mcpClient(Map<String, dynamic> server, String name) async {
+    dynamic saved;
+    try {
+      saved = await widget
+          .onDirectAction('tools', 'mcp_oauth_get', {'bot': server['id']});
+    } catch (_) {
+      return; // The console reports the error.
+    }
+    if (!mounted) return;
+    final s = _map(saved);
+    final fields = {
+      for (final k in const [
+        'client_id',
+        'client_secret',
+        'authorization_endpoint',
+        'token_endpoint',
+        'scopes',
+        'params'
+      ])
+        k: TextEditingController(
+            text: k == 'client_secret' ? '' : '${s[k] ?? ''}'),
+    };
+    const labels = {
+      'client_id': 'Client id',
+      'client_secret': 'Client secret',
+      'authorization_endpoint': 'Authorization endpoint (optional)',
+      'token_endpoint': 'Token endpoint (optional)',
+      'scopes': 'Scopes (optional)',
+      'params': 'Extra sign-in parameters (optional, name=value&…)',
+    };
+    final body = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.key_rounded),
+        title: Text('Sign-in client for $name'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                      'For a provider that will not register Tradera by itself: create an OAuth client there, then save it here. People sign in with it; its secret stays on the node.'),
+                  if (widget.oauthRedirectUri.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    AdminKeyValue('Redirect address', widget.oauthRedirectUri,
+                        mono: true),
+                  ],
+                  const SizedBox(height: 8),
+                  for (final e in fields.entries) ...[
+                    TextField(
+                        controller: e.value,
+                        obscureText: e.key == 'client_secret',
+                        decoration: InputDecoration(
+                            labelText: labels[e.key],
+                            hintText: e.key == 'client_secret' &&
+                                    s['has_secret'] == true
+                                ? 'Saved. Type a new one to replace it'
+                                : null,
+                            border: const OutlineInputBorder())),
+                    const SizedBox(height: 10),
+                  ],
+                ]),
+          ),
+        ),
+        actions: [
+          if ('${s['client_id'] ?? ''}'.isNotEmpty)
+            TextButton(
+                onPressed: () => Navigator.pop(
+                    context, {'bot': server['id'], 'client_id': ''}),
+                child: const Text('Remove client')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, {
+                    'bot': server['id'],
+                    for (final e in fields.entries)
+                      if (e.key != 'client_secret' ||
+                          e.value.text.trim().isNotEmpty)
+                        e.key: e.value.text.trim(),
+                  }),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    for (final c in fields.values) {
+      c.dispose();
+    }
+    if (body == null) return;
+    try {
+      await widget.onDirectAction('tools', 'mcp_oauth_set', body);
+    } catch (_) {
+      // The console reports the error.
+    }
   }
 
   Widget _talent() {

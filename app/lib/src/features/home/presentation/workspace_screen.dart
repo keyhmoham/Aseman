@@ -36,6 +36,7 @@ import '../../miniapps/presentation/miniapp_sandbox_screen.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import '../../search_feed/presentation/post_editor.dart';
 import '../../search_feed/presentation/rich_post_content.dart';
+import '../../tools/connect/mcp_connect_dialog.dart';
 import '../../tools/data/tools_api.dart';
 import '../../tools/domain/tool_models.dart';
 import '../../tools/presentation/mcp_app_view.dart';
@@ -141,6 +142,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     try {
       await widget.dependencies.service.addBotToSpace(sp.id, bot.id);
       await _loadSpaceBots();
+      // A tool each person connects with their own account asks for it now,
+      // as it is added, rather than failing at its first use.
+      if (bot.kind == 'tool' && mounted) {
+        await connectMcpToolIfNeeded(context, widget.dependencies.service,
+            botId: bot.id, spaceId: sp.id, name: bot.name);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -3118,6 +3125,10 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
           await deps.service.addBotToSpace(widget.spaceId, b.id);
           if (mounted) setState(() => _inSpace = true);
           _snack('Added ${b.name} to this workspace');
+          if (b.kind == 'tool' && mounted) {
+            await connectMcpToolIfNeeded(context, deps.service,
+                botId: b.id, spaceId: widget.spaceId, name: b.name);
+          }
         } else if (b.listing.isNotEmpty) {
           await deps.service
               .installListing(b.listing['listing_id'] as String? ?? '');

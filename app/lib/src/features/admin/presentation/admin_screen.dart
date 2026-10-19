@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_shape.dart';
+import '../../tools/connect/mcp_sign_in.dart';
 import 'admin_forms.dart';
 import 'admin_page_content.dart';
 import 'llm_providers_tab.dart';
@@ -125,6 +126,7 @@ class _AppScreenState extends State<AdminScreen> {
             _Call('tools', 'mcp_register'),
             _Call('tools', 'mcp_update'),
             _Call('tools', 'mcp_delete'),
+            _Call('tools', 'mcp_oauth_get'),
             _Call('tools', 'mcp_oauth_set'),
             _Call('market', 'publish'),
             _Call('market', 'unpublish'),
@@ -480,6 +482,7 @@ class _AppScreenState extends State<AdminScreen> {
         'partner_key_create',
         'partner_key_revoke',
         'admin_terminate_sandbox',
+        'mcp_oauth_set',
       };
       if (mutations.contains(action)) {
         _toast(adminActionDone(namespace, action));
@@ -616,6 +619,8 @@ class _AppScreenState extends State<AdminScreen> {
                         onDirectAction: runDirectAction,
                         onNavigate: navigateToLabel,
                         onQuery: setQuery,
+                        oauthRedirectUri:
+                            McpSignIn(widget.dependencies.service).redirectUri,
                       ),
               ),
             ),

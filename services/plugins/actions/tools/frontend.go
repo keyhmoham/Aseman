@@ -24,7 +24,7 @@ import (
 
 // A tool's frontend is what people use it through.
 //
-// A static frontend is an Elpian miniapp: a program the device runs on the
+// A static frontend is an Elpian app: a program the device runs on the
 // Elpian VM (bytecode) or QuickJS (source), calling the tool's microtools
 // through tools.invoke.
 //

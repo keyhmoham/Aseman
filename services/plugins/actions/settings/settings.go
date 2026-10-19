@@ -3,7 +3,7 @@
 //   - categories: the marketplace categories offered when publishing;
 //   - universal_system_prompt: instructions prepended to every agent turn
 //     (read by spaces through Instructions);
-//   - pricing: what execution costs — the sandbox, tools and miniapps, and
+//   - pricing: what execution costs — the sandbox, apps, and
 //     agents' time (read by bots through Pricing);
 //   - machine: the size of a project's computer — sold size, idle reserve and
 //     ceiling (read by spaces and the Modal adapter through Machine);

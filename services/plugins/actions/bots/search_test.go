@@ -41,13 +41,13 @@ func TestSearchBotsPlatformWide(t *testing.T) {
 		t.Fatalf("agent search = %v", agents)
 	}
 
-	// comma-separated kinds (miniapp,tool) → the miniapp + tool bots.
-	combos, err := s.SearchBots(ctx, "", "miniapp,tool", 50, 0)
+	// comma-separated kinds (agent,tool) → the agent and both apps.
+	combos, err := s.SearchBots(ctx, "", "agent,tool", 50, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(combos) != 2 {
-		t.Fatalf("miniapp,tool search = %v", combos)
+	if len(combos) != 3 {
+		t.Fatalf("agent,tool search = %v", combos)
 	}
 
 	// name substring filter + pagination.

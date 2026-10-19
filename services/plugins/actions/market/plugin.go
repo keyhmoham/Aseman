@@ -16,6 +16,6 @@ func NewPlugin() api.Plugin {
 		r := repo.New(d.Kernel)
 		log := d.Logger
 		s := NewService(d.Kernel, r, botLoaderBridge{K: d.Kernel}, spaceInstallerBridge{K: d.Kernel}, log)
-		return module.Instance{Service: s, Actions: BuildActions(s), Models: append(schema.Models(), models.Models()...)}, nil
+		return module.Instance{Service: s, Actions: BuildActions(s), Bootstrap: s.Bootstrap, Models: append(schema.Models(), models.Models()...)}, nil
 	})
 }

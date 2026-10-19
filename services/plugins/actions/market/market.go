@@ -1,5 +1,5 @@
 // Package market implements the market namespace: publishing, discovering and
-// installing agents and miniapps. A listing wraps a bot VM; installing adds the
+// installing agents and apps. A listing wraps a bot VM; installing adds the
 // underlying bot to a workspace so its members can use it.
 package market
 
@@ -38,6 +38,22 @@ type Service struct {
 	L *logger.Logger
 }
 
+// Bootstrap turns listings stored under the retired "miniapp" type into
+// tool listings: an app is a tool, whatever it was published as.
+func (s *Service) Bootstrap(ctx context.Context) error {
+	var old []market.Listing
+	if err := s.R.List(ctx, "market", database.Filter{Equal: map[string]any{"type": "miniapp"}}, &old); err != nil {
+		return nil
+	}
+	for i := range old {
+		old[i].Type = market.ItemTool
+		if err := s.R.Update(ctx, "market", old[i].ID, &old[i]); err != nil {
+			s.L.Warn("could not migrate an app listing", "listing", old[i].ID.String(), "error", err)
+		}
+	}
+	return nil
+}
+
 // NewService builds the market service.
 func NewService(k api.Kernel, r *repo.Repo, bots BotLoader, spaces SpaceInstaller, log *logger.Logger) *Service {
 	return &Service{K: k, R: r, B: bots, S: spaces, L: log.Named("market")}
@@ -61,17 +77,10 @@ func (s *Service) Publish(ctx context.Context, publisher identity.ID, botID iden
 		// Agents may run on any VM, but default to langchain.
 	case market.ItemTool:
 		if rec.Kind != bot.KindTool {
-			return nil, errs.InvalidArgument("tool listings require a tool bot")
-		}
-	case market.ItemMiniapp:
-		if rec.VMType != bot.VMTypeWASM {
-			return nil, errs.InvalidArgument("miniapps must run on the wasm VM")
-		}
-		if rec.Frontend == "" && rec.FrontendRef == "" {
-			return nil, errs.InvalidArgument("miniapps require an elpian frontend bundle")
+			return nil, errs.InvalidArgument("app listings require an app")
 		}
 	default:
-		return nil, errs.InvalidArgument("type must be agent, tool or miniapp")
+		return nil, errs.InvalidArgument("type must be agent or tool")
 	}
 	if name == "" {
 		name = rec.Name

@@ -56,7 +56,7 @@ func (s *Service) Widget(ctx context.Context, botID identity.ID) string {
 type botWidgetSetAction struct{ s *Service }
 
 func (a *botWidgetSetAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "bots", Name: "widget_set", Summary: "Set the desk-widget DSL a miniapp shows on room desks"}
+	return api.ActionMeta{Namespace: "bots", Name: "widget_set", Summary: "Set the desk-widget DSL an app shows on room desks"}
 }
 func (a *botWidgetSetAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireAuthenticated(req); err != nil {
@@ -82,7 +82,7 @@ func (a *botWidgetSetAction) Handle(ctx context.Context, req *api.ActionRequest)
 type botWidgetGetAction struct{ s *Service }
 
 func (a *botWidgetGetAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "bots", Name: "widget_get", Summary: "Get the stored desk-widget DSL of a miniapp"}
+	return api.ActionMeta{Namespace: "bots", Name: "widget_get", Summary: "Get the stored desk-widget DSL of an app"}
 }
 func (a *botWidgetGetAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireAuthenticated(req); err != nil {

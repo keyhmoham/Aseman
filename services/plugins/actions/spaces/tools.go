@@ -61,7 +61,7 @@ func toolDetail(toolName string) string {
 	}
 }
 
-// SpaceTools lists the tools (miniapps/tools and the shared sandbox) installed
+// SpaceTools lists the apps (tools and the shared sandbox) installed
 // in a space, with a human description for each. This is what a langchain agent
 // sees when it wakes up in a space: every tool becomes a callable function that
 // routes back through spaces.ask.
@@ -95,7 +95,7 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 		if err != nil {
 			continue
 		}
-		if rec.Kind != bot.KindMiniapp && rec.Kind != bot.KindTool {
+		if rec.Kind != bot.KindTool {
 			continue
 		}
 		if toolBots[rec.ID.String()] {
@@ -224,14 +224,7 @@ func (s *Service) toolDescription(ctx context.Context, rec *bot.Bot) string {
 			}
 		}
 	}
-	switch rec.Kind {
-	case bot.KindMiniapp:
-		return "Miniapp " + rec.Name + ": run its backend through this tool and return the result."
-	case bot.KindTool:
-		return "Tool " + rec.Name + ": performs an operation and returns its output."
-	default:
-		return "Tool " + rec.Name
-	}
+	return "App " + rec.Name + ": performs an operation and returns its output."
 }
 
 // ToolDispatch executes a tool call made by an agent in a space. The sandbox

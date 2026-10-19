@@ -12,7 +12,7 @@
 //     (spaces.message_send) and direct messages (users.dm_send); the lead hands
 //     tasks to the space's agents by messaging them in the room and reads their
 //     answers (reply_to) from it;
-//   - tools — the shared space sandbox (shell and files), tool and miniapp
+//   - tools — the shared space sandbox (shell and files), app
 //     bots, and platform tools — are called through spaces.ask;
 //   - work logs and live status go through spaces.agent_log;
 //   - model calls go through the node's metered LLM proxy, so provider keys

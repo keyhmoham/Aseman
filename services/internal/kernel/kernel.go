@@ -528,7 +528,7 @@ func (k *Kernel) VMM() vmm.VMM {
 
 // VMMFor returns a started VMM adapter that supports the given VM type. This
 // lets different bot kinds run side by side (langchain agents, docker sandboxes
-// and wasm miniapps) even though only one adapter is the category "active".
+// and wasm apps) even though only one adapter is the category "active".
 func (k *Kernel) VMMFor(t vmm.Type) vmm.VMM {
 	for _, e := range k.reg.List() {
 		if e.State != api.StateStarted {

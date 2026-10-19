@@ -32,7 +32,7 @@ var allowedActions = map[string]bool{
 	// direct messages.
 	"spaces.message_send": true, "spaces.message_list": true, "spaces.message_search": true,
 	"users.dm_send": true, "users.dm_list": true,
-	// Working: the shared sandbox, tool and miniapp bots and platform tools.
+	// Working: the shared sandbox, app bots and platform tools.
 	"spaces.ask": true, "spaces.tools_list": true,
 	// The project's files, read without starting its computer.
 	"spaces.sandbox_files": true,

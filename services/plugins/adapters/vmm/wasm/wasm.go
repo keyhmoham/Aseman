@@ -293,7 +293,7 @@ func (a *Adapter) Usage(ctx context.Context, id string) (vmm.Usage, error) {
 }
 
 // wasmAskInPtr / wasmAskOutPtr are the linear-memory offsets used by the
-// miniapp backend ABI. A backend module exporting `ask` receives the JSON
+// app backend ABI. A backend module exporting `ask` receives the JSON
 // request string at wasmAskInPtr and writes its JSON reply at wasmAskOutPtr,
 // returning the reply length (or a negative error code).
 const (
@@ -301,7 +301,7 @@ const (
 	wasmAskOutPtr = 65536
 )
 
-// Send delivers an ask to a wasm miniapp backend and returns its reply. It is
+// Send delivers an ask to a wasm app backend and returns its reply. It is
 // part of the message/ask protocol: an elpian frontend asks its backend
 // through message.ask, which lands here as a host call into the module.
 func (a *Adapter) Send(ctx context.Context, vmID, message string) (string, error) {
@@ -314,7 +314,7 @@ func (a *Adapter) Send(ctx context.Context, vmID, message string) (string, error
 	ask := run.mod.ExportedFunction("ask")
 	if ask == nil {
 		return "", errs.New(errs.CodeUnavailable,
-			"wasm module does not export ask (miniapp backend ABI)")
+			"wasm module does not export ask (app backend ABI)")
 	}
 	mem := run.mod.Memory()
 	if mem == nil {

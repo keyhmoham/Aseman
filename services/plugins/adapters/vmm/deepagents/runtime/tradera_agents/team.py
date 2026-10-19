@@ -16,7 +16,7 @@ from .gateway import GatewayError
 class Member:
     account_id: str
     name: str
-    kind: str  # "person", "agent", "tool", "miniapp"
+    kind: str  # "person", "agent", "tool" (an app)
     bot_id: str = ""
     description: str = ""
     runtime: bool = False  # an agent of the deep agents runtime (can take tasks)
@@ -70,7 +70,7 @@ def find(members: list[Member], who: str) -> Member | None:
 
 def describe(members: list[Member]) -> str:
     lines = []
-    for kind, title in (("agent", "Agents"), ("person", "People"), ("tool", "Tools"), ("miniapp", "Miniapps")):
+    for kind, title in (("agent", "Agents"), ("person", "People"), ("tool", "Apps")):
         group = [m for m in members if m.kind == kind]
         if not group:
             continue

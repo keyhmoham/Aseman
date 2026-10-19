@@ -1,7 +1,7 @@
 // Package message implements the message namespace: the universal packet
 // transport between users and bots. It provides fire-and-forget delivery
 // (message.send), request/response exchanges (message.ask / message.respond)
-// and inbox listing. The ask/respond protocol is what miniapp frontends use to
+// and inbox listing. The ask/respond protocol is what app frontends use to
 // call their wasm backends and agents use to answer questions.
 package message
 
@@ -23,7 +23,7 @@ import (
 )
 
 // BotMessenger is the subset of the bots service the message namespace needs
-// to deliver asks to bot VMs (langchain agents and wasm miniapp backends).
+// to deliver asks to bot VMs (langchain agents and wasm app backends).
 type BotMessenger interface {
 	SendMessage(ctx context.Context, botID identity.ID, body string, attachments []vmm.FileAttachment, history []vmm.ChatMessage) (string, error)
 	// BillUsage charges the customer for a bot execution (per-minute cost).

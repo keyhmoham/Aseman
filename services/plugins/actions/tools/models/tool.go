@@ -28,7 +28,7 @@ const (
 // Frontend modes of a tool.
 const (
 	FrontendNone       = ""
-	FrontendStatic     = "static"     // an Elpian miniapp: a program on the Elpian VM or QuickJS
+	FrontendStatic     = "static"     // an Elpian app: a program on the Elpian VM or QuickJS
 	FrontendGenerative = "generative" // A2UI generated from a skill, cached in the component registry
 )
 

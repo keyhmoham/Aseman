@@ -62,7 +62,7 @@ type ChargeLine struct {
 	Desc       string
 	// Category says what the line pays for, for per-project usage:
 	// CategoryAgent (an agent's time), CategoryCompute (the project's
-	// computer), CategoryTool (a tool or miniapp's time and calls) or
+	// computer), CategoryTool (an app's time and calls) or
 	// CategoryLLM (model tokens and images). Empty lines are classified by
 	// their payees, as before.
 	Category string

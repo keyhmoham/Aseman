@@ -18,14 +18,14 @@ import (
 )
 
 // AskBot routes a message to a bot within a space. It is the universal
-// bot-interaction entry point: people, agents, the shared sandbox and miniapp
+// bot-interaction entry point: people, agents, the shared sandbox and app
 // backends all talk to each other through it.
 //   - agents run a turn in the room the ask was made from;
 //   - docker/container/modal bots (the shared sandbox) execute the body as a
 //     shell command;
 //   - tool backends (external MCP, managed elpian/quickjs/docker, installed in
 //     the space's sandbox) receive {"function","payload"} as a microtool call;
-//   - wasm miniapp backends receive the body as their input.
+//   - wasm app backends receive the body as their input.
 //
 // [attachments] are files sent with the ask.
 func (s *Service) AskBot(ctx context.Context, spaceID, botID identity.ID, body string, attachments []vmm.FileAttachment, history []vmm.ChatMessage) (string, error) {
@@ -102,7 +102,7 @@ func (s *Service) AskBot(ctx context.Context, spaceID, botID identity.ID, body s
 type spaceAskAction struct{ s *Service }
 
 func (a *spaceAskAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "spaces", Name: "ask", Summary: "Ask a bot (agent, sandbox or miniapp) inside a space"}
+	return api.ActionMeta{Namespace: "spaces", Name: "ask", Summary: "Ask a bot (agent, sandbox or app) inside a space"}
 }
 func (a *spaceAskAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireAuthenticated(req); err != nil {
@@ -395,7 +395,7 @@ func (a *sandboxStopAction) Handle(ctx context.Context, req *api.ActionRequest) 
 type toolsListAction struct{ s *Service }
 
 func (a *toolsListAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "spaces", Name: "tools_list", Summary: "List tools (miniapps + sandbox) available to agents in a space"}
+	return api.ActionMeta{Namespace: "spaces", Name: "tools_list", Summary: "List tools (apps and the sandbox) available to agents in a space"}
 }
 func (a *toolsListAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireAuthenticated(req); err != nil {

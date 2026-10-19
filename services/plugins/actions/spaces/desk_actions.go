@@ -52,6 +52,12 @@ func (s *Service) resolveDeskOpens(ctx context.Context, spaceID identity.ID, ops
 			// People reopen a composed widget (from a pin) as it was.
 			continue
 		}
+		if ops[i].Kind == DeskWeb {
+			if err := s.resolveWebOpen(ctx, spaceID, &ops[i], &tools); err != nil {
+				return err
+			}
+			continue
+		}
 		if tools == nil {
 			var err error
 			if tools, err = s.SpaceTools(ctx, spaceID, identity.ID{}); err != nil {
@@ -90,6 +96,45 @@ func (s *Service) resolveDeskOpens(ctx context.Context, spaceID identity.ID, ops
 		}
 	}
 	return nil
+}
+
+// resolveWebOpen checks a web page window's page is a preview of this space
+// and names the tool it is a frontend of, if any.
+func (s *Service) resolveWebOpen(ctx context.Context, spaceID identity.ID, op *DeskOp, tools *[]vmm.Tool) error {
+	page, _ := op.Args["page"].(string)
+	if err := checkPage(page); err != nil {
+		return err
+	}
+	id, err := identity.Parse(page[len("/v1/proxy/") : len("/v1/proxy/")+32])
+	if err != nil {
+		return errs.InvalidArgument("invalid preview id in " + page)
+	}
+	p, err := s.ProxyGet(ctx, id)
+	if err != nil {
+		return err
+	}
+	if p.SpaceID != spaceID {
+		return errs.Permission("the page is a preview of another space")
+	}
+	if op.Title == "" {
+		op.Title = p.Title
+	}
+	if op.Tool == "" || op.Tool == DeskWebTool {
+		op.Tool, op.Name = DeskWebTool, "Web pages"
+		return nil
+	}
+	if *tools == nil {
+		if *tools, err = s.SpaceTools(ctx, spaceID, identity.ID{}); err != nil {
+			return err
+		}
+	}
+	for _, t := range *tools {
+		if t.BotID != "" && (t.BotID == op.Tool || equalFoldName(t.Name, op.Tool)) {
+			op.Tool, op.Name = t.BotID, t.Name
+			return nil
+		}
+	}
+	return errs.InvalidArgument(op.Tool + " is no tool of this space")
 }
 
 // defaultRequest stands for a request nobody put in words: showing the

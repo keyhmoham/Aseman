@@ -46,6 +46,9 @@ type API struct {
 	Log    *logger.Logger
 	Spaces FileSpaces
 	replay *signing.ReplayGuard
+	// pageActions runs the actions a preview's page API calls (tests set
+	// it; nil is the kernel's router).
+	pageActions func(context.Context, string, string, *api.ActionRequest) (*api.ActionResponse, error)
 }
 
 // New builds the API gateway.
@@ -79,6 +82,11 @@ func (a *API) Register(net network.Network) error {
 	}
 	// Framework base-path links commonly use the canonical root without a slash.
 	if err := net.Handle(network.MethodGet, "/v1/proxy/{id}", a.proxyServe); err != nil {
+		return err
+	}
+	// Tradera's web UI kit for pages served from anywhere (pkg/webkit);
+	// previews also have it under their own prefix (proxy_page.go).
+	if err := net.Handle(network.MethodGet, "/v1/webkit/{file}", a.webkitServe); err != nil {
 		return err
 	}
 	if err := net.Handle(network.MethodGet, "/healthz", a.health); err != nil {
@@ -234,6 +242,11 @@ func (a *API) proxyServe(ctx context.Context, req *network.Request) (*network.Re
 	}
 
 	rest := params["*"]
+	// The kit and the page's Tradera API are the gateway's own, never the
+	// sandbox's (proxy_page.go).
+	if page, ok := strings.CutPrefix(strings.TrimLeft(rest, "/"), pagePrefix); ok {
+		return a.proxyPage(ctx, req, p, acc, method, page)
+	}
 	upstream := strings.TrimRight(p.TargetURL, "/")
 	if rest != "" {
 		upstream += "/" + strings.TrimLeft(rest, "/")

@@ -42,6 +42,11 @@ var known = func() map[string]bool {
 	return m
 }()
 
+// Components lists every component type devices render.
+func Components() []string {
+	return append(append([]string{}, basic...), tradera...)
+}
+
 // Known reports whether devices render the component type.
 func Known(component string) bool { return known[component] }
 

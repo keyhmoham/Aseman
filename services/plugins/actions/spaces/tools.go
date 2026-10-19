@@ -52,6 +52,8 @@ func toolDetail(toolName string) string {
 		return "composing a widget…"
 	case "frontend_show":
 		return "opening the result on the desk…"
+	case "web_show":
+		return "opening the page on the desk…"
 	case "desk_state", "desk_arrange", "desk_close":
 		return "arranging the desk…"
 	default:
@@ -377,11 +379,13 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 	case toolName == "proxy_list" || toolName == "proxy_get" || toolName == "proxy_delete":
 		result, terr = s.proxyManageTool(ctx, id, toolName, argsJSON)
 	case toolName == "proxy_create":
-		result, terr = s.proxyCreateTool(ctx, id, argsJSON)
+		result, terr = s.proxyCreateTool(ctx, id, agentName, argsJSON)
 	case toolName == "ui_compose":
 		result, terr = s.composeUI(ctx, id, roomID, agentName, argsJSON)
 	case toolName == "frontend_show":
 		result, terr = s.showTool(ctx, id, roomID, agentName, argsJSON)
+	case toolName == "web_show":
+		result, terr = s.webShowTool(ctx, id, roomID, agentName, argsJSON)
 	case toolName == "desk_state":
 		result, terr = s.deskStateTool(ctx, id, roomID, argsJSON)
 	case toolName == "desk_arrange":

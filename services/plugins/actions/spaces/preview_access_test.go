@@ -126,7 +126,7 @@ func TestProxyToolsCannotReachAnUnauthorizedRoom(t *testing.T) {
 			t.Fatalf("%s crossed room boundary: %v", name, err)
 		}
 	}
-	if _, err := s.proxyCreateTool(ctx, sp.ID, `{"room":"`+private.String()+`","port":3000}`); errs.CodeOf(err) != errs.CodePermission {
+	if _, err := s.proxyCreateTool(ctx, sp.ID, "agent", `{"room":"`+private.String()+`","port":3000}`); errs.CodeOf(err) != errs.CodePermission {
 		t.Fatalf("creation crossed room boundary: %v", err)
 	}
 	if _, err := s.ProxyGet(internal, pid); err != nil {

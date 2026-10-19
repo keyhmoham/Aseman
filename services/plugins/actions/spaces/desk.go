@@ -59,6 +59,42 @@ const DeskAutoFrontend = "auto"
 // MCP App: the ui:// resource the microtool declares), run on the device.
 const DeskAppFrontend = "app"
 
+// Web page windows: a page served from the space's sandbox through a preview
+// gateway (proxy_create), typically an interactive frontend an agent built
+// for a tool with Tradera's web UI kit. Its Args hold {"page": the gateway
+// path, "/v1/proxy/<id>/…"}; Tool is the tool it is a frontend of, or
+// DeskWebTool for a page of no tool (they share that dock entry).
+const (
+	DeskWeb         = "web"
+	DeskWebFrontend = "web"
+	DeskWebTool     = "pages"
+)
+
+// Page is the gateway path a web page window shows ("" for any other).
+func (w *DeskWindow) Page() string {
+	if w.Kind != DeskWeb {
+		return ""
+	}
+	page, _ := w.Args["page"].(string)
+	return page
+}
+
+// checkPage accepts a preview gateway path (with a path, query or fragment
+// of the page inside it), nothing else: a web window never opens another
+// site with a person's sign-in.
+func checkPage(page string) error {
+	rest, ok := strings.CutPrefix(page, "/v1/proxy/")
+	if !ok || len(rest) < 33 || rest[32] != '/' || strings.Contains(page, "..") || strings.ContainsAny(page, " \\\n\r\t") {
+		return errs.InvalidArgument("a web page window shows a preview gateway path: /v1/proxy/<id>/…")
+	}
+	for _, c := range rest[:32] {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", c) {
+			return errs.InvalidArgument("a web page window shows a preview gateway path: /v1/proxy/<id>/…")
+		}
+	}
+	return nil
+}
+
 // DeskDesigning is the status of a designed window whose design is under way.
 const DeskDesigning = "designing"
 
@@ -308,6 +344,15 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 				return "", errs.InvalidArgument("a composed window needs its widget")
 			}
 			op.Tool, op.Name, op.Frontend, op.Microtool, op.Args = DeskComposedTool, "Widgets", "generative", "", nil
+		} else if op.Kind == DeskWeb {
+			page, _ := op.Args["page"].(string)
+			if err := checkPage(page); err != nil {
+				return "", err
+			}
+			if op.Tool == "" || op.Tool == DeskWebTool {
+				op.Tool, op.Name = DeskWebTool, "Web pages"
+			}
+			op.Frontend, op.Microtool, op.Args = DeskWebFrontend, "", map[string]any{"page": page}
 		} else if op.Tool == "" {
 			return "", errs.InvalidArgument("open needs a tool")
 		}
@@ -562,6 +607,9 @@ func (d *Desktop) Summary() string {
 			what := w.Microtool + args
 			if w.Kind == DeskComposed {
 				what = "composed widget"
+			}
+			if w.Kind == DeskWeb {
+				what = "web page " + w.Page()
 			}
 			if w.Frontend == DeskAutoFrontend {
 				what += ", designed for: " + strings.TrimSpace(w.Request)

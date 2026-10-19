@@ -155,7 +155,7 @@ func (s *Service) ProxyDelete(ctx context.Context, id identity.ID) error {
 // proxyCreateTool implements the proxy_create agent tool: expose a sandbox port
 // through the gateway and post a chat message with an open button for the room's
 // users. It returns the gateway URL the agent can report.
-func (s *Service) proxyCreateTool(ctx context.Context, spaceID identity.ID, argsJSON string) (string, error) {
+func (s *Service) proxyCreateTool(ctx context.Context, spaceID identity.ID, agentName, argsJSON string) (string, error) {
 	var in struct {
 		Port         int    `json:"port"`
 		Title        string `json:"title"`
@@ -164,6 +164,12 @@ func (s *Service) proxyCreateTool(ctx context.Context, spaceID identity.ID, args
 		// Start is the command that starts the service, so the preview can be
 		// brought back after the computer has slept.
 		Start string `json:"start"`
+		// Tool names the tool the page is an interactive frontend of; Path
+		// is the page inside the service to show; Show false keeps it off
+		// the desk (a backend nobody looks at, say).
+		Tool string `json:"tool"`
+		Path string `json:"path"`
+		Show *bool  `json:"show"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil && argsJSON != "" {
 		return "", errs.InvalidArgument("proxy_create args: {\"port\":...,\"title\":\"...\"}")
@@ -217,6 +223,23 @@ func (s *Service) proxyCreateTool(ctx context.Context, spaceID identity.ID, args
 	// resolves the absolute URL and renders an "Open in webview" button.
 	_ = s.PostMessage(ctx, spaceID, roomID, dec, fmt.Sprintf(
 		"🔗 **%s** preview gateway created. Readiness must be verified after starting the service.\n\nOpen it: %s", p.Title, p.GatewayPath()))
+	// The page opens in a card window on the room's desk, where tools'
+	// frontends are: people see and use it in the app, with the tool it is
+	// the frontend of when one is named.
+	if in.Show == nil || *in.Show {
+		show := webShowInput{Page: p.GatewayPath(), Path: in.Path, Tool: in.Tool, Title: in.Title}
+		if !roomID.IsZero() {
+			show.Room = roomID.String()
+		} else {
+			show.Room = "home"
+		}
+		if d, id, err := s.showPage(ctx, spaceID, roomID, agentName, show); err != nil {
+			status += "\nThe page could not be opened on the desk: " + err.Error() + ". Fix it and open it with web_show."
+		} else if w := windowJSON(d, id); w != nil {
+			raw, _ := json.Marshal(w)
+			status += "\nOpened on the room's desk as a card window: " + string(raw) + ". Arrange it with desk_arrange; open other pages of the service with web_show."
+		}
+	}
 	return p.GatewayPath() + status, nil
 }
 

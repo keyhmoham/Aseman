@@ -8,12 +8,14 @@ import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/utils/context_extensions.dart';
+import '../../../data/models/bot.dart';
 import '../../../data/models/profile.dart';
 import '../../../data/models/space.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import '../../tools/connect/mcp_connect_dialog.dart';
 import 'project_control_screen.dart';
 
 /// Feature-rich settings panel for a workspace (space): profile & visibility,
@@ -48,6 +50,10 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
   List<Map<String, dynamic>> _members = const [];
   List<WorkspaceRoom> _rooms = const [];
   Map<String, dynamic> _usage = const {};
+
+  /// The space's tools that each person connects with their own account,
+  /// and whether the caller has connected theirs here.
+  List<({String id, String name, bool connected})> _accounts = const [];
   late final TextEditingController _name =
       TextEditingController(text: _space.name);
   late final TextEditingController _desc =
@@ -128,6 +134,7 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
         _loading = false;
       });
       unawaited(_loadUsage());
+      unawaited(_loadAccounts());
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -144,6 +151,32 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
       if (!mounted) return;
       setState(() => _usage = usage);
     } catch (_) {}
+  }
+
+  /// Best-effort, like usage: a failure only hides the section.
+  Future<void> _loadAccounts() async {
+    try {
+      final service = widget.dependencies.service;
+      final results = await Future.wait<Object>([
+        service.toolConnections(_space.id),
+        service.fetchSpaceBots(_space.id),
+      ]);
+      final states = results[0]
+          as Map<String, ({String auth, bool connected, String name})>;
+      final inSpace = {for (final b in results[1] as List<Bot>) b.id};
+      if (!mounted) return;
+      setState(() => _accounts = [
+            for (final e in states.entries)
+              if (e.value.auth == 'user' && inSpace.contains(e.key))
+                (id: e.key, name: e.value.name, connected: e.value.connected),
+          ]);
+    } catch (_) {}
+  }
+
+  Future<void> _connect(String botId, String name, bool reconnect) async {
+    final ok = await connectMcpTool(context, widget.dependencies.service,
+        botId: botId, spaceId: _space.id, name: name, reconnect: reconnect);
+    if (ok) await _loadAccounts();
   }
 
   Future<void> _openProjectControls() => showFloatingPanel(
@@ -440,6 +473,10 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
                         _roomsCard(context),
                         const SizedBox(height: 16),
                         _membersCard(context),
+                        if (_accounts.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          _accountsCard(context),
+                        ],
                         const SizedBox(height: 16),
                         _usageCard(context),
                         const SizedBox(height: 16),
@@ -598,6 +635,37 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
   }
 
   // ── members ──────────────────────────────────────────────────────────────
+
+  Widget _accountsCard(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return _Section(
+      title: 'Your app connections',
+      icon: Icons.link_rounded,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(
+            'These apps run with each person\'s own account. Connect yours to use them here; nobody else in the space sees it.',
+            style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant)),
+        for (final a in _accounts)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+                a.connected ? Icons.link_rounded : Icons.link_off_rounded,
+                color:
+                    a.connected ? AppColors.success : colors.onSurfaceVariant),
+            title: Text(a.name.isEmpty ? 'App' : a.name,
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text(a.connected ? 'Connected' : 'Not connected'),
+            trailing: a.connected
+                ? TextButton(
+                    onPressed: () => _connect(a.id, a.name, true),
+                    child: const Text('Reconnect'))
+                : FilledButton.tonal(
+                    onPressed: () => _connect(a.id, a.name, false),
+                    child: const Text('Connect')),
+          ),
+      ]),
+    );
+  }
 
   Widget _membersCard(BuildContext context) {
     final colors = Theme.of(context).colorScheme;

@@ -33,6 +33,7 @@ func billingAdapter(t *testing.T, usage string, chat vmm.ProviderConfig) (*Adapt
 	a.platform = fakePlatform{memoryChat: &chat, memoryEmbedding: &embedding}
 	charges := []memoryCharge{}
 	var failWith error
+	a.memoryRecordFn = func(identity.ID, int64, int64, int64) {}
 	a.memoryChargeFn = func(_ context.Context, space, payer, payee identity.ID, amount int64, desc string) error {
 		if failWith != nil {
 			return failWith
@@ -95,6 +96,27 @@ func TestAProjectPaysForItsMemoryAtTheMemoryModelsPrices(t *testing.T) {
 	a.billMemory(context.Background())
 	if len(*charges) != 1 {
 		t.Fatalf("charged again: %+v", *charges)
+	}
+}
+
+func TestAMemorySettlementIsRecordedForTheAdminLog(t *testing.T) {
+	p := ids(t, 3)
+	space, person, keyOwner := p[0], p[1], p[2]
+	a, _, _ := billingAdapter(t, `,"usage":{"prompt_tokens":3,"completion_tokens":2}`,
+		vmm.ProviderConfig{Model: "mini", InputPrice: 1e6, OutputPrice: 2e6, OwnerID: keyOwner.String()})
+	a.memory.notePayer(space.String(), person.String())
+	type rec struct {
+		space                    identity.ID
+		tokens, tokensIn, amount int64
+	}
+	var got []rec
+	a.memoryRecordFn = func(sp identity.ID, tokens, tokensIn, amount int64) {
+		got = append(got, rec{sp, tokens, tokensIn, amount})
+	}
+	memoryRequest(t, a, space, `{"messages":[{"role":"user","content":"x"}]}`, true)
+	a.billMemory(context.Background())
+	if len(got) != 1 || got[0] != (rec{space, 5, 3, 7}) {
+		t.Fatalf("recorded: %+v", got)
 	}
 }
 
@@ -188,5 +210,22 @@ func TestEmbeddingsWithoutUsageAreEstimated(t *testing.T) {
 	a.billMemory(context.Background())
 	if len(*charges) != 1 || (*charges)[0].amount != 5 {
 		t.Fatalf("estimated: %+v", *charges)
+	}
+}
+
+func TestAnIdleOrUnsetMemoryRecordsNothing(t *testing.T) {
+	a, _, _ := newTestAdapter(t)
+	a.memoryKey = "root-key"
+	a.platform = fakePlatform{} // no memory models picked
+	recorded := 0
+	a.memoryRecordFn = func(identity.ID, int64, int64, int64) { recorded++ }
+	space := ids(t, 1)[0]
+	if resp := memoryRequest(t, a, space, `{"input":"x"}`, false); resp.Status != 409 {
+		t.Fatalf("an unset model says so: %d", resp.Status)
+	}
+	a.billMemory(context.Background())
+	a.billMemory(context.Background())
+	if recorded != 0 {
+		t.Fatalf("recorded %d settlements with the memory models off", recorded)
 	}
 }

@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/space.dart';
+import '../../../data/services/tradera_service.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
+import 'report_dialog.dart';
 
 /// One conversation of the messenger, direct or a project room. Both are rooms
 /// of a space (a direct chat is a one-room space shared by two accounts), so
@@ -22,15 +24,15 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage> {
-  List<RoomMessage> _messages = const [];
-  String _working = '';
-  String _workingDetail = '';
+  RoomChatPage _page = const RoomChatPage();
   List<Bot> _agents = const [];
   Timer? _poll;
   bool _loading = false;
   DateTime? _seen;
+  late ChatSummary _chat = widget.chat;
 
-  ChatSummary get chat => widget.chat;
+  ChatSummary get chat => _chat;
+  TraderaService get _service => widget.dependencies.service;
   String get _me =>
       widget.dependencies.sessionController.session?.accountId ?? '';
 
@@ -54,20 +56,23 @@ class _ChatPageState extends State<ChatPage> {
     if (_loading) return;
     _loading = true;
     try {
-      final res = await widget.dependencies.service
-          .fetchRoomMessages(chat.spaceId, chat.roomId);
+      final res = await _service.fetchRoomChat(chat.spaceId, chat.roomId);
       if (!mounted) return;
       final msgs = res.messages;
-      final changed = msgs.length != _messages.length ||
+      final old = _page;
+      final changed = msgs.length != old.messages.length ||
           List.generate(msgs.length, (i) => i)
-              .any((i) => !_messages[i].hasSameContentAs(msgs[i])) ||
-          res.working != _working ||
-          res.workingDetail != _workingDetail;
+              .any((i) => !old.messages[i].hasSameContentAs(msgs[i])) ||
+          res.working != old.working ||
+          res.workingDetail != old.workingDetail ||
+          res.typing.join('\n') != old.typing.join('\n') ||
+          res.peerSeenAt != old.peerSeenAt ||
+          res.blocked != old.blocked ||
+          res.canSend != old.canSend;
       if (changed) {
         setState(() {
-          _messages = List.unmodifiable(msgs);
-          _working = res.working;
-          _workingDetail = res.workingDetail;
+          _page = res;
+          _chat = _chat.copyWith(blocked: res.blocked, canSend: res.canSend);
         });
       }
       _markSeen(msgs);
@@ -85,15 +90,12 @@ class _ChatPageState extends State<ChatPage> {
         msgs.map((m) => m.createdAt).reduce((a, b) => a.isAfter(b) ? a : b);
     if (_seen != null && !newest.isAfter(_seen!)) return;
     _seen = newest;
-    unawaited(widget.dependencies.service
-        .markSeen(chat.spaceId, newest)
-        .catchError((_) {}));
+    unawaited(_service.markSeen(chat.spaceId, newest).catchError((_) {}));
   }
 
   Future<void> _loadAgents() async {
     try {
-      final bots =
-          await widget.dependencies.service.fetchSpaceBots(chat.spaceId);
+      final bots = await _service.fetchSpaceBots(chat.spaceId);
       if (mounted) {
         setState(() => _agents = bots.where((b) => b.isAgent).toList());
       }
@@ -101,62 +103,226 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _send(
-      String body, List<String> mentions, List<String> attachments) async {
+      String body, List<String> mentions, List<String> attachments,
+      {String replyTo = ''}) async {
     // Writing to an agent in its direct chat is addressed to it, so it runs a
     // turn exactly as when it is mentioned in a project room.
     var to = mentions;
     final peer = chat.peer;
-    if (to.isEmpty && chat.direct && peer != null && peer.isAgent) {
+    if (to.isEmpty &&
+        chat.direct &&
+        !chat.saved &&
+        peer != null &&
+        peer.isAgent) {
       final agent = _agents.where((b) =>
           b.id == peer.botId || b.accountId == peer.id || b.id == peer.id);
       to = [agent.isNotEmpty ? agent.first.id : peer.botId];
       to.removeWhere((id) => id.isEmpty);
     }
     try {
-      await widget.dependencies.service.sendRoomMessage(
-          chat.spaceId, chat.roomId, body,
-          mentions: to, attachments: attachments);
+      await _service.sendRoomMessage(chat.spaceId, chat.roomId, body,
+          mentions: to, attachments: attachments, replyTo: replyTo);
       await _load();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Send failed: $e')));
-      }
+      _say('Send failed: $e');
       rethrow;
     }
   }
+
+  void _say(String text) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    }
+  }
+
+  Future<void> _change(Future<void> Function() change) async {
+    try {
+      await change();
+      await _load();
+    } catch (e) {
+      _say('Could not change it: $e');
+      rethrow;
+    }
+  }
+
+  void _typing() => unawaited(
+      _service.setTyping(chat.spaceId, chat.roomId, true).catchError((_) {}));
+
+  Future<void> _togglePin() async {
+    final pin = !chat.pinned;
+    try {
+      await _service.pinChat(chat.spaceId, chat.roomId, pin);
+      if (!mounted) return;
+      setState(() => _chat = pin
+          ? _chat.copyWith(pinnedAt: DateTime.now())
+          : _chat.copyWith(clearPin: true));
+      _say(pin ? 'Pinned to the top of your chats' : 'Unpinned');
+    } catch (e) {
+      _say('Could not pin: $e');
+    }
+  }
+
+  Future<void> _clear() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.delete_sweep_outlined),
+        title: const Text('Delete this chat?'),
+        content: Text(chat.saved
+            ? 'Your saved messages are removed for you.'
+            : 'It is deleted for you only; ${chat.title} keeps their copy. '
+                'It comes back if a new message arrives.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _service.clearChat(chat.spaceId);
+      if (mounted) await Navigator.of(context).maybePop();
+    } catch (e) {
+      _say('Could not delete the chat: $e');
+    }
+  }
+
+  Future<void> _toggleBlock() async {
+    final block = !chat.blocked;
+    if (block) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          icon: const Icon(Icons.block_rounded),
+          title: Text('Block ${chat.title}?'),
+          content: const Text(
+              'Neither of you can write in this chat until you unblock it.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Block')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    try {
+      await _service.blockDirect(chat.spaceId, block);
+      if (!mounted) return;
+      setState(() => _chat = _chat.copyWith(blocked: block));
+      await _load();
+    } catch (e) {
+      _say('Could not ${block ? 'block' : 'unblock'}: $e');
+    }
+  }
+
+  Widget _menu() => PopupMenuButton<String>(
+        tooltip: 'Chat options',
+        icon: const Icon(Icons.more_vert_rounded),
+        onSelected: (value) {
+          switch (value) {
+            case 'pin':
+              unawaited(_togglePin());
+            case 'clear':
+              unawaited(_clear());
+            case 'block':
+              unawaited(_toggleBlock());
+            case 'report':
+              unawaited(reportToAdmins(context, _service,
+                  spaceId: chat.spaceId, roomId: chat.roomId));
+          }
+        },
+        itemBuilder: (context) => [
+          PopupMenuItem(
+              value: 'pin',
+              child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(chat.pinned
+                      ? Icons.push_pin_rounded
+                      : Icons.push_pin_outlined),
+                  title: Text(chat.pinned ? 'Unpin chat' : 'Pin chat'))),
+          if (chat.direct)
+            const PopupMenuItem(
+                value: 'clear',
+                child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.delete_sweep_outlined),
+                    title: Text('Delete chat for me'))),
+          if (chat.direct && !chat.saved)
+            PopupMenuItem(
+                value: 'block',
+                child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.block_rounded),
+                    title: Text(chat.blocked ? 'Unblock' : 'Block'))),
+          if (!chat.saved)
+            const PopupMenuItem(
+                value: 'report',
+                child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.flag_outlined),
+                    title: Text('Report chat'))),
+        ],
+      );
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final peer = chat.peer;
     final canPop = Navigator.of(context).canPop();
+    final receipts = chat.direct && !chat.saved && !(peer?.isAgent ?? false);
     return Scaffold(
       backgroundColor: scheme.surface,
       body: SafeArea(
         top: false,
         child: RoomChat(
           room: chat.title,
-          messages: _messages,
-          working: _working,
-          workingDetail: _workingDetail,
+          messages: _page.messages,
+          working: _page.working,
+          workingDetail: _page.workingDetail,
           me: _me,
           dependencies: widget.dependencies,
           spaceId: chat.spaceId,
           roomId: chat.roomId,
           canManageTasks: chat.canManage,
+          canModerate: chat.canModerate,
           mentionable: _agents,
           onSend: _send,
+          onEdit: (m, body) =>
+              _change(() => _service.editRoomMessage(m.id, body)),
+          onDelete: (m) =>
+              _change(() => _service.deleteRoomMessage(chat.spaceId, m.id)),
+          onReport: (m) => reportToAdmins(context, _service,
+              spaceId: chat.spaceId, roomId: chat.roomId, messageId: m.id),
+          onTyping: chat.saved ? null : _typing,
+          typing: _page.typing,
+          receipts: receipts,
+          peerSeenAt: _page.peerSeenAt,
+          composerNotice: chat.canSend
+              ? null
+              : chat.blocked
+                  ? 'You blocked this chat. Unblock it from the menu to write.'
+                  : 'You can\'t reply to this chat.',
+          headerActions: [const SizedBox(width: 2), _menu()],
           bare: true,
-          hint: 'Message ${chat.title}…',
-          subtitle: chat.direct
-              ? (peer == null
-                  ? 'Direct chat'
-                  : [
-                      if (peer.handle.isNotEmpty) '@${peer.handle}',
-                      peer.isAgent ? 'Agent' : 'Direct chat',
-                    ].join(' · '))
-              : chat.spaceName,
+          hint: chat.saved ? 'Write a note…' : 'Message ${chat.title}…',
+          subtitle: chat.saved
+              ? 'Notes, links and files for yourself'
+              : chat.direct
+                  ? (peer == null
+                      ? 'Direct chat'
+                      : [
+                          if (peer.handle.isNotEmpty) '@${peer.handle}',
+                          peer.isAgent ? 'Agent' : 'Direct chat',
+                        ].join(' · '))
+                  : chat.spaceName,
           memberNames: {
             if (peer != null && peer.id.isNotEmpty) peer.id: peer.displayName,
           },
@@ -185,6 +351,14 @@ class ChatAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final peer = chat.peer;
+    if (chat.saved) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
+        child: Icon(Icons.bookmark_rounded, size: radius),
+      );
+    }
     if (chat.direct) {
       final agent = peer?.isAgent ?? false;
       final name = peer?.displayName.replaceFirst('@', '') ?? '';

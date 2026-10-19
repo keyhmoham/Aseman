@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tradera/tradera/internal/plugins/identity"
@@ -41,6 +42,34 @@ type session struct {
 	// Fresh turns may read only replies to handoffs made during this session.
 	sentMessages map[string]bool
 	attachments  map[string]bool
+	// inflight counts the turn's gateway calls still being served (model,
+	// decision and platform calls), which meter what they use onto the turn.
+	inflight atomic.Int64
+}
+
+// begin marks one gateway call of the turn as in flight; the returned func
+// ends it.
+func (s *session) begin() func() {
+	s.inflight.Add(1)
+	return func() { s.inflight.Add(-1) }
+}
+
+// settleTimeout bounds how long a stopped turn waits for its gateway calls.
+var settleTimeout = 30 * time.Second
+
+// settle waits, when the turn was stopped, for the gateway calls it still had
+// in flight: they meter what the provider already did (an interrupted model
+// call, an image being made) onto the turn, and the turn is charged right
+// after it returns. Without the wait that usage landed after the charge and
+// was never paid.
+func (s *session) settle(ctx context.Context) {
+	if ctx.Err() == nil {
+		return
+	}
+	deadline := time.Now().Add(settleTimeout)
+	for s.inflight.Load() > 0 && time.Now().Before(deadline) {
+		time.Sleep(25 * time.Millisecond)
+	}
 }
 
 // agentPayload is the agent definition the runtime runs a turn with.
@@ -114,7 +143,10 @@ func (a *Adapter) open(ctx context.Context, vmID string, turn vmm.AgentTurn) (*s
 	if turn.Agent.Name == "" {
 		turn.Agent.Name = spec.Name
 	}
-	if err := a.ensureRuntime(ctx); err != nil {
+	endRuntime := vmm.Trace(ctx, "runtime.ensure", "")
+	err = a.ensureRuntime(ctx)
+	endRuntime()
+	if err != nil {
 		return nil, turnRequest{}, err
 	}
 	if spec.ContextWindow == 0 && a.platform != nil {
@@ -185,7 +217,12 @@ func (a *Adapter) run(ctx context.Context, path string, req turnRequest) (turnRe
 	if status != nil {
 		status(req.Turn.Agent.Name, "thinking…")
 	}
+	// From here the agent's runtime works: the gaps between its model calls and
+	// tools in the trace are its own time (loading its thread, recalling memory,
+	// thinking), the total is this span.
+	endRun := vmm.Trace(ctx, "agent.run", req.Agent.Name)
 	err := a.call(ctx, http.MethodPost, path, req, &out)
+	endRun()
 	if err != nil {
 		return out, err
 	}
@@ -211,6 +248,7 @@ func (a *Adapter) Prompt(ctx context.Context, vmID string, turn vmm.AgentTurn) (
 	}
 	defer a.close(s)
 	out, err := a.run(ctx, "/v1/turns", req)
+	s.settle(ctx)
 	return strings.TrimSpace(out.Reply), err
 }
 
@@ -232,6 +270,7 @@ func (a *Adapter) Reply(ctx context.Context, vmID string, turn vmm.AgentTurn) (b
 	}
 	defer a.close(s)
 	out, err := a.run(ctx, "/v1/answers", req)
+	s.settle(ctx)
 	if !out.Answered && err == nil {
 		return false, "", nil
 	}

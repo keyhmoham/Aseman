@@ -564,6 +564,20 @@ func (s *Service) ListInvitations(ctx context.Context, invitee identity.ID) ([]i
 	return out, nil
 }
 
+// deleteSpaceRoutines removes a workspace's routines, so nothing keeps firing
+// (and notifying people) for a project that no longer exists.
+func (s *Service) deleteSpaceRoutines(ctx context.Context, spaceID identity.ID) {
+	var routines []struct {
+		ID identity.ID `db:"id"`
+	}
+	if err := s.R.List(ctx, "routines", database.Filter{Equal: map[string]any{"space_id": spaceID.String()}}, &routines); err != nil {
+		return
+	}
+	for _, r := range routines {
+		_ = s.R.Delete(ctx, "routines", r.ID)
+	}
+}
+
 // revokeSpaceInvitations revokes a workspace's pending invitations, so nobody
 // is left holding an invitation to a workspace that no longer exists.
 func (s *Service) revokeSpaceInvitations(ctx context.Context, spaceID identity.ID) {

@@ -136,7 +136,7 @@ func (s *Service) projects(ctx context.Context, req *api.ActionRequest, admin bo
 				}
 			}
 			if p.title == "" {
-				p.title = "Deleted project"
+				p.title = "Deleted room"
 			}
 			byID[p.id] = p
 		}

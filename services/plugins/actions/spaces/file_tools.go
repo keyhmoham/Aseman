@@ -187,12 +187,18 @@ func (s *Service) imageGenerateTool(ctx context.Context, spaceID identity.ID, ag
 	var data []byte
 	var mime string
 	var price float64
-	if err := bridge.Invoke(ctx, s.K, "llm", "GenerateImage", []any{ctx, spec.Provider, in.Prompt, in.Size}, &data, &mime, &price); err != nil {
+	var imageModel string
+	var tokensIn, tokensOut int64
+	// An image the provider has started is billed to the node whether or not
+	// the person stops the turn meanwhile: it is finished, charged and
+	// delivered, so a stop never leaves it made but unpaid.
+	ctx = context.WithoutCancel(ctx)
+	if err := bridge.Invoke(ctx, s.K, "llm", "GenerateImage", []any{ctx, spec.Provider, in.Prompt, in.Size}, &data, &mime, &price, &imageModel, &tokensIn, &tokensOut); err != nil {
 		return "", err
 	}
-	if price > 0 {
-		vmm.AddInvocationUsage(ctx, usage.Delta{Images: int64(price)})
-	}
+	// Metered on the invocation: the price is charged to the person, and the
+	// model, count and tokens go to the admin log.
+	vmm.AddInvocationUsage(ctx, usage.Delta{Images: int64(price), ImageCount: 1, ImageIn: tokensIn, ImageOut: tokensOut, ImageModel: imageModel})
 	name := in.Name
 	if name == "" {
 		name = "image"

@@ -167,6 +167,56 @@ class _ChatListState extends State<_ChatList> {
     if (mounted) unawaited(_load());
   }
 
+  Future<void> _openSaved() async {
+    try {
+      final chat = await _service.openSaved();
+      if (!mounted) return;
+      await _open(chat);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open Saved Messages: $e')));
+    }
+  }
+
+  // Long-pressing a chat pins or unpins it (and deletes a direct chat for
+  // the caller).
+  Future<void> _chatMenu(ChatSummary chat) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+              leading: Icon(chat.pinned
+                  ? Icons.push_pin_rounded
+                  : Icons.push_pin_outlined),
+              title: Text(chat.pinned ? 'Unpin' : 'Pin to top'),
+              onTap: () => Navigator.pop(context, 'pin')),
+          if (chat.direct)
+            ListTile(
+                leading: const Icon(Icons.delete_sweep_outlined),
+                title: const Text('Delete chat for me'),
+                onTap: () => Navigator.pop(context, 'clear')),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    try {
+      if (picked == 'pin') {
+        await _service.pinChat(chat.spaceId, chat.roomId, !chat.pinned);
+      } else {
+        await _service.clearChat(chat.spaceId);
+      }
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Could not change it: $e')));
+    }
+  }
+
   Future<void> _newChat() async {
     final peer = await Navigator.of(context).push<String>(
         MaterialPageRoute<String>(
@@ -224,6 +274,10 @@ class _ChatListState extends State<_ChatList> {
                   tooltip: 'Refresh',
                   onPressed: _load,
                   icon: const Icon(Icons.refresh_rounded)),
+              IconButton(
+                  tooltip: 'Saved Messages',
+                  onPressed: _openSaved,
+                  icon: const Icon(Icons.bookmark_outline_rounded)),
               FilledButton.icon(
                   onPressed: _newChat,
                   icon: const Icon(Icons.edit_square, size: 18),
@@ -302,6 +356,7 @@ class _ChatListState extends State<_ChatList> {
                                 chat: shown[i],
                                 me: _me,
                                 onTap: () => _open(shown[i]),
+                                onMenu: () => _chatMenu(shown[i]),
                               ),
                             ),
                           ),
@@ -313,11 +368,16 @@ class _ChatListState extends State<_ChatList> {
 }
 
 class _ChatTile extends StatelessWidget {
-  const _ChatTile({required this.chat, required this.me, required this.onTap});
+  const _ChatTile(
+      {required this.chat,
+      required this.me,
+      required this.onTap,
+      required this.onMenu});
 
   final ChatSummary chat;
   final String me;
   final VoidCallback onTap;
+  final VoidCallback onMenu;
 
   String get _preview {
     final body = chat.lastBody.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -329,6 +389,7 @@ class _ChatTile extends StatelessWidget {
                 : '📎 ${chat.lastAttachments} attachments')
             : '';
     if (text.isEmpty) {
+      if (chat.saved) return 'Notes, links and files for yourself';
       return chat.direct ? 'Say hello' : 'No messages yet';
     }
     if (chat.lastSenderId == me) return 'You: $text';
@@ -351,6 +412,8 @@ class _ChatTile extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onMenu,
+        onSecondaryTap: onMenu,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           child: Row(children: [
@@ -386,7 +449,16 @@ class _ChatTile extends StatelessWidget {
                                     ? FontWeight.w800
                                     : FontWeight.w700)),
                       ),
-                      if (chat.direct && (chat.peer?.isAgent ?? false)) ...[
+                      if (chat.blocked) ...[
+                        const SizedBox(width: 6),
+                        Icon(Icons.block_rounded,
+                            size: 14,
+                            semanticLabel: 'Blocked',
+                            color: scheme.onSurfaceVariant),
+                      ],
+                      if (chat.direct &&
+                          !chat.saved &&
+                          (chat.peer?.isAgent ?? false)) ...[
                         const SizedBox(width: 6),
                         _Tag('AI', scheme.tertiary),
                       ],
@@ -403,12 +475,17 @@ class _ChatTile extends StatelessWidget {
                       ],
                     ]),
                     const SizedBox(height: 3),
-                    Text(chat.working ? 'Agent is working…' : _preview,
+                    Text(
+                        chat.working
+                            ? 'Agent is working…'
+                            : chat.typing
+                                ? 'typing…'
+                                : _preview,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             fontSize: 13,
-                            color: chat.working
+                            color: chat.working || chat.typing
                                 ? scheme.primary
                                 : unread
                                     ? scheme.onSurface
@@ -417,11 +494,22 @@ class _ChatTile extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text(_when(chat.updatedAt),
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: unread ? scheme.primary : scheme.onSurfaceVariant,
-                      fontWeight: unread ? FontWeight.w700 : FontWeight.w400)),
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                if (chat.pinned) ...[
+                  Icon(Icons.push_pin_rounded,
+                      size: 13,
+                      semanticLabel: 'Pinned',
+                      color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 3),
+                ],
+                Text(_when(chat.updatedAt),
+                    style: TextStyle(
+                        fontSize: 11,
+                        color:
+                            unread ? scheme.primary : scheme.onSurfaceVariant,
+                        fontWeight:
+                            unread ? FontWeight.w700 : FontWeight.w400)),
+              ]),
               const SizedBox(height: 6),
               if (unread)
                 Badge(

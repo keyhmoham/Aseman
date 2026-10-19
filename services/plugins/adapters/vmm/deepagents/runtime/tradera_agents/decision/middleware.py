@@ -21,7 +21,7 @@ import logging
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware, hook_config
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from . import approval, completion, progress, routing
 from . import tools as choosing
@@ -48,6 +48,24 @@ def last_request(messages: list[Any]) -> str:
             if not text.startswith(NOTE):
                 return text
     return ""
+
+
+#: Tools that put a result in front of the person (a file or image in the chat).
+DELIVERY_TOOLS = {"image_generate", "file_send", "file_upload"}
+
+
+def delivered(messages: list[Any]) -> list[str]:
+    """What the delivery tools sent to the chat since the request (their reports)."""
+    out: list[str] = []
+    for m in reversed(messages):
+        if isinstance(m, HumanMessage) and not _text(m.content).startswith(NOTE):
+            break
+        if isinstance(m, ToolMessage) and m.name in DELIVERY_TOOLS and getattr(m, "status", "success") != "error":
+            text = _text(m.content).strip()
+            if text and not text.lower().startswith("error"):
+                out.append(f"{m.name}: {text[:300]}")
+    out.reverse()
+    return out
 
 
 class DecisionMiddleware(AgentMiddleware):
@@ -142,7 +160,7 @@ class DecisionMiddleware(AgentMiddleware):
         if not isinstance(last, AIMessage) or last.tool_calls:
             return None
         self._completion_checked = True
-        if not await completion.incomplete(self.client, last_request(messages), _text(last.content)):
+        if not await completion.incomplete(self.client, last_request(messages), _text(last.content), delivered(messages)):
             return None
         await self._log("Decision · completion check: the answer does not deliver the request yet; continuing")
         return {"messages": [HumanMessage(NOTE + completion.NOTE)], "jump_to": "model"}

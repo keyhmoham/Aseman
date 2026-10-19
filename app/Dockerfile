@@ -18,7 +18,11 @@ COPY packages ./packages
 
 RUN flutter config --no-analytics >/dev/null && flutter pub get
 COPY . .
-RUN flutter build web --release --no-web-resources-cdn --dart-define=API_BASE_URL=same-origin
+# The developer API's base URL, shown in the app's Developer API console
+# (e.g. https://api.example.com/v1). Empty: the node has no developer host.
+ARG DEVELOPER_API_BASE=""
+RUN flutter build web --release --no-web-resources-cdn --dart-define=API_BASE_URL=same-origin \
+    --dart-define=DEVELOPER_API_BASE=${DEVELOPER_API_BASE}
 
 FROM nginx:1.29-alpine
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf

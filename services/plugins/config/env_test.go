@@ -49,6 +49,28 @@ func TestMinimalConfigAutoWiresFromEnv(t *testing.T) {
 	}
 }
 
+func TestAnS3BucketReplacesTheLocalFilesystem(t *testing.T) {
+	for _, k := range []string{EnvDatabaseDSN, EnvNomadURL, EnvDockerHost, EnvModalTokenID, EnvModalTokenSec} {
+		t.Setenv(k, "")
+	}
+	t.Setenv(EnvS3Bucket, "files")
+	t.Setenv(EnvS3Endpoint, "https://acct.r2.cloudflarestorage.com")
+	t.Setenv(EnvS3AccessKey, "id")
+	t.Setenv(EnvS3SecretKey, "secret")
+	cfg := &Config{}
+	cfg.ApplyEnv()
+	cfg.Defaults()
+	got := names(cfg.Plugins.Adapters)
+	if _, ok := got["local"]; ok {
+		t.Fatal("the node's disk is not used for files when a bucket is set")
+	}
+	s3 := got["s3"].Config
+	opts, _ := s3["options"].(map[string]any)
+	if s3["bucket"] != "files" || s3["endpoint"] != "https://acct.r2.cloudflarestorage.com" || s3["region"] != "auto" || opts["access_key_id"] != "id" || opts["secret_access_key"] != "secret" {
+		t.Fatalf("s3 = %v", s3)
+	}
+}
+
 func TestAutoWiringWithoutEnvUsesMemoryAndSkipsOptional(t *testing.T) {
 	for _, k := range []string{EnvDatabaseDSN, EnvNomadURL, EnvDockerHost, EnvModalTokenID, EnvModalTokenSec} {
 		t.Setenv(k, "")

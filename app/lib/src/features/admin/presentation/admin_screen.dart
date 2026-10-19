@@ -85,6 +85,14 @@ class _AppScreenState extends State<AdminScreen> {
             _Call('spaces', 'admins_space_set'),
             _Call('finance', 'budget_set'),
           ]),
+      _Page('Chat reports', 'Messages and chats people reported',
+          Icons.flag_outlined, Icons.flag_rounded,
+          calls: [
+            _Call('spaces', 'admin_chat_reports', {'status': 'open'})
+          ],
+          actions: [
+            _Call('spaces', 'admin_chat_report_resolve'),
+          ]),
     ]),
     _Section('Catalog', [
       _Page('Agents', 'Create, price and approve agents',
@@ -130,6 +138,17 @@ class _AppScreenState extends State<AdminScreen> {
           actions: [
             _Call('users', 'account_update'),
           ]),
+      _Page('Talent requests', 'Jobs people post and partner keys',
+          Icons.work_outline_rounded, Icons.work_rounded,
+          calls: [
+            _Call('talent', 'admin_requests'),
+            _Call('talent', 'partner_keys'),
+          ],
+          actions: [
+            _Call('talent', 'admin_request_status'),
+            _Call('talent', 'partner_key_create'),
+            _Call('talent', 'partner_key_revoke'),
+          ]),
     ]),
     _Section('Money', [
       _Page(
@@ -151,6 +170,15 @@ class _AppScreenState extends State<AdminScreen> {
           Icons.payments_outlined, Icons.payments_rounded,
           calls: [_Call('finance', 'payouts_list')],
           actions: [_Call('finance', 'payout_resolve')]),
+      _Page('Developer API', 'Organizations, their spend and requests',
+          Icons.api_outlined, Icons.api_rounded,
+          calls: [
+            _Call('developer', 'admin_orgs'),
+            _Call('developer', 'admin_logs', {'limit': 100}),
+          ],
+          actions: [
+            _Call('developer', 'admin_org')
+          ]),
     ]),
     _Section('AI', [
       _Page('Providers', 'Endpoints and API keys', Icons.key_outlined,
@@ -158,12 +186,21 @@ class _AppScreenState extends State<AdminScreen> {
           providers: true),
       _Page('Models', 'Model list and token prices', Icons.memory_outlined,
           Icons.memory_rounded,
-          calls: [_Call('llm', 'llm_providers_list')],
-          actions: [_Call('llm', 'llm_provider_set')]),
+          calls: [
+            _Call('llm', 'llm_providers_list')
+          ],
+          actions: [
+            _Call('llm', 'llm_provider_set'),
+            _Call('llm', 'llm_import_vercel'),
+          ]),
       _Page('Decision model', 'Tool selection and work decisions',
           Icons.alt_route_outlined, Icons.alt_route_rounded,
           calls: [_Call('llm', 'llm_decision_get')],
           actions: [_Call('llm', 'llm_decision_set')]),
+      _Page('Image model', 'What agents make images with', Icons.image_outlined,
+          Icons.image_rounded,
+          calls: [_Call('llm', 'llm_image_get')],
+          actions: [_Call('llm', 'llm_image_set')]),
       _Page('Memory models', 'Learning and semantic recall',
           Icons.psychology_outlined, Icons.psychology_rounded,
           calls: [_Call('llm', 'llm_memory_get')],
@@ -201,7 +238,8 @@ class _AppScreenState extends State<AdminScreen> {
           ]),
       _Page('Sandboxes', 'Machines running at the provider',
           Icons.computer_outlined, Icons.computer_rounded,
-          calls: [_Call('spaces', 'admin_sandboxes')]),
+          calls: [_Call('spaces', 'admin_sandboxes')],
+          actions: [_Call('spaces', 'admin_terminate_sandbox')]),
       _Page('Storage', 'Volumes and project files', Icons.storage_outlined,
           Icons.storage_rounded,
           calls: [_Call('spaces', 'admin_storage')]),
@@ -431,11 +469,17 @@ class _AppScreenState extends State<AdminScreen> {
         'llm_provider_set',
         'llm_decision_set',
         'llm_memory_set',
+        'llm_image_set',
         'plugins_load',
         'plugins_unload',
         'plugins_stop',
         'plugins_set_active',
         'update',
+        'admin_chat_report_resolve',
+        'admin_request_status',
+        'partner_key_create',
+        'partner_key_revoke',
+        'admin_terminate_sandbox',
       };
       if (mutations.contains(action)) {
         _toast(adminActionDone(namespace, action));

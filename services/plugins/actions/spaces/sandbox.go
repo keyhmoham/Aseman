@@ -512,9 +512,13 @@ func (s *Service) reconcileSandbox(ctx context.Context, spaceID identity.ID, rec
 // its output. It starts the sandbox on demand and schedules the idle stop.
 func (s *Service) SandboxExec(ctx context.Context, spaceID identity.ID, command string) (string, error) {
 	gate := s.sandboxGate(spaceID)
+	// One command at a time per computer: time spent here is waiting behind another.
+	endWait := vmm.Trace(ctx, "sandbox.queue", "waiting for the computer's turn")
 	select {
 	case gate <- struct{}{}:
+		endWait()
 	case <-ctx.Done():
+		endWait()
 		return "", ctx.Err()
 	}
 	defer func() { <-gate }()
@@ -535,7 +539,10 @@ func (s *Service) SandboxExec(ctx context.Context, spaceID identity.ID, command 
 		s.sandboxMu.Unlock()
 		s.touch(spaceID)
 	}()
+	// Starting (or waking) the computer: the slow part of a first command.
+	endStart := vmm.Trace(ctx, "sandbox.start", "create or wake the computer")
 	rec, err := s.SandboxStart(ctx, spaceID)
+	endStart()
 	if err != nil {
 		return "", err
 	}
@@ -553,7 +560,9 @@ func (s *Service) SandboxExec(ctx context.Context, spaceID identity.ID, command 
 	if dir := vmm.WorkingDirectory(vmm.ExecutionFrom(ctx).RunID); dir != "" {
 		command = "mkdir -p " + dir + " && cd " + dir + " && (" + command + "\n)"
 	}
+	endExec := vmm.Trace(ctx, "sandbox.exec", clipTrace(command, 80))
 	out, err := execVM.Send(ctx, rec.VMID, command)
+	endExec()
 	if err != nil {
 		return out, err
 	}
@@ -872,4 +881,13 @@ const sandboxConcurrency = 6
 func (s *Service) sandboxGate(spaceID identity.ID) chan struct{} {
 	gate, _ := s.sandboxOperations.LoadOrStore(spaceID.String(), make(chan struct{}, sandboxConcurrency))
 	return gate.(chan struct{})
+}
+
+// clipTrace is a command shortened to a line for the turn's trace.
+func clipTrace(text string, n int) string {
+	text = strings.Join(strings.Fields(text), " ")
+	if r := []rune(text); len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return text
 }

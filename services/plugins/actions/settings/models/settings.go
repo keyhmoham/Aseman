@@ -44,11 +44,17 @@ type Pricing struct {
 	Tool Rate `json:"tool"`
 	// AgentPerMinute is an agent's time when the agent sets no rate of its own.
 	AgentPerMinute int64 `json:"agent_per_minute"`
+	// StorageGBMonth is what a developer organization pays for each GB it keeps
+	// in Storage for a month (ledger units), charged by the hour.
+	StorageGBMonth int64 `json:"storage_gb_month"`
 }
+
+// DefaultStorageGBMonth is $0.05 per GB-month: a few times what the object store costs.
+const DefaultStorageGBMonth int64 = 50_000
 
 // DefaultPricing is the price list before an administrator sets one.
 func DefaultPricing() Pricing {
-	return Pricing{Sandbox: Rate{PerMinute: 1}, Tool: Rate{PerMinute: 1}, AgentPerMinute: 1}
+	return Pricing{Sandbox: Rate{PerMinute: 1}, Tool: Rate{PerMinute: 1}, AgentPerMinute: 1, StorageGBMonth: DefaultStorageGBMonth}
 }
 
 // Machine is the size of a project's computer, set from the admin console.
@@ -69,4 +75,19 @@ type Machine struct {
 	ReserveMemoryMB int64   `json:"reserve_memory_mb"`
 	MaxCPU          float64 `json:"max_cpu"`
 	MaxMemoryMB     int64   `json:"max_memory_mb"`
+	// The sandbox provider's own limits, a safety net under the platform's idle
+	// stop: it ends a computer the node has lost track of.
+	//   - ProviderIdleMin: minutes without activity before the provider ends it.
+	//   - MaxLifetimeMin: the longest minutes one computer may run, busy or not.
+	//   - CommandTimeoutSec: the longest one command may run.
+	ProviderIdleMin   int64 `json:"provider_idle_min"`
+	MaxLifetimeMin    int64 `json:"max_lifetime_min"`
+	CommandTimeoutSec int64 `json:"command_timeout_sec"`
 }
+
+// The provider limits a computer gets when none are set.
+const (
+	DefaultProviderIdleMin   = 30
+	DefaultMaxLifetimeMin    = 8 * 60
+	DefaultCommandTimeoutSec = 300
+)

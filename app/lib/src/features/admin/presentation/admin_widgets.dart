@@ -1396,12 +1396,17 @@ class AdminKeyValue extends StatelessWidget {
           Flexible(
             child: Align(
               alignment: Alignment.centerRight,
-              child: SelectableText(value.isEmpty ? '—' : value,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontFamily: mono ? 'monospace' : null,
-                      fontWeight: FontWeight.w600)),
+              // Its own storage key: inside an ExpansionTile the text's
+              // scroll offset would otherwise share the tile's saved state.
+              child: KeyedSubtree(
+                key: PageStorageKey<String>('kv:$label'),
+                child: SelectableText(value.isEmpty ? '—' : value,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontFamily: mono ? 'monospace' : null,
+                        fontWeight: FontWeight.w600)),
+              ),
             ),
           ),
         ]),

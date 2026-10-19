@@ -49,7 +49,7 @@ func (s *Service) Record(ctx context.Context, u *usage.Usage) error {
 	if u.SpaceID.IsZero() {
 		return errs.InvalidArgument("usage space required")
 	}
-	if u.TokensIn <= 0 && u.TokensOut <= 0 && u.Images <= 0 {
+	if u.TokensIn <= 0 && u.TokensOut <= 0 && u.Images <= 0 && u.DecisionIn <= 0 && u.DecisionOut <= 0 {
 		return nil // nothing consumed; skip the noise
 	}
 	id, err := identity.New(s.K.NodeID())
@@ -60,6 +60,23 @@ func (s *Service) Record(ctx context.Context, u *usage.Usage) error {
 	u.Entity = entity.Entity{ID: id, CreatedAt: now, UpdatedAt: now}
 	if err := s.R.CreateID(ctx, "usages", id, u); err != nil {
 		return errs.Wrap(errs.CodeInternal, err, "record usage")
+	}
+	return nil
+}
+
+// RecordMemory appends one settlement of a project's memory use.
+func (s *Service) RecordMemory(ctx context.Context, spaceID identity.ID, tokens, tokensIn, cost int64) error {
+	if spaceID.IsZero() || (tokens <= 0 && cost <= 0) {
+		return nil
+	}
+	id, err := identity.New(s.K.NodeID())
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	m := &usage.MemoryUsage{Entity: entity.Entity{ID: id, CreatedAt: now, UpdatedAt: now}, SpaceID: spaceID, Tokens: tokens, TokensIn: tokensIn, Cost: cost}
+	if err := s.R.CreateID(ctx, "memory_usages", id, m); err != nil {
+		return errs.Wrap(errs.CodeInternal, err, "record memory usage")
 	}
 	return nil
 }

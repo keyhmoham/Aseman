@@ -8,7 +8,7 @@ import (
 func f(name string, k database.Kind) database.Field { return database.Field{Name: name, Kind: k} }
 
 func Models() []database.Model {
-	return append(shared.Models(), []database.Model{spaces(), rooms(), memberships(), files(), proxies(), invitations(), turns(), executionEvents(), executionArtifacts()}...)
+	return append(shared.Models(), []database.Model{spaces(), rooms(), memberships(), files(), proxies(), invitations(), turns(), executionEvents(), executionArtifacts(), chatReports()}...)
 }
 
 func spaces() database.Model {
@@ -101,7 +101,7 @@ func invitations() database.Model {
 
 func turns() database.Model {
 	return database.Model{Name: "room_turns", Table: "room_turns", Fields: []database.Field{
-		f("id", database.KindString), f("space_id", database.KindString), f("room_id", database.KindString), f("actor_id", database.KindString), f("submission", database.KindString), f("fingerprint", database.KindString), f("message_id", database.KindString), f("prompt", database.KindString), f("seeds", database.KindJSON), f("attachments", database.KindJSON), f("status", database.KindString), f("error", database.KindString), f("started_at", database.KindTime), f("ended_at", database.KindTime), f("lease_until", database.KindTime), f("created_at", database.KindTime), f("updated_at", database.KindTime)}}
+		f("id", database.KindString), f("space_id", database.KindString), f("room_id", database.KindString), f("actor_id", database.KindString), f("submission", database.KindString), f("fingerprint", database.KindString), f("message_id", database.KindString), f("prompt", database.KindString), f("seeds", database.KindJSON), f("attachments", database.KindJSON), f("status", database.KindString), f("error", database.KindString), f("started_at", database.KindTime), f("ended_at", database.KindTime), f("lease_until", database.KindTime), f("spans", database.KindJSON), f("created_at", database.KindTime), f("updated_at", database.KindTime)}}
 }
 
 // executionEvents records each platform tool an agent ran (idempotent replay
@@ -127,4 +127,21 @@ func executionArtifacts() database.Model {
 	return database.Model{Name: "execution_artifacts", Table: "execution_artifacts", Fields: []database.Field{
 		f("id", database.KindString), f("file_id", database.KindString), f("space_id", database.KindString), f("room_id", database.KindString), f("run_id", database.KindString), f("step_id", database.KindString), f("attempt_id", database.KindString), f("agent_id", database.KindString), f("delivered", database.KindBool), f("created_at", database.KindTime), f("updated_at", database.KindTime),
 	}}
+}
+
+// chatReports are what people reported in chats, for the node's admins.
+func chatReports() database.Model {
+	return database.Model{
+		Name:  "chat_reports",
+		Table: "chat_reports",
+		Fields: []database.Field{
+			f("id", database.KindString), f("reporter_id", database.KindString),
+			f("space_id", database.KindString), f("room_id", database.KindString),
+			f("message_id", database.KindString), f("accused_id", database.KindString),
+			f("reason", database.KindString), f("note", database.KindString),
+			f("evidence", database.KindString), f("status", database.KindString),
+			f("resolved_by", database.KindString), f("resolved_at", database.KindTime),
+			f("created_at", database.KindTime), f("updated_at", database.KindTime),
+		},
+	}
 }

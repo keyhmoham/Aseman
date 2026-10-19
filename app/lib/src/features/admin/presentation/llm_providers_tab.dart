@@ -273,14 +273,17 @@ class _LlmProvidersTabState extends State<LlmProvidersTab> {
 
 /// One editable model row of the provider form.
 class _ModelRow {
-  _ModelRow([LlmModel? m])
-      : id = TextEditingController(text: m?.id ?? ''),
-        name = m?.name ?? '',
-        capabilities = m?.capabilities ?? const [],
+  _ModelRow([this.original])
+      : id = TextEditingController(text: original?.id ?? ''),
+        name = original?.name ?? '',
+        capabilities = original?.capabilities ?? const [],
         input = TextEditingController(
-            text: m == null ? '' : formatCredits(m.inputPrice)),
+            text: original == null ? '' : formatCredits(original.inputPrice)),
         output = TextEditingController(
-            text: m == null ? '' : formatCredits(m.outputPrice));
+            text: original == null ? '' : formatCredits(original.outputPrice));
+
+  /// The model as the node had it (null for a new row).
+  final LlmModel? original;
   final TextEditingController id;
   final String name;
   final List<String> capabilities;
@@ -378,12 +381,28 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     for (final r in rows) {
       final id = r.id.text.trim();
       if (id.isEmpty) continue;
+      final input = (double.tryParse(r.input.text.trim()) ?? 0) * 10000;
+      final output = (double.tryParse(r.output.text.trim()) ?? 0) * 10000;
+      // What the node stores beyond these fields stays; a price typed here is
+      // no longer an import's price plus its markup.
+      final extra = {...?r.original?.extra};
+      final repriced = r.original != null &&
+          (input != r.original!.inputPrice ||
+              output != r.original!.outputPrice);
+      if (repriced) {
+        extra
+          ..remove('markup')
+          ..remove('base_input_price')
+          ..remove('base_output_price');
+        if (input > 0 || output > 0) extra.remove('unpriced');
+      }
       models.add(LlmModel(
         id: id,
         name: r.name,
-        inputPrice: (double.tryParse(r.input.text.trim()) ?? 0) * 10000,
-        outputPrice: (double.tryParse(r.output.text.trim()) ?? 0) * 10000,
+        inputPrice: input,
+        outputPrice: output,
         capabilities: r.capabilities,
+        extra: extra,
       ));
     }
     String? problem;

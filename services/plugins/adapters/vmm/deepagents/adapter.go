@@ -55,6 +55,12 @@ const (
 	EnvRuntimeNetwork = "TRADERA_AGENT_RUNTIME_NETWORK"
 	// EnvRuntimeMemoryMB is the memory the runtime reserves on Nomad (MB).
 	EnvRuntimeMemoryMB = "TRADERA_AGENT_RUNTIME_MEMORY_MB"
+	// Model calls have a generous total deadline, but a provider must start and
+	// keep producing its OpenAI-compatible stream. All three accept Go duration
+	// strings (for example "2m" or "45s").
+	EnvLLMCallTimeout       = "TRADERA_LLM_CALL_TIMEOUT"
+	EnvLLMFirstEventTimeout = "TRADERA_LLM_FIRST_EVENT_TIMEOUT"
+	EnvLLMStreamIdleTimeout = "TRADERA_LLM_STREAM_IDLE_TIMEOUT"
 )
 
 const (
@@ -67,9 +73,19 @@ const (
 	defaultNetwork = "tradera_default"
 	// defaultRuntimeMemoryMB fits a 4 GB server next to the database, the node and
 	// Nomad; raise it (EnvRuntimeMemoryMB) on a larger one.
-	defaultRuntimeMemoryMB int64 = 2048
-	runtimeService               = "deepagents-runtime"
+	defaultRuntimeMemoryMB      int64 = 2048
+	runtimeService                    = "deepagents-runtime"
+	defaultLLMCallTimeout             = 5 * time.Minute
+	defaultLLMFirstEventTimeout       = 2 * time.Minute
+	defaultLLMStreamIdleTimeout       = 45 * time.Second
 )
+
+func envDuration(name string, fallback time.Duration) time.Duration {
+	if parsed, err := time.ParseDuration(strings.TrimSpace(os.Getenv(name))); err == nil && parsed > 0 {
+		return parsed
+	}
+	return fallback
+}
 
 // agentDef is a registered deepagents VM.
 type agentDef struct {
@@ -103,6 +119,11 @@ type Adapter struct {
 	// memoryMB is what the runtime asks Nomad to reserve for it.
 	memoryMB int64
 	client   *http.Client
+	// The total model-call deadline and the two liveness deadlines inside it.
+	// Kept on the adapter so tests can exercise timeout behaviour in milliseconds.
+	llmCallTimeout       time.Duration
+	llmFirstEventTimeout time.Duration
+	llmStreamIdleTimeout time.Duration
 
 	mu       sync.Mutex
 	agents   map[string]*agentDef
@@ -123,6 +144,7 @@ type Adapter struct {
 	memory *memoryMeter
 	// memoryChargeFn / memoryOwnerFn replace finance and the spaces service in
 	// charging for memory (tests).
+	memoryRecordFn func(space identity.ID, tokens, tokensIn, amount int64)
 	memoryChargeFn func(ctx context.Context, space, payer, payee identity.ID, amount int64, desc string) error
 	memoryOwnerFn  func(ctx context.Context, space identity.ID) identity.ID
 }
@@ -139,9 +161,12 @@ func New(log *logger.Logger) *Adapter {
 			Log:         log,
 		},
 		image: defaultImage, alias: defaultAlias, port: defaultPort, volume: defaultVolume, memory: newMemoryMeter(),
-		client:   &http.Client{},
-		agents:   map[string]*agentDef{},
-		sessions: map[string]*session{},
+		client:               &http.Client{},
+		llmCallTimeout:       envDuration(EnvLLMCallTimeout, defaultLLMCallTimeout),
+		llmFirstEventTimeout: envDuration(EnvLLMFirstEventTimeout, defaultLLMFirstEventTimeout),
+		llmStreamIdleTimeout: envDuration(EnvLLMStreamIdleTimeout, defaultLLMStreamIdleTimeout),
+		agents:               map[string]*agentDef{},
+		sessions:             map[string]*session{},
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/tradera/tradera/internal/kernel"
 	"github.com/tradera/tradera/internal/plugins/entity"
 	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/tradera/tradera/pkg/errs"
 	"github.com/tradera/tradera/pkg/logger"
 	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
 	rt "github.com/tradera/tradera/plugins/actions/routines/models"
@@ -72,6 +73,7 @@ func harness(t *testing.T) (*Service, *fakeSpaces, context.Context) {
 		id    identity.ID
 		value any
 	}{
+		{"spaces", workspace, &space.Space{Entity: entity.Entity{ID: workspace}}},
 		{"rooms", roomID, &room}, {"bots", creator, &agent},
 		{"memberships", mustID(t, "00000000000000010000000000000003"), &membership.Membership{Entity: entity.Entity{ID: mustID(t, "00000000000000010000000000000003")}, SpaceID: workspace, MemberID: creator, Role: membership.RoleOwner}},
 		{"memberships", mustID(t, "00000000000000010000000000000004"), &membership.Membership{Entity: entity.Entity{ID: mustID(t, "00000000000000010000000000000004")}, SpaceID: workspace, MemberID: account, Role: membership.RoleBot}},
@@ -307,5 +309,33 @@ func TestAnIntervalRoutineKeepsItsCadenceInsteadOfDriftingByTheRunTime(t *testin
 	// A node that was down for three days does not replay them, it picks the next slot.
 	if got := nextPeriodicRun(r, due.Add(3*24*time.Hour+time.Hour)); !got.Equal(due.Add(4 * 24 * time.Hour)) {
 		t.Fatalf("after downtime next = %v; want the next slot on the same cadence", got)
+	}
+}
+
+func TestRoutineOfDeletedProjectIsRemoved(t *testing.T) {
+	s, fake, ctx := harness(t)
+	ws := mustID(t, "00000000000000010000000000000099")
+	room := mustID(t, "00000000000000010000000000000098")
+	creator := mustID(t, "00000000000000010000000000000001")
+	r, err := s.Create(ctx, ws, room, creator, "daily", rt.Periodic, "00000000000000010000000000000001", "report", 0, 60)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.R.Delete(ctx, "spaces", ws); err != nil {
+		t.Fatal(err)
+	}
+	r.NextRunAt = time.Now().Add(-time.Minute)
+	if err := s.R.Update(ctx, "routines", r.ID, r); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RunDue(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var got rt.Routine
+	if err := s.R.Get(ctx, "routines", r.ID, &got); errs.CodeOf(err) != errs.CodeNotFound {
+		t.Fatalf("routine of a deleted project still exists: %v", err)
+	}
+	if fake.asks != 0 {
+		t.Fatal("routine of a deleted project fired")
 	}
 }

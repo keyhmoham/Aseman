@@ -14,7 +14,9 @@ services:
       - tradera
     environment:
       APP_DOMAIN: ${APP_DOMAIN:?set APP_DOMAIN in .env (e.g. app.example.com)}
-      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN in .env (e.g. api.example.com)}
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN in .env (e.g. connect.example.com)}
+      # The developer API (bearer keys) on its own host; unset leaves it off.
+      DEVELOPER_DOMAIN: ${DEVELOPER_DOMAIN:-developer.localhost}
       ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
     ports:
       - "80:80"

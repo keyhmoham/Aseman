@@ -211,17 +211,29 @@ func (s *Service) adminWorkLog(ctx context.Context, req *api.ActionRequest) (*ap
 	}
 	for _, u := range usages {
 		summary := (usage.Delta{TokensIn: u.TokensIn, TokensOut: u.TokensOut, Images: u.Images, Cost: u.Cost}).Summary()
-		if summary == "" {
+		if summary == "" && u.DecisionIn+u.DecisionOut == 0 {
 			continue
 		}
 		usageEvents = append(usageEvents, map[string]any{
 			"id": u.ID.String(), "created_at": u.Entity.CreatedAt, "bot_name": u.BotName,
 			"room_id": u.RoomID.String(), "request_id": u.RequestID, "summary": summary,
 			"provider": providerName(u.Provider), "model": u.Model, "kind": u.Kind, "tokens_in": u.TokensIn, "tokens_out": u.TokensOut, "cost": u.Cost,
+			"decision_in": u.DecisionIn, "decision_out": u.DecisionOut, "decision": u.Decision,
+			"images": u.Images, "image_count": u.ImageCount, "image_in": u.ImageIn, "image_out": u.ImageOut, "image_model": u.ImageModel,
 		})
 	}
+	// Memory is charged to the project in batches, so it is a project-level
+	// list, never a part of one run.
+	var mem []usage.MemoryUsage
+	_ = s.R.List(ctx, "memory_usages", database.Filter{
+		Equal: map[string]any{"space_id": spID.String()}, OrderBy: "created_at", Asc: false, Limit: 50,
+	}, &mem)
+	memoryEvents := make([]map[string]any, 0, len(mem))
+	for _, m := range mem {
+		memoryEvents = append(memoryEvents, map[string]any{"id": m.ID.String(), "created_at": m.Entity.CreatedAt, "tokens": m.Tokens, "tokens_in": m.TokensIn, "cost": m.Cost})
+	}
 	if len(turns) == 0 {
-		return helper.JSON(map[string]any{"runs": []any{}, "usage_events": usageEvents})
+		return helper.JSON(map[string]any{"runs": []any{}, "usage_events": usageEvents, "memory_events": memoryEvents})
 	}
 	oldest := turns[len(turns)-1].CreatedAt
 	var msgs []message.Message
@@ -234,22 +246,22 @@ func (s *Service) adminWorkLog(ctx context.Context, req *api.ActionRequest) (*ap
 	people := s.participants()
 	runs := make([]map[string]any, 0, len(turns))
 	for i, t := range turns {
-		// A run owns its room's events from its start until it ended, or until the
-		// next run in that room began.
-		end := t.EndedAt
-		if end.IsZero() {
-			end = time.Now().UTC()
-			for j := i - 1; j >= 0; j-- {
-				if turns[j].RoomID == t.RoomID {
-					end = turns[j].CreatedAt
-					break
-				}
+		// A run owns its room's events from its start until the next run in that
+		// room begins (or now), not only until it ended: an answer to a question
+		// the run asked resumes the agent outside any run of its own, and what it
+		// did then belongs here, after this run.
+		end, slack := time.Now().UTC(), 2*time.Second
+		for j := i - 1; j >= 0; j-- {
+			if turns[j].RoomID == t.RoomID {
+				end, slack = turns[j].CreatedAt, 0 // the next run's own events are listed under it
+				break
 			}
 		}
 		start := t.CreatedAt
 		events := []map[string]any{}
 		for _, m := range msgs {
-			if m.RoomID != t.RoomID || m.CreatedAt.Before(start) || m.CreatedAt.After(end.Add(2*time.Second)) {
+			past := m.CreatedAt.After(end.Add(slack)) || (slack == 0 && !m.CreatedAt.Before(end))
+			if m.RoomID != t.RoomID || m.CreatedAt.Before(start) || past {
 				continue
 			}
 			body := m.Body
@@ -277,9 +289,10 @@ func (s *Service) adminWorkLog(ctx context.Context, req *api.ActionRequest) (*ap
 			"id": t.ID.String(), "room_id": t.RoomID.String(), "status": t.Status, "error": t.Error, "prompt": t.Prompt,
 			"actor": people.get(ctx, t.ActorID)["handle"], "agents": agents,
 			"created_at": t.CreatedAt, "started_at": t.StartedAt, "ended_at": t.EndedAt, "events": events,
+			"spans": t.Spans,
 		})
 	}
-	return helper.JSON(map[string]any{"runs": runs, "usage_events": usageEvents})
+	return helper.JSON(map[string]any{"runs": runs, "usage_events": usageEvents, "memory_events": memoryEvents})
 }
 
 // adminFiles lists every file stored in a project, across all its rooms, with
@@ -328,7 +341,7 @@ func (s *Service) adminWorkspace(ctx context.Context, spaceID identity.ID) map[s
 	out := map[string]any{"available": false, "entries": []map[string]any{}, "total_size": int64(0), "truncated": false}
 	id, ok := s.sandboxBotID(ctx, spaceID)
 	if !ok || s.Bots == nil {
-		out["note"] = "This project's computer has not been started yet."
+		out["note"] = "This room's computer has not been started yet."
 		return out
 	}
 	rec, err := s.Bots.GetBot(ctx, id)
@@ -356,7 +369,7 @@ func (s *Service) adminWorkspace(ctx context.Context, spaceID identity.ID) map[s
 		items, err := reader.ListWorkspace(ctx, rec.VMID, cur.path)
 		if err != nil {
 			if cur.path == "" {
-				out["note"] = "The project's files could not be read right now."
+				out["note"] = "The room's files could not be read right now."
 				return out
 			}
 			continue
@@ -419,13 +432,9 @@ func (s *Service) projectsByMachine(ctx context.Context) map[string]map[string]a
 	return out
 }
 
-// adminSandboxes lists the machines the provider is running right now, each
-// with the project it belongs to. One with no project is running, and billed,
-// without the node using it.
-func (s *Service) adminSandboxes(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
-	if err := helper.RequireNodeAdmin(ctx, s.R, req, s.K.Env()["admin_handle"]); err != nil {
-		return nil, err
-	}
+// providerSandboxRows are the machines the provider is running right now, each
+// with the project it belongs to (none when no project on this node uses it).
+func (s *Service) providerSandboxRows(ctx context.Context) ([]map[string]any, error) {
 	inv, err := s.inventory()
 	if err != nil {
 		return nil, err
@@ -458,7 +467,75 @@ func (s *Service) adminSandboxes(ctx context.Context, req *api.ActionRequest) (*
 		}
 		out = append(out, row)
 	}
+	return out, nil
+}
+
+// adminSandboxes lists the machines the provider is running right now, each
+// with the project it belongs to. One with no project is running, and billed,
+// without the node using it.
+func (s *Service) adminSandboxes(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+	if err := helper.RequireNodeAdmin(ctx, s.R, req, s.K.Env()["admin_handle"]); err != nil {
+		return nil, err
+	}
+	out, err := s.providerSandboxRows(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return helper.JSON(map[string]any{"provider": string(s.sandboxVMType()), "sandboxes": out})
+}
+
+// strayTerminateError is why a machine may not be terminated from the admin
+// list: only one that no project on this node uses may be, since a project's own
+// computer is stopped from its project (and its files are synced first).
+func strayTerminateError(row map[string]any) error {
+	if row == nil {
+		return errs.NotFound("that machine is not running")
+	}
+	if project, ok := row["project"].(map[string]any); ok && project != nil {
+		return errs.Conflict("this machine belongs to a project; stop it from the project")
+	}
+	return nil
+}
+
+// adminTerminateSandbox ends a machine that is running on the provider but that
+// no project on this node uses (a deleted project's, or one the node lost track
+// of). It is never done on its own: the machine may be another node's on the
+// same provider account, so an admin decides.
+func (s *Service) adminTerminateSandbox(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+	if err := helper.RequireNodeAdmin(ctx, s.R, req, s.K.Env()["admin_handle"]); err != nil {
+		return nil, err
+	}
+	var in struct {
+		ID string `json:"id"`
+	}
+	if err := helper.Decode(req, &in); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(in.ID) == "" {
+		return nil, errs.InvalidArgument("machine id required")
+	}
+	rows, err := s.providerSandboxRows(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var found map[string]any
+	for _, r := range rows {
+		if r["id"] == in.ID {
+			found = r
+		}
+	}
+	if err := strayTerminateError(found); err != nil {
+		return nil, err
+	}
+	vm := s.K.VMMFor(vmm.Type(s.sandboxVMType()))
+	if vm == nil {
+		return nil, errs.New(errs.CodeUnavailable, "sandbox provider unavailable")
+	}
+	if err := vm.DeleteVM(ctx, in.ID); err != nil {
+		return nil, err
+	}
+	s.L.Info("sandbox terminated by an admin", "sandbox", in.ID, "machine", found["machine"])
+	return helper.JSON(map[string]any{"ok": true})
 }
 
 // adminStorage lists the volumes the provider stores, each with the project

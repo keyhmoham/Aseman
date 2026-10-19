@@ -114,6 +114,11 @@ String adminActionDone(String namespace, String action) =>
       'spaces.space_delete': 'Project deleted',
       'spaces.computer': 'Computer updated',
       'spaces.admins_space_set': 'Admins space saved',
+      'spaces.admin_chat_report_resolve': 'Report updated',
+      'talent.admin_request_status': 'Request updated',
+      'talent.partner_key_create': 'Partner key created',
+      'talent.partner_key_revoke': 'Partner key revoked',
+      'spaces.admin_terminate_sandbox': 'Machine terminated',
       'bots.bot_create': 'Agent created',
       'bots.bot_edit': 'Agent saved',
       'bots.bot_delete': 'Agent deleted',
@@ -129,6 +134,7 @@ String adminActionDone(String namespace, String action) =>
       'llm.llm_provider_set': 'Models saved',
       'llm.llm_decision_set': 'Decision model saved',
       'llm.llm_memory_set': 'Memory models saved',
+      'llm.llm_image_set': 'Image model saved',
       'admin.plugins_load': 'Plugin loaded',
       'admin.plugins_unload': 'Plugin unloaded',
       'admin.plugins_stop': 'Plugin stopped',
@@ -162,6 +168,12 @@ Widget _computerForm(Map<String, dynamic> body) {
         Icons.autorenew_rounded,
         'Replace the computer?',
         'A fresh machine is created from the base image. Anything outside the project volume is lost.',
+        true
+      ),
+    'forget_logins' => (
+        Icons.no_accounts_rounded,
+        'Forget the browser\'s logins?',
+        'The desktop browser keeps the sites it is signed in to across sleeps and replacements. This signs it out of all of them; nothing else is touched.',
         true
       ),
     _ => (

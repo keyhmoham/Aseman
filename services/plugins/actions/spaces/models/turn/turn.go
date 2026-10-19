@@ -23,4 +23,15 @@ type Turn struct {
 	StartedAt   time.Time   `db:"started_at" json:"started_at,omitempty"`
 	EndedAt     time.Time   `db:"ended_at" json:"ended_at,omitempty"`
 	LeaseUntil  time.Time   `db:"lease_until" json:"-"`
+	// Spans is where the turn's time went (admin project log).
+	Spans []Span `db:"spans" json:"spans,omitempty"`
+}
+
+// Span is one timed phase of a turn: what it was, the detail worth reading, when
+// it began and how long it took.
+type Span struct {
+	Name   string    `json:"name"`
+	Detail string    `json:"detail,omitempty"`
+	Start  time.Time `json:"start"`
+	Ms     int64     `json:"ms"`
 }

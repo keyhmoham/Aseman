@@ -27,7 +27,6 @@ enum AccountArea {
       'Balance, activity, top-ups and purchases', [
     _Endpoint('finance', 'account'),
     _Endpoint('finance', 'wallet_get'),
-    _Endpoint('finance', 'ledger_list', {'limit': 100}),
     _Endpoint('finance', 'purchases_mine'),
   ]),
   usage('Usage', Icons.query_stats_outlined,

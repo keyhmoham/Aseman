@@ -23,8 +23,9 @@ import (
 )
 
 type Service struct {
-	K api.Kernel
-	R *repo.Repo
+	K     api.Kernel
+	R     *repo.Repo
+	limit limiter
 }
 
 func (s *Service) invoke(ctx context.Context, ns, name string, actor identity.ID, payload any) (map[string]any, error) {
@@ -304,6 +305,34 @@ func (s *Service) run(ctx context.Context) {
 func NewPlugin() api.Plugin {
 	return module.New(api.Info{Name: "talent-ns", Version: "1.0.0", Provides: []string{"service/talent"}}, func(ctx context.Context, d *api.Dependencies) (module.Instance, error) {
 		s := &Service{K: d.Kernel, R: repo.New(d.Kernel)}
-		return module.Instance{Service: s, Models: append(schema.Models(), models.Models()...), Run: s.run, Actions: []api.Action{helper.Action{Namespace: "talent", Name: "create", Summary: "Fund a collaboration offer", Handler: s.create}, helper.Action{Namespace: "talent", Name: "respond", Summary: "Accept or decline a funded offer", Handler: s.respond}, helper.Action{Namespace: "talent", Name: "list_mine", Summary: "Own offers", Handler: func(c context.Context, r *api.ActionRequest) (*api.ActionResponse, error) { return s.list(c, r, false) }}, helper.Action{Namespace: "talent", Name: "list_project", Summary: "Project offers", Handler: func(c context.Context, r *api.ActionRequest) (*api.ActionResponse, error) { return s.list(c, r, true) }}}}, nil
+		var release func()
+		actions := []api.Action{
+			helper.Action{Namespace: "talent", Name: "create", Summary: "Fund a collaboration offer", Handler: s.create},
+			helper.Action{Namespace: "talent", Name: "respond", Summary: "Accept or decline a funded offer", Handler: s.respond},
+			helper.Action{Namespace: "talent", Name: "list_mine", Summary: "Own offers", Handler: func(c context.Context, r *api.ActionRequest) (*api.ActionResponse, error) { return s.list(c, r, false) }},
+			helper.Action{Namespace: "talent", Name: "list_project", Summary: "Project offers", Handler: func(c context.Context, r *api.ActionRequest) (*api.ActionResponse, error) { return s.list(c, r, true) }},
+		}
+		return module.Instance{
+			Service: s,
+			Models:  append(schema.Models(), models.Models()...),
+			Run:     s.run,
+			Actions: append(actions, s.requestActions()...),
+			// The partner API: GET /v1/partner/talent-requests on the developer host.
+			Mount: func(context.Context) error {
+				binder, ok := d.Kernel.(api.NetworkBindings)
+				if !ok {
+					return errs.New(errs.CodeUnavailable, "host does not support plugin network bindings")
+				}
+				var err error
+				release, err = binder.BindRoutes("talent", s.Register, s.Unregister)
+				return err
+			},
+			Close: func(context.Context) error {
+				if release != nil {
+					release()
+				}
+				return nil
+			},
+		}, nil
 	})
 }

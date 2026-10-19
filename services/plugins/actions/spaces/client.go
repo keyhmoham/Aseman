@@ -49,6 +49,7 @@ func clientActions(s *Service) []api.Action {
 		helper.Action{Namespace: "spaces", Name: "space_list_all", Summary: "Administrate workspaces", Handler: s.spaceListAll},
 		helper.Action{Namespace: "spaces", Name: "admin_files", Summary: "Admin: every file stored in a project", Handler: s.adminFiles},
 		helper.Action{Namespace: "spaces", Name: "admin_work_log", Summary: "Admin: a project's recent runs with their events", Handler: s.adminWorkLog},
+		helper.Action{Namespace: "spaces", Name: "admin_terminate_sandbox", Summary: "Admin: end a running machine that no project uses", Handler: s.adminTerminateSandbox},
 		helper.Action{Namespace: "spaces", Name: "admin_sandboxes", Summary: "Admin: the machines the sandbox provider is running now", Handler: s.adminSandboxes},
 		helper.Action{Namespace: "spaces", Name: "admin_storage", Summary: "Admin: the volumes the sandbox provider stores", Handler: s.adminStorage},
 	}, append(append(append(append(append(turnActions(s), computerActions(s)...), updatesActions(s)...), seenActions(s)...), adminsSpaceActions(s)...), dbActions(s)...)...)

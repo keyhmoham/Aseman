@@ -69,7 +69,7 @@ func parsePricing(v any) (models.Pricing, error) {
 	if err := dec.Decode(&p); err != nil {
 		return models.Pricing{}, errs.InvalidArgument("invalid pricing: " + err.Error())
 	}
-	if !p.Sandbox.Valid() || !p.Tool.Valid() || p.AgentPerMinute < 0 {
+	if !p.Sandbox.Valid() || !p.Tool.Valid() || p.AgentPerMinute < 0 || p.StorageGBMonth < 0 {
 		return models.Pricing{}, errs.InvalidArgument("prices cannot be negative")
 	}
 	return p, nil
@@ -122,6 +122,16 @@ func effectiveMachine(m models.Machine, env map[string]string) models.Machine {
 	if m.MaxMemoryMB <= 0 {
 		m.MaxMemoryMB = 8192
 	}
+	if m.ProviderIdleMin <= 0 {
+		m.ProviderIdleMin = models.DefaultProviderIdleMin
+	}
+	if m.MaxLifetimeMin <= 0 {
+		m.MaxLifetimeMin = models.DefaultMaxLifetimeMin
+	}
+	if m.CommandTimeoutSec <= 0 {
+		m.CommandTimeoutSec = models.DefaultCommandTimeoutSec
+	}
+	m.MaxLifetimeMin = max(m.MaxLifetimeMin, m.ProviderIdleMin)
 	m.MaxCPU = math.Max(m.MaxCPU, m.CPU)
 	m.MaxMemoryMB = max(m.MaxMemoryMB, m.MemoryMB)
 	m.ReserveCPU = math.Min(m.ReserveCPU, m.MaxCPU)
@@ -152,6 +162,14 @@ func parseMachine(v any) (models.Machine, error) {
 		return models.Machine{}, errs.InvalidArgument("memory must be between 0 and 256 GB")
 	case m.DiskMB < 0 || m.DiskMB > 2097152:
 		return models.Machine{}, errs.InvalidArgument("disk must be between 0 and 2 TB")
+	case m.ProviderIdleMin != 0 && (m.ProviderIdleMin < 5 || m.ProviderIdleMin > 1440):
+		return models.Machine{}, errs.InvalidArgument("the provider idle limit must be between 5 minutes and 24 hours")
+	case m.MaxLifetimeMin != 0 && (m.MaxLifetimeMin < 30 || m.MaxLifetimeMin > 1440):
+		return models.Machine{}, errs.InvalidArgument("the longest a computer may run must be between 30 minutes and 24 hours")
+	case m.ProviderIdleMin > 0 && m.MaxLifetimeMin > 0 && m.ProviderIdleMin > m.MaxLifetimeMin:
+		return models.Machine{}, errs.InvalidArgument("the provider idle limit cannot be longer than the longest a computer may run")
+	case m.CommandTimeoutSec != 0 && (m.CommandTimeoutSec < 10 || m.CommandTimeoutSec > 3600):
+		return models.Machine{}, errs.InvalidArgument("the command limit must be between 10 seconds and 1 hour")
 	case m.ReserveCPU > 0 && m.CPU > 0 && m.ReserveCPU > m.CPU:
 		return models.Machine{}, errs.InvalidArgument("the idle reserve cannot be more than the size projects are sold at")
 	case m.ReserveMemoryMB > 0 && m.MemoryMB > 0 && m.ReserveMemoryMB > m.MemoryMB:

@@ -17,7 +17,7 @@ import (
 	"github.com/tradera/tradera/plugins/config"
 )
 
-var defaultNamespaces = []string{"auth", "users", "finance", "federation", "llm", "usage", "bots", "message", "posts", "market", "spaces", "routines", "settings", "talent", "tools", "timeline", "admin"}
+var defaultNamespaces = []string{"auth", "users", "finance", "federation", "llm", "usage", "developer", "bots", "message", "posts", "market", "spaces", "routines", "settings", "talent", "tools", "timeline", "admin"}
 
 func bootPlugins(cfg *dconfig.Config, k *kernel.Kernel, ring *logs.Ring) error {
 	root, directory, err := pluginPaths(cfg)

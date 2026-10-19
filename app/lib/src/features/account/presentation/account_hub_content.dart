@@ -80,12 +80,19 @@ class _AccountHubContentState extends State<AccountHubContent> {
   Widget _wallet() {
     final account = _map(widget.results['finance.account']);
     final wallet = _map(widget.results['finance.wallet_get']);
-    final ledger = _maps(
-        _map(widget.results['finance.ledger_list'])['entries'] ??
-            _map(widget.results['finance.ledger_list'])['ledger']);
+    // The caller's own wallet activity, signed from their side (finance.ledger_list
+    // is the node's whole ledger, not this person's).
+    final activity = _maps(account['transactions']);
     final purchases =
         _maps(_map(widget.results['finance.purchases_mine'])['purchases']);
     final balance = wallet['balance'] ?? account['balance'];
+    // Credits granted with an end date: finance.account marks the ledger
+    // entries that added them with when they lapse (or lapsed).
+    final active = activity
+        .where((t) => '${t['expires_at'] ?? ''}'.isNotEmpty)
+        .where((g) => '${g['grant_status']}' != 'expired')
+        .toList()
+      ..sort((a, b) => '${a['expires_at']}'.compareTo('${b['expires_at']}'));
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       AdminGrid(minTileWidth: 150, children: [
         AdminStatCard(
@@ -110,6 +117,20 @@ class _AccountHubContentState extends State<AccountHubContent> {
             hint: 'Across projects',
             icon: Icons.query_stats_outlined),
       ]),
+      if (active.isNotEmpty) ...[
+        const SizedBox(height: 18),
+        AdminSectionCard(
+            title: 'Credits that expire',
+            icon: Icons.hourglass_bottom_rounded,
+            subtitle:
+                'Granted credits are used first and lapse on their date if any are left.',
+            child: Column(children: [
+              for (final g in active)
+                AdminKeyValue(
+                    '${g['base_description'] ?? 'Granted credits'} · ${_signedCredits(g['amount'])}',
+                    'expires ${_date(g['expires_at'])}'),
+            ])),
+      ],
       const SizedBox(height: 18),
       Row(children: [
         Expanded(
@@ -130,20 +151,21 @@ class _AccountHubContentState extends State<AccountHubContent> {
         empty: 'No wallet activity yet.',
         columns: const [
           AdminTableColumn('When', width: 170),
-          AdminTableColumn('Description', width: 300),
+          AdminTableColumn('Description', width: 340),
           AdminTableColumn('Type', width: 130),
           AdminTableColumn('Amount', width: 130, align: TextAlign.right),
-          AdminTableColumn('Balance', width: 130, align: TextAlign.right),
         ],
         rows: [
-          for (final e in ledger)
+          for (final e in activity)
             [
               Text(_date(e['created_at'])),
-              Text(
-                  '${e['description'] ?? e['reason'] ?? e['kind'] ?? 'Wallet entry'}'),
-              AdminStatusPill('${e['kind'] ?? e['type'] ?? 'entry'}'),
+              Text('${e['description'] ?? ''}'.isEmpty
+                  ? 'Wallet entry'
+                  : '${e['description']}'),
+              AdminStatusPill(e['grant_status'] == 'expired'
+                  ? 'expired'
+                  : '${e['type'] ?? 'entry'}'),
               Text(_signedCredits(e['amount']), textAlign: TextAlign.right),
-              Text(_credits(e['balance']), textAlign: TextAlign.right)
             ]
         ],
       ),

@@ -9,6 +9,7 @@ import (
 
 	"github.com/tradera/tradera/internal/plugins/bridge"
 	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/tradera/tradera/pkg/errs"
 	"github.com/tradera/tradera/plugins/actions/auth/models/account"
 	"github.com/tradera/tradera/plugins/actions/message/models/message"
 	"github.com/tradera/tradera/plugins/actions/spaces/models/invitation"
@@ -63,6 +64,9 @@ func (s *Service) notifyRoomMessage(msg *message.Message) {
 }
 
 func (s *Service) announceMessage(ctx context.Context, msg *message.Message) {
+	if _, err := s.GetSpace(ctx, msg.SpaceID); errs.CodeOf(err) == errs.CodeNotFound {
+		return // the project was deleted: nothing to announce
+	}
 	var to []identity.ID
 	for _, person := range s.peopleOf(ctx, msg.SpaceID) {
 		if person == msg.SenderID {
@@ -99,7 +103,7 @@ func (s *Service) notifyInvite(inv *invitation.Invitation) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		project := "a project"
+		project := "a room"
 		if sp, err := s.GetSpace(ctx, copied.SpaceID); err == nil && strings.TrimSpace(sp.Name) != "" {
 			project = sp.Name
 		}
@@ -108,7 +112,7 @@ func (s *Service) notifyInvite(inv *invitation.Invitation) {
 			inviter = "Someone"
 		}
 		s.push(ctx, []identity.ID{copied.InviteeID}, map[string]any{
-			"title": "Project invitation", "body": inviter + " invited you to " + project + ".",
+			"title": "Room invitation", "body": inviter + " invited you to " + project + ".",
 			"kind": "invite", "space": copied.SpaceID.String(),
 		})
 	}()

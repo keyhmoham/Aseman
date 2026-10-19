@@ -290,6 +290,16 @@ func (s *Service) RunDue(ctx context.Context) error {
 	var firstErr error
 	for i := range all {
 		r := all[i]
+		// A routine whose project was deleted must not keep running: it would
+		// wake agents, post messages and notify people for nothing.
+		var sp struct {
+			ID identity.ID `db:"id"`
+		}
+		if err := s.R.Get(ctx, "spaces", r.SpaceID, &sp); errs.CodeOf(err) == errs.CodeNotFound {
+			s.L.Info("routine removed: its project no longer exists", "routine", r.ID.String())
+			_ = s.R.Delete(ctx, "routines", r.ID)
+			continue
+		}
 		if r.Status == rt.Retrying && (r.RetryAt == nil || r.RetryAt.After(s.now().UTC())) {
 			continue
 		}

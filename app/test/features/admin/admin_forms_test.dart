@@ -242,4 +242,172 @@ void main() {
     expect(queries['finance.overview'], isEmpty);
     expect(find.byType(AdminDonutChart), findsOneWidget);
   });
+
+  /// Pumps one admin page with [results] and records its direct actions.
+  Future<List<(String, Map<String, dynamic>)>> page(
+      WidgetTester tester, String name, Map<String, dynamic> results) async {
+    tester.view.physicalSize = const Size(1440, 1100);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final calls = <(String, Map<String, dynamic>)>[];
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.darkWith(const Color(0xFF8B7BFF)),
+      home: Scaffold(
+        body: AdminPageContent(
+          page: name,
+          loading: false,
+          results: results,
+          onRefresh: () async {},
+          onAction: (_, __, ___) async {},
+          onDirectAction: (ns, action, body) async {
+            calls.add(('$ns.$action', body));
+            return null;
+          },
+          onNavigate: (_) {},
+        ),
+      ),
+    ));
+    await tester.pump();
+    return calls;
+  }
+
+  testWidgets('editing an imported model keeps what the import recorded',
+      (tester) async {
+    final calls = await page(tester, 'Models', {
+      'llm.llm_providers_list': {
+        'providers': [
+          {
+            'id': 'prov-vercel',
+            'name': 'Vercel',
+            'kind': 'vercel',
+            'enabled': true,
+            'models': [
+              {
+                'id': 'flux-pro',
+                'name': 'Flux',
+                'input_price': 0,
+                'output_price': 0,
+                'capabilities': ['image'],
+                'units': {'image': 40000},
+                'base_units': {'image': 33333},
+                'source': 'vercel',
+                'markup': 20,
+                'tags': ['image-generation'],
+              }
+            ],
+          }
+        ]
+      }
+    });
+    expect(find.textContaining(r'$0.04 / image'), findsOneWidget);
+    expect(find.text('Import from Vercel'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Edit model'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Display name (optional)'), 'Flux Pro');
+    await tester.ensureVisible(find.text('Save'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    var model = ((calls.last.$2['models'] as List).single as Map);
+    expect(calls.last.$1, 'llm.llm_provider_set');
+    expect(model['name'], 'Flux Pro');
+    expect(model['units'], {'image': 40000.0});
+    expect(model['source'], 'vercel');
+    expect(model['markup'], 20, reason: 'the price did not change');
+    expect(model['base_units'], {'image': 33333});
+    expect(model['tags'], ['image-generation']);
+
+    // A price typed by hand is no longer Vercel's price plus the markup.
+    await tester.tap(find.byTooltip('Edit model'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextField, r'$ per image'), '0.05');
+    await tester.ensureVisible(find.text('Save'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    model = ((calls.last.$2['models'] as List).single as Map);
+    expect(model['units'], {'image': 50000.0});
+    expect(model['source'], 'vercel');
+    expect(model.containsKey('markup'), isFalse);
+    expect(model.containsKey('base_units'), isFalse);
+  });
+
+  testWidgets('saving prices keeps the developer storage price',
+      (tester) async {
+    final saved = <Map<String, dynamic>>[];
+    tester.view.physicalSize = const Size(1440, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: AdminPageContent(
+          page: 'Settings · Pricing',
+          loading: false,
+          results: {'settings.get': adminFixtures()['settings.get']},
+          onRefresh: () async {},
+          onAction: (_, __, ___) async {},
+          onDirectAction: (ns, action, body) async {
+            saved.add(body);
+            return null;
+          },
+          onNavigate: (_) {},
+        ),
+      ),
+    ));
+    await tester.pump();
+    // Change any rate so the save bar appears, then save.
+    await tester.ensureVisible(find.text('Free'));
+    await tester.tap(find.text('Free'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Save'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect((saved.single['pricing'] as Map)['storage_gb_month'], 0);
+  });
+
+  testWidgets('a chat report is resolved from its evidence', (tester) async {
+    final calls = await page(tester, 'Chat reports', {
+      'spaces.admin_chat_reports': {
+        'open': 1,
+        'reports': [
+          {
+            'id': 'rep-1',
+            'status': 'open',
+            'reason': 'scam',
+            'kind': 'message',
+            'message_id': 'm2',
+            'direct': true,
+            'created_at': '2026-10-19T10:00:00Z',
+            'reporter': {'handle': 'alice'},
+            'accused': {'handle': 'bob'},
+            'evidence': [
+              {
+                'id': 'm1',
+                'sender': {'handle': 'alice'},
+                'body': 'hi bob'
+              },
+              {
+                'id': 'm2',
+                'sender': {'handle': 'bob'},
+                'body': 'send me your password'
+              },
+            ],
+          }
+        ],
+      }
+    });
+    await tester.tap(find.textContaining('SCAM'));
+    await tester.pumpAndSettle();
+    expect(find.text('send me your password'), findsOneWidget);
+    await tester.tap(find.text('Mark resolved'));
+    await tester.pump();
+    expect(calls.single.$1, 'spaces.admin_chat_report_resolve');
+    expect(calls.single.$2, {'id': 'rep-1', 'status': 'resolved'});
+  });
 }

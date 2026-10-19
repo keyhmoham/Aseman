@@ -337,6 +337,109 @@ class TraderaService implements BackendService {
     return ChatSummary.fromJson({...m, 'kind': 'direct'});
   }
 
+  /// Opens the caller's Saved Messages: the direct chat with themselves.
+  Future<ChatSummary> openSaved() async {
+    final resp = await client.call('spaces', 'direct_open',
+        body: {'peer': session?.accountId ?? ''});
+    final m = (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+    return ChatSummary.fromJson({...m, 'kind': 'direct', 'saved': true});
+  }
+
+  /// Pins a chat to the top of the caller's chats, or unpins it.
+  Future<void> pinChat(String spaceId, String roomId, bool pinned) async {
+    await client.call('spaces', 'chat_pin',
+        body: {'space': spaceId, 'room': roomId, 'pinned': pinned});
+  }
+
+  /// Deletes a direct chat for the caller only: it returns with a newer message.
+  Future<void> clearChat(String spaceId) async {
+    await client.call('spaces', 'chat_clear', body: {'space': spaceId});
+  }
+
+  /// Blocks (or unblocks) the other side of a direct chat: neither can write.
+  Future<void> blockDirect(String spaceId, bool blocked) async {
+    await client.call('spaces', 'direct_block',
+        body: {'space': spaceId, 'blocked': blocked});
+  }
+
+  /// Tells the room's others that the caller is typing (or stopped).
+  Future<void> setTyping(String spaceId, String roomId, bool typing) async {
+    await client.call('spaces', 'typing_set',
+        body: {'space': spaceId, 'room': roomId, 'typing': typing});
+  }
+
+  /// Reports a message ([messageId]) or a whole chat to the node's admins.
+  /// [reason] is spam, harassment, abuse, scam, inappropriate or other.
+  Future<void> reportChat(String spaceId, String roomId,
+      {String messageId = '', required String reason, String note = ''}) async {
+    await client.call('spaces', 'message_report', body: {
+      'space': spaceId,
+      'room': roomId,
+      if (messageId.isNotEmpty) 'message': messageId,
+      'reason': reason,
+      if (note.trim().isNotEmpty) 'note': note.trim(),
+    });
+  }
+
+  /// Admin: what people reported in chats. [status] is open, resolved,
+  /// dismissed or all.
+  Future<({List<Map<String, dynamic>> reports, int open})> adminChatReports(
+      {String status = 'open'}) async {
+    final resp = await client
+        .call('spaces', 'admin_chat_reports', body: {'status': status});
+    final m = (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+    return (
+      reports: (m['reports'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      open: (m['open'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  /// Admin: resolve, dismiss or reopen ("open") a chat report.
+  Future<void> adminResolveChatReport(String id, String status) async {
+    await client.call('spaces', 'admin_chat_report_resolve',
+        body: {'id': id, 'status': status});
+  }
+
+  // ── developer API console ─────────────────────────────────────────────────
+
+  /// One action of the developer console (`developer.<action>`), signed in
+  /// as the person; [body] usually names the organization ("org").
+  Future<Map<String, dynamic>> developer(String action,
+      [Map<String, dynamic> body = const {}]) async {
+    final resp = await client.call('developer', action,
+        body: body, requestTimeout: const Duration(minutes: 3));
+    return (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+  }
+
+  // ── talent requests ───────────────────────────────────────────────────────
+
+  /// The jobs the caller posted for talent, newest first.
+  Future<List<Map<String, dynamic>>> fetchTalentRequests() async {
+    final resp = await client.call('talent', 'request_list');
+    final list = (resp.body as Map?)?['requests'] as List? ?? const [];
+    return list.whereType<Map<String, dynamic>>().toList().reversed.toList();
+  }
+
+  /// Posts a request for talent (`talent.request_create`).
+  Future<Map<String, dynamic>> createTalentRequest(
+      Map<String, dynamic> input) async {
+    final resp = await client.call('talent', 'request_create', body: input);
+    return ((resp.body as Map?)?['request'] as Map?)?.cast<String, dynamic>() ??
+        const {};
+  }
+
+  /// Closes ("closed") or reopens ("open") one of the caller's requests.
+  Future<void> setTalentRequestStatus(String id, String status) async {
+    await client
+        .call('talent', 'request_status', body: {'id': id, 'status': status});
+  }
+
+  Future<void> deleteTalentRequest(String id) async {
+    await client.call('talent', 'request_delete', body: {'id': id});
+  }
+
   /// Records that the caller has read a space's conversation up to [at].
   Future<void> markSeen(String spaceId, DateTime at) async {
     await client.call('spaces', 'seen_set',
@@ -369,10 +472,34 @@ class TraderaService implements BackendService {
     );
   }
 
+  /// A room's conversation for a chat page: messages plus who is typing and,
+  /// for a direct chat, the peer's read cursor and whether anyone can write.
+  Future<RoomChatPage> fetchRoomChat(String spaceId, String roomId,
+      {int limit = 50}) async {
+    final resp = await client.call('spaces', 'message_list',
+        body: {'space': spaceId, 'room': roomId, 'limit': limit});
+    return RoomChatPage.fromJson(
+        (resp.body as Map?)?.cast<String, dynamic>() ?? const {});
+  }
+
+  /// Changes the text of a message the caller sent.
+  Future<void> editRoomMessage(String messageId, String body) async {
+    await client.call('spaces', 'message_edit',
+        body: {'message': messageId, 'body': body});
+  }
+
+  /// Deletes a message for everyone: the caller's own, or anyone's for a
+  /// project's manager.
+  Future<void> deleteRoomMessage(String spaceId, String messageId) async {
+    await client.call('spaces', 'message_delete',
+        body: {'space': spaceId, 'message': messageId});
+  }
+
   Future<RoomMessage> sendRoomMessage(
       String spaceId, String roomId, String body,
       {List<String> mentions = const [],
-      List<String> attachments = const []}) async {
+      List<String> attachments = const [],
+      String replyTo = ''}) async {
     final resp = mentions.isNotEmpty
         ? await client.call('spaces', 'turn_submit', body: {
             'space': spaceId,
@@ -383,12 +510,14 @@ class TraderaService implements BackendService {
             'prompt': body,
             'seeds': mentions,
             if (attachments.isNotEmpty) 'attachments': attachments,
+            if (replyTo.isNotEmpty) 'reply_to': replyTo,
           })
         : await client.call('spaces', 'message_send', body: {
             'space': spaceId,
             'room': roomId,
             'body': body,
             if (attachments.isNotEmpty) 'attachments': attachments,
+            if (replyTo.isNotEmpty) 'reply_to': replyTo,
           });
     final m = resp.body as Map<String, dynamic>;
     return RoomMessage(
@@ -400,6 +529,7 @@ class TraderaService implements BackendService {
       createdAt: DateTime.now(),
       mentions: mentions,
       attachments: await _resolveAttachments(attachments),
+      replyTo: replyTo,
     );
   }
 

@@ -554,6 +554,19 @@ func (s *Service) ChargeLines(ctx context.Context, customer identity.ID, desc st
 	})
 }
 
+// EnsureWallet gives an owner a wallet when it has none: an organization of
+// the developer API has its own balance, apart from any person's.
+func (s *Service) EnsureWallet(ctx context.Context, owner identity.ID) error {
+	if s.walletExists(ctx, owner) {
+		return nil
+	}
+	id, err := identity.New(s.K.NodeID())
+	if err != nil {
+		return err
+	}
+	return s.R.CreateID(ctx, "wallets", id, &wallet.Wallet{ID: id, OwnerID: owner, UpdatedAt: time.Now().UTC()})
+}
+
 func (s *Service) walletExists(ctx context.Context, owner identity.ID) bool {
 	_, err := s.GetWallet(ctx, owner)
 	return err == nil

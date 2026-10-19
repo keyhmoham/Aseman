@@ -152,6 +152,7 @@ func (a *Adapter) billMemory(ctx context.Context) {
 		m.mu.Lock()
 		switch {
 		case err == nil:
+			a.recordMemory(ctx, b.space, b.tokens, b.tokensIn, amount)
 			if cur := m.bills[b.space.String()+"|"+b.payee.String()]; cur != nil {
 				cur.cost -= float64(amount)
 				cur.tokens -= b.tokens
@@ -168,6 +169,21 @@ func (a *Adapter) billMemory(ctx context.Context) {
 		if err != nil {
 			a.Log.Warn("agent memory not charged", "space", b.space.String(), "payer", payer.String(), "amount", amount, "error", err)
 		}
+	}
+}
+
+// recordMemory writes a settlement to the usage ledger for the admin log. It is
+// best-effort: a failed record never undoes the charge.
+func (a *Adapter) recordMemory(ctx context.Context, space identity.ID, tokens, tokensIn, amount int64) {
+	if a.memoryRecordFn != nil {
+		a.memoryRecordFn(space, tokens, tokensIn, amount)
+		return
+	}
+	if a.k == nil {
+		return
+	}
+	if err := bridge.Invoke(ctx, a.k, "usage", "RecordMemory", []any{ctx, space, tokens, tokensIn, amount}); err != nil {
+		a.Log.Warn("agent memory use not recorded", "space", space.String(), "error", err)
 	}
 }
 

@@ -83,14 +83,76 @@ type Model struct {
 	// and cannot hold a conversation) and/or "embedding" (it turns text into
 	// vectors, for the agents' memory; it cannot hold a conversation either).
 	Capabilities []string `json:"capabilities,omitempty"`
+	// Source is the catalog the model was imported from ("vercel"); empty for
+	// a model the admin added by hand. An import updates the models of its
+	// source in place, so it never adds a model twice.
+	Source string `json:"source,omitempty"`
+	// BaseInputPrice and BaseOutputPrice are what the source charges the node
+	// (credits per 1M tokens) and Markup the percentage added on top, so a new
+	// markup or a new source price can be applied again.
+	BaseInputPrice  float64 `json:"base_input_price,omitempty"`
+	BaseOutputPrice float64 `json:"base_output_price,omitempty"`
+	Markup          float64 `json:"markup,omitempty"`
+	// Tags are the features the source reports (vision, tool-use, reasoning,
+	// file-input, …); the developer catalog reads them instead of guessing.
+	Tags []string `json:"tags,omitempty"`
+	// Inputs are the kinds of content the model accepts (text, image, pdf, …).
+	Inputs []string `json:"inputs,omitempty"`
+	// Units are the prices of what is not counted in tokens (credits per
+	// image, second, character or search), and BaseUnits what the source
+	// charges for them before the markup.
+	Units     *UnitPrices `json:"units,omitempty"`
+	BaseUnits *UnitPrices `json:"base_units,omitempty"`
+	// Unpriced marks an imported model whose source publishes no price the
+	// node can meter: it is not served until the admin sets one.
+	Unpriced bool `json:"unpriced,omitempty"`
+	// Disabled hides the model: it is not offered for new agents, the
+	// decision and memory pickers or the developer API. Agents already set
+	// to it keep running on it.
+	Disabled bool `json:"disabled,omitempty"`
 }
 
-// Model capabilities.
+// UnitPrices are prices per unit other than tokens, in credits.
+type UnitPrices struct {
+	// Image is per generated image.
+	Image float64 `json:"image,omitempty"`
+	// Second is per second of generated video or of transcribed audio;
+	// SecondBy is per second of video at a resolution ("720p"), where it
+	// differs by resolution (Second is then the dearest, for a request that
+	// names none).
+	Second   float64            `json:"second,omitempty"`
+	SecondBy map[string]float64 `json:"second_by,omitempty"`
+	// Character is per character of text turned into speech.
+	Character float64 `json:"character,omitempty"`
+	// Search is per reranking request (a search of up to 100 documents).
+	Search float64 `json:"search,omitempty"`
+}
+
+// Empty reports whether no unit has a price.
+func (u *UnitPrices) Empty() bool {
+	return u == nil || u.Image <= 0 && u.Second <= 0 && len(u.SecondBy) == 0 && u.Character <= 0 && u.Search <= 0
+}
+
+// Model capabilities. Agents run on chat models; the others are served by the
+// developer API's endpoints of the same kind (and decision and embedding
+// models by the agents' decisions and memory).
 const (
-	CapabilityChat      = "chat"
-	CapabilityDecision  = "decision"
-	CapabilityEmbedding = "embedding"
+	CapabilityChat          = "chat"
+	CapabilityDecision      = "decision"
+	CapabilityEmbedding     = "embedding"
+	CapabilityImage         = "image"
+	CapabilityVideo         = "video"
+	CapabilitySpeech        = "speech"
+	CapabilityTranscription = "transcription"
+	CapabilityRerank        = "rerank"
 )
+
+// Capabilities lists every capability a model can have.
+var Capabilities = []string{CapabilityChat, CapabilityDecision, CapabilityEmbedding, CapabilityImage, CapabilityVideo,
+	CapabilitySpeech, CapabilityTranscription, CapabilityRerank}
+
+// Has reports whether the model has a capability (as the node treats it).
+func (m Model) Has(c string) bool { return m.WithCapabilities().has(c) }
 
 // KnownDecisionModel reports whether a model id names a known decision model
 // (they are reached through a decision API, never through chat completions).
@@ -182,11 +244,11 @@ func (p *Provider) SetModels(models []Model) {
 	p.Models = string(b)
 }
 
-// ChatModels returns the models agents can run on, in order.
+// ChatModels returns the models agents can run on, in order (not the disabled ones).
 func (p *Provider) ChatModels() []Model {
 	out := []Model{}
 	for _, m := range p.ParseModels() {
-		if m.Chat() {
+		if m.Chat() && !m.Disabled {
 			out = append(out, m)
 		}
 	}

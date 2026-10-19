@@ -199,6 +199,10 @@ services:
       TRADERA_AGENT_RUNTIME_MEMORY_MB: ${TRADERA_AGENT_RUNTIME_MEMORY_MB:-2048}
       # Set to run the runtime yourself instead (e.g. http://host:8000).
       TRADERA_AGENT_RUNTIME_URL: ${TRADERA_AGENT_RUNTIME_URL:-}
+      # Bound a provider call, its time to first SSE event and silence between events.
+      TRADERA_LLM_CALL_TIMEOUT: ${TRADERA_LLM_CALL_TIMEOUT:-5m}
+      TRADERA_LLM_FIRST_EVENT_TIMEOUT: ${TRADERA_LLM_FIRST_EVENT_TIMEOUT:-2m}
+      TRADERA_LLM_STREAM_IDLE_TIMEOUT: ${TRADERA_LLM_STREAM_IDLE_TIMEOUT:-45s}
       # The agents' memory: the self-hosted OpenViking above, as the runtime
       # reaches it, and how much it recalls with each message (tokens).
       TRADERA_OPENVIKING_URL: ${TRADERA_OPENVIKING_URL:-http://openviking:1933}
@@ -220,6 +224,16 @@ services:
       # network). Off by default: tool URLs are user-supplied.
       TRADERA_MCP_ALLOW_PRIVATE: ${TRADERA_MCP_ALLOW_PRIVATE:-false}
       TRADERA_HTTP_ADDR: ":8080"
+      # The developer API's own host (api.example.com): on it the node serves
+      # only that API, with bearer API keys. Empty: the API is off.
+      TRADERA_DEVELOPER_HOST: ${DEVELOPER_DOMAIN:-}
+      # Where the node keeps files (chat attachments, developer Storage): an
+      # S3-compatible bucket (Cloudflare R2, AWS S3, MinIO). Empty: the node's disk.
+      TRADERA_S3_BUCKET: ${S3_BUCKET:-}
+      TRADERA_S3_ENDPOINT: ${S3_ENDPOINT:-}
+      TRADERA_S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      TRADERA_S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      TRADERA_S3_REGION: ${S3_REGION:-}
       TRADERA_REVENUECAT_SECRET: ${TRADERA_REVENUECAT_SECRET:-}
       TRADERA_REVENUECAT_PRODUCTS: ${TRADERA_REVENUECAT_PRODUCTS:-}
       # What buyers actually paid (after discounts), read from RevenueCat's v2 API.
@@ -259,7 +273,11 @@ services:
   # The Flutter web client (nginx). It proxies the node's API (/v1) on the same
   # origin, so the browser only ever talks to this port.
   web:
-    build: ./app
+    build:
+      context: ./app
+      args:
+        # The developer API console shows where to call once a developer host is set.
+        DEVELOPER_API_BASE: ${DEVELOPER_API_BASE:-${DEVELOPER_DOMAIN:+https://${DEVELOPER_DOMAIN}/v1}}
     image: tradera/flutter-web:latest
     restart: unless-stopped
     depends_on:

@@ -100,12 +100,10 @@ func TestDirectConversationIsOneHiddenRoomPerPair(t *testing.T) {
 	}
 }
 
-func TestDirectConversationNeedsSomeoneElse(t *testing.T) {
+// (A conversation with oneself is Saved Messages: see chats_test.go.)
+func TestDirectConversationNeedsAnAccountOfThisNode(t *testing.T) {
 	s, ctx := fileToolHarness(t)
 	alice := directPerson(t, s, ctx, "00000000000000010000000000000001", "alice")
-	if _, _, err := s.OpenDirect(ctx, alice, alice); err == nil {
-		t.Fatal("a conversation with oneself was opened")
-	}
 	if _, _, err := s.OpenDirect(ctx, alice, idFromHex(t, "00000000000000010000000000000077")); err == nil {
 		t.Fatal("a conversation with an unknown account was opened")
 	}

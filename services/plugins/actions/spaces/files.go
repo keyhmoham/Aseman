@@ -227,7 +227,7 @@ func (s *Service) enrichMessages(ctx context.Context, msgs []message.Message) []
 
 // messageToMap serializes a message to its JSON map form.
 func messageToMap(m *message.Message) map[string]any {
-	return map[string]any{
+	out := map[string]any{
 		"id":             m.ID.String(),
 		"space_id":       m.SpaceID.String(),
 		"room_id":        m.RoomID.String(),
@@ -240,6 +240,10 @@ func messageToMap(m *message.Message) map[string]any {
 		"created_at":     m.CreatedAt,
 		"updated_at":     m.UpdatedAt,
 	}
+	if !m.EditedAt.IsZero() {
+		out["edited_at"] = m.EditedAt
+	}
+	return out
 }
 
 // UploadFile stores a file into a space/room on behalf of [caller] and returns
@@ -267,13 +271,14 @@ func (s *Service) UploadFile(ctx context.Context, caller, spaceID, roomID identi
 	if err != nil {
 		return nil, err
 	}
-	if err := fs.Put(ctx, id.String(), bytes.NewReader(data), int64(len(data)), mimeType); err != nil {
+	key := projectFileKey(spaceID, id)
+	if err := fs.Put(ctx, key, bytes.NewReader(data), int64(len(data)), mimeType); err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC()
 	file := &filedata.File{Entity: entity.Entity{ID: id, CreatedAt: now, UpdatedAt: now},
 		OwnerID: caller, SpaceID: spaceID, RoomID: roomID, Name: name,
-		Mime: mimeType, Size: int64(len(data)), StorageKey: id.String()}
+		Mime: mimeType, Size: int64(len(data)), StorageKey: key}
 	if err := s.R.CreateID(ctx, "files", id, file); err != nil {
 		return nil, err
 	}

@@ -71,6 +71,10 @@ func TestServeDecisionForwardsToTheDecisionModelAndMeters(t *testing.T) {
 	if d := vmm.InvocationFrom(usageCtx).Delta; d.Decision != 4 {
 		t.Fatalf("decision usage after two = %+v", d)
 	}
+	// The decision model's tokens are kept apart from the agent model's, for the admin log.
+	if d := vmm.InvocationFrom(usageCtx).Delta; d.DecisionIn != 800_000 || d.TokensIn != 0 || d.TokensOut != 0 {
+		t.Fatalf("decision tokens = %+v", d)
+	}
 	if s.tokIn != 0 {
 		t.Fatal("decision tokens must not be priced as the agent model's tokens")
 	}
@@ -83,7 +87,8 @@ func TestServeDecisionWhenOffOrBroken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a.sessions["tok"] = &session{token: "tok", def: def, base: context.Background()}
+	usageCtx := vmm.WithInvocationUsage(context.Background())
+	a.sessions["tok"] = &session{token: "tok", def: def, base: usageCtx}
 	if resp := decide(t, a, question); resp.Status != http.StatusConflict {
 		t.Fatalf("off must answer 409 decision_disabled, got %d %s", resp.Status, resp.Body)
 	}
@@ -94,6 +99,10 @@ func TestServeDecisionWhenOffOrBroken(t *testing.T) {
 	a.platform = fakePlatform{decision: &vmm.ProviderConfig{BaseURL: down.URL, Model: "typesafe-ai/jev"}}
 	if resp := decide(t, a, question); resp.Status != http.StatusBadGateway {
 		t.Fatalf("a failing provider must be a 502, got %d", resp.Status)
+	}
+	// Off or failing, nothing is metered: the admin log records nothing for the decision model.
+	if d := vmm.InvocationFrom(usageCtx).Delta; d.Decision != 0 || d.DecisionIn != 0 || d.DecisionOut != 0 {
+		t.Fatalf("decision usage while off or failing = %+v", d)
 	}
 	if resp := decide(t, a, `{"state":"x","questions":{}}`); resp.Status != http.StatusBadRequest {
 		t.Fatalf("no questions must be a 400, got %d", resp.Status)

@@ -35,6 +35,12 @@ func NewPlugin() api.Plugin {
 		s.SandboxBackend = cfg.Sandbox.Backend
 		s.SandboxImage = cfg.Sandbox.Image
 		s.SandboxResources = bot.ResourceProfile{CPU: cfg.Sandbox.CPU, Memory: cfg.Sandbox.MemoryMB, Disk: cfg.Sandbox.DiskMB}
-		return module.Instance{Models: schema.Models(), Mount: s.encryptLegacyProxyTokens, Service: s, Actions: BuildActions(s), Run: s.RunTurns, Close: func(ctx context.Context) error { s.StopAllSandboxes(ctx); return nil }}, nil
+		return module.Instance{Models: schema.Models(), Mount: func(ctx context.Context) error {
+			if err := s.encryptLegacyProxyTokens(ctx); err != nil {
+				return err
+			}
+			go s.sweepOrphanFiles(ctx)
+			return nil
+		}, Service: s, Actions: BuildActions(s), Run: s.RunTurns, Close: func(ctx context.Context) error { s.StopAllSandboxes(ctx); return nil }}, nil
 	})
 }

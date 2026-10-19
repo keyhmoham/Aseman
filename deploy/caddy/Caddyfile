@@ -3,7 +3,8 @@
 #
 # The values come from the root .env:
 #   APP_DOMAIN   the web app          (e.g. app.example.com)
-#   API_DOMAIN   the node's API       (e.g. api.example.com)
+#   API_DOMAIN   the node's API       (e.g. connect.example.com)
+#   DEVELOPER_DOMAIN  the developer API (e.g. api.example.com); optional
 #   ACME_EMAIL   certificate contact
 
 {
@@ -35,6 +36,22 @@
 		header_regexp preview Referer ^https?://[^/]+(/v1/proxy/[0-9a-fA-F]+)/
 	}
 	redir @fromPreview {re.preview.1}{uri} 307
+	reverse_proxy tradera:8080 {
+		flush_interval -1
+		transport http {
+			read_timeout 30m
+			write_timeout 30m
+		}
+	}
+}
+
+# The developer API: its own host, for people calling the platform from their own
+# code with an API key. The node serves only that API here (TRADERA_DEVELOPER_HOST
+# is the same name), never the app's own actions. Responses are streamed.
+{$DEVELOPER_DOMAIN:developer.localhost} {
+	request_body {
+		max_size 64MB
+	}
 	reverse_proxy tradera:8080 {
 		flush_interval -1
 		transport http {

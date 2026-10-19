@@ -25,11 +25,13 @@ class _Service extends FakeTraderaService {
   @override
   Future<RoomMessage> sendRoomMessage(
       String spaceId, String roomId, String body,
-      {List<String> mentions = const [], List<String> attachments = const []}) {
+      {List<String> mentions = const [],
+      List<String> attachments = const [],
+      String replyTo = ''}) {
     if (failSending)
       throw const ApiException('UNAVAILABLE', 'Test send failure');
     return super.sendRoomMessage(spaceId, roomId, body,
-        mentions: mentions, attachments: attachments);
+        mentions: mentions, attachments: attachments, replyTo: replyTo);
   }
 
   @override

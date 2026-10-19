@@ -25,8 +25,13 @@ import (
 	"google.golang.org/grpc"
 )
 
-// defaultSandboxLifetime is how long a sandbox may live before Modal reaps it.
-const defaultSandboxLifetime = 24 * time.Hour
+// defaultSandboxLifetime is how long a sandbox may live before Modal reaps it,
+// and defaultSandboxIdleLimit how long it may sit idle first; both are the
+// admin's to change (Admin → Machine).
+const (
+	defaultSandboxLifetime  = 8 * time.Hour
+	defaultSandboxIdleLimit = 30 * time.Minute
+)
 
 // defaultExecTimeout bounds a single sandbox command so it can never block the
 // calling agent/workflow forever (mirrors the docker sandbox behaviour).
@@ -53,6 +58,11 @@ type Adapter struct {
 	// (see workspace.go); volumeIDs caches workspace volume ids by name.
 	conn      atomic.Pointer[grpc.ClientConn]
 	volumeIDs map[string]string
+	// limits caches the admin's provider limits for a short while, so running a
+	// command does not read the settings each time.
+	limitsMu sync.Mutex
+	limitsAt time.Time
+	limits   machineSizes
 }
 
 // New creates the adapter plugin.
@@ -196,15 +206,18 @@ func (a *Adapter) create(ctx context.Context, spec vmm.VMSpec) (*sandboxState, v
 		}
 		volumes = map[string]*modal.Volume{"/workspace": vol}
 	}
-	cpuRequest, cpuLimit, memRequest, memLimit := burstSizes(spec.Resources, a.sizes(ctx))
+	sizes := a.sizes(ctx)
+	cpuRequest, cpuLimit, memRequest, memLimit := burstSizes(spec.Resources, sizes)
 	sb, err := a.client.Sandboxes.Create(ctx, app, img, &modal.SandboxCreateParams{
 		Command: cmd,
 		Volumes: volumes,
-		Timeout: defaultSandboxLifetime,
+		Timeout: sizes.lifetime(),
 		// The platform decides when a sandbox is idle (spaces: sandboxIdleTTL) and
-		// terminates it itself; Modal's own idle window must not cut a long
-		// command short, so it is set explicitly rather than left at its default.
-		IdleTimeout: defaultSandboxLifetime,
+		// terminates it itself, within minutes. Modal's own idle limit is a net
+		// under that, for a sandbox the node has lost track of (its project was
+		// deleted, or its stop kept failing), so it ends instead of billing for
+		// the rest of its lifetime.
+		IdleTimeout: sizes.idleLimit(),
 		CPU:         cpuRequest,
 		CPULimit:    cpuLimit,
 		MemoryMiB:   memRequest,
@@ -235,6 +248,36 @@ type machineSizes struct {
 	ReserveMemoryMB int64   `json:"reserve_memory_mb"`
 	MaxCPU          float64 `json:"max_cpu"`
 	MaxMemoryMB     int64   `json:"max_memory_mb"`
+	// The provider's own limits (Admin → Machine); zero means the default.
+	ProviderIdleMin   int64 `json:"provider_idle_min"`
+	MaxLifetimeMin    int64 `json:"max_lifetime_min"`
+	CommandTimeoutSec int64 `json:"command_timeout_sec"`
+}
+
+// lifetime is the longest Modal lets a sandbox live.
+func (m machineSizes) lifetime() time.Duration {
+	if m.MaxLifetimeMin > 0 {
+		return time.Duration(m.MaxLifetimeMin) * time.Minute
+	}
+	return defaultSandboxLifetime
+}
+
+// idleLimit is how long Modal lets a sandbox sit without activity before it
+// ends it. The platform stops idle computers itself within minutes; this is for
+// the one it has lost track of.
+func (m machineSizes) idleLimit() time.Duration {
+	if m.ProviderIdleMin > 0 {
+		return min(time.Duration(m.ProviderIdleMin)*time.Minute, m.lifetime())
+	}
+	return defaultSandboxIdleLimit
+}
+
+// commandLimit is the longest one command may run.
+func (m machineSizes) commandLimit() time.Duration {
+	if m.CommandTimeoutSec > 0 {
+		return time.Duration(m.CommandTimeoutSec) * time.Second
+	}
+	return defaultExecTimeout
 }
 
 const (
@@ -254,6 +297,16 @@ func (a *Adapter) sizes(ctx context.Context) machineSizes {
 		_ = bridge.Invoke(ctx, a.k, "settings", "Machine", []any{ctx}, &m)
 	}
 	return m
+}
+
+// commandLimit is the admin's limit for one command, read at most every half minute.
+func (a *Adapter) commandLimit(ctx context.Context) time.Duration {
+	a.limitsMu.Lock()
+	defer a.limitsMu.Unlock()
+	if time.Since(a.limitsAt) > 30*time.Second {
+		a.limits, a.limitsAt = a.sizes(ctx), time.Now()
+	}
+	return a.limits.commandLimit()
 }
 
 // burstSizes returns the CPU and memory (reserve, ceiling) pairs for a sandbox
@@ -694,6 +747,7 @@ func specHasType(spec vmm.VMSpec) bool { return spec.Type == vmm.TypeModal }
 
 // exec runs a command in a sandbox, returning its output and exit code.
 func (a *Adapter) exec(ctx context.Context, sb *modal.Sandbox, command string) (string, error) {
+	limit := a.commandLimit(ctx)
 	// The sandbox may still be starting right after creation; retry briefly.
 	var cp *modal.ContainerProcess
 	var lastErr error
@@ -701,7 +755,7 @@ func (a *Adapter) exec(ctx context.Context, sb *modal.Sandbox, command string) (
 		cp, lastErr = sb.Exec(ctx, []string{"/bin/sh", "-c", command}, &modal.SandboxExecParams{
 			Stdout:  modal.Pipe,
 			Stderr:  modal.Pipe,
-			Timeout: defaultExecTimeout,
+			Timeout: limit,
 		})
 		if lastErr == nil {
 			break

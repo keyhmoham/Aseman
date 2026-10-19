@@ -165,14 +165,20 @@ func (s *Service) prepareTurn(ctx context.Context, spaceID, roomID identity.ID, 
 		return nil, nil, err
 	}
 	// The runtime keeps definitions in memory; rebuild after a restart.
-	if err := s.Bots.EnsureVM(ctx, rec); err != nil {
-		return nil, nil, err
+	endVM := vmm.Trace(ctx, "agent.ensure", rec.Name)
+	vmErr := s.Bots.EnsureVM(ctx, rec)
+	endVM()
+	if vmErr != nil {
+		return nil, nil, vmErr
 	}
 	ref, release := vmm.SandboxRef{}, func() {}
 	if turn.NoSandbox {
 		// The agent engine runs on the node; the space machine stays untouched.
 	} else if _, recorded := s.sandboxBotID(ctx, spaceID); recorded || s.K.VMMFor(vmm.Type(s.sandboxVMType())) != nil {
-		if ref, release, err = s.reserveSandbox(ctx, spaceID); err != nil {
+		endSandbox := vmm.Trace(ctx, "sandbox.reserve", "start or wake the project computer")
+		ref, release, err = s.reserveSandbox(ctx, spaceID)
+		endSandbox()
+		if err != nil {
 			return nil, nil, err
 		}
 	} else {
@@ -180,8 +186,10 @@ func (s *Service) prepareTurn(ctx context.Context, spaceID, roomID identity.ID, 
 		// use platform tools but have no shell or files.
 		s.L.Warn("no sandbox provider; agent turn runs without the shared sandbox", "space", spaceID.String(), "type", string(s.sandboxVMType()))
 	}
+	endContext := vmm.Trace(ctx, "context", "room, people and instructions")
 	turn.Context = s.agentContext(ctx, spaceID, roomID, rec)
 	turn.Note = s.senderClock(ctx, turn.SenderID)
+	endContext()
 	// The desk as it is now: agents place, move and close card windows on it.
 	if desk := s.deskNote(ctx, spaceID, roomID); desk != "" {
 		turn.Note = strings.TrimSpace(turn.Note + "\n" + desk)
@@ -200,8 +208,11 @@ func (s *Service) promptAgent(ctx context.Context, spaceID, roomID identity.ID, 
 		}
 		roomID = room.ID
 	}
-	if err := s.gateTurn(ctx, spaceID, roomID, rec, s.payer(ctx, sender)); err != nil {
-		return "", err
+	endGate := vmm.Trace(ctx, "gate", "budget and wallet")
+	gateErr := s.gateTurn(ctx, spaceID, roomID, rec, s.payer(ctx, sender))
+	endGate()
+	if gateErr != nil {
+		return "", gateErr
 	}
 	turn := s.agentTurn(ctx, spaceID, roomID, rec, sender, body, messageID, atts)
 	rt, release, err := s.prepareTurn(ctx, spaceID, roomID, rec, &turn)
@@ -384,7 +395,10 @@ func (s *Service) answerAgent(ctx context.Context, spaceID, roomID identity.ID, 
 	pending := false
 	if art, err := s.agentRuntime(rec); err == nil {
 		if ql, ok := art.(vmm.QuestionLister); ok {
-			if qs, err := ql.Questions(ctx, rec.VMID, spaceID.String()); err == nil {
+			endCheck := vmm.Trace(ctx, "answer.check", "does the message answer an open question")
+			qs, qerr := ql.Questions(ctx, rec.VMID, spaceID.String())
+			endCheck()
+			if qerr == nil {
 				if !waitsIn(qs, roomID, turn.QuestionID) {
 					return false, nil, nil
 				}

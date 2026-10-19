@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../app_dependencies.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -44,6 +44,16 @@ class RoomChat extends StatefulWidget {
     this.subtitle,
     this.hint = 'Message room…',
     this.memberNames = const {},
+    this.onEdit,
+    this.onDelete,
+    this.onReport,
+    this.onTyping,
+    this.typing = const [],
+    this.receipts = false,
+    this.peerSeenAt,
+    this.composerNotice,
+    this.headerActions = const [],
+    this.canModerate = false,
   });
   final String room;
   final List<RoomMessage> messages;
@@ -56,7 +66,8 @@ class RoomChat extends StatefulWidget {
   final bool canManageTasks;
   final List<Bot> mentionable;
   final Future<void> Function(
-      String body, List<String> mentions, List<String> attachments)? onSend;
+      String body, List<String> mentions, List<String> attachments,
+      {String replyTo})? onSend;
   final bool flat;
   final double topContentInset;
 
@@ -77,6 +88,35 @@ class RoomChat extends StatefulWidget {
   /// Display names of members by account id, for senders the room's agents
   /// do not cover (e.g. the other person of a direct chat).
   final Map<String, String> memberNames;
+
+  /// Change the text of one of the caller's messages; null hides "Edit".
+  final Future<void> Function(RoomMessage message, String body)? onEdit;
+
+  /// Delete a message for everyone; null hides "Delete".
+  final Future<void> Function(RoomMessage message)? onDelete;
+
+  /// Report someone else's message to the node's admins; null hides "Report".
+  final Future<void> Function(RoomMessage message)? onReport;
+
+  /// Called while the caller types (at most every few seconds).
+  final VoidCallback? onTyping;
+
+  /// Display names of the others typing now.
+  final List<String> typing;
+
+  /// Whether the caller's messages show sent / seen ticks (a direct chat
+  /// with a person), and how far the other side has read (null: nothing yet).
+  final bool receipts;
+  final DateTime? peerSeenAt;
+
+  /// Shown instead of the composer when no one can write (a blocked chat).
+  final String? composerNotice;
+
+  /// Extra buttons at the end of the header (e.g. a chat's menu).
+  final List<Widget> headerActions;
+
+  /// Whether the caller may delete other people's messages.
+  final bool canModerate;
   @override
   State<RoomChat> createState() => _RoomChatState();
 }
@@ -89,6 +129,22 @@ class _RoomChatState extends State<RoomChat> {
   final ScrollController _chatScroll = ScrollController();
   final Set<String> _expandedLogs = {};
   bool _sending = false;
+
+  /// The message the next one answers, and the message being changed.
+  RoomMessage? _replyTo;
+  RoomMessage? _editing;
+  DateTime _typedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  void _typed(String _) {
+    final now = DateTime.now();
+    if (widget.onTyping == null ||
+        _editing != null ||
+        now.difference(_typedAt) < const Duration(seconds: 4)) {
+      return;
+    }
+    _typedAt = now;
+    widget.onTyping!();
+  }
 
   @override
   void initState() {
@@ -194,7 +250,8 @@ class _RoomChatState extends State<RoomChat> {
         .toList();
     input.text = md;
     try {
-      await widget.onSend?.call(md, _mentions.toList(), attachments);
+      await widget.onSend?.call(md, _mentions.toList(), attachments,
+          replyTo: _replyTo?.id ?? '');
     } catch (_) {
       // The parent reports the error. Keep the designed message and files.
       return;
@@ -203,6 +260,7 @@ class _RoomChatState extends State<RoomChat> {
     input.clear();
     setState(() {
       _mentions.clear();
+      _replyTo = null;
       for (final d in _drafts.toList()) {
         _drafts.remove(d);
       }
@@ -210,6 +268,25 @@ class _RoomChatState extends State<RoomChat> {
   }
 
   Future<void> _submit(String value) async {
+    final editing = _editing;
+    if (editing != null) {
+      final body = value.trim();
+      if (body.isEmpty || _sending) return;
+      setState(() => _sending = true);
+      try {
+        if (body != editing.body.trim()) {
+          await widget.onEdit?.call(editing, body);
+        }
+        if (!mounted) return;
+        input.clear();
+        setState(() => _editing = null);
+      } catch (_) {
+        // The parent reports the error; keep the text to retry.
+      } finally {
+        if (mounted) setState(() => _sending = false);
+      }
+      return;
+    }
     final drafts =
         _drafts.where((d) => d.uploaded && d.fileId.isNotEmpty).toList();
     final attachments = drafts.map((d) => d.fileId).toList();
@@ -217,19 +294,200 @@ class _RoomChatState extends State<RoomChat> {
     if (_sending) return;
     setState(() => _sending = true);
     try {
-      await widget.onSend?.call(value.trim(), _mentions.toList(), attachments);
+      await widget.onSend?.call(value.trim(), _mentions.toList(), attachments,
+          replyTo: _replyTo?.id ?? '');
       if (!mounted) return;
       // Success: drop the sent attachments and clear the composer.
       for (final d in _drafts.toList()) {
         _drafts.remove(d);
       }
       input.clear();
-      setState(() => _mentions.clear());
+      setState(() {
+        _mentions.clear();
+        _replyTo = null;
+      });
     } catch (_) {
       // Keep the composer + drafts so the user can retry.
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  // ── message actions ─────────────────────────────────────────────────────
+
+  RoomMessage? _byId(String id) {
+    for (final m in widget.messages) {
+      if (m.id == id) return m;
+    }
+    return null;
+  }
+
+  Future<void> _messageMenu(RoomMessage m) async {
+    if (m.id.isEmpty || m.kind == 'log') return;
+    final mine = m.senderId == widget.me;
+    final canWrite = widget.onSend != null && widget.composerNotice == null;
+    final actions = <(IconData, String, String)>[
+      if (canWrite) (Icons.reply_rounded, 'Reply', 'reply'),
+      if (m.body.trim().isNotEmpty) (Icons.copy_rounded, 'Copy text', 'copy'),
+      if (mine && widget.onEdit != null && canWrite && m.body.trim().isNotEmpty)
+        (Icons.edit_outlined, 'Edit', 'edit'),
+      if ((mine || widget.canModerate) && widget.onDelete != null)
+        (Icons.delete_outline_rounded, 'Delete for everyone', 'delete'),
+      if (!mine && widget.onReport != null)
+        (Icons.flag_outlined, 'Report', 'report'),
+    ];
+    if (actions.isEmpty) return;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          for (final (icon, label, value) in actions)
+            ListTile(
+                leading: Icon(icon,
+                    color: value == 'delete' || value == 'report'
+                        ? Theme.of(context).colorScheme.error
+                        : null),
+                title: Text(label),
+                onTap: () => Navigator.pop(context, value)),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (!mounted || picked == null) return;
+    switch (picked) {
+      case 'reply':
+        setState(() {
+          _editing = null;
+          _replyTo = m;
+        });
+      case 'copy':
+        await Clipboard.setData(ClipboardData(text: m.body));
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('Copied')));
+        }
+      case 'edit':
+        setState(() {
+          _replyTo = null;
+          _editing = m;
+          input.text = m.body;
+        });
+      case 'delete':
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            icon: const Icon(Icons.delete_outline_rounded),
+            title: const Text('Delete this message?'),
+            content: const Text('It is removed for everyone in the chat.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Delete')),
+            ],
+          ),
+        );
+        if (ok == true) await widget.onDelete?.call(m);
+      case 'report':
+        await widget.onReport?.call(m);
+    }
+  }
+
+  // The banner above the composer while replying to or changing a message.
+  Widget _composerBanner() {
+    final scheme = Theme.of(context).colorScheme;
+    final editing = _editing;
+    final target = editing ?? _replyTo!;
+    final who =
+        target.senderId == widget.me ? 'yourself' : _senderOf(target).name;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(4, 2, 4, 6),
+      padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+      decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(AppShape.inner),
+          border: Border(left: BorderSide(color: scheme.primary, width: 3))),
+      child: Row(children: [
+        Icon(editing != null ? Icons.edit_outlined : Icons.reply_rounded,
+            size: 18, color: scheme.primary),
+        const SizedBox(width: 8),
+        Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(editing != null ? 'Edit message' : 'Reply to $who',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: scheme.primary)),
+            Text(_quoteText(target),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+          ]),
+        ),
+        IconButton(
+            tooltip: editing != null ? 'Cancel edit' : 'Cancel reply',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => setState(() {
+                  if (_editing != null) input.clear();
+                  _editing = null;
+                  _replyTo = null;
+                }),
+            icon: const Icon(Icons.close_rounded, size: 18)),
+      ]),
+    );
+  }
+
+  static String _quoteText(RoomMessage m) {
+    final body = m.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (body.isNotEmpty) return body;
+    return m.attachments.isEmpty ? 'Message' : '📎 Attachment';
+  }
+
+  ({String name, bool agent}) _senderOf(RoomMessage m) {
+    var sender = _sender(m.senderId);
+    if (m.senderName.isNotEmpty &&
+        !widget.memberNames.containsKey(m.senderId) &&
+        !widget.mentionable.any((b) => b.id == m.senderId)) {
+      sender = (name: m.senderName, agent: m.senderIsAgent);
+    }
+    return sender;
+  }
+
+  // The answered message, quoted at the top of a reply.
+  Widget _quote(RoomMessage m, Color fg) {
+    final original = _byId(m.replyTo);
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+      decoration: BoxDecoration(
+          color: fg.withValues(alpha: .07),
+          borderRadius: BorderRadius.circular(8),
+          border: Border(left: BorderSide(color: scheme.primary, width: 3))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (original != null)
+          Text(
+              original.senderId == widget.me ? 'You' : _senderOf(original).name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: scheme.primary)),
+        Text(original == null ? 'An earlier message' : _quoteText(original),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                fontSize: 12,
+                fontStyle:
+                    original == null ? FontStyle.italic : FontStyle.normal,
+                color: fg.withValues(alpha: .75))),
+      ]),
+    );
   }
 
   // ── file attachments ────────────────────────────────────────────────────
@@ -531,7 +789,8 @@ class _RoomChatState extends State<RoomChat> {
                         _WorkingIndicator(
                             agent: widget.working,
                             detail: widget.workingDetail),
-                    ]
+                    ],
+                    if (widget.typing.isNotEmpty) _typingRow(),
                   ]),
             )),
             Positioned(left: 10, right: 10, bottom: 10, child: _composer()),
@@ -545,7 +804,7 @@ class _RoomChatState extends State<RoomChat> {
             child: CustomPaint(
           painter: _ChatPatternPainter(
               Theme.of(context).colorScheme.primary, widget.room),
-          child: messages.isEmpty
+          child: messages.isEmpty && widget.typing.isEmpty
               ? const _NoMessages()
               : ListView(
                   controller: _chatScroll,
@@ -559,10 +818,29 @@ class _RoomChatState extends State<RoomChat> {
                           _WorkingIndicator(
                               agent: widget.working,
                               detail: widget.workingDetail),
+                        if (widget.typing.isNotEmpty) _typingRow(),
                       ]),
         )),
         Padding(padding: const EdgeInsets.all(10), child: _composer()),
       ]),
+    );
+  }
+
+  Widget _typingRow() {
+    final scheme = Theme.of(context).colorScheme;
+    final names = widget.typing;
+    final who = names.length == 1
+        ? '${names.first} is typing…'
+        : names.length == 2
+            ? '${names[0]} and ${names[1]} are typing…'
+            : 'Several people are typing…';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(42, 8, 12, 4),
+      child: Text(who,
+          style: TextStyle(
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+              color: scheme.onSurfaceVariant)),
     );
   }
 
@@ -646,11 +924,29 @@ class _RoomChatState extends State<RoomChat> {
                   : () => showRoutinesSheet(context, deps, widget.spaceId,
                       widget.roomId, widget.room),
               icon: const Icon(Icons.schedule_rounded, size: 18)),
+          ...widget.headerActions,
         ]));
   }
 
   Widget _composer() {
     final scheme = Theme.of(context).colorScheme;
+    final notice = widget.composerNotice;
+    if (notice != null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+            color: scheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(AppShape.card)),
+        child: Row(children: [
+          Icon(Icons.block_rounded, size: 18, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 10),
+          Expanded(
+              child: Text(notice,
+                  style:
+                      TextStyle(fontSize: 13, color: scheme.onSurfaceVariant))),
+        ]),
+      );
+    }
     return Material(
         color: scheme.surfaceContainerHigh,
         elevation: widget.flat ? 3 : 0,
@@ -688,6 +984,7 @@ class _RoomChatState extends State<RoomChat> {
                                     style: const TextStyle(fontSize: 12)),
                                 onDeleted: () => _removeMention(id)),
                         ]))),
+              if (_editing != null || _replyTo != null) _composerBanner(),
               LayoutBuilder(builder: (context, box) {
                 final actions = [
                   _composerAction(Icons.add_rounded, 'Attach file',
@@ -701,6 +998,7 @@ class _RoomChatState extends State<RoomChat> {
                     controller: input,
                     enabled: !_sending,
                     onSubmitted: _submit,
+                    onChanged: _typed,
                     minLines: 1,
                     maxLines: 5,
                     textInputAction: TextInputAction.send,
@@ -790,12 +1088,11 @@ class _RoomChatState extends State<RoomChat> {
         m.createdAt.difference(previous.createdAt).inMinutes.abs() < 5;
     final time = _msgTime(m.createdAt);
     final deps = widget.dependencies;
-    var sender = _sender(m.senderId);
-    if (m.senderName.isNotEmpty &&
-        !widget.memberNames.containsKey(m.senderId) &&
-        !widget.mentionable.any((b) => b.id == m.senderId)) {
-      sender = (name: m.senderName, agent: m.senderIsAgent);
-    }
+    final sender = _senderOf(m);
+    final seen = mine &&
+        widget.receipts &&
+        widget.peerSeenAt != null &&
+        !m.createdAt.isAfter(widget.peerSeenAt!);
     final fg = mine ? scheme.onPrimaryContainer : scheme.onSurface;
     const r = Radius.circular(20);
     const tail = Radius.circular(6);
@@ -812,6 +1109,7 @@ class _RoomChatState extends State<RoomChat> {
             style: TextStyle(color: fg, fontSize: 14, height: 1.4),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              if (m.replyTo.isNotEmpty) _quote(m, fg),
               if (m.attachments.isNotEmpty)
                 ...m.attachments.map((f) => Padding(
                       padding: const EdgeInsets.only(bottom: 4),
@@ -845,9 +1143,20 @@ class _RoomChatState extends State<RoomChat> {
                         service: deps.service,
                         page: _proxyPathIn(m.body) ?? '')),
               const SizedBox(height: 2),
-              Text(time,
-                  style: TextStyle(
-                      fontSize: 10, color: fg.withValues(alpha: .65))),
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(m.edited ? 'edited · $time' : time,
+                    style: TextStyle(
+                        fontSize: 10, color: fg.withValues(alpha: .65))),
+                // In a direct chat, the caller's messages show whether the
+                // other side has read them.
+                if (mine && widget.receipts) ...[
+                  const SizedBox(width: 3),
+                  Icon(seen ? Icons.done_all_rounded : Icons.done_rounded,
+                      size: 13,
+                      semanticLabel: seen ? 'Seen' : 'Sent',
+                      color: seen ? scheme.primary : fg.withValues(alpha: .65)),
+                ],
+              ]),
             ])));
     final avatar = SizedBox(
         width: 30,
@@ -902,7 +1211,11 @@ class _RoomChatState extends State<RoomChat> {
                                           MiniTag('AI', scheme.tertiary),
                                         ],
                                       ])),
-                            bubble,
+                            GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onLongPress: () => _messageMenu(m),
+                                onSecondaryTap: () => _messageMenu(m),
+                                child: bubble),
                           ]))),
               SizedBox(width: mine ? 4 : 12),
             ]));

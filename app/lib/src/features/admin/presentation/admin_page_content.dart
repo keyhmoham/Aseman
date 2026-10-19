@@ -189,11 +189,14 @@ class _AppPageContentState extends State<AdminPageContent> {
         'Agents' => _agents(),
         'Tools' => _tools(),
         'Talent' => _talent(),
+        'Talent requests' => _talentRequests(),
         'Finance · Overview' => _finance(),
         'Finance · Purchases' => _purchases(),
         'Finance · Payouts' => _payouts(),
+        'Developer API' => _developer(),
         'Models' => _models(),
         'Decision model' => _decision(),
+        'Image model' => _imageModel(),
         'Memory models' => _memoryModels(),
         'Health' => _health(),
         'Node · Host' => _node(),
@@ -1401,6 +1404,540 @@ class _AppPageContentState extends State<AdminPageContent> {
     });
   }
 
+  /// Requests for talent people posted, which partners read through their
+  /// API key, and the partner keys themselves.
+  Widget _talentRequests() {
+    final scheme = Theme.of(context).colorScheme;
+    final all =
+        _listOfMaps(_map(widget.results['talent.admin_requests'])['requests']);
+    final keys =
+        _listOfMaps(_map(widget.results['talent.partner_keys'])['keys']);
+    int count(String s) => all.where((r) => '${r['status']}' == s).length;
+    final status =
+        const ['open', 'closed', 'hidden', 'deleted', 'all'].contains(filter)
+            ? filter
+            : 'all';
+    final q = search.text.toLowerCase().trim();
+    final rows = all.where((r) {
+      final s = '${r['status']}';
+      return (status == 'all' ? s != 'deleted' : s == status) &&
+          (q.isEmpty ||
+              '${r['title']} ${r['category']} ${r['company']} ${r['owner_handle']} ${_stringList(r['skills']).join(' ')}'
+                  .toLowerCase()
+                  .contains(q));
+    }).toList()
+      ..sort((a, b) =>
+          '${b['created_at'] ?? ''}'.compareTo('${a['created_at'] ?? ''}'));
+    String budget(Map<String, dynamic> r) {
+      final amount = compactDecimal(_number(r['budget_amount']), decimals: 2);
+      return switch ('${r['budget_type']}') {
+        'hourly' => '\$$amount / hour',
+        'monthly' => '\$$amount / month',
+        _ => '\$$amount fixed',
+      };
+    }
+
+    Future<void> setStatus(Map<String, dynamic> r, String to) async {
+      try {
+        await widget.onDirectAction(
+            'talent', 'admin_request_status', {'id': r['id'], 'status': to});
+      } catch (_) {
+        // The console reports the error.
+      }
+    }
+
+    final activeKeys = keys.where((k) => '${k['status']}' == 'active').length;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      AdminGrid(maxColumns: 3, children: [
+        AdminStatCard(
+            label: 'Open requests',
+            value: '${count('open')}',
+            hint: 'What partners read now',
+            icon: Icons.work_rounded,
+            tone: AppColors.success),
+        AdminStatCard(
+            label: 'Taken down',
+            value: '${count('hidden')}',
+            hint: 'Removed by an admin',
+            icon: Icons.visibility_off_rounded,
+            tone: count('hidden') == 0 ? null : AppColors.warning),
+        AdminStatCard(
+            label: 'Partner keys',
+            value: '$activeKeys',
+            hint: '${keys.length - activeKeys} revoked',
+            icon: Icons.key_rounded),
+      ]),
+      const SizedBox(height: 18),
+      _toolbar(
+          AdminSearchField(
+              controller: search,
+              hint: 'Search title, category, company or poster',
+              onChanged: (_) => setState(() {})),
+          const []),
+      const SizedBox(height: 12),
+      AdminFilterChips<String>(
+        selected: status,
+        onSelected: (v) => setState(() => filter = v),
+        options: [
+          AdminFilterOption('all', 'All',
+              count: all.where((r) => '${r['status']}' != 'deleted').length),
+          AdminFilterOption('open', 'Open', count: count('open')),
+          AdminFilterOption('closed', 'Closed', count: count('closed')),
+          AdminFilterOption('hidden', 'Taken down', count: count('hidden')),
+          AdminFilterOption('deleted', 'Deleted', count: count('deleted')),
+        ],
+      ),
+      const SizedBox(height: 12),
+      AdminSectionCard(
+        title: 'Requests',
+        icon: Icons.work_rounded,
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: rows.isEmpty
+            ? const AdminEmptyState(
+                'No requests', 'Jobs people post for talent show up here.',
+                icon: Icons.work_outline_rounded)
+            : Column(children: [
+                for (final r in rows)
+                  ExpansionTile(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppShape.control)),
+                    collapsedShape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppShape.control)),
+                    leading: AdminAvatar('${r['title']}',
+                        icon: Icons.work_rounded, size: 40),
+                    title: Text('${r['title']}',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(
+                        '${r['category']} · ${budget(r)} · @${r['owner_handle'] ?? '—'} · ${_date(r['created_at'])}'),
+                    trailing: AdminStatusPill('${r['status']}' == 'hidden'
+                        ? 'removed'
+                        : '${r['status']}'),
+                    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                    expandedCrossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AdminKeyValue('Company', '${r['company'] ?? '—'}'),
+                      if ('${r['timeline'] ?? ''}'.isNotEmpty)
+                        AdminKeyValue(
+                            'Timeline',
+                            _humanKey('${r['timeline']}'
+                                    .replaceAll('lt_', 'under '))
+                                .toLowerCase()),
+                      if (_stringList(r['skills']).isNotEmpty)
+                        AdminKeyValue(
+                            'Skills', _stringList(r['skills']).join(', ')),
+                      const SizedBox(height: 6),
+                      KeyedSubtree(
+                        key: PageStorageKey<String>('request:${r['id']}'),
+                        child: SelectableText('${r['description'] ?? ''}',
+                            style: TextStyle(
+                                fontSize: 13, color: scheme.onSurface)),
+                      ),
+                      if ('${r['status']}' != 'deleted') ...[
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: '${r['status']}' == 'hidden'
+                              ? OutlinedButton.icon(
+                                  onPressed: () => setStatus(r, 'open'),
+                                  icon:
+                                      const Icon(Icons.undo_rounded, size: 18),
+                                  label: const Text('Restore'))
+                              : OutlinedButton.icon(
+                                  onPressed: () => setStatus(r, 'hidden'),
+                                  icon: const Icon(
+                                      Icons.visibility_off_outlined,
+                                      size: 18),
+                                  label: const Text('Take down')),
+                        ),
+                      ],
+                    ],
+                  ),
+              ]),
+      ),
+      const SizedBox(height: 16),
+      AdminSectionCard(
+        title: 'Partner keys',
+        icon: Icons.key_rounded,
+        subtitle:
+            'Partners read the open requests on the developer host: GET /v1/partner/talent-requests with Authorization: Bearer pk_live_….',
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+            child: FilledButton.icon(
+                onPressed: _createPartnerKey,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('New partner key')),
+          ),
+          if (keys.isEmpty)
+            Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text('No partner keys yet.', style: _muted()))
+          else
+            for (final k in keys)
+              _adaptiveTile(
+                leading: AdminAvatar('${k['name']}', icon: Icons.key_rounded),
+                title: Text('${k['name']}',
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: SelectableText(
+                    '${k['prefix']}…${k['last4']} · ${_integer(k['requests'])} calls · last used ${_date(k['last_used_at'])}'),
+                actions: [
+                  AdminStatusPill('${k['status']}'),
+                  if ('${k['status']}' == 'active')
+                    TextButton(
+                        onPressed: () => _revokePartnerKey(k),
+                        child: const Text('Revoke')),
+                ],
+              ),
+        ]),
+      ),
+    ]);
+  }
+
+  Future<void> _createPartnerKey() async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.key_rounded),
+        title: const Text('New partner key'),
+        content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+                labelText: 'Partner name',
+                hintText: 'Acme Recruiting',
+                border: OutlineInputBorder()),
+            onSubmitted: (v) => Navigator.pop(context, v)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text),
+              child: const Text('Create')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.trim().isEmpty || !mounted) return;
+    dynamic result;
+    try {
+      result = await widget.onDirectAction(
+          'talent', 'partner_key_create', {'name': name.trim()});
+    } catch (_) {
+      return; // The console reports the error.
+    }
+    final secret = '${_map(result)['secret'] ?? ''}';
+    if (secret.isEmpty || !mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.key_rounded),
+        title: const Text('Copy the key now'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text(
+              'It is shown only this once. Give it to the partner; only its last four characters are kept.'),
+          const SizedBox(height: 12),
+          SelectableText(secret,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
+        ]),
+        actions: [
+          TextButton.icon(
+              onPressed: () => Clipboard.setData(ClipboardData(text: secret)),
+              icon: const Icon(Icons.copy_rounded, size: 18),
+              label: const Text('Copy')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _revokePartnerKey(Map<String, dynamic> key) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.key_off_rounded),
+        title: Text('Revoke ${key['name']}?'),
+        content: const Text(
+            'The partner can no longer read requests with it. This cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Revoke')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget
+          .onDirectAction('talent', 'partner_key_revoke', {'id': key['id']});
+    } catch (_) {
+      // The console reports the error.
+    }
+  }
+
+  /// The developer API across every organization: what each spent and called
+  /// in the last days, and the latest requests (read-only).
+  Widget _developer() {
+    final overview = _map(widget.results['developer.admin_orgs']);
+    final totals = _map(overview['totals']);
+    final orgs = _listOfMaps(overview['orgs']);
+    final logs =
+        _listOfMaps(_map(widget.results['developer.admin_logs'])['logs']);
+    final window = _integer(totals['windowDays']);
+    final q = search.text.toLowerCase().trim();
+    final shown = orgs
+        .where((o) =>
+            q.isEmpty ||
+            '${o['name']} ${o['owner']} ${o['id']}'.toLowerCase().contains(q))
+        .toList()
+      ..sort((a, b) => _number(b['spend']).compareTo(_number(a['spend'])));
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      AdminGrid(maxColumns: 4, children: [
+        AdminStatCard(
+            label: 'Organizations',
+            value: '${_integer(totals['orgs'])}',
+            hint:
+                '${_integer(totals['active'])} active in ${window == 0 ? 30 : window} days',
+            icon: Icons.apartment_rounded),
+        AdminStatCard(
+            label: 'Spend',
+            value: _money(totals['spend']),
+            hint: '${_compact(totals['requests'])} requests',
+            icon: Icons.payments_rounded,
+            tone: AppColors.success),
+        AdminStatCard(
+            label: 'Errors',
+            value: _compact(totals['errors']),
+            hint: 'Failed requests',
+            icon: Icons.error_outline_rounded,
+            tone: _integer(totals['errors']) == 0 ? null : AppColors.warning),
+        AdminStatCard(
+            label: 'Held in balances',
+            value: _money(totals['balances']),
+            hint:
+                '${_integer(totals['keys'])} keys · ${_integer(totals['running'])} computers running · ${_bytes(totals['bytes'])} stored',
+            icon: Icons.account_balance_wallet_rounded),
+      ]),
+      const SizedBox(height: 18),
+      _toolbar(
+          AdminSearchField(
+              controller: search,
+              hint: 'Search organization or owner',
+              onChanged: (_) => setState(() {})),
+          const []),
+      const SizedBox(height: 12),
+      AdminDataTable(
+        empty: 'No organization uses the developer API yet.',
+        columns: const [
+          AdminTableColumn('Organization', width: 240),
+          AdminTableColumn('Balance', width: 110, align: TextAlign.right),
+          AdminTableColumn('Spend', width: 110, align: TextAlign.right),
+          AdminTableColumn('Requests', width: 110, align: TextAlign.right),
+          AdminTableColumn('Keys · people', width: 130, align: TextAlign.right),
+          AdminTableColumn('Last request', width: 150),
+          AdminTableColumn('', width: 90, align: TextAlign.right),
+        ],
+        rows: [
+          for (final o in shown)
+            [
+              _primaryCell('${o['name']}',
+                  '${o['kind'] == 'personal' ? 'personal' : 'team'} · @${o['owner'] ?? '—'}'),
+              Text(_money(o['balance']), textAlign: TextAlign.right),
+              Text(_money(o['spend']), textAlign: TextAlign.right),
+              Text(
+                  '${_compact(o['requests'])}${_integer(o['errors']) > 0 ? ' (${_integer(o['errors'])} failed)' : ''}',
+                  textAlign: TextAlign.right),
+              Text('${_integer(o['keys'])} · ${_integer(o['members'])}',
+                  textAlign: TextAlign.right),
+              Text(_date(o['lastAt'])),
+              TextButton(
+                  onPressed: () => _showDeveloperOrg(o),
+                  child: const Text('Open')),
+            ]
+        ],
+      ),
+      const SizedBox(height: 18),
+      AdminSectionCard(
+        title: 'Latest requests',
+        icon: Icons.receipt_long_rounded,
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: _developerLogs(logs, withOrg: true),
+      ),
+    ]);
+  }
+
+  Widget _developerLogs(List<Map<String, dynamic>> logs,
+          {bool withOrg = false}) =>
+      AdminDataTable(
+        empty: 'No requests yet.',
+        columns: [
+          const AdminTableColumn('Time', width: 150),
+          if (withOrg) const AdminTableColumn('Organization', width: 160),
+          const AdminTableColumn('Request', width: 260),
+          const AdminTableColumn('Model', width: 200),
+          const AdminTableColumn('Status', width: 90),
+          const AdminTableColumn('Tokens', width: 120, align: TextAlign.right),
+          const AdminTableColumn('Cost', width: 90, align: TextAlign.right),
+        ],
+        rows: [
+          for (final l in logs)
+            [
+              Text(_date(l['at'])),
+              if (withOrg) Text('${l['orgName'] ?? l['org'] ?? '—'}'),
+              _primaryCell('${l['method'] ?? ''} ${l['path'] ?? ''}',
+                  '${l['keyName'] ?? ''} · ${_integer(l['latencyMs'])} ms'),
+              _primaryCell('${l['model'] ?? '—'}',
+                  '${l['provider'] ?? ''}${'${l['error'] ?? ''}'.isEmpty ? '' : ' · ${l['error']}'}'),
+              AdminStatusPill(_integer(l['status']) >= 400
+                  ? 'failed ${_integer(l['status'])}'
+                  : 'ok ${_integer(l['status'])}'),
+              Text('${_compact(l['tokensIn'])} / ${_compact(l['tokensOut'])}',
+                  textAlign: TextAlign.right),
+              Text(_money(l['cost']), textAlign: TextAlign.right),
+            ]
+        ],
+      );
+
+  Future<void> _showDeveloperOrg(Map<String, dynamic> org) async {
+    dynamic value;
+    try {
+      value = await widget
+          .onDirectAction('developer', 'admin_org', {'org': org['id']});
+    } catch (_) {
+      return; // The console reports the error.
+    }
+    if (!mounted) return;
+    final d = _map(value);
+    final total = _map(_map(d['usage'])['total']);
+    final storage = _map(d['storage']);
+    final settings = _map(d['settings']);
+    await showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+          child: ListView(padding: const EdgeInsets.all(24), children: [
+            Row(children: [
+              AdminAvatar('${org['name']}',
+                  size: 44, icon: Icons.apartment_rounded),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _primaryCell(
+                      '${org['name']}', '${org['id']} · @${org['owner']}')),
+              IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded)),
+            ]),
+            const SizedBox(height: 16),
+            AdminGrid(maxColumns: 4, children: [
+              AdminStatCard(
+                  label: 'Balance',
+                  value: _money(_map(d['org'])['balance']),
+                  hint: '${_money(d['held'])} held for running work',
+                  icon: Icons.account_balance_wallet_rounded),
+              AdminStatCard(
+                  label: 'Spend',
+                  value: _money(total['spend']),
+                  hint:
+                      '${_compact(total['requests'])} requests · ${_compact(total['errors'])} failed',
+                  icon: Icons.payments_rounded),
+              AdminStatCard(
+                  label: 'Monthly cap',
+                  value: _number(settings['accountMonthlyCap']) > 0
+                      ? _money(settings['accountMonthlyCap'])
+                      : 'None',
+                  hint: '${_money(settings['spentMonth'])} this month',
+                  icon: Icons.savings_rounded),
+              AdminStatCard(
+                  label: 'Storage',
+                  value: _bytes(storage['usedBytes']),
+                  hint:
+                      '${_integer(storage['files'])} files · ${_money(storage['perMonth'])} a month',
+                  icon: Icons.cloud_rounded),
+            ]),
+            _heading('Keys'),
+            AdminDataTable(
+              empty: 'No keys.',
+              columns: const [
+                AdminTableColumn('Key', width: 240),
+                AdminTableColumn('Status', width: 100),
+                AdminTableColumn('This month',
+                    width: 120, align: TextAlign.right),
+                AdminTableColumn('Requests',
+                    width: 100, align: TextAlign.right),
+                AdminTableColumn('Last used', width: 150),
+              ],
+              rows: [
+                for (final k in _listOfMaps(d['keyList']))
+                  [
+                    _primaryCell(
+                        '${k['name']}', '${k['prefix']}…${k['last4']}'),
+                    AdminStatusPill('${k['status']}'),
+                    Text(_money(k['spentMonth']), textAlign: TextAlign.right),
+                    Text(_compact(k['requests']), textAlign: TextAlign.right),
+                    Text(_date(k['lastUsedAt'])),
+                  ]
+              ],
+            ),
+            _heading('People'),
+            AdminDataTable(
+              empty: 'No members.',
+              columns: const [
+                AdminTableColumn('Person', width: 240),
+                AdminTableColumn('Role', width: 120),
+                AdminTableColumn('Status', width: 120),
+              ],
+              rows: [
+                for (final m in _listOfMaps(d['members']))
+                  [
+                    _primaryCell(
+                        '${m['name'] ?? m['handle']}', '@${m['handle']}'),
+                    Text('${m['role']}'),
+                    AdminStatusPill('${m['status']}'),
+                  ]
+              ],
+            ),
+            if (_listOfMaps(d['computerList']).isNotEmpty) ...[
+              _heading('Computers'),
+              AdminDataTable(
+                empty: 'No computers.',
+                columns: const [
+                  AdminTableColumn('Computer', width: 240),
+                  AdminTableColumn('Status', width: 120),
+                  AdminTableColumn('Size', width: 160),
+                  AdminTableColumn('Minutes',
+                      width: 100, align: TextAlign.right),
+                ],
+                rows: [
+                  for (final c in _listOfMaps(d['computerList']))
+                    [
+                      _primaryCell('${c['name']}', '${c['image']}'),
+                      AdminStatusPill('${c['status']}'),
+                      Text(
+                          '${compactDecimal(_number(_map(c['spec'])['cpu']))} vCPU · ${_bytes(_number(_map(c['spec'])['memoryMb']) * 1024 * 1024)}'),
+                      Text(compactDecimal(_number(c['minutes']), decimals: 1),
+                          textAlign: TextAlign.right),
+                    ]
+                ],
+              ),
+            ],
+            _heading('Requests'),
+            _developerLogs(_listOfMaps(d['logs'])),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Widget _finance() {
     final o = _map(widget.results['finance.overview']);
     final income = _map(o['income']);
@@ -1891,9 +2428,14 @@ class _AppPageContentState extends State<AdminPageContent> {
     final q = search.text.trim().toLowerCase();
     final shown = models.where((m) {
       final provider = _map(m['_provider']);
-      return (filter == 'all' ||
-              '${provider['id']}' == filter ||
-              _modelPurpose(m).toLowerCase() == filter) &&
+      final matches = switch (filter) {
+        'all' => true,
+        'unpriced' => m['unpriced'] == true,
+        'disabled' => m['disabled'] == true,
+        _ => '${provider['id']}' == filter ||
+            _modelPurpose(m).toLowerCase() == filter,
+      };
+      return matches &&
           (q.isEmpty ||
               '${provider['name']} ${m['id']} ${m['name']}'
                   .toLowerCase()
@@ -1901,10 +2443,16 @@ class _AppPageContentState extends State<AdminPageContent> {
     }).toList();
     final palette = adminPalette(context);
     final purposeColor = {
-      'Agent': palette[0],
-      'Decision': palette[1],
-      'Embedding': palette[3],
+      for (var i = 0; i < _modelKinds.length; i++)
+        _modelKinds[i].$2: palette[i % palette.length],
     };
+    final present = [
+      for (final k in _modelKinds)
+        if (models.any((m) => _modelPurpose(m) == k.$2)) k.$2
+    ];
+    final unpriced = models.where((m) => m['unpriced'] == true).length;
+    final disabled = models.where((m) => m['disabled'] == true).length;
+    final vercel = providers.where((p) => '${p['kind']}' == 'vercel').toList();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       AdminGrid(maxColumns: 2, minTileWidth: 340, children: [
         AdminSectionCard(
@@ -1915,7 +2463,7 @@ class _AppPageContentState extends State<AdminPageContent> {
             center: '${models.length}',
             caption: 'models',
             slices: [
-              for (final purpose in const ['Agent', 'Decision', 'Embedding'])
+              for (final purpose in present)
                 AdminChartSlice(
                     purpose,
                     models
@@ -1948,6 +2496,11 @@ class _AppPageContentState extends State<AdminPageContent> {
               hint: 'Search provider or model',
               onChanged: (_) => setState(() {})),
           [
+            if (vercel.isNotEmpty)
+              OutlinedButton.icon(
+                  onPressed: () => _importVercel(vercel),
+                  icon: const Icon(Icons.download_rounded, size: 18),
+                  label: const Text('Import from Vercel')),
             FilledButton.icon(
                 onPressed:
                     providers.isEmpty ? null : () => _showModel(providers),
@@ -1960,9 +2513,13 @@ class _AppPageContentState extends State<AdminPageContent> {
         onSelected: (v) => setState(() => filter = v),
         options: [
           AdminFilterOption('all', 'All', count: models.length),
-          for (final purpose in const ['Agent', 'Decision', 'Embedding'])
+          for (final purpose in present)
             AdminFilterOption(purpose.toLowerCase(), purpose,
                 count: models.where((m) => _modelPurpose(m) == purpose).length),
+          if (unpriced > 0)
+            AdminFilterOption('unpriced', 'Needs a price', count: unpriced),
+          if (disabled > 0)
+            AdminFilterOption('disabled', 'Disabled', count: disabled),
           for (final p in providers)
             AdminFilterOption('${p['id']}', '${p['name']}',
                 icon: Icons.hub_outlined),
@@ -1977,9 +2534,8 @@ class _AppPageContentState extends State<AdminPageContent> {
           AdminTableColumn('Provider', width: 180),
           AdminTableColumn('Model', width: 260),
           AdminTableColumn('Purpose', width: 130),
-          AdminTableColumn('Input \$/1M', width: 120, align: TextAlign.right),
-          AdminTableColumn('Output \$/1M', width: 120, align: TextAlign.right),
-          AdminTableColumn('Actions', width: 130, align: TextAlign.right),
+          AdminTableColumn('Price', width: 260, align: TextAlign.right),
+          AdminTableColumn('Actions', width: 170, align: TextAlign.right),
         ],
         rows: [
           for (final m in shown)
@@ -2002,12 +2558,37 @@ class _AppPageContentState extends State<AdminPageContent> {
                           : 'enabled'),
                 ),
               ]),
-              _primaryCell('${m['name'] ?? m['id']}',
-                  m['name'] != null ? '${m['id']}' : ''),
+              _primaryCell(
+                  '${m['name'] ?? m['id']}',
+                  [
+                    if (m['name'] != null) '${m['id']}',
+                    if (m['disabled'] == true) 'disabled',
+                    if ('${m['source'] ?? ''}'.isNotEmpty)
+                      m['markup'] is num
+                          ? 'from ${m['source']} +${compactDecimal(_number(m['markup']))}%'
+                          : m['unpriced'] == true
+                              ? 'from ${m['source']}'
+                              : 'from ${m['source']}, priced by hand',
+                  ].join(' · ')),
               _Tag(_modelPurpose(m), color: purposeColor[_modelPurpose(m)]),
-              Text(_modelPrice(m['input_price']), textAlign: TextAlign.right),
-              Text(_modelPrice(m['output_price']), textAlign: TextAlign.right),
+              Text(_modelPriceText(m),
+                  textAlign: TextAlign.right,
+                  style: m['unpriced'] == true
+                      ? const TextStyle(
+                          color: AppColors.warning, fontWeight: FontWeight.w700)
+                      : null),
               Wrap(alignment: WrapAlignment.end, children: [
+                IconButton(
+                    tooltip: m['disabled'] == true
+                        ? 'Enable model'
+                        : 'Disable model',
+                    onPressed: () =>
+                        _setModelDisabled(m, m['disabled'] != true),
+                    icon: Icon(
+                        m['disabled'] == true
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        size: 18)),
                 IconButton(
                     tooltip: 'Edit model',
                     onPressed: () => _showModel(providers,
@@ -2022,6 +2603,92 @@ class _AppPageContentState extends State<AdminPageContent> {
         ],
       ),
     ]);
+  }
+
+  /// Disabling hides a model from new agents, the pickers and the developer
+  /// API; agents already on it keep running. The provider is saved whole.
+  Future<void> _setModelDisabled(Map<String, dynamic> model, bool disabled) {
+    final provider = _map(model['_provider']);
+    return widget.onDirectAction('llm', 'llm_provider_set', {
+      ...provider,
+      'models': [
+        for (final m in _listOfMaps(provider['models']))
+          if ('${m['id']}' == '${model['id']}')
+            ({...m}..remove('disabled'))
+              ..addAll({if (disabled) 'disabled': true})
+          else
+            m
+      ],
+    });
+  }
+
+  /// Brings Vercel AI Gateway's catalog into a Vercel provider at Vercel's
+  /// price plus a markup; importing again updates the models in place.
+  Future<void> _importVercel(List<Map<String, dynamic>> vercel) async {
+    final last = [
+      for (final p in vercel)
+        for (final m in _listOfMaps(p['models']))
+          if (m['markup'] is num) _number(m['markup'])
+    ];
+    final picked = await showDialog<(String, double)>(
+      context: context,
+      builder: (_) => _ImportVercelDialog(
+          providers: vercel,
+          markup: last.isEmpty ? null : last.first.toDouble()),
+    );
+    if (picked == null || !mounted) return;
+    dynamic result;
+    try {
+      result = await widget.onDirectAction('llm', 'llm_import_vercel',
+          {'provider_id': picked.$1, 'markup': picked.$2});
+    } catch (_) {
+      return; // The console reports the error.
+    }
+    await widget.onRefresh();
+    if (!mounted) return;
+    final r = _map(result);
+    final skipped = _map(r['skipped']);
+    final needPrice = _stringList(r['need_price']);
+    final gone = _stringList(r['gone']);
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.download_done_rounded),
+        title: const Text('Vercel models imported'),
+        content: SingleChildScrollView(
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    '${_integer(r['added'])} added · ${_integer(r['updated'])} updated · ${_integer(r['unchanged'])} unchanged, at Vercel\'s price +${compactDecimal(_number(r['markup']))}%.'),
+                if (skipped.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                      'Skipped: ${skipped.entries.map((e) => '${e.value} ${e.key}').join(', ')}.',
+                      style: _muted()),
+                ],
+                if (needPrice.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                      '${needPrice.length} need a price before they are served: ${needPrice.take(8).join(', ')}${needPrice.length > 8 ? '…' : ''}',
+                      style: const TextStyle(color: AppColors.warning)),
+                ],
+                if (gone.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                      '${gone.length} imported before are no longer listed by Vercel (kept, remove them if unused): ${gone.take(8).join(', ')}${gone.length > 8 ? '…' : ''}',
+                      style: _muted()),
+                ],
+              ]),
+        ),
+        actions: [
+          FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done')),
+        ],
+      ),
+    );
   }
 
   Future<void> _showModel(List<Map<String, dynamic>> providers,
@@ -2120,6 +2787,61 @@ class _AppPageContentState extends State<AdminPageContent> {
           value: setting['auto_approve'] == true,
           onChanged: (value) => widget.onDirectAction('llm', 'llm_decision_set',
               _decisionBody(setting, autoApprove: value)),
+        ),
+      ]),
+    );
+  }
+
+  /// The node's image model: agents make images with their image tool using
+  /// this one model, whatever model they run on, charged at its prices.
+  Widget _imageModel() {
+    final setting = _map(widget.results['llm.llm_image_get']);
+    final providers = _listOfMaps(setting['providers']);
+    final enabled = setting['enabled'] == true;
+    final providerId = '${setting['provider_id'] ?? ''}';
+    final modelId = '${setting['model_id'] ?? ''}';
+    Map<String, dynamic> body({bool? on, String? provider, String? model}) => {
+          'enabled': on ?? enabled,
+          'provider_id': provider ?? providerId,
+          'model_id': model ?? modelId,
+        };
+    final provider = providers
+        .cast<Map<String, dynamic>?>()
+        .firstWhere((p) => '${p?['id']}' == providerId, orElse: () => null);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _settingStatus(setting),
+        const SizedBox(height: 16),
+        AdminSectionCard(
+          title: 'Image model',
+          icon: Icons.image_rounded,
+          subtitle:
+              'Agents make images with their image tool, never with their own chat model, so any agent can make images. Mark a model "Image" on the Models page to offer it here.',
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            AppSwitchCard(
+              icon: Icons.image_outlined,
+              title: enabled ? 'On' : 'Off',
+              subtitle: enabled
+                  ? 'Images are made with the model below and charged at its prices on the Models page.'
+                  : 'Agents cannot make images.',
+              value: enabled,
+              onChanged: (value) => widget.onDirectAction(
+                  'llm', 'llm_image_set', body(on: value)),
+            ),
+            const SizedBox(height: 20),
+            _modelPicker(
+              providers: providers,
+              providerId: providerId,
+              modelId: modelId,
+              models: _listOfMaps(provider?['image_models']),
+              onProvider: (value) => widget.onDirectAction(
+                  'llm', 'llm_image_set', body(provider: value, model: '')),
+              onModel: (value) => widget.onDirectAction(
+                  'llm', 'llm_image_set', body(model: value)),
+            ),
+          ]),
         ),
       ]),
     );
@@ -3169,11 +3891,15 @@ class _AppPageContentState extends State<AdminPageContent> {
                                         fontWeight: FontWeight.w700,
                                         color: scheme.onSurfaceVariant)),
                                 const SizedBox(height: 2),
-                                SelectableText(
-                                    '${m['body'] ?? ''}'.isEmpty
-                                        ? '(${m['attachments'] ?? 0} attachment(s))'
-                                        : '${m['body']}',
-                                    style: const TextStyle(fontSize: 13)),
+                                KeyedSubtree(
+                                  key: PageStorageKey<String>(
+                                      'evidence:${r['id']}:${m['id']}'),
+                                  child: SelectableText(
+                                      '${m['body'] ?? ''}'.isEmpty
+                                          ? '(${m['attachments'] ?? 0} attachment(s))'
+                                          : '${m['body']}',
+                                      style: const TextStyle(fontSize: 13)),
+                                ),
                               ]),
                         ),
                       const SizedBox(height: 8),
@@ -3682,19 +4408,22 @@ class _ModelEditorDialog extends StatefulWidget {
 class _ModelEditorDialogState extends State<_ModelEditorDialog> {
   late String providerId;
   late String purpose;
+  late bool disabled;
   late final String previousId;
   late final TextEditingController id;
   late final TextEditingController name;
   late final TextEditingController input;
   late final TextEditingController output;
+  final units = <String, TextEditingController>{};
   bool saving = false;
 
   bool get editing => widget.model != null;
+  Map<String, dynamic> get previous => widget.model ?? const {};
 
   @override
   void initState() {
     super.initState();
-    final model = widget.model ?? const <String, dynamic>{};
+    final model = previous;
     providerId = '${widget.provider['id']}';
     previousId = '${model['id'] ?? ''}';
     id = TextEditingController(text: previousId);
@@ -3703,7 +4432,19 @@ class _ModelEditorDialogState extends State<_ModelEditorDialog> {
         text: ledgerUsdField(_number(model['input_price'])));
     output = TextEditingController(
         text: ledgerUsdField(_number(model['output_price'])));
-    purpose = _modelPurpose(model).toLowerCase();
+    final label = _modelPurpose(model);
+    purpose = _modelKinds.firstWhere((k) => k.$2 == label).$1;
+    disabled = model['disabled'] == true;
+    final stored = _map(model['units']);
+    for (final fields in _unitFields.values) {
+      for (final (key, quoted, scale) in fields) {
+        final v = _number(stored[key]) * scale;
+        units[quoted] = TextEditingController(
+            text: v > 0
+                ? compactDecimal(v / ledgerUnitsPerUsd, decimals: 10)
+                : '');
+      }
+    }
   }
 
   @override
@@ -3712,18 +4453,51 @@ class _ModelEditorDialogState extends State<_ModelEditorDialog> {
     name.dispose();
     input.dispose();
     output.dispose();
+    for (final c in units.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
+  void _say(String text) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+
   Future<void> save() async {
     final modelId = id.text.trim();
-    final inputUnits = parseUsdToLedger(input.text);
-    final outputUnits = parseUsdToLedger(output.text);
+    final tokens = _tokenPriced.contains(purpose);
+    final inputUnits =
+        tokens ? parseUsdToLedger(input.text.isEmpty ? '0' : input.text) : 0;
+    final outputUnits =
+        tokens ? parseUsdToLedger(output.text.isEmpty ? '0' : output.text) : 0;
     if (modelId.isEmpty || inputUnits == null || outputUnits == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text(
-              'Enter the provider model id and valid dollar prices (up to six decimals).')));
+      _say(
+          'Enter the provider model id and valid dollar prices (up to six decimals).');
       return;
+    }
+    // Prices other than tokens: dollars per quoted unit in, ledger units per
+    // stored unit out.
+    Map<String, dynamic>? nextUnits;
+    for (final (key, quoted, scale)
+        in _unitFields[purpose] ?? const <(String, String, double)>[]) {
+      final raw = units[quoted]!.text.trim().replaceFirst(RegExp(r'^\$'), '');
+      if (raw.isEmpty) continue;
+      final usd = double.tryParse(raw.replaceAll(',', ''));
+      if (usd == null || usd < 0) {
+        _say('$quoted: a dollar amount, e.g. 0.04.');
+        return;
+      }
+      if (usd > 0) {
+        final v = (usd * ledgerUnitsPerUsd / scale * 100).round() / 100;
+        nextUnits = {...?nextUnits, key: v};
+      }
+    }
+    final before = _map(previous['units']);
+    // A video priced by resolution keeps those prices while its rate is left
+    // as it was.
+    if (purpose == 'video' &&
+        before['second_by'] != null &&
+        _number(nextUnits?['second']) == _number(before['second'])) {
+      nextUnits = {...?nextUnits, 'second_by': before['second_by']};
     }
     final provider = widget.providers.firstWhere(
         (p) => '${p['id']}' == providerId,
@@ -3731,16 +4505,45 @@ class _ModelEditorDialogState extends State<_ModelEditorDialog> {
     final models = _listOfMaps(provider['models']);
     if (models
         .any((m) => '${m['id']}' == modelId && '${m['id']}' != previousId)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('$modelId is already listed.')));
+      _say('$modelId is already listed.');
       return;
     }
+    // What an import recorded (source, tags, inputs) stays; a price typed by
+    // hand is no longer the source's price plus a markup.
+    final kept = {...previous}
+      ..remove('_provider')
+      ..remove('name')
+      ..remove('capabilities')
+      ..remove('units')
+      ..remove('unpriced')
+      ..remove('disabled');
+    bool sameUnits(Map<String, dynamic> a, Map<String, dynamic> b) =>
+        {...a.keys, ...b.keys}.every((k) => k == 'second_by'
+            ? jsonEncode(a[k]) == jsonEncode(b[k])
+            : _number(a[k]) == _number(b[k]));
+    final repriced = editing &&
+        (_number(previous['input_price']) != inputUnits ||
+            _number(previous['output_price']) != outputUnits ||
+            !sameUnits(before, nextUnits ?? const {}));
+    if (repriced) {
+      kept
+        ..remove('markup')
+        ..remove('base_input_price')
+        ..remove('base_output_price')
+        ..remove('base_units');
+    }
+    final priced = inputUnits > 0 || outputUnits > 0 || nextUnits != null;
     final next = <String, dynamic>{
+      ...kept,
       'id': modelId,
       if (name.text.trim().isNotEmpty) 'name': name.text.trim(),
       'input_price': inputUnits,
       'output_price': outputUnits,
+      if (nextUnits != null) 'units': nextUnits,
       'capabilities': [purpose],
+      // Imported without a price, it is served once one is set.
+      if (previous['unpriced'] == true && !priced) 'unpriced': true,
+      if (disabled) 'disabled': true,
     };
     final nextModels = <Map<String, dynamic>>[
       for (final current in models)
@@ -3753,16 +4556,41 @@ class _ModelEditorDialogState extends State<_ModelEditorDialog> {
       if (mounted) Navigator.pop(context);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save model: $error')));
+      _say('Could not save model: $error');
       setState(() => saving = false);
     }
   }
 
+  static const _purposeHints = {
+    'chat': 'Agents can use this as their main reasoning model.',
+    'decision':
+        'Used for tool selection, routing, progress, and completion checks. Agents cannot use it as their main model.',
+    'embedding':
+        'Turns memories into vectors for semantic recall. Agents cannot use it as their main model.',
+    'image':
+        'Makes images: the node\'s image model and the developer API. Priced per image, by its tokens, or both.',
+    'video': 'Makes videos for the developer API, priced per second.',
+    'speech':
+        'Turns text into speech for the developer API, priced per character.',
+    'transcription':
+        'Turns audio into text for the developer API, priced per minute.',
+    'rerank':
+        'Reranks search results for the developer API, priced per search.',
+  };
+
+  Widget _priceField(TextEditingController c, String label, String hint) =>
+      TextField(
+          controller: c,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+              labelText: label,
+              hintText: hint,
+              border: const OutlineInputBorder()));
+
   @override
   Widget build(BuildContext context) => Dialog(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 650, maxHeight: 720),
+          constraints: const BoxConstraints(maxWidth: 650, maxHeight: 760),
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child:
@@ -3777,6 +4605,16 @@ class _ModelEditorDialogState extends State<_ModelEditorDialog> {
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.close_rounded)),
               ]),
+              if ('${previous['source'] ?? ''}'.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                    previous['markup'] is num
+                        ? 'Imported from ${previous['source']} at its price +${compactDecimal(_number(previous['markup']))}%. Typing a price here sets it by hand.'
+                        : 'Imported from ${previous['source']}.',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              ],
               const SizedBox(height: 18),
               DropdownButtonFormField<String>(
                 initialValue: providerId,
@@ -3810,60 +4648,41 @@ class _ModelEditorDialogState extends State<_ModelEditorDialog> {
                       hintText: 'GPT-4.1',
                       border: OutlineInputBorder())),
               const SizedBox(height: 18),
-              const Text('WHAT THIS MODEL IS FOR',
-                  style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1)),
-              const SizedBox(height: 8),
-              // Three long labels do not fit side by side on a phone.
-              SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SegmentedButton<String>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(value: 'chat', label: Text('Agent model')),
-                      ButtonSegment(
-                          value: 'decision', label: Text('Decision model')),
-                      ButtonSegment(
-                          value: 'embedding', label: Text('Embedding model')),
-                    ],
-                    selected: {purpose},
-                    onSelectionChanged: (value) =>
-                        setState(() => purpose = value.first),
-                  )),
-              const SizedBox(height: 8),
-              Text(
-                  purpose == 'chat'
-                      ? 'Agents can use this as their main reasoning model.'
-                      : purpose == 'decision'
-                          ? 'Used for tool selection, routing, progress, and completion checks. Agents cannot use it as their main model.'
-                          : 'Turns memories into vectors for semantic recall. Agents cannot use it as their main model.',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              AppChoiceField<String>(
+                label: 'What this model is for',
+                value: purpose,
+                onChanged: (value) => setState(() => purpose = value),
+                choices: [
+                  for (final (value, label) in _modelKinds)
+                    AppChoice(value, value == 'chat' ? 'Agent model' : label,
+                        hint: _purposeHints[value]),
+                ],
+              ),
               const SizedBox(height: 18),
-              Row(children: [
-                Expanded(
-                    child: TextField(
-                        controller: input,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        decoration: const InputDecoration(
-                            labelText: 'Input \$/1M tokens',
-                            hintText: '2.50',
-                            border: OutlineInputBorder()))),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: TextField(
-                        controller: output,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        decoration: const InputDecoration(
-                            labelText: 'Output \$/1M tokens',
-                            hintText: '10.00',
-                            border: OutlineInputBorder()))),
-              ]),
+              if (_tokenPriced.contains(purpose))
+                Row(children: [
+                  Expanded(
+                      child: _priceField(input, 'Input \$/1M tokens', '2.50')),
+                  const SizedBox(width: 12),
+                  Expanded(
+                      child:
+                          _priceField(output, 'Output \$/1M tokens', '10.00')),
+                ]),
+              for (final (_, quoted, _) in _unitFields[purpose] ??
+                  const <(String, String, double)>[]) ...[
+                const SizedBox(height: 12),
+                _priceField(units[quoted]!, quoted, '0.04'),
+              ],
+              const SizedBox(height: 14),
+              AppSwitchCard(
+                icon: Icons.visibility_off_outlined,
+                title: disabled ? 'Disabled' : 'Offered',
+                subtitle: disabled
+                    ? 'Hidden from new agents, the pickers and the developer API. Agents already on it keep running.'
+                    : 'Offered for new agents, the pickers and the developer API.',
+                value: disabled,
+                onChanged: (v) => setState(() => disabled = v),
+              ),
               const SizedBox(height: 22),
               Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                 TextButton(
@@ -3883,6 +4702,90 @@ class _ModelEditorDialogState extends State<_ModelEditorDialog> {
             ]),
           ),
         ),
+      );
+}
+
+/// Picks the Vercel provider and the markup for an import.
+class _ImportVercelDialog extends StatefulWidget {
+  const _ImportVercelDialog({required this.providers, this.markup});
+  final List<Map<String, dynamic>> providers;
+
+  /// The markup of the last import, offered again.
+  final double? markup;
+
+  @override
+  State<_ImportVercelDialog> createState() => _ImportVercelDialogState();
+}
+
+class _ImportVercelDialogState extends State<_ImportVercelDialog> {
+  late String providerId = '${widget.providers.first['id']}';
+  late final markup = TextEditingController(
+      text: widget.markup == null ? '' : compactDecimal(widget.markup!));
+  String? error;
+
+  @override
+  void dispose() {
+    markup.dispose();
+    super.dispose();
+  }
+
+  void submit() {
+    final v = double.tryParse(markup.text.trim().replaceFirst('%', ''));
+    if (v == null || v < 0 || v > 1000) {
+      setState(
+          () => error = 'Enter a markup between 0 and 1000 percent, e.g. 20.');
+      return;
+    }
+    Navigator.pop(context, (providerId, v));
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        icon: const Icon(Icons.download_rounded),
+        title: const Text('Import from Vercel'),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                    'Brings Vercel AI Gateway\'s models in at Vercel\'s price plus your markup. Importing again updates them in place; prices you typed by hand stay.'),
+                const SizedBox(height: 16),
+                if (widget.providers.length > 1) ...[
+                  AppChoiceField<String>(
+                    label: 'Into',
+                    value: providerId,
+                    onChanged: (v) => setState(() => providerId = v),
+                    choices: [
+                      for (final p in widget.providers)
+                        AppChoice('${p['id']}', '${p['name']}',
+                            icon: Icons.hub_outlined),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                TextField(
+                  controller: markup,
+                  autofocus: true,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onSubmitted: (_) => submit(),
+                  decoration: InputDecoration(
+                      labelText: 'Markup',
+                      suffixText: '%',
+                      hintText: '20',
+                      errorText: error,
+                      border: const OutlineInputBorder()),
+                ),
+              ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          FilledButton(onPressed: submit, child: const Text('Import')),
+        ],
       );
 }
 
@@ -3979,6 +4882,9 @@ class _PricingEditorState extends State<_PricingEditor> {
       'tool.cpu_per_min': credits(tool['cpu_per_min']),
       'tool.memory_per_gb_min': credits(tool['memory_per_gb_min']),
       'tool.disk_per_gb_min': credits(tool['disk_per_gb_min']),
+      // Dollars per GB-month; a node that never set it charges the default.
+      'storage_gb_month':
+          p.containsKey('storage_gb_month') ? usd(p['storage_gb_month']) : .05,
     };
   }
 
@@ -4014,6 +4920,7 @@ class _PricingEditorState extends State<_PricingEditor> {
           'memory_per_gb_min': credits('tool.memory_per_gb_min'),
           'disk_per_gb_min': credits('tool.disk_per_gb_min'),
         },
+        'storage_gb_month': usd('storage_gb_month'),
       });
     } finally {
       if (mounted) setState(() => busy = false);
@@ -4106,6 +5013,24 @@ class _PricingEditorState extends State<_PricingEditor> {
             ])),
         const SizedBox(height: 16),
         AdminSectionCard(
+            title: 'Developer storage',
+            icon: Icons.cloud_outlined,
+            subtitle:
+                'What a developer API organization pays for each GB it keeps in Storage, per month.',
+            child: AppAmountField(
+              label: 'Storage',
+              value: values['storage_gb_month']!,
+              max: 1,
+              step: .01,
+              decimals: 3,
+              unit: '\$ / GB-month',
+              presets: const [0, .02, .05, .1],
+              presetLabel: (v) => v == 0 ? 'Free' : _usd(v),
+              format: (v) => v == 0 ? 'Free' : '${_usd(v)} / GB-month',
+              onChanged: (v) => setState(() => values['storage_gb_month'] = v),
+            )),
+        const SizedBox(height: 16),
+        AdminSectionCard(
             title: 'Model tokens',
             icon: Icons.memory_rounded,
             subtitle: 'Input and output prices are set per model.',
@@ -4183,6 +5108,9 @@ class _MachineEditorState extends State<_MachineEditor> {
       'reserve_memory': gb(m['reserve_memory_mb']),
       'max_cpu': n(m['max_cpu']),
       'max_memory': gb(m['max_memory_mb']),
+      'provider_idle_min': n(m['provider_idle_min']) ?? 30,
+      'max_lifetime_min': n(m['max_lifetime_min']) ?? 480,
+      'command_timeout_sec': n(m['command_timeout_sec']) ?? 300,
     };
   }
 
@@ -4203,6 +5131,9 @@ class _MachineEditorState extends State<_MachineEditor> {
         'reserve_memory_mb': mb(values['reserve_memory']),
         'max_cpu': values['max_cpu'],
         'max_memory_mb': mb(values['max_memory']),
+        'provider_idle_min': values['provider_idle_min']?.round(),
+        'max_lifetime_min': values['max_lifetime_min']?.round(),
+        'command_timeout_sec': values['command_timeout_sec']?.round(),
       });
     } finally {
       if (mounted) setState(() => busy = false);
@@ -4347,9 +5278,77 @@ class _MachineEditorState extends State<_MachineEditor> {
               sizeChips('max_memory', 'RAM', const [4, 8, 16, 32], 'GB',
                   auto: true),
             ])),
+        const SizedBox(height: 16),
+        AdminSectionCard(
+            title: 'Time limits',
+            icon: Icons.timer_outlined,
+            subtitle:
+                'When an idle computer is stopped at the provider, the longest any computer may run, and how long one command may take.',
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              AppAmountField(
+                label: 'Stop when idle for',
+                value: values['provider_idle_min'] ?? 30,
+                min: 5,
+                max: 1440,
+                step: 5,
+                decimals: 0,
+                unit: 'min',
+                presets: const [10, 30, 60, 120],
+                presetLabel: _minutes,
+                format: _minutes,
+                onChanged: (v) => setState(() {
+                  values['provider_idle_min'] = v;
+                  final life = values['max_lifetime_min'] ?? 480;
+                  if (life < v) values['max_lifetime_min'] = v;
+                }),
+              ),
+              const SizedBox(height: 20),
+              AppAmountField(
+                label: 'Longest run',
+                value: values['max_lifetime_min'] ?? 480,
+                min: 30,
+                max: 1440,
+                step: 30,
+                decimals: 0,
+                unit: 'min',
+                presets: const [120, 480, 720, 1440],
+                presetLabel: _minutes,
+                format: _minutes,
+                onChanged: (v) => setState(() {
+                  values['max_lifetime_min'] = v;
+                  final idle = values['provider_idle_min'] ?? 30;
+                  if (idle > v) values['provider_idle_min'] = v;
+                }),
+              ),
+              const SizedBox(height: 20),
+              AppAmountField(
+                label: 'One command may take',
+                value: values['command_timeout_sec'] ?? 300,
+                min: 10,
+                max: 3600,
+                step: 10,
+                decimals: 0,
+                unit: 's',
+                presets: const [60, 300, 900, 3600],
+                presetLabel: _seconds,
+                format: _seconds,
+                onChanged: (v) =>
+                    setState(() => values['command_timeout_sec'] = v),
+              ),
+            ])),
       ]),
     );
   }
+
+  static String _minutes(double v) => v >= 60 && v % 60 == 0
+      ? '${(v / 60).round()} h'
+      : v >= 60
+          ? '${(v / 60).floor()} h ${(v % 60).round()} min'
+          : '${v.round()} min';
+
+  static String _seconds(double v) =>
+      v >= 60 && v % 60 == 0 ? '${(v / 60).round()} min' : '${v.round()} s';
 }
 
 class _PromptEditor extends StatefulWidget {
@@ -4930,7 +5929,10 @@ class _ProjectDialogState extends State<_ProjectDialog> {
   int tab = 0;
   bool loading = true;
   Map<String, dynamic> detail = const {};
-  List<Map<String, dynamic>> work = const [];
+
+  /// spaces.admin_work_log: the project's runs (with their events and where
+  /// their time went), metered usage and memory charges. Null until loaded.
+  Map<String, dynamic>? workLog;
   List<Map<String, dynamic>> files = const [];
 
   @override
@@ -4954,13 +5956,9 @@ class _ProjectDialogState extends State<_ProjectDialog> {
   Future<void> loadTab(int value) async {
     setState(() => tab = value);
     try {
-      if (value == 4 && work.isEmpty) {
+      if (value == 4 && workLog == null) {
         final value = await widget.loadWork();
-        if (mounted) {
-          setState(() => work = _listOfMaps(_map(value)['logs'] ??
-              _map(value)['work'] ??
-              _map(value)['events']));
-        }
+        if (mounted) setState(() => workLog = _map(value));
       }
       if (value == 3 && files.isEmpty) {
         final value = await widget.loadFiles();
@@ -5188,25 +6186,166 @@ class _ProjectDialogState extends State<_ProjectDialog> {
             ]
         ],
       );
-  Widget _work() => AdminDataTable(
-        empty: 'No work log entries.',
+  Widget _work() {
+    final log = workLog;
+    if (log == null) {
+      return const Padding(
+          padding: EdgeInsets.all(24),
+          child: Center(child: CircularProgressIndicator()));
+    }
+    final scheme = Theme.of(context).colorScheme;
+    final runs = _listOfMaps(log['runs']);
+    final usage = _listOfMaps(log['usage_events']);
+    final memory = _listOfMaps(log['memory_events']);
+    String ms(dynamic v) {
+      final n = _number(v);
+      return n >= 1000
+          ? '${(n / 1000).toStringAsFixed(1)} s'
+          : '${n.round()} ms';
+    }
+
+    String took(Map<String, dynamic> run) {
+      final start = DateTime.tryParse('${run['started_at'] ?? ''}');
+      final end = DateTime.tryParse('${run['ended_at'] ?? ''}');
+      if (start == null ||
+          end == null ||
+          start.year < 2000 ||
+          end.year < 2000) {
+        return '';
+      }
+      return ' · took ${ms(end.difference(start).inMilliseconds)}';
+    }
+
+    Widget heading(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 18, 4, 8),
+        child: Text(text,
+            style: TextStyle(
+                fontSize: 11,
+                letterSpacing: 1,
+                fontWeight: FontWeight.w800,
+                color: scheme.onSurfaceVariant)));
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      heading('RUNS'),
+      if (runs.isEmpty)
+        const AdminEmptyState(
+            'No runs', 'Agent work in this project shows up here.',
+            icon: Icons.receipt_long_outlined)
+      else
+        for (final run in runs)
+          ExpansionTile(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppShape.control)),
+            collapsedShape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppShape.control)),
+            title: Text(
+                [
+                  _stringList(run['agents']).isNotEmpty
+                      ? _stringList(run['agents']).join(', ')
+                      : 'Run',
+                  if ('${run['actor'] ?? ''}'.isNotEmpty) 'by @${run['actor']}',
+                ].join(' · '),
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text(
+                '${_date(run['created_at'])}${took(run)} · ${'${run['prompt'] ?? ''}'.replaceAll('\n', ' ')}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis),
+            trailing: AdminStatusPill('${run['status'] ?? '—'}'),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+            expandedCrossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if ('${run['error'] ?? ''}'.isNotEmpty)
+                AdminKeyValue('Error', '${run['error']}'),
+              if (_listOfMaps(run['spans']).isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text('Where the time went',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: scheme.onSurfaceVariant)),
+                for (final s in _listOfMaps(run['spans']))
+                  AdminKeyValue('${s['name']}',
+                      '${ms(s['ms'])}${'${s['detail'] ?? ''}'.isEmpty ? '' : ' · ${s['detail']}'}'),
+              ],
+              const SizedBox(height: 6),
+              for (final e in _listOfMaps(run['events']))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            '${e['sender'] ?? '—'} · ${e['kind'] == '' || e['kind'] == null ? 'message' : e['kind']} · ${_date(e['created_at'])}',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: scheme.onSurfaceVariant)),
+                        KeyedSubtree(
+                          key: PageStorageKey<String>('event:${e['id']}'),
+                          child: SelectableText('${e['body'] ?? ''}',
+                              maxLines: 8,
+                              style: const TextStyle(fontSize: 12.5)),
+                        ),
+                      ]),
+                ),
+            ],
+          ),
+      heading('METERED USAGE'),
+      AdminDataTable(
+        empty: 'No metered usage.',
         columns: const [
           AdminTableColumn('Time', width: 150),
-          AdminTableColumn('Agent', width: 170),
-          AdminTableColumn('Event', width: 180),
-          AdminTableColumn('Detail', width: 400)
+          AdminTableColumn('Agent', width: 150),
+          AdminTableColumn('Model', width: 200),
+          AdminTableColumn('Usage', width: 320),
+          AdminTableColumn('Cost', width: 100, align: TextAlign.right),
         ],
         rows: [
-          for (final e in work)
+          for (final u in usage)
             [
-              Text(_date(e['created_at'] ?? e['time'])),
-              Text('${e['bot_name'] ?? e['agent'] ?? '—'}'),
-              AdminStatusPill(
-                  '${e['kind'] ?? e['event'] ?? e['status'] ?? '—'}'),
-              Text('${e['message'] ?? e['detail'] ?? e['prompt'] ?? ''}')
+              Text(_date(u['created_at'])),
+              Text('${u['bot_name'] ?? '—'}'),
+              _primaryCell('${u['model'] ?? '—'}', '${u['provider'] ?? ''}'),
+              Text([
+                if ('${u['summary'] ?? ''}'.isNotEmpty) '${u['summary']}',
+                if (_integer(u['decision_in']) + _integer(u['decision_out']) >
+                    0)
+                  'decisions ${_compact(u['decision_in'])} in / ${_compact(u['decision_out'])} out',
+                if (_integer(u['image_count']) > 0)
+                  '${_integer(u['image_count'])} image(s)${'${u['image_model'] ?? ''}'.isEmpty ? '' : ' with ${u['image_model']}'}',
+              ].join(' · ')),
+              Text(_money(u['cost']), textAlign: TextAlign.right),
             ]
         ],
-      );
+      ),
+      heading('MEMORY'),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+        child: Text(
+            'The agents\' memory is charged to the project in batches, apart from any one run.',
+            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+      ),
+      AdminDataTable(
+        empty: 'No memory charges yet.',
+        columns: const [
+          AdminTableColumn('Time', width: 150),
+          AdminTableColumn('Tokens', width: 140, align: TextAlign.right),
+          AdminTableColumn('Of which input',
+              width: 140, align: TextAlign.right),
+          AdminTableColumn('Cost', width: 100, align: TextAlign.right),
+        ],
+        rows: [
+          for (final m in memory)
+            [
+              Text(_date(m['created_at'])),
+              Text(_compact(m['tokens']), textAlign: TextAlign.right),
+              Text(_compact(m['tokens_in']), textAlign: TextAlign.right),
+              Text(_money(m['cost']), textAlign: TextAlign.right),
+            ]
+        ],
+      ),
+    ]);
+  }
+
   Widget _people() {
     final people = [..._listOfMaps(detail['members'])];
     if (_map(detail['owner']).isNotEmpty) {
@@ -5401,11 +6540,75 @@ double _sum(List<Map<String, dynamic>> rows, String key) => rows.fold(
     (sum, row) =>
         sum + _number(row[key] ?? row['credits'] ?? row['listed_amount']));
 
+/// What a model is for: its capability, and the label the console shows.
+const _modelKinds = <(String, String)>[
+  ('chat', 'Agent'),
+  ('decision', 'Decision'),
+  ('embedding', 'Embedding'),
+  ('image', 'Image'),
+  ('video', 'Video'),
+  ('speech', 'Speech'),
+  ('transcription', 'Transcription'),
+  ('rerank', 'Rerank'),
+];
+
 String _modelPurpose(Map<String, dynamic> model) {
   final capabilities = _stringList(model['capabilities']);
-  if (capabilities.any((c) => c.contains('embedding'))) return 'Embedding';
-  if (capabilities.any((c) => c.contains('decision'))) return 'Decision';
+  for (final (capability, label) in _modelKinds.skip(1)) {
+    if (capabilities.any((c) => c.contains(capability))) return label;
+  }
   return 'Agent';
+}
+
+/// A model's prices other than tokens, as the console edits them: the
+/// stored unit, the quoted unit and how many stored units one quoted unit is.
+const _unitFields = <String, List<(String, String, double)>>{
+  'image': [('image', '\$ per image', 1)],
+  'video': [('second', '\$ per second of video', 1)],
+  'speech': [('character', '\$ per 1M characters', 1e6)],
+  'transcription': [('second', '\$ per minute of audio', 60)],
+  'rerank': [('search', '\$ per search', 1)],
+};
+
+/// Kinds also, or only, priced by their tokens.
+const _tokenPriced = {'chat', 'decision', 'embedding', 'image', 'rerank'};
+
+String _unitUsd(num units) {
+  final usd = units / ledgerUnitsPerUsd;
+  if (usd <= 0) return '\$0';
+  return '\$${usd >= 1 ? usd.toStringAsFixed(2) : compactDecimal(usd, decimals: 8)}';
+}
+
+/// What a model costs, in one line: tokens, or its unit, as it is priced.
+String _modelPriceText(Map<String, dynamic> m) {
+  if (m['unpriced'] == true) return 'needs a price';
+  final kind = _modelKinds
+      .firstWhere((k) => k.$2 == _modelPurpose(m),
+          orElse: () => _modelKinds.first)
+      .$1;
+  final u = _map(m['units']);
+  final parts = <String>[
+    if (_number(u['image']) > 0) '${_unitUsd(_number(u['image']))} / image',
+    if (kind == 'video' && _map(u['second_by']).isNotEmpty)
+      _map(u['second_by'])
+          .entries
+          .map((e) => '${e.key} ${_unitUsd(_number(e.value))}/s')
+          .join(' · ')
+    else if (kind == 'video' && _number(u['second']) > 0)
+      '${_unitUsd(_number(u['second']))} / second',
+    if (kind == 'transcription' && _number(u['second']) > 0)
+      '${_unitUsd(_number(u['second']) * 60)} / minute',
+    if (_number(u['character']) > 0)
+      '${_unitUsd(_number(u['character']) * 1e6)} / 1M characters',
+    if (_number(u['search']) > 0) '${_unitUsd(_number(u['search']))} / search',
+  ];
+  final input = _number(m['input_price']), output = _number(m['output_price']);
+  if (input > 0 || output > 0 || parts.isEmpty) {
+    parts.add(output > 0
+        ? '${_modelPrice(input)} in · ${_modelPrice(output)} out / 1M'
+        : '${_modelPrice(input)} / 1M tokens');
+  }
+  return parts.join(' · ');
 }
 
 String _logLevel(String value) {

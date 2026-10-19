@@ -7,6 +7,7 @@ class LlmModel {
     this.inputPrice = 0,
     this.outputPrice = 0,
     this.capabilities = const [],
+    this.extra = const {},
   });
 
   final String id;
@@ -15,7 +16,23 @@ class LlmModel {
   final double outputPrice;
   final List<String> capabilities;
 
+  /// Everything else the node stores with the model (unit prices, where it
+  /// was imported from and at what markup, whether it is disabled, …). It is
+  /// sent back unchanged, so saving a provider never drops it.
+  final Map<String, dynamic> extra;
+
   String get label => name.isNotEmpty ? name : id;
+
+  /// Whether the admin turned the model off for new agents.
+  bool get disabled => extra['disabled'] == true;
+
+  static const _fields = {
+    'id',
+    'name',
+    'input_price',
+    'output_price',
+    'capabilities'
+  };
 
   factory LlmModel.fromJson(Map<String, dynamic> j) => LlmModel(
         id: j['id'] as String? ?? '',
@@ -26,9 +43,14 @@ class LlmModel {
           for (final value in (j['capabilities'] as List? ?? const []))
             '$value',
         ],
+        extra: {
+          for (final e in j.entries)
+            if (!_fields.contains(e.key)) e.key: e.value,
+        },
       );
 
   Map<String, dynamic> toJson() => {
+        ...extra,
         'id': id,
         if (name.isNotEmpty) 'name': name,
         'input_price': inputPrice,

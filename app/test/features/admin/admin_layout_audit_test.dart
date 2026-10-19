@@ -143,7 +143,7 @@ void main() {
         (t) async {
           await t.tap(find.text('Add model'));
           await settle(t);
-          expect(find.text('WHAT THIS MODEL IS FOR'), findsOneWidget);
+          expect(find.text('What this model is for'), findsOneWidget);
         }
       ),
       'provider editor': (

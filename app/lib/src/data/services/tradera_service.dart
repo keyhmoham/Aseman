@@ -448,8 +448,9 @@ class TraderaService implements BackendService {
   }
 
   /// Whether a tool needs each person's own account ("user") and whether the
-  /// caller connected theirs in the project.
-  Future<({String auth, bool connected})> toolConnection(
+  /// caller connected theirs in the project. A tool that is not an MCP
+  /// server reads as shared and connected.
+  Future<({String auth, bool connected, String name})> toolConnection(
       String botId, String spaceId) async {
     final resp = await client
         .call('tools', 'commands_list', body: {'bot': botId, 'space': spaceId});
@@ -457,12 +458,13 @@ class TraderaService implements BackendService {
     return (
       auth: '${m['auth'] ?? ''}',
       connected: m['connected'] != false,
+      name: '${m['name'] ?? ''}',
     );
   }
 
   /// Every tool's connection state in a project, by bot id.
-  Future<Map<String, ({String auth, bool connected})>> toolConnections(
-      String spaceId) async {
+  Future<Map<String, ({String auth, bool connected, String name})>>
+      toolConnections(String spaceId) async {
     final resp =
         await client.call('tools', 'commands_list', body: {'space': spaceId});
     final list = (resp.body as Map?)?['tools'] as List? ?? const [];
@@ -472,6 +474,7 @@ class TraderaService implements BackendService {
           '${t['bot_id']}': (
             auth: '${t['auth'] ?? ''}',
             connected: t['connected'] != false,
+            name: '${t['name'] ?? ''}',
           ),
     };
   }

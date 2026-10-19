@@ -9,6 +9,7 @@ import '../../../genui/genui.dart'
         FrontendDisplay,
         FrontendPresentation;
 import '../../miniapps/presentation/miniapp_theme.dart';
+import '../connect/mcp_connect_dialog.dart';
 import '../data/tools_api.dart';
 import '../domain/tool_models.dart';
 import '../runtime/tool_frontend_host.dart';
@@ -36,6 +37,7 @@ class ToolFrontendView extends StatefulWidget {
     this.template,
     this.request = '',
     this.onLoaded,
+    this.onConnected,
   });
 
   final ToolsApi api;
@@ -60,6 +62,9 @@ class ToolFrontendView extends StatefulWidget {
   final String request;
   final ValueChanged<ToolFrontendPayload>? onLoaded;
 
+  /// Called once the person connected their own account to the tool here.
+  final VoidCallback? onConnected;
+
   @override
   State<ToolFrontendView> createState() => _ToolFrontendViewState();
 }
@@ -71,6 +76,10 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
   ToolFrontendPayload? _payload;
   Object? _error;
   bool _loading = true;
+
+  /// The name of a tool each person connects with their own account, while
+  /// this person has not connected theirs in the space (null otherwise).
+  String? _needsAccount;
 
   @override
   void initState() {
@@ -92,8 +101,28 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
     setState(() {
       _loading = true;
       _error = null;
+      _needsAccount = null;
     });
     try {
+      // Anyone in the space uses a per-person tool with their own account:
+      // until they connect it, its frontend would only have nothing to show.
+      final service = widget.api.service;
+      if (service != null && widget.spaceId.isNotEmpty) {
+        try {
+          final state =
+              await service.toolConnection(widget.botId, widget.spaceId);
+          if (state.auth == 'user' && !state.connected) {
+            if (!mounted) return;
+            setState(() {
+              _needsAccount = state.name.isEmpty ? 'this app' : state.name;
+              _loading = false;
+            });
+            return;
+          }
+        } catch (_) {
+          // Not an MCP tool, or the node could not say: open it as usual.
+        }
+      }
       final payload = await widget.api.frontend(widget.botId,
           spaceId: widget.spaceId,
           roomId: widget.roomId,
@@ -114,6 +143,18 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _connect() async {
+    final service = widget.api.service;
+    if (service == null) return;
+    final ok = await connectMcpTool(context, service,
+        botId: widget.botId,
+        spaceId: widget.spaceId,
+        name: _needsAccount ?? 'this app');
+    if (!ok || !mounted) return;
+    widget.onConnected?.call();
+    await _load();
   }
 
   Future<Map<String, dynamic>?> _action(
@@ -175,6 +216,37 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
                 Text('Opening…',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: scheme.onSurfaceVariant)),
+              ])));
+    }
+    final account = _needsAccount;
+    if (account != null) {
+      if (compact) {
+        return Center(
+            child: IconButton.filledTonal(
+                tooltip: 'Connect your $account account',
+                onPressed: _connect,
+                icon: const Icon(Icons.link_off_rounded)));
+      }
+      return Center(
+          child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.link_off_rounded, size: 40, color: scheme.primary),
+                const SizedBox(height: 12),
+                Text('Connect your $account account',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 6),
+                Text(
+                    'Everyone in this space uses it with their own account. Connect yours to use it here.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: scheme.onSurfaceVariant)),
+                const SizedBox(height: 14),
+                FilledButton.icon(
+                    onPressed: _connect,
+                    icon: const Icon(Icons.login_rounded),
+                    label: const Text('Connect')),
               ])));
     }
     if (_error != null) {

@@ -110,42 +110,21 @@ class _ToolScreenState extends State<ToolScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: _connected == false
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.link_off_rounded,
-                      size: 44, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(height: 12),
-                  Text('Connect your ${widget.bot.name} account',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 6),
-                  const Text(
-                      'Everyone uses this app with their own account. Connect yours to use it here.',
-                      textAlign: TextAlign.center),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                      onPressed: _connect,
-                      icon: const Icon(Icons.login_rounded),
-                      label: const Text('Connect')),
-                ]),
-              ),
-            )
-          : ToolFrontendView(
-              key: ValueKey('${widget.bot.id}/$_generations'),
-              api: _api,
-              botId: widget.bot.id,
-              spaceId: widget.spaceId,
-              roomId: widget.roomId,
-              userId: _me,
-              regenerate: _generations > 0,
-              onLoaded: (p) {
-                if (mounted) setState(() => _payload = p);
-              },
-            ),
+      body: ToolFrontendView(
+        key: ValueKey('${widget.bot.id}/$_generations'),
+        api: _api,
+        botId: widget.bot.id,
+        spaceId: widget.spaceId,
+        roomId: widget.roomId,
+        userId: _me,
+        regenerate: _generations > 0,
+        onConnected: () {
+          if (mounted) setState(() => _connected = true);
+        },
+        onLoaded: (p) {
+          if (mounted) setState(() => _payload = p);
+        },
+      ),
     );
   }
 }

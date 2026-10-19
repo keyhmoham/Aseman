@@ -402,6 +402,44 @@ class TraderaService implements BackendService {
         body: {'id': id, 'status': status});
   }
 
+  // ── developer API console ─────────────────────────────────────────────────
+
+  /// One action of the developer console (`developer.<action>`), signed in
+  /// as the person; [body] usually names the organization ("org").
+  Future<Map<String, dynamic>> developer(String action,
+      [Map<String, dynamic> body = const {}]) async {
+    final resp = await client.call('developer', action,
+        body: body, requestTimeout: const Duration(minutes: 3));
+    return (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+  }
+
+  // ── talent requests ───────────────────────────────────────────────────────
+
+  /// The jobs the caller posted for talent, newest first.
+  Future<List<Map<String, dynamic>>> fetchTalentRequests() async {
+    final resp = await client.call('talent', 'request_list');
+    final list = (resp.body as Map?)?['requests'] as List? ?? const [];
+    return list.whereType<Map<String, dynamic>>().toList().reversed.toList();
+  }
+
+  /// Posts a request for talent (`talent.request_create`).
+  Future<Map<String, dynamic>> createTalentRequest(
+      Map<String, dynamic> input) async {
+    final resp = await client.call('talent', 'request_create', body: input);
+    return ((resp.body as Map?)?['request'] as Map?)?.cast<String, dynamic>() ??
+        const {};
+  }
+
+  /// Closes ("closed") or reopens ("open") one of the caller's requests.
+  Future<void> setTalentRequestStatus(String id, String status) async {
+    await client
+        .call('talent', 'request_status', body: {'id': id, 'status': status});
+  }
+
+  Future<void> deleteTalentRequest(String id) async {
+    await client.call('talent', 'request_delete', body: {'id': id});
+  }
+
   /// Records that the caller has read a space's conversation up to [at].
   Future<void> markSeen(String spaceId, DateTime at) async {
     await client.call('spaces', 'seen_set',

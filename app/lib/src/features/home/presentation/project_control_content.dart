@@ -114,6 +114,12 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
             onPressed: () => _computerAction('replace'),
             icon: const Icon(Icons.restart_alt_rounded),
             label: const Text('Replace')),
+        // The desktop browser keeps its sign-ins in the workspace, so they
+        // survive sleeps and replacements until they are forgotten here.
+        OutlinedButton.icon(
+            onPressed: () => _computerAction('forget_logins'),
+            icon: const Icon(Icons.no_accounts_outlined),
+            label: const Text('Forget browser logins')),
         OutlinedButton.icon(
             onPressed: () => widget.onAction(
                 'spaces', 'desktop_install', {'space': widget.spaceId}),

@@ -273,7 +273,11 @@ services:
   # The Flutter web client (nginx). It proxies the node's API (/v1) on the same
   # origin, so the browser only ever talks to this port.
   web:
-    build: ./app
+    build:
+      context: ./app
+      args:
+        # The developer API console shows where to call once a developer host is set.
+        DEVELOPER_API_BASE: ${DEVELOPER_API_BASE:-${DEVELOPER_DOMAIN:+https://${DEVELOPER_DOMAIN}/v1}}
     image: tradera/flutter-web:latest
     restart: unless-stopped
     depends_on:

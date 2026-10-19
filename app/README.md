@@ -14,6 +14,9 @@ flutter pub get
 # point the app at your Tradera node:
 flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8080
 # android emulator default: http://10.0.2.2:8080 (set in app_dependencies.dart)
+# optional: where the developer API answers, shown in Profile → Developer API
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8080 \
+  --dart-define=DEVELOPER_API_BASE=https://api.example.com/v1
 ```
 
 ## How the client talks to the server

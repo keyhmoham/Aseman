@@ -9,9 +9,11 @@ import '../../core/theme/app_surfaces.dart';
 import '../../features/account/presentation/account_panel.dart';
 import '../../features/admin/presentation/admin_screen.dart';
 import '../../features/agents/presentation/agents_screen.dart';
+import '../../features/developer/presentation/developer_console.dart';
 import '../../features/market/presentation/market_screen.dart';
 import '../../features/messenger/presentation/messenger_panel.dart';
 import '../../features/settings/presentation/settings_screen.dart';
+import '../../features/talent/presentation/talent_requests_panel.dart';
 import 'overlay_panels.dart';
 import 'user_profile_sheet.dart';
 
@@ -21,6 +23,8 @@ enum ProfileAction {
   market,
   wallet,
   messages,
+  talent,
+  developer,
   invitations,
   usage,
   account,
@@ -133,6 +137,11 @@ Future<void> _dispatch(
       await showAccountPanel(context, dependencies, AccountArea.wallet);
     case ProfileAction.messages:
       await showMessenger(context, dependencies);
+    case ProfileAction.talent:
+      await showTalentRequests(context, dependencies);
+    case ProfileAction.developer:
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => DeveloperConsole(service: dependencies.service)));
     case ProfileAction.invitations:
       await showAccountPanel(context, dependencies, AccountArea.invitations);
     case ProfileAction.usage:
@@ -281,6 +290,18 @@ class _ProfileBody extends StatelessWidget {
                 icon: Icons.query_stats_outlined,
                 label: 'Usage',
                 onTap: () => onSelect(ProfileAction.usage),
+              ),
+              const SizedBox(height: 2),
+              _MenuRow(
+                icon: Icons.work_outline_rounded,
+                label: 'Hire talent',
+                onTap: () => onSelect(ProfileAction.talent),
+              ),
+              const SizedBox(height: 2),
+              _MenuRow(
+                icon: Icons.api_rounded,
+                label: 'Developer API',
+                onTap: () => onSelect(ProfileAction.developer),
               ),
               const SizedBox(height: 2),
               _MenuRow(

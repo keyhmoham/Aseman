@@ -123,7 +123,7 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('space', required: true, hint: 'Project ID'),
     _FieldTemplate('operation',
         required: true,
-        hint: 'status, provision, keepalive, sleep, or replace'),
+        hint: 'status, provision, keepalive, sleep, replace or forget_logins'),
   ],
   'spaces.sandbox_files': [
     _FieldTemplate('space', required: true, hint: 'Project ID'),

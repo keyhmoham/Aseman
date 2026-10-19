@@ -59,6 +59,8 @@ class _ProjectControlScreenState extends State<ProjectControlScreen> {
               {'space': widget.spaceId, 'operation': 'sleep'}),
           _ProjectCall('spaces', 'computer',
               {'space': widget.spaceId, 'operation': 'replace'}),
+          _ProjectCall('spaces', 'computer',
+              {'space': widget.spaceId, 'operation': 'forget_logins'}),
           _ProjectCall('spaces', 'desktop_install', {'space': widget.spaceId}),
           _ProjectCall(
               'spaces', 'desktop_uninstall', {'space': widget.spaceId}),

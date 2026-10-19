@@ -170,9 +170,24 @@ void main() {
         area: AccountArea.wallet,
         results: const {
           'finance.wallet_get': {'balance': 500, 'locked': 10},
-          'finance.ledger_list': {
-            'entries': [
-              {'kind': 'credit', 'description': 'Top-up', 'amount': 500}
+          'finance.account': {
+            'transactions': [
+              {'type': 'transfer', 'description': 'Top-up', 'amount': 500},
+              {
+                'type': 'mint',
+                'description': 'Welcome credits · expires 2 Jan 2027',
+                'base_description': 'Welcome credits',
+                'amount': 300,
+                'expires_at': '2027-01-02T00:00:00Z',
+                'grant_status': 'active',
+              },
+              {
+                'type': 'mint',
+                'description': 'Promo · expired 1 Feb 2026',
+                'amount': 100,
+                'expires_at': '2026-02-01T00:00:00Z',
+                'grant_status': 'expired',
+              },
             ]
           },
           'finance.purchases_mine': {'purchases': <Map<String, dynamic>>[]},
@@ -185,6 +200,11 @@ void main() {
     expect(find.text('Available balance'), findsOneWidget);
     expect(find.text('Add credits'), findsOneWidget);
     expect(find.text('WALLET ACTIVITY'), findsOneWidget);
+    expect(find.text('Top-up'), findsOneWidget);
+    // Granted credits say when they lapse; lapsed ones say so.
+    expect(find.text('Credits that expire'), findsOneWidget);
+    expect(find.textContaining('Welcome credits'), findsNWidgets(2));
+    expect(find.text('Promo · expired 1 Feb 2026'), findsOneWidget);
 
     await pumpWide(
       tester,

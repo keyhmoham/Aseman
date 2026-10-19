@@ -170,6 +170,12 @@ Widget _computerForm(Map<String, dynamic> body) {
         'A fresh machine is created from the base image. Anything outside the project volume is lost.',
         true
       ),
+    'forget_logins' => (
+        Icons.no_accounts_rounded,
+        'Forget the browser\'s logins?',
+        'The desktop browser keeps the sites it is signed in to across sleeps and replacements. This signs it out of all of them; nothing else is touched.',
+        true
+      ),
     _ => (
         Icons.info_outline_rounded,
         'Check the computer?',

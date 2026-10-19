@@ -21,9 +21,6 @@ type Execution struct {
 	NoSandbox    bool
 	NoMemory     bool
 	RequestScope string
-	// Chat marks work that answered a person in a chat (an agent in their
-	// notes), which has no room: its charges are their own usage, "Chats".
-	Chat bool
 	// Nil means the host's workspace policy; a non-nil empty list denies all tools.
 	ToolCallID   string
 	Capabilities []string

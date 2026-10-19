@@ -35,9 +35,7 @@ func directs() database.Model {
 		Fields: []database.Field{
 			f("id", database.KindString), f("from_id", database.KindString),
 			f("to_id", database.KindString), f("body", database.KindString),
-			f("sent_at", database.KindTime), f("reply_to", database.KindString),
-			f("edited_at", database.KindTime), f("deleted_at", database.KindTime),
-			f("agent_id", database.KindString), f("created_at", database.KindTime),
+			f("sent_at", database.KindTime), f("created_at", database.KindTime),
 			f("updated_at", database.KindTime),
 		},
 	}

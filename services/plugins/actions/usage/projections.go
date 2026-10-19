@@ -15,10 +15,6 @@ import (
 	"time"
 )
 
-// chatScope names the charges of a person's chats (no room) in the usage
-// views: the "space" a client asks for, and the settlement's scope.
-const chatScope = "chat"
-
 // computerSessionGap is the longest pause between two computer-time charges of
 // one session. The computer is charged about once a minute while awake, so a
 // longer gap means it slept in between.
@@ -57,7 +53,7 @@ func (s *Service) settlements(ctx context.Context, caller identity.ID, spaceID s
 		if e := helper.RequireNodeAdmin(ctx, s.R, req, s.K.Env()["admin_handle"]); e != nil {
 			return nil, e
 		}
-	} else if spaceID != "" && spaceID != chatScope {
+	} else if spaceID != "" {
 		id, e := identity.Parse(spaceID)
 		if e != nil {
 			return nil, e
@@ -67,7 +63,7 @@ func (s *Service) settlements(ctx context.Context, caller identity.ID, spaceID s
 		}
 	}
 	filter := database.Filter{Equal: map[string]any{"kind": "settlement", "status": "completed"}, OrderBy: "created_at", Asc: false}
-	if !admin && (spaceID == "" || spaceID == chatScope) {
+	if !admin && spaceID == "" {
 		filter.Equal["owner"] = caller.String()
 	}
 	var rows []financial.Record
@@ -76,7 +72,7 @@ func (s *Service) settlements(ctx context.Context, caller identity.ID, spaceID s
 	}
 	out := []financial.Record{}
 	for _, r := range rows {
-		if spaceID == "" || r.Data["space_id"] == spaceID || spaceID == chatScope && r.Data["scope"] == chatScope {
+		if spaceID == "" || r.Data["space_id"] == spaceID {
 			out = append(out, r)
 		}
 	}
@@ -102,7 +98,7 @@ func (s *Service) projects(ctx context.Context, req *api.ActionRequest, admin bo
 	}
 	type project struct {
 		id, title, owner           string
-		deleted, chat              bool
+		deleted                    bool
 		spent, compute, llm, tools int64
 		rows                       map[string]map[string]any
 		turns                      []map[string]any
@@ -123,20 +119,10 @@ func (s *Service) projects(ctx context.Context, req *api.ActionRequest, admin bo
 			continue
 		}
 		id, _ := r.Data["space_id"].(string)
-		// A chat's charges (an agent answering in a person's notes) have no
-		// room: they are that person's "Chats".
-		chat := r.Data["scope"] == chatScope
-		if chat {
-			id = chatScope + ":" + r.Owner
-		}
 		if id == "" {
 			continue
 		}
 		p := byID[id]
-		if p == nil && chat {
-			p = &project{id: id, title: "Chats", owner: r.Owner, chat: true, rows: map[string]map[string]any{}, turns: []map[string]any{}, at: r.CreatedAt}
-			byID[id] = p
-		}
 		if p == nil {
 			title, _ := r.Data["space_name"].(string)
 			p = &project{id: id, title: title, owner: r.Owner, rows: map[string]map[string]any{}, turns: []map[string]any{}, at: r.CreatedAt}
@@ -226,14 +212,14 @@ func (s *Service) projects(ctx context.Context, req *api.ActionRequest, admin bo
 				continue
 			}
 			turn := map[string]any{"id": r.ID, "created_at": r.CreatedAt, "started_at": r.CreatedAt, "bot_id": botID, "bot_name": agentName, "charged": r.Amount, "compute": c, "tool": t, "llm": l, "description": caption}
-			event := map[string]any{"id": r.ID, "space_id": id, "space_name": p.title, "created_at": r.CreatedAt, "started_at": r.CreatedAt, "bot_id": botID, "bot_name": agentName, "description": caption, "charged": r.Amount, "deleted": p.deleted, "chat": p.chat}
+			event := map[string]any{"id": r.ID, "space_id": id, "space_name": p.title, "created_at": r.CreatedAt, "started_at": r.CreatedAt, "bot_id": botID, "bot_name": agentName, "description": caption, "charged": r.Amount, "deleted": p.deleted}
 			sessions[id] = &computerSession{start: r.CreatedAt, turn: turn, event: event}
 			p.turns = append(p.turns, turn)
 			events = append(events, event)
 			continue
 		}
 		p.turns = append(p.turns, map[string]any{"id": r.ID, "created_at": r.CreatedAt, "bot_id": botID, "bot_name": agentName, "charged": r.Amount, "compute": c, "tool": t, "llm": l, "description": caption})
-		events = append(events, map[string]any{"id": r.ID, "space_id": id, "space_name": p.title, "created_at": r.CreatedAt, "bot_id": botID, "bot_name": agentName, "description": caption, "charged": r.Amount, "deleted": p.deleted, "chat": p.chat})
+		events = append(events, map[string]any{"id": r.ID, "space_id": id, "space_name": p.title, "created_at": r.CreatedAt, "bot_id": botID, "bot_name": agentName, "description": caption, "charged": r.Amount, "deleted": p.deleted})
 	}
 	sorted := []*project{}
 	for _, p := range byID {
@@ -247,7 +233,7 @@ func (s *Service) projects(ctx context.Context, req *api.ActionRequest, admin bo
 			buckets = append(buckets, b)
 		}
 		sort.Slice(buckets, func(i, j int) bool { return number(buckets[i]["charged"]) > number(buckets[j]["charged"]) })
-		out = append(out, map[string]any{"space_id": p.id, "name": p.title, "owner_id": p.owner, "deleted": p.deleted, "chat": p.chat, "spent": p.spent, "compute": p.compute, "tools": p.tools, "agents": p.spent - p.compute - p.tools, "llm": p.llm, "buckets": buckets, "charges": p.turns})
+		out = append(out, map[string]any{"space_id": p.id, "name": p.title, "owner_id": p.owner, "deleted": p.deleted, "spent": p.spent, "compute": p.compute, "tools": p.tools, "agents": p.spent - p.compute - p.tools, "llm": p.llm, "buckets": buckets, "charges": p.turns})
 	}
 	total := len(out)
 	if !admin {
@@ -278,7 +264,7 @@ func (s *Service) modelSummary(ctx context.Context, req *api.ActionRequest, admi
 		if e := helper.RequireNodeAdmin(ctx, s.R, req, s.K.Env()["admin_handle"]); e != nil {
 			return nil, e
 		}
-	} else if in.Space != chatScope {
+	} else {
 		sp, e := identity.Parse(in.Space)
 		if e != nil {
 			return nil, e
@@ -288,13 +274,7 @@ func (s *Service) modelSummary(ctx context.Context, req *api.ActionRequest, admi
 		}
 	}
 	filter := database.Filter{}
-	switch {
-	case in.Space == chatScope && admin:
-		filter.Equal = map[string]any{"kind": usage.KindChat}
-	case in.Space == chatScope:
-		// One's own chats: the agents that answered in them.
-		filter.Equal = map[string]any{"kind": usage.KindChat, "actor_id": req.Caller.ID.String()}
-	case !admin || in.Space != "":
+	if !admin || in.Space != "" {
 		// An admin may narrow the platform view to one project.
 		filter.Equal = map[string]any{"space_id": in.Space}
 	}

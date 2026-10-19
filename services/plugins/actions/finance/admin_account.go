@@ -77,9 +77,6 @@ func (s *Service) adminAccount(ctx context.Context, req *api.ActionRequest) (*ap
 			agent += amountOf(r.Data["agent_minor"])
 			sid, _ := r.Data["space_id"].(string)
 			name, _ := r.Data["space_name"].(string)
-			if r.Data["scope"] == "chat" {
-				sid, name = "chat", "Chats"
-			}
 			p := projects[sid]
 			if p == nil {
 				p = &projectSpend{ID: sid, Name: name}

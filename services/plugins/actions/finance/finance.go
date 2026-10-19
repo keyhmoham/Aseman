@@ -527,7 +527,7 @@ func (s *Service) ChargeLines(ctx context.Context, customer identity.ID, desc st
 			}
 			seq++
 		}
-		if execution.SpaceID != "" || execution.Chat {
+		if execution.SpaceID != "" {
 			id, e := identity.New(s.K.NodeID())
 			if e != nil {
 				return e
@@ -536,9 +536,7 @@ func (s *Service) ChargeLines(ctx context.Context, customer identity.ID, desc st
 			var project struct {
 				Name string `db:"name"`
 			}
-			if execution.SpaceID == "" {
-				name = "Chats"
-			} else if e := tx.Get(ctx, "spaces", execution.SpaceID, &project); e == nil {
+			if e := tx.Get(ctx, "spaces", execution.SpaceID, &project); e == nil {
 				name = project.Name
 			}
 			botID := execution.AgentID
@@ -548,9 +546,6 @@ func (s *Service) ChargeLines(ctx context.Context, customer identity.ID, desc st
 			record := financial.Record{ID: id.String(), Owner: customer.String(), Kind: "settlement", Amount: total, Status: "completed", Data: map[string]any{"space_id": execution.SpaceID, "space_name": name, "room_id": execution.RoomID, "bot_id": botID, "agent_id": execution.AgentID, "run_id": execution.RunID, "description": desc, "llm_minor": byCategory[wallet.CategoryLLM], "compute_minor": byCategory[wallet.CategoryCompute], "tool_minor": byCategory[wallet.CategoryTool], "agent_minor": byCategory[wallet.CategoryAgent],
 				// Usage that cost the customer nothing because it was their own; Amount and the *_minor keys above are money only.
 				"own_minor": own, "own_llm_minor": ownByCategory[wallet.CategoryLLM], "own_compute_minor": ownByCategory[wallet.CategoryCompute], "own_tool_minor": ownByCategory[wallet.CategoryTool], "own_agent_minor": ownByCategory[wallet.CategoryAgent]}, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-			if execution.Chat && execution.SpaceID == "" {
-				record.Data["scope"] = "chat" // a chat's charge, of no room
-			}
 			if e = tx.Create(ctx, "financial_records", id.String(), &record); e != nil {
 				return e
 			}

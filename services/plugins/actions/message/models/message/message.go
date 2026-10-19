@@ -17,16 +17,6 @@ type Direct struct {
 	To     identity.ID `db:"to_id" json:"to_id"`
 	Body   string      `db:"body" json:"body"`
 	SentAt time.Time   `db:"sent_at" json:"sent_at"`
-	// ReplyTo is the message of the same conversation this one answers.
-	ReplyTo string `db:"reply_to" json:"reply_to,omitempty"`
-	// EditedAt is when its sender last changed it, DeletedAt when they took it
-	// back (its text is then gone for both sides). Zero when never.
-	EditedAt  time.Time `db:"edited_at" json:"-"`
-	DeletedAt time.Time `db:"deleted_at" json:"-"`
-	// AgentID is the account of the agent that wrote it, for an agent's answer
-	// in a person's own notes (Saved Messages): stored as the person's note to
-	// themselves, shown as the agent's. Empty for a person's message.
-	AgentID string `db:"agent_id" json:"agent_id,omitempty"`
 }
 
 // PacketKind classifies the packet's semantics.

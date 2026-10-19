@@ -19,6 +19,23 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8080 \
   --dart-define=DEVELOPER_API_BASE=https://api.example.com/v1
 ```
 
+## Connecting MCP tools
+
+A tool registered with "each person connects" (`auth: user`) asks for the
+person's own account where it is used: when it is added to a project, on its
+screen, and under Project → Plugins. Sign-in is OAuth with PKCE run by the
+node (`tools.oauth_prepare` / `oauth_exchange`): the app only opens the
+provider's page and brings the code back, then stores the connection from the
+sign-in (`tools.connection_set` with its `grant`) so the node renews it. On
+the web the page opens in a popup that returns to `/oauth.html`; on Android,
+iOS, macOS and Windows in an in-app web view that stops at the redirect;
+elsewhere in the browser, with the returned address pasted back. A provider
+that will not register Tradera needs an OAuth client: a person can enter one
+in the connect dialog, or an admin saves one per server (Admin → Tools →
+Sign-in client), created with the redirect address shown there. Override that
+address with `--dart-define=OAUTH_REDIRECT_URI=…`. A pasted access token works
+too, without renewal.
+
 ## How the client talks to the server
 
 Every action is an HTTP `POST /v1/{namespace}/{action}` carrying a JSON body.

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Signing in…</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+      font: 15px system-ui, sans-serif; background: #0f1115; color: #e8e8ee; }
+    p { margin: 6px; text-align: center; } .hint { opacity: .65; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div><p>Finishing sign-in…</p><p class="hint">This window closes by itself.</p></div>
+  <script>
+    // Where a provider sends a person back after signing in to an MCP tool.
+    // The app that opened this window reads the address (with its code) and
+    // completes the sign-in on the node; this page only hands it back.
+    (function () {
+      var url = location.href;
+      var state = new URLSearchParams(location.search).get('state') || '';
+      try { localStorage.setItem('tradera.oauth.' + state, url); } catch (e) {}
+      try {
+        if (window.opener) window.opener.postMessage({ type: 'tradera:oauth', state: state, url: url }, location.origin);
+      } catch (e) {}
+      setTimeout(function () { window.close(); }, 300);
+    })();
+  </script>
+</body>
+</html>

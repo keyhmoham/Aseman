@@ -43,6 +43,8 @@ class ToolAvatar extends StatelessWidget {
     bool has(List<String> words) => words.any(n.contains);
     // Agents' composed widgets share one dock entry.
     if (n == 'widgets') return Icons.dashboard_customize_rounded;
+    // Web pages agents built, of no tool.
+    if (n == 'web pages') return Icons.language_rounded;
     if (has(['weather', 'forecast', 'climate'])) return Icons.wb_sunny_rounded;
     if (has(
         ['market', 'stock', 'price', 'crypto', 'trade', 'ticker', 'quote'])) {

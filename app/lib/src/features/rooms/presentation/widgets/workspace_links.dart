@@ -1,8 +1,9 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../data/services/tradera_service.dart';
+import '../../../desk/presentation/desk_controller.dart';
+import '../../../desk/presentation/web/web_page_frame.dart';
 import 'attachment_bubble.dart';
 import 'proxy_webview.dart';
 
@@ -40,7 +41,7 @@ Future<void> openWorkspaceLink(
     if (!uri.hasScheme &&
         !uri.hasAuthority &&
         RegExp(r'^/v1/proxy/[0-9a-fA-F]{32}/').hasMatch(uri.path)) {
-      await openWorkspacePreview(context, service.proxyUrl(link),
+      await openWorkspacePage(context, service, link,
           title: 'Website preview');
       return;
     }
@@ -58,22 +59,33 @@ Future<void> openWorkspaceLink(
   }
 }
 
-bool get workspacePreviewUsesWebView =>
-    !kIsWeb &&
-    [
-      TargetPlatform.android,
-      TargetPlatform.iOS,
-      TargetPlatform.macOS,
-    ].contains(defaultTargetPlatform);
+/// Where a page of the space opens: on the room's desk, as a card window
+/// next to tools' frontends, when a desk is on screen; else full screen in
+/// the app where it can show pages; else in the browser.
+enum WorkspacePageTarget { desk, screen, browser }
 
-Future<void> openWorkspacePreview(BuildContext context, String url,
+WorkspacePageTarget workspacePageTarget(BuildContext context) =>
+    DeskScope.maybeOf(context) != null
+        ? WorkspacePageTarget.desk
+        : webPageFrameSupported
+            ? WorkspacePageTarget.screen
+            : WorkspacePageTarget.browser;
+
+/// Opens [page] (a preview gateway path, /v1/proxy/<id>/…) in the app.
+Future<void> openWorkspacePage(
+    BuildContext context, TraderaService service, String page,
     {required String title}) async {
-  if (workspacePreviewUsesWebView) {
-    if (!context.mounted) return;
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => ProxyWebView(title: title, url: url)));
-  } else if (!await launchUrl(Uri.parse(url),
-      mode: LaunchMode.externalApplication)) {
-    throw StateError('Could not open preview');
+  switch (workspacePageTarget(context)) {
+    case WorkspacePageTarget.desk:
+      await DeskScope.maybeOf(context)!.openPage(page, title: title);
+    case WorkspacePageTarget.screen:
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) =>
+              ProxyWebView(title: title, service: service, page: page)));
+    case WorkspacePageTarget.browser:
+      if (!await launchUrl(Uri.parse(service.proxyUrl(page)),
+          mode: LaunchMode.externalApplication)) {
+        throw StateError('Could not open preview');
+      }
   }
 }

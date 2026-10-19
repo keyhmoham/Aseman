@@ -130,6 +130,18 @@ Users create tools in the Tools panel from one form with a **backend** and a
   card windows on the room's desk, placed and arranged by agents and people;
   agents combine tools' frontends and data into bigger widgets
   (`ui_compose`) on the desk too.
+- **Interactive web frontends:** when people want to *work with* a tool (an
+  interactive view, dashboard, form or console), agents build a web page for
+  it in the space's sandbox and expose it with `proxy_create`; it opens on
+  the desk as the tool's card window like any frontend (in an `<iframe>` on
+  the web, a native web view on Android, iOS, macOS and Windows). Pages use
+  **Tradera's web UI kit** ([`services/pkg/webkit`](services/pkg/webkit)):
+  the app's theme and every component the app renders (the A2UI catalog, the
+  tool UI kit, the Elpian widgets and HTML) as `<t-…>` web elements, plus a
+  client that calls the tool's microtools through the Tradera API as the
+  person viewing the page. Every preview serves the kit at `/_tradera/kit/`
+  (its gallery: `/_tradera/kit/gallery.html`) and the page API at
+  `/_tradera/api/`.
 
 Ready-made tools live in [`deploy/tools`](deploy/tools): the
 [weather](deploy/tools/weather) tool and the **traders

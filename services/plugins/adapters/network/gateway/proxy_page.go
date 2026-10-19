@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/tradera/tradera/internal/plugins/api"
+	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/errs"
 	"github.com/tradera/tradera/pkg/webkit"
 	"github.com/tradera/tradera/plugins/actions/auth/models/account"
@@ -65,6 +66,9 @@ func (a *API) proxyPage(ctx context.Context, req *network.Request, p *proxy.Prox
 	if !ok {
 		return nil, errs.NotFound("no such page route")
 	}
+	if id, ok := strings.CutPrefix(op, "file/"); ok {
+		return a.pageFile(ctx, acc, strings.Trim(id, "/"))
+	}
 	out, err := a.pageAPI(ctx, req, p, acc, method, strings.Trim(op, "/"))
 	if err != nil {
 		resp := a.errorResponse(err)
@@ -77,6 +81,33 @@ func (a *API) proxyPage(ctx context.Context, req *network.Request, p *proxy.Prox
 	}
 	return &network.Response{Status: http.StatusOK, Body: body, Header: map[string]string{
 		"Content-Type": "application/json", "Cache-Control": "no-store",
+	}}, nil
+}
+
+// pageFile serves a stored file the person may read (the page's images and
+// media: a component's url naming /v1/files/<id>/content or the bare id).
+func (a *API) pageFile(ctx context.Context, acc *account.Account, raw string) (*network.Response, error) {
+	id, err := identity.Parse(raw)
+	if err != nil {
+		return nil, errs.InvalidArgument("invalid file id")
+	}
+	file, err := a.Spaces.GetFile(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.Spaces.CanReadFile(ctx, file.ID, acc.ID); err != nil {
+		return nil, err
+	}
+	data, err := a.Spaces.ReadFileBytes(ctx, file)
+	if err != nil {
+		return nil, err
+	}
+	ctype := file.Mime
+	if ctype == "" {
+		ctype = http.DetectContentType(data)
+	}
+	return &network.Response{Status: http.StatusOK, Body: data, Header: map[string]string{
+		"Content-Type": ctype, "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff",
 	}}, nil
 }
 

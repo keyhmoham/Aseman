@@ -9,6 +9,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_shape.dart';
 import '../../../../data/models/bot.dart';
 import '../../../../data/models/space.dart';
+import '../../../../data/services/tradera_service.dart';
 import '../../../../shared/widgets/mini_tag.dart';
 import '../../../home/presentation/widgets/routines_panel.dart';
 import '../../../search_feed/presentation/post_editor.dart';
@@ -841,8 +842,8 @@ class _RoomChatState extends State<RoomChat> {
                     padding: const EdgeInsets.only(top: 6),
                     child: _ProxyOpenButton(
                         title: _proxyTitle(m.body) ?? 'Sandbox service',
-                        url:
-                            deps.service.proxyUrl(_proxyPathIn(m.body) ?? ''))),
+                        service: deps.service,
+                        page: _proxyPathIn(m.body) ?? '')),
               const SizedBox(height: 2),
               Text(time,
                   style: TextStyle(
@@ -1004,14 +1005,16 @@ String? _proxyTitle(String body) {
 // _ProxyOpenButton opens the proxied sandbox page. On web the page is opened in
 // a new browser tab (reliable); on native platforms it opens the in-app webview.
 class _ProxyOpenButton extends StatelessWidget {
-  const _ProxyOpenButton({required this.title, required this.url});
+  const _ProxyOpenButton(
+      {required this.title, required this.service, required this.page});
 
   final String title;
-  final String url;
+  final TraderaService service;
+  final String page;
 
   Future<void> _open(BuildContext context) async {
     try {
-      await openWorkspacePreview(context, url, title: title);
+      await openWorkspacePage(context, service, page, title: title);
     } catch (_) {
       if (context.mounted)
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -1023,6 +1026,7 @@ class _ProxyOpenButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final target = workspacePageTarget(context);
     return Align(
       alignment: Alignment.centerLeft,
       child: Material(
@@ -1035,17 +1039,21 @@ class _ProxyOpenButton extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(
-                  kIsWeb
-                      ? Icons.open_in_new_rounded
-                      : Icons.open_in_browser_rounded,
+                  switch (target) {
+                    WorkspacePageTarget.desk => Icons.dashboard_rounded,
+                    WorkspacePageTarget.screen => Icons.open_in_browser_rounded,
+                    WorkspacePageTarget.browser => Icons.open_in_new_rounded,
+                  },
                   size: 16,
                   color: scheme.onPrimary),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
-                    workspacePreviewUsesWebView
-                        ? 'Open in webview'
-                        : 'Open page',
+                    switch (target) {
+                      WorkspacePageTarget.desk => 'Open on the desk',
+                      WorkspacePageTarget.screen => 'Open page',
+                      WorkspacePageTarget.browser => 'Open in browser',
+                    },
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

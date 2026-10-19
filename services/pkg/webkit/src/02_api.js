@@ -37,14 +37,17 @@ function microtoolValue(result) {
 }
 
 async function api(op, body) {
-  if (config.mock && op === 'call') {
-    const fn = field(config.mock, `${body.tool}.${body.microtool}`) ?? config.mock[body.tool]?.[body.microtool];
+  // Mock answers are for developing without the gateway: never in a preview
+  // (unless a demo page, the kit's gallery, insists with mockAlways).
+  const mock = previewPrefix() && !config.mockAlways ? null : config.mock;
+  if (mock && op === 'call') {
+    const fn = field(mock, `${body.tool}.${body.microtool}`) ?? mock[body.tool]?.[body.microtool];
     if (typeof fn !== 'function') throw new TraderaError(`no mock for ${body.tool}/${body.microtool}`, 'not_found');
     return { result: await fn(body.args || {}) };
   }
-  if (config.mock && op !== 'call') {
+  if (mock && op !== 'call') {
     if (op === 'context') return { space: 'local', user: { id: 'local', handle: 'you' }, preview: { title: document.title } };
-    if (op === 'tools') return { tools: Object.keys(config.mock).map((name) => ({ name, id: name, microtools: Object.keys(config.mock[name]).map((n) => ({ name: n })) })) };
+    if (op === 'tools') return { tools: Object.keys(mock).map((name) => ({ name, id: name, microtools: Object.keys(mock[name]).map((n) => ({ name: n })) })) };
   }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), config.timeout);
@@ -177,7 +180,10 @@ function readStoredTheme() {
   try { return JSON.parse(sessionStorage.getItem('tradera-theme') || '{}') || {}; } catch { return {}; }
 }
 function b64json(s) {
-  try { return JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))))); } catch { return null; }
+  try {
+    const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+  } catch { return null; }
 }
 Tradera.theme = {
   set: setTheme,

@@ -13,8 +13,8 @@
 </head>
 <body class="t-page">
 <script>
-  // Outside a preview the gallery answers its own microtool calls.
-  if (!window.__traderaProxy) Tradera.configure({ mock: {
+  // The gallery answers its own microtool calls (its tools are made up).
+  Tradera.configure({ mockAlways: true, mock: {
     Weather: {
       forecast: ({ city = 'Oslo' }) => ({ city, temp: 12 + city.length, humidity: 0.64, wind: 5.2, conditions: 'Partly cloudy',
         days: [ { day: 'Mon', high: 14, low: 7 }, { day: 'Tue', high: 16, low: 8 }, { day: 'Wed', high: 13, low: 6 }, { day: 'Thu', high: 17, low: 9 }, { day: 'Fri', high: 18, low: 11 } ] }),

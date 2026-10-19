@@ -42,6 +42,13 @@ const String designedFrontend = 'auto';
 const String appFrontend = 'app';
 const String composedTool = 'widgets';
 
+/// The kind of a window that shows a web page served from the space's
+/// sandbox through a preview gateway (an agent's interactive frontend for a
+/// tool, a site it built); its args hold `{"page": "/v1/proxy/<id>/…"}`.
+/// Pages of no tool share the dock entry [webTool].
+const String webKind = 'web';
+const String webTool = 'pages';
+
 /// How a window sits on the phone board (the desk as compact widgets).
 /// Empty [shape] / [size] take the frontend's hint, else a medium card.
 class DeskCompact {
@@ -147,6 +154,12 @@ class DeskWindow {
 
   /// Shown with the tool's own app (MCP Apps).
   bool get isApp => frontend == appFrontend;
+
+  /// A web page (a preview of the space) rather than a tool's own frontend.
+  bool get isWeb => kind == webKind;
+
+  /// The gateway path a web page window shows.
+  String get page => isWeb ? '${args['page'] ?? ''}' : '';
   final String name;
   final String title;
 
@@ -168,8 +181,10 @@ class DeskWindow {
       ? null
       : ShownResult(microtool: microtool, args: args);
 
-  /// "city: New York · units: metric".
-  String get argsSummary => args.entries
+  /// "city: New York · units: metric" (nothing for a web page).
+  String get argsSummary => isWeb
+      ? ''
+      : args.entries
       .where((e) => e.value is! Map && e.value is! List)
       .map((e) => '${e.key}: ${e.value}')
       .join(' · ');
@@ -261,16 +276,22 @@ class DeskPin {
   /// Shown with the tool's own app (MCP Apps).
   bool get isApp => frontend == appFrontend;
 
+  /// A web page (a preview of the space).
+  bool get isWeb => kind == webKind;
+  String get page => isWeb ? '${args['page'] ?? ''}' : '';
+
   String get label => title.isNotEmpty ? title : name;
 
   ShownResult? get shown => microtool.isEmpty && args.isEmpty
       ? null
       : ShownResult(microtool: microtool, args: args);
 
-  String get argsSummary => args.entries
-      .where((e) => e.value is! Map && e.value is! List)
-      .map((e) => '${e.key}: ${e.value}')
-      .join(' · ');
+  String get argsSummary => isWeb
+      ? ''
+      : args.entries
+          .where((e) => e.value is! Map && e.value is! List)
+          .map((e) => '${e.key}: ${e.value}')
+          .join(' · ');
 }
 
 class DeskState {

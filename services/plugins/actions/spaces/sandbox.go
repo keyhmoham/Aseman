@@ -295,6 +295,9 @@ func (s *Service) SandboxStart(ctx context.Context, spaceID identity.ID) (*bot.B
 		// Starting a computer costs time and money: record what asked for it.
 		s.L.Info("sandbox started", "space", spaceID.String(), "for", startedFor(), "agent", vmm.ExecutionFrom(ctx).AgentID)
 		s.provideDesktopScript(ctx, rec)
+		// The kit is half a megabyte: written in the background, and only when
+		// the machine's copy is missing or older.
+		go s.provideWebkit(context.WithoutCancel(ctx), rec)
 	}
 	s.touch(spaceID)
 	return rec, nil

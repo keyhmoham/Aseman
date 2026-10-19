@@ -71,8 +71,21 @@ async def test_lead_plans_works_in_the_sandbox_and_logs(platform: Platform, tmp_
     assert any(t.startswith("Plan\n") and "write hello" in t for t in texts)
     assert any(t.startswith("Tool · execute\n") for t in texts)
     assert any(entry.get("status") == "running a command in the sandbox" for entry in platform.logs)
+    assert any(entry.get("status") == "waiting for the model" for entry in platform.logs)
     # Memory is OpenViking's (see test_memory.py): nothing of it in the sandbox.
     assert not (WORKSPACE / ".tradera/agents/tradera/AGENTS.md").exists()
+
+
+async def test_model_failure_is_visible_in_the_work_log(platform: Platform, tmp_path: Path) -> None:
+    def fail(_: list[Any]) -> AIMessage:
+        raise RuntimeError("provider stream idle timeout after 45s")
+
+    r, _ = runner(platform, tmp_path, [fail])
+    out = await r.prompt(turn_request(LEAD, "hello", token="tok-lead", role="lead"))
+    assert out.status == "failed"
+    assert "provider stream idle timeout" in out.error
+    assert any(entry.get("status") == "model request failed" and
+               "provider stream idle timeout" in entry.get("text", "") for entry in platform.logs)
 
 
 async def test_task_delegates_through_room_messages(platform: Platform, tmp_path: Path) -> None:

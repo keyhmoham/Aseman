@@ -101,7 +101,7 @@ func invitations() database.Model {
 
 func turns() database.Model {
 	return database.Model{Name: "room_turns", Table: "room_turns", Fields: []database.Field{
-		f("id", database.KindString), f("space_id", database.KindString), f("room_id", database.KindString), f("actor_id", database.KindString), f("submission", database.KindString), f("fingerprint", database.KindString), f("message_id", database.KindString), f("prompt", database.KindString), f("seeds", database.KindJSON), f("attachments", database.KindJSON), f("status", database.KindString), f("error", database.KindString), f("started_at", database.KindTime), f("ended_at", database.KindTime), f("lease_until", database.KindTime), f("created_at", database.KindTime), f("updated_at", database.KindTime)}}
+		f("id", database.KindString), f("space_id", database.KindString), f("room_id", database.KindString), f("actor_id", database.KindString), f("submission", database.KindString), f("fingerprint", database.KindString), f("message_id", database.KindString), f("prompt", database.KindString), f("seeds", database.KindJSON), f("attachments", database.KindJSON), f("status", database.KindString), f("error", database.KindString), f("started_at", database.KindTime), f("ended_at", database.KindTime), f("lease_until", database.KindTime), f("spans", database.KindJSON), f("created_at", database.KindTime), f("updated_at", database.KindTime)}}
 }
 
 // executionEvents records each platform tool an agent ran (idempotent replay

@@ -21,7 +21,12 @@ type Offer struct {
 	Error        string      `db:"error" json:"error,omitempty"`
 }
 
+// Models are the namespace's records: offers, requests and partner keys.
 func Models() []database.Model {
+	return append(offerModels(), requestModels()...)
+}
+
+func offerModels() []database.Model {
 	f := func(n string, k database.Kind) database.Field { return database.Field{Name: n, Kind: k} }
 	return []database.Model{{Name: "talent_offers", Table: "talent_offers", Fields: []database.Field{f("id", database.KindString), f("space_id", database.KindString), f("sender_id", database.KindString), f("recipient_id", database.KindString), f("amount", database.KindInt64), f("status", database.KindString), f("message", database.KindString), f("invitation_id", database.KindString), f("funded_at", database.KindTime), f("responded_at", database.KindTime), f("error", database.KindString), f("created_at", database.KindTime), f("updated_at", database.KindTime)}}}
 }

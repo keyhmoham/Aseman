@@ -18,7 +18,10 @@ import (
 )
 
 type recordingBiller struct {
-	calls   []billCall
+	calls []billCall
+	// ctxErrs is the context error each charge saw: a real wallet write fails
+	// on a cancelled context.
+	ctxErrs []error
 	gates   []identity.ID
 	gateErr error
 }
@@ -29,7 +32,8 @@ type billCall struct {
 	desc                          string
 }
 
-func (r *recordingBiller) Charge(_ context.Context, customer, botOwner, nodeOwner identity.ID, amount int64, desc string) error {
+func (r *recordingBiller) Charge(ctx context.Context, customer, botOwner, nodeOwner identity.ID, amount int64, desc string) error {
+	r.ctxErrs = append(r.ctxErrs, ctx.Err())
 	r.calls = append(r.calls, billCall{customer, botOwner, nodeOwner, amount, desc})
 	return nil
 }
@@ -317,5 +321,37 @@ func TestSandboxExecutionPaysTheNode(t *testing.T) {
 	}
 	if len(biller.calls) != 1 || biller.calls[0].amount != 2 || biller.calls[0].botOwner == spaceOwner {
 		t.Fatalf("sandbox charge = %+v; want 2 credits paid to the node, not the space owner", biller.calls)
+	}
+}
+
+func TestAStoppedTurnIsStillCharged(t *testing.T) {
+	s, ctx, _, _ := entityHarness(t)
+	biller := &recordingBiller{}
+	s.Biller = biller
+	other := mustID(t, "00000000000000010000000000000009")
+	botID, _ := identity.New(1)
+	now := time.Now().UTC()
+	rec := &bot.Bot{Entity: entity.Entity{ID: botID, CreatedAt: now, UpdatedAt: now}, OwnerID: other, Name: "priced", Kind: bot.KindTool,
+		VMType: bot.VMTypeWASM, Status: bot.StatusRunning, Cost: `{"per_minute":3}`}
+	if err := s.R.CreateID(ctx, "bots", botID, rec); err != nil {
+		t.Fatal(err)
+	}
+	// The person stopped the turn: its context is cancelled when it is charged.
+	stopped, cancel := context.WithCancel(ctx)
+	cancel()
+	customer := mustID(t, "00000000000000010000000000000001")
+	if err := s.BillUsage(stopped, customer, botID, 60, "ask"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.BillAndRecordUsage(stopped, customer, botID, 60, "turn", usage.UsageCtx{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(biller.calls) != 2 || biller.calls[0].amount != 3 {
+		t.Fatalf("a stopped turn went unpaid: %+v", biller.calls)
+	}
+	for _, err := range biller.ctxErrs {
+		if err != nil {
+			t.Fatalf("the charge ran on the stopped turn's context, where the wallet write fails: %v", err)
+		}
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,9 +29,13 @@ type Adapter struct {
 	router *ncore.Router
 	srv    *http.Server
 	addr   string
-	tls    *network.TLSConfig
-	mu     sync.Mutex
-	cancel context.CancelFunc
+	// developerHost is the host of the developer API door (api.example.com):
+	// requests addressed to it reach only the developer routes, and its
+	// /v1/... is the developer API (see the developer namespace).
+	developerHost string
+	tls           *network.TLSConfig
+	mu            sync.Mutex
+	cancel        context.CancelFunc
 }
 
 // New creates the adapter plugin.
@@ -56,6 +61,7 @@ func (a *Adapter) Init(ctx context.Context, deps *api.Dependencies) error {
 	c := cfg.Network(deps.Config)
 	a.addr = c.Addr
 	a.tls = c.TLS
+	a.developerHost = normalizeHost(c.Options["developer_host"])
 	return nil
 }
 
@@ -77,6 +83,7 @@ func (a *Adapter) Name() string { return "http" }
 func (a *Adapter) Open(ctx context.Context, c network.Config) error {
 	a.addr = c.Addr
 	a.tls = c.TLS
+	a.developerHost = normalizeHost(c.Options["developer_host"])
 	return nil
 }
 
@@ -173,9 +180,15 @@ func (a *Adapter) dispatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	method := network.Method(r.Method)
-	handler, params, ok := a.router.Match(method, r.URL.Path)
+	host := requestHost(r)
+	path, ok := a.routePath(host, r.URL.Path)
 	if !ok {
-		handler, params, ok = a.router.Match(network.MethodCall, r.URL.Path)
+		http.Error(w, `{"error":"route not found"}`, http.StatusNotFound)
+		return
+	}
+	handler, params, ok := a.router.Match(method, path)
+	if !ok {
+		handler, params, ok = a.router.Match(network.MethodCall, path)
 		if !ok {
 			http.Error(w, `{"error":"route not found"}`, http.StatusNotFound)
 			return
@@ -185,12 +198,13 @@ func (a *Adapter) dispatch(w http.ResponseWriter, r *http.Request) {
 	_ = r.Body.Close()
 	req := &network.Request{
 		Method: method,
-		Route:  r.URL.Path,
-		Path:   r.URL.Path,
+		Route:  path,
+		Path:   path,
 		Query:  r.URL.Query(),
 		Header: map[string]string{},
 		Body:   body,
 		Peer:   r.RemoteAddr,
+		Host:   host,
 	}
 	for k, v := range r.Header {
 		if len(v) > 0 {
@@ -217,8 +231,77 @@ func (a *Adapter) dispatch(w http.ResponseWriter, r *http.Request) {
 	for k, v := range resp.Header {
 		w.Header().Set(k, v)
 	}
+	if resp.Stream != nil {
+		w.Header().Set("X-Accel-Buffering", "no") // a proxy must not hold the events back
+		w.WriteHeader(status)
+		fw := &flushWriter{w: w}
+		if f, ok := w.(http.Flusher); ok {
+			fw.f = f
+			f.Flush()
+		}
+		if err := resp.Stream(r.Context(), fw); err != nil {
+			a.Log.Warn("http stream ended", "path", path, "error", err)
+		}
+		return
+	}
 	w.WriteHeader(status)
 	_, _ = w.Write(resp.Body)
+}
+
+// developerPrefix is where the developer namespace's routes live in the router.
+// The developer host's /v1/... is mapped onto it, so the same path never means
+// two things: /v1/chat/completions on the developer host, /v1/{ns}/{action} on
+// the node's own.
+const developerPrefix = "/dev"
+
+// routePath maps the requested path to the router's. On the developer host
+// only the developer API is reachable (and a health probe); anywhere else the
+// developer prefix is not served, so that door has exactly one address.
+func (a *Adapter) routePath(host, path string) (string, bool) {
+	if a.developerHost != "" && host == a.developerHost {
+		switch {
+		case path == "/healthz":
+			return path, true
+		case path == "/v1" || strings.HasPrefix(path, "/v1/"):
+			return developerPrefix + path, true
+		}
+		return "", false
+	}
+	if a.developerHost != "" && (path == developerPrefix || strings.HasPrefix(path, developerPrefix+"/")) {
+		return "", false
+	}
+	return path, true
+}
+
+// requestHost is the host a request was addressed to, without a port. A
+// forwarded host is believed: the node sits behind the deployment's proxy.
+func requestHost(r *http.Request) string {
+	if forwarded := r.Header.Get("X-Forwarded-Host"); forwarded != "" {
+		return normalizeHost(strings.Split(forwarded, ",")[0])
+	}
+	return normalizeHost(r.Host)
+}
+
+func normalizeHost(host string) string {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if i := strings.LastIndex(host, ":"); i > 0 && !strings.Contains(host[i:], "]") {
+		host = host[:i]
+	}
+	return host
+}
+
+// flushWriter sends every write to the caller at once.
+type flushWriter struct {
+	w http.ResponseWriter
+	f http.Flusher
+}
+
+func (f *flushWriter) Write(p []byte) (int, error) {
+	n, err := f.w.Write(p)
+	if f.f != nil {
+		f.f.Flush()
+	}
+	return n, err
 }
 
 // Call implements network.Network (outbound HTTP).
@@ -274,9 +357,10 @@ func errStatus(err error) int {
 func setCORS(w http.ResponseWriter) {
 	h := w.Header()
 	h.Set("Access-Control-Allow-Origin", "*")
-	h.Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+	h.Set("Access-Control-Allow-Methods", "POST, GET, PUT, PATCH, DELETE, OPTIONS")
 	h.Set("Access-Control-Allow-Headers",
 		"Content-Type, Authorization, X-Tradera-Nonce, X-Tradera-Timestamp, X-Tradera-Signature, X-Tradera-Node")
+	h.Set("Access-Control-Expose-Headers", "X-Tradera-Model, X-Tradera-Cost, X-Tradera-Request-Id, X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After")
 	h.Set("Access-Control-Max-Age", "600")
 }
 

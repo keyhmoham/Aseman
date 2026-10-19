@@ -7,6 +7,7 @@ the history of its run.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -14,7 +15,6 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, ToolMessage
 
 from .context import TurnContext
-from .gateway import GatewayError
 
 _STATUS = {
     "execute": "running a command in the sandbox",
@@ -65,8 +65,9 @@ class WorkLog:
         if status is not None:
             body["status"] = status
         try:
-            await self.ctx.gateway.call("spaces", "agent_log", body)
-        except GatewayError:
+            # A live-status write must never be what stalls the work it describes.
+            await asyncio.wait_for(self.ctx.gateway.call("spaces", "agent_log", body), timeout=10.0)
+        except Exception:  # noqa: BLE001 - status/logging is deliberately best effort
             pass  # the log is best effort; the work goes on
 
 
@@ -88,12 +89,35 @@ class WorkLogMiddleware(AgentMiddleware):
             await self.log.write(f"Thought\n{_clip(thought, 1500)}")
         return None
 
+    async def awrap_model_call(self, request: Any, handler: Any) -> Any:
+        """Keep the visible status accurate and persist provider failures."""
+        await self.log.write(status="waiting for the model")
+        try:
+            response = await handler(request)
+        except asyncio.CancelledError:
+            # The host clears room activity when the cancelled turn unwinds.
+            raise
+        except Exception as exc:
+            await self.log.write(f"Model failed\n{_clip(str(exc), 800)}", status="model request failed")
+            raise
+        await self.log.write(status="thinking…")
+        return response
+
     async def awrap_tool_call(self, request: Any, handler: Any) -> Any:
         call = request.tool_call
         name = call.get("name", "")
         args = call.get("args") or {}
         await self.log.write(status=_STATUS.get(name, f"using {name}"))
-        result = await handler(request)
+        try:
+            result = await handler(request)
+        except asyncio.CancelledError:
+            # The host clears the room activity as the turn unwinds; do not
+            # delay cancellation with another network request here.
+            raise
+        except Exception as exc:
+            await self.log.write(f"Tool failed · {name}\n{_args(args)}\n→ {_clip(str(exc), 800)}")
+            await self.log.write(status="thinking…")
+            raise
         output = _text(result.content) if isinstance(result, ToolMessage) else ""
         failed = isinstance(result, ToolMessage) and getattr(result, "status", "") == "error"
         if name == "write_todos":

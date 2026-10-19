@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -120,6 +122,7 @@ func (a *Adapter) serveCall(ctx context.Context, req *network.Request) (*network
 	if s == nil {
 		return errorResponse(errs.Unauthenticated("invalid or expired agent turn token")), nil
 	}
+	defer s.begin()()
 	var in struct {
 		Namespace string          `json:"namespace"`
 		Action    string          `json:"action"`
@@ -145,8 +148,10 @@ func (a *Adapter) serveCall(ctx context.Context, req *network.Request) (*network
 	if json.Unmarshal(in.Body, &scope) == nil && scope.Space != "" && scope.Space != s.spaceID {
 		return errorResponse(errs.Permission("an agent acts only inside the space of its turn")), nil
 	}
+	endCall := vmm.Trace(s.base, "platform."+name, "")
 	resp, err := a.k.Actions().Dispatch(scoped{Context: ctx, values: s.base}, in.Namespace, in.Action,
 		&api.ActionRequest{Caller: api.Caller{ID: s.account, Kind: "bot"}, Body: in.Body})
+	endCall()
 	if err != nil {
 		return errorResponse(err), nil
 	}
@@ -229,11 +234,15 @@ func (a *Adapter) serveChat(ctx context.Context, req *network.Request) (*network
 	if s == nil {
 		return openAIError(401, "invalid or expired agent turn token"), nil
 	}
+	defer s.begin()()
 	s.def.mu.Lock()
 	spec := s.def.spec
 	s.def.mu.Unlock()
-	if err := a.gate(s); err != nil {
-		return openAIError(http.StatusPaymentRequired, err.Error()), nil
+	endGate := vmm.Trace(s.base, "llm.gate", "")
+	gateErr := a.gate(s)
+	endGate()
+	if gateErr != nil {
+		return openAIError(http.StatusPaymentRequired, gateErr.Error()), nil
 	}
 	provider, err := a.platform.ResolveChat(s.base, spec.Provider, spec.Model)
 	if err != nil {
@@ -252,34 +261,132 @@ func (a *Adapter) serveChat(ctx context.Context, req *network.Request) (*network
 		opts["include_usage"] = true
 		body["stream_options"] = opts
 	}
-	callCtx, cancel := context.WithTimeout(ctx, 15*time.Minute)
-	defer cancel()
-	up, err := providerRequest(callCtx, provider, "/chat/completions", body)
+	callTimeout := a.llmCallTimeout
+	if callTimeout <= 0 {
+		callTimeout = defaultLLMCallTimeout
+	}
+	firstTimeout := a.llmFirstEventTimeout
+	if firstTimeout <= 0 {
+		firstTimeout = defaultLLMFirstEventTimeout
+	}
+	idleTimeout := a.llmStreamIdleTimeout
+	if idleTimeout <= 0 {
+		idleTimeout = defaultLLMStreamIdleTimeout
+	}
+	callCtx, cancelCall := context.WithTimeout(ctx, callTimeout)
+	defer cancelCall()
+	requestCtx, cancelRequest := context.WithCancel(callCtx)
+	defer cancelRequest()
+	up, err := providerRequest(requestCtx, provider, "/chat/completions", body)
 	if err != nil {
 		return openAIError(500, err.Error()), nil
 	}
 	if stream {
 		up.Header.Set("Accept", "text/event-stream")
 	}
-	resp, err := a.client.Do(up)
+	// Record every exit, including a cancelled or timed-out response. Without the
+	// defer, precisely the calls admins need to diagnose disappeared from a run.
+	llmStart := time.Now()
+	traceDetail := provider.Model + " · interrupted"
+	defer func() { vmm.TraceFrom(s.base, "llm.call", traceDetail, llmStart) }()
+	firstDeadline := llmStart.Add(firstTimeout)
+	type providerResult struct {
+		resp *http.Response
+		err  error
+	}
+	started := make(chan providerResult, 1)
+	go func() {
+		resp, callErr := a.client.Do(up)
+		started <- providerResult{resp: resp, err: callErr}
+	}()
+	var resp *http.Response
+	firstTimer := time.NewTimer(firstTimeout)
+	select {
+	case got := <-started:
+		if !firstTimer.Stop() {
+			select {
+			case <-firstTimer.C:
+			default:
+			}
+		}
+		resp, err = got.resp, got.err
+	case <-firstTimer.C:
+		cancelRequest()
+		go func() {
+			if late := <-started; late.resp != nil {
+				_ = late.resp.Body.Close()
+			}
+		}()
+		traceDetail = fmt.Sprintf("%s · no response within %s", provider.Model, firstTimeout)
+		return openAIError(http.StatusGatewayTimeout, "LLM provider did not start responding within "+firstTimeout.String()), nil
+	case <-ctx.Done():
+		if !firstTimer.Stop() {
+			select {
+			case <-firstTimer.C:
+			default:
+			}
+		}
+		cancelRequest()
+		go func() {
+			if late := <-started; late.resp != nil {
+				_ = late.resp.Body.Close()
+			}
+		}()
+		// The request reached the provider, which bills its input whether or
+		// not anyone waits for the answer.
+		in := estimateInputTokens(body)
+		a.meter(s, in, 0)
+		traceDetail = fmt.Sprintf("%s · cancelled before response · ≈%d in (estimated)", provider.Model, in)
+		return openAIError(499, "LLM request cancelled"), nil
+	}
 	if err != nil {
-		return openAIError(502, "LLM provider unreachable: "+err.Error()), nil
+		status := http.StatusBadGateway
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(callCtx.Err(), context.DeadlineExceeded) {
+			status = http.StatusGatewayTimeout
+		}
+		traceDetail = provider.Model + " · provider unreachable: " + clip(err.Error(), 160)
+		return openAIError(status, "LLM provider unreachable: "+err.Error()), nil
 	}
 	defer resp.Body.Close()
+	firstEvent := time.Since(llmStart) // response headers for a non-streamed error
 	var data []byte
-	if tools, _ := body["tools"].([]any); stream && resp.StatusCode < 300 && len(tools) > 0 {
-		// A step of the agent's own loop (its other model calls, such as
-		// summarizing, carry no tools): show the answer as it is written.
-		data, err = a.followStream(s, spec.Name, resp.Body)
+	if stream && resp.StatusCode < 300 {
+		// Every successful stream uses the SSE reader, including summarization
+		// calls that carry no tools. Only an agent-loop call publishes a draft.
+		tools, _ := body["tools"].([]any)
+		remaining := time.Until(firstDeadline)
+		if remaining <= 0 {
+			cancelRequest()
+			traceDetail = fmt.Sprintf("%s · no first event within %s", provider.Model, firstTimeout)
+			return openAIError(http.StatusGatewayTimeout, "LLM provider did not send its first event within "+firstTimeout.String()), nil
+		}
+		beforeStream := time.Since(llmStart)
+		var stats streamStats
+		data, stats, err = a.followStream(callCtx, s, spec.Name, resp.Body, len(tools) > 0, remaining, idleTimeout)
+		if stats.firstEvent > 0 {
+			firstEvent = beforeStream + stats.firstEvent
+		}
 	} else {
 		data, err = io.ReadAll(resp.Body)
 	}
 	if err != nil {
-		return openAIError(502, "LLM provider response failed: "+err.Error()), nil
+		status := http.StatusBadGateway
+		if errors.Is(err, context.DeadlineExceeded) || isStreamTimeout(err) {
+			status = http.StatusGatewayTimeout
+		}
+		// A response cut off (the turn stopped, or the stream broke) was still
+		// produced and billed by the provider up to there: meter it.
+		in, out, estimated := partialUsage(body, data, stream)
+		a.meter(s, in, out)
+		traceDetail = provider.Model + " · response failed: " + clip(err.Error(), 160) + meteredNote(in, out, estimated)
+		return openAIError(status, "LLM provider response failed: "+err.Error()), nil
 	}
 	if resp.StatusCode < 300 {
 		in, out := parseUsage(data, stream)
 		a.meter(s, in, out)
+		traceDetail = fmt.Sprintf("%s · first event %dms · %d in / %d out", provider.Model, firstEvent.Milliseconds(), in, out)
+	} else {
+		traceDetail = fmt.Sprintf("%s · HTTP %d", provider.Model, resp.StatusCode)
 	}
 	if msg, ok := contextOverflow(resp.StatusCode, data); ok {
 		// Providers word (and code) a request larger than the model's window
@@ -395,13 +502,64 @@ func (a *Adapter) serveModels(ctx context.Context, req *network.Request) (*netwo
 // in progress: often enough to read as typing, rare enough to stay cheap.
 const draftEvery = 150 * time.Millisecond
 
-// followStream reads a streamed model response to its end (the runtime gets
-// it whole, as before) and publishes the text as it arrives as the agent's
-// draft in the room. A response that turns out to call a tool is a step, not
-// an answer: its draft is withdrawn.
-func (a *Adapter) followStream(s *session, agent string, body io.Reader) ([]byte, error) {
+type streamStats struct {
+	firstEvent time.Duration
+	done       bool
+}
+
+type streamTimeoutError struct {
+	phase string
+	wait  time.Duration
+}
+
+func (e *streamTimeoutError) Error() string {
+	return fmt.Sprintf("provider stream %s timeout after %s", e.phase, e.wait)
+}
+
+func isStreamTimeout(err error) bool {
+	var target *streamTimeoutError
+	return errors.As(err, &target)
+}
+
+type streamRead struct {
+	line []byte
+	err  error
+}
+
+// readStreamLine gives each read a liveness deadline. Closing an HTTP response
+// body unblocks its pending read; the buffered result channel also prevents a
+// badly behaved test/provider reader from stranding the reader goroutine.
+func readStreamLine(ctx context.Context, body io.ReadCloser, reader *bufio.Reader, wait time.Duration, phase string) ([]byte, error) {
+	result := make(chan streamRead, 1)
+	go func() {
+		line, err := reader.ReadBytes('\n')
+		result <- streamRead{line: line, err: err}
+	}()
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case got := <-result:
+		return got.line, got.err
+	case <-ctx.Done():
+		_ = body.Close()
+		return nil, ctx.Err()
+	case <-timer.C:
+		_ = body.Close()
+		return nil, &streamTimeoutError{phase: phase, wait: wait}
+	}
+}
+
+// followStream reads an OpenAI-compatible SSE response until its protocol
+// terminator, not until the peer happens to close its HTTP connection. It also
+// enforces a deadline for the first event and for every later event. Agent-loop
+// calls publish text as a room draft; internal model calls only consume it.
+func (a *Adapter) followStream(ctx context.Context, s *session, agent string, body io.ReadCloser, publishDraft bool,
+	firstTimeout, idleTimeout time.Duration) ([]byte, streamStats, error) {
 	roomID, rerr := identity.Parse(s.roomID)
 	publish := func(text string) {
+		if !publishDraft {
+			return
+		}
 		if a.draftFn != nil {
 			a.draftFn(s.roomID, agent, text)
 			return
@@ -417,11 +575,35 @@ func (a *Adapter) followStream(s *session, agent string, body io.Reader) ([]byte
 		toolCall bool
 		sent     time.Time
 		reader   = bufio.NewReader(body)
+		stats    streamStats
+		started  = time.Now()
 	)
 	for {
-		line, err := reader.ReadBytes('\n')
+		wait, phase := idleTimeout, "idle"
+		if stats.firstEvent == 0 {
+			wait, phase = firstTimeout, "first event"
+		}
+		line, err := readStreamLine(ctx, body, reader, wait, phase)
+		if stats.firstEvent == 0 && len(line) > 0 {
+			stats.firstEvent = time.Since(started)
+		}
 		all.Write(line)
-		if payload, ok := bytes.CutPrefix(bytes.TrimSpace(line), []byte("data:")); ok && !toolCall {
+		payload, event := bytes.CutPrefix(bytes.TrimSpace(line), []byte("data:"))
+		payload = bytes.TrimSpace(payload)
+		if event && bytes.Equal(payload, []byte("[DONE]")) {
+			// The SSE protocol is complete even if an intermediary keeps the HTTP
+			// connection alive. Preserve anything already buffered (normally the
+			// blank event separator) without performing another blocking read.
+			if buffered := reader.Buffered(); buffered > 0 {
+				if tail, peekErr := reader.Peek(buffered); peekErr == nil {
+					all.Write(tail)
+					_, _ = reader.Discard(buffered)
+				}
+			}
+			stats.done = true
+			break
+		}
+		if event && !toolCall {
 			var chunk struct {
 				Choices []struct {
 					Delta struct {
@@ -430,7 +612,7 @@ func (a *Adapter) followStream(s *session, agent string, body io.Reader) ([]byte
 					} `json:"delta"`
 				} `json:"choices"`
 			}
-			if json.Unmarshal(bytes.TrimSpace(payload), &chunk) == nil && len(chunk.Choices) > 0 {
+			if json.Unmarshal(payload, &chunk) == nil && len(chunk.Choices) > 0 {
 				delta := chunk.Choices[0].Delta
 				if len(delta.ToolCalls) > 0 {
 					toolCall = true
@@ -449,13 +631,13 @@ func (a *Adapter) followStream(s *session, agent string, body io.Reader) ([]byte
 		}
 		if err != nil {
 			publish("")
-			return all.Bytes(), err
+			return all.Bytes(), stats, err
 		}
 	}
 	if !toolCall && text.Len() > 0 {
 		publish(text.String())
 	}
-	return all.Bytes(), nil
+	return all.Bytes(), stats, nil
 }
 
 // meter records the tokens of one model call on the agent and on its turn.
@@ -502,6 +684,81 @@ func (a *Adapter) gate(s *session) error {
 
 // parseUsage reads token usage from a chat completion (or the final chunk of
 // a stream).
+// estimateInputTokens is a request's input size when the provider never
+// reported it: about 4 characters a token over its messages and tools, which is
+// what providers bill.
+func estimateInputTokens(body map[string]any) int64 {
+	n := 0
+	for _, key := range []string{"messages", "tools"} {
+		if v, ok := body[key]; ok {
+			b, _ := json.Marshal(v)
+			n += len(b)
+		}
+	}
+	return int64(n/4) + 1
+}
+
+// streamedChars counts what a stream wrote: its text and its tool-call
+// arguments.
+func streamedChars(data []byte) int {
+	n := 0
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "data:"))
+		if line == "" || line == "[DONE]" {
+			continue
+		}
+		var chunk struct {
+			Choices []struct {
+				Delta struct {
+					Content   string `json:"content"`
+					ToolCalls []struct {
+						Function struct {
+							Name      string `json:"name"`
+							Arguments string `json:"arguments"`
+						} `json:"function"`
+					} `json:"tool_calls"`
+				} `json:"delta"`
+			} `json:"choices"`
+		}
+		if json.Unmarshal([]byte(line), &chunk) != nil {
+			continue
+		}
+		for _, c := range chunk.Choices {
+			n += len(c.Delta.Content)
+			for _, t := range c.Delta.ToolCalls {
+				n += len(t.Function.Name) + len(t.Function.Arguments)
+			}
+		}
+	}
+	return n
+}
+
+// partialUsage is what an interrupted call used: the provider's own report
+// when it arrived, else an estimate (the input from the request, the output
+// from what was streamed). estimated says which.
+func partialUsage(body map[string]any, data []byte, stream bool) (in, out int64, estimated bool) {
+	if in, out = parseUsage(data, stream); in > 0 || out > 0 {
+		return in, out, false
+	}
+	in = estimateInputTokens(body)
+	if stream {
+		if chars := streamedChars(data); chars > 0 {
+			out = int64(chars/4) + 1
+		}
+	}
+	return in, out, true
+}
+
+func meteredNote(in, out int64, estimated bool) string {
+	if in == 0 && out == 0 {
+		return ""
+	}
+	if estimated {
+		return fmt.Sprintf(" · ≈%d in / %d out (estimated)", in, out)
+	}
+	return fmt.Sprintf(" · %d in / %d out", in, out)
+}
+
 func parseUsage(data []byte, stream bool) (int64, int64) {
 	type u struct {
 		Usage *struct {

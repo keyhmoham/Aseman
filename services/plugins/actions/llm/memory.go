@@ -217,6 +217,9 @@ func (s *Service) memoryView(ctx context.Context) (map[string]any, error) {
 		}
 		chat, embedding := []llmprovider.Model{}, []llmprovider.Model{}
 		for _, m := range modelsView(p) {
+			if m.Disabled {
+				continue
+			}
 			if m.Chat() {
 				chat = append(chat, m)
 			}

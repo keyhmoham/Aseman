@@ -180,7 +180,7 @@ through `internal/plugins/host`; see [runtime plugin architecture](plugins/READM
 |---|---|---|
 | database | postgres, mysql, mongodb, memory | memory |
 | cache | local-cache, redis | local-cache |
-| filesystem | local, s3 | local |
+| filesystem | local, s3 | local (s3 when `TRADERA_S3_BUCKET` is set: Cloudflare R2, AWS S3, MinIO) |
 | network | http, tcp (JSON frames), websocket | http |
 | vmm | nomad (docker, plus elpian/quickjs tool backends), docker, wasm (wazero), modal, deepagents, mcp (external and installed tools) | nomad |
 
@@ -267,6 +267,45 @@ done is never refused, so a run can finish at most one step past the cap.
   agents' reads (`MCP`, through the deepagents gateway's `/timeline/mcp`) and
   `timeline.status` shows the admin each feed's cursor. Configured by
   `TRADERA_TIMELINE_URL` / `_EMAIL` / `_PASSWORD`; off without the URL.
+- **developer** — the developer API: organizations (a person's own, or teams with
+  their own wallet, members and roles), API keys (`dk_live_…`, hashed; permissions,
+  per-key spend cap, rate limit, model and provider allow-lists, expiry), a unified
+  model catalog built from the LLM providers (one entry per model, priced), and
+  the HTTP door on the developer host (`TRADERA_DEVELOPER_HOST`): `GET /v1/models`,
+  `POST /v1/chat/completions` (streaming), `/v1/embeddings`, `/v1/decisions`,
+  `/v1/images/generations`, `/v1/audio/speech` (answers with the audio),
+  `/v1/audio/transcriptions` (multipart or base64 JSON), `/v1/rerank`, video as a
+  job (`POST /v1/videos/generations`, `GET /v1/videos/{id}`; charged at the start,
+  refunded if the provider fails it), `/v1/balance`, `/v1/usage`, plus computers
+  and storage. Image, speech, transcription and video models are reached through
+  Vercel AI Gateway's own protocol (`/v4/ai/{kind}-model`), reranking through its
+  Cohere-compatible `/v2/rerank`. Fallback `models` are tried in order (a
+  `provider` object still routes between the node's providers, undocumented while
+  there is one). The model that answers is billed to the organization's wallet,
+  paid to the provider key's owner, and logged. Replies, headers and the
+  console never name the provider; the node admin sees it (with every
+  organization's usage, keys and requests) through `developer.admin_orgs`,
+  `admin_org` and `admin_logs`. Admin → Models → Import → Vercel
+  (`llm.llm_import_vercel`) brings Vercel's catalog in at its price plus a markup,
+  updating models in place; a model with no price the node can meter is imported
+  as unpriced and not served until the admin prices it.
+- **talent** — funded offers to hire people into a project (`create`, `respond`,
+  `list_mine`, `list_project`), and **requests for talent**: a person posts a job
+  (title, category, description of 50–5,000 characters, budget as fixed / hourly /
+  monthly in US dollars, company or project, optional timeline and skills) with
+  `request_create` (ten open at a time; a `request_id` makes a retry post once),
+  and lists, closes, reopens and deletes their own (`request_list`,
+  `request_status`, `request_delete`). The node's admin sees all of them and can take
+  one down (`admin_requests`, `admin_request_status`) and manages **partner keys**
+  (`partner_keys`, `partner_key_create` shows the secret once, `partner_key_revoke`).
+  A partner reads the open requests with a key (`Authorization: Bearer pk_live_…`)
+  on the developer host: `GET /v1/partner/talent-requests` (newest first;
+  `limit`, `category`, `cursor` → `next_cursor`), or `?updated_since=<RFC 3339>` for
+  what changed (new and edited requests in full; closed, deleted or taken-down ones
+  as `{id, status: "closed"}`; `next_updated_since` to continue), and
+  `GET /v1/partner/talent-requests/{id}`. Each request carries `poster: {name, email}` so
+  the partner can get in touch (the post form tells the poster so); which project it
+  came from is never in the partner API. 120 calls a minute per key.
 - **market** — publish, discover and install agents and miniapps:
   `publish`, `unpublish`, `list`, `get`, `install`, `my_listings`.
 
@@ -424,6 +463,21 @@ Every deep agents feature is on, mapped onto the platform:
   on the runtime's volume, so conversations and pending questions survive
   restarts.
 
+### Image model
+
+Agents make images with their `image_generate` tool, never with their own chat
+model, so an agent can run on any model and still make images. The tool always
+uses the node's **image model** (Admin → AI → Image model, `llm.llm_image_get` /
+`llm_image_set`): one model of an enabled provider marked *Image* on the Models
+page. It is charged at that model's prices there: per image (`units.image`), per
+token (the input and output tokens the provider reports for the image, as
+Gemini image models bill), or both. Gemini image models (`gemini-…-image`) on
+Vertex AI or Google Gemini are called through Google's `generateContent`; every
+other provider through its OpenAI-compatible `/images/generations`. Until the
+setting is first saved, a provider's own `image_model` field is used at its
+flat `image_price`, as before. The tool runs only when the person's message asks
+for an image (the request's intent, set when a turn starts).
+
 ### Decision model
 
 The node admin can turn on a **decision model** (Admin → AI → Decision model):
@@ -470,8 +524,15 @@ or by DM (a DM runs in the space the person and the agent share).
 Configuration (all optional; compose sets them): `TRADERA_AGENT_RUNTIME_IMAGE`,
 `TRADERA_AGENT_NODE_URL` (the node as the runtime reaches it),
 `TRADERA_AGENT_RUNTIME_NETWORK`, or `TRADERA_AGENT_RUNTIME_URL` to run the
-runtime yourself. The runtime's own tests: `cd plugins/adapters/vmm/deepagents/runtime
-&& pip install -r requirements-dev.txt && pytest`.
+runtime yourself. Provider calls default to a five-minute total limit, two
+minutes to the first streamed event and 45 seconds between events; tune them
+with `TRADERA_LLM_CALL_TIMEOUT`, `TRADERA_LLM_FIRST_EVENT_TIMEOUT` and
+`TRADERA_LLM_STREAM_IDLE_TIMEOUT` (Go duration strings). The runtime's own
+tests:
+
+```bash
+cd plugins/adapters/vmm/deepagents/runtime && pip install -r requirements-dev.txt && pytest
+```
 
 ### Shared space sandbox
 

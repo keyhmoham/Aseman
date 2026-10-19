@@ -48,7 +48,12 @@ func (s *Service) adminAccount(ctx context.Context, req *api.ActionRequest) (*ap
 		Amount   int64
 	}
 	projects := map[string]*projectSpend{}
+	// Grants that lapse, by the ledger entry that added them.
+	lapsing := map[int64]models.Record{}
 	for _, r := range records {
+		if r.Kind == grantKind {
+			lapsing[amountOf(r.Data["ledger_seq"])] = r
+		}
 		switch r.Kind {
 		case "purchase":
 			if sandbox, _ := r.Data["sandbox"].(bool); sandbox {
@@ -72,6 +77,9 @@ func (s *Service) adminAccount(ctx context.Context, req *api.ActionRequest) (*ap
 			agent += amountOf(r.Data["agent_minor"])
 			sid, _ := r.Data["space_id"].(string)
 			name, _ := r.Data["space_name"].(string)
+			if r.Data["scope"] == "chat" {
+				sid, name = "chat", "Chats"
+			}
 			p := projects[sid]
 			if p == nil {
 				p = &projectSpend{ID: sid, Name: name}
@@ -91,11 +99,15 @@ func (s *Service) adminAccount(ctx context.Context, req *api.ActionRequest) (*ap
 		if l.FromID != id && l.ToID != id {
 			continue
 		}
+		// A mint's sender is the operator who created the credits, not a payer.
+		if l.Type == wallet.EntryMint && l.ToID != id {
+			continue
+		}
 		if l.Type == wallet.EntryPoolLock || l.Type == wallet.EntryPoolFree {
 			continue
 		}
 		change := l.Amount
-		if l.FromID == id {
+		if l.FromID == id && l.Type != wallet.EntryMint {
 			change = -l.Amount
 		}
 		if l.Type == wallet.EntryMint && l.ToID == id && !hasPrefix(l.Description, "verified purchase") {
@@ -105,7 +117,14 @@ func (s *Service) adminAccount(ctx context.Context, req *api.ActionRequest) (*ap
 			earned += l.Amount
 		}
 		if len(moves) < in.Limit {
-			moves = append(moves, map[string]any{"id": l.ID.String(), "type": l.Type, "amount": change, "description": l.Description, "created_at": l.CreatedAt})
+			move := map[string]any{"id": l.ID.String(), "type": l.Type, "amount": change, "description": l.Description, "created_at": l.CreatedAt}
+			if g, ok := lapsing[l.Seq]; ok && l.Type == wallet.EntryMint {
+				if at, _ := g.Data["expires_at"].(string); at != "" {
+					move["expires_at"] = at
+					move["grant_status"] = g.Status // active | expired
+				}
+			}
+			moves = append(moves, move)
 		}
 	}
 

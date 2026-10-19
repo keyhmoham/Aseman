@@ -65,6 +65,9 @@ type PushNote struct {
 	Kind  string `json:"kind"`
 	Space string `json:"space,omitempty"`
 	Room  string `json:"room,omitempty"`
+	// Peer is the person a direct message ("dm") is from: tapping it opens
+	// that conversation.
+	Peer string `json:"peer,omitempty"`
 	// Collapse replaces an earlier notification with the same value instead of
 	// stacking under it.
 	Collapse string `json:"collapse,omitempty"`
@@ -315,11 +318,14 @@ func apnsPayload(note PushNote) ([]byte, error) {
 	if note.Space != "" {
 		// One stack per project in Notification Centre.
 		aps["thread-id"] = note.Space
+	} else if note.Peer != "" {
+		// And one per conversation.
+		aps["thread-id"] = "dm:" + note.Peer
 	}
 	// What the app needs to open the right screen. It goes under "body": the
 	// app's notification library hands the app that part of a remote
 	// notification and nothing else.
-	return json.Marshal(map[string]any{"aps": aps, "body": map[string]any{"kind": note.Kind, "space": note.Space, "room": note.Room}})
+	return json.Marshal(map[string]any{"aps": aps, "body": map[string]any{"kind": note.Kind, "space": note.Space, "room": note.Room, "peer": note.Peer}})
 }
 
 // send delivers one notification to one device. A token is issued by one of

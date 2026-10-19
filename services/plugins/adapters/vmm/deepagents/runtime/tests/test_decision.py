@@ -267,3 +267,34 @@ async def test_a_lead_gets_a_routing_hint(platform: Platform, tmp_path: Path) ->
     r, model = runner(platform, tmp_path, [AIMessage(content="ok")])
     await r.prompt(request("write a blog post about the launch"))
     assert "writer fits this request best" in notes(model, 0)
+
+
+async def test_completion_check_counts_what_was_delivered() -> None:
+    from langchain_core.messages import ToolMessage
+
+    from tradera_agents.decision import completion
+    from tradera_agents.decision.middleware import delivered
+
+    messages = [
+        HumanMessage(content="generate a floating banana image"),
+        call("image_generate", {"prompt": "a banana"}, cid="c1"),
+        ToolMessage(content="Sent floating_banana.png to the chat (file id f1)", name="image_generate", tool_call_id="c1"),
+        call("file_send", {"file_id": "f1"}, cid="c2"),
+        ToolMessage(content="error: file_send requires a sandbox path", name="file_send", tool_call_id="c2"),
+        AIMessage(content="Here is your floating banana."),
+    ]
+    sent = delivered(messages)
+    assert sent == ["image_generate: Sent floating_banana.png to the chat (file id f1)"]
+    # An earlier request's deliveries do not count for this one.
+    assert delivered([*messages, HumanMessage(content="now a cat")]) == []
+
+    class Client:
+        state: dict[str, Any] = {}
+
+        async def evaluate(self, state: dict[str, Any], questions: dict[str, Any]) -> dict[str, Any]:
+            Client.state = state
+            assert "delivered" in questions["complete"]["instructions"]
+            return {"complete": {"type": "boolean", "probability": 0.9}}
+
+    assert not await completion.incomplete(Client(), "generate a floating banana image", "Here is your floating banana.", sent)
+    assert "floating_banana.png" in Client.state["delivered"]

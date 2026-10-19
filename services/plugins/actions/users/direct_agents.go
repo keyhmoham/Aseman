@@ -43,14 +43,21 @@ func (s *Service) deliverDirect(ctx context.Context, from, agentAccount, botID i
 	if strings.TrimSpace(reply) == "" {
 		return
 	}
+	// A person who blocked the agent meanwhile does not get its answer.
+	if blocked, _, err := s.directBlocked(ctx, agentAccount, from); err == nil && blocked {
+		return
+	}
 	id, err := identity.New(s.K.NodeID())
 	if err != nil {
 		return
 	}
 	now := time.Now().UTC()
 	dm := &message.Direct{Entity: entity.Entity{ID: id, CreatedAt: now, UpdatedAt: now}, From: agentAccount, To: from, Body: reply, SentAt: now}
-	if err := s.R.CreateID(context.WithoutCancel(ctx), "directs", id, dm); err != nil && s.L != nil {
-		s.L.Warn("store agent direct reply", "bot", botID.String(), "error", err)
+	if err := s.storeDirect(context.WithoutCancel(ctx), dm); err != nil {
+		if s.L != nil {
+			s.L.Warn("store agent direct reply", "bot", botID.String(), "error", err)
+		}
+		return
 	}
 	s.mirrorDirect(context.WithoutCancel(ctx), agentAccount, from, reply)
 }

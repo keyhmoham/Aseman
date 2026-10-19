@@ -53,12 +53,13 @@ func BuildActions(s *Service) []api.Action {
 		&metadataReplaceAction{s: s},
 		&metadataPublicAction{s: s},
 		&dmSendAction{s: s},
+		&dmAgentAskAction{s: s},
 		&dmListAction{s: s},
 		&dmThreadsAction{s: s},
 		&fileUploadAction{s: s},
 		&fileDownloadAction{s: s},
 		&fileDeleteAction{s: s},
-	}, append(accountActions(s), pushActions(s)...)...)
+	}, append(append(append(append(accountActions(s), pushActions(s)...), directActions(s)...), directLiveActions(s)...), reportActions(s)...)...)
 }
 
 // GetAccount resolves an account by universal id or handle.
@@ -86,7 +87,7 @@ func (s *Service) UploadFile(ctx context.Context, owner identity.ID, name, mime 
 	if err != nil {
 		return nil, err
 	}
-	key := id.String()
+	key := "users/" + owner.String() + "/" + id.String() // one folder per person in the object store
 	if err := fs.Put(ctx, key, r, size, mime); err != nil {
 		return nil, err
 	}
@@ -321,8 +322,9 @@ func (a *dmSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 		return nil, err
 	}
 	var in struct {
-		To   string `json:"to"`
-		Body string `json:"body"`
+		To      string `json:"to"`
+		Body    string `json:"body"`
+		ReplyTo string `json:"reply_to,omitempty"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
@@ -337,6 +339,28 @@ func (a *dmSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	if err != nil {
 		return nil, err
 	}
+	if blocked, byMe, err := a.s.directBlocked(ctx, req.Caller.ID, to); err != nil {
+		return nil, err
+	} else if blocked && byMe {
+		return nil, errs.New(errs.CodePermission, "You blocked this person. Unblock them to send a message.")
+	} else if blocked {
+		return nil, errs.New(errs.CodePermission, "You can't message this person.")
+	}
+	if in.ReplyTo != "" {
+		// A reply answers a message of this same conversation.
+		rid, err := identity.Parse(in.ReplyTo)
+		if err != nil {
+			return nil, err
+		}
+		orig, err := a.s.getDirect(ctx, rid)
+		if err != nil {
+			return nil, errs.InvalidArgument("the message you reply to is not there")
+		}
+		pair := orig.From == req.Caller.ID && orig.To == to || orig.From == to && orig.To == req.Caller.ID
+		if !pair {
+			return nil, errs.InvalidArgument("you can only reply to a message of this conversation")
+		}
+	}
 	id, err := identity.New(a.s.K.NodeID())
 	if err != nil {
 		return nil, err
@@ -344,12 +368,17 @@ func (a *dmSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	now := time.Now().UTC()
 	dm := &message.Direct{
 		Entity: entity.Entity{ID: id, CreatedAt: now, UpdatedAt: now},
-		From:   req.Caller.ID, To: to, Body: in.Body, SentAt: now,
+		From:   req.Caller.ID, To: to, Body: in.Body, SentAt: now, ReplyTo: in.ReplyTo,
 	}
-	if err := a.s.R.CreateID(ctx, "directs", id, dm); err != nil {
+	if err := a.s.storeDirect(ctx, dm); err != nil {
 		return nil, err
 	}
 	a.s.mirrorDirect(ctx, req.Caller.ID, to, in.Body)
+	// Writing to someone means you have read the conversation so far, and
+	// that you stopped typing. The mirrored room message above is what
+	// announces it to the other person.
+	_, _ = a.s.updateDirectState(ctx, req.Caller.ID, to, func(st *directState) { st.ReadAt = now })
+	typing.set(req.Caller.ID, to, false)
 	// A message to an agent is a conversation with it: the agent answers in
 	// the same direct thread, without holding up this request. An agent
 	// messaging another agent inside a run keeps that run's scope.
@@ -392,13 +421,50 @@ func (a *dmListAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	}, &mine); err != nil {
 		return nil, err
 	}
-	if err := a.s.R.List(ctx, "directs", database.Filter{
-		Equal:   map[string]any{"from_id": peer.String(), "to_id": req.Caller.ID.String()},
-		OrderBy: "created_at", Asc: false, Limit: in.Limit,
-	}, &theirs); err != nil {
+	// Saved Messages (a conversation with oneself) is one direction only.
+	if peer != req.Caller.ID {
+		if err := a.s.R.List(ctx, "directs", database.Filter{
+			Equal:   map[string]any{"from_id": peer.String(), "to_id": req.Caller.ID.String()},
+			OrderBy: "created_at", Asc: false, Limit: in.Limit,
+		}, &theirs); err != nil {
+			return nil, err
+		}
+	}
+	me, _, err := a.s.directStateOf(ctx, req.Caller.ID, peer)
+	if err != nil {
 		return nil, err
 	}
-	out := append(mine, theirs...)
+	them, _, err := a.s.directStateOf(ctx, peer, req.Caller.ID)
+	if err != nil {
+		return nil, err
+	}
+	hidden, err := a.s.hiddenDirects(ctx, req.Caller.ID)
+	if err != nil {
+		return nil, err
+	}
+	all := append(mine, theirs...)
+	// A message its sender took back is gone from the conversation for both
+	// sides (no "deleted" placeholder), and a reply to it no longer quotes it.
+	gone := map[string]bool{}
+	for _, dm := range all {
+		if !dm.DeletedAt.IsZero() {
+			gone[dm.ID.String()] = true
+		}
+	}
+	out := all[:0]
+	replyGone := map[string]bool{}
+	for _, dm := range all {
+		// A conversation the caller deleted shows only what came after.
+		if !me.ClearedAt.IsZero() && !dm.CreatedAt.After(me.ClearedAt) || !dm.DeletedAt.IsZero() || hidden[dm.ID.String()] {
+			continue // before the caller cleared the chat, taken back, or deleted for the caller
+		}
+		if gone[dm.ReplyTo] || hidden[dm.ReplyTo] {
+			// The message it answered is not there for the caller: the reply
+			// says so instead of passing for a message of its own.
+			replyGone[dm.ID.String()] = true
+		}
+		out = append(out, dm)
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
 	if len(out) > in.Limit {
 		out = out[:in.Limit]
@@ -406,7 +472,47 @@ func (a *dmListAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
 		out[i], out[j] = out[j], out[i]
 	}
-	return helper.JSON(map[string]any{"messages": out})
+	views := make([]map[string]any, 0, len(out))
+	agents := map[string]map[string]any{}
+	for i := range out {
+		a.s.openDirect(&out[i])
+		v := directView(out[i])
+		if replyGone[out[i].ID.String()] {
+			v["reply_deleted"] = true
+		}
+		// An agent's answer in the notes carries who wrote it.
+		if aid := out[i].AgentID; aid != "" {
+			if agents[aid] == nil {
+				if id, err := identity.Parse(aid); err == nil {
+					agents[aid] = a.s.publicRef(ctx, req.Caller.ID, id)
+				}
+			}
+			if ref := agents[aid]; ref != nil {
+				v["agent"] = ref
+			}
+		}
+		views = append(views, v)
+	}
+	view := map[string]any{"messages": views,
+		"peer_typing": typing.is(peer, req.Caller.ID),
+		// How far the peer has read: the client marks the caller's messages up to it as seen.
+		"peer_read_at": nullTime(them.ReadAt),
+		"blocked":      me.Blocked,
+		"can_send":     !me.Blocked && !them.Blocked,
+	}
+	if peer == req.Caller.ID {
+		// The notes' agents still writing an answer (shown as "thinking").
+		view["agents_working"] = a.s.workingSavedAsks(ctx, req.Caller.ID)
+	}
+	return helper.JSON(view)
+}
+
+// nullTime is a time for JSON, or null when it was never set.
+func nullTime(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t
 }
 
 // dmThreadsAction users.dm_threads: the caller's conversations, newest first,
@@ -434,25 +540,74 @@ func (a *dmThreadsAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 	if err := a.s.R.List(ctx, "directs", database.Filter{Equal: map[string]any{"to_id": req.Caller.ID.String()}, OrderBy: "created_at", Asc: false, Limit: 1000}, &received); err != nil {
 		return nil, err
 	}
-	all := append(sent, received...)
+	states, err := a.s.directStates(ctx, req.Caller.ID)
+	if err != nil {
+		return nil, err
+	}
+	hidden, err := a.s.hiddenDirects(ctx, req.Caller.ID)
+	if err != nil {
+		return nil, err
+	}
+	// What the caller has not read yet: the peer's messages after both the
+	// caller's read point and the point they deleted the conversation.
+	unread := map[string]int{}
+	for _, dm := range received {
+		if dm.From == req.Caller.ID {
+			continue // a note to oneself is never unread
+		}
+		st := states[dm.From.String()]
+		if dm.DeletedAt.IsZero() && !hidden[dm.ID.String()] && dm.CreatedAt.After(st.ReadAt) && dm.CreatedAt.After(st.ClearedAt) {
+			unread[dm.From.String()]++
+		}
+	}
+	all := append([]message.Direct{}, sent...)
+	for _, dm := range received {
+		if dm.From != req.Caller.ID { // notes to oneself are already among the sent
+			all = append(all, dm)
+		}
+	}
 	sort.Slice(all, func(i, j int) bool { return all[i].CreatedAt.After(all[j].CreatedAt) })
 	threads := []map[string]any{}
+	pinnedAt := map[string]time.Time{}
 	seen := map[string]bool{}
+	total := 0
 	for _, dm := range all {
 		peer := dm.To
 		if dm.To == req.Caller.ID {
 			peer = dm.From
 		}
-		if seen[peer.String()] {
-			continue
+		st := states[peer.String()]
+		if seen[peer.String()] || !st.ClearedAt.IsZero() && !dm.CreatedAt.After(st.ClearedAt) {
+			continue // a deleted conversation returns only with a newer message
+		}
+		if !dm.DeletedAt.IsZero() || hidden[dm.ID.String()] {
+			continue // the preview is the newest message still there for the caller
 		}
 		seen[peer.String()] = true
-		threads = append(threads, map[string]any{"peer": a.s.publicRef(ctx, req.Caller.ID, peer), "last": dm})
-		if len(threads) >= in.Limit {
-			break
+		a.s.openDirect(&dm)
+		n := unread[peer.String()]
+		total += n
+		thread := map[string]any{"peer": a.s.publicRef(ctx, req.Caller.ID, peer), "last": directView(dm), "unread": n, "blocked": st.Blocked,
+			"typing": typing.is(peer, req.Caller.ID), "saved": peer == req.Caller.ID}
+		if !st.PinnedAt.IsZero() {
+			thread["pinned_at"] = st.PinnedAt
+			pinnedAt[peer.String()] = st.PinnedAt
 		}
+		threads = append(threads, thread)
 	}
-	return helper.JSON(map[string]any{"threads": threads})
+	// Pinned chats first, the latest pinned on top; the rest stay newest first.
+	// The limit applies after, so a pinned chat is never cut for a newer one.
+	sort.SliceStable(threads, func(i, j int) bool {
+		pi, pj := pinnedAt[threadPeer(threads[i])], pinnedAt[threadPeer(threads[j])]
+		if pi.IsZero() != pj.IsZero() {
+			return !pi.IsZero()
+		}
+		return pi.After(pj)
+	})
+	if len(threads) > in.Limit {
+		threads = threads[:in.Limit]
+	}
+	return helper.JSON(map[string]any{"threads": threads, "unread_total": total})
 }
 
 // fileUploadAction users.file_upload
@@ -561,4 +716,11 @@ func (a *fileDeleteAction) Handle(ctx context.Context, req *api.ActionRequest) (
 		return nil, err
 	}
 	return helper.JSON(map[string]any{"ok": true})
+}
+
+// threadPeer is the id of a thread row's peer.
+func threadPeer(t map[string]any) string {
+	ref, _ := t["peer"].(map[string]any)
+	id, _ := ref["id"].(string)
+	return id
 }

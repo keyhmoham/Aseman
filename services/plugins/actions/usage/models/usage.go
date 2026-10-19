@@ -31,6 +31,33 @@ type Usage struct {
 	// Cost is the credits charged for this usage (best-effort; 0 when the node
 	// has no priced provider for the bot's model).
 	Cost int64 `db:"cost" json:"cost,omitempty"`
+	// DecisionIn and DecisionOut are the tokens the node's decision model used
+	// for this request's decisions, and Decision what it charged (ledger
+	// units, already inside Cost). All zero when the decision model was not
+	// called.
+	DecisionIn  int64 `db:"decision_in" json:"decision_in,omitempty"`
+	DecisionOut int64 `db:"decision_out" json:"decision_out,omitempty"`
+	Decision    int64 `db:"decision" json:"decision,omitempty"`
+	// ImageCount, ImageIn and ImageOut are the images the node's image model
+	// made for this request and the tokens it reported, ImageModel which model
+	// ("Provider / model"). What they cost is Images (inside Cost).
+	ImageCount int64  `db:"image_count" json:"image_count,omitempty"`
+	ImageIn    int64  `db:"image_in" json:"image_in,omitempty"`
+	ImageOut   int64  `db:"image_out" json:"image_out,omitempty"`
+	ImageModel string `db:"image_model" json:"image_model,omitempty"`
+}
+
+// MemoryUsage is one settlement of what a project's agent memory used: the
+// memory models are charged to the project in batches, not per request, so
+// this is a project-level line and is kept apart from the per-request usage.
+type MemoryUsage struct {
+	entity.Entity
+	SpaceID identity.ID `db:"space_id" json:"space_id"`
+	// Tokens is every token of the settled calls, TokensIn the input part.
+	Tokens   int64 `db:"tokens" json:"tokens"`
+	TokensIn int64 `db:"tokens_in" json:"tokens_in"`
+	// Cost is what was charged, in ledger units.
+	Cost int64 `db:"cost" json:"cost"`
 }
 
 type Delta = metrics.Delta
@@ -38,6 +65,7 @@ type UsageCtx = metrics.UsageCtx
 
 const (
 	KindAsk      = metrics.KindAsk
+	KindChat     = metrics.KindChat
 	KindMention  = metrics.KindMention
 	KindMessage  = metrics.KindMessage
 	KindSandbox  = metrics.KindSandbox

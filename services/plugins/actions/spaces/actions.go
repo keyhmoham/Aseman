@@ -218,6 +218,8 @@ func (a *spaceDeleteAction) Handle(ctx context.Context, req *api.ActionRequest) 
 	// and permanently terminate its sandbox together.
 	_ = a.s.SandboxDestroy(ctx, id)
 	a.s.revokeSpaceInvitations(ctx, id)
+	a.s.deleteSpaceRoutines(ctx, id)
+	a.s.deleteSpaceFiles(ctx, id)
 	_ = a.s.R.Delete(ctx, "spaces", id)
 	return helper.JSON(map[string]any{"ok": true})
 }

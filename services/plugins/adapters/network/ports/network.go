@@ -23,14 +23,18 @@ const (
 
 // Request is a protocol normalized request.
 type Request struct {
-	Method  Method            `json:"method"`
-	Route   string            `json:"route"`
-	Path    string            `json:"path,omitempty"`
-	Query   url.Values        `json:"query,omitempty"`
-	Header  map[string]string `json:"header,omitempty"`
-	Body    []byte            `json:"body,omitempty"`
-	Peer    string            `json:"peer,omitempty"` // remote address
-	RawBody io.ReadCloser     `json:"-"`
+	Method Method            `json:"method"`
+	Route  string            `json:"route"`
+	Path   string            `json:"path,omitempty"`
+	Query  url.Values        `json:"query,omitempty"`
+	Header map[string]string `json:"header,omitempty"`
+	Body   []byte            `json:"body,omitempty"`
+	Peer   string            `json:"peer,omitempty"` // remote address
+	// Host is the host the caller addressed (the Host header, or the one a
+	// trusted proxy forwarded), without a port. Adapters without a notion of
+	// host leave it empty.
+	Host    string        `json:"host,omitempty"`
+	RawBody io.ReadCloser `json:"-"`
 }
 
 // Response is a protocol normalized response.
@@ -39,6 +43,11 @@ type Response struct {
 	Status int               `json:"status"`
 	Header map[string]string `json:"header,omitempty"`
 	Body   []byte            `json:"body,omitempty"`
+	// Stream, when set, replaces Body: the adapter sends the headers and then
+	// calls it with a writer whose every Write reaches the caller at once (a
+	// server-sent event stream). Adapters that cannot stream (tcp, websocket)
+	// collect what it writes into Body.
+	Stream func(ctx context.Context, w io.Writer) error `json:"-"`
 }
 
 // Handler processes a normalized request.

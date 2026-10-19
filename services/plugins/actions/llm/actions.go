@@ -15,7 +15,7 @@ import (
 func AdminActions(s *Service) []api.Action {
 	return []api.Action{
 		&providersListAction{s: s}, &providerSetAction{s: s},
-		&providerDeleteAction{s: s}, &kindsAction{s: s},
+		&providerDeleteAction{s: s}, &kindsAction{s: s}, &importVercelAction{s: s},
 	}
 }
 
@@ -142,4 +142,27 @@ func (a *catalogAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 		return nil, err
 	}
 	return helper.JSON(map[string]any{"providers": list, "price_unit": "credits per 1M tokens"})
+}
+
+type importVercelAction struct{ s *Service }
+
+func (a *importVercelAction) Meta() api.ActionMeta {
+	return api.ActionMeta{Namespace: "llm", Name: "llm_import_vercel", Summary: "Import Vercel AI Gateway's models into a Vercel provider at Vercel's price plus a markup"}
+}
+func (a *importVercelAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+	if err := a.s.requireAdmin(req); err != nil {
+		return nil, err
+	}
+	var in struct {
+		ProviderID string  `json:"provider_id"`
+		Markup     float64 `json:"markup"`
+	}
+	if err := helper.Decode(req, &in); err != nil {
+		return nil, err
+	}
+	res, err := a.s.ImportVercel(ctx, in.ProviderID, in.Markup)
+	if err != nil {
+		return nil, err
+	}
+	return helper.JSON(res)
 }

@@ -4,6 +4,7 @@ package testutil
 import (
 	authschema "github.com/tradera/tradera/plugins/actions/auth/schema"
 	botsschema "github.com/tradera/tradera/plugins/actions/bots/schema"
+	developer "github.com/tradera/tradera/plugins/actions/developer/models"
 	federationschema "github.com/tradera/tradera/plugins/actions/federation/schema"
 	financeschema "github.com/tradera/tradera/plugins/actions/finance/schema"
 	llm "github.com/tradera/tradera/plugins/actions/llm/models"
@@ -33,6 +34,7 @@ func Models() []database.Model {
 	models = append(models, market.Models()...)
 	models = append(models, usage.Models()...)
 	models = append(models, llm.Models()...)
+	models = append(models, developer.Models()...)
 	seen := make(map[string]bool)
 	unique := make([]database.Model, 0, len(models))
 	for _, m := range models {

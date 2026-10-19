@@ -17,6 +17,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -76,11 +77,24 @@ func (a *Adapter) Open(ctx context.Context, c filesystem.Config) error {
 	if c.Region != "" {
 		opts = append(opts, awsconfig.WithRegion(c.Region))
 	}
+	// Keys for this store alone (options), else the AWS environment's.
+	if id, secret := c.Options["access_key_id"], c.Options["secret_access_key"]; id != "" && secret != "" {
+		opts = append(opts, awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(id, secret, "")))
+	}
 	cfgAWS, err := awsconfig.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
 		return errs.Wrap(errs.CodePlugin, err, "load aws config")
 	}
-	a.client = s3.NewFromConfig(cfgAWS)
+	a.client = s3.NewFromConfig(cfgAWS, func(o *s3.Options) {
+		if c.Endpoint != "" {
+			// S3-compatible stores (Cloudflare R2, MinIO) address the bucket in the path.
+			o.UsePathStyle = true
+		}
+		// Only send and check the checksums an operation requires: stores that are
+		// not AWS reject the newer default trailing checksums.
+		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
+	})
 	a.uploader = manager.NewUploader(a.client)
 	a.bucket = c.Bucket
 	return nil

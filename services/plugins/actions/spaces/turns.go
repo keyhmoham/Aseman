@@ -373,13 +373,37 @@ func (s *Service) executeTurn(parent context.Context, t turn.Turn) {
 		policy.RequestScope = t.ID.String()
 	}
 	execution := vmm.WithExecution(usage.WithRequestID(helper.WithActor(ctx, t.ActorID), t.ID.String()), policy)
+	// What the person asked for authorises image/file output for this turn. It is
+	// set here, from the submitted prompt, because the execution above already
+	// names the actor, and deliverToAgent only derives intent when it does not.
+	execution = vmm.WithRequestIntent(execution, prompt, make([]vmm.FileAttachment, len(t.Attachments)))
+	// Where the turn's time goes is recorded on the turn (admin project log). The
+	// wait in the queue came first; the rest is reported by the work itself.
+	execution, tracer := vmm.WithTracer(execution)
+	tracer.Add("queue", "waiting for a worker and the room", t.CreatedAt, t.StartedAt.Sub(t.CreatedAt))
 	// Each agent turn bills the turn's actor itself (runAgentTurn).
 	_, runErr := s.DeliverMentions(execution, t.SpaceID, t.RoomID, msg)
 	close(stop)
 	<-renewDone
 	finishCtx := context.WithoutCancel(parent)
 	var current turn.Turn
-	if e = s.R.Get(finishCtx, "room_turns", t.ID, &current); e != nil || current.Status != "running" {
+	if e = s.R.Get(finishCtx, "room_turns", t.ID, &current); e != nil {
+		return
+	}
+	rawSpans := tracer.Spans()
+	spans := make([]turn.Span, 0, len(rawSpans))
+	for _, sp := range rawSpans {
+		spans = append(spans, turn.Span{Name: sp.Name, Detail: sp.Detail, Start: sp.Start, Ms: sp.Ms})
+	}
+	if current.Status != "running" {
+		// turn_cancel changes the row before it cancels this context. Preserve the
+		// completed trace after the worker unwinds, without changing the cancelled
+		// outcome or its original end time.
+		if current.Status == "cancelled" && len(spans) > 0 {
+			current.Spans = spans
+			current.UpdatedAt = time.Now().UTC()
+			_, _ = s.R.CompareAndSwap(finishCtx, "room_turns", t.ID.String(), map[string]any{"status": "cancelled"}, &current)
+		}
 		return
 	}
 	current.Status = "done"
@@ -393,5 +417,6 @@ func (s *Service) executeTurn(parent context.Context, t turn.Turn) {
 	}
 	current.EndedAt = time.Now().UTC()
 	current.UpdatedAt = current.EndedAt
+	current.Spans = spans
 	_, _ = s.R.CompareAndSwap(finishCtx, "room_turns", t.ID.String(), map[string]any{"status": "running"}, &current)
 }

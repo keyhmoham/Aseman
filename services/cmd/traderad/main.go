@@ -11,6 +11,11 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	// The node's container has no system timezone database (it is a minimal
+	// image), and time.LoadLocation("Europe/London") would fail in it: a
+	// person's timezone could not be read, and a routine "every day at 9am" could
+	// not be scheduled. This carries the IANA database inside the binary.
+	_ "time/tzdata"
 
 	"github.com/tradera/tradera/internal/app"
 	"github.com/tradera/tradera/plugins/config"

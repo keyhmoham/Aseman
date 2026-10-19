@@ -16,6 +16,6 @@ func NewPlugin() api.Plugin {
 		r := repo.New(d.Kernel)
 		log := d.Logger
 		s := &Service{K: d.Kernel, R: r, L: log, M: &metasvc.Service{K: d.Kernel, R: r}}
-		return module.Instance{Models: schema.Models(), Service: s, Actions: BuildActions(s)}, nil
+		return module.Instance{Models: schema.Models(), Service: s, Mount: s.encryptLegacyDirects, Actions: BuildActions(s)}, nil
 	})
 }

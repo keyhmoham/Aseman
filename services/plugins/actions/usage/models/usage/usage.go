@@ -34,6 +34,7 @@ func RequestIDFrom(ctx context.Context) string {
 // Kind labels the interaction that produced the usage.
 const (
 	KindAsk      = "ask"      // direct ask to an agent
+	KindChat     = "chat"     // an agent answering in a person's chat (no room)
 	KindMention  = "mention"  // agent triggered by a room chat mention
 	KindMessage  = "message"  // direct message to a bot
 	KindSandbox  = "sandbox"  // shared sandbox command execution
@@ -54,17 +55,30 @@ type UsageCtx struct {
 type Delta struct {
 	TokensIn  int64
 	TokensOut int64
-	Images    int64
+	// Images is the priced cost of generated images in ledger units (the image
+	// model's price per image and/or per token), not a count of images.
+	Images int64
+	// ImageCount, ImageIn and ImageOut are what the image model made and the
+	// tokens it reported (0 for a model priced per image), and ImageModel which
+	// model ("Provider / model"), for the admin log.
+	ImageCount int64
+	ImageIn    int64
+	ImageOut   int64
+	ImageModel string
 	// Decision is what the node's decision model charged for the agent's
 	// decisions (tool selection and checks), already priced in ledger units
 	// with the decision model's own token prices.
 	Decision int64
-	Cost     int64
+	// DecisionIn and DecisionOut are the decision model's own tokens (not part
+	// of TokensIn/TokensOut, which are the agent model's), for the admin log.
+	DecisionIn  int64
+	DecisionOut int64
+	Cost        int64
 }
 
 // Zero reports whether no tokens or images were consumed.
 func (d Delta) Zero() bool {
-	return d.TokensIn <= 0 && d.TokensOut <= 0 && d.Images <= 0 && d.Decision <= 0
+	return d.TokensIn <= 0 && d.TokensOut <= 0 && d.Images <= 0 && d.Decision <= 0 && d.DecisionIn <= 0 && d.DecisionOut <= 0
 }
 
 // Summary renders a compact, human-readable usage footer for an agent's reply,
@@ -90,8 +104,9 @@ func (d Delta) Summary() string {
 		if d.TokensIn > 0 || d.TokensOut > 0 {
 			b = append(b, " · "...)
 		}
-		b = appendInt(b, d.Images)
-		b = append(b, " image(s)"...)
+		// Images holds what the images cost (already priced, in ledger units,
+		// part of Cost), not how many there were: show that images were made.
+		b = append(b, "images"...)
 	}
 	if d.Cost > 0 {
 		// Cost is in ledger units (1,000,000 per USD); people see credits
@@ -100,8 +115,15 @@ func (d Delta) Summary() string {
 		if d.Cost < unitsPerCredit {
 			b = append(b, " · <1 credit"...)
 		} else {
+			// To a tenth of a credit, rounded: 18,000 units is "≈1.8 credits",
+			// not "≈1" (cutting the fraction off hid almost half of it).
+			tenths := (d.Cost + unitsPerCredit/20) / (unitsPerCredit / 10)
 			b = append(b, " · ≈"...)
-			b = appendInt(b, d.Cost/unitsPerCredit)
+			b = appendInt(b, tenths/10)
+			if tenths%10 != 0 {
+				b = append(b, '.')
+				b = appendInt(b, tenths%10)
+			}
 			b = append(b, " credits"...)
 		}
 	}

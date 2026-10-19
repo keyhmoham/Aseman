@@ -267,13 +267,14 @@ func (s *Service) UploadFile(ctx context.Context, caller, spaceID, roomID identi
 	if err != nil {
 		return nil, err
 	}
-	if err := fs.Put(ctx, id.String(), bytes.NewReader(data), int64(len(data)), mimeType); err != nil {
+	key := projectFileKey(spaceID, id)
+	if err := fs.Put(ctx, key, bytes.NewReader(data), int64(len(data)), mimeType); err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC()
 	file := &filedata.File{Entity: entity.Entity{ID: id, CreatedAt: now, UpdatedAt: now},
 		OwnerID: caller, SpaceID: spaceID, RoomID: roomID, Name: name,
-		Mime: mimeType, Size: int64(len(data)), StorageKey: id.String()}
+		Mime: mimeType, Size: int64(len(data)), StorageKey: key}
 	if err := s.R.CreateID(ctx, "files", id, file); err != nil {
 		return nil, err
 	}

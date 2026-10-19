@@ -66,3 +66,15 @@ func TestComputerTimeIsMeteredFromWhenItWokeAndAdvances(t *testing.T) {
 		t.Fatalf("an asleep computer was charged %v", d)
 	}
 }
+
+func TestOnlyAMachineNoProjectUsesCanBeTerminatedFromTheAdminList(t *testing.T) {
+	if err := strayTerminateError(map[string]any{"id": "sb-1", "machine": "sbx-gone"}); err != nil {
+		t.Fatalf("a stray machine was refused: %v", err)
+	}
+	if err := strayTerminateError(map[string]any{"id": "sb-2", "project": map[string]any{"id": "p", "name": "Shop"}}); err == nil {
+		t.Fatal("a project's machine must be stopped from its project")
+	}
+	if err := strayTerminateError(nil); err == nil {
+		t.Fatal("a machine that is not running cannot be terminated")
+	}
+}

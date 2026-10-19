@@ -35,6 +35,8 @@ type Service struct {
 	K Kernel
 	R *repo.Repo
 	L *logger.Logger
+	// VercelURL overrides Vercel AI Gateway's model list (tests).
+	VercelURL string
 }
 
 // NewService builds the service.
@@ -199,7 +201,7 @@ func cleanModels(in []llmprovider.Model) ([]llmprovider.Model, error) {
 		if seen[m.ID] {
 			return nil, errs.InvalidArgument("duplicate model " + m.ID)
 		}
-		if m.InputPrice < 0 || m.OutputPrice < 0 {
+		if m.InputPrice < 0 || m.OutputPrice < 0 || negativeUnits(m.Units) {
 			return nil, errs.InvalidArgument("model prices must not be negative")
 		}
 		caps, err := cleanCapabilities(m.ID, m.Capabilities)
@@ -225,7 +227,11 @@ func cleanCapabilities(id string, in []string) ([]string, error) {
 		if c == "" || seen[c] {
 			continue
 		}
-		if c != llmprovider.CapabilityChat && c != llmprovider.CapabilityDecision && c != llmprovider.CapabilityEmbedding {
+		known := false
+		for _, k := range llmprovider.Capabilities {
+			known = known || c == k
+		}
+		if !known {
 			return nil, errs.InvalidArgument("unknown model capability " + c)
 		}
 		seen[c] = true
@@ -409,4 +415,16 @@ func (s *Service) SeedIfEmpty(ctx context.Context, owner identity.ID, in Provide
 		return false, err
 	}
 	return true, nil
+}
+
+func negativeUnits(u *llmprovider.UnitPrices) bool {
+	if u == nil {
+		return false
+	}
+	for _, v := range u.SecondBy {
+		if v < 0 {
+			return true
+		}
+	}
+	return u.Image < 0 || u.Second < 0 || u.Character < 0 || u.Search < 0
 }

@@ -5,7 +5,9 @@ import "github.com/tradera/tradera/plugins/adapters/database/ports"
 func f(name string, k database.Kind) database.Field { return database.Field{Name: name, Kind: k} }
 
 // Models belongs to this namespace and is registered by its plugin lifecycle.
-func Models() []database.Model { return []database.Model{llmProviders(), llmDecision(), llmMemory()} }
+func Models() []database.Model {
+	return []database.Model{llmProviders(), llmDecision(), llmMemory(), llmImage()}
+}
 
 func llmProviders() database.Model {
 	return database.Model{

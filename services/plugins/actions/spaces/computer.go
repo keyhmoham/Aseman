@@ -16,6 +16,7 @@ import (
 	"github.com/tradera/tradera/plugins/actions/support/helper"
 	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
 	"path"
+	"slices"
 	"strings"
 )
 
@@ -72,6 +73,8 @@ func (s *Service) computerAction(ctx context.Context, req *api.ActionRequest) (*
 		}
 	case "sleep":
 		_, e = s.SandboxStop(ctx, sp)
+	case "forget_logins":
+		e = s.forgetBrowserLogins(ctx, sp)
 	case "replace":
 		if _, ok := s.sandboxBotID(ctx, sp); !ok {
 			_, e = s.SandboxStart(ctx, sp)
@@ -106,6 +109,49 @@ func (s *Service) computerAction(ctx context.Context, req *api.ActionRequest) (*
 		"idle_timeout_sec": int64(sandboxIdleTTL.Seconds()), "desktop": desktop,
 	})
 }
+
+// browserProfileDir is where the desktop's browser keeps its cookies and
+// logins, on the project's own disk so they outlive a sleeping or rebuilt
+// computer (see desktop.sh). It is a live session: no file tool shows it.
+const browserProfileDir = "/workspace/.tradera/browser-profile"
+
+// inBrowserProfile reports whether a cleaned workspace path is the browser's
+// saved logins or inside them.
+func inBrowserProfile(target string) bool {
+	return target == browserProfileDir || strings.HasPrefix(target, browserProfileDir+"/")
+}
+
+// forgetBrowserLogins erases the browser's saved logins, awake or asleep.
+func (s *Service) forgetBrowserLogins(ctx context.Context, sp identity.ID) error {
+	id, ok := s.sandboxBotID(ctx, sp)
+	if !ok {
+		return nil // no computer yet: nothing was ever saved
+	}
+	rec, e := s.Bots.GetBot(ctx, id)
+	if e != nil {
+		return e
+	}
+	if rec.Status == bot.StatusRunning {
+		out, e := s.SandboxExec(ctx, sp, desktopInstallCommand()+" && tradera-desktop forget-logins")
+		if e != nil {
+			return e
+		}
+		if !strings.HasPrefix(out, "exit=0") {
+			return errs.New(errs.CodeUnavailable, fmt.Sprint(out))
+		}
+		return nil
+	}
+	writer, ok := s.K.VMMFor(vmm.Type(rec.VMType)).(vmm.WorkspaceWriter)
+	if !ok {
+		return errs.New(errs.CodeUnavailable, "Start the computer first: this provider cannot erase files while it sleeps.")
+	}
+	_ = s.Bots.EnsureVM(ctx, rec)
+	if e := writer.DeleteWorkspace(ctx, rec.VMID, strings.TrimPrefix(browserProfileDir, "/workspace/")); e != nil && errs.CodeOf(e) != errs.CodeNotFound {
+		return e
+	}
+	return nil
+}
+
 func workspacePath(p string) (string, error) {
 	clean := path.Clean("/workspace/" + strings.TrimPrefix(p, "/"))
 	if clean != "/workspace" && !strings.HasPrefix(clean, "/workspace/") {
@@ -132,6 +178,9 @@ func (s *Service) sandboxFilesAction(ctx context.Context, req *api.ActionRequest
 	if e != nil {
 		return nil, e
 	}
+	if inBrowserProfile(target) {
+		return nil, errs.Permission("the browser's saved logins are not files you can open")
+	}
 	// An agent's request carries its turn's limits (a person's has none).
 	if policy := vmm.ExecutionFrom(ctx); policy.NoSandbox {
 		return nil, errs.Permission("sandbox access is disabled for this request")
@@ -144,9 +193,9 @@ func (s *Service) sandboxFilesAction(ctx context.Context, req *api.ActionRequest
 	}
 	id, ok := s.sandboxBotID(ctx, sp)
 	if !ok {
-		// To an agent, a project that has never had a computer simply has no
-		// files yet: nothing to create one for.
-		if !write && req.Caller.Kind == "bot" {
+		// A project that has never had a computer simply has no files yet — to
+		// an agent and to a person alike. Looking is no reason to create one.
+		if !write {
 			if in.Operation == "list" {
 				return helper.JSON(map[string]any{"items": []any{}})
 			}
@@ -172,6 +221,9 @@ func (s *Service) sandboxFilesAction(ctx context.Context, req *api.ActionRequest
 			if in.Operation == "list" {
 				entries, e := reader.ListWorkspace(ctx, rec.VMID, strings.TrimPrefix(strings.TrimPrefix(target, "/workspace"), "/"))
 				if e == nil {
+					if target == path.Dir(browserProfileDir) {
+						entries = slices.DeleteFunc(entries, func(en vmm.WorkspaceEntry) bool { return path.Join(target, en.Name) == browserProfileDir })
+					}
 					return helper.JSON(map[string]any{"items": entries})
 				}
 				if errs.CodeOf(e) == errs.CodeNotFound {
@@ -241,7 +293,7 @@ func (s *Service) sandboxFilesAction(ctx context.Context, req *api.ActionRequest
 p=json.loads(base64.b64decode('` + base64.StdEncoding.EncodeToString(b) + `')); target=os.path.realpath(p['path']); root=os.path.realpath('/workspace')
 if target!=root and not target.startswith(root+'/'): raise ValueError('Path escapes workspace')
 op=p['op']
-if op=='list': result={'items':[{'name':f,'type':'dir' if os.path.isdir(os.path.join(target,f)) else 'file','size':os.path.getsize(os.path.join(target,f))} for f in sorted(os.listdir(target))]}
+if op=='list': result={'items':[{'name':f,'type':'dir' if os.path.isdir(os.path.join(target,f)) else 'file','size':os.path.getsize(os.path.join(target,f))} for f in sorted(os.listdir(target)) if os.path.join(target,f)!='/workspace/.tradera/browser-profile']}
 elif op=='read':
  data=open(target,'rb').read(67108865)
  if len(data)>67108864: raise ValueError('File too large')

@@ -205,6 +205,11 @@ type LineCharger interface {
 // The returned error is propagated so the caller can hard-fail the action when
 // the customer cannot pay.
 func (s *Service) BillUsage(ctx context.Context, customer, botID identity.ID, seconds int64, desc string) error {
+	// Charging must outlive the work: a person stopping a turn cancels its
+	// context, and on a cancelled context every wallet and ledger write fails,
+	// so what the turn had already used went unpaid. The values (who pays, the
+	// metered usage) are kept; only the cancellation is dropped.
+	ctx = context.WithoutCancel(ctx)
 	if s.Biller == nil {
 		return nil
 	}
@@ -251,6 +256,11 @@ func (s *Service) BillUsage(ctx context.Context, customer, botID identity.ID, se
 // attributed to the space/room/bot/request in [uc]. It returns the metered
 // delta so callers can append the token summary to the agent's reply.
 func (s *Service) BillAndRecordUsage(ctx context.Context, customer, botID identity.ID, seconds int64, desc string, uc usage.UsageCtx) (usage.Delta, error) {
+	// Charging must outlive the work: a person stopping a turn cancels its
+	// context, and on a cancelled context every wallet and ledger write fails,
+	// so what the turn had already used went unpaid. The values (who pays, the
+	// metered usage) are kept; only the cancellation is dropped.
+	ctx = context.WithoutCancel(ctx)
 	if s.Biller == nil {
 		return usage.Delta{}, nil
 	}
@@ -293,6 +303,11 @@ func (s *Service) BillAndRecordUsage(ctx context.Context, customer, botID identi
 // orchestrator for the agents it dispatches inside a workflow). It returns the
 // delta so callers can append the token summary to an agent's reply.
 func (s *Service) RecordUsage(ctx context.Context, actor, botID identity.ID, uc usage.UsageCtx) (usage.Delta, error) {
+	// Charging must outlive the work: a person stopping a turn cancels its
+	// context, and on a cancelled context every wallet and ledger write fails,
+	// so what the turn had already used went unpaid. The values (who pays, the
+	// metered usage) are kept; only the cancellation is dropped.
+	ctx = context.WithoutCancel(ctx)
 	rec, err := s.GetBot(ctx, botID)
 	if err != nil {
 		return usage.Delta{}, err
@@ -359,6 +374,11 @@ func (s *Service) usageDelta(ctx context.Context, rec *bot.Bot) (usage.Delta, er
 // VM (used by tradera to log its own orchestrator brain's token usage, which
 // is not tied to a bot VM meter).
 func (s *Service) RecordDelta(ctx context.Context, actor, botID identity.ID, d usage.Delta, uc usage.UsageCtx) error {
+	// Charging must outlive the work: a person stopping a turn cancels its
+	// context, and on a cancelled context every wallet and ledger write fails,
+	// so what the turn had already used went unpaid. The values (who pays, the
+	// metered usage) are kept; only the cancellation is dropped.
+	ctx = context.WithoutCancel(ctx)
 	if d.Zero() || uc.SpaceID.IsZero() {
 		return nil
 	}
@@ -374,6 +394,8 @@ func (s *Service) RecordDelta(ctx context.Context, actor, botID identity.ID, d u
 		BotName: uc.BotName, ActorID: actor,
 		RequestID: uc.RequestID, Kind: uc.Kind,
 		TokensIn: d.TokensIn, TokensOut: d.TokensOut, Images: d.Images, Cost: d.Cost,
+		DecisionIn: d.DecisionIn, DecisionOut: d.DecisionOut, Decision: d.Decision,
+		ImageCount: d.ImageCount, ImageIn: d.ImageIn, ImageOut: d.ImageOut, ImageModel: d.ImageModel,
 	})
 }
 

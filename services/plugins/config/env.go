@@ -17,13 +17,26 @@ type ModalConfig = modalconfig.ModalConfig
 // sets them so the config file only carries node identity, Google sign-in and
 // the Modal credentials.
 const (
-	EnvNodeName      = "TRADERA_NODE_NAME"
-	EnvNodeURL       = "TRADERA_NODE_URL"
-	EnvHTTPAddr      = "TRADERA_HTTP_ADDR"
+	EnvNodeName = "TRADERA_NODE_NAME"
+	EnvNodeURL  = "TRADERA_NODE_URL"
+	EnvHTTPAddr = "TRADERA_HTTP_ADDR"
+	// EnvDeveloperHost is the host of the developer API (api.example.com):
+	// the node serves only the developer routes on it, and its /v1/... is that
+	// API. Empty: the developer API is not exposed on its own host.
+	EnvDeveloperHost = "TRADERA_DEVELOPER_HOST"
 	EnvDatabaseDSN   = "TRADERA_DATABASE_DSN" // postgres://...
 	EnvNomadURL      = "TRADERA_NOMAD_URL"
 	EnvDockerHost    = "TRADERA_DOCKER_HOST"
 	EnvFilesDir      = "TRADERA_FILES_DIR"
+	// The node's files (attachments, developer storage) go to an S3-compatible
+	// bucket (Cloudflare R2, AWS S3, MinIO) instead of the node's disk when a
+	// bucket is set. The endpoint is the store's S3 API address (for R2:
+	// https://<account>.r2.cloudflarestorage.com); the region is "auto" for R2.
+	EnvS3Bucket      = "TRADERA_S3_BUCKET"
+	EnvS3Endpoint    = "TRADERA_S3_ENDPOINT"
+	EnvS3Region      = "TRADERA_S3_REGION"
+	EnvS3AccessKey   = "TRADERA_S3_ACCESS_KEY_ID"
+	EnvS3SecretKey   = "TRADERA_S3_SECRET_ACCESS_KEY"
 	EnvWasmDir       = "TRADERA_WASM_DIR"
 	EnvLogDir        = "TRADERA_LOG_DIR"
 	EnvGoogleClient  = "TRADERA_GOOGLE_CLIENT_ID"
@@ -142,8 +155,15 @@ func (c *Config) ApplyEnv() {
 			setOption(p, "runtime_secret", os.Getenv(EnvAgentRuntimeSecret))
 		case "http":
 			setIf(p, "addr", os.Getenv(EnvHTTPAddr))
+			setOption(p, "developer_host", os.Getenv(EnvDeveloperHost))
 		case "local":
 			setIf(p, "base_path", os.Getenv(EnvFilesDir))
+		case "s3":
+			for key, env := range map[string]string{"bucket": EnvS3Bucket, "endpoint": EnvS3Endpoint, "region": EnvS3Region} {
+				setIf(p, key, os.Getenv(env))
+			}
+			setOption(p, "access_key_id", os.Getenv(EnvS3AccessKey))
+			setOption(p, "secret_access_key", os.Getenv(EnvS3SecretKey))
 		case "wasm":
 			setOption(p, "module_root", os.Getenv(EnvWasmDir))
 		case "modal":
@@ -172,12 +192,22 @@ func (c *Config) AutoAdapters() []PluginSpec {
 		add("memory", nil)
 	}
 	add("local-cache", nil)
-	add("local", map[string]any{"base_path": envOr(EnvFilesDir, "./data/files")})
+	if bucket := os.Getenv(EnvS3Bucket); bucket != "" {
+		region := envOr(EnvS3Region, "auto")
+		add("s3", map[string]any{"bucket": bucket, "endpoint": os.Getenv(EnvS3Endpoint), "region": region,
+			"options": map[string]any{"access_key_id": os.Getenv(EnvS3AccessKey), "secret_access_key": os.Getenv(EnvS3SecretKey)}})
+	} else {
+		add("local", map[string]any{"base_path": envOr(EnvFilesDir, "./data/files")})
+	}
 	addr := c.HTTP.Addr
 	if addr == "" {
 		addr = ":8080"
 	}
-	add("http", map[string]any{"addr": addr})
+	httpConfig := map[string]any{"addr": addr}
+	if host := os.Getenv(EnvDeveloperHost); host != "" {
+		httpConfig["options"] = map[string]any{"developer_host": host}
+	}
+	add("http", httpConfig)
 	if u := os.Getenv(EnvNomadURL); u != "" {
 		nomad := map[string]any{"nomad_url": u}
 		options := map[string]any{}

@@ -16,6 +16,6 @@ func NewPlugin() api.Plugin {
 		r := repo.New(d.Kernel)
 		log := d.Logger
 		s := NewService(d.Kernel, r, log)
-		return module.Instance{Service: s, Mount: s.encryptLegacyKeys, Actions: append(append(append(CatalogActions(s), AdminActions(s)...), DecisionActions(s)...), MemoryActions(s)...), Bootstrap: s.Bootstrap, Models: append(schema.Models(), models.Models()...)}, nil
+		return module.Instance{Service: s, Mount: s.encryptLegacyKeys, Actions: append(append(append(append(CatalogActions(s), AdminActions(s)...), DecisionActions(s)...), MemoryActions(s)...), ImageActions(s)...), Bootstrap: s.Bootstrap, Models: append(schema.Models(), models.Models()...)}, nil
 	})
 }

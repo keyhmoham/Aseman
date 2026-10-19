@@ -38,6 +38,8 @@ func (a *Adapter) serveDecision(ctx context.Context, req *network.Request) (*net
 	if s == nil {
 		return openAIError(401, "invalid or expired agent turn token"), nil
 	}
+	defer s.begin()()
+	defer vmm.Trace(s.base, "decision", "")()
 	if err := a.gate(s); err != nil {
 		return openAIError(http.StatusPaymentRequired, err.Error()), nil
 	}
@@ -110,6 +112,11 @@ func decisionURL(base string) string {
 // the turn carries the fraction and meters whole units as they add up.
 func (a *Adapter) meterDecision(s *session, provider vmm.ProviderConfig, in, out int64) {
 	cost := (float64(in)*provider.InputPrice + float64(out)*provider.OutputPrice) / 1e6
+	// The tokens are recorded on the turn even when the model is free, so the
+	// admin log shows that the decision model ran.
+	if in > 0 || out > 0 {
+		vmm.AddInvocationUsage(s.base, usage.Delta{DecisionIn: in, DecisionOut: out})
+	}
 	if cost <= 0 {
 		return
 	}

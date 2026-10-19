@@ -176,14 +176,24 @@ func (s *Service) financialAccount(ctx context.Context, req *api.ActionRequest) 
 	if e = s.R.List(ctx, "ledger", database.Filter{OrderBy: "created_at", Asc: false}, &entries); e != nil {
 		return nil, e
 	}
+	lapsing, e := s.grantsByEntry(ctx, req.Caller.ID)
+	if e != nil {
+		return nil, e
+	}
 	transactions := []map[string]any{}
 	var earned, spent, deposits, receivedTransfers, sentTransfers int64
 	for _, l := range entries {
 		if l.FromID != req.Caller.ID && l.ToID != req.Caller.ID {
 			continue
 		}
+		// A mint records who created the credits, not who paid them: the
+		// operator is no sender (their balance did not fall), and a grant to
+		// someone else is not in the operator's own activity.
+		if l.Type == wallet.EntryMint && l.ToID != req.Caller.ID {
+			continue
+		}
 		change := l.Amount
-		if l.FromID == req.Caller.ID {
+		if l.FromID == req.Caller.ID && l.Type != wallet.EntryMint {
 			change = -l.Amount
 			if l.Type != wallet.EntryPoolLock && l.Type != wallet.EntryPoolFree {
 				spent += l.Amount
@@ -203,7 +213,11 @@ func (s *Service) financialAccount(ctx context.Context, req *api.ActionRequest) 
 				sentTransfers += l.Amount
 			}
 		}
-		transactions = append(transactions, map[string]any{"id": l.ID.String(), "type": l.Type, "amount": change, "from_id": l.FromID.String(), "to_id": l.ToID.String(), "description": l.Description, "created_at": l.CreatedAt})
+		tx := map[string]any{"id": l.ID.String(), "type": l.Type, "amount": change, "from_id": l.FromID.String(), "to_id": l.ToID.String(), "description": l.Description, "created_at": l.CreatedAt}
+		if g, ok := lapsing[l.Seq]; ok && l.Type == wallet.EntryMint {
+			withGrantExpiry(tx, l.Description, g)
+		}
+		transactions = append(transactions, tx)
 	}
 	var records []models.Record
 	if e = s.R.List(ctx, "financial_records", database.Filter{Equal: map[string]any{"owner": req.Caller.ID.String(), "kind": "payout"}}, &records); e != nil {

@@ -82,8 +82,11 @@ def openai_model(agent: AgentDef, gateway: Gateway) -> BaseChatModel:
     # Streamed, so the node can show the answer in the room as it is written
     # (it reads the stream; this runtime still gets each response whole).
     # TRADERA_STREAM=0 turns that off for a provider that cannot stream.
+    # The node owns provider deadlines and returns a precise first-event or
+    # stream-idle failure. Retrying the whole agent step here used to hide that
+    # failure and could turn one dead stream into several minutes of silence.
     model = ChatOpenAI(model=agent.model or "default", base_url=gateway.llm_base_url, api_key=gateway.token,
-                       use_responses_api=False, timeout=900, max_retries=2,
+                       use_responses_api=False, timeout=330, max_retries=0,
                        streaming=os.environ.get("TRADERA_STREAM", "1") != "0", **kwargs)
     if agent.context_window:
         try:

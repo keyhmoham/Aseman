@@ -139,3 +139,40 @@ func (s *Service) expireGrant(ctx context.Context, g models.Record) error {
 		return tx.Update(ctx, "financial_records", g.ID, &rec)
 	})
 }
+
+// grantsByEntry is the caller's lapsing grants, by the ledger entry that added them.
+func (s *Service) grantsByEntry(ctx context.Context, owner identity.ID) (map[int64]models.Record, error) {
+	var records []models.Record
+	if err := s.R.List(ctx, "financial_records", database.Filter{Equal: map[string]any{"owner": owner.String(), "kind": grantKind}}, &records); err != nil {
+		return nil, err
+	}
+	out := make(map[int64]models.Record, len(records))
+	for _, r := range records {
+		out[amountOf(r.Data["ledger_seq"])] = r
+	}
+	return out, nil
+}
+
+// withGrantExpiry adds a lapsing grant's expiry to its line in the person's
+// activity. The published apps print `description` as it is, so the text
+// carries the expiry to them without a new build; newer clients read the
+// fields and show `base_description` beside a badge of their own.
+func withGrantExpiry(tx map[string]any, desc string, g models.Record) {
+	raw, _ := g.Data["expires_at"].(string)
+	at, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return
+	}
+	base := desc
+	if base == "" || base == "mint" {
+		base = "Added by Tradera"
+	}
+	note := "expires " + at.UTC().Format("2 Jan 2006")
+	if g.Status == grantExpired {
+		note = "expired " + at.UTC().Format("2 Jan 2006")
+	}
+	tx["grant_status"] = g.Status
+	tx["expires_at"] = at.UTC().Format(time.RFC3339)
+	tx["base_description"] = base
+	tx["description"] = base + " · " + note
+}

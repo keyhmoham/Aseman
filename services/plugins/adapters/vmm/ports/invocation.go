@@ -31,7 +31,15 @@ func AddInvocationUsage(ctx context.Context, d usage.Delta) {
 		u.Delta.TokensIn += d.TokensIn
 		u.Delta.TokensOut += d.TokensOut
 		u.Delta.Images += d.Images
+		u.Delta.ImageCount += d.ImageCount
+		u.Delta.ImageIn += d.ImageIn
+		u.Delta.ImageOut += d.ImageOut
+		if d.ImageModel != "" {
+			u.Delta.ImageModel = d.ImageModel
+		}
 		u.Delta.Decision += d.Decision
+		u.Delta.DecisionIn += d.DecisionIn
+		u.Delta.DecisionOut += d.DecisionOut
 		u.mu.Unlock()
 	}
 }

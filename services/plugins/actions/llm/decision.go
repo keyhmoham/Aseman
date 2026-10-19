@@ -134,7 +134,7 @@ func (s *Service) decisionView(ctx context.Context) (map[string]any, error) {
 		}
 		decision := []llmprovider.Model{}
 		for _, m := range modelsView(p) {
-			if m.Decision() {
+			if m.Decision() && !m.Disabled {
 				decision = append(decision, m)
 			}
 		}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/tradera/tradera/internal/plugins/api"
+	"github.com/tradera/tradera/internal/plugins/bridge"
 	"github.com/tradera/tradera/internal/plugins/entity"
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/errs"
@@ -336,6 +337,12 @@ func (a *dmSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	to, err := identity.Parse(in.To)
 	if err != nil {
 		return nil, err
+	}
+	// A direct chat either side blocked takes no messages (the spaces
+	// namespace keeps who blocked whom, with the conversation's room).
+	var blocked bool
+	if err := bridge.Invoke(ctx, a.s.K, "spaces", "DirectBlocked", []any{ctx, req.Caller.ID, to}, &blocked); err == nil && blocked {
+		return nil, errs.Permission("You can't message this person.")
 	}
 	id, err := identity.New(a.s.K.NodeID())
 	if err != nil {

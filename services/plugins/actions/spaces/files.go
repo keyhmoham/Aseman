@@ -227,7 +227,7 @@ func (s *Service) enrichMessages(ctx context.Context, msgs []message.Message) []
 
 // messageToMap serializes a message to its JSON map form.
 func messageToMap(m *message.Message) map[string]any {
-	return map[string]any{
+	out := map[string]any{
 		"id":             m.ID.String(),
 		"space_id":       m.SpaceID.String(),
 		"room_id":        m.RoomID.String(),
@@ -240,6 +240,10 @@ func messageToMap(m *message.Message) map[string]any {
 		"created_at":     m.CreatedAt,
 		"updated_at":     m.UpdatedAt,
 	}
+	if !m.EditedAt.IsZero() {
+		out["edited_at"] = m.EditedAt
+	}
+	return out
 }
 
 // UploadFile stores a file into a space/room on behalf of [caller] and returns

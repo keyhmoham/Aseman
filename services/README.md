@@ -435,7 +435,7 @@ The platform's own APIs are the agents' transport:
 
 | what | transport |
 |---|---|
-| people ↔ agents | room messages (`spaces.message_send` / `message_list`) and direct chats: a one-room space per pair (`spaces.direct_open`, listed with project rooms by `spaces.chat_list`); `users.dm_send` / `dm_list` still work and mirror into that room |
+| people ↔ agents | room messages (`spaces.message_send` / `message_list`) and direct chats: a one-room space per pair (`spaces.direct_open`, listed with project rooms by `spaces.chat_list`, pinned chats first); `users.dm_send` / `dm_list` still work and mirror into that room. A direct chat with oneself is Saved Messages. Any room: `message_edit` and `message_delete` by the sender (in a project a manager can delete any message), `typing_set`, `chat_pin`, `message_report` (a copy of the last messages goes to the admins: `admin_chat_reports`, `admin_chat_report_resolve`); a direct chat only: `chat_clear` (deleted for the caller until a newer message) and `direct_block` (neither side can write). `message_list` carries `typing` and, for a direct chat, `peer_seen_at`, `blocked` and `can_send` |
 | lead ↔ subagents (and any agent ↔ agent) | room messages: the delegating agent mentions the agent it hands work to; the agent's answer is a message whose `reply_to` is the hand-off |
 | agents → tools | `spaces.ask`: the shared sandbox (`raw` shell commands), tool and miniapp bots, and platform tools (`tool` + `args`: files, images, previews, routines) |
 | work logs and live status | `spaces.agent_log` (log messages in the room + the room's live activity) |

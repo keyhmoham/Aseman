@@ -47,7 +47,7 @@ func BuildActions(s *Service) []api.Action {
 		&fileUploadAction{s: s}, &fileDownloadAction{s: s}, &fileGetAction{s: s},
 		&fileDeleteAction{s: s}, &fileListAction{s: s},
 		&kvSetAction{s: s}, &kvGetAction{s: s}, &kvListAction{s: s}, &kvDeleteAction{s: s},
-	}, append(clientActions(s), directActions(s)...)...), agentActions(s)...)
+	}, append(append(clientActions(s), directActions(s)...), chatActions(s)...)...), agentActions(s)...)
 }
 
 // --- spaces ---
@@ -982,6 +982,9 @@ func (a *msgSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	if in.Body == "" && len(in.Attachments) == 0 {
 		return nil, errs.InvalidArgument("body or attachments required")
 	}
+	if blocked, byMe := a.s.directBlock(ctx, spID, req.Caller.ID); blocked {
+		return nil, blockError(byMe)
+	}
 	in.Mentions = a.s.directMentions(ctx, spID, req.Caller.ID, in.Mentions)
 	// An agent handing work to agents is refused up front when the chain is
 	// already as deep as it may go, so the sender hears it instead of waiting
@@ -1012,6 +1015,7 @@ func (a *msgSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	if err := a.s.R.CreateID(ctx, "messages", id, msg); err != nil {
 		return nil, err
 	}
+	setTyping(roomID, req.Caller.ID, false) // the message is written
 	a.s.notifyRoomMessage(msg)
 	// Deliver the message to the space's agents: mentioned agents are
 	// triggered to respond, others record it as conversation history.
@@ -1082,6 +1086,16 @@ func (a *msgListAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 		filter.GreaterThan = map[string]any{"created_at": in.After.UTC()}
 		filter.Asc = true
 	}
+	// A direct chat the caller deleted for themselves starts again after.
+	sp, _ := a.s.GetSpace(ctx, spID)
+	direct := sp != nil && sp.Direct
+	tree := map[string]any{}
+	if direct {
+		tree = a.s.chatTree(ctx, spID)
+		if cleared := clearedIn(tree, req.Caller.ID); !cleared.IsZero() && cleared.After(in.After) {
+			filter.GreaterThan = map[string]any{"created_at": cleared.UTC()}
+		}
+	}
 	var msgs []message.Message
 	if err := a.s.R.List(ctx, "messages", filter, &msgs); err != nil {
 		return nil, err
@@ -1102,12 +1116,35 @@ func (a *msgListAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	if agent, detail, ok := a.s.RoomActivity(roomID); ok {
 		working, workingDetail = agent, detail
 	}
-	return helper.JSON(map[string]any{
+	out := map[string]any{
 		"messages":       a.s.enrichMessages(ctx, msgs),
 		"has_more":       hasMore,
 		"working":        working,
 		"working_detail": workingDetail,
-	})
+	}
+	people := a.s.participants()
+	typingNow := []map[string]any{}
+	for _, id := range typingIn(roomID, req.Caller.ID) {
+		typingNow = append(typingNow, people.get(ctx, id))
+	}
+	out["typing"] = typingNow
+	if direct {
+		// How far the other side has read (the client marks the caller's
+		// messages up to it as seen), and whether anyone can write.
+		peers := a.s.directPeers(ctx, spID, req.Caller.ID)
+		out["saved"] = len(peers) == 0
+		mine := blockedIn(tree, req.Caller.ID)
+		theirs := false
+		for _, p := range peers {
+			theirs = theirs || blockedIn(tree, p)
+			if seen := a.s.SeenAt(ctx, p, spID); !seen.IsZero() {
+				out["peer_seen_at"] = seen
+			}
+		}
+		out["blocked"] = mine
+		out["can_send"] = !mine && !theirs
+	}
+	return helper.JSON(out)
 }
 
 type msgDeleteAction struct{ s *Service }
@@ -1132,10 +1169,21 @@ func (a *msgDeleteAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 	if err := a.s.R.Get(ctx, "messages", msgID, msg); err != nil {
 		return nil, err
 	}
-	if err := a.s.Can(ctx, spID, msg.RoomID, req.Caller.ID, permission.SpaceManageMessages); err != nil {
+	if msg.SpaceID != spID {
+		return nil, errs.NotFound("message not found")
+	}
+	// The sender takes back their own message (for everyone); a manager of
+	// a project can delete anyone's. A direct chat has no manager: whoever
+	// opened it does not moderate the other side.
+	sp, err := a.s.GetSpace(ctx, spID)
+	if err != nil {
 		return nil, err
 	}
-	if msg.SenderID != req.Caller.ID {
+	if msg.SenderID == req.Caller.ID {
+		if err := a.s.Can(ctx, spID, msg.RoomID, req.Caller.ID, permission.RoomSend); err != nil {
+			return nil, err
+		}
+	} else if sp.Direct || a.s.Can(ctx, spID, msg.RoomID, req.Caller.ID, permission.SpaceManageMessages) != nil {
 		return nil, errs.Permission("only the sender or a manager can delete")
 	}
 	_ = a.s.R.Delete(ctx, "messages", msgID)

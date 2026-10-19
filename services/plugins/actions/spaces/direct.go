@@ -60,8 +60,11 @@ func (s *Service) openDirect(ctx context.Context, caller, peer identity.ID) (*sp
 		return nil, nil, false, errs.Unauthenticated("authentication required")
 	}
 	peer = s.botAccountOf(ctx, peer)
-	if peer.IsZero() || peer == caller {
-		return nil, nil, false, errs.InvalidArgument("choose someone else to talk to")
+	if peer.IsZero() {
+		return nil, nil, false, errs.InvalidArgument("choose someone to talk to")
+	}
+	if peer == caller {
+		return s.openSaved(ctx, caller)
 	}
 	var callerAcc, peerAcc account.Account
 	if err := s.R.Get(ctx, "accounts", caller, &callerAcc); err != nil {
@@ -106,6 +109,36 @@ func (s *Service) openDirect(ctx context.Context, caller, peer identity.ID) (*sp
 	}
 	s.importDirectHistory(ctx, sp.ID, room.ID, caller, peer)
 	return sp, room, true, nil
+}
+
+// openSaved is a person's Saved Messages: a direct chat with themselves, for
+// notes, links and files. Like any room, agents added to it answer when
+// mentioned.
+func (s *Service) openSaved(ctx context.Context, caller identity.ID) (*space.Space, *space.Room, bool, error) {
+	var acc account.Account
+	if err := s.R.Get(ctx, "accounts", caller, &acc); err != nil {
+		return nil, nil, false, errs.NotFound("account not found")
+	}
+	if acc.IsBot() {
+		return nil, nil, false, errs.InvalidArgument("choose someone else to talk to")
+	}
+	key := directKey(caller, caller)
+	directMu.Lock()
+	defer directMu.Unlock()
+	created := false
+	sp := s.findDirect(ctx, key)
+	if sp == nil {
+		var err error
+		if sp, err = s.createSpace(ctx, caller, "Saved Messages", "Your notes", key); err != nil {
+			return nil, nil, false, err
+		}
+		created = true
+	}
+	room, err := s.generalRoom(ctx, sp.ID)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	return sp, room, created, nil
 }
 
 func (s *Service) findDirect(ctx context.Context, key string) *space.Space {
@@ -163,6 +196,9 @@ func (s *Service) PostDirect(ctx context.Context, from, to identity.ID, body str
 	if err != nil || created {
 		// A new conversation already imported the message with its history.
 		return err
+	}
+	if blocked, byMe := s.directBlock(ctx, sp.ID, from); blocked {
+		return blockError(byMe)
 	}
 	_, err = s.storeRoomMessage(ctx, sp.ID, room.ID, from, body, message.KindMessage, "")
 	return err
@@ -250,6 +286,11 @@ func (s *Service) chatList(ctx context.Context, req *api.ActionRequest) (*api.Ac
 			continue
 		}
 		seen := s.SeenAt(ctx, req.Caller.ID, sp.ID)
+		tree := s.chatTree(ctx, sp.ID)
+		cleared := time.Time{}
+		if sp.Direct {
+			cleared = clearedIn(tree, req.Caller.ID)
+		}
 		for _, room := range rooms {
 			row := map[string]any{
 				"kind": "room", "space_id": sp.ID.String(), "space_name": sp.Name,
@@ -260,9 +301,32 @@ func (s *Service) chatList(ctx context.Context, req *api.ActionRequest) (*api.Ac
 				row["kind"] = "direct"
 				if peers := s.directPeers(ctx, sp.ID, req.Caller.ID); len(peers) > 0 {
 					row["peer"] = people.get(ctx, peers[0])
+					mine, theirs := blockedIn(tree, req.Caller.ID), blockedIn(tree, peers[0])
+					if mine {
+						row["blocked"] = true
+					}
+					if mine || theirs {
+						row["can_send"] = false
+					}
+				} else {
+					row["saved"] = true
+					row["peer"] = people.get(ctx, req.Caller.ID)
 				}
 			}
-			if last := s.lastRoomMessage(ctx, room.ID); last != nil {
+			if at := pinnedIn(tree, req.Caller.ID, room.ID); !at.IsZero() {
+				row["pinned_at"] = at
+			}
+			if len(typingIn(room.ID, req.Caller.ID)) > 0 {
+				row["typing"] = true
+			}
+			last := s.lastRoomMessage(ctx, room.ID)
+			if last != nil && !cleared.IsZero() && !last.CreatedAt.After(cleared) {
+				last = nil // deleted for the caller: it returns with a newer message
+				if row["pinned_at"] == nil {
+					continue
+				}
+			}
+			if last != nil {
 				body := last.Body
 				if r := []rune(body); len(r) > 200 {
 					body = string(r[:200])
@@ -292,7 +356,16 @@ func (s *Service) chatList(ctx context.Context, req *api.ActionRequest) (*api.Ac
 			chats = append(chats, row)
 		}
 	}
+	// Pinned chats first, the latest pinned on top; the rest newest first.
 	sort.SliceStable(chats, func(i, j int) bool {
+		pi, _ := chats[i]["pinned_at"].(time.Time)
+		pj, _ := chats[j]["pinned_at"].(time.Time)
+		if pi.IsZero() != pj.IsZero() {
+			return !pi.IsZero()
+		}
+		if !pi.IsZero() {
+			return pi.After(pj)
+		}
 		a, _ := chats[i]["updated_at"].(time.Time)
 		b, _ := chats[j]["updated_at"].(time.Time)
 		return a.After(b)

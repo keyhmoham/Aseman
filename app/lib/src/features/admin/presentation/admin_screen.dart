@@ -85,6 +85,14 @@ class _AppScreenState extends State<AdminScreen> {
             _Call('spaces', 'admins_space_set'),
             _Call('finance', 'budget_set'),
           ]),
+      _Page('Chat reports', 'Messages and chats people reported',
+          Icons.flag_outlined, Icons.flag_rounded,
+          calls: [
+            _Call('spaces', 'admin_chat_reports', {'status': 'open'})
+          ],
+          actions: [
+            _Call('spaces', 'admin_chat_report_resolve'),
+          ]),
     ]),
     _Section('Catalog', [
       _Page('Agents', 'Create, price and approve agents',
@@ -201,7 +209,8 @@ class _AppScreenState extends State<AdminScreen> {
           ]),
       _Page('Sandboxes', 'Machines running at the provider',
           Icons.computer_outlined, Icons.computer_rounded,
-          calls: [_Call('spaces', 'admin_sandboxes')]),
+          calls: [_Call('spaces', 'admin_sandboxes')],
+          actions: [_Call('spaces', 'admin_terminate_sandbox')]),
       _Page('Storage', 'Volumes and project files', Icons.storage_outlined,
           Icons.storage_rounded,
           calls: [_Call('spaces', 'admin_storage')]),
@@ -436,6 +445,8 @@ class _AppScreenState extends State<AdminScreen> {
         'plugins_stop',
         'plugins_set_active',
         'update',
+        'admin_chat_report_resolve',
+        'admin_terminate_sandbox',
       };
       if (mutations.contains(action)) {
         _toast(adminActionDone(namespace, action));

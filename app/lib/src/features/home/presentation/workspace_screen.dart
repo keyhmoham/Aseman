@@ -30,6 +30,7 @@ import '../../desk/presentation/designed_window.dart';
 import '../../desk/presentation/desk_controller.dart';
 import '../../desk/presentation/floating_desk.dart';
 import '../../desk/presentation/web_page_view.dart';
+import '../../messenger/presentation/report_dialog.dart';
 import '../../miniapps/domain/sandbox_explorer_frontend.dart';
 import '../../miniapps/presentation/miniapp_sandbox_screen.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
@@ -249,7 +250,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   }
 
   Future<void> _sendRoomMessage(
-      String body, List<String> mentions, List<String> attachments) async {
+      String body, List<String> mentions, List<String> attachments,
+      {String replyTo = ''}) async {
     final sp = _spaceFor(workspace);
     final r = room == null
         ? null
@@ -257,7 +259,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     if (sp == null || r == null || r.isEmpty) return;
     try {
       await widget.dependencies.service.sendRoomMessage(sp.id, r.first.id, body,
-          mentions: mentions, attachments: attachments);
+          mentions: mentions, attachments: attachments, replyTo: replyTo);
       if (!mounted) return;
       // Bump so the left-panel file library (Docs/GIFs/Media/Audio) reloads and
       // shows the newly attached files.
@@ -270,6 +272,32 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       }
       rethrow;
     }
+  }
+
+  // Changing, deleting and reporting a message of the open room, then
+  // reloading it so the change shows at once.
+  Future<void> _messageChange(Future<void> Function() change) async {
+    try {
+      await change();
+      if (room != null) await _loadRoomMessages(room!);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Could not change it: $e')));
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _editRoomMessage(RoomMessage m, String body) => _messageChange(
+      () => widget.dependencies.service.editRoomMessage(m.id, body));
+
+  Future<void> _deleteRoomMessage(RoomMessage m) => _messageChange(
+      () => widget.dependencies.service.deleteRoomMessage(m.spaceId, m.id));
+
+  Future<void> _reportRoomMessage(RoomMessage m) async {
+    await reportToAdmins(context, widget.dependencies.service,
+        spaceId: m.spaceId, roomId: m.roomId, messageId: m.id);
   }
 
   Future<void> _createRoom() async {
@@ -577,7 +605,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                           mentionable: spaceBots
                                               .where((b) => b.isAgent)
                                               .toList(),
-                                          onSend: _sendRoomMessage))),
+                                          onSend: _sendRoomMessage,
+                                          onEdit: _editRoomMessage,
+                                          onDelete: _deleteRoomMessage,
+                                          onReport: _reportRoomMessage,
+                                          canModerate: _canManageTasks))),
                         ]));
               }))
             ])),
@@ -623,6 +655,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                       canManageTasks: _canManageTasks,
                       mentionable: spaceBots.where((b) => b.isAgent).toList(),
                       onSend: _sendRoomMessage,
+                      onEdit: _editRoomMessage,
+                      onDelete: _deleteRoomMessage,
+                      onReport: _reportRoomMessage,
+                      canModerate: _canManageTasks,
                       flat: true,
                       topContentInset: 62),
             ])),

@@ -10,7 +10,8 @@ import '../../fake_tradera_service.dart';
 
 /// Records what the messenger sends, and installs the direct chat's agent.
 class _MessengerService extends FakeTraderaService {
-  final sent = <({String space, String body, List<String> mentions})>[];
+  final sent =
+      <({String space, String body, List<String> mentions, String replyTo})>[];
 
   @override
   Future<List<Bot>> fetchSpaceBots(String spaceId) async =>
@@ -30,10 +31,13 @@ class _MessengerService extends FakeTraderaService {
   @override
   Future<RoomMessage> sendRoomMessage(
       String spaceId, String roomId, String body,
-      {List<String> mentions = const [], List<String> attachments = const []}) {
-    sent.add((space: spaceId, body: body, mentions: mentions));
+      {List<String> mentions = const [],
+      List<String> attachments = const [],
+      String replyTo = ''}) {
+    sent.add(
+        (space: spaceId, body: body, mentions: mentions, replyTo: replyTo));
     return super.sendRoomMessage(spaceId, roomId, body,
-        mentions: mentions, attachments: attachments);
+        mentions: mentions, attachments: attachments, replyTo: replyTo);
   }
 }
 
@@ -117,5 +121,151 @@ void main() {
     expect(service.sent.single.mentions, ['bot-alpha']);
     // The read cursor follows the open chat.
     expect(service.seen, contains(FakeTraderaService.agentDirectId));
+  });
+
+  const me = '00000000000000010000000000000001';
+  const maya = '00000000000000010000000000000042';
+  const mayaRoom = '${FakeTraderaService.directId}/d1';
+
+  RoomMessage msg(String id, String sender, String body, int minute,
+          {String replyTo = '', DateTime? editedAt}) =>
+      RoomMessage(
+          id: id,
+          spaceId: FakeTraderaService.directId,
+          roomId: 'd1',
+          senderId: sender,
+          body: body,
+          createdAt: DateTime(2026, 3, 4, 9, minute),
+          replyTo: replyTo,
+          editedAt: editedAt);
+
+  Future<void> openMaya(WidgetTester tester) async {
+    await tester.tap(find.text('Maya Chen'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('a direct chat shows replies, edits, typing and what was seen',
+      (tester) async {
+    final service = await openMessenger(tester);
+    service.roomMessages[mayaRoom] = [
+      msg('m1', maya, 'Desk review tomorrow?', 1),
+      msg('m2', me, 'Yes, at ten', 2, replyTo: 'm1'),
+      msg('m3', me, 'Bring the charts', 3,
+          editedAt: DateTime(2026, 3, 4, 9, 4)),
+    ];
+    service.chatState[FakeTraderaService.directId] = RoomChatPage(
+        typing: const ['Maya Chen'], peerSeenAt: DateTime(2026, 3, 4, 9, 2));
+    await openMaya(tester);
+    // The reply quotes what it answers; the edit says so.
+    expect(find.text('Desk review tomorrow?'), findsNWidgets(2));
+    expect(find.textContaining('edited ·'), findsOneWidget);
+    expect(find.text('Maya Chen is typing…'), findsOneWidget);
+    // Maya read up to the reply, not the later message.
+    expect(find.byIcon(Icons.done_all_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.done_rounded), findsOneWidget);
+  });
+
+  testWidgets('replying, editing and deleting go through the message menu',
+      (tester) async {
+    final service = await openMessenger(tester);
+    service.roomMessages[mayaRoom] = [
+      msg('m1', maya, 'Desk review tomorrow?', 1),
+      msg('m2', me, 'Yes, at tem', 2),
+    ];
+    await openMaya(tester);
+
+    await tester.longPress(find.text('Desk review tomorrow?'));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit'), findsNothing, reason: 'not my message');
+    await tester.tap(find.text('Reply'));
+    await tester.pumpAndSettle();
+    expect(find.text('Reply to Maya Chen'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, 'Sure');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pumpAndSettle();
+    expect(service.sent.single.replyTo, 'm1');
+    expect(find.text('Reply to Maya Chen'), findsNothing);
+
+    await tester.longPress(find.text('Yes, at tem'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit message'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, 'Yes, at ten');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pumpAndSettle();
+    expect(service.chatCalls, contains('edit:m2'));
+    expect(find.text('Yes, at ten'), findsOneWidget);
+
+    await tester.longPress(find.text('Yes, at ten'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete for everyone'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(service.chatCalls, contains('delete:m2'));
+    expect(find.text('Yes, at ten'), findsNothing);
+  });
+
+  testWidgets('someone else\'s message is reported with a reason',
+      (tester) async {
+    final service = await openMessenger(tester);
+    service.roomMessages[mayaRoom] = [msg('m1', maya, 'Send me your seed', 1)];
+    await openMaya(tester);
+    await tester.longPress(find.text('Send me your seed'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete for everyone'), findsNothing,
+        reason: 'nobody moderates the other side of a direct chat');
+    await tester.tap(find.text('Report'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Scam or fraud'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Report'));
+    await tester.pumpAndSettle();
+    expect(service.chatCalls, contains('report:m1:scam'));
+  });
+
+  testWidgets('blocking a chat replaces the composer until it is unblocked',
+      (tester) async {
+    final service = await openMessenger(tester);
+    await openMaya(tester);
+    await tester.tap(find.byTooltip('Chat options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Block'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Block'));
+    await tester.pumpAndSettle();
+    expect(service.chatCalls, contains('block:${FakeTraderaService.directId}'));
+    expect(find.textContaining('You blocked this chat'), findsOneWidget);
+    expect(find.byTooltip('Send'), findsNothing);
+
+    await tester.tap(find.byTooltip('Chat options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Unblock'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Send'), findsOneWidget);
+  });
+
+  testWidgets('a long-pressed chat is pinned to the top of the list',
+      (tester) async {
+    final service = await openMessenger(tester);
+    await tester.longPress(find.text('Atlas Capital').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pin to top'));
+    await tester.pumpAndSettle();
+    expect(service.chatCalls.single, startsWith('pin:'));
+    expect(find.byIcon(Icons.push_pin_rounded), findsOneWidget);
+  });
+
+  testWidgets('Saved Messages opens the chat with oneself', (tester) async {
+    await openMessenger(tester);
+    await tester.tap(find.byTooltip('Saved Messages'));
+    await tester.pumpAndSettle();
+    expect(find.text('Write a note…'), findsOneWidget);
+    expect(find.text('Notes, links and files for yourself'), findsOneWidget);
+    await tester.tap(find.byTooltip('Chat options'));
+    await tester.pumpAndSettle();
+    expect(find.text('Block'), findsNothing);
+    expect(find.text('Report chat'), findsNothing);
   });
 }

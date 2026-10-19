@@ -82,6 +82,8 @@ class RoomMessage {
     this.attachments = const [],
     this.senderName = '',
     this.senderIsAgent = false,
+    this.replyTo = '',
+    this.editedAt,
   });
 
   final String id;
@@ -108,6 +110,14 @@ class RoomMessage {
   final String senderName;
   final bool senderIsAgent;
 
+  /// The message of the room this one answers (empty when none).
+  final String replyTo;
+
+  /// When its sender last changed it (null when never).
+  final DateTime? editedAt;
+
+  bool get edited => editedAt != null;
+
   /// Message pages can rotate at the same length or enrich an existing
   /// attachment. Compare visible content rather than only the oldest ID.
   bool hasSameContentAs(RoomMessage other) =>
@@ -116,6 +126,8 @@ class RoomMessage {
       body == other.body &&
       kind == other.kind &&
       createdAt == other.createdAt &&
+      replyTo == other.replyTo &&
+      editedAt == other.editedAt &&
       _sameList(mentions, other.mentions, (a, b) => a == b) &&
       _sameList(
           attachments,
@@ -149,6 +161,8 @@ class RoomMessage {
         attachments: _attachments(json['attachments']),
         senderName: _senderName(json['sender']),
         senderIsAgent: json['sender'] is Map && json['sender']['kind'] == 'bot',
+        replyTo: json['reply_to'] as String? ?? '',
+        editedAt: DateTime.tryParse(json['edited_at'] as String? ?? ''),
       );
 
   static String _senderName(dynamic sender) {
@@ -280,6 +294,11 @@ class ChatSummary {
     this.unread = 0,
     this.working = false,
     this.role = '',
+    this.pinnedAt,
+    this.saved = false,
+    this.blocked = false,
+    this.canSend = true,
+    this.typing = false,
   });
 
   final String spaceId;
@@ -299,9 +318,59 @@ class ChatSummary {
   /// The caller's role in the chat's space ("owner", "admin", "member", ...).
   final String role;
 
+  /// When the caller pinned the chat to the top of their list (null: not pinned).
+  final DateTime? pinnedAt;
+
+  /// The caller's Saved Messages: the direct chat with themselves.
+  final bool saved;
+
+  /// Whether the caller blocked the other side of a direct chat, and whether
+  /// anyone can write in it (false when either side blocked the other).
+  final bool blocked;
+  final bool canSend;
+
+  /// Whether someone else is typing in it right now.
+  final bool typing;
+
+  bool get pinned => pinnedAt != null;
   bool get canManage => role == 'owner' || role == 'admin';
+
+  /// Whether the caller may delete other people's messages: a project's
+  /// managers may; in a direct chat nobody moderates the other side.
+  bool get canModerate => !direct && canManage;
   String get key => '$spaceId/$roomId';
-  String get title => direct ? (peer?.displayName ?? 'Direct chat') : roomName;
+  String get title => saved
+      ? 'Saved Messages'
+      : direct
+          ? (peer?.displayName ?? 'Direct chat')
+          : roomName;
+
+  ChatSummary copyWith(
+          {DateTime? pinnedAt,
+          bool clearPin = false,
+          bool? blocked,
+          bool? canSend}) =>
+      ChatSummary(
+        spaceId: spaceId,
+        roomId: roomId,
+        direct: direct,
+        spaceName: spaceName,
+        roomName: roomName,
+        peer: peer,
+        lastBody: lastBody,
+        lastSenderId: lastSenderId,
+        lastSenderName: lastSenderName,
+        lastAttachments: lastAttachments,
+        updatedAt: updatedAt,
+        unread: unread,
+        working: working,
+        role: role,
+        pinnedAt: clearPin ? null : pinnedAt ?? this.pinnedAt,
+        saved: saved,
+        blocked: blocked ?? this.blocked,
+        canSend: canSend ?? this.canSend,
+        typing: typing,
+      );
 
   factory ChatSummary.fromJson(Map<String, dynamic> json) {
     final last = json['last'] is Map
@@ -328,6 +397,59 @@ class ChatSummary {
       unread: (json['unread'] as num?)?.toInt() ?? 0,
       working: json['working'] == true,
       role: '${json['role'] ?? ''}',
+      pinnedAt: DateTime.tryParse('${json['pinned_at'] ?? ''}')?.toLocal(),
+      saved: json['saved'] == true,
+      blocked: json['blocked'] == true,
+      canSend: json['can_send'] != false,
+      typing: json['typing'] == true,
     );
   }
+}
+
+/// A room's conversation as `spaces.message_list` reads it for a chat: its
+/// messages, the agent working in it, who is typing and, for a direct chat,
+/// how far the other side has read and whether anyone can write.
+class RoomChatPage {
+  const RoomChatPage({
+    this.messages = const [],
+    this.working = '',
+    this.workingDetail = '',
+    this.typing = const [],
+    this.peerSeenAt,
+    this.blocked = false,
+    this.canSend = true,
+    this.saved = false,
+  });
+
+  final List<RoomMessage> messages;
+  final String working;
+  final String workingDetail;
+
+  /// Display names of the others typing in the room now.
+  final List<String> typing;
+  final DateTime? peerSeenAt;
+  final bool blocked;
+  final bool canSend;
+  final bool saved;
+
+  factory RoomChatPage.fromJson(Map<String, dynamic> json) => RoomChatPage(
+        messages: (json['messages'] as List? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            // Widgets agents once posted into the chat (kind "ui"): tools'
+            // interfaces now open on the room's desk instead.
+            .where((m) => m['kind'] != 'ui')
+            .map(RoomMessage.fromJson)
+            .toList(),
+        working: json['working'] as String? ?? '',
+        workingDetail: json['working_detail'] as String? ?? '',
+        typing: [
+          for (final t in json['typing'] as List? ?? const [])
+            if (t is Map)
+              ChatPeer.fromJson(t.cast<String, dynamic>()).displayName
+        ],
+        peerSeenAt: DateTime.tryParse('${json['peer_seen_at'] ?? ''}'),
+        blocked: json['blocked'] == true,
+        canSend: json['can_send'] != false,
+        saved: json['saved'] == true,
+      );
 }

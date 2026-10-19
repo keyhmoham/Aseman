@@ -55,6 +55,9 @@ class AdminPageContent extends StatefulWidget {
 class _AppPageContentState extends State<AdminPageContent> {
   final search = TextEditingController();
   String filter = 'all';
+
+  /// Which chat reports are listed (the page starts with the open ones).
+  String reportStatus = 'open';
   String sort = 'created';
   bool ascending = false;
   bool live = true;
@@ -182,6 +185,7 @@ class _AppPageContentState extends State<AdminPageContent> {
         'Overview' => _overview(),
         'Users' => _users(),
         'Projects' => _projects(),
+        'Chat reports' => _chatReports(),
         'Agents' => _agents(),
         'Tools' => _tools(),
         'Talent' => _talent(),
@@ -2953,7 +2957,13 @@ class _AppPageContentState extends State<AdminPageContent> {
                       if (_map(row['project']).isNotEmpty)
                         TextButton(
                             onPressed: () => _showProject(_map(row['project'])),
-                            child: const Text('Open project')),
+                            child: const Text('Open project'))
+                      else
+                        TextButton.icon(
+                            onPressed: () => _terminateSandbox(row),
+                            icon: const Icon(Icons.power_settings_new_rounded,
+                                size: 18),
+                            label: const Text('Terminate')),
                     ],
                   ),
               ]);
@@ -3002,6 +3012,198 @@ class _AppPageContentState extends State<AdminPageContent> {
           icon: Icons.folder_rounded,
           padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
           child: list(mine, 'No project computer is running right now.')),
+    ]);
+  }
+
+  Future<void> _terminateSandbox(Map<String, dynamic> row) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.power_settings_new_rounded),
+        title: const Text('Terminate this machine?'),
+        content: Text(
+            '${row['machine'] ?? row['name'] ?? row['id']} runs at the provider '
+            'without a project on this node. Terminating it stops its billing '
+            'and deletes it; this cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Terminate')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget.onDirectAction(
+          'spaces', 'admin_terminate_sandbox', {'id': row['id']});
+    } catch (_) {
+      // The console reports the error.
+    }
+  }
+
+  Widget _chatReports() {
+    final scheme = Theme.of(context).colorScheme;
+    final response = _map(widget.results['spaces.admin_chat_reports']);
+    final reports = _listOfMaps(response['reports']);
+    final open = _integer(response['open']);
+    const statuses = ['open', 'resolved', 'dismissed', 'all'];
+    final status = reportStatus;
+    String person(dynamic ref) {
+      final m = _map(ref);
+      final name = '${m['display_name'] ?? ''}'.trim();
+      final handle = '${m['handle'] ?? ''}'.trim();
+      if (name.isNotEmpty && handle.isNotEmpty) return '$name (@$handle)';
+      return name.isNotEmpty
+          ? name
+          : handle.isNotEmpty
+              ? '@$handle'
+              : 'Unknown';
+    }
+
+    Future<void> resolve(Map<String, dynamic> r, String to) async {
+      try {
+        await widget.onDirectAction('spaces', 'admin_chat_report_resolve',
+            {'id': r['id'], 'status': to});
+      } catch (_) {
+        // The console reports the error.
+      }
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      AdminGrid(maxColumns: 2, children: [
+        AdminStatCard(
+            label: 'Open reports',
+            value: '$open',
+            hint: open == 0
+                ? 'Nothing waits for a decision.'
+                : 'Read the copied messages, then resolve or dismiss.',
+            icon: Icons.flag_rounded,
+            tone: open == 0 ? AppColors.success : AppColors.warning),
+        AdminStatCard(
+            label: 'Shown',
+            value: '${reports.length}',
+            hint: status == 'all' ? 'Every report' : 'Reports $status',
+            icon: Icons.inbox_rounded),
+      ]),
+      const SizedBox(height: 16),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        for (final s in statuses)
+          ChoiceChip(
+            label: Text(s[0].toUpperCase() + s.substring(1)),
+            selected: s == status,
+            onSelected: (_) {
+              setState(() => reportStatus = s);
+              widget.onQuery?.call('spaces.admin_chat_reports', {'status': s});
+            },
+          ),
+      ]),
+      const SizedBox(height: 12),
+      AdminSectionCard(
+        title: 'Reports',
+        icon: Icons.flag_rounded,
+        subtitle:
+            'Each report carries a copy of the messages as they were when it was filed.',
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: reports.isEmpty
+            ? const AdminEmptyState('No reports',
+                'What people report in their chats shows up here.',
+                icon: Icons.flag_outlined)
+            : Column(children: [
+                for (final r in reports)
+                  ExpansionTile(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppShape.control)),
+                    collapsedShape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppShape.control)),
+                    leading: AdminAvatar(person(r['accused']),
+                        icon: Icons.flag_rounded, size: 40),
+                    title: Text(
+                        '${_humanKey('${r['reason'] ?? 'other'}')} · ${r['kind'] == 'message' ? 'a message' : 'a chat'}',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(
+                        'About ${person(r['accused'])} · by ${person(r['reporter'])} · ${_date(r['created_at'])}'),
+                    trailing: AdminStatusPill('${r['status'] ?? 'open'}'),
+                    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                    children: [
+                      AdminKeyValue(
+                          'Where',
+                          r['direct'] == true
+                              ? 'Direct chat'
+                              : '${r['space_name'] ?? 'Room'}'),
+                      if ('${r['note'] ?? ''}'.isNotEmpty)
+                        AdminKeyValue('Note', '${r['note']}'),
+                      if (r['resolved_by'] != null)
+                        AdminKeyValue('Decided by',
+                            '${person(r['resolved_by'])} · ${_date(r['resolved_at'])}'),
+                      const SizedBox(height: 8),
+                      Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('MESSAGES',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  letterSpacing: 1,
+                                  fontWeight: FontWeight.w800,
+                                  color: scheme.onSurfaceVariant))),
+                      const SizedBox(height: 6),
+                      for (final m in _listOfMaps(r['evidence']))
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                              color: '${m['id']}' == '${r['message_id']}'
+                                  ? scheme.errorContainer
+                                  : scheme.surfaceContainerHigh,
+                              borderRadius:
+                                  BorderRadius.circular(AppShape.inner)),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                    '${person(m['sender'])} · ${_date(m['created_at'])}${m['edited_at'] != null ? ' · edited' : ''}',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: scheme.onSurfaceVariant)),
+                                const SizedBox(height: 2),
+                                SelectableText(
+                                    '${m['body'] ?? ''}'.isEmpty
+                                        ? '(${m['attachments'] ?? 0} attachment(s))'
+                                        : '${m['body']}',
+                                    style: const TextStyle(fontSize: 13)),
+                              ]),
+                        ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if ('${r['status']}' == 'open') ...[
+                              OutlinedButton.icon(
+                                  onPressed: () => resolve(r, 'dismissed'),
+                                  icon: const Icon(Icons.do_not_disturb_rounded,
+                                      size: 18),
+                                  label: const Text('Dismiss')),
+                              FilledButton.icon(
+                                  onPressed: () => resolve(r, 'resolved'),
+                                  icon:
+                                      const Icon(Icons.check_rounded, size: 18),
+                                  label: const Text('Mark resolved')),
+                            ] else
+                              OutlinedButton.icon(
+                                  onPressed: () => resolve(r, 'open'),
+                                  icon:
+                                      const Icon(Icons.undo_rounded, size: 18),
+                                  label: const Text('Reopen')),
+                          ]),
+                    ],
+                  ),
+              ]),
+      ),
     ]);
   }
 

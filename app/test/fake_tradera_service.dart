@@ -537,6 +537,99 @@ class FakeTraderaService extends TraderaService {
   @override
   Future<void> markSeen(String spaceId, DateTime at) async => seen.add(spaceId);
 
+  /// What a chat page reads besides its messages, by space id.
+  final Map<String, RoomChatPage> chatState = {};
+
+  /// The room chat actions the UI called, as "action:argument".
+  final List<String> chatCalls = [];
+
+  @override
+  Future<RoomChatPage> fetchRoomChat(String spaceId, String roomId,
+      {int limit = 50}) async {
+    final extra = chatState[spaceId] ?? const RoomChatPage();
+    return RoomChatPage(
+        // A fresh list per read, as the node sends.
+        messages: List.of(roomMessages[spaceId + '/' + roomId] ?? const []),
+        working: workingAgent,
+        workingDetail: workingDetailAgent,
+        typing: extra.typing,
+        peerSeenAt: extra.peerSeenAt,
+        blocked: extra.blocked,
+        canSend: extra.canSend,
+        saved: extra.saved);
+  }
+
+  @override
+  Future<void> editRoomMessage(String messageId, String body) async {
+    chatCalls.add('edit:$messageId');
+    for (final list in roomMessages.values) {
+      final i = list.indexWhere((m) => m.id == messageId);
+      if (i < 0) continue;
+      final m = list[i];
+      list[i] = RoomMessage(
+          id: m.id,
+          spaceId: m.spaceId,
+          roomId: m.roomId,
+          senderId: m.senderId,
+          body: body,
+          createdAt: m.createdAt,
+          replyTo: m.replyTo,
+          editedAt: DateTime.now());
+    }
+  }
+
+  @override
+  Future<void> deleteRoomMessage(String spaceId, String messageId) async {
+    chatCalls.add('delete:$messageId');
+    for (final list in roomMessages.values) {
+      list.removeWhere((m) => m.id == messageId);
+    }
+  }
+
+  @override
+  Future<void> setTyping(String spaceId, String roomId, bool typing) async =>
+      chatCalls.add('typing:$spaceId');
+
+  @override
+  Future<void> pinChat(String spaceId, String roomId, bool pinned) async {
+    chatCalls.add('${pinned ? 'pin' : 'unpin'}:$spaceId');
+    chats = [
+      for (final c in chats)
+        c.spaceId == spaceId && c.roomId == roomId
+            ? (pinned
+                ? c.copyWith(pinnedAt: DateTime.now())
+                : c.copyWith(clearPin: true))
+            : c
+    ];
+  }
+
+  @override
+  Future<void> clearChat(String spaceId) async =>
+      chatCalls.add('clear:$spaceId');
+
+  @override
+  Future<void> blockDirect(String spaceId, bool blocked) async {
+    chatCalls.add('${blocked ? 'block' : 'unblock'}:$spaceId');
+    chatState[spaceId] = RoomChatPage(blocked: blocked, canSend: !blocked);
+  }
+
+  @override
+  Future<void> reportChat(String spaceId, String roomId,
+          {String messageId = '',
+          required String reason,
+          String note = ''}) async =>
+      chatCalls
+          .add('report:${messageId.isEmpty ? spaceId : messageId}:$reason');
+
+  @override
+  Future<ChatSummary> openSaved() async => const ChatSummary(
+      spaceId: '00000000000000010000000000000010',
+      roomId: 's1',
+      direct: true,
+      saved: true,
+      role: 'owner',
+      peer: ChatPeer(id: '00000000000000010000000000000001', handle: 'test'));
+
   /// Simulates the backend "working agent" signal for the room indicator.
   String workingAgent = '';
 
@@ -547,7 +640,8 @@ class FakeTraderaService extends TraderaService {
   Future<RoomMessage> sendRoomMessage(
       String spaceId, String roomId, String body,
       {List<String> mentions = const [],
-      List<String> attachments = const []}) async {
+      List<String> attachments = const [],
+      String replyTo = ''}) async {
     final resolved = <UploadedFile>[];
     for (final id in attachments) {
       for (final f in _files[spaceId] ?? const <UploadedFile>[]) {
@@ -565,6 +659,7 @@ class FakeTraderaService extends TraderaService {
         body: body,
         mentions: mentions,
         attachments: resolved,
+        replyTo: replyTo,
         createdAt: DateTime.now());
     roomMessages.putIfAbsent(spaceId + '/' + roomId, () => []).add(msg);
     return msg;

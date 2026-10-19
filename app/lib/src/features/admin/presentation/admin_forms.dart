@@ -114,6 +114,8 @@ String adminActionDone(String namespace, String action) =>
       'spaces.space_delete': 'Project deleted',
       'spaces.computer': 'Computer updated',
       'spaces.admins_space_set': 'Admins space saved',
+      'spaces.admin_chat_report_resolve': 'Report updated',
+      'spaces.admin_terminate_sandbox': 'Machine terminated',
       'bots.bot_create': 'Agent created',
       'bots.bot_edit': 'Agent saved',
       'bots.bot_delete': 'Agent deleted',

@@ -11,7 +11,7 @@ import 'package:tradera/src/data/services/tradera_service.dart';
 import 'package:tradera/src/domain/models/market_quote.dart';
 import 'package:tradera/src/domain/models/message.dart';
 import 'package:tradera/src/domain/models/room.dart';
-import 'package:tradera/src/features/miniapps/domain/widget_dsl.dart';
+import 'package:tradera/src/features/tools/domain/widget_dsl.dart';
 
 /// Deterministic in-memory `TraderaService` used by widget tests. It stands
 /// in for the backend gateway so tests exercise the real UI with stable data,
@@ -926,11 +926,7 @@ class FakeTraderaService extends TraderaService {
       {String kind = '', int limit = 20, int offset = 0}) async {
     final bots = await fetchBots();
     return bots
-        .where((b) =>
-            kind.isEmpty ||
-            kind.split(',').any((k) => k == b.kind) ||
-            (kind.contains('miniapp') && b.isMiniapp) ||
-            (kind.contains('tool') && b.isTool))
+        .where((b) => kind.isEmpty || kind.split(',').any((k) => k == b.kind))
         .where((b) => b.name.toLowerCase().contains(query.toLowerCase()))
         .skip(offset)
         .take(limit)

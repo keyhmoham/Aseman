@@ -107,7 +107,7 @@ class _McpAppWebViewState extends State<_McpAppWebView> {
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-              'This tool shows its results in its own app, which runs in the web, Android, iOS and macOS versions of Tradera.',
+              'This app shows its results in its own screen, which runs in the web, Android, iOS and macOS versions of Tradera.',
               textAlign: TextAlign.center),
         ),
       );

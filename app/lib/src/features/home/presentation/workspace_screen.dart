@@ -31,15 +31,15 @@ import '../../desk/presentation/desk_controller.dart';
 import '../../desk/presentation/floating_desk.dart';
 import '../../desk/presentation/web_page_view.dart';
 import '../../messenger/presentation/report_dialog.dart';
-import '../../miniapps/domain/sandbox_explorer_frontend.dart';
-import '../../miniapps/presentation/miniapp_sandbox_screen.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import '../../search_feed/presentation/post_editor.dart';
 import '../../search_feed/presentation/rich_post_content.dart';
-import '../../tools/connect/add_mcp_app.dart';
+import '../../tools/connect/add_app.dart';
 import '../../tools/connect/mcp_connect_dialog.dart';
 import '../../tools/data/tools_api.dart';
+import '../../tools/domain/sandbox_explorer_frontend.dart';
 import '../../tools/domain/tool_models.dart';
+import '../../tools/presentation/app_frontend_screen.dart';
 import '../../tools/presentation/mcp_app_view.dart';
 import '../../tools/presentation/tool_frontend_view.dart';
 import '../../tools/presentation/tool_screen.dart';
@@ -123,7 +123,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     } catch (_) {}
   }
 
-  /// Bots explicitly installed in the current workspace. Agents/miniapps/tools
+  /// Bots explicitly installed in the current workspace. Agents and apps
   /// are only shown (and usable) here once added via [addBotToSpace].
   List<Bot> get spaceBots => _spaceBots[workspace] ?? const [];
 
@@ -159,7 +159,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   Future<void> _addAppToWorkspace() async {
     final sp = _spaceFor(workspace);
     if (sp == null) return;
-    final added = await showAddMcpApp(context, widget.dependencies.service,
+    final added = await showAddApp(context, widget.dependencies.service,
         spaceId: sp.id);
     if (added && mounted) await _loadSpaceBots();
   }
@@ -334,7 +334,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     }
   }
 
-  void openMiniapp(Bot bot) {
+  void openApp(Bot bot) {
     final spaceId = _spaceFor(workspace)?.id ?? '';
     if (bot.isUnifiedTool && spaceId.isNotEmpty) {
       // On the desk, as a card window (its dock entry gathers it): a static
@@ -354,15 +354,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
             // A tool, through its static or generated frontend, in this space.
             ? ToolScreen(
                 dependencies: widget.dependencies, bot: bot, spaceId: spaceId)
-            : MiniappSandboxScreen(
+            : AppFrontendScreen(
                 dependencies: widget.dependencies,
                 bot: bot,
                 spaceId: spaceId)));
   }
 
-  /// Opens the shared per-space sandbox as a full file-explorer miniapp. The
+  /// Opens the shared per-space sandbox as a full file-explorer app. The
   /// explorer frontend is installed on the sandbox bot (idempotent) so the
-  /// sandbox tool appears in the workspace Tools library with its UI.
+  /// sandbox appears in the workspace Apps library with its UI.
   Future<void> _openSandboxExplorer() async {
     final sp = _spaceFor(workspace);
     if (sp == null) return;
@@ -381,7 +381,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       final bot = await widget.dependencies.service.fetchBot(botId);
       if (!mounted) return;
       await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => MiniappSandboxScreen(
+          builder: (_) => AppFrontendScreen(
               dependencies: widget.dependencies, bot: bot, spaceId: sp.id)));
     } catch (e) {
       if (!mounted) return;
@@ -494,7 +494,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                           roomId: _currentRoomId,
                           fileRevision: _fileRevision,
                           onTab: (v) => setState(() => libraryTab = v),
-                          onOpenMiniapp: openMiniapp,
+                          onOpenApp: openApp,
                           onOpenSandbox: _openSandboxExplorer,
                           onCreateRoom: _createRoom,
                           onSearch: () => _search(context),
@@ -568,7 +568,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                       fileRevision: _fileRevision,
                                       onTab: (v) =>
                                           setState(() => libraryTab = v),
-                                      onOpenMiniapp: openMiniapp,
+                                      onOpenApp: openApp,
                                       onOpenSandbox: _openSandboxExplorer,
                                       onCreateRoom: _createRoom,
                                       onSearch: () => _search(context),
@@ -829,7 +829,7 @@ class _LibraryPanel extends StatelessWidget {
       this.roomId = '',
       this.fileRevision = 0,
       required this.onTab,
-      this.onOpenMiniapp,
+      this.onOpenApp,
       this.onOpenSandbox,
       this.onCreateRoom,
       this.onSearch,
@@ -854,7 +854,7 @@ class _LibraryPanel extends StatelessWidget {
   final int fileRevision;
   final ValueChanged<int> onTab;
   final ValueChanged<String> openRoom;
-  final ValueChanged<Bot>? onOpenMiniapp;
+  final ValueChanged<Bot>? onOpenApp;
   final VoidCallback? onOpenSandbox;
   final VoidCallback? onCreateRoom;
   final VoidCallback? onSearch;
@@ -876,7 +876,7 @@ class _LibraryPanel extends StatelessWidget {
   static const labels = [
     'Rooms',
     'Agents',
-    'Tools',
+    'Apps',
     'Docs',
     'Links',
     'GIFs',
@@ -1029,21 +1029,25 @@ class _LibraryPanel extends StatelessWidget {
           });
     }
     if (tab == 2) {
-      // Only miniapps/tools explicitly added to this workspace are shown.
-      final tools = spaceBots.where((b) => b.isMiniapp || b.isTool).toList();
-      final candidates = allBots
-          .where((b) =>
-              (b.isMiniapp || b.isTool) && !spaceBots.any((s) => s.id == b.id))
-          .toList();
-      // The shared sandbox is surfaced as a first-class tool: its frontend is
-      // the file-explorer miniapp (Sandbox Explorer).
-      final hasSandbox = onOpenSandbox != null;
+      // Only apps explicitly added to this workspace are shown.
+      final tools = spaceBots.where((b) => b.isTool).toList();
       final addApp = onAddApp;
+      // "Add an app" offers the person's own apps too; the plain picker is
+      // only for when it is not available.
+      final candidates = addApp != null
+          ? const <Bot>[]
+          : allBots
+              .where((b) =>
+                  b.isTool && !spaceBots.any((s) => s.id == b.id))
+              .toList();
+      // The shared sandbox is surfaced as a first-class app: its frontend is
+      // the file explorer (Sandbox Explorer).
+      final hasSandbox = onOpenSandbox != null;
       if (tools.isEmpty && candidates.isEmpty && !hasSandbox && addApp == null) {
         return const _LibraryEmpty(
             icon: Icons.widgets_outlined,
             message:
-                'No tools in this workspace yet — add a miniapp from the market.');
+                'No apps in this workspace yet — add one.');
       }
       return ListView.separated(
           padding: EdgeInsets.zero,
@@ -1065,7 +1069,7 @@ class _LibraryPanel extends StatelessWidget {
             if (addApp != null) index--;
             if (index == tools.length) {
               return _AddBotTile(
-                  label: 'Add tool',
+                  label: 'Add app',
                   icon: Icons.widgets_outlined,
                   candidates: candidates,
                   onAdd: (b) => onAddBot?.call(b));
@@ -1077,7 +1081,7 @@ class _LibraryPanel extends StatelessWidget {
                 icon: Icons.widgets_outlined,
                 dependencies: dependencies,
                 spaceId: spaceId,
-                onTap: () => onOpenMiniapp?.call(bot),
+                onTap: () => onOpenApp?.call(bot),
                 onRemove: onRemoveBot == null ? null : () => onRemoveBot!(bot));
           });
     }
@@ -1390,7 +1394,7 @@ class _LibraryListCard extends StatelessWidget {
       child: InkWell(
           onTap: kind == 1 || kind == 2
               ? () => _openEntityProfile(
-                  context, kind == 1 ? 'Agents' : 'Tools', label, dependencies)
+                  context, kind == 1 ? 'Agents' : 'Apps', label, dependencies)
               : null,
           borderRadius: BorderRadius.circular(15),
           child: Padding(
@@ -1700,7 +1704,7 @@ class _LibraryToolCard extends StatelessWidget {
       child: InkWell(
           onTap: onTap ??
               () => _openEntityProfile(
-                  context, 'Tools', label, dependencies, spaceId),
+                  context, 'Apps', label, dependencies, spaceId),
           borderRadius: BorderRadius.circular(17),
           child: Padding(
               padding: const EdgeInsets.all(10),
@@ -1887,7 +1891,7 @@ class _CenterDesk extends StatelessWidget {
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 360),
             child: Text(
-                'Tool results open here as windows. Ask an agent, or open a tool from the library.',
+                'App results open here as windows. Ask an agent, or open an app from the library.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
           ),
@@ -1970,9 +1974,9 @@ class _AppPinPreview extends StatelessWidget {
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.widgets_outlined, color: scheme.primary, size: 32),
         const SizedBox(height: 8),
-        Text(name.isEmpty ? 'The tool\'s app' : '$name app',
+        Text(name.isEmpty ? 'This app' : name,
             style: const TextStyle(fontWeight: FontWeight.w700)),
-        Text('Opens with the tool\'s own interface',
+        Text('Opens with its own interface',
             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
       ]),
     );
@@ -2392,14 +2396,14 @@ class _SearchPanelState extends State<_SearchPanel>
   static const local = [
     'Users',
     'Agents',
-    'Tools',
+    'Apps',
     'Media',
     'Documents',
     'Links',
     'GIFs',
     'Messages'
   ];
-  static const global = ['Users', 'Agents', 'Tools', 'Posts', 'Workspaces'];
+  static const global = ['Users', 'Agents', 'Apps', 'Posts', 'Workspaces'];
   @override
   void initState() {
     super.initState();
@@ -2521,7 +2525,7 @@ class _SearchSectionNav extends StatelessWidget {
 IconData _sectionIcon(String section) => switch (section) {
       'Users' => Icons.people_outline,
       'Agents' => Icons.smart_toy_outlined,
-      'Tools' => Icons.extension_outlined,
+      'Apps' => Icons.extension_outlined,
       'Media' => Icons.perm_media_outlined,
       'Documents' => Icons.description_outlined,
       'Links' => Icons.link_rounded,
@@ -2674,10 +2678,10 @@ class _SearchResultsState extends State<_SearchResults> {
             .where((n) => n.isNotEmpty && n.toLowerCase().contains(q))
             .toList();
       case 'Agents':
-      case 'Tools':
-        final isTool = widget.section == 'Tools';
+      case 'Apps':
+        final isTool = widget.section == 'Apps';
         if (widget.global) {
-          final kinds = isTool ? 'miniapp,tool' : 'agent';
+          final kinds = isTool ? 'tool' : 'agent';
           final bots = await deps.service
               .searchBots(q, kind: kinds, limit: _pageSize, offset: offset);
           return bots
@@ -2688,7 +2692,7 @@ class _SearchResultsState extends State<_SearchResults> {
         if (space.isEmpty) return const [];
         final sb = await deps.service.fetchSpaceBots(space);
         return sb
-            .where((b) => isTool ? (b.isMiniapp || b.isTool) : b.isAgent)
+            .where((b) => isTool ? b.isTool : b.isAgent)
             .map((b) => b.name)
             .where((n) => n.toLowerCase().contains(q))
             .skip(offset)
@@ -2938,7 +2942,7 @@ class _SearchResultCard extends StatelessWidget {
         'Users' => 'Systematic trader · macro and digital assets',
         'Agents' =>
           'Autonomous market intelligence with configurable permissions',
-        'Tools' => 'Connected trading utility · privacy reviewed',
+        'Apps' => 'Connected app · privacy reviewed',
         'Rooms' =>
           'Active discussion, agents, shared research and live widgets',
         'Workspaces' =>
@@ -2954,7 +2958,7 @@ class _SearchResultCard extends StatelessWidget {
   bool get _hasProfile => const [
         'Users',
         'Agents',
-        'Tools',
+        'Apps',
         'Workspaces',
         'Rooms'
       ].contains(section);
@@ -3023,12 +3027,12 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
       final service = deps.service;
       switch (widget.section) {
         case 'Agents':
-        case 'Tools':
+        case 'Apps':
           var bots = await service.fetchBots();
           var bot = bots
               .where((b) => widget.section == 'Agents'
                   ? b.isAgent
-                  : (b.isMiniapp || b.isTool))
+                  : b.isTool)
               .where((b) => b.name == widget.title)
               .firstOrNull;
           // Agents/tools opened from a workspace tab are space bots; resolve
@@ -3039,7 +3043,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
               bot = sb
                   .where((b) => widget.section == 'Agents'
                       ? b.isAgent
-                      : (b.isMiniapp || b.isTool))
+                      : b.isTool)
                   .where((b) => b.name == widget.title)
                   .firstOrNull;
             } catch (_) {}
@@ -3177,7 +3181,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
         if (mounted) setState(() => _user = updated);
         return;
       }
-      if (widget.section == 'Agents' || widget.section == 'Tools') {
+      if (widget.section == 'Agents' || widget.section == 'Apps') {
         final b = _bot;
         if (b == null) return;
         if (_inSpace) {
@@ -3270,7 +3274,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
   String get singular => switch (widget.section) {
         'Users' => 'Trader',
         'Agents' => 'Agent',
-        'Tools' => 'Tool',
+        'Apps' => 'App',
         'Workspaces' => 'Workspace',
         'Rooms' => 'Room',
         _ => 'Profile'
@@ -3278,7 +3282,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
   IconData get icon => switch (widget.section) {
         'Users' => Icons.person_rounded,
         'Agents' => Icons.smart_toy_rounded,
-        'Tools' => Icons.extension_rounded,
+        'Apps' => Icons.extension_rounded,
         'Workspaces' => Icons.hub_rounded,
         'Rooms' => Icons.forum_rounded,
         _ => Icons.category_rounded
@@ -3331,7 +3335,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
     return switch (widget.section) {
       'Users' => [('—', 'Followers'), ('—', 'Posts')],
       'Agents' => [('—', 'Status'), ('—', 'Installs')],
-      'Tools' => [('—', 'Status'), ('—', 'Installs')],
+      'Apps' => [('—', 'Status'), ('—', 'Installs')],
       'Workspaces' => [('—', 'Members'), ('—', 'Rooms')],
       'Rooms' => [('—', 'Members'), ('—', 'Messages')],
       _ => [('—', 'Activity')]
@@ -3378,7 +3382,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
     return switch (widget.section) {
       'Users' => ['Public profile'],
       'Agents' => ['Agent profile'],
-      'Tools' => ['Tool profile'],
+      'Apps' => ['App profile'],
       'Workspaces' => ['Workspace profile'],
       'Rooms' => ['Room profile'],
       _ => ['Public profile']
@@ -3550,7 +3554,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
     return switch (widget.section) {
       'Users' => 'Trader profile',
       'Agents' => 'Agent profile',
-      'Tools' => 'Tool profile',
+      'Apps' => 'App profile',
       'Workspaces' => 'Workspace profile',
       'Rooms' => 'Room profile',
       _ => 'Tradera profile'
@@ -3560,7 +3564,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
   String _sectionTitle() => switch (widget.section) {
         'Users' => 'Profile',
         'Agents' => 'Runtime',
-        'Tools' => 'Runtime',
+        'Apps' => 'Runtime',
         'Workspaces' => 'Overview',
         'Rooms' => 'Activity',
         _ => 'Highlights'
@@ -3575,7 +3579,7 @@ class _EntityProfileDetail extends StatelessWidget {
   Widget build(BuildContext context) => switch (section) {
         'Users' => const _TraderProfileDetail(),
         'Agents' => const _AgentProfileDetail(),
-        'Tools' => const _ToolProfileDetail(),
+        'Apps' => const _ToolProfileDetail(),
         'Workspaces' => const _WorkspaceProfileDetail(),
         'Rooms' => const _RoomProfileDetail(),
         _ => const SizedBox.shrink()

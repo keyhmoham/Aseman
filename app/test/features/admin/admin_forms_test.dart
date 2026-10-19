@@ -199,8 +199,8 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, 'Value'), 'secret');
     await tester.pump();
     await shot(tester, 'mcp_phone');
-    await tester.ensureVisible(find.text('Add server'));
-    await tester.tap(find.text('Add server'));
+    await tester.ensureVisible(find.text('Add app'));
+    await tester.tap(find.text('Add app'));
     await tester.pumpAndSettle();
     expect(await result, {
       'name': 'Market data',

@@ -29,7 +29,7 @@ class BotFormResult {
   });
 
   final String name;
-  final String kind; // agent | miniapp | tool
+  final String kind; // agent | tool
   final String vmType;
   final String description;
   final String instructions;

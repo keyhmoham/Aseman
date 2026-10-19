@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/widget_dsl.dart';
 
-/// Renders a miniapp [DeskWidgetDsl] inside a room-desk tile. Rows are laid
+/// Renders an app [DeskWidgetDsl] inside a room-desk tile. Rows are laid
 /// out vertically and are kept compact to fit small mosaic tiles. Actions are
 /// executed through [onAction], which returns the backend reply string shown
 /// as a snackbar.

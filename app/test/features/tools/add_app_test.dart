@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/features/tools/connect/add_mcp_app.dart';
+import 'package:tradera/src/data/models/bot.dart';
+import 'package:tradera/src/features/tools/connect/add_app.dart';
 
 import '../../fake_tradera_service.dart';
 
@@ -15,6 +16,35 @@ class _Service extends FakeTraderaService {
       const [
         (id: 'bot-gh', name: 'GitHub', auth: 'user'),
         (id: 'bot-wx', name: 'Weather', auth: ''),
+      ];
+
+  @override
+  Future<List<Bot>> fetchBots({int limit = 50, int offset = 0}) async => const [
+        Bot(
+            id: 'bot-mine',
+            ownerId: 'me',
+            accountId: 'acct-mine',
+            name: 'My Chart',
+            kind: 'tool',
+            vmType: 'elpian',
+            status: 'running'),
+        // Listed in the catalog too: shown once.
+        Bot(
+            id: 'bot-gh',
+            ownerId: 'me',
+            accountId: 'acct-gh',
+            name: 'GitHub',
+            kind: 'tool',
+            vmType: 'mcp',
+            status: 'running'),
+        Bot(
+            id: 'agent-1',
+            ownerId: 'me',
+            accountId: 'acct-a',
+            name: 'Helper',
+            kind: 'agent',
+            vmType: 'deepagents',
+            status: 'running'),
       ];
 
   @override
@@ -50,7 +80,7 @@ Future<Future<bool>> _open(WidgetTester tester, _Service service) async {
     home: Builder(
       builder: (context) => FilledButton(
         onPressed: () =>
-            result = showAddMcpApp(context, service, spaceId: 'space-1'),
+            result = showAddApp(context, service, spaceId: 'space-1'),
         child: const Text('open'),
       ),
     ),
@@ -88,11 +118,23 @@ void main() {
     expect(await result, isTrue);
   });
 
+  testWidgets('the person\'s own apps can be added too, once each',
+      (tester) async {
+    final service = _Service();
+    await _open(tester, service);
+    expect(find.widgetWithText(ListTile, 'My Chart'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'GitHub'), findsOneWidget);
+    expect(find.text('Helper'), findsNothing);
+    await tester.tap(find.widgetWithText(FilledButton, 'Add').at(2));
+    await tester.pumpAndSettle();
+    expect(service.added, ['space-1/bot-mine']);
+  });
+
   testWidgets('a ready-to-use catalog app is added without a sign-in',
       (tester) async {
     final service = _Service();
     final result = await _open(tester, service);
-    await tester.tap(find.widgetWithText(FilledButton, 'Add').last);
+    await tester.tap(find.widgetWithText(FilledButton, 'Add').at(1));
     await tester.pumpAndSettle();
     expect(service.added, ['space-1/bot-wx']);
     expect(find.textContaining('Connect '), findsNothing);

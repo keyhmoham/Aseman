@@ -9,15 +9,15 @@ import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/status_tag.dart';
-import '../../miniapps/presentation/miniapp_sandbox_screen.dart';
 import '../../tools/data/tools_api.dart';
 import '../../tools/domain/tool_models.dart';
+import '../../tools/presentation/app_frontend_screen.dart';
 import '../../tools/presentation/tool_create_form.dart';
 import '../../tools/presentation/tool_screen.dart';
 import 'agent_create_form.dart';
 
 /// "My bots" — a modal panel (dialog on desktop, bottom sheet on mobile) that
-/// shows the agents and tools (miniapps) the signed-in user created, and
+/// shows the agents and apps the signed-in user created, and
 /// keeps them editable after they were created. Follows the app's panel
 /// convention: icon + title header, TabBar, and tabbed content.
 class AgentsScreen extends StatefulWidget {
@@ -62,7 +62,7 @@ class _AgentsScreenState extends State<AgentsScreen> {
   }
 
   List<Bot> get _agents => _bots.where((b) => b.isAgent).toList();
-  List<Bot> get _tools => _bots.where((b) => b.isMiniapp || b.isTool).toList();
+  List<Bot> get _tools => _bots.where((b) => b.isTool).toList();
 
   /// Create an agent or a tool.
   Future<void> _create(String what) =>
@@ -194,7 +194,7 @@ class _AgentsScreenState extends State<AgentsScreen> {
     if (!mounted) return;
     if (!tool.editable) {
       messenger.showSnackBar(
-          const SnackBar(content: Text('Only the tool’s owner can edit it.')));
+          const SnackBar(content: Text('Only the app’s owner can edit it.')));
       return;
     }
     final changes = await showEditToolForm(context, tool);
@@ -248,14 +248,14 @@ class _AgentsScreenState extends State<AgentsScreen> {
     }
   }
 
-  void _openMiniapp(Bot bot) {
+  void _openApp(Bot bot) {
     if (bot.isUnifiedTool) {
       _openTool(bot);
       return;
     }
     Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (_) =>
-            MiniappSandboxScreen(dependencies: widget.dependencies, bot: bot)));
+            AppFrontendScreen(dependencies: widget.dependencies, bot: bot)));
   }
 
   /// A tool runs in a space; from here, the owner's home space (it is added
@@ -268,7 +268,7 @@ class _AgentsScreenState extends State<AgentsScreen> {
     final navigator = Navigator.of(context);
     if (home.isEmpty) {
       messenger.showSnackBar(const SnackBar(
-          content: Text('Open the tool from a workspace it was added to.')));
+          content: Text('Open the app from a workspace it was added to.')));
       return;
     }
     try {
@@ -307,7 +307,7 @@ class _AgentsScreenState extends State<AgentsScreen> {
           PanelHeader(
             icon: Icons.smart_toy_outlined,
             title: 'My bots',
-            subtitle: 'Agents & tools you created across the network',
+            subtitle: 'Agents & apps you created across the network',
             onClose: () => Navigator.pop(context),
             actions: [
               PopupMenuButton<String>(
@@ -323,8 +323,8 @@ class _AgentsScreenState extends State<AgentsScreen> {
                   PopupMenuItem(
                       value: 'tool',
                       child: ListTile(
-                          leading: Icon(Icons.widgets_outlined),
-                          title: Text('Tool'),
+                          leading: Icon(Icons.apps_outlined),
+                          title: Text('App'),
                           subtitle: Text(
                               'A backend and the frontend it is used through'))),
                 ],
@@ -346,8 +346,8 @@ class _AgentsScreenState extends State<AgentsScreen> {
           SegmentedTabBar(
             compact: compact,
             alignment: Alignment.centerLeft,
-            labels: const ['Agents', 'Tools'],
-            icons: const [Icons.smart_toy_outlined, Icons.widgets_outlined],
+            labels: const ['Agents', 'Apps'],
+            icons: const [Icons.smart_toy_outlined, Icons.apps_outlined],
           ),
           const SizedBox(height: 10),
           Expanded(
@@ -364,9 +364,7 @@ class _AgentsScreenState extends State<AgentsScreen> {
                               b, b.status == 'running' ? 'stop' : 'start'),
                         ),
                         _ToolsTab(
-                            tools: _tools,
-                            onOpen: _openMiniapp,
-                            onEdit: _editTool),
+                            tools: _tools, onOpen: _openApp, onEdit: _editTool),
                       ]),
           ),
         ]),
@@ -429,7 +427,7 @@ class _ToolsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     if (tools.isEmpty) {
       return const _PanelEmpty(
-          icon: Icons.widgets_outlined, message: 'No tools yet — create one.');
+          icon: Icons.widgets_outlined, message: 'No apps yet — create one.');
     }
     return LayoutBuilder(builder: (context, box) {
       final columns = box.maxWidth > 900
@@ -646,7 +644,7 @@ class _ToolCard extends StatelessWidget {
                 Icon(Icons.open_in_new_rounded,
                     size: 14, color: scheme.onSurfaceVariant),
                 const SizedBox(width: 5),
-                Text('Open tool',
+                Text('Open app',
                     style: TextStyle(
                         fontSize: 10, color: scheme.onSurfaceVariant)),
               ]),
@@ -684,13 +682,13 @@ class _ProfileFormState extends State<_ProfileForm> {
   @override
   Widget build(BuildContext context) => AppFormFrame(
         icon: Icons.edit_outlined,
-        title: 'Edit tool',
+        title: 'Edit app',
         subtitle: 'Its name and what people and agents read about it.',
         submit: 'Save changes',
         onSubmit: () {
           if (name.text.trim().isEmpty) {
             ScaffoldMessenger.maybeOf(context)
-                ?.showSnackBar(const SnackBar(content: Text('Name the tool.')));
+                ?.showSnackBar(const SnackBar(content: Text('Name the app.')));
             return;
           }
           Navigator.pop(context, (name.text.trim(), description.text.trim()));

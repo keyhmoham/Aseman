@@ -5,15 +5,15 @@ import '../../../data/services/tradera_service.dart';
 import 'mcp_connect_dialog.dart';
 import 'mcp_sign_in.dart';
 
-/// Adds an MCP app to the space [spaceId]: one from the catalog, or a server
-/// the person names by its address. An app that runs with each person's own
+/// Adds an app to the space [spaceId]: one from the node's catalog, one the
+/// person made, or an MCP server the person names by its address. An app that runs with each person's own
 /// account asks them to sign in right after it is added. Returns whether
 /// something was added.
-Future<bool> showAddMcpApp(BuildContext context, TraderaService service,
+Future<bool> showAddApp(BuildContext context, TraderaService service,
         {required String spaceId}) async =>
     await showDialog<bool>(
         context: context,
-        builder: (_) => AddMcpAppDialog(service: service, spaceId: spaceId)) ==
+        builder: (_) => AddAppDialog(service: service, spaceId: spaceId)) ==
     true;
 
 /// Whether registering a server failed because the server wants a sign-in.
@@ -42,17 +42,16 @@ String mcpAddFailure(Object error) {
   return mcpSignInMessage(error);
 }
 
-class AddMcpAppDialog extends StatefulWidget {
-  const AddMcpAppDialog(
-      {super.key, required this.service, required this.spaceId});
+class AddAppDialog extends StatefulWidget {
+  const AddAppDialog({super.key, required this.service, required this.spaceId});
   final TraderaService service;
   final String spaceId;
 
   @override
-  State<AddMcpAppDialog> createState() => _AddMcpAppDialogState();
+  State<AddAppDialog> createState() => _AddAppDialogState();
 }
 
-class _AddMcpAppDialogState extends State<AddMcpAppDialog> {
+class _AddAppDialogState extends State<AddAppDialog> {
   final _name = TextEditingController();
   final _url = TextEditingController();
   List<({String id, String name, String auth})> _catalog = const [];
@@ -80,14 +79,21 @@ class _AddMcpAppDialogState extends State<AddMcpAppDialog> {
       final results = await Future.wait<Object>([
         widget.service.mcpCatalog(),
         widget.service.fetchSpaceBots(widget.spaceId),
+        // The person's own apps; best-effort, the catalog stands alone.
+        widget.service.fetchBots().catchError((_) => const <Bot>[]),
       ]);
       final inSpace = {for (final b in results[1] as List<Bot>) b.id};
+      final catalog =
+          results[0] as List<({String id, String name, String auth})>;
+      final listed = {for (final t in catalog) t.id};
       if (!mounted) return;
       setState(() {
         _catalog = [
-          for (final t
-              in results[0] as List<({String id, String name, String auth})>)
-            if (!inSpace.contains(t.id)) t
+          for (final t in catalog)
+            if (!inSpace.contains(t.id)) t,
+          for (final b in results[2] as List<Bot>)
+            if (b.isTool && !inSpace.contains(b.id) && !listed.contains(b.id))
+              (id: b.id, name: b.name, auth: ''),
         ];
         _loading = false;
       });
@@ -199,10 +205,10 @@ class _AddMcpAppDialogState extends State<AddMcpAppDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                    'Apps (MCP servers) give this space’s agents and people new tools. One that runs with each person’s own account asks you to sign in once it is added.',
+                    'Apps give this space’s agents and people new abilities. One that runs with each person’s own account asks you to sign in once it is added.',
                     style: TextStyle(color: scheme.onSurfaceVariant)),
                 const SizedBox(height: 16),
-                const Text('From the catalog',
+                const Text('Apps you can add',
                     style: TextStyle(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 6),
                 if (_loading)
@@ -210,7 +216,7 @@ class _AddMcpAppDialogState extends State<AddMcpAppDialog> {
                       padding: EdgeInsets.all(12),
                       child: Center(child: CircularProgressIndicator()))
                 else if (_catalog.isEmpty)
-                  Text('Nothing new to add from the catalog.',
+                  Text('Every available app is already here.',
                       style: TextStyle(color: scheme.onSurfaceVariant))
                 else
                   for (final t in _catalog)
@@ -231,7 +237,7 @@ class _AddMcpAppDialogState extends State<AddMcpAppDialog> {
                               child: const Text('Add')),
                     ),
                 const Divider(height: 28),
-                const Text('Connect another server',
+                const Text('Or connect an MCP server',
                     style: TextStyle(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 10),
                 TextField(

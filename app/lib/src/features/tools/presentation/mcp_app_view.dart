@@ -107,7 +107,7 @@ class _McpAppViewState extends State<McpAppView> {
           ? (app['resource'] as Map).cast<String, dynamic>()
           : <String, dynamic>{};
       final html = htmlOf(resource);
-      if (html == null) throw StateError('the tool sent no app to show');
+      if (html == null) throw StateError('the app sent nothing to show');
       if (!mounted) return;
       setState(() {
         _html = html;
@@ -147,7 +147,7 @@ class _McpAppViewState extends State<McpAppView> {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Icon(Icons.error_outline_rounded, color: scheme.error),
             const SizedBox(height: 8),
-            const Text('The tool\'s app could not open',
+            const Text('The app could not open',
                 style: TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
             Text('$_error',

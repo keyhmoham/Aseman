@@ -1,4 +1,4 @@
-/// A bot VM (agent, miniapp backend or tool) as returned by the bots namespace.
+/// A bot VM (an agent, or an app) as returned by the bots namespace.
 class Bot {
   const Bot({
     required this.id,
@@ -16,20 +16,19 @@ class Bot {
   final String ownerId;
   final String accountId;
   final String name;
-  final String kind; // agent | miniapp | tool
+  final String kind; // agent | tool (an app)
   final String vmType; // langchain | wasm | docker | container | modal
   final String status; // pending | running | stopped | paused | failed
   final String imageRef;
   final bool hasFrontend;
 
-  bool get isMiniapp => kind == 'miniapp';
   bool get isAgent => kind == 'agent';
   bool get isTool => kind == 'tool';
 
   /// A tool whose backend serves microtools over MCP — an external server, a
   /// backend this node runs (Elpian VM, QuickJS or docker) or one installed
   /// into each space's sandbox. It is used through its frontend
-  /// (features/tools), not as a legacy wasm miniapp.
+  /// (features/tools).
   bool get isUnifiedTool =>
       isTool &&
       !name.startsWith('sbx-') &&
@@ -44,11 +43,11 @@ class Bot {
         'elpian' => 'Managed · Elpian VM',
         'quickjs' => 'Managed · QuickJS',
         'docker' => 'Managed · Docker',
-        _ => isMiniapp ? 'Miniapp' : 'Tool',
+        _ => 'App',
       };
 
-  /// In the client UI miniapps are surfaced as tools.
-  String get displayKind => isMiniapp ? 'tool' : kind;
+  /// What it is, for display: an agent or an app.
+  String get kindLabel => isAgent ? 'Agent' : 'App';
 
   factory Bot.fromJson(Map<String, dynamic> json) => Bot(
         id: json['id'] as String? ?? '',
@@ -82,7 +81,7 @@ class MarketListing {
   final String id;
   final String publisherId;
   final String botId;
-  final String type; // agent | miniapp
+  final String type; // agent | tool (an app)
   final String name;
   final String description;
   final int price;
@@ -91,7 +90,10 @@ class MarketListing {
   final String status;
   final Bot? bot;
 
-  bool get isMiniapp => type == 'miniapp';
+  bool get isApp => type == 'tool';
+
+  /// What it lists, for display: an agent or an app.
+  String get kindLabel => isAgent ? 'Agent' : 'App';
   bool get isAgent => type == 'agent';
 
   factory MarketListing.fromJson(Map<String, dynamic> json) {

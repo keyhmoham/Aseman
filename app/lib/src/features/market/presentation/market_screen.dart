@@ -12,8 +12,8 @@ import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/status_tag.dart';
 
 /// Marketplace — a modal panel (dialog on desktop, bottom sheet on mobile) to
-/// browse, install and publish agents and miniapps. Uses the app's TabBar
-/// panel convention; miniapps surface as tools.
+/// browse, install and publish agents and apps. Uses the app's TabBar
+/// panel convention.
 class MarketScreen extends StatefulWidget {
   const MarketScreen({super.key, required this.dependencies});
 
@@ -63,7 +63,7 @@ class _MarketScreenState extends State<MarketScreen> {
         widget.dependencies.service.fetchMarket(
             type: 'agent', query: query, limit: _pageSize, offset: offset),
         widget.dependencies.service.fetchMarket(
-            type: 'miniapp', query: query, limit: _pageSize, offset: offset),
+            type: 'tool', query: query, limit: _pageSize, offset: offset),
       ]);
       if (!mounted) return;
       final agents = results[0];
@@ -131,7 +131,7 @@ class _MarketScreenState extends State<MarketScreen> {
           PanelHeader(
             icon: Icons.storefront_outlined,
             title: 'Market',
-            subtitle: 'Publish & install agents and miniapps',
+            subtitle: 'Publish & install agents and apps',
             onClose: () => Navigator.pop(context),
             actions: [
               FilledButton.icon(
@@ -153,7 +153,7 @@ class _MarketScreenState extends State<MarketScreen> {
                 onSubmitted: (_) => _load(),
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.search_rounded),
-                  hintText: 'Search agents & tools…',
+                  hintText: 'Search agents & apps…',
                   isDense: true,
                   suffixIcon: IconButton(
                     onPressed: _load,
@@ -167,8 +167,8 @@ class _MarketScreenState extends State<MarketScreen> {
           SegmentedTabBar(
             compact: compact,
             alignment: Alignment.centerLeft,
-            labels: const ['Agents', 'Tools'],
-            icons: const [Icons.smart_toy_outlined, Icons.widgets_outlined],
+            labels: const ['Agents', 'Apps'],
+            icons: const [Icons.smart_toy_outlined, Icons.apps_outlined],
           ),
           const SizedBox(height: 10),
           Expanded(
@@ -263,7 +263,7 @@ class _ListingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final color = listing.isMiniapp ? AppColors.cyan : AppColors.primary;
+    final color = listing.isApp ? AppColors.cyan : AppColors.primary;
     final header = Row(children: [
       AppAvatar(listing.name, color: color, radius: 22),
       const SizedBox(width: 13),
@@ -396,7 +396,7 @@ class _PublishDialogState extends State<_PublishDialog> {
             : bots.isEmpty
                 ? null
                 : bots.first;
-        if (_selected?.kind == 'miniapp') _type = 'miniapp';
+        if (_selected?.isTool ?? false) _type = 'tool';
         _loading = false;
       });
     } catch (_) {
@@ -440,7 +440,7 @@ class _PublishDialogState extends State<_PublishDialog> {
         if (_loading)
           const LinearProgressIndicator()
         else if (_bots.isEmpty)
-          Text('You have no bots yet. Create an agent or miniapp first.',
+          Text('You have no bots yet. Create an agent or app first.',
               style: TextStyle(color: scheme.onSurfaceVariant))
         else ...[
           AppSegmentedField<String>(
@@ -453,13 +453,16 @@ class _PublishDialogState extends State<_PublishDialog> {
             }),
             choices: const [
               AppChoice('agent', 'Agent', icon: Icons.smart_toy_outlined),
-              AppChoice('miniapp', 'Miniapp', icon: Icons.extension_outlined),
+              AppChoice('tool', 'App', icon: Icons.apps_outlined),
             ],
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const AppFieldLabel('Bot'),
             if (shown.isEmpty)
-              Text('You have no ${_type}s yet.',
+              Text(
+                  _type == 'agent'
+                      ? 'You have no agents yet.'
+                      : 'You have no apps yet.',
                   style: TextStyle(color: scheme.onSurfaceVariant)),
             for (final b in shown)
               Padding(

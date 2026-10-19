@@ -3,9 +3,10 @@
 The Flutter client for the **Tradera** federated super app. Every screen is
 connected to the Tradera Go gateway (`services/`): a federated, decentralized
 VM platform where users publish posts, build workspaces (each account gets a
-home workspace), deploy and chat with **agents** (langchain bots), and run
-**miniapps** — wasm-backed bots whose **elpian** frontends render inside the
-client's sandbox and surface as *tools*.
+home workspace), deploy and chat with **agents**, and add **apps** — a
+backend (an MCP server, an Elpian VM, QuickJS or docker program, or one
+installed into the space's sandbox) and the frontend it is used through. On
+the wire an app is a bot of kind `tool`, served by the `tools` namespace.
 
 ## Run
 
@@ -19,11 +20,12 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8080 \
   --dart-define=DEVELOPER_API_BASE=https://api.example.com/v1
 ```
 
-## Connecting MCP tools
+## Signing in to apps
 
-A tool registered with "each person connects" (`auth: user`) asks for the
-person's own account where it is used: when it is added to a project, on its
-screen, and under Project → Plugins. Sign-in is OAuth with PKCE run by the
+An app registered with "each person connects" (`auth: user`) asks for the
+person's own account where it is used: when it is added with "Add an app"
+(workspace Apps library or Project → Apps), on its screen, and under
+Project → Apps. Sign-in is OAuth with PKCE run by the
 node (`tools.oauth_prepare` / `oauth_exchange`): the app only opens the
 provider's page and brings the code back, then stores the connection from the
 sign-in (`tools.connection_set` with its `grant`) so the node renews it. On
@@ -31,7 +33,7 @@ the web the page opens in a popup that returns to `/oauth.html`; on Android,
 iOS, macOS and Windows in an in-app web view that stops at the redirect;
 elsewhere in the browser, with the returned address pasted back. A provider
 that will not register Tradera needs an OAuth client: a person can enter one
-in the connect dialog, or an admin saves one per server (Admin → Tools →
+in the connect dialog, or an admin saves one per server (Admin → Apps →
 Sign-in client), created with the redirect address shown there. Override that
 address with `--dart-define=OAUTH_REDIRECT_URI=…`. A pasted access token works
 too, without renewal.
@@ -42,20 +44,20 @@ Every action is an HTTP `POST /v1/{namespace}/{action}` carrying a JSON body.
 Authenticated requests are **Ed25519-signed** with the account's identity key
 (`core/network/signing.dart`) over the canonical payload
 `method\npath\nnonce\ntimestamp\nsha256(body)` and carry the session bearer
-token. This is what lets a miniapp frontend call its backend "as the user":
+token. This is what lets an app's frontend call its backend "as the user":
 the backend always sees the signed-in user's identity.
 
-## Elpian miniapps
+## Elpian frontends
 
 The Elpian engine is part of the app, not a dependency: its Flutter host is
 copied into `lib/src/elpian` (rendering engine, Elpian VM and QuickJS
-runtimes, miniapp host, A2UI renderer, the Godot `Scene3D` widget — see its
+runtimes, app host, A2UI renderer, the Godot `Scene3D` widget — see its
 README), its native VM library into `packages/elpian_vm_native`, the
 embedded Godot engine into `packages/elpian_godot_native`, and its web
-runtimes into `assets/elpian`. A miniapp is a
-bot whose `frontend` field holds a `{ manifest, source }` bundle. The
-`MiniappSandboxScreen` runs the bundle inside an `ElpianVmWidget` (QuickJS
-runtime) with host handlers wired by `features/miniapps/elpian/miniapp_bridge.dart`:
+runtimes into `assets/elpian`. An app's static frontend is a
+`{ manifest, source }` bundle in its bot's `frontend` field. The
+`AppFrontendScreen` runs the bundle inside an `ElpianVmWidget` (QuickJS
+runtime) with host handlers wired by `features/tools/elpian/app_bridge.dart`:
 
 | host API        | backend action                      |
 |-----------------|-------------------------------------|
@@ -64,14 +66,14 @@ runtime) with host handlers wired by `features/miniapps/elpian/miniapp_bridge.da
 | `host.send`     | `message.send` (fire-and-forget)     |
 | `ctx.user`      | the signed-in user context           |
 
-## Tools
+## Apps
 
-Tools are created from one form (`features/tools/presentation/tool_create_form.dart`,
-"My bots → Create → Tool") with a **backend** — external (an MCP server),
+Apps are created from one form (`features/tools/presentation/tool_create_form.dart`,
+"My bots → Create → App") with a **backend** — external (an MCP server),
 managed (an Elpian VM, QuickJS or docker backend the node runs) or installed
 (into each space's sandbox) — and a **frontend**:
 
-* **static** — an Elpian miniapp the app runs on the Elpian VM (bytecode) or
+* **static** — an Elpian program the app runs on the Elpian VM (bytecode) or
   QuickJS, with `ToolFrontendHost` as its host: `tool.call(microtool, args)`,
   `tool.microtools()`, `tool.context()` (with `display`: `full`, `compact`
   or `sheet`), `tool.compact(summary)` (its phone widget) and

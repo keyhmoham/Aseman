@@ -34,7 +34,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     'Trending',
     'Traders',
     'AI agents',
-    'Tools',
+    'Apps',
     'Rooms'
   ];
   @override
@@ -54,7 +54,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     try {
       final results = await Future.wait([
         deps.service.fetchMarket(type: 'agent', limit: 20),
-        deps.service.fetchMarket(type: 'miniapp', limit: 20),
+        deps.service.fetchMarket(type: 'tool', limit: 20),
       ]);
       if (!mounted) return;
       setState(() {
@@ -89,7 +89,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   @override
   Widget build(BuildContext context) => FeaturePage(
       title: 'Explore',
-      subtitle: 'Find traders, agents, tools, and public rooms',
+      subtitle: 'Find traders, agents, apps, and public rooms',
       child: AnimatedBuilder(
           animation: model,
           builder: (_, __) => ListView(
@@ -99,7 +99,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         onChanged: (v) => setState(() => query = v),
                         decoration: const InputDecoration(
                             prefixIcon: Icon(Icons.search_rounded),
-                            hintText: 'Search agents, rooms, traders, tools…')),
+                            hintText: 'Search agents, rooms, traders, apps…')),
                     const SizedBox(height: 16),
                     SizedBox(
                         height: 38,
@@ -140,10 +140,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
                               .map((l) => _AgentCard(
                                     l.name,
                                     l.description.isEmpty
-                                        ? '${l.type} · ${l.installs} installs'
+                                        ? '${l.kindLabel} · ${l.installs} installs'
                                         : l.description,
                                     '${l.installs} installs',
-                                    l.isMiniapp
+                                    l.isApp
                                         ? AppColors.primary
                                         : AppColors.warning,
                                   ))

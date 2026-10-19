@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 
-/// Injects the app's color system into elpian miniapp frontends as a JSON
+/// Injects the app's color system into elpian app frontends as a JSON
 /// stylesheet of semantic classes. The guest JS uses `className: 'primary'`,
-/// `className: 'panel'`, … so the explorer (or any miniapp) automatically
+/// `className: 'panel'`, … so the explorer (or any app) automatically
 /// follows the host app's theme without baking hex values into the bundle.
-class MiniappTheme {
+class AppFrontendTheme {
   static String _hex(Color c) {
     final v = (c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0');
     return '#$v';
   }
 
   /// Semantic classes mapped onto the host [theme] (or [AppColors] when no
-  /// theme is given), so a miniapp follows the light/dark mode and accent of
+  /// theme is given), so an app follows the light/dark mode and accent of
   /// the app around it. Keep the keys stable so guest bundles reference them
   /// by name.
   static Map<String, String> _tokens(ThemeData? theme) {

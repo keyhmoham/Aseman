@@ -4,7 +4,7 @@ import '../../../app_dependencies.dart';
 import '../../../shared/widgets/backend_action_ui.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
-import '../../tools/connect/add_mcp_app.dart';
+import '../../tools/connect/add_app.dart';
 import '../../tools/connect/mcp_connect_dialog.dart';
 import 'project_control_content.dart';
 
@@ -27,7 +27,7 @@ class _ProjectArea {
 }
 
 /// Project facilities shared by every room: files, computer, apps, routines,
-/// memory, plugins, previews and usage. Requests go directly to backend
+/// memory, previews and usage. Requests go directly to backend
 /// actions and are pre-scoped to this project.
 class ProjectControlScreen extends StatefulWidget {
   const ProjectControlScreen({
@@ -107,16 +107,21 @@ class _ProjectControlScreenState extends State<ProjectControlScreen> {
           }),
         ]),
     _ProjectArea('Apps', Icons.apps_outlined,
-        'Installed widgets, commands and app connections',
+        'Apps in this project, their commands and your sign-ins',
         loads: [
-          _ProjectCall('spaces', 'widget_list', {'space': widget.spaceId}),
           _ProjectCall('spaces', 'tools_list', {'space': widget.spaceId}),
           _ProjectCall('tools', 'commands_list', {'space': widget.spaceId}),
         ],
         actions: [
           _ProjectCall('tools', 'invoke', {'space': widget.spaceId}),
+          const _ProjectCall('tools', 'mcp_register', {}),
+          const _ProjectCall('tools', 'mcp_update', {}),
+          const _ProjectCall('tools', 'mcp_delete', {}),
+          const _ProjectCall('tools', 'mcp_oauth_get', {}),
+          const _ProjectCall('tools', 'mcp_oauth_set', {}),
+          const _ProjectCall('tools', 'oauth_prepare', {}),
+          const _ProjectCall('tools', 'oauth_exchange', {}),
           _ProjectCall('tools', 'connection_set', {'space': widget.spaceId}),
-          _ProjectCall('spaces', 'widget_action', {'space': widget.spaceId}),
         ]),
     _ProjectArea('Routines', Icons.schedule_outlined,
         'Delayed and recurring work in project rooms',
@@ -159,22 +164,6 @@ class _ProjectControlScreenState extends State<ProjectControlScreen> {
             'content': ''
           }),
         ]),
-    _ProjectArea('Plugins', Icons.extension_outlined,
-        'MCP servers, OAuth and credentials for project tools',
-        loads: [
-          _ProjectCall('spaces', 'tools_list', {'space': widget.spaceId}),
-          _ProjectCall('tools', 'commands_list', {'space': widget.spaceId}),
-        ],
-        actions: [
-          const _ProjectCall('tools', 'mcp_register', {}),
-          const _ProjectCall('tools', 'mcp_update', {}),
-          const _ProjectCall('tools', 'mcp_delete', {}),
-          const _ProjectCall('tools', 'mcp_oauth_get', {}),
-          const _ProjectCall('tools', 'mcp_oauth_set', {}),
-          const _ProjectCall('tools', 'oauth_prepare', {}),
-          const _ProjectCall('tools', 'oauth_exchange', {}),
-          _ProjectCall('tools', 'connection_set', {'space': widget.spaceId}),
-        ]),
     _ProjectArea('Previews', Icons.open_in_browser_outlined,
         'Published sandbox ports and secure preview links',
         loads: [
@@ -186,7 +175,7 @@ class _ProjectControlScreenState extends State<ProjectControlScreen> {
           const _ProjectCall('spaces', 'proxy_delete', {}),
         ]),
     _ProjectArea('Usage', Icons.query_stats_outlined,
-        'Spend by room, agent, tool, computer and model',
+        'Spend by room, agent, app, computer and model',
         loads: [
           _ProjectCall(
               'usage', 'summary', {'space': widget.spaceId, 'limit': 500}),
@@ -310,7 +299,7 @@ class _ProjectControlScreenState extends State<ProjectControlScreen> {
                       if (connected && mounted) await load();
                     },
                     onAddApp: () async {
-                      final added = await showAddMcpApp(
+                      final added = await showAddApp(
                           context, widget.dependencies.service,
                           spaceId: widget.spaceId);
                       if (added && mounted) await load();

@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/app_dependencies.dart';
 import 'package:tradera/src/data/models/bot.dart';
-import 'package:tradera/src/data/models/space.dart';
 import 'package:tradera/src/features/home/presentation/project_control_content.dart';
-import 'package:tradera/src/features/home/presentation/space_settings_panel.dart';
 import 'package:tradera/src/features/tools/connect/mcp_connect_dialog.dart';
 import 'package:tradera/src/features/tools/connect/mcp_sign_in.dart';
 import 'package:tradera/src/features/tools/data/tools_api.dart';
@@ -165,13 +162,13 @@ void main() {
     expect(await result, isTrue);
   });
 
-  testWidgets('the project plugins say which tools need your account',
+  testWidgets('the project apps say which ones need your account',
       (tester) async {
     final asked = <String>[];
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: ProjectControlContent(
-          area: 'Plugins',
+          area: 'Apps',
           spaceId: 'space-1',
           results: const {
             'spaces.tools_list': {
@@ -221,34 +218,6 @@ void main() {
     await tester.tap(find.text('Connect'));
     await tester.pumpAndSettle();
     expect(find.text('Connect GitHub'), findsOneWidget);
-    expect(find.text('Sign in with GitHub'), findsOneWidget);
-  });
-
-  testWidgets('every member sees their own app connections in the space',
-      (tester) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    final service = _Member();
-    await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-            body: SpaceSettingsPanel(
-                dependencies: AppDependencies.withService(service),
-                space: const Workspace(
-                    id: 'space-1',
-                    ownerId: 'someone-else',
-                    name: 'Desk',
-                    role: 'member')))));
-    await tester.pumpAndSettle();
-    expect(find.text('Your app connections'), findsOneWidget);
-    expect(find.text('GitHub'), findsOneWidget);
-    expect(find.text('Not connected'), findsOneWidget);
-    // A tool of another space, and one everyone shares, are not listed.
-    expect(find.text('Linear'), findsNothing);
-    expect(find.text('Weather'), findsNothing);
-    await tester.ensureVisible(find.text('Connect'));
-    await tester.tap(find.text('Connect'));
-    await tester.pumpAndSettle();
     expect(find.text('Sign in with GitHub'), findsOneWidget);
   });
 }

@@ -7,7 +7,7 @@ import 'dart:convert';
 /// host bridge (`sandbox.exec`, `sandbox.upload`, `sandbox.read`, …) that the
 /// client services with the user's signed identity. It uses only semantic theme
 /// classes (`bg`, `panel-card`, `primary`, `muted`, …) injected by
-/// [MiniappTheme], so it follows the host app's color system automatically.
+/// [AppFrontendTheme], so it follows the host app's color system automatically.
 abstract final class SandboxExplorerFrontend {
   static const manifestName = 'Sandbox Explorer';
 

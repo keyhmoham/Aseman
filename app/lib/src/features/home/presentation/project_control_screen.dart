@@ -4,6 +4,7 @@ import '../../../app_dependencies.dart';
 import '../../../shared/widgets/backend_action_ui.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
+import '../../tools/connect/add_mcp_app.dart';
 import '../../tools/connect/mcp_connect_dialog.dart';
 import 'project_control_content.dart';
 
@@ -163,7 +164,6 @@ class _ProjectControlScreenState extends State<ProjectControlScreen> {
         loads: [
           _ProjectCall('spaces', 'tools_list', {'space': widget.spaceId}),
           _ProjectCall('tools', 'commands_list', {'space': widget.spaceId}),
-          const _ProjectCall('tools', 'mcp_samples', {}),
         ],
         actions: [
           const _ProjectCall('tools', 'mcp_register', {}),
@@ -308,6 +308,12 @@ class _ProjectControlScreenState extends State<ProjectControlScreen> {
                           name: name,
                           reconnect: reconnect);
                       if (connected && mounted) await load();
+                    },
+                    onAddApp: () async {
+                      final added = await showAddMcpApp(
+                          context, widget.dependencies.service,
+                          spaceId: widget.spaceId);
+                      if (added && mounted) await load();
                     },
                   )),
       ]),

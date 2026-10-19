@@ -479,6 +479,44 @@ class TraderaService implements BackendService {
     };
   }
 
+  /// The MCP apps the caller can add to a space: their own and those the
+  /// node's admins listed for everyone (`tools.commands_list`).
+  Future<List<({String id, String name, String auth})>> mcpCatalog() async {
+    final resp = await client.call('tools', 'commands_list');
+    final list = (resp.body as Map?)?['tools'] as List? ?? const [];
+    return [
+      for (final t in list)
+        if (t is Map)
+          (
+            id: '${t['bot_id']}',
+            name: '${t['name'] ?? ''}',
+            auth: '${t['auth'] ?? ''}'
+          ),
+    ];
+  }
+
+  /// Registers a remote MCP server as a tool the caller owns. With [auth]
+  /// "user" each person connects their own account and the node does not
+  /// call the server now; otherwise it checks that the server answers.
+  /// Returns the new tool's bot id.
+  Future<String> mcpRegister(
+      {required String name,
+      required String url,
+      String auth = '',
+      String token = '',
+      Map<String, dynamic> descriptor = const {}}) async {
+    final resp = await client.call('tools', 'mcp_register',
+        body: {
+          'name': name,
+          'url': url,
+          if (auth.isNotEmpty) 'auth': auth,
+          if (token.isNotEmpty) 'token': token,
+          if (descriptor.isNotEmpty) 'descriptor': descriptor,
+        },
+        requestTimeout: const Duration(minutes: 1));
+    return '${(resp.body as Map?)?['bot_id'] ?? ''}';
+  }
+
   // ── developer API console ─────────────────────────────────────────────────
 
   /// One action of the developer console (`developer.<action>`), signed in

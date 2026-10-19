@@ -36,6 +36,7 @@ import '../../miniapps/presentation/miniapp_sandbox_screen.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import '../../search_feed/presentation/post_editor.dart';
 import '../../search_feed/presentation/rich_post_content.dart';
+import '../../tools/connect/add_mcp_app.dart';
 import '../../tools/connect/mcp_connect_dialog.dart';
 import '../../tools/data/tools_api.dart';
 import '../../tools/domain/tool_models.dart';
@@ -153,6 +154,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Add failed: $e')));
     }
+  }
+
+  Future<void> _addAppToWorkspace() async {
+    final sp = _spaceFor(workspace);
+    if (sp == null) return;
+    final added = await showAddMcpApp(context, widget.dependencies.service,
+        spaceId: sp.id);
+    if (added && mounted) await _loadSpaceBots();
   }
 
   Future<void> _removeBotFromWorkspace(Bot bot) async {
@@ -491,6 +500,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                           onSearch: () => _search(context),
                           onAddBot: _addBotToWorkspace,
                           onRemoveBot: _removeBotFromWorkspace,
+                          onAddApp: _addAppToWorkspace,
                           openRoom: (value) {
                             Navigator.pop(context);
                             openRoom(value);
@@ -564,6 +574,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                       onSearch: () => _search(context),
                                       onAddBot: _addBotToWorkspace,
                                       onRemoveBot: _removeBotFromWorkspace,
+                                      onAddApp: _addAppToWorkspace,
                                       openRoom: openRoom))),
                           const SizedBox(width: 16),
                           Expanded(
@@ -824,6 +835,7 @@ class _LibraryPanel extends StatelessWidget {
       this.onSearch,
       this.onAddBot,
       this.onRemoveBot,
+      this.onAddApp,
       required this.openRoom});
   final String? room;
   final String workspace;
@@ -848,6 +860,9 @@ class _LibraryPanel extends StatelessWidget {
   final VoidCallback? onSearch;
   final ValueChanged<Bot>? onAddBot;
   final ValueChanged<Bot>? onRemoveBot;
+
+  /// Adds an MCP app (from the catalog or by its address) to the space.
+  final VoidCallback? onAddApp;
   static const icons = [
     Icons.forum_outlined,
     Icons.smart_toy_outlined,
@@ -1023,7 +1038,8 @@ class _LibraryPanel extends StatelessWidget {
       // The shared sandbox is surfaced as a first-class tool: its frontend is
       // the file-explorer miniapp (Sandbox Explorer).
       final hasSandbox = onOpenSandbox != null;
-      if (tools.isEmpty && candidates.isEmpty && !hasSandbox) {
+      final addApp = onAddApp;
+      if (tools.isEmpty && candidates.isEmpty && !hasSandbox && addApp == null) {
         return const _LibraryEmpty(
             icon: Icons.widgets_outlined,
             message:
@@ -1033,7 +1049,8 @@ class _LibraryPanel extends StatelessWidget {
           padding: EdgeInsets.zero,
           itemCount: tools.length +
               (hasSandbox ? 1 : 0) +
-              (candidates.isEmpty ? 0 : 1),
+              (candidates.isEmpty ? 0 : 1) +
+              (addApp == null ? 0 : 1),
           separatorBuilder: (_, __) => const SizedBox(height: 7),
           itemBuilder: (context, index) {
             if (hasSandbox) {
@@ -1042,6 +1059,10 @@ class _LibraryPanel extends StatelessWidget {
               }
               index--;
             }
+            if (addApp != null && index == tools.length) {
+              return _AddAppTile(onTap: addApp);
+            }
+            if (addApp != null) index--;
             if (index == tools.length) {
               return _AddBotTile(
                   label: 'Add tool',
@@ -1523,6 +1544,48 @@ class _SandboxExplorerTile extends StatelessWidget {
                     size: 13,
                     color: Theme.of(context).colorScheme.onSurfaceVariant),
               ]))));
+}
+
+/// Opens "Add an app": an MCP server from the catalog or by its address,
+/// with each person's sign-in right after when it needs one.
+class _AddAppTile extends StatelessWidget {
+  const _AddAppTile({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(17),
+        child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(17),
+            child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Row(children: [
+                  Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                          color: scheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(12)),
+                      child: Icon(Icons.add_link_rounded,
+                          size: 19, color: scheme.onPrimaryContainer)),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text('Add an app',
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w800)),
+                        SizedBox(height: 2),
+                        Text('MCP server, with sign-in',
+                            style: TextStyle(fontSize: 10)),
+                      ])),
+                ]))));
+  }
 }
 
 class _AddBotTile extends StatelessWidget {

@@ -15,6 +15,7 @@ class ProjectControlContent extends StatefulWidget {
     required this.results,
     required this.onAction,
     this.onConnect,
+    this.onAddApp,
   });
   final String area;
   final String spaceId;
@@ -25,6 +26,9 @@ class ProjectControlContent extends StatefulWidget {
   /// token), then reloads.
   final Future<void> Function(String botId, String name, bool reconnect)?
       onConnect;
+
+  /// Adds an MCP app to the project (catalog or address, then sign-in).
+  final VoidCallback? onAddApp;
   @override
   State<ProjectControlContent> createState() => _ProjectControlContentState();
 }
@@ -438,15 +442,14 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
           in _maps(_map(widget.results['tools.commands_list'])['tools']))
         '${t['bot_id']}': t,
     };
-    final samples = _maps(_map(widget.results['tools.mcp_samples'])['samples']);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Align(
           alignment: Alignment.centerRight,
           child: FilledButton.icon(
-              onPressed: () =>
-                  widget.onAction('tools', 'mcp_register', const {}),
+              onPressed: widget.onAddApp ??
+                  () => widget.onAction('tools', 'mcp_register', const {}),
               icon: const Icon(Icons.add_rounded),
-              label: const Text('Add MCP server'))),
+              label: const Text('Add an app'))),
       const SizedBox(height: 14),
       AdminSectionCard(
           title: 'Project connections (${installed.length})',
@@ -496,19 +499,6 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
                               ],
                             ]))
                 ])),
-      if (samples.isNotEmpty) ...[
-        const SizedBox(height: 18),
-        AdminSectionCard(
-            title: 'MCP catalog',
-            child: Wrap(spacing: 8, runSpacing: 8, children: [
-              for (final s in samples)
-                ActionChip(
-                    avatar: const Icon(Icons.add_circle_outline, size: 17),
-                    label: Text('${s['name'] ?? s['url']}'),
-                    onPressed: () => widget.onAction('tools', 'mcp_register',
-                        {'name': s['name'], 'url': s['url']}))
-            ]))
-      ],
     ]);
   }
 

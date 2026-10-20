@@ -99,9 +99,10 @@ class WorkflowRepository {
     });
   }
 
-  Future<List<Map<String, dynamic>>> execution(String workflowId) async {
-    final response = await service.client
-        .call('spaces', 'turn_log', body: {'turn': workflowId, 'limit': 200});
+  Future<List<Map<String, dynamic>>> execution(
+      String spaceId, String workflowId) async {
+    final response = await service.client.call('spaces', 'turn_log',
+        body: {'space': spaceId, 'turn': workflowId, 'limit': 200});
     final body = (response.body as Map<Object?, Object?>?) ?? const {};
     return (body['entries'] as List? ?? const [])
         .whereType<Map<Object?, Object?>>()

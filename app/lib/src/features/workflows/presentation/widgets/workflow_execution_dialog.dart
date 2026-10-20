@@ -52,8 +52,8 @@ class _WorkflowExecutionDialogState extends State<WorkflowExecutionDialog> {
                           if (snapshot.hasError)
                             return TextButton(
                                 onPressed: () => setState(() {
-                                      events = widget.model.repository
-                                          .execution(widget.run.id);
+                                      events =
+                                          widget.model.execution(widget.run.id);
                                     }),
                                 child: const Text(
                                     'Could not load execution history. Retry'));

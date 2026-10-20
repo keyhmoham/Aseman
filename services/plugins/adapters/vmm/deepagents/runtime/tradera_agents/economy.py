@@ -12,8 +12,9 @@ module works on each of those:
   before the model's window is full (with or without a sandbox); both start at
   a share of the model's window, so a model with a large window keeps more of
   what it read. Instructions the agent read (an app's instructions or help, a
-  skill) are never trimmed: an agent that loses how to work reads it again,
-  and again;
+  skill) stay in the conversation whole, neither sent to a file nor trimmed,
+  up to a share of the model's window: an agent that holds only a preview of
+  how to work asks for it again, and again;
 * the count — tokens are estimated conservatively (code, JSON and ids take far
   more tokens than four characters each), so summarizing starts before the
   window is full;
@@ -114,6 +115,8 @@ NEVER_TRIM = frozenset({"task", "wait_tasks", "check_tasks", "ask_user", "write_
 # Instructions the agent read stay whole up to this size (characters); a larger
 # result went to a file, and the parts of it the agent reads stay whole instead.
 PIN_MAX_CHARS = 24_000
+# ...or up to this share of the model's window, when that is more (see pin_max).
+PIN_SHARE = 0.25
 
 # Summarize the history at this share of the model's window (at the most
 # TRADERA_SUMMARIZE_MAX_TOKENS, when set, to bound what a call costs).
@@ -181,7 +184,12 @@ def _text_of(content: Any) -> str:
     return str(content)
 
 
-def pinned(messages: list[Any]) -> set[str]:
+def pin_max(model: Any) -> int:
+    """How large instructions the agent read may be and still stay whole (characters)."""
+    return max(PIN_MAX_CHARS, int(window_of(model) * PIN_SHARE * CHARS_PER_TOKEN))
+
+
+def pinned(messages: list[Any], pin_max: int = PIN_MAX_CHARS) -> set[str]:
     """The tool results kept whole however large the conversation: the latest
     read of each set of instructions (see guard.reference), and what the agent
     read of one that was too large and went to a file."""
@@ -193,14 +201,14 @@ def pinned(messages: list[Any]) -> set[str]:
     for call in calls.values():
         path = str((call.get("args") or {}).get("file_path", "")) if call.get("name") == "read_file" else ""
         captured = bool(path) and "large_tool_results" in path and any(cid in path for cid in captures)
-        if (reference(call) or captured) and sizes.get(call.get("id", ""), 0) <= PIN_MAX_CHARS:
+        if (reference(call) or captured) and sizes.get(call.get("id", ""), 0) <= pin_max:
             # Read again: only the newest copy stays whole.
             key = call.get("name", "") + json.dumps(call.get("args") or {}, sort_keys=True, default=str)
             latest[key] = call.get("id", "")
     return set(latest.values())
 
 
-def diet(messages: list[Any], trim_above: int = TRIM_ABOVE) -> list[Any]:
+def diet(messages: list[Any], trim_above: int = TRIM_ABOVE, pin_max: int = PIN_MAX_CHARS) -> list[Any]:
     """The messages to replace so the conversation carries less.
 
     Each message is changed at most once and only ever to the same text, so the
@@ -226,7 +234,7 @@ def diet(messages: list[Any], trim_above: int = TRIM_ABOVE) -> list[Any]:
             mark(msg, [*kept, {"type": "text", "text": _ATTACHED_GONE}], "media_dropped")
 
     if count_tokens(messages) > trim_above:
-        keep = pinned(messages)
+        keep = pinned(messages, pin_max)
         for msg in results[:-KEEP_RESULTS] if KEEP_RESULTS else results:
             if msg.name in NEVER_TRIM or msg.tool_call_id in keep or (msg.response_metadata or {}).get("trimmed"):
                 continue
@@ -243,16 +251,45 @@ def diet(messages: list[Any], trim_above: int = TRIM_ABOVE) -> list[Any]:
 class ContextDiet(AgentMiddleware):
     """Trims old tool output and drops old screenshots before each model call."""
 
-    def __init__(self, trim_above: int = TRIM_ABOVE) -> None:
+    def __init__(self, trim_above: int = TRIM_ABOVE, pin_max: int = PIN_MAX_CHARS) -> None:
         super().__init__()
         self.trim_above = trim_above
+        self.pin_max = pin_max
 
     def before_model(self, state: Any, runtime: Any) -> dict[str, Any] | None:
-        updates = diet(list(state.get("messages") or []), self.trim_above)
+        updates = diet(list(state.get("messages") or []), self.trim_above, self.pin_max)
         return {"messages": updates} if updates else None
 
     async def abefore_model(self, state: Any, runtime: Any) -> dict[str, Any] | None:
         return self.before_model(state, runtime)
+
+
+class Files(FilesystemMiddleware):
+    """The harness's file tools, except that instructions an app returns stay in
+    the conversation rather than going to a file: the agent works from them on
+    every step, and a preview of them it would have to page through is how an
+    agent ends up asking for them again and again."""
+
+    def __init__(self, *args: Any, pin_max: int = PIN_MAX_CHARS, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.pin_max = pin_max
+
+    @property
+    def name(self) -> str:
+        # Replaces the harness's own file middleware.
+        return FilesystemMiddleware.__name__
+
+    def _keep(self, result: Any) -> bool:
+        return (isinstance(result, ToolMessage) and reference({"name": result.name or "", "args": {}})
+                and len(_text_of(result.content)) <= self.pin_max)
+
+    def _intercept_large_tool_result(self, tool_result: Any) -> Any:
+        return tool_result if self._keep(tool_result) else super()._intercept_large_tool_result(tool_result)
+
+    async def _aintercept_large_tool_result(self, tool_result: Any) -> Any:
+        if self._keep(tool_result):
+            return tool_result
+        return await super()._aintercept_large_tool_result(tool_result)
 
 
 def planning() -> AgentMiddleware:
@@ -263,7 +300,8 @@ def middleware(model: Any, backend: Any, *, skills: list[str] | None) -> list[Ag
     """The context-keeping middleware of a turn. The ones that share a name with
     the harness's defaults replace them."""
     above = summarize_above(model)
-    stack: list[AgentMiddleware] = [planning(), ContextDiet(trim_above=trim_above(above))]
+    pin = pin_max(model)
+    stack: list[AgentMiddleware] = [planning(), ContextDiet(trim_above=trim_above(above), pin_max=pin)]
     summarization = SummarizationMiddleware(
         # Without a sandbox the history goes to the thread's own state.
         model, backend=backend if backend is not None else StateBackend(), token_counter=count_tokens,
@@ -273,8 +311,8 @@ def middleware(model: Any, backend: Any, *, skills: list[str] | None) -> list[Ag
     if backend is None:
         return [*stack, summarization]
     stack += [
-        FilesystemMiddleware(backend=backend, custom_tool_descriptions=FILE_TOOLS,
-                             tool_token_limit_before_evict=RESULT_TO_FILE_ABOVE),
+        Files(backend=backend, custom_tool_descriptions=FILE_TOOLS,
+              tool_token_limit_before_evict=RESULT_TO_FILE_ABOVE, pin_max=pin),
         summarization,
     ]
     if skills:

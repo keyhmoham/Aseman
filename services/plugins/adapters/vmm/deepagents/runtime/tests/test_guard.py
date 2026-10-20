@@ -206,11 +206,43 @@ async def test_an_agent_that_keeps_reading_the_same_skill_is_stopped(platform, t
     refused = [m for m in model.seen[-1] if isinstance(m, ToolMessage) and "Not run" in str(m.content)]
     assert len(refused) == guard.BLOCKS
     assert "kept repeating" in notes_seen(model)[-1]
-    # The skill went to a file as lines the agent can page through, not one line of JSON.
+    assert "in full" in str(refused[0].content)
+    # The agent has the whole skill to work from, as text: not a preview of a file, not one line of JSON.
     first = next(m for m in model.seen[1] if isinstance(m, ToolMessage))
-    assert "large_tool_results" in str(first.content)
-    assert "# Canvas Composer DSL Specification" in str(first.content)
-    assert '{"skill"' not in str(first.content)
+    assert str(first.content) == SPEC
+    assert "large_tool_results" not in str(first.content)
+
+
+async def test_instructions_too_large_to_keep_are_read_from_their_file(platform, tmp_path: Path) -> None:
+    miro(platform)
+    huge = "# Spec\n" + "\n".join(f"Rule {i}: " + "x" * 200 for i in range(3000))
+    platform.app_reply = json.dumps({"content": [{"type": "text", "text": json.dumps({"skill": huge})}]})
+    name, args = "tool_miro__canvas_get_canvas_composer_skill", {"step": "dsl"}
+    r, model = runner(platform, tmp_path, [call(name, args, cid="m0"), call(name, args, cid="m1"),
+                                           AIMessage(content="done")])
+    out = await r.prompt(turn_request(LEAD, "draw", token="tok-lead", role="lead", message_id="m0"))
+    assert out.status == "done", out
+    results = [m for m in model.seen[-1] if isinstance(m, ToolMessage)]
+    assert "large_tool_results" in str(results[0].content)
+    # Asked again, the agent is pointed at the file, not told it has the text.
+    assert "Not run" in str(results[1].content) and "large_tool_results/m0" in str(results[1].content)
+
+
+async def test_instructions_no_longer_in_the_conversation_can_be_read_again() -> None:
+    class Request:
+        def __init__(self, cid, state):
+            self.tool_call = {"name": "app__help", "args": {}, "id": cid}
+            self.state = state
+
+    async def handler(request):
+        return ToolMessage(content="how to", tool_call_id=request.tool_call["id"], name="app__help")
+
+    g = guard.TurnGuard(budget=100)
+    first = await g.awrap_tool_call(Request("h0", {"messages": []}), handler)
+    again = await g.awrap_tool_call(Request("h1", {"messages": [first]}), handler)
+    assert "Not run" in str(again.content)
+    # Summarized away: it runs.
+    assert str((await g.awrap_tool_call(Request("h2", {"messages": []}), handler)).content) == "how to"
 
 
 async def test_the_same_call_twice_in_one_step_runs_once(platform, tmp_path: Path) -> None:

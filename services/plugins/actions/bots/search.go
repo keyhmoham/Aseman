@@ -11,7 +11,7 @@ import (
 )
 
 // SearchBots lists bots platform-wide (any owner), optionally filtered by one
-// or more comma-separated kinds (agent, miniapp, tool) and a name substring,
+// or more comma-separated kinds (agent, tool) and a name substring,
 // newest first. This powers the Explore → global search so the whole platform's
 // agents/tools are discoverable, not just the caller's own bots.
 func (s *Service) SearchBots(ctx context.Context, query, kind string, limit, offset int) ([]bot.Bot, error) {
@@ -60,7 +60,7 @@ func (s *Service) SearchBots(ctx context.Context, query, kind string, limit, off
 type botSearchAction struct{ s *Service }
 
 func (a *botSearchAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "bots", Name: "bot_search", Summary: "Search agents/miniapps/tools across the whole platform"}
+	return api.ActionMeta{Namespace: "bots", Name: "bot_search", Summary: "Search agents and apps across the whole platform"}
 }
 func (a *botSearchAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireAuthenticated(req); err != nil {
@@ -68,7 +68,7 @@ func (a *botSearchAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 	}
 	var in struct {
 		Query  string `json:"query,omitempty"`
-		Kind   string `json:"kind,omitempty"` // agent | miniapp | tool
+		Kind   string `json:"kind,omitempty"` // agent | tool
 		Limit  int    `json:"limit,omitempty"`
 		Offset int    `json:"offset,omitempty"`
 	}

@@ -206,7 +206,7 @@ second and rounded up to whole credits (a 2 s command is not a minute).
 | **Sandbox** (a space's shared computer) | the platform's sandbox rate × the seconds a command or agent used it | the node |
 | **Agent** | the agent's own per-minute rate (else the platform's agent rate) × the seconds of the turn — time only; its machine is the sandbox, billed apart | the agent's owner and the node |
 | **Model tokens** | input / output tokens × the model's prices per 1M (set per model on its LLM provider) | the provider's owner |
-| **Tool or miniapp** | its time (its own rates, else the platform's tool rates, × its resources) **plus** its flat price per call (`cost.per_call`, set by its owner or an admin in its price form) | the tool's owner and the node, half each |
+| **App** (a tool) | its time (its own rates, else the platform's app rates, × its resources) **plus** its flat price per call (`cost.per_call`, set by its owner or an admin in its price form) | the tool's owner and the node, half each |
 
 The bots namespace resolves all of it in one place (`costFor`). Every agent
 turn is billed once, where it runs, to the person who started it (including the
@@ -244,14 +244,14 @@ done is never refused, so a run can finish at most one step past the cap.
   system, metadata, messages, files and per-bot isolated key-value storage.
 - **users** — accounts, JSON-tree metadata with public/private paths, files,
   direct messaging.
-- **bots** — VM lifecycle, bot metadata (`kind` agent/miniapp/tool), the elpian
-  `frontend` bundle for miniapps (`frontend_set`/`frontend_get`), bot host
+- **bots** — VM lifecycle, bot metadata (`kind` agent or tool — an app), the
+  elpian `frontend` bundle of an app (`frontend_set`/`frontend_get`), bot host
   functions (global KV, network ops) and direct bot messaging.
 - **message** — the universal packet transport between users and bots:
   - `message.send` — a fire-and-forget packet to a user or bot.
   - `message.ask` — a request to a user or bot that expects a response. When
     the target is a bot the ask is routed synchronously to its VM (an agent's
-    reply, or a wasm miniapp backend's `ask` host function); when the
+    reply, or a wasm app backend's `ask` host function); when the
     target is a user the ask is stored and answered via `message.respond`.
   - `message.respond`, `message.get`, `message.list`, `message.requests`.
 - **posts** — the social feed: `post_create`, `post_get`, `post_delete`,
@@ -306,20 +306,19 @@ done is never refused, so a run can finish at most one step past the cap.
   `GET /v1/partner/talent-requests/{id}`. Each request carries `poster: {name, email}` so
   the partner can get in touch (the post form tells the poster so); which project it
   came from is never in the partner API. 120 calls a minute per key.
-- **market** — publish, discover and install agents and miniapps:
+- **market** — publish, discover and install agents and apps:
   `publish`, `unpublish`, `list`, `get`, `install`, `my_listings`.
 
-### Agents & miniapps
+### Agents & apps
 
 Every agent is a **bot** managed through the VMM layer; agents run on the
 deepagents VM (skills/instructions YAML as the image, token usage metered as
-cost). Every miniapp is also a **bot**: its backend is a wasm VM that exports
-an `ask` host function (see `plugins/adapters/vmm/wasm`), and its frontend is
-an **elpian** bundle served by the bot and rendered inside the client's elpian
-sandbox. In the client UI miniapps surface as **tools**.
+cost). Every app is a bot too, of kind `tool` (see below). There is one kind
+of app: the retired `miniapp` kind (a wasm backend with an elpian frontend)
+is migrated to `tool` when the node starts, bots and market listings alike.
 
-A miniapp frontend talks to its backend through two actions:
-`message.ask` (request/response — used by miniapp backends and chat agents)
+A static app frontend talks to its backend through two actions:
+`message.ask` (request/response — used by wasm backends and chat agents)
 and `message.send` (fire-and-forget). Every such call is signed by the user,
 so the backend always sees the caller's identity.
 
@@ -353,7 +352,7 @@ acts only in the space it was called from.
 
 | Mode | What it is |
 |---|---|
-| `static` | an Elpian miniapp: a program on the Elpian VM (compiled to bytecode by the node's tool compiler, or uploaded compiled) or QuickJS, run by the app; it calls microtools with `tool.call`, and on phones may publish its compact widget's summary with `tool.compact` (`tool.context().display` says how it is shown) |
+| `static` | an Elpian program on the Elpian VM (compiled to bytecode by the node's tool compiler, or uploaded compiled) or QuickJS, run by the app; it calls microtools with `tool.call`, and on phones may publish its compact widget's summary with `tool.compact` (`tool.context().display` says how it is shown) |
 | `generative` | A2UI generated from the deployer's skill the first time anyone opens it, kept in the **component registry** (`tool_components`, keyed by the skill's version and the backend's microtools) and served from there afterwards, filled with fresh microtool data per request; its buttons map to microtools |
 
 A tool without a generative frontend still gets an interface where one is
@@ -437,7 +436,7 @@ The platform's own APIs are the agents' transport:
 |---|---|
 | people ↔ agents | room messages (`spaces.message_send` / `message_list`) and direct chats: a one-room space per pair (`spaces.direct_open`, listed with project rooms by `spaces.chat_list`, pinned chats first); `users.dm_send` / `dm_list` still work and mirror into that room. A direct chat with oneself is Saved Messages. Any room: `message_edit` and `message_delete` by the sender (in a project a manager can delete any message), `typing_set`, `chat_pin`, `message_report` (a copy of the last messages goes to the admins: `admin_chat_reports`, `admin_chat_report_resolve`); a direct chat only: `chat_clear` (deleted for the caller until a newer message) and `direct_block` (neither side can write). `message_list` carries `typing` and, for a direct chat, `peer_seen_at`, `blocked` and `can_send` |
 | lead ↔ subagents (and any agent ↔ agent) | room messages: the delegating agent mentions the agent it hands work to; the agent's answer is a message whose `reply_to` is the hand-off |
-| agents → tools | `spaces.ask`: the shared sandbox (`raw` shell commands), tool and miniapp bots, and platform tools (`tool` + `args`: files, images, previews, routines) |
+| agents → tools | `spaces.ask`: the shared sandbox (`raw` shell commands), apps, and platform tools (`tool` + `args`: files, images, previews, routines) |
 | work logs and live status | `spaces.agent_log` (log messages in the room + the room's live activity) |
 | questions to people | `spaces.agent_questions` / `spaces.agent_answer`, or a plain reply in the room |
 | recruiting specialists | `spaces.agent_recruit` |
@@ -539,20 +538,20 @@ cd plugins/adapters/vmm/deepagents/runtime && pip install -r requirements-dev.tx
 Every space owns a **shared sandbox** — itself a bot (kind `tool`) provisioned
 lazily and joined to the space as a member. Its backbone is selected by one
 config variable, `sandbox.backend`: a **docker container** (VM type `container`,
-the default) or a **Modal remote sandbox** (VM type `modal`). Agents, miniapps
+the default) or a **Modal remote sandbox** (VM type `modal`). Agents, apps
 and users all talk to it (and to each other) through `spaces.ask`. The sandbox
 is **started on agent activity** and **stopped after an idle window** (2
 minutes) — never deleted, restarted on the next activity.
 
 When an agent takes a turn in a space, the runtime reads the space's tools
-(`spaces.tools_list`) — every miniapp/tool installed in the space **plus the
+(`spaces.tools_list`) — every app installed in the space **plus the
 sandbox** — and exposes them to the model. Calling any of them routes back
 through `spaces.ask`:
 
 | tool | backend | routing |
 |---|---|---|
 | `execute` and the file tools | shared docker/container or modal sandbox VM | `spaces.ask` (`raw`) → docker/modal exec (`Send`) |
-| `ask_<miniapp>` | wasm miniapp VM | `spaces.ask` → wasm `ask` host fn |
+| `ask_<app>` | wasm app VM | `spaces.ask` → wasm `ask` host fn |
 | platform tools (`file_send`, `image_generate`, `proxy_*`, `routine_*`) | the spaces namespace | `spaces.ask` (`tool` + `args`) |
 
 ```bash
@@ -560,7 +559,7 @@ through `spaces.ask`:
 ./bin/tradera call spaces.tools_list space=<space-id>
 # run a shell command in the shared sandbox
 ./bin/tradera call spaces.sandbox_exec space=<space-id> command="ls /"
-# ask an agent (it may call sandbox + miniapp tools)
+# ask an agent (it may call sandbox + apps)
 ./bin/tradera call spaces.ask space=<space-id> bot=<agent-bot> body="..."
 ```
 

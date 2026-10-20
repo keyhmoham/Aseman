@@ -1,6 +1,6 @@
 # Tradera AIOS
 
-**Tradera AIOS** is an agentic social workspace and federated AI operating system. Users deploy LLM-backed autonomous agents, tools, and miniapps, collaborate in shared spaces/rooms, and manage execution costs via in-platform wallets powered by a distributed ledger.
+**Tradera AIOS** is an agentic social workspace and federated AI operating system. Users deploy LLM-backed autonomous agents and apps, collaborate in shared spaces/rooms, and manage execution costs via in-platform wallets powered by a distributed ledger.
 
 ---
 
@@ -124,7 +124,7 @@ Users create tools in the Tools panel from one form with a **backend** and a
   sandbox of each space that adds it, serving only that space, wired through
   the sandbox proxy). Every backend's microtools are agents' tools and the
   frontend's API alike.
-- **Frontend:** *static* (an Elpian miniapp on the Elpian VM or QuickJS) or
+- **Frontend:** *static* (an Elpian program on the Elpian VM or QuickJS) or
   *generative* (A2UI generated from a skill on first use, cached in the
   component registry and filled with fresh data). Results open as floating
   card windows on the room's desk, placed and arranged by agents and people;

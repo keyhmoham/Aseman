@@ -13,7 +13,7 @@ import (
 	"github.com/tradera/tradera/plugins/adapters/database/ports"
 )
 
-// BotProfile assembles the public-facing profile of a bot (agent, miniapp or
+// BotProfile assembles the public-facing profile of a bot (agent, app or
 // tool) from its persisted record, its account metadata (description), live VM
 // usage, runtime entities and its marketplace listing when published.
 func (s *Service) BotProfile(ctx context.Context, botID identity.ID) (map[string]any, error) {
@@ -99,7 +99,7 @@ func (s *Service) BotProfile(ctx context.Context, botID identity.ID) (map[string
 type botProfileAction struct{ s *Service }
 
 func (a *botProfileAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "bots", Name: "bot_profile", Summary: "Rich profile for an agent, miniapp or tool"}
+	return api.ActionMeta{Namespace: "bots", Name: "bot_profile", Summary: "Rich profile for an agent or app"}
 }
 func (a *botProfileAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	var in struct {

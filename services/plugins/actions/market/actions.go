@@ -14,7 +14,7 @@ import (
 type publishAction struct{ s *Service }
 
 func (a *publishAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "market", Name: "publish", Summary: "Publish an agent or miniapp to the marketplace"}
+	return api.ActionMeta{Namespace: "market", Name: "publish", Summary: "Publish an agent or app to the marketplace"}
 }
 func (a *publishAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireAuthenticated(req); err != nil {
@@ -22,7 +22,7 @@ func (a *publishAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	}
 	var in struct {
 		Bot         string `json:"bot"`
-		Type        string `json:"type"` // agent | miniapp
+		Type        string `json:"type"` // agent | tool
 		Name        string `json:"name,omitempty"`
 		Description string `json:"description,omitempty"`
 		Price       int64  `json:"price,omitempty"`
@@ -77,7 +77,7 @@ func (a *unpublishAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 type listAction struct{ s *Service }
 
 func (a *listAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "market", Name: "list", Summary: "Browse agents and miniapps in the marketplace"}
+	return api.ActionMeta{Namespace: "market", Name: "list", Summary: "Browse agents and apps in the marketplace"}
 }
 func (a *listAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireAuthenticated(req); err != nil {

@@ -864,9 +864,14 @@ func (a *payBotAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 type ledgerListAction struct{ s *Service }
 
 func (a *ledgerListAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "finance", Name: "ledger_list", Summary: "List ledger entries"}
+	return api.ActionMeta{Namespace: "finance", Name: "ledger_list", Summary: "List the node's ledger entries (admins only)"}
 }
 func (a *ledgerListAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+	// The node's whole ledger: every account's movements. A person's own
+	// activity is finance.account.
+	if err := helper.RequireNodeAdmin(ctx, a.s.R, req, a.s.K.Env()["admin_handle"]); err != nil {
+		return nil, err
+	}
 	var in struct {
 		Limit int `json:"limit"`
 	}

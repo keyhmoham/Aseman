@@ -183,7 +183,7 @@ func (s *Service) CreateBot(ctx context.Context, owner identity.ID, req CreateBo
 	if req.Kind == "" {
 		req.Kind = bot.KindAgent
 	}
-	// Every bot (agent/tool/miniapp) is metered. Default pricing: 1 credit per
+	// Every bot (agent or tool) is metered. Default pricing: 1 credit per
 	// minute base, 1 credit per vCPU-min, per GB of RAM-min and per GB of
 	// disk-min, plus token pricing for langchain agents (1 in / 2 out per 1000).
 	if req.Cost.PerMinute <= 0 {
@@ -205,12 +205,9 @@ func (s *Service) CreateBot(ctx context.Context, owner identity.ID, req CreateBo
 		req.Cost.TokenOutRate = 2
 	}
 	switch req.Kind {
-	case bot.KindAgent, bot.KindMiniapp, bot.KindTool:
+	case bot.KindAgent, bot.KindTool:
 	default:
-		return nil, errs.InvalidArgument("kind must be agent, miniapp or tool")
-	}
-	if req.Kind == bot.KindMiniapp && req.VMType != bot.VMTypeWASM {
-		return nil, errs.InvalidArgument("miniapp bots must use the wasm VM")
+		return nil, errs.InvalidArgument("kind must be agent or tool")
 	}
 	if req.ImageRef == "" && req.SpecYML != "" {
 		// Build an image from the yml spec first.
@@ -248,15 +245,12 @@ func (s *Service) CreateBot(ctx context.Context, owner identity.ID, req CreateBo
 			}
 			req.ImageRef = img.Ref
 		}
-	case bot.KindMiniapp, bot.KindTool:
+	case bot.KindTool:
 		if req.ImageRef == "" && req.Module != "" {
 			req.ImageRef = req.Module
 		}
 		if req.ImageRef == "" {
 			return nil, errs.InvalidArgument(string(req.Kind) + " requires a module or image reference")
-		}
-		if req.Kind == bot.KindMiniapp && req.Frontend == "" {
-			return nil, errs.InvalidArgument("miniapp requires an elpian frontend bundle")
 		}
 	}
 	node := s.K.NodeID()
@@ -431,6 +425,21 @@ func (s *Service) GetBot(ctx context.Context, id identity.ID) (*bot.Bot, error) 
 // migrateAgentEngine moves an agent recorded on an engine this node no longer
 // runs onto the deep agents runtime. Its spec is engine-neutral (name, model,
 // instructions, skills), so nothing else changes.
+// migrateRetiredKinds turns bots stored under the retired "miniapp" kind into
+// tools: an app is a tool, whatever it was created as.
+func (s *Service) migrateRetiredKinds(ctx context.Context) {
+	var old []bot.Bot
+	if err := s.R.List(ctx, "bots", database.Filter{Equal: map[string]any{"kind": "miniapp"}}, &old); err != nil {
+		return
+	}
+	for i := range old {
+		old[i].Kind = bot.KindTool
+		if err := s.R.Update(ctx, "bots", old[i].ID, &old[i]); err != nil {
+			s.L.Warn("could not migrate an app to a tool", "bot", old[i].ID.String(), "error", err)
+		}
+	}
+}
+
 func (s *Service) migrateAgentEngine(ctx context.Context, rec *bot.Bot) {
 	if rec.Kind != bot.KindAgent {
 		return
@@ -522,7 +531,7 @@ func (s *Service) SendMessage(ctx context.Context, botID identity.ID, body strin
 		return "", errs.New(errs.CodeUnavailable, "no VMM adapter active")
 	}
 	// Agents work in a space sandbox: a direct conversation runs in the
-	// caller's space. Wasm miniapp backends answer through their exported ask
+	// caller's space. Wasm app backends answer through their exported ask
 	// host function. Everything else is recorded with no synchronous reply.
 	switch rec.VMType {
 	case bot.VMTypeDeepAgents:
@@ -531,7 +540,7 @@ func (s *Service) SendMessage(ctx context.Context, botID identity.ID, body strin
 		}
 		return s.Agents.AskDirect(ctx, helper.Actor(ctx), botID, body, attachments)
 	case bot.VMTypeWASM, bot.VMTypeMCP, bot.VMTypeInstalled:
-		// A wasm miniapp's ask host function, or a remote MCP tool's call.
+		// A wasm app's ask host function, or a remote MCP tool's call.
 		if wm, ok := vm.(interface {
 			Send(ctx context.Context, vmID, message string) (string, error)
 		}); ok {
@@ -1095,7 +1104,7 @@ func (a *botNetworkCallAction) Handle(ctx context.Context, req *api.ActionReques
 	return helper.JSON(map[string]any{"status": resp.Status, "body": string(resp.Body)})
 }
 
-// SetFrontend stores (or clears) the elpian bundle a miniapp bot serves to
+// SetFrontend stores (or clears) the elpian bundle an app serves to
 // clients. Only the bot owner/account may set it. The canonical copy lives in
 // the bot's entity store under the frontend contract key.
 func (s *Service) SetFrontend(ctx context.Context, caller identity.ID, botID identity.ID, bundle string, bundleRef string) (*bot.Bot, error) {
@@ -1123,7 +1132,7 @@ func (s *Service) SetFrontend(ctx context.Context, caller identity.ID, botID ide
 }
 
 // Frontend returns the elpian bundle of a bot, reading the entity store first
-// and falling back to the legacy column. Miniapp frontends are public to
+// and falling back to the legacy column. App frontends are public to
 // authenticated users (they run sandboxed in the client); backend access is
 // still gated by user-signed asks.
 func (s *Service) Frontend(ctx context.Context, botID identity.ID) (string, error) {
@@ -1143,7 +1152,7 @@ func (s *Service) Frontend(ctx context.Context, botID identity.ID) (string, erro
 type botFrontendSetAction struct{ s *Service }
 
 func (a *botFrontendSetAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "bots", Name: "frontend_set", Summary: "Set the elpian frontend bundle of a miniapp bot"}
+	return api.ActionMeta{Namespace: "bots", Name: "frontend_set", Summary: "Set the elpian frontend bundle of an app"}
 }
 func (a *botFrontendSetAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireAuthenticated(req); err != nil {
@@ -1171,7 +1180,7 @@ func (a *botFrontendSetAction) Handle(ctx context.Context, req *api.ActionReques
 type botFrontendGetAction struct{ s *Service }
 
 func (a *botFrontendGetAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "bots", Name: "frontend_get", Summary: "Fetch the elpian frontend bundle of a miniapp bot"}
+	return api.ActionMeta{Namespace: "bots", Name: "frontend_get", Summary: "Fetch the elpian frontend bundle of an app"}
 }
 func (a *botFrontendGetAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireAuthenticated(req); err != nil {

@@ -6,18 +6,18 @@ import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/bot.dart';
 import '../../../elpian/elpian.dart';
-import '../elpian/miniapp_bridge.dart';
-import 'miniapp_theme.dart';
+import '../elpian/app_bridge.dart';
+import 'app_frontend_theme.dart';
 
-/// Full-screen sandbox that runs a miniapp's elpian frontend inside the
+/// Full-screen sandbox that runs an app's elpian frontend inside the
 /// client. The frontend talks to its wasm backend through the user-signed
 /// host bridge (message.ask / message.send). When [spaceId] is provided the
 /// shared per-space sandbox bridge (sandbox.exec, sandbox.upload, …) is also
 /// exposed so sandbox tooling (e.g. the file explorer) can drive the docker
 /// sandbox. The app's color system is injected as a stylesheet so the frontend
 /// follows the host theme.
-class MiniappSandboxScreen extends StatefulWidget {
-  const MiniappSandboxScreen({
+class AppFrontendScreen extends StatefulWidget {
+  const AppFrontendScreen({
     super.key,
     required this.dependencies,
     required this.bot,
@@ -29,10 +29,10 @@ class MiniappSandboxScreen extends StatefulWidget {
   final String spaceId;
 
   @override
-  State<MiniappSandboxScreen> createState() => _MiniappSandboxScreenState();
+  State<AppFrontendScreen> createState() => _AppFrontendScreenState();
 }
 
-class _MiniappSandboxScreenState extends State<MiniappSandboxScreen> {
+class _AppFrontendScreenState extends State<AppFrontendScreen> {
   String? _source;
   Map<String, dynamic>? _manifest;
   String? _error;
@@ -74,7 +74,7 @@ class _MiniappSandboxScreenState extends State<MiniappSandboxScreen> {
         actions: [
           if (_source != null)
             IconButton(
-              tooltip: 'Reload miniapp',
+              tooltip: 'Reload app',
               icon: const Icon(Icons.refresh_rounded),
               onPressed: () {
                 setState(() => _loading = true);
@@ -99,7 +99,7 @@ class _MiniappSandboxScreenState extends State<MiniappSandboxScreen> {
             const Icon(Icons.error_outline_rounded,
                 size: 44, color: AppColors.danger),
             const SizedBox(height: 12),
-            const Text('Could not load miniapp frontend',
+            const Text('Could not load the app',
                 style: TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             Text(_error!,
@@ -112,34 +112,34 @@ class _MiniappSandboxScreenState extends State<MiniappSandboxScreen> {
       );
     }
     if (_source == null || _source!.isEmpty) {
-      return const Center(child: Text('This miniapp has no frontend bundle.'));
+      return const Center(child: Text('This app has no screen.'));
     }
-    final bridge = MiniappHostBridge(
+    final bridge = AppHostBridge(
       widget.dependencies.service,
       botId: widget.bot.id,
       userId: widget.dependencies.sessionController.session?.accountId ?? '',
       spaceId: widget.spaceId,
     );
     return ElpianVmWidget.fromCode(
-      machineId: 'miniapp-${widget.bot.id}',
+      machineId: 'app-${widget.bot.id}',
       code: _source!,
       runtime: ElpianRuntime.quickJs,
-      stylesheet: MiniappTheme.stylesheet(Theme.of(context)),
+      stylesheet: AppFrontendTheme.stylesheet(Theme.of(context)),
       hostHandlers: bridge.buildHostHandlers(),
       onUpdateApp: (data) {
-        debugPrint('miniapp updateApp: $data');
+        debugPrint('app updateApp: $data');
       },
     );
   }
 }
 
-/// Default QuickJS template shipped for newly created miniapps. It renders a
+/// Default QuickJS template shipped for newly created apps. It renders a
 /// minimal card and echoes a backend call through `server.call`.
-const String kDefaultMiniappTemplate = r'''
+const String kDefaultAppTemplate = r'''
 function MainComponent() {
   return { type: 'Column', props: { style: { padding: '20', gap: '12' } }, children: [
     { type: 'Text', props: { text: 'Hello from elpian', style: { fontSize: '22', fontWeight: 'bold' } } },
-    { type: 'Text', props: { text: 'This miniapp runs inside the Tradera sandbox.' } },
+    { type: 'Text', props: { text: 'This app runs inside the Tradera sandbox.' } },
     { type: 'Button', props: { text: 'Call backend', className: 'primary' }, events: { tap: 'ping' } },
     { type: 'Text', key: 'reply', props: { text: 'Press the button to ask the backend.' } }
   ] };

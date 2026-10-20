@@ -5,9 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tradera/src/core/network/api_client.dart';
 import 'package:tradera/src/core/theme/app_colors.dart';
 import 'package:tradera/src/data/services/tradera_service.dart';
-import 'package:tradera/src/features/miniapps/domain/sandbox_explorer_frontend.dart';
-import 'package:tradera/src/features/miniapps/elpian/miniapp_bridge.dart';
-import 'package:tradera/src/features/miniapps/presentation/miniapp_theme.dart';
+import 'package:tradera/src/features/tools/domain/sandbox_explorer_frontend.dart';
+import 'package:tradera/src/features/tools/elpian/app_bridge.dart';
+import 'package:tradera/src/features/tools/presentation/app_frontend_theme.dart';
 
 /// A service whose sandbox methods return canned values (no network).
 class _SandboxStubService extends TraderaService {
@@ -44,8 +44,8 @@ class _SandboxStubService extends TraderaService {
 }
 
 void main() {
-  test('miniapp theme stylesheet maps semantic classes to AppColors', () {
-    final sheet = MiniappTheme.stylesheet();
+  test('app theme stylesheet maps semantic classes to AppColors', () {
+    final sheet = AppFrontendTheme.stylesheet();
     final rules = (sheet['rules'] as List).cast<Map<String, dynamic>>();
     final bySelector = {
       for (final r in rules) r['selector'] as String: (r['styles'] as Map),
@@ -77,7 +77,7 @@ void main() {
 
   test('bridge sandbox.exec returns typed output', () async {
     final service = _SandboxStubService();
-    final bridge = MiniappHostBridge(service,
+    final bridge = AppHostBridge(service,
         botId: 'bot-1', userId: 'u1', spaceId: 'space-1');
     final handlers = bridge.buildHostHandlers();
 
@@ -90,7 +90,7 @@ void main() {
   });
 
   test('bridge sandbox.status returns typed object', () async {
-    final bridge = MiniappHostBridge(_SandboxStubService(),
+    final bridge = AppHostBridge(_SandboxStubService(),
         botId: 'bot-1', spaceId: 'space-1');
     final raw = await bridge.buildHostHandlers()['sandbox.status']!(
         'sandbox.status', '[]');
@@ -100,14 +100,14 @@ void main() {
   });
 
   test('bridge without spaceId hides sandbox handlers', () {
-    final bridge = MiniappHostBridge(_SandboxStubService(), botId: 'bot-1');
+    final bridge = AppHostBridge(_SandboxStubService(), botId: 'bot-1');
     expect(bridge.buildHostHandlers().containsKey('sandbox.exec'), isFalse);
     expect(bridge.buildHostHandlers().containsKey('server.call'), isTrue);
   });
 
   test('web index.html includes the Elpian VM and QuickJS web runtimes', () {
     // Without these the browser throws "QuickJS web runtime not loaded" and
-    // miniapps (Sandbox Explorer included) cannot boot on the web target.
+    // apps (Sandbox Explorer included) cannot boot on the web target.
     final index = File('web/index.html').readAsStringSync();
     for (final runtime in const [
       'elpian/web_runtime/quickjs_web_runtime.js',

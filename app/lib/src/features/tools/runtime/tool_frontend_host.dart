@@ -1,15 +1,15 @@
 import 'dart:async';
 
 import '../../../elpian/elpian.dart';
-import '../../miniapps/elpian/host_values.dart';
+import '../../tools/elpian/host_values.dart';
 import '../data/tools_api.dart';
 
-/// The host a tool's static frontend runs against — an Elpian miniapp on the
+/// The host a tool's static frontend runs against — an Elpian app on the
 /// Elpian VM or QuickJS. Its program reaches its own backend, whatever the
 /// backend's mode, by calling microtools:
 ///
 ///   * `tool.call(microtool, args)` → the microtool's result
-///     (`server.call` is the same, for miniapp programs written against it)
+///     (`server.call` is the same, for app programs written against it)
 ///   * `tool.microtools()`         → what the backend offers
 ///   * `tool.context()`            → `{tool, space, room, user, display}`;
 ///     `display` is how the frontend is shown: `full` (a desk card window),

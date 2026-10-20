@@ -8,7 +8,7 @@ import '../../../genui/genui.dart'
         CompactSummaryView,
         FrontendDisplay,
         FrontendPresentation;
-import '../../miniapps/presentation/miniapp_theme.dart';
+import '../../tools/presentation/app_frontend_theme.dart';
 import '../connect/mcp_connect_dialog.dart';
 import '../data/tools_api.dart';
 import '../domain/tool_models.dart';
@@ -268,7 +268,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
             onCompact: _onCompact,
             onExpand: FrontendPresentation.maybeOf(context)?.onExpand);
         final machineId = 'tool-${widget.botId}-${identityHashCode(this)}';
-        final stylesheet = MiniappTheme.stylesheet(Theme.of(context));
+        final stylesheet = AppFrontendTheme.stylesheet(Theme.of(context));
         final Widget program =
             payload.runtime == ToolRuntime.elpian && payload.bytecode != null
                 ? ElpianVmWidget.fromBytecode(
@@ -308,7 +308,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
             padding: const EdgeInsets.all(16), child: view);
       case FrontendMode.none:
         if (compact) return const SizedBox.shrink();
-        return const Center(child: Text('This tool has no frontend.'));
+        return const Center(child: Text('This app has no screen.'));
     }
   }
 }
@@ -371,7 +371,7 @@ class _FrontendError extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.error_outline_rounded, color: scheme.error),
           const SizedBox(height: 8),
-          const Text('Could not open the tool',
+          const Text('Could not open the app',
               style: TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
           Text('$error',

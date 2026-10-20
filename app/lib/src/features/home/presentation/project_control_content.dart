@@ -15,6 +15,7 @@ class ProjectControlContent extends StatefulWidget {
     required this.results,
     required this.onAction,
     this.onConnect,
+    this.onAddApp,
   });
   final String area;
   final String spaceId;
@@ -25,6 +26,9 @@ class ProjectControlContent extends StatefulWidget {
   /// token), then reloads.
   final Future<void> Function(String botId, String name, bool reconnect)?
       onConnect;
+
+  /// Adds an MCP app to the project (catalog or address, then sign-in).
+  final VoidCallback? onAddApp;
   @override
   State<ProjectControlContent> createState() => _ProjectControlContentState();
 }
@@ -54,7 +58,6 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
             'Apps' => _apps(),
             'Routines' => _routines(),
             'Memory' => _memory(),
-            'Plugins' => _plugins(),
             'Previews' => _previews(),
             'Usage' => _usage(),
             _ => const SizedBox.shrink(),
@@ -282,76 +285,6 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
     ]);
   }
 
-  Widget _apps() {
-    final widgets =
-        _maps(_map(widget.results['spaces.widget_list'])['widgets']);
-    final tools = _maps(_map(widget.results['spaces.tools_list'])['tools']);
-    // commands_list answers with each tool and the commands it offers here.
-    final listed = _map(widget.results['tools.commands_list']);
-    final commands = [
-      ..._maps(listed['commands']),
-      for (final t in _maps(listed['tools'])) ..._maps(t['commands']),
-    ];
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _cards(
-          'Installed apps',
-          widgets,
-          Icons.widgets_outlined,
-          (row) => widget.onAction('spaces', 'widget_action', {
-                'space': widget.spaceId,
-                'widget': row['id'],
-                'action': 'open'
-              })),
-      const SizedBox(height: 18),
-      _cards(
-          'Connected tools',
-          tools,
-          Icons.build_outlined,
-          (row) => widget.onAction(
-              'tools', 'invoke', {'space': widget.spaceId, 'bot': row['id']})),
-      const SizedBox(height: 18),
-      AdminSectionCard(
-          title: 'Commands (${commands.length})',
-          child: commands.isEmpty
-              ? const Text('No commands are exposed by installed tools.')
-              : Wrap(spacing: 8, runSpacing: 8, children: [
-                  for (final c in commands)
-                    ActionChip(
-                        avatar: const Icon(Icons.terminal_rounded, size: 16),
-                        label: Text('/${c['name'] ?? c['command']}'),
-                        onPressed: () => widget.onAction('tools', 'invoke', {
-                              'space': widget.spaceId,
-                              'function': c['name'] ?? c['command']
-                            }))
-                ]))
-    ]);
-  }
-
-  Widget _cards(String title, List<Map<String, dynamic>> rows, IconData icon,
-          ValueChanged<Map<String, dynamic>> open) =>
-      AdminSectionCard(
-          title: '$title (${rows.length})',
-          child: rows.isEmpty
-              ? Text('No ${title.toLowerCase()} yet.')
-              : Wrap(spacing: 10, runSpacing: 10, children: [
-                  for (final row in rows)
-                    SizedBox(
-                        width: 260,
-                        child: Card(
-                            child: ListTile(
-                                leading: Icon(icon),
-                                title: Text(
-                                    '${row['name'] ?? row['title'] ?? row['id']}',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w800)),
-                                subtitle: Text(
-                                    '${row['description'] ?? row['status'] ?? ''}',
-                                    maxLines: 2),
-                                trailing:
-                                    const Icon(Icons.arrow_forward_rounded),
-                                onTap: () => open(row))))
-                ]));
-
   Widget _routines() {
     final rows = _maps(_map(widget.results['routines.list'])['routines']);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -430,39 +363,43 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
             }));
   }
 
-  Widget _plugins() {
+  Widget _apps() {
     final installed = _maps(_map(widget.results['spaces.tools_list'])['tools']);
-    // Whether each tool needs the caller's own account here, and has it.
+    // commands_list answers with each app, the commands it offers here and
+    // whether it needs the caller's own account, and has it.
+    final listed = _map(widget.results['tools.commands_list']);
     final connection = {
-      for (final t
-          in _maps(_map(widget.results['tools.commands_list'])['tools']))
-        '${t['bot_id']}': t,
+      for (final t in _maps(listed['tools'])) '${t['bot_id']}': t,
     };
-    final samples = _maps(_map(widget.results['tools.mcp_samples'])['samples']);
+    final commands = [
+      ..._maps(listed['commands']),
+      for (final t in _maps(listed['tools'])) ..._maps(t['commands']),
+    ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Align(
           alignment: Alignment.centerRight,
           child: FilledButton.icon(
-              onPressed: () =>
-                  widget.onAction('tools', 'mcp_register', const {}),
+              onPressed: widget.onAddApp ??
+                  () => widget.onAction('tools', 'mcp_register', const {}),
               icon: const Icon(Icons.add_rounded),
-              label: const Text('Add MCP server'))),
+              label: const Text('Add an app'))),
       const SizedBox(height: 14),
       AdminSectionCard(
-          title: 'Project connections (${installed.length})',
+          title: 'Apps (${installed.length})',
           padding: EdgeInsets.zero,
           child: installed.isEmpty
-              ? const AdminEmptyState('No project plugins',
-                  'Connect an MCP server or tool to this project.')
+              ? const AdminEmptyState(
+                  'No apps yet', 'Add an app or MCP server to this project.')
               : Column(children: [
                   for (final p in installed)
                     ListTile(
-                        leading: const CircleAvatar(
-                            child: Icon(Icons.extension_outlined)),
+                        leading:
+                            const CircleAvatar(child: Icon(Icons.apps_rounded)),
                         title: Text('${p['name'] ?? p['id']}',
                             style:
                                 const TextStyle(fontWeight: FontWeight.w800)),
-                        subtitle: Text('${p['url'] ?? p['description'] ?? ''}'),
+                        subtitle: Text('${p['description'] ?? p['url'] ?? ''}',
+                            maxLines: 2),
                         trailing: Wrap(
                             crossAxisAlignment: WrapCrossAlignment.center,
                             spacing: 5,
@@ -494,21 +431,30 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
                                           size: 18),
                                       label: const Text('Connect')),
                               ],
+                              TextButton(
+                                  onPressed: () => widget.onAction(
+                                          'tools', 'invoke', {
+                                        'space': widget.spaceId,
+                                        'bot': p['id']
+                                      }),
+                                  child: const Text('Run')),
                             ]))
                 ])),
-      if (samples.isNotEmpty) ...[
-        const SizedBox(height: 18),
-        AdminSectionCard(
-            title: 'MCP catalog',
-            child: Wrap(spacing: 8, runSpacing: 8, children: [
-              for (final s in samples)
-                ActionChip(
-                    avatar: const Icon(Icons.add_circle_outline, size: 17),
-                    label: Text('${s['name'] ?? s['url']}'),
-                    onPressed: () => widget.onAction('tools', 'mcp_register',
-                        {'name': s['name'], 'url': s['url']}))
-            ]))
-      ],
+      const SizedBox(height: 18),
+      AdminSectionCard(
+          title: 'Commands (${commands.length})',
+          child: commands.isEmpty
+              ? const Text('No commands are offered by this project’s apps.')
+              : Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final c in commands)
+                    ActionChip(
+                        avatar: const Icon(Icons.terminal_rounded, size: 16),
+                        label: Text('/${c['name'] ?? c['command']}'),
+                        onPressed: () => widget.onAction('tools', 'invoke', {
+                              'space': widget.spaceId,
+                              'function': c['name'] ?? c['command']
+                            }))
+                ])),
     ]);
   }
 
@@ -608,7 +554,7 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
             value: _credits(summary['compute']),
             icon: Icons.computer_outlined),
         AdminStatCard(
-            label: 'Models & tools',
+            label: 'Models & apps',
             value: _credits(_num(summary['llm']) + _num(summary['tools'])),
             icon: Icons.memory_outlined),
       ]),
@@ -626,7 +572,7 @@ class _ProjectControlContentState extends State<ProjectControlContent> {
       AdminDataTable(empty: 'No usage events yet.', columns: const [
         AdminTableColumn('When', width: 170),
         AdminTableColumn('Kind', width: 130),
-        AdminTableColumn('Agent / tool', width: 220),
+        AdminTableColumn('Agent / app', width: 220),
         AdminTableColumn('Room', width: 160),
         AdminTableColumn('Charge', width: 130, align: TextAlign.right)
       ], rows: [

@@ -305,7 +305,7 @@ func (s *Service) agentContext(ctx context.Context, spaceID, roomID identity.ID,
 		sort.Strings(tools)
 		writeList(&b, "People", people)
 		writeList(&b, "Other agents (delegate to them with the task tool, or message them)", agents)
-		writeList(&b, "Tools and miniapps", tools)
+		writeList(&b, "Apps", tools)
 	}
 	return strings.TrimSpace(b.String())
 }

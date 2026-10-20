@@ -91,7 +91,7 @@ func TestBillUsageDefaultsFreeBotsToOneCreditPerMinute(t *testing.T) {
 	s, ctx, owner, botID := entityHarness(t)
 	biller := &recordingBiller{}
 	s.Biller = biller
-	// entityHarness seeds a miniapp with no cost model.
+	// entityHarness seeds an app with no cost model.
 	if err := s.BillUsage(ctx, owner, botID, 30, "run"); err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestCostForAppliesPlatformPricing(t *testing.T) {
 	}{
 		{"the sandbox always follows the platform", bot.Bot{Name: "sbx-1", Kind: bot.KindTool, VMType: bot.VMTypeContainer, Cost: `{"per_minute":1}`},
 			bot.CostModel{PerMinute: 5, CPUPerMin: 2, MemoryPerGBMin: 1, DiskPerGBMin: 1}},
-		{"a tool without rates gets the tool defaults", bot.Bot{Name: "weather", Kind: bot.KindMiniapp, VMType: bot.VMTypeWASM},
+		{"a tool without rates gets the tool defaults", bot.Bot{Name: "weather", Kind: bot.KindTool, VMType: bot.VMTypeWASM},
 			bot.CostModel{PerMinute: 3, CPUPerMin: 1}},
 		{"a tool keeps its own rates", bot.Bot{Name: "render", Kind: bot.KindTool, VMType: bot.VMType("mcp"), Cost: `{"per_minute":0,"cpu_per_min":4}`},
 			bot.CostModel{CPUPerMin: 4}},

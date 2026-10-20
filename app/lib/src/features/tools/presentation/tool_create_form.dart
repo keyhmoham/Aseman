@@ -149,7 +149,7 @@ class _ToolFormState extends State<_ToolForm> {
   }
 
   String? _problem() {
-    if (name.text.trim().isEmpty) return 'Name the tool.';
+    if (name.text.trim().isEmpty) return 'Name the app.';
     final initial = widget.initial;
     if (initial != null && initial.mode != BackendMode.external) {
       // Its runtime cannot change; only its program can.
@@ -268,7 +268,7 @@ class _ToolFormState extends State<_ToolForm> {
   @override
   Widget build(BuildContext context) => AppFormFrame(
         icon: editing ? Icons.edit_outlined : Icons.widgets_outlined,
-        title: editing ? 'Edit tool' : 'Create tool',
+        title: editing ? 'Edit app' : 'Create app',
         subtitle: editing
             ? 'Change its name, description, backend program or frontend. Where it runs stays as it is.'
             : 'A backend whose microtools agents and people use, and a frontend people use it through.',
@@ -304,7 +304,7 @@ class _ToolFormState extends State<_ToolForm> {
                 AppChoice(BackendMode.external, 'External',
                     icon: Icons.public_rounded,
                     hint:
-                        'An MCP server you already run. Its tools become this tool’s microtools.'),
+                        'An MCP server you already run. Its tools become this app’s microtools.'),
                 AppChoice(BackendMode.managed, 'Managed',
                     icon: Icons.cloud_outlined,
                     hint:
@@ -329,7 +329,7 @@ class _ToolFormState extends State<_ToolForm> {
               AppChoice(FrontendMode.static, 'Static',
                   icon: Icons.phone_android_rounded,
                   hint:
-                      'An Elpian miniapp: your program, on the Elpian VM or QuickJS. It calls microtools with askHost(\'tool.call\', [name, args]).'),
+                      'Your program, on the Elpian VM or QuickJS. It calls microtools with askHost(\'tool.call\', [name, args]).'),
               AppChoice(FrontendMode.generative, 'Generative',
                   icon: Icons.auto_awesome_rounded,
                   hint:
@@ -436,8 +436,8 @@ class _ToolFormState extends State<_ToolForm> {
             child: Text(
               docker
                   ? '$where — ${t.image}:${t.port}${t.path}. '
-                      'To run it elsewhere or from another image, create a new tool.'
-                  : '$where. To run it elsewhere, create a new tool.',
+                      'To run it elsewhere or from another image, create a new app.'
+                  : '$where. To run it elsewhere, create a new app.',
               style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
             ),
           ),

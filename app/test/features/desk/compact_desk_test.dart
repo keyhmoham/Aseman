@@ -159,7 +159,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(phone(c));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Widget options').first);
+    await tester.tap(find.byTooltip('App options').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Circle'));
     await tester.pumpAndSettle();

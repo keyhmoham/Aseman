@@ -50,7 +50,7 @@ enum ToolRuntime {
 enum FrontendMode {
   none('', 'None'),
 
-  /// An Elpian miniapp: a program on the Elpian VM or QuickJS.
+  /// An Elpian app: a program on the Elpian VM or QuickJS.
   static('static', 'Static'),
 
   /// A2UI generated from a skill on first use, then served from the

@@ -7,10 +7,10 @@ import '../../../data/services/tradera_service.dart';
 import '../../../elpian/elpian.dart';
 import 'host_values.dart';
 
-/// Bridges a miniapp's elpian frontend to its backend bot through the user's
+/// Bridges an app's elpian frontend to its backend bot through the user's
 /// signed identity.
 ///
-/// A miniapp frontend (dart/JS compiled for the elpian sandbox) calls host
+/// An app frontend (dart/JS compiled for the elpian sandbox) calls host
 /// APIs that are serviced here:
 ///
 ///   * `server.call(name, args)`  → `message.ask` to the bot's backend, waiting
@@ -21,7 +21,7 @@ import 'host_values.dart';
 ///   * `ctx.user()`               → the signed-in user's context (id, handle).
 ///
 /// When a [spaceId] is provided the sandbox bridge is also exposed so a
-/// miniapp (e.g. the Sandbox Explorer file manager) can drive the space's
+/// app (e.g. the Sandbox Explorer file manager) can drive the space's
 /// shared docker sandbox:
 ///
 ///   * `sandbox.exec(command)`    → runs a shell command, returns its output.
@@ -32,8 +32,8 @@ import 'host_values.dart';
 ///
 /// The backend wasm VM receives the request with the user's identity on every
 /// call, so a bot backend can serve per-user data and enforce per-user policy.
-class MiniappHostBridge {
-  MiniappHostBridge(this.service,
+class AppHostBridge {
+  AppHostBridge(this.service,
       {required this.botId, this.userId = '', this.spaceId = ''});
 
   final TraderaService service;

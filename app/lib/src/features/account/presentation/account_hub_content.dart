@@ -224,7 +224,7 @@ class _AccountHubContentState extends State<AccountHubContent> {
           AdminTableColumn('Project', width: 260),
           AdminTableColumn('Agent', width: 120, align: TextAlign.right),
           AdminTableColumn('Compute', width: 120, align: TextAlign.right),
-          AdminTableColumn('Tools', width: 120, align: TextAlign.right),
+          AdminTableColumn('Apps', width: 120, align: TextAlign.right),
           AdminTableColumn('Models', width: 120, align: TextAlign.right),
           AdminTableColumn('Total', width: 130, align: TextAlign.right),
           AdminTableColumn('Details', width: 130, align: TextAlign.right)

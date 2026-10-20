@@ -81,7 +81,7 @@ func (s *Service) pricing(ctx context.Context) settings.Pricing {
 // costFor is the cost model a bot is billed with:
 //
 //   - a space's sandbox is priced by the platform (the sandbox rate);
-//   - a tool or miniapp uses the execution rates set on it, or the platform's
+//   - a tool uses the execution rates set on it, or the platform's
 //     tool rates when it has none;
 //   - an agent uses its own per-minute rate, or the platform's agent rate,
 //     and no resource rates (its machine, the sandbox, is billed apart).
@@ -99,7 +99,7 @@ func (s *Service) costFor(ctx context.Context, rec *bot.Bot) *bot.CostModel {
 	switch {
 	case rec.IsSandbox():
 		apply(s.pricing(ctx).Sandbox)
-	case rec.Kind == bot.KindTool || rec.Kind == bot.KindMiniapp:
+	case rec.Kind == bot.KindTool:
 		if !cost.ExecutionPriced() {
 			apply(s.pricing(ctx).Tool)
 		}
@@ -428,7 +428,7 @@ func (s *Service) chargeDelta(ctx context.Context, customer identity.ID, rec *bo
 		}
 		execPayees, execTypes = []identity.ID{nodeOwner}, []wallet.EntryType{wallet.EntryPayNode}
 		category = wallet.CategoryCompute
-	case rec.Kind == bot.KindTool || rec.Kind == bot.KindMiniapp:
+	case rec.Kind == bot.KindTool:
 		category = wallet.CategoryTool
 	}
 	if lc, ok := s.Biller.(LineCharger); ok {

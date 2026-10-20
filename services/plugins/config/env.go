@@ -180,7 +180,7 @@ func (c *Config) ApplyEnv() {
 // when a DSN is given (in-memory otherwise), the local cache and filesystem,
 // HTTP, the nomad and docker VMM providers when reachable, the deep agents
 // runtime (LLM providers are managed in the admin panel),
-// Modal sandboxes when credentials are set, and wasm miniapp backends.
+// Modal sandboxes when credentials are set, and wasm app backends.
 func (c *Config) AutoAdapters() []PluginSpec {
 	var out []PluginSpec
 	add := func(name string, cfg map[string]any) {

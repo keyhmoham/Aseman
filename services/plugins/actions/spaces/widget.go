@@ -17,8 +17,8 @@ import (
 	"github.com/tradera/tradera/plugins/adapters/database/ports"
 )
 
-// RoomWidgets returns the live desk-widget DSL for every miniapp/tool
-// installed in a room. The DSL is produced by asking each miniapp's backend VM
+// RoomWidgets returns the live desk-widget DSL for every app
+// installed in a room. The DSL is produced by asking each app's backend VM
 // ({"op":"widget",...}), which lets a widget update on the client's polling
 // interval. When the VM cannot answer, the stored widget/dsl metadata is used,
 // falling back to a generated default.
@@ -40,7 +40,7 @@ func (s *Service) RoomWidgets(ctx context.Context, spaceID, roomID identity.ID) 
 		if err != nil {
 			continue
 		}
-		if rec.Kind != bot.KindMiniapp && rec.Kind != bot.KindTool {
+		if rec.Kind != bot.KindTool {
 			continue
 		}
 		// The shared per-space sandbox is not a desk widget.
@@ -60,7 +60,7 @@ func (s *Service) RoomWidgets(ctx context.Context, spaceID, roomID identity.ID) 
 	return out, nil
 }
 
-// widgetFor resolves the desk-widget DSL for one miniapp: live from its backend
+// widgetFor resolves the desk-widget DSL for one app: live from its backend
 // VM, else stored metadata, else a generated default.
 func (s *Service) widgetFor(ctx context.Context, spaceID, roomID identity.ID, rec *bot.Bot) *widget.Widget {
 	raw := s.liveWidgetDSL(ctx, spaceID, roomID, rec)
@@ -93,7 +93,7 @@ func validWidget(w *widget.Widget) bool {
 	return len(w.Rows) > 0 || w.Title != "" || w.Version > 0
 }
 
-// liveWidgetDSL asks a miniapp's backend VM for its current widget DSL. The
+// liveWidgetDSL asks an app's backend VM for its current widget DSL. The
 // well-known "widget" op lets the backend serve live data on every poll.
 func (s *Service) liveWidgetDSL(ctx context.Context, spaceID, roomID identity.ID, rec *bot.Bot) string {
 	if rec.Kind == bot.KindAgent {
@@ -115,7 +115,7 @@ func (s *Service) liveWidgetDSL(ctx context.Context, spaceID, roomID identity.ID
 type widgetListAction struct{ s *Service }
 
 func (a *widgetListAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "spaces", Name: "widget_list", Summary: "List the desk-widget DSLs of miniapps installed in a room"}
+	return api.ActionMeta{Namespace: "spaces", Name: "widget_list", Summary: "List the desk-widget DSLs of apps installed in a room"}
 }
 func (a *widgetListAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireAuthenticated(req); err != nil {
@@ -153,7 +153,7 @@ func (a *widgetListAction) Handle(ctx context.Context, req *api.ActionRequest) (
 type widgetActionAction struct{ s *Service }
 
 func (a *widgetActionAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "spaces", Name: "widget_action", Summary: "Run a widget action against a miniapp backend VM (static ask)"}
+	return api.ActionMeta{Namespace: "spaces", Name: "widget_action", Summary: "Run a widget action against an app backend VM (static ask)"}
 }
 func (a *widgetActionAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireAuthenticated(req); err != nil {

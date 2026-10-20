@@ -76,7 +76,7 @@ plugins:
         options:
           modal_token_id: "..."
           modal_token_secret: "..."
-    - name: wasm              # miniapp backends (wasm VMs)
+    - name: wasm              # app backends (wasm VMs)
       enabled: true
       config:
         options:

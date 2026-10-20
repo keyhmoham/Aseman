@@ -34,7 +34,7 @@ class ApiResponse {
 
 /// The Tradera HTTP client. Every request is Ed25519-signed with the
 /// account's identity key and carries the session bearer token, so each action
-/// runs with the user's identity — this is what lets a miniapp frontend call
+/// runs with the user's identity — this is what lets an app frontend call
 /// its backend "as the user".
 class TraderaApiClient {
   TraderaApiClient({

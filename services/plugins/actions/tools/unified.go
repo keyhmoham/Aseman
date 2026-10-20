@@ -29,7 +29,7 @@ import (
 //	          service: Elpian VM, QuickJS or a docker image) or installed (run
 //	          inside the sandbox of each space that adds it, on the same three
 //	          runtimes)
-//	frontend  static (an Elpian miniapp program on the Elpian VM or QuickJS)
+//	frontend  static (an Elpian app program on the Elpian VM or QuickJS)
 //	          or generative (a skill A2UI is generated from on first use, then
 //	          served from the component registry)
 //

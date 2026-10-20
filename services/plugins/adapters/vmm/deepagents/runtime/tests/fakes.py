@@ -117,7 +117,7 @@ class Platform:
             {"name": "sandbox_exec", "kind": "tool", "description": "shell", **({"bot_id": SANDBOX_BOT} if self.has_computer else {})},
             {"name": "file_send", "kind": "tool", "description": "Attach a sandbox file.",
              "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "caption": {"type": "string"}}}},
-            {"name": "weather", "kind": "miniapp", "bot_id": "bot-weather", "description": "Weather forecasts."},
+            {"name": "weather", "kind": "tool", "bot_id": "bot-weather", "description": "Weather forecasts."},
             {"name": "frontend_show", "kind": "tool", "description": "Open a result in the tool's own interface on the desk.",
              "parameters": {"type": "object", "properties": {"tool": {"type": "string"}, "microtool": {"type": "string"},
                                                               "args": {"type": "object"}}, "required": ["tool"]}},

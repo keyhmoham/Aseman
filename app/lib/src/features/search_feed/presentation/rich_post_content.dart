@@ -434,7 +434,7 @@ class _InfoCard extends StatelessWidget {
     final (icon, color, title) = switch (card.kind) {
       CardKind.user => (Icons.person_rounded, AppColors.cyan, 'Trader'),
       CardKind.agent => (Icons.smart_toy_rounded, AppColors.primary, 'Agent'),
-      CardKind.tool => (Icons.extension_rounded, AppColors.warning, 'Tool'),
+      CardKind.tool => (Icons.apps_rounded, AppColors.warning, 'App'),
       CardKind.space => (Icons.hub_rounded, AppColors.success, 'Workspace'),
     };
     return Container(

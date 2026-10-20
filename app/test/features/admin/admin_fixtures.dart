@@ -248,8 +248,8 @@ Map<String, dynamic> adminFixtures() {
         },
         {
           'id': 'tool-2',
-          'name': 'Chart miniapp',
-          'kind': 'miniapp',
+          'name': 'Chart app',
+          'kind': 'tool',
           'description': 'Draws charts'
         },
       ]

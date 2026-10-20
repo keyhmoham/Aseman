@@ -1,16 +1,16 @@
-/// Desk-widget DSL served by the backend for a miniapp installed in a room.
+/// Desk-widget DSL served by the backend for an app installed in a room.
 ///
 /// The DSL describes the UI rendered on a room desk. It is refreshed by the
 /// client on a fixed interval ([refreshSec], default 10s) and may contain
 /// actions with inline parameters that make static ask requests to the
-/// miniapp's backend VM.
+/// app's backend VM.
 library;
 
 class DeskWidgetDsl {
   const DeskWidgetDsl({
     required this.botId,
     required this.name,
-    this.kind = 'miniapp',
+    this.kind = 'tool',
     this.status = '',
     required this.title,
     this.version = 1,
@@ -33,7 +33,7 @@ class DeskWidgetDsl {
     return DeskWidgetDsl(
       botId: (entry['bot_id'] as String?) ?? (d['bot_id'] as String?) ?? '',
       name: (entry['name'] as String?) ?? '',
-      kind: (entry['kind'] as String?) ?? 'miniapp',
+      kind: (entry['kind'] as String?) ?? 'tool',
       status: (entry['status'] as String?) ?? '',
       title: (d['title'] as String?) ?? (entry['name'] as String?) ?? 'Widget',
       version: (d['version'] as num?)?.toInt() ?? 1,

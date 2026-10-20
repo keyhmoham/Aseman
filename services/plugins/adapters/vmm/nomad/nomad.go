@@ -135,7 +135,7 @@ func (a *Adapter) Health(ctx context.Context) vmm.Health {
 // SupportedTypes implements vmm.VMM. Docker, plus the two tool backend
 // runtimes, which are docker tasks of the tool runtime image. The wasm driver
 // is not advertised: it is not available on standard Nomad agents, so wasm
-// miniapps keep running on the in-process wasm adapter.
+// apps keep running on the in-process wasm adapter.
 func (a *Adapter) SupportedTypes() []vmm.Type {
 	return []vmm.Type{vmm.TypeDocker, vmm.TypeElpian, vmm.TypeQuickJS}
 }

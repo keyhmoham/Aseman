@@ -192,7 +192,7 @@ class _AppPageContentState extends State<AdminPageContent> {
         'Projects' => _projects(),
         'Chat reports' => _chatReports(),
         'Agents' => _agents(),
-        'Tools' => _tools(),
+        'Apps' => _apps(),
         'Talent' => _talent(),
         'Talent requests' => _talentRequests(),
         'Finance · Overview' => _finance(),
@@ -205,7 +205,7 @@ class _AppPageContentState extends State<AdminPageContent> {
         'Memory models' => _memoryModels(),
         'Health' => _health(),
         'Node · Host' => _node(),
-        'Node · Plugins' => _nodePlugins(),
+        'Node · Modules' => _nodePlugins(),
         'Node · Logs' => _logs(),
         'Sandboxes' => _sandboxes(),
         'Storage' => _storage(),
@@ -362,7 +362,7 @@ class _AppPageContentState extends State<AdminPageContent> {
         AdminStatCard(
             label: 'Bots',
             value: _compact(counters['bots']),
-            hint: 'Agents, tools and miniapps',
+            hint: 'Agents and apps',
             icon: Icons.smart_toy_rounded,
             tone: AppColors.success,
             onTap: () => widget.onNavigate('Agents')),
@@ -807,7 +807,7 @@ class _AppPageContentState extends State<AdminPageContent> {
       title: 'Platform admins space',
       icon: Icons.admin_panel_settings_rounded,
       subtitle:
-          'Every platform admin is added to this project automatically, now and whenever someone is made an admin. Its agents and tools can read the platform database when they work for an admin.',
+          'Every platform admin is added to this project automatically, now and whenever someone is made an admin. Its agents and apps can read the platform database when they work for an admin.',
       child: _toolbar(
         Row(children: [
           AdminAvatar(chosen.isEmpty ? '?' : name,
@@ -1076,11 +1076,11 @@ class _AppPageContentState extends State<AdminPageContent> {
     ];
   }
 
-  Widget _tools() {
+  Widget _apps() {
     final bots =
         _listOfMaps(_map(widget.results['admin.bots_list'])['bots']).where((b) {
       final kind = '${b['kind'] ?? ''}';
-      return kind == 'tool' || kind == 'miniapp' || kind == 'mcp';
+      return kind == 'tool' || kind == 'mcp';
     }).toList();
     final samples =
         _listOfMaps(_map(widget.results['tools.mcp_samples'])['samples']);
@@ -1096,8 +1096,6 @@ class _AppPageContentState extends State<AdminPageContent> {
                 .toLowerCase()
                 .contains(q))
         .toList();
-    final servers = rows.where(isServer).toList();
-    final tools = rows.where((b) => !isServer(b)).toList();
     final listedIds = listings
         .where((l) => '${l['status']}' == 'approved')
         .map((l) => '${l['bot_id'] ?? l['bot']}')
@@ -1105,20 +1103,12 @@ class _AppPageContentState extends State<AdminPageContent> {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       AdminGrid(children: [
         AdminStatCard(
-            label: 'MCP servers',
+            label: 'Apps', value: '${bots.length}', icon: Icons.apps_rounded),
+        AdminStatCard(
+            label: 'From MCP servers',
             value: '${bots.where(isServer).length}',
-            icon: Icons.hub_rounded),
-        AdminStatCard(
-            label: 'Tools',
-            value:
-                '${bots.where((b) => !isServer(b) && '${b['kind']}' != 'miniapp').length}',
-            icon: Icons.build_rounded,
+            icon: Icons.hub_rounded,
             tone: AppColors.cyan),
-        AdminStatCard(
-            label: 'Miniapps',
-            value: '${bots.where((b) => '${b['kind']}' == 'miniapp').length}',
-            icon: Icons.widgets_rounded,
-            tone: AppColors.warning),
         AdminStatCard(
             label: 'In the catalog',
             value:
@@ -1134,7 +1124,7 @@ class _AppPageContentState extends State<AdminPageContent> {
       _toolbar(
           AdminSearchField(
               controller: search,
-              hint: 'Search MCP servers, tools and miniapps',
+              hint: 'Search apps',
               onChanged: (_) => setState(() {})),
           [
             OutlinedButton.icon(
@@ -1148,34 +1138,34 @@ class _AppPageContentState extends State<AdminPageContent> {
               onPressed: () =>
                   widget.onAction('tools', 'mcp_register', const {}),
               icon: const Icon(Icons.add_rounded, size: 18),
-              label: const Text('Add server'),
+              label: const Text('Add an app'),
             ),
           ]),
       const SizedBox(height: 16),
-      _toolSection('MCP servers (${servers.length})', servers, listings,
-          server: true),
-      const SizedBox(height: 16),
-      _toolSection('Tools and miniapps (${tools.length})', tools, listings),
+      _appSection('Apps (${rows.length})', rows, listings, isServer),
     ]);
   }
 
-  Widget _toolSection(String title, List<Map<String, dynamic>> rows,
+  Widget _appSection(
+      String title,
+      List<Map<String, dynamic>> rows,
       List<Map<String, dynamic>> listings,
-      {bool server = false}) {
+      bool Function(Map<String, dynamic>) isServer) {
     return AdminSectionCard(
       title: title,
-      icon: server ? Icons.hub_rounded : Icons.widgets_rounded,
+      icon: Icons.apps_rounded,
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
       child: rows.isEmpty
           ? AdminEmptyState(
-              server ? 'No MCP servers' : 'No tools or miniapps',
+              'No apps',
               search.text.isEmpty
-                  ? 'Nothing in this section yet.'
-                  : 'No items match your search.',
-              icon: server ? Icons.hub_outlined : Icons.widgets_outlined)
+                  ? 'Add an app or import the catalog.'
+                  : 'No apps match your search.',
+              icon: Icons.apps_outlined)
           : Column(children: [
               for (final b in rows)
                 Builder(builder: (context) {
+                  final server = isServer(b);
                   final listing = listings
                       .cast<Map<String, dynamic>?>()
                       .firstWhere(
@@ -1187,16 +1177,12 @@ class _AppPageContentState extends State<AdminPageContent> {
                   return _adaptiveTile(
                     leading: AdminAvatar(name,
                         size: 40,
-                        icon: server
-                            ? Icons.hub_rounded
-                            : '${b['kind']}' == 'miniapp'
-                                ? Icons.widgets_rounded
-                                : Icons.build_rounded),
+                        icon: server ? Icons.hub_rounded : Icons.apps_rounded),
                     title: Text(name,
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(
                         [
-                          '${b['kind'] ?? (server ? 'MCP server' : 'tool')}',
+                          server ? 'MCP server' : 'app',
                           '${b['url'] ?? _map(b['descriptor'])['url'] ?? ''}',
                           _perMinute(
                               b['per_minute'] ?? _map(b['cost'])['per_minute']),
@@ -2065,7 +2051,7 @@ class _AppPageContentState extends State<AdminPageContent> {
           display: _money(charged['compute'])),
       AdminChartSlice('Agent time', _number(charged['agent_time']), palette[2],
           display: _money(charged['agent_time'])),
-      AdminChartSlice('Tools', _number(charged['tools']), palette[3],
+      AdminChartSlice('Apps', _number(charged['tools']), palette[3],
           display: _money(charged['tools'])),
     ];
     final destinations = [
@@ -2861,7 +2847,7 @@ class _AppPageContentState extends State<AdminPageContent> {
         AdminSectionCard(
           title: 'Fast decision model',
           icon: Icons.bolt_rounded,
-          subtitle: 'Tool selection, routing, progress and completion checks.',
+          subtitle: 'App selection, routing, progress and completion checks.',
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             AppSwitchCard(
@@ -2894,7 +2880,7 @@ class _AppPageContentState extends State<AdminPageContent> {
           icon: Icons.verified_user_outlined,
           title: 'Auto-approve low-risk calls',
           subtitle:
-              'Every other tool call still waits for a person; approvals are written to the work log.',
+              'Every other action still waits for a person; approvals are written to the work log.',
           value: setting['auto_approve'] == true,
           onChanged: (value) => widget.onDirectAction('llm', 'llm_decision_set',
               _decisionBody(setting, autoApprove: value)),
@@ -2928,7 +2914,7 @@ class _AppPageContentState extends State<AdminPageContent> {
           title: 'Image model',
           icon: Icons.image_rounded,
           subtitle:
-              'Agents make images with their image tool, never with their own chat model, so any agent can make images. Mark a model "Image" on the Models page to offer it here.',
+              'Agents make images through the platform\'s image function, never with their own chat model, so any agent can make images. Mark a model "Image" on the Models page to offer it here.',
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             AppSwitchCard(
@@ -3136,7 +3122,7 @@ class _AppPageContentState extends State<AdminPageContent> {
     for (final check in checks) {
       (groups['${check['group'] ?? 'Platform'}'] ??= []).add(check);
     }
-    if (pluginHealth.isNotEmpty) groups['Plugin health'] = pluginHealth;
+    if (pluginHealth.isNotEmpty) groups['Module health'] = pluginHealth;
     for (final rows in groups.values) {
       rows.sort((a, b) =>
           _healthRank(statusOf(a)).compareTo(_healthRank(statusOf(b))));
@@ -3346,7 +3332,7 @@ class _AppPageContentState extends State<AdminPageContent> {
       const SizedBox(height: 14),
       AdminGrid(children: [
         AdminStatCard(
-            label: 'Plugins',
+            label: 'Modules',
             value: '${node['plugins'] ?? 0}',
             hint: '${node['goroutines'] ?? 0} goroutines',
             icon: Icons.extension_rounded),
@@ -3404,7 +3390,7 @@ class _AppPageContentState extends State<AdminPageContent> {
       }),
       const SizedBox(height: 14),
       AdminSectionCard(
-        title: 'Plugin health',
+        title: 'Module health',
         icon: Icons.health_and_safety_rounded,
         padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
         child: plugins.isEmpty
@@ -3590,7 +3576,7 @@ class _AppPageContentState extends State<AdminPageContent> {
       ],
       if (groups.isEmpty)
         const AdminEmptyState(
-            'No plugins match', 'Try a different namespace or adapter name.',
+            'No modules match', 'Try a different namespace or adapter name.',
             icon: Icons.extension_off_rounded),
     ]);
   }
@@ -4675,7 +4661,7 @@ class _ModelEditorDialogState extends State<_ModelEditorDialog> {
   static const _purposeHints = {
     'chat': 'Agents can use this as their main reasoning model.',
     'decision':
-        'Used for tool selection, routing, progress, and completion checks. Agents cannot use it as their main model.',
+        'Used for app selection, routing, progress, and completion checks. Agents cannot use it as their main model.',
     'embedding':
         'Turns memories into vectors for semantic recall. Agents cannot use it as their main model.',
     'image':
@@ -5079,7 +5065,7 @@ class _PricingEditorState extends State<_PricingEditor> {
           'Project computer', values['sandbox.per_minute']! * 60, palette[1],
           display:
               '\$${(values['sandbox.per_minute']! * 60).toStringAsFixed(2)}'),
-      AdminChartSlice('Tools', values['tool.per_minute']! * 60, palette[3],
+      AdminChartSlice('Apps', values['tool.per_minute']! * 60, palette[3],
           display: '\$${(values['tool.per_minute']! * 60).toStringAsFixed(2)}'),
     ];
     return ConstrainedBox(
@@ -5094,7 +5080,7 @@ class _PricingEditorState extends State<_PricingEditor> {
           title: 'An hour of busy work costs a user',
           icon: Icons.schedule_rounded,
           subtitle:
-              'Agent time, its project computer and tools, before model tokens. Credits are shown at 100 per \$1.',
+              'Agent time, its project computer and apps, before model tokens. Credits are shown at 100 per \$1.',
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
@@ -5119,7 +5105,7 @@ class _PricingEditorState extends State<_PricingEditor> {
               rate('sandbox.per_minute', 'Project computer',
                   'While the computer is awake', Icons.computer_outlined),
               const SizedBox(height: 22),
-              rate('tool.per_minute', 'Tools & miniapps', 'While one runs',
+              rate('tool.per_minute', 'Apps', 'While one runs',
                   Icons.build_outlined),
             ])),
         const SizedBox(height: 16),
@@ -5176,7 +5162,7 @@ class _PricingEditorState extends State<_PricingEditor> {
           ),
           const SizedBox(height: 16),
           AdminSectionCard(
-            title: 'Tools & miniapps',
+            title: 'Apps',
             icon: Icons.build_rounded,
             subtitle: 'Extra credits per minute, per unit.',
             child: Column(children: [

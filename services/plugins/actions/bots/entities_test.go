@@ -31,7 +31,7 @@ func entityHarness(t *testing.T) (*Service, context.Context, identity.ID, identi
 	botID, _ := identity.New(1)
 	if err := s.R.CreateID(ctx, "bots", botID, &bot.Bot{
 		Entity: entity.Entity{ID: botID}, OwnerID: owner,
-		Name: "b", Kind: bot.KindMiniapp, VMType: bot.VMTypeWASM, Status: bot.StatusRunning,
+		Name: "b", Kind: bot.KindTool, VMType: bot.VMTypeWASM, Status: bot.StatusRunning,
 	}); err != nil {
 		t.Fatal(err)
 	}

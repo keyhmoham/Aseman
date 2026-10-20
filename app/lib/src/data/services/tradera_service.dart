@@ -10,7 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../domain/models/market_quote.dart';
 import '../../domain/models/message.dart';
 import '../../domain/models/room.dart';
-import '../../features/miniapps/domain/widget_dsl.dart';
+import '../../features/tools/domain/widget_dsl.dart';
 import '../models/bot.dart';
 import '../models/llm_provider.dart';
 import '../models/post.dart';
@@ -37,7 +37,7 @@ abstract final class BotEntityKeys {
 
 /// The real, server-backed implementation of [TraderaService]. All calls go
 /// through the signed Tradera gateway, so every action runs with the signed
-/// in user's identity — including miniapp backend asks.
+/// in user's identity — including app backend asks.
 class TraderaService implements BackendService {
   TraderaService(this.client);
 
@@ -479,6 +479,44 @@ class TraderaService implements BackendService {
     };
   }
 
+  /// The MCP apps the caller can add to a space: their own and those the
+  /// node's admins listed for everyone (`tools.commands_list`).
+  Future<List<({String id, String name, String auth})>> mcpCatalog() async {
+    final resp = await client.call('tools', 'commands_list');
+    final list = (resp.body as Map?)?['tools'] as List? ?? const [];
+    return [
+      for (final t in list)
+        if (t is Map)
+          (
+            id: '${t['bot_id']}',
+            name: '${t['name'] ?? ''}',
+            auth: '${t['auth'] ?? ''}'
+          ),
+    ];
+  }
+
+  /// Registers a remote MCP server as a tool the caller owns. With [auth]
+  /// "user" each person connects their own account and the node does not
+  /// call the server now; otherwise it checks that the server answers.
+  /// Returns the new tool's bot id.
+  Future<String> mcpRegister(
+      {required String name,
+      required String url,
+      String auth = '',
+      String token = '',
+      Map<String, dynamic> descriptor = const {}}) async {
+    final resp = await client.call('tools', 'mcp_register',
+        body: {
+          'name': name,
+          'url': url,
+          if (auth.isNotEmpty) 'auth': auth,
+          if (token.isNotEmpty) 'token': token,
+          if (descriptor.isNotEmpty) 'descriptor': descriptor,
+        },
+        requestTimeout: const Duration(minutes: 1));
+    return '${(resp.body as Map?)?['bot_id'] ?? ''}';
+  }
+
   // ── developer API console ─────────────────────────────────────────────────
 
   /// One action of the developer console (`developer.<action>`), signed in
@@ -754,7 +792,7 @@ class TraderaService implements BackendService {
     return out;
   }
 
-  // ── bots / agents / miniapps ──────────────────────────────────────────────
+  // ── bots / agents / apps ──────────────────────────────────────────────
 
   Future<List<Bot>> fetchBots({int limit = 100, int offset = 0}) async {
     final resp = await client.call('bots', 'bot_list', body: {
@@ -765,7 +803,7 @@ class TraderaService implements BackendService {
     return list.whereType<Map<String, dynamic>>().map(Bot.fromJson).toList();
   }
 
-  /// List the bots (agents/miniapps/tools) installed in a space. Bots are only
+  /// List the bots (agents and apps) installed in a space. Bots are only
   /// present here when explicitly added through [addBotToSpace].
   Future<List<Bot>> fetchSpaceBots(String spaceId) async {
     final resp =
@@ -785,7 +823,7 @@ class TraderaService implements BackendService {
         .toList();
   }
 
-  /// Add a bot (agent/miniapp/tool) to a space so it becomes available there.
+  /// Add a bot (agent or app) to a space so it becomes available there.
   Future<void> addBotToSpace(String spaceId, String botId,
       {String roomId = ''}) async {
     await client.call('spaces', 'bot_add', body: {
@@ -915,7 +953,7 @@ class TraderaService implements BackendService {
     return Bot.fromJson(resp.body as Map<String, dynamic>);
   }
 
-  /// Chat with an agent or ask a miniapp backend; returns the reply string.
+  /// Chat with an agent or ask an app backend; returns the reply string.
   /// [history] carries earlier turns of the conversation so conversational
   /// agents remember the context.
   Future<String> askBot(String botId, String message,
@@ -996,7 +1034,7 @@ class TraderaService implements BackendService {
     return list.whereType<Map<String, dynamic>>().toList();
   }
 
-  /// List the tools (miniapps + sandbox) available to agents in a space.
+  /// List the apps (and the sandbox) available to agents in a space.
   Future<List<Map<String, dynamic>>> fetchSpaceTools(String spaceId,
       {String? roomId}) async {
     final resp = await client.call('spaces', 'tools_list', body: {
@@ -1007,7 +1045,7 @@ class TraderaService implements BackendService {
     return list.whereType<Map<String, dynamic>>().toList();
   }
 
-  /// Search agents/miniapps/tools across the whole platform (paged).
+  /// Search agents and apps across the whole platform (paged).
   Future<List<Map<String, dynamic>>> searchBots(String query,
       {String kind = '', int limit = 20, int offset = 0}) async {
     final resp = await client.call('bots', 'bot_search', body: {
@@ -1047,7 +1085,7 @@ class TraderaService implements BackendService {
 
   // ── room desk widgets ────────────────────────────────────────────────────
 
-  /// Fetch the live desk-widget DSLs of every miniapp installed in a room.
+  /// Fetch the live desk-widget DSLs of every app installed in a room.
   Future<List<DeskWidgetDsl>> fetchRoomWidgets(
       String spaceId, String roomId) async {
     final resp = await client.call('spaces', 'widget_list', body: {
@@ -1061,7 +1099,7 @@ class TraderaService implements BackendService {
         .toList();
   }
 
-  /// Run a widget action against a miniapp's backend VM. The action is sent as
+  /// Run a widget action against an app's backend VM. The action is sent as
   /// a static ask request and the backend reply is returned.
   Future<String> widgetAction(String spaceId, String botId, String op,
       [Map<String, dynamic> args = const {}]) async {
@@ -1074,13 +1112,13 @@ class TraderaService implements BackendService {
     return ((resp.body as Map?)?['reply'] as String?) ?? '';
   }
 
-  /// Store the default desk-widget DSL of a miniapp (used as a fallback when
+  /// Store the default desk-widget DSL of an app (used as a fallback when
   /// its backend VM cannot answer a live widget ask).
   Future<void> setBotWidget(String botId, String dsl) async {
     await putBotEntity(botId, BotEntityKeys.widgetDsl, dsl);
   }
 
-  /// Read the stored default desk-widget DSL of a miniapp.
+  /// Read the stored default desk-widget DSL of an app.
   Future<String> fetchBotWidget(String botId) async {
     return fetchBotEntity(botId, BotEntityKeys.widgetDsl);
   }
@@ -1479,7 +1517,7 @@ class TraderaService implements BackendService {
         .toList();
   }
 
-  /// Rich agent/miniapp/tool profile (description, resources, usage, entities,
+  /// Rich agent or app profile (description, resources, usage, entities,
   /// marketplace listing).
   Future<BotProfile> fetchBotProfile(String botId) async {
     final resp = await client.call('bots', 'bot_profile', body: {'bot': botId});

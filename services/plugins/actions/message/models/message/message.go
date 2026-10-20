@@ -48,7 +48,7 @@ const (
 // Packet is the universal transport envelope between accounts (users and bots).
 // It powers both fire-and-forget messaging (message.send) and the
 // request/response protocol (message.ask / message.respond) used by chat
-// agents, miniapp backends and bot-to-bot orchestration.
+// agents, app backends and bot-to-bot orchestration.
 type Packet struct {
 	entity.Entity
 	From identity.ID `db:"from_id" json:"from_id"` // sender account (user or bot)
@@ -63,7 +63,7 @@ type Packet struct {
 	// Body is the human-readable content of the packet.
 	Body string `db:"body" json:"body"`
 
-	// Payload is an optional structured, JSON-encoded payload. Miniapp
+	// Payload is an optional structured, JSON-encoded payload. App
 	// frontends carry the opcode/args of their backend calls in here.
 	Payload string `db:"payload" json:"payload,omitempty"`
 

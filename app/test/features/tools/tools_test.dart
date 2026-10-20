@@ -742,7 +742,7 @@ void main() {
     testWidgets('the form opens filled and returns only the changes',
         (tester) async {
       final result = await edit(tester, managed, () async {
-        expect(find.text('Edit tool'), findsOneWidget);
+        expect(find.text('Edit app'), findsOneWidget);
         expect(find.text('Greeter'), findsOneWidget);
         expect(find.text('Show a greeting.'), findsOneWidget);
         // Where it runs is shown, not offered.

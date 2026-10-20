@@ -223,6 +223,7 @@ func (s *Service) Bootstrap(ctx context.Context) error {
 	for i := range agents {
 		s.migrateAgentEngine(ctx, &agents[i])
 	}
+	s.migrateRetiredKinds(ctx)
 	_, err := s.InstallTradera(ctx)
 	return err
 }

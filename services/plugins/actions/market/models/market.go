@@ -1,4 +1,4 @@
-// Package market defines the listings through which agents and miniapps are
+// Package market defines the listings through which agents and apps are
 // published, discovered and installed across the federated network.
 package market
 
@@ -9,15 +9,12 @@ import (
 	"github.com/tradera/tradera/internal/plugins/identity"
 )
 
-// ItemType distinguishes the published artifacts. Agents are langchain-run
-// bots; miniapps are wasm-backed bots whose UI is an elpian bundle. In the
-// client, both surface as "tools" in the super-app toolbox.
+// ItemType distinguishes the published artifacts: agents, and tools (apps).
 type ItemType string
 
 const (
-	ItemAgent   ItemType = "agent"
-	ItemTool    ItemType = "tool"
-	ItemMiniapp ItemType = "miniapp"
+	ItemAgent ItemType = "agent"
+	ItemTool  ItemType = "tool"
 )
 
 // Status of a listing.
@@ -30,14 +27,14 @@ const (
 	StatusUnpublished Status = "unpublished"
 )
 
-// Listing advertises a bot (an agent or a miniapp) in the marketplace.
+// Listing advertises a bot (an agent or an app) in the marketplace.
 type Listing struct {
 	entity.Entity
 	// PublisherID is the account that published the listing.
 	PublisherID identity.ID `db:"publisher_id" json:"publisher_id"`
 	// BotID is the underlying bot VM being sold/advertised.
 	BotID identity.ID `db:"bot_id" json:"bot_id"`
-	// Type is agent or miniapp.
+	// Type is agent or tool.
 	Type ItemType `db:"type" json:"type"`
 	// Name is the marketplace title.
 	Name string `db:"name" json:"name"`

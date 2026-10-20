@@ -17,7 +17,7 @@ type SkillConfig struct {
 
 type CreateBotRequest struct {
 	Name        string              `json:"name"`
-	Kind        bot.Kind            `json:"kind,omitempty"` // agent | miniapp | tool
+	Kind        bot.Kind            `json:"kind,omitempty"` // agent | tool
 	VMType      bot.VMType          `json:"vm_type"`
 	ImageRef    string              `json:"image_ref"`
 	SpecYML     string              `json:"spec_yml"`
@@ -25,7 +25,7 @@ type CreateBotRequest struct {
 	Cost        bot.CostModel       `json:"cost"`
 	Env         map[string]string   `json:"env,omitempty"`
 	Args        []string            `json:"args,omitempty"`
-	Frontend    string              `json:"frontend,omitempty"`     // elpian miniapp bundle
+	Frontend    string              `json:"frontend,omitempty"`     // elpian app bundle
 	FrontendRef string              `json:"frontend_ref,omitempty"` // ref to a stored bundle
 	// Entities carries arbitrary runtime artifacts keyed by contract keys
 	// (backend, spec, frontend, static/<name>, ...). New entity types can be
@@ -42,8 +42,8 @@ type CreateBotRequest struct {
 	AllowedTools []string      `json:"allowed_tools,omitempty"`
 	MaxTurns     int           `json:"max_turns,omitempty"`
 	Skills       []SkillConfig `json:"skills,omitempty"`
-	Module       string        `json:"module,omitempty"`     // miniapp/tool wasm module
-	WidgetDSL    string        `json:"widget_dsl,omitempty"` // miniapp desk-widget DSL
+	Module       string        `json:"module,omitempty"`     // app wasm module
+	WidgetDSL    string        `json:"widget_dsl,omitempty"` // app desk-widget DSL
 
 	// Service runs the VM as a service other parts of the node reach by name
 	// (a managed tool backend). Set only by namespaces of this node: the

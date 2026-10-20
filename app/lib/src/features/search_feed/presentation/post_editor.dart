@@ -163,7 +163,7 @@ class _PostEditorDialogState extends State<_PostEditorDialog> {
                 for (final (label, kind) in const [
                   ('Trader card', 'user'),
                   ('Agent card', 'agent'),
-                  ('Tool card', 'tool'),
+                  ('App card', 'tool'),
                   ('Workspace card', 'space'),
                 ])
                   ListTile(

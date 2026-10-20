@@ -56,7 +56,7 @@ class DeskDock extends StatelessWidget {
                 if (tools.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text('Open tools show up here',
+                    child: Text('Open apps show up here',
                         style: Theme.of(context)
                             .textTheme
                             .labelMedium

@@ -529,8 +529,7 @@ class CompactDeskState extends State<CompactDesk> {
               shape: shape,
               size: size,
               title: w.label,
-              accent: ToolAvatar.schemeFor(
-                      w.tool, Theme.of(context).brightness)
+              accent: ToolAvatar.schemeFor(w.tool, Theme.of(context).brightness)
                   .primary,
               onHint: (hint) {
                 if (_hints[w.id] != hint && mounted) {
@@ -576,7 +575,8 @@ class CompactWidgetTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final tool = ToolAvatar.schemeFor(window.tool, Theme.of(context).brightness);
+    final tool =
+        ToolAvatar.schemeFor(window.tool, Theme.of(context).brightness);
     final border = boardShape(shape);
     final round = shape == 'circle';
     final pill = shape == 'pill';
@@ -598,8 +598,7 @@ class CompactWidgetTile extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurfaceVariant),
+                  fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant),
             ),
           ),
         ] else
@@ -609,7 +608,7 @@ class CompactWidgetTile extends StatelessWidget {
             width: 28,
             height: 28,
             child: IconButton(
-              tooltip: 'Widget options',
+              tooltip: 'App options',
               padding: EdgeInsets.zero,
               iconSize: 18,
               onPressed: onMenu,
@@ -623,7 +622,7 @@ class CompactWidgetTile extends StatelessWidget {
     );
     return Semantics(
       button: true,
-      label: '${window.label}, widget. Tap to open, long-press to move.',
+      label: '${window.label}, app. Tap to open, long-press to move.',
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 260),
         decoration: ShapeDecoration(
@@ -662,59 +661,59 @@ class CompactWidgetTile extends StatelessWidget {
               ),
             ),
             child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              inset,
-              round || pill ? 14 : 10,
-              round || pill ? inset : 8,
-              round ? 14 : inset - 2,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (round)
-                  Align(
-                    alignment: Alignment.topCenter,
-                    child: SizedBox(
-                      height: 26,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ToolAvatar(
-                            tool: window.tool,
-                            name: window.name,
-                            size: 20,
-                          ),
-                          if (onMenu != null)
-                            SizedBox(
-                              width: 26,
-                              height: 26,
-                              child: IconButton(
-                                tooltip: 'Widget options',
-                                padding: EdgeInsets.zero,
-                                iconSize: 16,
-                                onPressed: onMenu,
-                                icon: const Icon(Icons.more_horiz_rounded),
-                              ),
+              padding: EdgeInsets.fromLTRB(
+                inset,
+                round || pill ? 14 : 10,
+                round || pill ? inset : 8,
+                round ? 14 : inset - 2,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (round)
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        height: 26,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ToolAvatar(
+                              tool: window.tool,
+                              name: window.name,
+                              size: 20,
                             ),
-                        ],
+                            if (onMenu != null)
+                              SizedBox(
+                                width: 26,
+                                height: 26,
+                                child: IconButton(
+                                  tooltip: 'App options',
+                                  padding: EdgeInsets.zero,
+                                  iconSize: 16,
+                                  onPressed: onMenu,
+                                  icon: const Icon(Icons.more_horiz_rounded),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    SizedBox(height: 26, child: header),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    // A glance: taps open the widget, they do not reach in.
+                    child: IgnorePointer(
+                      child: Padding(
+                        padding: EdgeInsets.only(right: round ? 0 : 6),
+                        child: child,
                       ),
                     ),
-                  )
-                else
-                  SizedBox(height: 26, child: header),
-                const SizedBox(height: 8),
-                Expanded(
-                  // A glance: taps open the widget, they do not reach in.
-                  child: IgnorePointer(
-                    child: Padding(
-                      padding: EdgeInsets.only(right: round ? 0 : 6),
-                      child: child,
-                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
           ),
         ),
       ),

@@ -14,14 +14,13 @@ import (
 )
 
 // Kind classifies what a bot is used for. Agents are LLM-driven assistants
-// (served by the deep agents runtime); miniapps are wasm-backed bots with an elpian frontend (surfaced
-// as tools in the client); tool is a generic helper bot.
+// (served by the deep agents runtime); a tool is an app: a backend (MCP,
+// wasm, a program) and the frontend it is used through.
 type Kind string
 
 const (
-	KindAgent   Kind = "agent"
-	KindMiniapp Kind = "miniapp"
-	KindTool    Kind = "tool"
+	KindAgent Kind = "agent"
+	KindTool  Kind = "tool"
 )
 
 // VMType supported by the VMM layer.
@@ -52,7 +51,7 @@ const (
 // IsToolBackend reports whether the bot is a tool whose backend answers
 // microtool calls over MCP (an external server, a managed runtime, or one
 // installed into a space sandbox), as opposed to the space sandbox itself or
-// a wasm miniapp.
+// a wasm app.
 func (b *Bot) IsToolBackend() bool {
 	if b == nil || b.Kind == KindAgent || b.IsSandbox() {
 		return false
@@ -106,7 +105,7 @@ type ResourceProfile struct {
 // Amounts are integer credits.
 type CostModel struct {
 	PerMinute int64 `json:"per_minute"` // base execution time rate (credits/min)
-	// PerCall is a flat price for every call of the bot (a tool or miniapp
+	// PerCall is a flat price for every call of the bot (a tool
 	// call), on top of the time and resources it runs for.
 	PerCall   int64 `json:"per_call,omitempty"`
 	ImageCost int64 `json:"image_cost,omitempty"`
@@ -127,7 +126,7 @@ type Bot struct {
 	OwnerID   identity.ID `db:"owner_id" json:"owner_id"` // account that deploys the VM
 	AccountID identity.ID `db:"account_id" json:"account_id"`
 	Name      string      `db:"name" json:"name"`
-	Kind      Kind        `db:"kind" json:"kind,omitempty"` // agent | miniapp | tool
+	Kind      Kind        `db:"kind" json:"kind,omitempty"` // agent | tool
 	VMType    VMType      `db:"vm_type" json:"vm_type"`
 	Status    Status      `db:"status" json:"status"`
 	VMID      string      `db:"vm_id" json:"vm_id,omitempty"` // provider VM id

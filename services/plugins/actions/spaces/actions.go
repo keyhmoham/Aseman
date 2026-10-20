@@ -892,7 +892,7 @@ func (a *botRemoveAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 type botsListAction struct{ s *Service }
 
 func (a *botsListAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "spaces", Name: "bots_list", Summary: "List the bots (agents/miniapps/tools) installed in a space"}
+	return api.ActionMeta{Namespace: "spaces", Name: "bots_list", Summary: "List the bots (agents and apps) installed in a space"}
 }
 func (a *botsListAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireAuthenticated(req); err != nil {

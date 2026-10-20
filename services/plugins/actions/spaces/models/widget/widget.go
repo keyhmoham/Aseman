@@ -1,8 +1,8 @@
-// Package widget defines the desk-widget DSL served to clients for miniapps
+// Package widget defines the desk-widget DSL served to clients for apps
 // installed in a room. A widget is a JSON document describing the UI rendered
 // on the room desk. It is refreshed by clients on a fixed interval (default 10
 // seconds) and may contain actions with inline parameters that make static ask
-// requests to the miniapp's backend VM.
+// requests to the app's backend VM.
 package widget
 
 import (
@@ -10,7 +10,7 @@ import (
 )
 
 // Action is an inline DSL action. When the user triggers it, the client sends
-// a static ask request to the miniapp's backend VM whose body is
+// a static ask request to the app's backend VM whose body is
 // {"op": Op, "args": Args} and renders the returned reply back into the desk.
 type Action struct {
 	Op      string         `json:"op"`
@@ -38,7 +38,7 @@ type Row struct {
 	Submit *Action   `json:"submit,omitempty"` // text_field on-submit
 }
 
-// Widget is the DSL document served for a miniapp's room desk widget.
+// Widget is the DSL document served for an app's room desk widget.
 type Widget struct {
 	Version    int    `json:"version"`
 	Title      string `json:"title"`

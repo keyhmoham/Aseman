@@ -40,7 +40,7 @@ func (r Rate) Valid() bool {
 type Pricing struct {
 	// Sandbox is every space's shared computer.
 	Sandbox Rate `json:"sandbox"`
-	// Tool is what tools and miniapps cost when none is set on the tool itself.
+	// Tool is what apps cost when none is set on the tool itself.
 	Tool Rate `json:"tool"`
 	// AgentPerMinute is an agent's time when the agent sets no rate of its own.
 	AgentPerMinute int64 `json:"agent_per_minute"`

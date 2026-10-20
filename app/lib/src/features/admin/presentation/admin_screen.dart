@@ -114,8 +114,8 @@ class _AppScreenState extends State<AdminScreen> {
             _Call('market', 'deny'),
             _Call('market', 'unpublish'),
           ]),
-      _Page('Tools', 'Tools, miniapps and what they cost', Icons.build_outlined,
-          Icons.build_rounded,
+      _Page('Apps', 'Apps, MCP servers and what they cost', Icons.apps_outlined,
+          Icons.apps_rounded,
           calls: [
             _Call('admin', 'bots_list'),
             _Call('tools', 'mcp_samples'),
@@ -195,7 +195,7 @@ class _AppScreenState extends State<AdminScreen> {
             _Call('llm', 'llm_provider_set'),
             _Call('llm', 'llm_import_vercel'),
           ]),
-      _Page('Decision model', 'Tool selection and work decisions',
+      _Page('Decision model', 'App selection and work decisions',
           Icons.alt_route_outlined, Icons.alt_route_rounded,
           calls: [_Call('llm', 'llm_decision_get')],
           actions: [_Call('llm', 'llm_decision_set')]),
@@ -220,7 +220,7 @@ class _AppScreenState extends State<AdminScreen> {
             _Call('federation', 'node_info'),
             _Call('federation', 'nodes_list'),
           ]),
-      _Page('Node · Plugins', 'Runtime plugins and active adapters',
+      _Page('Node · Modules', 'Runtime modules and active adapters',
           Icons.extension_outlined, Icons.extension_rounded,
           calls: [
             _Call('admin', 'plugins_list'),

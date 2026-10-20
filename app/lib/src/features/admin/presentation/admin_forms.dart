@@ -56,7 +56,7 @@ Future<Map<String, dynamic>?> showAdminActionForm(
     'tools.mcp_delete' => _ConfirmForm(
         initial: body,
         icon: Icons.delete_forever_rounded,
-        title: 'Delete ${name.isEmpty ? 'this tool' : name}?',
+        title: 'Delete ${name.isEmpty ? 'this app' : name}?',
         message:
             'Projects that added it can no longer call it. This cannot be undone.',
         submit: 'Delete',
@@ -71,7 +71,7 @@ Future<Map<String, dynamic>?> showAdminActionForm(
     'tools.mcp_import_samples' => _ConfirmForm(
         initial: body,
         icon: Icons.download_rounded,
-        title: 'Import the tool catalog?',
+        title: 'Import the app catalog?',
         message:
             'Adds the sample MCP servers to this node. Servers already registered are skipped.',
         submit: 'Import'),
@@ -123,7 +123,7 @@ String adminActionDone(String namespace, String action) =>
       'bots.bot_edit': 'Agent saved',
       'bots.bot_delete': 'Agent deleted',
       'bots.agent_import_samples': 'Sample agents imported',
-      'tools.mcp_import_samples': 'Tool catalog imported',
+      'tools.mcp_import_samples': 'App catalog imported',
       'tools.mcp_register': 'Server added',
       'tools.mcp_update': 'Server saved',
       'tools.mcp_delete': 'Deleted',
@@ -136,9 +136,9 @@ String adminActionDone(String namespace, String action) =>
       'llm.llm_decision_set': 'Decision model saved',
       'llm.llm_memory_set': 'Memory models saved',
       'llm.llm_image_set': 'Image model saved',
-      'admin.plugins_load': 'Plugin loaded',
-      'admin.plugins_unload': 'Plugin unloaded',
-      'admin.plugins_stop': 'Plugin stopped',
+      'admin.plugins_load': 'Module loaded',
+      'admin.plugins_unload': 'Module unloaded',
+      'admin.plugins_stop': 'Module stopped',
       'admin.plugins_set_active': 'Active adapter switched',
       'settings.update': 'Settings saved',
     }['$namespace.$action'] ??
@@ -840,7 +840,7 @@ class _AgentFormState extends State<_AgentForm> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final models = _models(provider);
-    final noun = agent ? 'agent' : (kind == 'miniapp' ? 'miniapp' : 'tool');
+    final noun = agent ? 'agent' : 'app';
     return AppFormFrame(
       formKey: formKey,
       icon: agent ? Icons.smart_toy_outlined : Icons.build_outlined,
@@ -929,7 +929,7 @@ class _AgentFormState extends State<_AgentForm> {
         AppAmountField(
           label: 'Price per minute',
           hint: rate == 0
-              ? 'Uses the platform’s ${agent ? 'agent' : 'tool'} rate from Settings › Pricing.'
+              ? 'Uses the platform’s ${agent ? 'agent' : 'app'} rate from Settings › Pricing.'
               : '${compactDecimal(rate * 100)} credits a minute, on top of model tokens.',
           value: rate,
           max: 1,
@@ -1165,11 +1165,11 @@ class _McpFormState extends State<_McpForm> {
       formKey: formKey,
       icon: Icons.hub_outlined,
       title: widget.editing
-          ? 'Edit ${name.text.isEmpty ? 'MCP server' : name.text}'
-          : 'Add an MCP server',
+          ? 'Edit ${name.text.isEmpty ? 'app' : name.text}'
+          : 'Add an app',
       subtitle:
-          'Agents call its tools. With shared credentials the node checks that it answers before saving.',
-      submit: widget.editing ? 'Save' : 'Add server',
+          'An app served by an MCP server. With shared credentials the node checks that it answers before saving.',
+      submit: widget.editing ? 'Save' : 'Add app',
       onSubmit: submit,
       children: [
         if (!widget.editing)

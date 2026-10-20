@@ -6,7 +6,7 @@ Nothing here talks to anything but the node's action API:
   and direct messages (``users.dm_send`` / ``dm_list``);
 * delegation — handing tasks to the space's agents is a room message that
   mentions them, and their answer is the message they post in reply;
-* tools — tool and miniapp bots and the platform's own tools (files, images,
+* tools — the space's apps and the platform's own tools (files, images,
   previews, routines) are all ``spaces.ask``;
 * the swarm — ``spaces.agent_recruit`` adds a specialist to the space.
 
@@ -147,7 +147,7 @@ def communication_tools(ctx: TurnContext) -> list[BaseTool]:
 
     @tool
     async def list_team() -> str:
-        """The people, agents, tools and miniapps of this space, with their ids."""
+        """The people, agents and apps of this space, with their ids."""
         return teamlib.describe(await teamlib.team(ctx))
 
     @tool
@@ -293,7 +293,7 @@ def recruit_tool(ctx: TurnContext) -> BaseTool:
 
 
 async def platform_tools(ctx: TurnContext) -> list[BaseTool]:
-    """The space's tool and miniapp bots and the platform tools, over spaces.ask."""
+    """The space's apps and the platform tools, over spaces.ask."""
     try:
         listed = await ctx.space_tools()
     except GatewayError:
@@ -307,7 +307,7 @@ async def platform_tools(ctx: TurnContext) -> list[BaseTool]:
         if name in PLATFORM_TOOLS:
             out.append(_platform_tool(ctx, name, PLATFORM_TOOLS[name], t))
             used.add(PLATFORM_TOOLS[name])
-        elif t.get("bot_id") and t.get("kind") in ("tool", "miniapp") and name not in ("sandbox_exec",):
+        elif t.get("bot_id") and t.get("kind") == "tool" and name not in ("sandbox_exec",):
             slug = _SLUG.sub("_", name.lower()).strip("_") or "tool"
             commands = [c for c in t.get("commands") or [] if isinstance(c, dict) and c.get("name")]
             if commands:

@@ -1064,7 +1064,6 @@ class _LibraryPanel extends StatelessWidget {
             if (addApp != null && index == tools.length) {
               return _AddAppTile(onTap: addApp);
             }
-            if (addApp != null) index--;
             if (index == tools.length) {
               return _AddBotTile(
                   label: 'Add app',

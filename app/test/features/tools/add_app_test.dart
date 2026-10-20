@@ -10,6 +10,7 @@ import '../../fake_tradera_service.dart';
 class _Service extends FakeTraderaService {
   final registered = <Map<String, Object>>[];
   final added = <String>[];
+  final removed = <String>[];
 
   @override
   Future<List<({String id, String name, String auth})>> mcpCatalog() async =>
@@ -64,6 +65,12 @@ class _Service extends FakeTraderaService {
       {String roomId = ''}) async {
     added.add('$spaceId/$botId');
   }
+
+  @override
+  Future<void> removeBotFromSpace(String spaceId, String botId,
+      {String roomId = ''}) async {
+    removed.add('$spaceId/$botId');
+  }
 }
 
 /// Lets the dialogs open; the row being added keeps spinning behind the
@@ -113,9 +120,17 @@ void main() {
     expect(find.text('Connect GitHub'), findsOneWidget);
     expect(find.text('Sign in with GitHub'), findsOneWidget);
 
+    // Skipping the sign-in takes the app back out and keeps the dialog
+    // open, so nothing half-added is left in the space.
     await tester.tap(find.text('Not now'));
     await tester.pumpAndSettle();
-    expect(await result, isTrue);
+    expect(service.removed, ['space-1/bot-gh']);
+    expect(find.text('Add an app'), findsOneWidget);
+    expect(find.textContaining('Sign-in was cancelled'), findsOneWidget);
+
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(await result, isFalse);
   });
 
   testWidgets('the person\'s own apps can be added too, once each',

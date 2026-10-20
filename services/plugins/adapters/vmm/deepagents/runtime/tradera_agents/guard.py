@@ -234,8 +234,8 @@ class TurnGuard(AgentMiddleware):
                     f"{self.last_run[sig]}). Follow them now: do the next step of the work.")
         if kept:
             return ("Not run: you already read these instructions in this turn with the same arguments, and they "
-                    f"have not changed. They are in the file {kept}: read the part you need with read_file "
-                    "(offset and limit) instead of asking for them again.")
+                    f"have not changed. They are in the file {kept}: read them with read_file, 500 lines "
+                    "at a time (offset and limit), instead of asking for them again.")
         if len(done) >= REPEATS - 1 and len(set(done[-(REPEATS - 1):])) == 1:
             return (f"Not run: this exact call already returned the same result {len(done)} times in this turn, "
                     "and it will not change. Use that result (it is earlier in this conversation), try a "

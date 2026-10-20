@@ -30,7 +30,7 @@ from typing import Any
 
 from deepagents.backends import StateBackend
 from deepagents.backends.utils import sanitize_tool_call_id
-from deepagents.middleware.filesystem import FilesystemMiddleware
+from deepagents.middleware.filesystem import NUM_CHARS_PER_TOKEN, FilesystemMiddleware
 from deepagents.middleware.skills import SkillsMiddleware
 from deepagents.middleware.summarization import SummarizationMiddleware
 from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
@@ -73,7 +73,7 @@ FILE_TOOLS = {
     "ls": "List the files in a directory (absolute path).",
     "read_file": (
         "Read a file (absolute path). Returns up to `limit` lines (default 100) from `offset`; page through large "
-        "files. A `@@ ... @@` status header precedes the content and is not part of the file. Images, audio, video "
+        "files, and read one you need whole (instructions, a saved tool result) 500 lines at a time. A `@@ ... @@` status header precedes the content and is not part of the file. Images, audio, video "
         "and PDFs are returned for you to see (pass only `file_path`). Read several files in one step when you "
         "need them. Read a file before you edit it."
     ),
@@ -128,6 +128,10 @@ DEFAULT_WINDOW = 128_000
 CHARS_PER_TOKEN = 3.0
 # A tool result larger than this goes to a file; the agent gets a preview.
 RESULT_TO_FILE_ABOVE = 6_000
+# Lines longer than this are broken before a result goes to a file: read_file
+# pages by line and cannot go past a line too long for one page.
+LINE_MAX = 2_000
+_REFLOWED = "[Lines longer than {n} characters were broken to fit read_file pages.]\n"
 
 _MEDIA_TYPES = frozenset({"image", "image_url", "audio", "video", "file", "input_image", "input_audio"})
 _MEDIA_GONE = "[picture removed from context to save space: read the file again if you need to see it]"
@@ -182,6 +186,30 @@ def _text_of(content: Any) -> str:
     if isinstance(content, list):
         return "\n".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content if not _is_media(b))
     return str(content)
+
+
+def reflow(text: str, line_max: int = LINE_MAX) -> str:
+    """Text whose every line fits a read_file page: JSON indented, then any
+    line still too long broken at a space (or cut) near ``line_max``."""
+    if all(len(line) <= line_max for line in text.splitlines()):
+        return text
+    stripped = text.strip()
+    if stripped.startswith(("{", "[")):
+        try:
+            text = json.dumps(json.loads(stripped), ensure_ascii=False, indent=1)
+        except ValueError:
+            pass
+        if all(len(line) <= line_max for line in text.splitlines()):
+            return text
+    out: list[str] = []
+    for line in text.splitlines():
+        while len(line) > line_max:
+            cut = line.rfind(" ", line_max // 2, line_max)
+            cut = cut + 1 if cut > 0 else line_max
+            out.append(line[:cut].rstrip())
+            line = line[cut:]
+        out.append(line)
+    return _REFLOWED.format(n=line_max) + "\n".join(out)
 
 
 def pin_max(model: Any) -> int:
@@ -268,7 +296,8 @@ class Files(FilesystemMiddleware):
     """The harness's file tools, except that instructions an app returns stay in
     the conversation rather than going to a file: the agent works from them on
     every step, and a preview of them it would have to page through is how an
-    agent ends up asking for them again and again."""
+    agent ends up asking for them again and again. A result that does go to a
+    file goes as lines the agent can page through (see reflow)."""
 
     def __init__(self, *args: Any, pin_max: int = PIN_MAX_CHARS, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -283,13 +312,25 @@ class Files(FilesystemMiddleware):
         return (isinstance(result, ToolMessage) and reference({"name": result.name or "", "args": {}})
                 and len(_text_of(result.content)) <= self.pin_max)
 
+    def _pageable(self, result: Any) -> Any:
+        """A result that will go to a file, with lines read_file can page through."""
+        limit = self._tool_token_limit_before_evict
+        if not isinstance(result, ToolMessage) or not isinstance(result.content, str) or not limit:
+            return result
+        if len(result.content) <= NUM_CHARS_PER_TOKEN * limit:
+            return result  # stays in the conversation as it is
+        content = reflow(result.content)
+        return result if content == result.content else result.model_copy(update={"content": content})
+
     def _intercept_large_tool_result(self, tool_result: Any) -> Any:
-        return tool_result if self._keep(tool_result) else super()._intercept_large_tool_result(tool_result)
+        if self._keep(tool_result):
+            return tool_result
+        return super()._intercept_large_tool_result(self._pageable(tool_result))
 
     async def _aintercept_large_tool_result(self, tool_result: Any) -> Any:
         if self._keep(tool_result):
             return tool_result
-        return await super()._aintercept_large_tool_result(tool_result)
+        return await super()._aintercept_large_tool_result(self._pageable(tool_result))
 
 
 def planning() -> AgentMiddleware:

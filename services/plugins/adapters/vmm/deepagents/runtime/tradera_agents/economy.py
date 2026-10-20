@@ -8,8 +8,12 @@ module works on each of those:
   file-tool instructions, with the same rules;
 * the conversation — old tool output is trimmed to its opening lines and old
   screenshots and attached pictures are dropped once the agent has moved on,
-  big tool results go to a file sooner, and the history is summarized long
-  before the model's window is full (with or without a sandbox);
+  big tool results go to a file sooner, and the history is summarized well
+  before the model's window is full (with or without a sandbox); both start at
+  a share of the model's window, so a model with a large window keeps more of
+  what it read. Instructions the agent read (an app's instructions or help, a
+  skill) are never trimmed: an agent that loses how to work reads it again,
+  and again;
 * the count — tokens are estimated conservatively (code, JSON and ids take far
   more tokens than four characters each), so summarizing starts before the
   window is full;
@@ -19,16 +23,20 @@ module works on each of those:
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 
 from deepagents.backends import StateBackend
+from deepagents.backends.utils import sanitize_tool_call_id
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.middleware.skills import SkillsMiddleware
 from deepagents.middleware.summarization import SummarizationMiddleware
 from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
-from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately
+
+from .guard import reference
 
 # --- the fixed prompt --------------------------------------------------------
 
@@ -91,7 +99,8 @@ FILE_TOOLS = {
 
 # --- the conversation --------------------------------------------------------
 
-# Trim old tool output once the conversation is this large (estimated tokens).
+# Trim old tool output once the conversation is this large (estimated tokens);
+# a turn trims at half its summarization size instead (see trim_above).
 # Not too early: an agent that loses what it just read reads it again.
 TRIM_ABOVE = 24_000
 # The newest tool results are always kept whole.
@@ -102,10 +111,12 @@ KEEP_CHARS = 400
 KEEP_MEDIA = 2
 # Answers the agent cannot get again by re-running a tool.
 NEVER_TRIM = frozenset({"task", "wait_tasks", "check_tasks", "ask_user", "write_todos", "assemble_team", "run_swarm"})
+# Instructions the agent read stay whole up to this size (characters); a larger
+# result went to a file, and the parts of it the agent reads stay whole instead.
+PIN_MAX_CHARS = 24_000
 
-# Summarize the history at this size instead of near the model's window, and
-# at the latest at this share of the window.
-SUMMARIZE_ABOVE = 48_000
+# Summarize the history at this share of the model's window (at the most
+# TRADERA_SUMMARIZE_MAX_TOKENS, when set, to bound what a call costs).
 SUMMARIZE_SHARE = 0.6
 SUMMARY_KEEPS = 12_000
 # The window assumed for a model nobody told the runtime about.
@@ -140,7 +151,22 @@ def window_of(model: Any) -> int:
 
 
 def summarize_above(model: Any) -> int:
-    return max(4_000, min(SUMMARIZE_ABOVE, int(window_of(model) * SUMMARIZE_SHARE)))
+    above = int(window_of(model) * SUMMARIZE_SHARE)
+    try:
+        cap = int(os.environ.get("TRADERA_SUMMARIZE_MAX_TOKENS", "") or 0)
+    except ValueError:
+        cap = 0
+    return max(4_000, min(above, cap) if cap > 0 else above)
+
+
+def trim_above(summarize: int) -> int:
+    """Where old tool output starts being trimmed: half way to summarizing."""
+    return summarize // 2
+
+
+def summary_keeps(summarize: int) -> int:
+    """How much of the latest history a summary keeps as it is."""
+    return min(summarize // 3, max(SUMMARY_KEEPS, summarize // 4))
 
 
 def _is_media(block: Any) -> bool:
@@ -153,6 +179,25 @@ def _text_of(content: Any) -> str:
     if isinstance(content, list):
         return "\n".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content if not _is_media(b))
     return str(content)
+
+
+def pinned(messages: list[Any]) -> set[str]:
+    """The tool results kept whole however large the conversation: the latest
+    read of each set of instructions (see guard.reference), and what the agent
+    read of one that was too large and went to a file."""
+    calls = {c.get("id", ""): c for m in messages if isinstance(m, AIMessage) for c in m.tool_calls or []}
+    sizes = {m.tool_call_id: len(_text_of(m.content)) for m in messages if isinstance(m, ToolMessage)}
+    refs = [c for c in calls.values() if reference(c)]
+    captures = [sanitize_tool_call_id(c["id"]) for c in refs if c.get("id")]
+    latest: dict[str, str] = {}
+    for call in calls.values():
+        path = str((call.get("args") or {}).get("file_path", "")) if call.get("name") == "read_file" else ""
+        captured = bool(path) and "large_tool_results" in path and any(cid in path for cid in captures)
+        if (reference(call) or captured) and sizes.get(call.get("id", ""), 0) <= PIN_MAX_CHARS:
+            # Read again: only the newest copy stays whole.
+            key = call.get("name", "") + json.dumps(call.get("args") or {}, sort_keys=True, default=str)
+            latest[key] = call.get("id", "")
+    return set(latest.values())
 
 
 def diet(messages: list[Any], trim_above: int = TRIM_ABOVE) -> list[Any]:
@@ -181,8 +226,9 @@ def diet(messages: list[Any], trim_above: int = TRIM_ABOVE) -> list[Any]:
             mark(msg, [*kept, {"type": "text", "text": _ATTACHED_GONE}], "media_dropped")
 
     if count_tokens(messages) > trim_above:
+        keep = pinned(messages)
         for msg in results[:-KEEP_RESULTS] if KEEP_RESULTS else results:
-            if msg.name in NEVER_TRIM or (msg.response_metadata or {}).get("trimmed"):
+            if msg.name in NEVER_TRIM or msg.tool_call_id in keep or (msg.response_metadata or {}).get("trimmed"):
                 continue
             current = changed.get(id(msg), msg)
             text = _text_of(current.content)
@@ -217,11 +263,11 @@ def middleware(model: Any, backend: Any, *, skills: list[str] | None) -> list[Ag
     """The context-keeping middleware of a turn. The ones that share a name with
     the harness's defaults replace them."""
     above = summarize_above(model)
-    stack: list[AgentMiddleware] = [planning(), ContextDiet(trim_above=min(TRIM_ABOVE, above // 2))]
+    stack: list[AgentMiddleware] = [planning(), ContextDiet(trim_above=trim_above(above))]
     summarization = SummarizationMiddleware(
         # Without a sandbox the history goes to the thread's own state.
         model, backend=backend if backend is not None else StateBackend(), token_counter=count_tokens,
-        trigger=("tokens", above), keep=("tokens", min(SUMMARY_KEEPS, above // 3)),
+        trigger=("tokens", above), keep=("tokens", summary_keeps(above)),
         truncate_args_settings={"trigger": ("tokens", above // 2), "keep": ("messages", 8), "max_length": 1000},
     )
     if backend is None:

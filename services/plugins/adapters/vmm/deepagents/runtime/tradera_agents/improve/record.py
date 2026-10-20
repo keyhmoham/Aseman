@@ -4,7 +4,8 @@ A decision point is a moment of the turn where the agent chose its next step,
 with what came of it:
 
 * ``failure`` — a tool call that failed (an error, a non-zero exit);
-* ``repeat`` — the same call, with the same arguments, a third time;
+* ``repeat`` — the same call, with the same arguments, a third time, or
+  instructions the agent had already read, read again;
 * ``incomplete`` — a final answer that did not deliver what was asked (the
   decision model's completion check, during the turn or after it);
 * ``good`` — a step of a turn that went well, kept so that a new playbook is
@@ -25,7 +26,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage, convert_to_openai_messages
 
-from ..guard import NOTE
+from ..guard import NOTE, reference
 
 #: How much of each message a decision point keeps (characters).
 HUMAN_CHARS = 3_000
@@ -124,7 +125,13 @@ def points(messages: list[BaseMessage], quality: float, complete: float | None) 
             result = results.get(call.get("id", ""))
             outcome = _text(result.content)[:600] if result is not None else ""
             seen[_signature(call)] += 1
-            if seen[_signature(call)] == 3:
+            # Instructions read once stay in context: the same read a second time is a repeat already.
+            if reference(call) and seen[_signature(call)] == 2:
+                problems.append({"kind": "repeat", "at": i, "action": action,
+                                 "feedback": f"`{action['name']}` had already been read in this turn, and what it "
+                                             f"returned was still in the agent's context; reading these instructions "
+                                             f"again added nothing."})
+            elif seen[_signature(call)] == 3 and not reference(call):
                 problems.append({"kind": "repeat", "at": i, "action": action,
                                  "feedback": f"This exact call (`{action['name']}` with the same arguments) had already "
                                              f"been made twice, with the same result; repeating it changed nothing. "

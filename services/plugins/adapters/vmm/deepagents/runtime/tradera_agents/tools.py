@@ -69,6 +69,9 @@ CORE_TOOLS = {"send_message", "read_room", "list_team", "ask_user", "send_direct
               "desk_close"}
 
 _SLUG = re.compile(r"[^a-z0-9_]+")
+# A tool's own description sent to the model, at most (characters). Apps put how
+# to use a function in its description: cut short, the agent goes looking for it.
+DESCRIPTION_MAX = 8_000
 # How long check_tasks waits for a first answer before reporting all still running.
 CHECK_WAIT = 20.0
 
@@ -352,7 +355,7 @@ def _app_command_tool(ctx: TurnContext, name: str, spec: dict[str, Any], command
     raw = command.get("schema") if isinstance(command.get("schema"), dict) else {}
     schema = {"type": "object", "properties": raw.get("properties") or {}, "required": raw.get("required") or []}
     description = (str(command.get("description") or "").strip() or f"{function} of {spec.get('name')}.")
-    description = f"[{spec.get('name')}] {description}\n{presentation_hint(spec, function)}"
+    description = f"[{spec.get('name')}] {_clip(description, DESCRIPTION_MAX)}\n{presentation_hint(spec, function)}"
 
     async def run(**kwargs: Any) -> str:
         try:
@@ -364,15 +367,15 @@ def _app_command_tool(ctx: TurnContext, name: str, spec: dict[str, Any], command
             return _err(exc)
         return _app_result(str(res.get("reply", "")))
 
-    return StructuredTool(name=name, description=description[:2000], args_schema=schema, coroutine=run)
+    return StructuredTool(name=name, description=description, args_schema=schema, coroutine=run)
 
 
 def _platform_tool(ctx: TurnContext, platform_name: str, name: str, spec: dict[str, Any]) -> BaseTool:
     schema = spec.get("parameters") or {"type": "object", "properties": {}}
     schema = {"type": "object", "properties": schema.get("properties", {}), "required": schema.get("required", [])}
-    description = spec.get("description", "")
+    description = _clip(spec.get("description", ""), DESCRIPTION_MAX)
     if spec.get("usage"):
-        description += "\n" + spec["usage"]
+        description += "\n" + _clip(spec["usage"], DESCRIPTION_MAX)
 
     async def run(**kwargs: Any) -> str:
         try:
@@ -385,7 +388,7 @@ def _platform_tool(ctx: TurnContext, platform_name: str, name: str, spec: dict[s
         result = res.get("result", res)
         return result if isinstance(result, str) else json.dumps(result)
 
-    return StructuredTool(name=name, description=description[:4000] or name, args_schema=schema, coroutine=run)
+    return StructuredTool(name=name, description=description or name, args_schema=schema, coroutine=run)
 
 
 def presentation_hint(spec: dict[str, Any], function: str | None = None) -> str:
@@ -406,7 +409,7 @@ def presentation_hint(spec: dict[str, Any], function: str | None = None) -> str:
 
 def _bot_tool(ctx: TurnContext, name: str, spec: dict[str, Any]) -> BaseTool:
     bot_id = spec["bot_id"]
-    description = (spec.get("description") or f"The {spec.get('name')} tool of this space.") + (
+    description = _clip(spec.get("description") or f"The {spec.get('name')} tool of this space.", DESCRIPTION_MAX) + (
         "\nSend it a request in natural language or its command syntax; returns its reply.\n" + presentation_hint(spec))
 
     async def run(request: str) -> str:
@@ -418,7 +421,7 @@ def _bot_tool(ctx: TurnContext, name: str, spec: dict[str, Any]) -> BaseTool:
             return _err(exc)
         return str(res.get("reply", ""))
 
-    return StructuredTool.from_function(coroutine=run, name=name, description=description[:4000])
+    return StructuredTool.from_function(coroutine=run, name=name, description=description)
 
 
 def filter_allowed(tools: list[BaseTool], allowed: list[str]) -> list[BaseTool]:

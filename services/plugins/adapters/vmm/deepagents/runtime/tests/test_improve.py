@@ -193,3 +193,37 @@ async def test_agents_learn_from_their_turns_and_use_their_playbook(platform: Pl
     await r.prompt(fresh)
     assert "## Your playbook" not in model.seen[-1][0].text
     assert len(store.turns()) == 2
+
+
+def test_reading_instructions_again_is_a_repeat() -> None:
+    messages = [HumanMessage("draw it"), *ran("board__get_instructions", {}, "How to draw.", "c1"),
+                *ran("board__draw", {"shape": "box"}, "drawn", "c2"),
+                *ran("board__get_instructions", {}, "How to draw.", "c3"),
+                AIMessage(content="Drawn.")]
+    points = record.points(messages, quality=0.8, complete=0.9)
+    [repeat] = [p for p in points if p["kind"] == "repeat"]
+    assert repeat["action"]["name"] == "board__get_instructions" and "already been read" in repeat["feedback"]
+
+
+async def test_a_turn_that_looped_is_learned_from_soon(platform: Platform, tmp_path: Path) -> None:
+    learning(platform)
+    platform.apps = [{"name": "Board", "kind": "tool", "bot_id": "bot-board", "description": "A whiteboard.",
+                      "commands": [{"name": "get_instructions", "description": "How to use the board.",
+                                    "schema": {"type": "object", "properties": {}}}]}]
+    platform.app_reply = '{"content": [{"type": "text", "text": "Draw with shapes."}]}'
+    improver = improve.Improver(tmp_path / "improve", "http://node", "test-secret",
+                                improve.Settings(every=100, cooldown=10_000, loop_cooldown=0, budget=20, min_points=1),
+                                transport=httpx.MockTransport(platform.handle))
+    model = ScriptedModel(script=[
+        call("execute", {"command": "exit 3"}, "c1"), AIMessage(content="It fails."),
+        call("board__get_instructions", {}, "b1"), call("board__get_instructions", {}, "b2"), AIMessage(content="Done."),
+        call("execute", {"command": "exit 4"}, "c2"), AIMessage(content="It fails again."),
+    ])
+    r = Runner(Store(str(tmp_path / "rt.db")), InMemorySaver(), model_factory=lambda agent, gw: model,
+               gateway_factory=platform.gateway, improver=improver)
+    store = AgentStore(tmp_path / "improve", SPACE, LEAD["vm_id"])
+    for i, (message, cycles) in enumerate([("run it", 1), ("draw it", 2), ("run it again", 2)]):
+        await r.prompt(turn_request(LEAD, message, token="tok-lead", role="lead", message_id=f"m{i}"))
+        await improver.drain()
+        # A failing turn waits out the cooldown; one that looped does not.
+        assert store.state().cycles == cycles, message

@@ -191,8 +191,10 @@ run docker/wasm drivers; the wasm provider runs modules in-process via
 **wazero**; docker talks directly to the engine API; modal wraps remote
 sandboxes; and the **deepagents** provider treats each agent as a VM — an
 agent's definition (instructions, skills, model) is its image, its turns run on
-the deep agents runtime, and token consumption is metered as execution cost
-(see [Agents](#agents-the-deep-agents-runtime) and `configs/vmm/vm.example.yml`).
+the agent runtime (an OpenCode backbone per agent, the swarm orchestrated with
+deep agents), and token consumption is metered as execution cost (see
+[Agents](#agents-opencode-backbones-orchestrated-by-deep-agents) and
+`configs/vmm/vm.example.yml`).
 
 ## Pricing
 
@@ -429,22 +431,50 @@ Configuration: `TRADERA_TOOL_RUNTIME_IMAGE`, `TRADERA_TOOL_RUNTIME_NETWORK`,
 `TRADERA_TOOL_NODE_URL` (the node as backends reach it) and
 `TRADERA_TOOL_COMPILER_URL` (compose sets them all).
 
-## Agents: the deep agents runtime
+## Agents: OpenCode backbones, orchestrated by deep agents
 
 Every agent — the built-in **tradera** lead of each space and every
-specialist — runs on [LangChain Deep Agents](https://github.com/langchain-ai/deepagents)
-(on LangGraph). The engine is a modular VMM adapter,
-`plugins/adapters/vmm/deepagents`:
+specialist — runs on a self-hosted **[OpenCode](https://github.com/anomalyco/opencode)**
+as its backbone, and the space's agents work as a swarm orchestrated with
+**[LangChain Deep Agents](https://github.com/langchain-ai/deepagents)** (on
+LangGraph). The engine is a modular VMM adapter, `plugins/adapters/vmm/deepagents`:
 
 - the **Go adapter** registers agents as VMs (`vm_type: deepagents`), runs the
-  **Python runtime** (`deepagents/runtime`, image `tradera/deepagents:v1`) as
+  **Python runtime** (`deepagents/runtime`, image `tradera/deepagents:v2`) as
   a Nomad service on the stack's network, and hands it one turn at a time;
+- the runtime runs **`opencode serve`** beside itself (loopback only, behind a
+  password only the runtime knows; pinned version, binary and plugin SDK baked
+  into the image so it never goes to npm or fetches anything). Each agent
+  thread (an agent in a room, a restricted request, or a parallel instance) is
+  an OpenCode project with a generated `opencode.json`, and its conversation is
+  an OpenCode session on the runtime's volume. OpenCode runs the agent's loop:
+  model calls, parallel tool calls, retries, compaction and the agent's harness
+  (skills, subagents, plugins);
 - each turn carries a **turn token**. The runtime reaches the platform only
   through the adapter's gateway (`/deepagents/v1/call`), which dispatches real
   actions *as the agent's account* inside the turn's execution scope (who
   started it and pays, the space, room and run), and through the metered
   OpenAI-compatible LLM proxy (`/deepagents/v1/llm`), so provider keys never
-  leave the node and every token is billed to the turn.
+  leave the node and every token is billed to the turn;
+- **OpenCode uses the platform's LLM settings and nothing else.** Its only
+  provider (`tradera`) is the runtime's relay for that project
+  (`/opencode/llm/{key}/v1`), which forwards every call to the node's metered
+  endpoint with the turn's token: the provider, model, key, prices, limits,
+  context window and timeouts are the ones the admin set for the agent (Admin →
+  LLM), and the answer streams back as the node streams it (drafts in the
+  room as before). OpenCode holds no provider key and no node credential. On
+  the way the relay applies the turn guard and the decision model and puts the
+  agent's system prompt in place;
+- the agent's **tools** are the runtime's MCP server for that project
+  (`/opencode/mcp/{key}`): the same tools as before, run in the runtime with the
+  turn's token — conversation, delegation and the swarm, every app and platform
+  tool, memory, the timeline, and the shared sandbox's shell and files (the
+  deep agents filesystem tools over the space's sandbox). OpenCode's own file
+  and shell tools are off: agents work in the space's sandbox, not in the
+  runtime.
+
+`TRADERA_AGENT_ENGINE=deepagents` runs agents as LangChain deep agents instead
+(the previous engine), with the same tools and behaviour.
 
 The platform's own APIs are the agents' transport:
 
@@ -455,28 +485,72 @@ The platform's own APIs are the agents' transport:
 | agents → tools | `spaces.ask`: the shared sandbox (`raw` shell commands), apps, and platform tools (`tool` + `args`: files, images, previews, routines) |
 | work logs and live status | `spaces.agent_log` (log messages in the room + the room's live activity) |
 | questions to people | `spaces.agent_questions` / `spaces.agent_answer`, or a plain reply in the room |
-| recruiting specialists | `spaces.agent_recruit` |
+| the team | `market.catalog` (published agents), `spaces.agent_hire` (a marketplace agent joins the space, installed by whoever runs the work), `spaces.agent_recruit` (a new specialist) |
+| learning | `/deepagents/v1/learn/chat/completions` (the runtime's secret; the agent's own model, billed to its project) |
 
-Every deep agents feature is on, mapped onto the platform:
+Every feature is on, mapped onto the platform:
 
 - **planning** — `write_todos`; the plan is written to the work log;
 - **filesystem and shell** — `ls`, `read_file`, `write_file`, `edit_file`,
   `glob`, `grep` and `execute` run on the space's shared sandbox, so the lead
   and every specialist work on the same machine and files (`/workspace`);
+  large results go to a file there;
 - **subagents** — the `task` tool hands a task to an agent of the space over
   room messaging and returns its answer; `general-purpose` is the space's
   generalist, recruited on first use. `start_task` / `check_tasks` /
-  `wait_tasks` run several agents in parallel in the background;
+  `wait_tasks` run several agents in the background;
+- **the swarm** — the lead's `assemble_team` staffs every role a goal needs
+  with the best fit: an agent already in the space, else one **published in the
+  marketplace** (hired into the space), else a **new specialist written for the
+  role** — reuse first, generation only for what is missing. The language
+  model breaks the goal into roles and writes missing specialists; the
+  decision model scores every (role, candidate) pair in one fast request and
+  checks each written specialist fits its role; the language model settles
+  only the close calls (one request for all of them). `run_swarm` runs a plan
+  as a LangGraph flow (plan → prune → run → report): the language model writes
+  the plan when the lead gives none, the decision model drops dependencies a
+  task does not really need, and every task starts the moment what it waits
+  for is done, many at once (`TRADERA_SWARM_PARALLEL`, default 8), each with
+  the results it builds on. Several tasks for the same agent run as **parallel
+  instances** of it: a tagged task (`[task …]`) that reaches an agent already
+  working in the room runs on a thread of its own instead of waiting;
 - **skills** — each agent's skills (and the space's shared ones) are `SKILL.md`
   files in the sandbox (`/workspace/.tradera/...`), loaded progressively;
-- **memory** — `/workspace/AGENTS.md` (the space's) and each agent's own
-  `AGENTS.md`, read every turn and kept current by the agents;
+- **memory** — OpenViking (see the root README): notes in the system prompt,
+  recall with every message, memory tools, every turn learned from;
 - **human in the loop** — `ask_user`, and any tool listed in an agent's
-  `interrupt_on`, pause the agent's thread on a question people answer;
-- **summarization, prompt caching and tool-call repair** — the harness defaults;
-- **durable threads** — one LangGraph thread per agent per room, checkpointed
-  on the runtime's volume, so conversations and pending questions survive
-  restarts.
+  `interrupt_on`, pause the agent's thread on a question people answer; an
+  approved call is run by the runtime and its result given to the agent;
+- **compaction, retries and loop guards** — OpenCode compacts a conversation
+  against the model's window; one that no longer fits starts a new session
+  (and a turn that had not acted yet runs again there); the turn guard bounds
+  every turn by its model calls and steers the agent out of loops;
+- **durable threads** — one OpenCode session per agent per room, on the
+  runtime's volume, so conversations and pending questions survive restarts;
+- **self-improvement** (google-research **[harness2](https://github.com/google-research/harness2)**)
+  — each agent has a harness per space (harness2's eight components in its
+  OpenCode layout: always-on text, skills, subagents, scripts, plugins) that it
+  improves as it works. After a turn that went poorly, or every few turns, a
+  background cycle runs harness2's stages as OpenCode sessions over the
+  agent's recent trajectories: the editor proposes an INV (how it works) and a
+  DOM (what a practitioner knows) candidate, the composer merges what the
+  evidence supports, the composed harness is **probed on the agent's next real
+  turns** and adopted only if they go at least as well, and the experience
+  reflector writes the lesson into the agent's harness2 library, which later
+  cycles read. Requests are never re-run (that would repeat their effects).
+  It runs on the agent's own model through the learn endpoint, billed to the
+  project like its memory. Requests made without memory never use or feed it.
+
+Configuration of the runtime (all optional): `TRADERA_AGENT_ENGINE`
+(`opencode`, the default, or `deepagents`); `TRADERA_OPENCODE_URL` (an
+OpenCode server run elsewhere, with `TRADERA_OPENCODE_PASSWORD` and the
+runtime's address for it in `TRADERA_OPENCODE_CALLBACK_URL`);
+`TRADERA_SWARM_PARALLEL`; `TRADERA_HARNESS=0` turns self-improvement off,
+`TRADERA_HARNESS_EVERY` (turns between cycles, 12), `TRADERA_HARNESS_COOLDOWN`
+(seconds between cycles of one agent in one space, 6 h),
+`TRADERA_HARNESS_PROBE_TURNS` (3) and `TRADERA_HARNESS_PLUGINS=1` (let agents'
+harnesses carry OpenCode plugins: code that runs in the runtime, off by
+default). The node passes them on to the runtime.
 
 ### Image model
 
@@ -548,6 +622,11 @@ tests:
 ```bash
 cd plugins/adapters/vmm/deepagents/runtime && pip install -r requirements-dev.txt && pytest
 ```
+
+The OpenCode tests run a real OpenCode server: they need the `opencode` binary
+(`npm i -g opencode-ai@1.19.3`, or `TRADERA_OPENCODE_BIN`) and are skipped
+without it; `TRADERA_OPENCODE_CONFIG_HOME` may point at a config home with
+`@opencode-ai/plugin` installed, as the image has, to keep them offline.
 
 ### Shared space sandbox
 

@@ -425,6 +425,6 @@ def filter_allowed(tools: list[BaseTool], allowed: list[str]) -> list[BaseTool]:
     """Restrict platform tools to an agent's allowed_tools (when it has any)."""
     if not allowed:
         return tools
-    keep = set(allowed) | CORE_TOOLS | {"recruit_agent"}
+    keep = set(allowed) | CORE_TOOLS | {"recruit_agent", "assemble_team", "run_swarm"}
     keep |= {PLATFORM_TOOLS[n] for n in allowed if n in PLATFORM_TOOLS}
     return [t for t in tools if t.name in keep]

@@ -17,10 +17,15 @@ import (
 
 // runtimeTuning are node environment variables passed on to the runtime: the
 // model calls a turn may make, the window assumed for a model whose window is
-// unknown, and the self-hosted OpenViking server that keeps the agents' memory
-// (its URL, root key and how much is recalled with each message).
+// unknown, the self-hosted OpenViking server that keeps the agents' memory
+// (its URL, root key and how much is recalled with each message), the agents'
+// engine (OpenCode, or deepagents), an OpenCode server run elsewhere, how many
+// swarm tasks run at once, and how agents improve their harness.
 var runtimeTuning = []string{"TRADERA_MAX_MODEL_CALLS", "TRADERA_DEFAULT_CONTEXT_WINDOW",
-	"TRADERA_OPENVIKING_URL", "TRADERA_OPENVIKING_API_KEY", "TRADERA_OPENVIKING_RECALL_TOKENS"}
+	"TRADERA_OPENVIKING_URL", "TRADERA_OPENVIKING_API_KEY", "TRADERA_OPENVIKING_RECALL_TOKENS",
+	"TRADERA_AGENT_ENGINE", "TRADERA_OPENCODE_URL", "TRADERA_OPENCODE_PASSWORD", "TRADERA_OPENCODE_CALLBACK_URL",
+	"TRADERA_SWARM_PARALLEL", "TRADERA_HARNESS", "TRADERA_HARNESS_EVERY", "TRADERA_HARNESS_COOLDOWN",
+	"TRADERA_HARNESS_PROBE_TURNS", "TRADERA_HARNESS_PLUGINS"}
 
 // healthTTL is how long a successful health check is trusted.
 const healthTTL = 30 * time.Second

@@ -80,6 +80,9 @@ type Service struct {
 	// replaced) on each one, which wakes everyone waiting in spaces.live.
 	liveSeq uint64
 	liveCh  chan struct{}
+
+	// hireFn replaces installing a marketplace listing in agent_hire (tests).
+	hireFn func(ctx context.Context, owner, listingID, spaceID identity.ID) (identity.ID, error)
 }
 
 // roomActivity is the live status of the agent currently working in a room.

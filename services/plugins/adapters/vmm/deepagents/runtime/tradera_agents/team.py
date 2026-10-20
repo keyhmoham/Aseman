@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -99,6 +100,22 @@ def subagent_name(m: Member) -> str:
 TASK_TIMEOUT = 45 * 60.0
 POLL_EVERY = 2.0
 
+#: Every delegated task carries a tag. An agent that is already working in the
+#: room when a tagged task reaches it takes the task as a parallel instance of
+#: itself, on a thread of its own, instead of queueing behind its current work:
+#: so several tasks for the same agent run at once.
+TASK_TAG = re.compile(r"\[task ([a-z0-9]{6,32})\]")
+
+
+def new_tag() -> str:
+    return uuid.uuid4().hex[:10]
+
+
+def task_tag(message: str) -> str:
+    """The tag of a delegated task message, or ''."""
+    m = TASK_TAG.search(message or "")
+    return m.group(1) if m else ""
+
 
 def task_id(message_id: str, account_id: str) -> str:
     return f"{message_id}:{account_id}"
@@ -109,10 +126,10 @@ def split_task_id(tid: str) -> tuple[str, str]:
     return message_id, account
 
 
-async def assign(ctx: TurnContext, member: Member, task: str) -> str:
+async def assign(ctx: TurnContext, member: Member, task: str, *, tag: str = "") -> str:
     """Post a task to an agent in the room (an @mention starts its turn) and
     return the task id its answer will be correlated with."""
-    body = f"@{member.name} {task}"
+    body = f"@{member.name} [task {tag or new_tag()}] {task}"
     out = await ctx.gateway.call("spaces", "message_send", {
         "space": ctx.space, "room": ctx.room, "body": body, "mentions": [member.account_id],
     })

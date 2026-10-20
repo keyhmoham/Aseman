@@ -23,7 +23,8 @@ _STATUS = {
     "write_todos": "planning", "task": "delegating", "start_task": "delegating", "wait_tasks": "waiting on the team",
     "check_tasks": "checking on the team", "send_message": "messaging the room", "read_room": "reading the room",
     "send_direct_message": "sending a direct message", "ask_user": "asking a question",
-    "recruit_agent": "recruiting a specialist", "image_generate": "generating an image", "file_send": "sharing a file",
+    "recruit_agent": "recruiting a specialist", "assemble_team": "setting up the team",
+    "run_swarm": "running the team in parallel", "image_generate": "generating an image", "file_send": "sharing a file",
 }
 
 _TODO_MARK = {"completed": "[x]", "in_progress": "[~]", "pending": "[ ]"}

@@ -36,7 +36,7 @@ import logging
 import os
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from deepagents import create_deep_agent
@@ -46,7 +46,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 from langgraph.types import Command
 
-from . import economy, guard as guardlib, memory as memlib, prompts, subagents, team as teamlib, timeline as timelinelib, tools as toollib
+from . import economy, guard as guardlib, memory as memlib, prompts, subagents, swarm as swarmlib, team as teamlib, timeline as timelinelib, tools as toollib
 from .context import AgentDef, DecisionConfig, Turn, TurnContext
 from .decision import DecisionClient, DecisionMiddleware
 from .decision import approval as decision_approval
@@ -101,6 +101,21 @@ def slug(name: str) -> str:
 
 
 @dataclass
+class Kit:
+    """What a turn works with (Runner.assemble), whichever engine runs it."""
+
+    members: list[teamlib.Member]
+    backend: TraderaSandbox | None
+    tools: list[Any]
+    interrupt_on: dict[str, Any]
+    system: str
+    skills: list[str] = field(default_factory=list)
+    # The memory's notes for the system prompt (None: the turn has no memory).
+    notes: dict[str, str] | None = None
+    timeline: bool = False
+
+
+@dataclass
 class Outcome:
     reply: str
     status: str = "done"  # done | awaiting | failed | cancelled
@@ -116,8 +131,11 @@ class Runner:
 
     def __init__(self, store: Store, checkpointer: Any, *, model_factory: ModelFactory = openai_model,
                  gateway_factory: Callable[[str, str], Gateway] = Gateway,
-                 memory_settings: memlib.Settings | None = None) -> None:
+                 memory_settings: memlib.Settings | None = None, engine: Any = None) -> None:
         self.store = store
+        # The agents' backbone: an OpenCode engine (opencode/engine.py), or,
+        # without one, a LangChain deep agent per turn.
+        self.engine = engine
         self.memory_settings = memory_settings or memlib.Settings.from_env()
         self.recorder = memlib.Recorder()
         self.checkpointer = checkpointer
@@ -133,6 +151,7 @@ class Runner:
 
     async def prompt(self, req: dict[str, Any]) -> Outcome:
         ctx = self._context(req)
+        self._instance(ctx)
         try:
             async with self._lock(ctx.thread_id):
                 pending = self.store.question_for_thread(ctx.thread_id)
@@ -160,6 +179,8 @@ class Runner:
             ctx.turn.no_sandbox = ctx.turn.no_sandbox or pending.no_sandbox
             ctx.turn.no_memory = ctx.turn.no_memory or pending.no_memory
             ctx.turn.request_scope = pending.request_scope
+            ctx.turn.instance = pending.instance
+            ctx.generation = self.store.generation(ctx.base_thread)
             async with self._lock(ctx.thread_id):
                 pending = self.store.question_for_thread(ctx.thread_id)
                 if pending is None or (ctx.turn.question_id and ctx.turn.question_id != pending.id):
@@ -176,6 +197,17 @@ class Runner:
         return [q.public() for q in self.store.questions(vm_id, space_id)]
 
     # --- a turn -------------------------------------------------------------
+
+    def _instance(self, ctx: TurnContext) -> None:
+        """A delegated task that reaches an agent busy in the room runs as a
+        parallel instance of it, on a thread of its own (team.TASK_TAG), rather
+        than waiting for the agent's current work to finish."""
+        tag = teamlib.task_tag(ctx.turn.message)
+        if not tag or not self._lock(ctx.thread_id).locked():
+            return
+        ctx.turn.instance = tag
+        ctx.generation = self.store.generation(ctx.base_thread)
+        log.info("agent %s busy in room %s: task %s runs as a parallel instance", ctx.agent.name, ctx.room, tag)
 
     def _context(self, req: dict[str, Any]) -> TurnContext:
         gateway = self.gateway_factory(req["gateway"], req["token"])
@@ -204,10 +236,13 @@ class Runner:
         return {"configurable": {"thread_id": ctx.thread_id},
                 "recursion_limit": guardlib.recursion_limit(graph, budget)}
 
-    async def _build(self, ctx: TurnContext) -> tuple[Any, guardlib.TurnGuard]:
+    async def assemble(self, ctx: TurnContext) -> Kit:
+        """What a turn works with, whichever engine runs it: the team, the
+        sandbox, the tools, the system prompt, the skills and the notes."""
         agent = ctx.agent
         decision = ctx.decision_config
         ctx.decision = DecisionClient(ctx.gateway, decision.model) if decision else None
+        ctx.llm = self.model_factory(agent, ctx.gateway)
         members = await teamlib.team(ctx)
         await ctx.space_tools()
         backend = None if ctx.turn.no_sandbox else TraderaSandbox(ctx)
@@ -217,6 +252,9 @@ class Runner:
         tools = toollib.communication_tools(ctx) + toollib.delegation_tools(ctx)
         if agent.lead:
             tools.append(toollib.recruit_tool(ctx))
+            # The swarm: a team from the space, the marketplace and new
+            # specialists, and plans run in parallel (see swarm/).
+            tools += swarmlib.swarm_tools(ctx, self.store)
         tools += await toollib.platform_tools(ctx)
         tools = toollib.filter_allowed(tools, agent.allowed_tools)
         if ctx.memory is not None:
@@ -252,31 +290,40 @@ class Runner:
         if restricted:
             for skill in agent.skills:
                 system += f"\n\nSkill: {skill.name}\n{skill.instructions}"
-        model = self.model_factory(agent, ctx.gateway)
-        skills = [] if restricted else [SHARED_SKILLS, f"{own}/skills/"]
-        memory: list[Any] = []
+        notes = None
         if ctx.memory is not None:
             # Loaded once per turn: the system prompt stays the same on every call.
-            memory.append(memlib.OpenVikingMemory(await ctx.memory.notes(self._legacy_notes(ctx, backend))))
+            notes = await ctx.memory.notes(self._legacy_notes(ctx, backend))
+        return Kit(members=members, backend=backend, tools=tools, interrupt_on=interrupt_on, system=system,
+                   skills=[] if restricted else [SHARED_SKILLS, f"{own}/skills/"], notes=notes,
+                   timeline=bool(timeline))
+
+    async def _build(self, ctx: TurnContext) -> tuple[Any, guardlib.TurnGuard]:
+        """The turn as a deep agent (the deepagents engine)."""
+        agent = ctx.agent
+        decision = ctx.decision_config
+        kit = await self.assemble(ctx)
+        model = ctx.llm
+        memory: list[Any] = [memlib.OpenVikingMemory(kit.notes)] if kit.notes is not None else []
         turn_guard = guardlib.TurnGuard(guardlib.max_calls(agent.max_turns))
-        middleware = [*economy.middleware(model, backend, skills=skills), *memory,
+        middleware = [*economy.middleware(model, kit.backend, skills=kit.skills), *memory,
                       WorkLogMiddleware(WorkLog(ctx)), turn_guard]
         if ctx.decision is not None:
             # Outermost: it sees every tool, and its checks pass the turn guard.
             middleware.insert(0, DecisionMiddleware(
                 ctx.decision, guard=turn_guard, lead=agent.lead,
-                agents=[m for m in members if m.kind == "agent" and m.runtime],
-                interrupt_on=set(interrupt_on), auto_approve=bool(decision and decision.auto_approve),
+                agents=[m for m in kit.members if m.kind == "agent" and m.runtime],
+                interrupt_on=set(kit.interrupt_on), auto_approve=bool(decision and decision.auto_approve),
                 worklog=WorkLog(ctx)))
         graph = create_deep_agent(
             model=model,
-            tools=tools,
-            system_prompt=system,
+            tools=kit.tools,
+            system_prompt=kit.system,
             middleware=middleware,
-            subagents=await subagents.subagents(ctx, members),
-            skills=skills,
-            backend=backend,
-            interrupt_on=interrupt_on,
+            subagents=await subagents.subagents(ctx, kit.members),
+            skills=kit.skills,
+            backend=kit.backend,
+            interrupt_on=kit.interrupt_on,
             checkpointer=self.checkpointer,
             name=slug(agent.name),
         )
@@ -416,6 +463,8 @@ class Runner:
         return toollib._format_messages(shown[-20:], clip=600)
 
     async def _run(self, ctx: TurnContext, payload: Any, *, fresh_retry: bool = True) -> Outcome:
+        if self.engine is not None:
+            return await self.engine.run(self, ctx, payload, fresh_retry=fresh_retry)
         log.info("turn %s agent=%s space=%s room=%s", ctx.thread_id, ctx.agent.name, ctx.space, ctx.room)
         graph = config = None
         before = 0
@@ -485,6 +534,9 @@ class Runner:
         return "\n\n".join(parts)
 
     async def _resume(self, ctx: TurnContext, pending: Question, answer: str, *, approve: bool) -> Outcome:
+        if self.engine is not None:
+            self.store.drop_question(ctx.thread_id)
+            return await self.engine.resume(self, ctx, pending, answer, approve=approve)
         decisions = []
         for action in pending.actions or [{"name": "ask_user"}]:
             if action.get("name") == "ask_user":
@@ -520,6 +572,7 @@ class Runner:
                      space_id=ctx.space, room_id=ctx.room, thread_id=ctx.thread_id, question=text.strip(),
                      kind=kind, options=options, actions=actions)
         q.no_sandbox, q.no_memory, q.request_scope = ctx.turn.no_sandbox, ctx.turn.no_memory, ctx.turn.request_scope
+        q.instance = ctx.turn.instance
         self.store.put_question(q)
         reply = f"❓ {q.question}"
         if options:

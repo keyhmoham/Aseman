@@ -38,18 +38,36 @@ def _task_text(state: dict[str, Any]) -> str:
     return ""
 
 
-def _runnable(ctx: TurnContext, resolve: Any) -> RunnableLambda:
+HANDOVER_FAILED = "The task could not be handed over: "
+
+
+def _runnable(ctx: TurnContext, resolve: Any, *, tag: str = "", timeout: float = teamlib.TASK_TIMEOUT) -> RunnableLambda:
+    """A subagent's runnable: the task goes to the agent as a room message and
+    its answer there is the result. ``tag`` names the task (team.TASK_TAG), so a
+    busy agent takes it as a parallel instance."""
+
     async def run(state: dict[str, Any]) -> dict[str, Any]:
         task = _task_text(state)
         try:
             member = await resolve()
-            tid = await teamlib.assign(ctx, member, task)
-            reply = await teamlib.wait(ctx, tid)
+            tid = await teamlib.assign(ctx, member, task, tag=tag)
+            reply = await teamlib.wait(ctx, tid, timeout)
         except GatewayError as exc:
-            reply = f"The task could not be handed over: {exc}"
+            reply = HANDOVER_FAILED + str(exc)
         return {"messages": [AIMessage(content=reply)]}
 
     return RunnableLambda(run)
+
+
+def member_subagent(ctx: TurnContext, member: teamlib.Member, *, tag: str = "",
+                    timeout: float = teamlib.TASK_TIMEOUT) -> CompiledSubAgent:
+    """One of the space's agents as a deep agents subagent."""
+
+    async def fixed() -> teamlib.Member:
+        return member
+
+    return CompiledSubAgent(name=teamlib.subagent_name(member), description=member.description or f"The space's {member.name} agent.",
+                            runnable=_runnable(ctx, fixed, tag=tag, timeout=timeout))
 
 
 async def subagents(ctx: TurnContext, members: list[teamlib.Member]) -> list[CompiledSubAgent]:
@@ -90,3 +108,27 @@ async def subagents(ctx: TurnContext, members: list[teamlib.Member]) -> list[Com
         + " Runs as the space's generalist agent, in the room and the shared sandbox.",
         runnable=_runnable(ctx, generalist_member)))
     return out
+
+
+def task_tool(subs: list[CompiledSubAgent]) -> Any:
+    """The deep agents ``task`` tool over the space's agents, for engines
+    without deep agents' subagent middleware (the OpenCode engine): the same
+    subagents, the same description, the same room hand-offs."""
+    from deepagents.middleware.subagents import TASK_TOOL_DESCRIPTION
+    from langchain_core.tools import StructuredTool
+
+    by_name = {s["name"]: s for s in subs}
+    listing = "\n".join(f"- {s['name']}: {s['description']}" for s in subs)
+
+    async def task(description: str, subagent_type: str) -> str:
+        sub = by_name.get(subagent_type)
+        if sub is None:
+            return f"error: no subagent {subagent_type!r}; choose one of: {', '.join(by_name)}"
+        out = await sub["runnable"].ainvoke({"messages": [HumanMessage(content=description)]})
+        return str(out["messages"][-1].content)
+
+    schema = {"type": "object", "required": ["description", "subagent_type"], "properties": {
+        "description": {"type": "string", "description": "The task for the agent, in full detail."},
+        "subagent_type": {"type": "string", "description": "The agent to hand it to.", "enum": list(by_name)}}}
+    return StructuredTool(name="task", description=TASK_TOOL_DESCRIPTION.format(available_agents=listing),
+                          args_schema=schema, coroutine=task)

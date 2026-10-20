@@ -130,9 +130,18 @@ func (a *Adapter) unpaid(header map[string]string) bool {
 	return ok && a.memory.isBlocked(space)
 }
 
-// billMemory charges every project the whole ledger units its memory has used.
+// billMemory charges every project the whole ledger units its memory and its
+// agents' learning (learn.go) have used.
 func (a *Adapter) billMemory(ctx context.Context) {
-	m := a.memory
+	a.billMeter(ctx, a.memory, "agent memory")
+	a.billMeter(ctx, a.learn, "agent learning")
+}
+
+// billMeter charges what one meter has metered, each charge described by label.
+func (a *Adapter) billMeter(ctx context.Context, m *memoryMeter, label string) {
+	if m == nil {
+		return
+	}
 	m.mu.Lock()
 	due := []memoryBill{}
 	for _, b := range m.bills {
@@ -147,7 +156,7 @@ func (a *Adapter) billMemory(ctx context.Context) {
 		if payer.IsZero() {
 			continue
 		}
-		desc := fmt.Sprintf("agent memory (%d tokens)", b.tokens)
+		desc := fmt.Sprintf("%s (%d tokens)", label, b.tokens)
 		err := a.chargeMemory(ctx, b.space, payer, b.payee, amount, desc)
 		m.mu.Lock()
 		switch {
@@ -167,7 +176,7 @@ func (a *Adapter) billMemory(ctx context.Context) {
 		}
 		m.mu.Unlock()
 		if err != nil {
-			a.Log.Warn("agent memory not charged", "space", b.space.String(), "payer", payer.String(), "amount", amount, "error", err)
+			a.Log.Warn(label+" not charged", "space", b.space.String(), "payer", payer.String(), "amount", amount, "error", err)
 		}
 	}
 }

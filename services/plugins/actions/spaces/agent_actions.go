@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/tradera/tradera/internal/plugins/api"
+	"github.com/tradera/tradera/internal/plugins/bridge"
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/errs"
 	bots "github.com/tradera/tradera/plugins/actions/bots/dto"
@@ -20,13 +21,15 @@ import (
 
 // Actions agents (and the people working with them) use to run a swarm in a
 // space: agents write their work log and live status, ask people questions
-// that people answer by id, and the lead recruits specialists into the space.
+// that people answer by id, and the lead hires published agents from the
+// marketplace and recruits new specialists into the space.
 func agentActions(s *Service) []api.Action {
 	return []api.Action{
 		helper.Action{Namespace: "spaces", Name: "agent_log", Summary: "Write an agent's work log entry or live status in a room", Handler: s.agentLog},
 		helper.Action{Namespace: "spaces", Name: "agent_questions", Summary: "Questions the space's agents are waiting on", Handler: s.agentQuestions},
 		helper.Action{Namespace: "spaces", Name: "agent_answer", Summary: "Answer an agent's question by id (posted in the room)", Handler: s.agentAnswer},
 		helper.Action{Namespace: "spaces", Name: "agent_recruit", Summary: "Create a specialist agent and add it to the space", Handler: s.agentRecruit},
+		helper.Action{Namespace: "spaces", Name: "agent_hire", Summary: "Add an agent published in the marketplace to the space", Handler: s.agentHire},
 	}
 }
 
@@ -202,4 +205,68 @@ func (s *Service) agentRecruit(ctx context.Context, req *api.ActionRequest) (*ap
 	}
 	s.L.Info("agent recruited", "space", spaceID.String(), "bot", rec.ID.String(), "name", rec.Name, "by", req.Caller.ID.String())
 	return helper.JSON(map[string]any{"bot_id": rec.ID.String(), "account_id": rec.AccountID.String(), "name": rec.Name, "description": in.Description})
+}
+
+// agentHire adds an agent published in the marketplace to the space, as an
+// install of its listing by whoever runs the work (the person who started the
+// run, inside one): the lead reuses a proven specialist rather than writing a
+// new one. The agent keeps its owner's definition and pricing.
+func (s *Service) agentHire(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+	if err := helper.RequireAuthenticated(req); err != nil {
+		return nil, err
+	}
+	var in struct {
+		Space   string `json:"space"`
+		Room    string `json:"room,omitempty"`
+		Listing string `json:"listing"`
+	}
+	if err := helper.Decode(req, &in); err != nil {
+		return nil, err
+	}
+	ids, err := parseIDs(in.Space, in.Listing)
+	if err != nil {
+		return nil, errs.InvalidArgument("space and listing are required")
+	}
+	spaceID, listingID := ids[0], ids[1]
+	owner := s.payer(ctx, req.Caller.ID)
+	if err := s.Can(ctx, spaceID, identity.ID{}, owner, permission.SpaceManageBots); err != nil {
+		return nil, err
+	}
+	hire := s.hireListing
+	if s.hireFn != nil {
+		hire = s.hireFn
+	}
+	botID, err := hire(ctx, owner, listingID, spaceID)
+	if err != nil {
+		return nil, err
+	}
+	rec, err := s.Bots.GetBot(ctx, botID)
+	if err != nil {
+		return nil, err
+	}
+	s.L.Info("agent hired", "space", spaceID.String(), "bot", rec.ID.String(), "listing", listingID.String(), "by", req.Caller.ID.String())
+	return helper.JSON(map[string]any{"bot_id": rec.ID.String(), "account_id": rec.AccountID.String(), "name": rec.Name,
+		"description": s.toolDescription(ctx, rec)})
+}
+
+// marketListing is what agentHire reads of a marketplace listing.
+type marketListing struct {
+	BotID  identity.ID `json:"bot_id"`
+	Type   string      `json:"type"`
+	Status string      `json:"status"`
+}
+
+// hireListing installs an agent's active listing into the space (space-wide).
+func (s *Service) hireListing(ctx context.Context, owner, listingID, spaceID identity.ID) (identity.ID, error) {
+	var listing marketListing
+	if err := bridge.Invoke(ctx, s.K, "market", "Get", []any{ctx, listingID}, &listing); err != nil {
+		return identity.ID{}, err
+	}
+	if listing.Type != "agent" {
+		return identity.ID{}, errs.InvalidArgument("only agents can be hired; this listing is a " + listing.Type)
+	}
+	if err := bridge.Invoke(ctx, s.K, "market", "Install", []any{ctx, owner, listingID, spaceID, identity.ID{}}, &listing); err != nil {
+		return identity.ID{}, err
+	}
+	return listing.BotID, nil
 }

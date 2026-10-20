@@ -1,1 +1,1 @@
-"""Tradera's deep agents runtime: tradera agents on LangChain Deep Agents."""
+"""Tradera's agent runtime: agents on a self-hosted OpenCode, orchestrated as a swarm with LangChain Deep Agents."""

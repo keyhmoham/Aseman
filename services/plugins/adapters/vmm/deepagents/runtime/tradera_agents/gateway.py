@@ -49,6 +49,11 @@ class Gateway:
         self._sync = httpx.Client(headers=headers, timeout=CALL_TIMEOUT, transport=sync_transport)
 
     @property
+    def http(self) -> httpx.AsyncClient:
+        """The turn's HTTP client (its token on every request)."""
+        return self._client
+
+    @property
     def llm_base_url(self) -> str:
         """The OpenAI-compatible, metered model endpoint of the turn."""
         return self.base_url + "/llm"

@@ -82,13 +82,14 @@ services:
     command: ["node", "server.mjs", "--compiler"]
     restart: unless-stopped
 
-  # The deep agents runtime (LangChain deepagents on LangGraph) that runs every
-  # agent. Built here; the node runs it as a Nomad service on the stack's
+  # The agent runtime that runs every agent: a self-hosted OpenCode as each
+  # agent's backbone, the swarm orchestrated with LangChain deepagents
+  # (LangGraph), self-improvement with harness2. Built here; the node runs it as a Nomad service on the stack's
   # network (alias tradera-deepagents) the first time an agent works. The
   # tag is pinned because Nomad always pulls ":latest" images.
   deepagents:
     build: ./services/plugins/adapters/vmm/deepagents/runtime
-    image: tradera/deepagents:v1
+    image: tradera/deepagents:v2
     command: ["true"]
     restart: "no"
 
@@ -192,7 +193,7 @@ services:
       TRADERA_SANDBOX_IMAGE: ${TRADERA_SANDBOX_IMAGE:-tradera/sandbox-computer:latest}
       # The deep agents runtime: its image, the node as the runtime reaches it
       # (agent gateway + metered LLM proxy) and the network it joins.
-      TRADERA_AGENT_RUNTIME_IMAGE: ${TRADERA_AGENT_RUNTIME_IMAGE:-tradera/deepagents:v1}
+      TRADERA_AGENT_RUNTIME_IMAGE: ${TRADERA_AGENT_RUNTIME_IMAGE:-tradera/deepagents:v2}
       TRADERA_AGENT_NODE_URL: ${TRADERA_AGENT_NODE_URL:-http://tradera:8080}
       TRADERA_AGENT_RUNTIME_NETWORK: ${TRADERA_AGENT_RUNTIME_NETWORK:-tradera_default}
       # Memory (MB) the runtime reserves on Nomad. Lower it on a small server, raise it on a big one.
@@ -208,6 +209,14 @@ services:
       TRADERA_OPENVIKING_URL: ${TRADERA_OPENVIKING_URL:-http://openviking:1933}
       TRADERA_OPENVIKING_API_KEY: ${TRADERA_OPENVIKING_ROOT_KEY:-}
       TRADERA_OPENVIKING_RECALL_TOKENS: ${TRADERA_OPENVIKING_RECALL_TOKENS:-1500}
+      # The agent runtime: engine, swarm and self-improvement (passed on to it).
+      TRADERA_AGENT_ENGINE: ${TRADERA_AGENT_ENGINE:-opencode}
+      TRADERA_SWARM_PARALLEL: ${TRADERA_SWARM_PARALLEL:-}
+      TRADERA_HARNESS: ${TRADERA_HARNESS:-}
+      TRADERA_HARNESS_EVERY: ${TRADERA_HARNESS_EVERY:-}
+      TRADERA_HARNESS_COOLDOWN: ${TRADERA_HARNESS_COOLDOWN:-}
+      TRADERA_HARNESS_PROBE_TURNS: ${TRADERA_HARNESS_PROBE_TURNS:-}
+      TRADERA_HARNESS_PLUGINS: ${TRADERA_HARNESS_PLUGINS:-}
       # The spaces' timelines: the Utopia server above and the node's account
       # in it. Set TRADERA_TIMELINE_URL to an empty value to turn them off.
       TRADERA_TIMELINE_URL: ${TRADERA_TIMELINE_URL-http://timeline:1516}

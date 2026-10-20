@@ -38,7 +38,7 @@ echo "==> platform $PLATFORM, tag $TAG"
 IMAGES=(
   "node|./services|tradera/traderad:latest"
   "web|./app|tradera/flutter-web:latest"
-  "agents|./services/plugins/adapters/vmm/deepagents/runtime|tradera/deepagents:v1"
+  "agents|./services/plugins/adapters/vmm/deepagents/runtime|tradera/deepagents:v2"
   "sandbox|./deploy/sandbox-computer|tradera/sandbox-computer:latest"
   "tools|./deploy/tool-runtime|tradera/tool-runtime:v1"
   "memory|./deploy/openviking|tradera/openviking:v1"

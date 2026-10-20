@@ -44,7 +44,7 @@ Run the entire platform with a single command. Docker with the Compose plugin is
 | **`postgres`** | The stack's one database server (Postgres 16 with pgvector): the node's records and the timelines' database | Internal |
 | **`nomad`** | Nomad agent executing bot and agent workloads | Internal |
 | **`sandbox-computer`** | Builds the base sandbox image for spaces, then exits | — |
-| **`deepagents`** | Builds the LangChain/LangGraph agent runtime image, then exits | — |
+| **`deepagents`** | Builds the agent runtime image (each agent on a self-hosted [OpenCode](https://github.com/anomalyco/opencode), the swarm orchestrated with LangChain Deep Agents, self-improvement with [harness2](https://github.com/google-research/harness2)), then exits | — |
 | **`tool-runtime`** | Runs tool backends written for the Elpian VM or QuickJS (Nomad runs its image for managed tools, sandboxes carry it for installed ones); this service is the node's tool compiler | Internal |
 | **`openviking`** | Self-hosted [OpenViking](https://openviking.ai): the agents' long-term memory | Internal |
 | **`timeline-db`** | Creates the timelines' database on `postgres` if it is missing, then exits | — |
@@ -90,6 +90,16 @@ Additional environment-level overrides (database credentials, transactional emai
 The Flutter client reads the Google web/server client ID from the node at runtime. For an iOS build, also set the `GOOGLE_REVERSED_CLIENT_ID` Xcode build setting to the reversed iOS OAuth client ID and pass that client ID with `--dart-define=GOOGLE_IOS_CLIENT_ID=...`. The iOS target already includes Sign in with Apple and APNs entitlements; signing profiles must enable both capabilities.
 
 ---
+
+## Agents
+
+Every agent's backbone is a self-hosted [OpenCode](https://github.com/anomalyco/opencode), run inside the agent runtime and orchestrated as a swarm by LangChain Deep Agents (see [`services/README.md`](services/README.md#agents-opencode-backbones-orchestrated-by-deep-agents)):
+
+- **One set of LLM settings:** OpenCode's only model provider is the runtime's relay to the node's metered LLM proxy, so agents use exactly the providers, models, keys, prices and limits configured under **Admin → LLM**, and every token is billed as before. OpenCode holds no key.
+- **Hybrid teams:** the lead (tradera) staffs a goal with agents already in the space, agents **published in the marketplace** (hired into the space) and, only for roles nothing fits, **new specialists it writes**. The language model and the decision model share the work: the decision model scores every candidate for every role in one fast request, and the language model breaks the goal into roles, settles close calls and writes missing specialists.
+- **Parallel work:** the lead runs plans across the team in parallel; independent tasks start at once (the decision model drops dependencies that are not needed), and several tasks for the same agent run as parallel instances of it.
+- **Self-improvement:** agents improve their own harness (prompts, guardrails, skills, subagents, scripts) as they work, with Google Research's [harness2](https://github.com/google-research/harness2): proposed and composed from their recent trajectories, probed on their next real requests, adopted only when it does at least as well, and the lessons kept in each agent's experience library. It is billed to the project like memory; `TRADERA_HARNESS=0` turns it off.
+- `TRADERA_AGENT_ENGINE=deepagents` runs agents on the previous LangChain deep agents engine.
 
 ## Agent Memory
 

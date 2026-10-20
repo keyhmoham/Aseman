@@ -21,7 +21,14 @@ NOTE = ("An independent check finds your answer does not yet deliver what was as
 
 
 async def incomplete(client: DecisionClient, request: str, answer: str, delivered: list[str] | None = None) -> bool:
-    """True when the decision model is confident the answer falls short.
+    """True when the decision model is confident the answer falls short."""
+    p = await complete(client, request, answer, delivered)
+    return p is not None and p < INCOMPLETE_BELOW
+
+
+async def complete(client: DecisionClient, request: str, answer: str, delivered: list[str] | None = None) -> float | None:
+    """The decision model's probability that the answer delivers the request
+    (None when it cannot say).
 
     ``delivered`` are the files and images the agent already sent to the chat in
     this turn (what its delivery tools reported). They are part of the answer:
@@ -30,7 +37,7 @@ async def incomplete(client: DecisionClient, request: str, answer: str, delivere
     to make (and bill) a second one.
     """
     if not request.strip() or not answer.strip():
-        return False
+        return None
     state: dict[str, str] = {"request": request[-4000:], "answer": answer[:6000]}
     instructions = "Does `answer` deliver what `request` asked for?"
     if delivered:
@@ -43,5 +50,4 @@ async def incomplete(client: DecisionClient, request: str, answer: str, delivere
         "criteria": {"true": "the requested result is given (in the answer or as a delivered file or image), or it is "
                              "clearly explained why it cannot be",
                      "false": "work is only promised, or part of the request is silently left out"}}})
-    p = probability(answers, "complete")
-    return p is not None and p < INCOMPLETE_BELOW
+    return probability(answers, "complete")

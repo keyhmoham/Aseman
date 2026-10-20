@@ -52,6 +52,12 @@ class Platform:
         self.app_reply = '{"content": [{"type": "text", "text": "ok"}]}'
         # Agents that answer a task the moment it is posted: account → fn(body) → reply.
         self.responders: dict[str, Callable[[str], str]] = {}
+        # Agents that answer after working a while: account → (seconds, fn(body) → reply).
+        self.workers: dict[str, tuple[float, Callable[[str], str]]] = {}
+        self.working = 0
+        self.most_working = 0
+        # Agents served by a runtime under test: account → async fn(body, message id) → reply.
+        self.live: dict[str, Callable[[str, str], Any]] = {}
         # The node's decision model: fn(state, questions) → answers; None is off (409).
         self.decide: Callable[[Any, dict[str, Any]], dict[str, Any]] | None = None
         self.decisions: list[dict[str, Any]] = []
@@ -59,6 +65,17 @@ class Platform:
         # The space's timeline MCP server: fn(message) → JSON-RPC reply; None is off (503).
         self.timeline: Callable[[dict[str, Any]], dict[str, Any]] | None = None
         self.timeline_calls: list[dict[str, Any]] = []
+        # The turn's metered LLM endpoint (the OpenCode engine's model calls):
+        # each call answers with the next step (see llm_step), recorded in llm_requests.
+        self.llm: list[Any] = []
+        self.llm_requests: list[dict[str, Any]] = []
+        self.llm_status = 200
+        # The node's learn endpoint (the harness editor's model calls): its own script.
+        self.learn: list[Any] = []
+        self.learn_requests: list[dict[str, Any]] = []
+        # The marketplace's active agent listings, as market.catalog returns them.
+        self.catalog: list[dict[str, Any]] = []
+        self.hired: list[str] = []
         self._ids = itertools.count(1)
         self._clock = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
@@ -80,12 +97,26 @@ class Platform:
     # --- the gateway --------------------------------------------------------
 
     def handle(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/learn/chat/completions"):
+            # The agents' learning (harness editing): the runtime's own credential, no turn.
+            if request.headers.get("X-Tradera-Runtime") != "test-secret":
+                return httpx.Response(401, json={"error": {"message": "bad runtime secret"}})
+            req = json.loads(request.content)
+            self.learn_requests.append({**req, "space": request.headers.get("X-Tradera-Space"),
+                                        "agent": request.headers.get("X-Tradera-Agent")})
+            script, self.llm = self.llm, self.learn
+            try:
+                return self.handle_llm(req)
+            finally:
+                self.learn, self.llm = self.llm, script
         caller = self.tokens.get(request.headers.get("Authorization", "").removeprefix("Bearer "), "")
         if not caller:
             return httpx.Response(401, json={"error": "bad token"})
         req = json.loads(request.content)
         if request.url.path.endswith("/decision/evaluate"):
             return self.handle_decision(req)
+        if request.url.path.endswith("/llm/chat/completions"):
+            return self.handle_llm(req)
         if request.url.path.endswith("/timeline/mcp"):
             self.timeline_calls.append(req)
             if self.timeline is None:
@@ -111,6 +142,49 @@ class Platform:
         answers = self.decide(req["state"], req["questions"])
         return httpx.Response(200, json={"model": "typesafe-ai/jev", "answers": answers,
                                          "usage": {"inputTokens": 50 * len(req["questions"]), "outputTokens": 0}})
+
+    def handle_llm(self, req: dict[str, Any]) -> httpx.Response:
+        self.llm_requests.append(req)
+        if self.llm_status != 200:
+            return httpx.Response(self.llm_status, json={"error": {"message": f"provider error {self.llm_status}",
+                                                                   "type": "invalid_request_error"}})
+        step = self.llm.pop(0) if self.llm else say("(script exhausted)")
+        if callable(step):
+            step = step(req)
+        if isinstance(step, httpx.Response):
+            return step
+        message: dict[str, Any] = {"role": "assistant", "content": step.get("content", "")}
+        calls = [{"id": f"call_{next(self._ids)}", "type": "function",
+                  "function": {"name": name, "arguments": json.dumps(args)}} for name, args in step.get("tool_calls", [])]
+        if calls:
+            message["tool_calls"] = calls
+        finish = "tool_calls" if calls else "stop"
+        usage = {"prompt_tokens": 100, "completion_tokens": 10, "total_tokens": 110}
+        if not req.get("stream"):
+            return httpx.Response(200, json={"id": "c1", "object": "chat.completion", "created": 1, "model": "m",
+                                             "choices": [{"index": 0, "message": message, "finish_reason": finish}],
+                                             "usage": usage})
+        delta = dict(message)
+        if calls:
+            delta["tool_calls"] = [dict(c, index=i) for i, c in enumerate(calls)]
+        chunks = [{"choices": [{"index": 0, "delta": delta, "finish_reason": None}]},
+                  {"choices": [{"index": 0, "delta": {}, "finish_reason": finish}]},
+                  {"choices": [], "usage": usage}]
+        body = "".join("data: " + json.dumps({"id": "c1", "object": "chat.completion.chunk", "created": 1,
+                                              "model": "m", **c}) + "\n\n" for c in chunks) + "data: [DONE]\n\n"
+        return httpx.Response(200, content=body.encode(), headers={"content-type": "text/event-stream"})
+
+    def do_market_catalog(self, caller: str, body: dict[str, Any]) -> dict[str, Any]:
+        return {"items": self.catalog}
+
+    def do_spaces_agent_hire(self, caller: str, body: dict[str, Any]) -> dict[str, Any]:
+        row = next(r for r in self.catalog if r["listing"]["id"] == body["listing"])
+        bot = row["bot"]
+        self.hired.append(body["listing"])
+        if not any(b["id"] == bot["id"] for b in self.bots):
+            self.bots.append(dict(bot, kind="agent", vm_type="deepagents", description=row.get("description", "")))
+        return {"bot_id": bot["id"], "account_id": bot["account_id"], "name": bot["name"],
+                "description": row.get("description", "")}
 
     def do_spaces_tools_list(self, caller: str, body: dict[str, Any]) -> dict[str, Any]:
         return {"tools": [
@@ -173,6 +247,31 @@ class Platform:
         for account in body.get("mentions") or []:
             if account in self.responders:
                 self.post(account, self.responders[account](body["body"]), reply_to=mid)
+            if account in self.live:
+                import asyncio
+
+                async def serve(account: str = account, text: str = body["body"], mid: str = mid) -> None:
+                    self.working += 1
+                    self.most_working = max(self.most_working, self.working)
+                    try:
+                        reply = await self.live[account](text, mid)
+                    finally:
+                        self.working -= 1
+                    self.post(account, reply, reply_to=mid)
+
+                asyncio.get_running_loop().create_task(serve())
+            if account in self.workers:
+                import asyncio
+
+                delay, fn = self.workers[account]
+                self.working += 1
+                self.most_working = max(self.most_working, self.working)
+
+                def done(account: str = account, text: str = body["body"], fn: Any = fn) -> None:
+                    self.working -= 1
+                    self.post(account, fn(text), reply_to=mid)
+
+                asyncio.get_running_loop().call_later(delay, done)
         return {"message_id": mid, "ok": True}
 
     def do_spaces_message_list(self, caller: str, body: dict[str, Any]) -> dict[str, Any]:
@@ -227,6 +326,24 @@ class ScriptedModel(BaseChatModel):
         if callable(step):
             step = step(messages)
         return ChatResult(generations=[ChatGeneration(message=step)])
+
+
+def say(text: str) -> dict[str, Any]:
+    """An LLM step (Platform.llm): the model answers with text."""
+    return {"content": text}
+
+
+def use(name: str, args: dict[str, Any] | None = None, *more: tuple[str, dict[str, Any]], text: str = "") -> dict[str, Any]:
+    """An LLM step: the model calls tools (several at once with ``more``)."""
+    return {"content": text, "tool_calls": [(name, args or {}), *more]}
+
+
+def listing(n: int, name: str, description: str, usecases: list[str] | None = None) -> dict[str, Any]:
+    """A marketplace catalog row (market.catalog) for an agent."""
+    bot = {"id": f"bot-m{n}", "account_id": f"acc-m{n}", "name": name, "kind": "agent", "vm_type": "deepagents"}
+    return {"bot": bot, "kind": "agent", "status": "active", "description": description,
+            "descriptor": {"name": name, "description": description, "usecases": usecases or []},
+            "listing": {"id": f"lst-{n}", "bot_id": bot["id"], "name": name, "status": "active", "installs": 3}}
 
 
 def call(name: str, args: dict[str, Any], cid: str | None = None) -> AIMessage:

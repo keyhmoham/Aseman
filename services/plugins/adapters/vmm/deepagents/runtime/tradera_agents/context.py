@@ -76,6 +76,9 @@ class Turn:
     no_sandbox: bool = False
     no_memory: bool = False
     request_scope: str = ""
+    # A parallel instance of the agent: a delegated task it takes while its
+    # thread in the room is busy runs on a thread of its own (see team.TASK_TAG).
+    instance: str = ""
 
     @classmethod
     def from_payload(cls, raw: dict[str, Any]) -> Turn:
@@ -125,6 +128,9 @@ class TurnContext:
     memory: Any = None
     # Whether the node serves the space's timeline to the turn (timeline.py).
     timeline: bool = False
+    # The agent's own chat model for side calls (the swarm's planning and team
+    # setup): a LangChain chat model behind the turn's metered LLM endpoint.
+    llm: Any = None
 
     @property
     def space(self) -> str:
@@ -138,7 +144,9 @@ class TurnContext:
     def base_thread(self) -> str:
         """The agent's thread: one per agent per room (or per restricted request)."""
         thread = f"{self.agent.vm_id}:{self.turn.space_id}:{self.turn.room_id}"
-        return f"{thread}:request:{self.turn.request_scope}" if self.turn.request_scope else thread
+        if self.turn.request_scope:
+            thread += f":request:{self.turn.request_scope}"
+        return f"{thread}:task:{self.turn.instance}" if self.turn.instance else thread
 
     @property
     def thread_id(self) -> str:

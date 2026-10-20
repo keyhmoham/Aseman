@@ -66,7 +66,7 @@ plugins:
       config:
         options:
           node_url: "http://tradera:8080"        # the node as the runtime reaches it
-          image: "tradera/deepagents:v1"         # runtime image, run on Nomad
+          image: "tradera/deepagents:v2"         # runtime image, run on Nomad
           network: "tradera_default"             # docker network the runtime joins
           # runtime_url: "http://localhost:8000"   # or run the runtime yourself
           image_model: "gpt-image-1"   # model behind the agents' image_generate tool

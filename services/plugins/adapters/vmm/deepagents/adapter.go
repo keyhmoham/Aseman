@@ -1,10 +1,12 @@
-// Package deepagents runs tradera's agents on LangChain Deep Agents
-// (deepagents on LangGraph) as a VM runtime.
+// Package deepagents runs tradera's agents as a VM runtime: each agent's
+// backbone is a self-hosted OpenCode, orchestrated as a swarm by LangChain Deep
+// Agents (deepagents on LangGraph).
 //
 // A deepagents VM is an agent definition (instructions, skills, LLM backbone).
-// Agents execute in the deep agents runtime: a Python service (./runtime) the
-// node supervises as a Nomad job through the VMM port. Every agent of every
-// space is served by it, each turn in its own LangGraph thread.
+// Agents execute in the agent runtime: a Python service (./runtime) the node
+// supervises as a Nomad job through the VMM port, which runs OpenCode beside
+// itself. Every agent of every space is served by it, each thread an OpenCode
+// session (TRADERA_AGENT_ENGINE=deepagents: a LangGraph thread).
 //
 // Tradera stays the only bridge between an agent and the platform, and the
 // platform's own action API is the transport:
@@ -16,7 +18,10 @@
 //     bots, and platform tools — are called through spaces.ask;
 //   - work logs and live status go through spaces.agent_log;
 //   - model calls go through the node's metered LLM proxy, so provider keys
-//     never leave the node and every token is billed to the turn.
+//     never leave the node and every token is billed to the turn; OpenCode's
+//     only provider is the runtime's relay to it;
+//   - agents improve their own harness between turns (harness2) on their own
+//     model through the learn endpoint, billed to their project (learn.go).
 //
 // Each turn gets a token scoped to that turn: the runtime calls the node's
 // action API through this adapter's gateway, which dispatches the real actions
@@ -66,7 +71,7 @@ const (
 const (
 	// A pinned tag: Nomad always pulls ":latest", so a locally built runtime
 	// image must carry another tag.
-	defaultImage   = "tradera/deepagents:v1"
+	defaultImage   = "tradera/deepagents:v2"
 	defaultAlias   = "tradera-deepagents"
 	defaultPort    = "8000"
 	defaultVolume  = "tradera-deepagents:/data"
@@ -142,6 +147,9 @@ type Adapter struct {
 
 	// memory meters what each project's memory uses of the memory models.
 	memory *memoryMeter
+	// learn meters what each project's agents use of their models to improve
+	// their harness (learn.go); charged like memory.
+	learn *memoryMeter
 	// memoryChargeFn / memoryOwnerFn replace finance and the spaces service in
 	// charging for memory (tests).
 	memoryRecordFn func(space identity.ID, tokens, tokensIn, amount int64)
@@ -161,6 +169,7 @@ func New(log *logger.Logger) *Adapter {
 			Log:         log,
 		},
 		image: defaultImage, alias: defaultAlias, port: defaultPort, volume: defaultVolume, memory: newMemoryMeter(),
+		learn:                newMemoryMeter(),
 		client:               &http.Client{},
 		llmCallTimeout:       envDuration(EnvLLMCallTimeout, defaultLLMCallTimeout),
 		llmFirstEventTimeout: envDuration(EnvLLMFirstEventTimeout, defaultLLMFirstEventTimeout),

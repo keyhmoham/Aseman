@@ -40,8 +40,10 @@ var allowedActions = map[string]bool{
 	"spaces.members_list": true, "spaces.bots_list": true, "spaces.room_get": true,
 	"spaces.room_list": true, "spaces.file_get": true, "spaces.file_list": true,
 	"users.account_get": true, "users.search": true,
-	// The swarm: work logs, live status and recruiting specialists.
-	"spaces.agent_log": true, "spaces.agent_recruit": true,
+	// The swarm: work logs, live status, recruiting specialists and hiring
+	// published agents from the marketplace.
+	"spaces.agent_log": true, "spaces.agent_recruit": true, "spaces.agent_hire": true,
+	"market.catalog": true,
 }
 
 type route struct {
@@ -61,6 +63,8 @@ func routes(a *Adapter) []route {
 		{network.MethodPost, gatewayPrefix + "/memory/embeddings", a.serveMemoryEmbeddings},
 		// The space's timeline, as a built-in MCP server (timeline.go).
 		{network.MethodPost, gatewayPrefix + "/timeline/mcp", a.serveTimeline},
+		// The agents' learning: their harness improving between turns (learn.go).
+		{network.MethodPost, gatewayPrefix + "/learn/chat/completions", a.serveLearn},
 	}
 }
 

@@ -29,7 +29,7 @@ from .client import DecisionClient, probability
 #: Never hidden: how the agent works, plans, talks and delegates.
 PINNED = frozenset(CORE_TOOLS | {
     "ls", "read_file", "write_file", "edit_file", "glob", "grep", "execute",
-    "write_todos", "task", "recruit_agent", "read_attachment",
+    "write_todos", "task", "recruit_agent", "assemble_team", "run_swarm", "read_attachment",
 } | TIMELINE_TOOLS)
 #: Choose only when at least this many tools are choosable.
 MIN_CANDIDATES = 8

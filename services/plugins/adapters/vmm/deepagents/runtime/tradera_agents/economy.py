@@ -101,7 +101,7 @@ KEEP_CHARS = 400
 # Screenshots and other media the agent can still see.
 KEEP_MEDIA = 2
 # Answers the agent cannot get again by re-running a tool.
-NEVER_TRIM = frozenset({"task", "wait_tasks", "check_tasks", "ask_user", "write_todos"})
+NEVER_TRIM = frozenset({"task", "wait_tasks", "check_tasks", "ask_user", "write_todos", "assemble_team", "run_swarm"})
 
 # Summarize the history at this size instead of near the model's window, and
 # at the latest at this share of the window.

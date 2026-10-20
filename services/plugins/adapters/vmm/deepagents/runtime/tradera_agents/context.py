@@ -131,6 +131,8 @@ class TurnContext:
     # The agent's own chat model for side calls (the swarm's planning and team
     # setup): a LangChain chat model behind the turn's metered LLM endpoint.
     llm: Any = None
+    # What the agent's self-improvement keeps of the turn (improve.TurnNotes).
+    learning: Any = None
 
     @property
     def space(self) -> str:

@@ -1,12 +1,10 @@
-// Package deepagents runs tradera's agents as a VM runtime: each agent's
-// backbone is a self-hosted OpenCode, orchestrated as a swarm by LangChain Deep
-// Agents (deepagents on LangGraph).
+// Package deepagents runs tradera's agents on LangChain Deep Agents
+// (deepagents on LangGraph) as a VM runtime.
 //
 // A deepagents VM is an agent definition (instructions, skills, LLM backbone).
-// Agents execute in the agent runtime: a Python service (./runtime) the node
-// supervises as a Nomad job through the VMM port, which runs OpenCode beside
-// itself. Every agent of every space is served by it, each thread an OpenCode
-// session (TRADERA_AGENT_ENGINE=deepagents: a LangGraph thread).
+// Agents execute in the deep agents runtime: a Python service (./runtime) the
+// node supervises as a Nomad job through the VMM port. Every agent of every
+// space is served by it, each turn in its own LangGraph thread.
 //
 // Tradera stays the only bridge between an agent and the platform, and the
 // platform's own action API is the transport:
@@ -18,10 +16,9 @@
 //     bots, and platform tools — are called through spaces.ask;
 //   - work logs and live status go through spaces.agent_log;
 //   - model calls go through the node's metered LLM proxy, so provider keys
-//     never leave the node and every token is billed to the turn; OpenCode's
-//     only provider is the runtime's relay to it;
-//   - agents improve their own harness between turns (harness2) on their own
-//     model through the learn endpoint, billed to their project (learn.go).
+//     never leave the node and every token is billed to the turn;
+//   - agents improve their own playbook between turns (GEPA) through the learn
+//     endpoints, billed to their project (learn.go).
 //
 // Each turn gets a token scoped to that turn: the runtime calls the node's
 // action API through this adapter's gateway, which dispatches the real actions
@@ -147,8 +144,8 @@ type Adapter struct {
 
 	// memory meters what each project's memory uses of the memory models.
 	memory *memoryMeter
-	// learn meters what each project's agents use of their models to improve
-	// their harness (learn.go); charged like memory.
+	// learn meters what each project's agents use of the models to improve
+	// their playbook (learn.go); charged like memory.
 	learn *memoryMeter
 	// memoryChargeFn / memoryOwnerFn replace finance and the spaces service in
 	// charging for memory (tests).

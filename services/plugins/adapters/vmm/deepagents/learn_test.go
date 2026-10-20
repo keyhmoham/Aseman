@@ -2,6 +2,8 @@ package deepagents
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -63,6 +65,45 @@ func TestAgentsLearnOnTheirOwnModelAndTheirProjectPays(t *testing.T) {
 	usage, _ := a.Usage(context.Background(), vm)
 	if usage.TokensIn != 3 || usage.TokensOut != 2 {
 		t.Fatalf("the agent's usage counts its learning: %+v", usage)
+	}
+}
+
+func TestTheDecisionModelJudgesAgentsLearningAndTheirProjectPays(t *testing.T) {
+	p := ids(t, 3)
+	space, person, keyOwner := p[0], p[1], p[2]
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"model":"jev","answers":{"sound":{"type":"boolean","probability":0.9}},
+			"usage":{"inputTokens":4,"outputTokens":0}}`))
+	}))
+	t.Cleanup(upstream.Close)
+	a, charges, _ := billingAdapter(t, "", vmm.ProviderConfig{})
+	a.memory.notePayer(space.String(), person.String())
+	judge := func(secret string) *network.Response {
+		resp, err := a.serveLearnDecision(context.Background(), &network.Request{Body: []byte(question),
+			Header: map[string]string{"X-Tradera-Runtime": secret, LearnSpaceHeader: space.String()}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	a.platform = fakePlatform{}
+	if resp := judge("secret"); resp.Status != 409 {
+		t.Fatalf("the decision model is off: %d", resp.Status)
+	}
+	a.platform = fakePlatform{decision: &vmm.ProviderConfig{BaseURL: upstream.URL + "/v1", Model: "jev",
+		InputPrice: 1e6, OwnerID: keyOwner.String()}}
+	if resp := judge("wrong"); resp.Status != 401 {
+		t.Fatalf("only the runtime learns: %d", resp.Status)
+	}
+	resp := judge("secret")
+	if resp.Status != 200 || !strings.Contains(string(resp.Body), `"probability":0.9`) {
+		t.Fatalf("%d %s", resp.Status, resp.Body)
+	}
+	a.billMemory(context.Background())
+	if len(*charges) != 1 || (*charges)[0].payer != person || (*charges)[0].amount != 4 ||
+		!strings.HasPrefix((*charges)[0].desc, "agent learning") {
+		t.Fatalf("charges: %+v", *charges)
 	}
 }
 

@@ -63,8 +63,9 @@ func routes(a *Adapter) []route {
 		{network.MethodPost, gatewayPrefix + "/memory/embeddings", a.serveMemoryEmbeddings},
 		// The space's timeline, as a built-in MCP server (timeline.go).
 		{network.MethodPost, gatewayPrefix + "/timeline/mcp", a.serveTimeline},
-		// The agents' learning: their harness improving between turns (learn.go).
+		// The agents' learning: their playbook improving between turns (learn.go).
 		{network.MethodPost, gatewayPrefix + "/learn/chat/completions", a.serveLearn},
+		{network.MethodPost, gatewayPrefix + "/learn/decision/evaluate", a.serveLearnDecision},
 	}
 }
 

@@ -84,12 +84,7 @@ async def subagents(ctx: TurnContext, members: list[teamlib.Member]) -> list[Com
         if name in names or name == "general-purpose":
             continue
         names.add(name)
-
-        async def fixed(member: teamlib.Member = m) -> teamlib.Member:
-            return member
-
-        out.append(CompiledSubAgent(name=name, description=m.description or f"The space's {m.name} agent.",
-                                    runnable=_runnable(ctx, fixed)))
+        out.append(member_subagent(ctx, m))
 
     async def generalist_member() -> teamlib.Member:
         nonlocal generalist
@@ -108,27 +103,3 @@ async def subagents(ctx: TurnContext, members: list[teamlib.Member]) -> list[Com
         + " Runs as the space's generalist agent, in the room and the shared sandbox.",
         runnable=_runnable(ctx, generalist_member)))
     return out
-
-
-def task_tool(subs: list[CompiledSubAgent]) -> Any:
-    """The deep agents ``task`` tool over the space's agents, for engines
-    without deep agents' subagent middleware (the OpenCode engine): the same
-    subagents, the same description, the same room hand-offs."""
-    from deepagents.middleware.subagents import TASK_TOOL_DESCRIPTION
-    from langchain_core.tools import StructuredTool
-
-    by_name = {s["name"]: s for s in subs}
-    listing = "\n".join(f"- {s['name']}: {s['description']}" for s in subs)
-
-    async def task(description: str, subagent_type: str) -> str:
-        sub = by_name.get(subagent_type)
-        if sub is None:
-            return f"error: no subagent {subagent_type!r}; choose one of: {', '.join(by_name)}"
-        out = await sub["runnable"].ainvoke({"messages": [HumanMessage(content=description)]})
-        return str(out["messages"][-1].content)
-
-    schema = {"type": "object", "required": ["description", "subagent_type"], "properties": {
-        "description": {"type": "string", "description": "The task for the agent, in full detail."},
-        "subagent_type": {"type": "string", "description": "The agent to hand it to.", "enum": list(by_name)}}}
-    return StructuredTool(name="task", description=TASK_TOOL_DESCRIPTION.format(available_agents=listing),
-                          args_schema=schema, coroutine=task)

@@ -76,12 +76,21 @@ def _clip(value: Any, n: int) -> Any:
 
 
 def condensed(messages: list[BaseMessage]) -> list[dict[str, Any]]:
-    """Messages as OpenAI-style dicts, each clipped, pictures left out."""
+    """Messages as OpenAI-style dicts, each clipped, pictures left out.
+
+    A tool result is never emitted without the call it answers: a turn resumed
+    from a human-in-the-loop interrupt opens with the interrupt's result, whose
+    call is in the checkpoint before it, and a provider rejects the replay with
+    "the referenced tool call was not found" if that lone result is sent.
+    """
     out = []
+    calls = {c.get("id") for m in messages if isinstance(m, AIMessage) for c in m.tool_calls or []}
     for m in messages:
         if isinstance(m, HumanMessage):
             m = HumanMessage(content=_clip(_text(m.content), HUMAN_CHARS))
         elif isinstance(m, ToolMessage):
+            if m.tool_call_id not in calls:
+                continue
             m = m.model_copy(update={"content": _clip(_text(m.content), RESULT_CHARS)})
         elif isinstance(m, AIMessage):
             m = m.model_copy(update={"content": _clip(_text(m.content), TEXT_CHARS),

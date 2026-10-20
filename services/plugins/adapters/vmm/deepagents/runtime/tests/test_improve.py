@@ -205,6 +205,24 @@ def test_reading_instructions_again_is_a_repeat() -> None:
     assert repeat["action"]["name"] == "board__get_instructions" and "already been read" in repeat["feedback"]
 
 
+def test_an_interrupt_result_is_never_replayed_without_its_call() -> None:
+    # A turn resumed from an ask_user interrupt opens with the interrupt's
+    # result; its call is in the checkpoint before it. Replaying the lone
+    # result as a tool message makes the provider reject the call with
+    # "the referenced tool call was not found".
+    messages = [ToolMessage(content="node-a: Yes, create it", tool_call_id="call_ask", name="ask_user"),
+                *ran("board__get_instructions", {}, "How to draw.", "c1"),
+                *ran("board__get_instructions", {}, "How to draw.", "c2"),
+                AIMessage(content="Drawn.")]
+    points = record.points(messages, quality=0.8, complete=0.9)
+    for p in points:
+        ai = {tc.get("id") for m in p["history"] if m.get("role") == "assistant" for tc in m.get("tool_calls") or []}
+        tool = {m.get("tool_call_id") for m in p["history"] if m.get("role") == "tool"}
+        assert not (tool - ai), f"dangling tool result in {p['kind']}: {tool - ai}"
+    # The interrupt's result is gone from every replay; the rest is intact.
+    assert all("call_ask" not in json.dumps(p["history"]) for p in points)
+
+
 async def test_a_turn_that_looped_is_learned_from_soon(platform: Platform, tmp_path: Path) -> None:
     learning(platform)
     platform.apps = [{"name": "Board", "kind": "tool", "bot_id": "bot-board", "description": "A whiteboard.",

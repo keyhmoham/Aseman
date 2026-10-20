@@ -620,6 +620,14 @@ func (s *Service) AskDirect(ctx context.Context, caller, botID identity.ID, body
 						return "", errs.Conflict("the chain of agents messaging agents is too deep; finish the work yourself")
 					}
 					ctx = vmm.WithAgentAsk(ctx)
+					// An agent messaged by a teammate works on the teammate's
+					// run, and stops with it.
+					var done func()
+					ctx, done = s.joinRun(ctx)
+					defer done()
+					if err := ctx.Err(); err != nil {
+						return "", errs.New(errs.CodeUnavailable, "the work was stopped")
+					}
 				}
 				return s.directTurn(ctx, s.payer(ctx, caller), ids[0], ids[1], rec, body, atts)
 			}

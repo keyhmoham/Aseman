@@ -511,6 +511,9 @@ func (s *Service) reconcileSandbox(ctx context.Context, spaceID identity.ID, rec
 // SandboxExec runs a shell command inside the shared space sandbox and returns
 // its output. It starts the sandbox on demand and schedules the idle stop.
 func (s *Service) SandboxExec(ctx context.Context, spaceID identity.ID, command string) (string, error) {
+	if s.runStopped(ctx) {
+		return "", errs.New(errs.CodeUnavailable, "the work was stopped")
+	}
 	gate := s.sandboxGate(spaceID)
 	// One command at a time per computer: time spent here is waiting behind another.
 	endWait := vmm.Trace(ctx, "sandbox.queue", "waiting for the computer's turn")
@@ -557,8 +560,11 @@ func (s *Service) SandboxExec(ctx context.Context, spaceID identity.ID, command 
 	if !ok || rec.VMID == "" {
 		return "", errs.New(errs.CodeUnavailable, "sandbox VM does not support exec")
 	}
-	if dir := vmm.WorkingDirectory(vmm.ExecutionFrom(ctx).RunID); dir != "" {
-		command = "mkdir -p " + dir + " && cd " + dir + " && (" + command + "\n)"
+	runID := vmm.ExecutionFrom(ctx).RunID
+	if dir := vmm.WorkingDirectory(runID); dir != "" {
+		// The run's mark goes with the command and everything it starts, so
+		// stopping the run ends them (killRunProcesses).
+		command = runEnv(runID) + "mkdir -p " + dir + " && cd " + dir + " && (" + command + "\n)"
 	}
 	endExec := vmm.Trace(ctx, "sandbox.exec", clipTrace(command, 80))
 	out, err := execVM.Send(ctx, rec.VMID, command)

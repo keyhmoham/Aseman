@@ -361,7 +361,13 @@ func (a *dmSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	// the same direct thread, without holding up this request. An agent
 	// messaging another agent inside a run keeps that run's scope.
 	if botID, ok := a.s.agentAccount(ctx, to); ok && to != req.Caller.ID {
-		go a.s.deliverDirect(helper.WithActor(context.WithoutCancel(ctx), req.Caller.ID), req.Caller.ID, to, botID, in.Body)
+		// It joins that run before going off on its own, so stopping the run
+		// stops it too and the run's turn waits for it.
+		deliver, leave := a.s.joinRun(helper.WithActor(context.WithoutCancel(ctx), req.Caller.ID))
+		go func() {
+			defer leave()
+			a.s.deliverDirect(deliver, req.Caller.ID, to, botID, in.Body)
+		}()
 	}
 	return helper.JSON(map[string]any{"id": id.String(), "ok": true})
 }

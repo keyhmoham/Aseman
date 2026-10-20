@@ -31,7 +31,21 @@ func (s *Service) agentAccount(ctx context.Context, accountID identity.ID) (iden
 // the agent's answer back as a direct message. The conversation runs through
 // the spaces namespace (the agent works on a space's sandbox): a person's DM
 // runs in their home space, an agent's DM inside its run.
+// joinRun makes the delivery part of the run it was started on, if any
+// (spaces.JoinRun); outside a run it is left as it is.
+func (s *Service) joinRun(ctx context.Context) (context.Context, func()) {
+	var joined context.Context
+	var leave func()
+	if err := bridge.Invoke(ctx, s.K, "spaces", "JoinRun", []any{ctx}, &joined, &leave); err != nil || joined == nil || leave == nil {
+		return ctx, func() {}
+	}
+	return joined, leave
+}
+
 func (s *Service) deliverDirect(ctx context.Context, from, agentAccount, botID identity.ID, body string) {
+	if ctx.Err() != nil {
+		return // its run was stopped
+	}
 	var reply string
 	err := bridge.Invoke(ctx, s.K, "spaces", "AskDirect", []any{ctx, from, botID, body, []vmm.FileAttachment(nil)}, &reply)
 	if err != nil {

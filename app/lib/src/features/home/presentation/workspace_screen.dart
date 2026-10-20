@@ -619,7 +619,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                           spaceId:
                                               _spaceFor(workspace)?.id ?? '',
                                           roomId: _currentRoomId,
-                                          canManageTasks: _canManageTasks,
                                           mentionable: spaceBots
                                               .where((b) => b.isAgent)
                                               .toList(),
@@ -670,7 +669,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                       dependencies: widget.dependencies,
                       spaceId: _spaceFor(workspace)?.id ?? '',
                       roomId: _currentRoomId,
-                      canManageTasks: _canManageTasks,
                       mentionable: spaceBots.where((b) => b.isAgent).toList(),
                       onSend: _sendRoomMessage,
                       onEdit: _editRoomMessage,

@@ -133,15 +133,22 @@ View models own mutable UI state and commands; repositories own data; the
 service isolates the remote (signed) infrastructure. Offline/mock mode falls
 back to bundled showcase data so the UI stays testable without a node.
 
-## Agent task compatibility
+## Agent work in a room
 
-Open a room and select **Agent tasks** to track Tradera's stages and outcome.
-The panel supports partial completion, budget exhaustion, interruption,
-question-bound answers, cancellation, execution review and delivered artifacts.
-Report attachment links use authenticated file cards; preview links use the
-configured gateway. Runtime instructions and skill selection stay on the server.
-See the [workflow feature](lib/src/features/workflows/README.md) for its boundaries
-and regression coverage.
+A room shows its agents' work in one place each (`features/rooms`, driven by
+`RoomWorkController` over `spaces.turn_log`, the `spaces.live` long poll and
+`spaces.agent_questions`):
+
+* **in the thread** — below the last message, who is working and on what, or
+  the answer being written as it comes, and how many requests wait;
+* **the composer** — its send button becomes Stop while agents work (it stops
+  the room's running and waiting requests); a leading `/` offers the `/btw`,
+  `/ask` and `/fresh` prompt commands;
+* **above the composer, only when needed** — the answers to an agent's question
+  (its question is its message in the thread), or Retry / Run again for work
+  that did not finish;
+* **Work** (header) — what runs and waits now (drop a waiting request) and what
+  ran, with its time, outcome and error.
 
 ```bash
 flutter analyze lib test

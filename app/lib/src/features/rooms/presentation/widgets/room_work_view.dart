@@ -1,352 +1,248 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_shape.dart';
 import '../../domain/room_work.dart';
 import '../room_work_controller.dart';
 
-/// Above the composer: what the room's agents are doing, with Stop and the
-/// details; the questions they wait on, answerable with a tap; and the last
-/// run that did not finish, with Retry. Nothing when there is nothing to say.
-class RoomWorkStrip extends StatelessWidget {
-  const RoomWorkStrip(
+/// Above the composer, only when the room's agents need the person: the
+/// answers to the question an agent asked (its question is its last message
+/// in the thread), or the run that did not finish, to run again.
+class RoomWorkNeeds extends StatelessWidget {
+  const RoomWorkNeeds(
       {super.key,
       required this.work,
-      required this.onStop,
       required this.onAnswer,
-      this.onRunAgain});
+      required this.onRunAgain});
 
   final RoomWorkController work;
-  final VoidCallback onStop;
   final void Function(AgentQuestion question, String answer) onAnswer;
-
-  /// Sends a failed run's prompt to its agent again.
-  final void Function(WorkEntry failed)? onRunAgain;
+  final void Function(WorkEntry failed) onRunAgain;
 
   @override
   Widget build(BuildContext context) {
-    final children = <Widget>[
-      for (final q in work.questions) _question(context, q),
-      if (work.busy) _status(context),
-      if (work.interrupted case final run?) _interrupted(context, run),
-      if (work.failure case final failed?) _failed(context, failed),
+    final q = work.questions.isEmpty ? null : work.questions.first;
+    final row = q != null
+        ? _answers(context, q)
+        : work.interrupted != null
+            ? _notice(context,
+                icon: Icons.pause_circle_outline,
+                color: AppColors.warning,
+                text: '${work.interrupted!.botName} was interrupted',
+                action: 'Retry',
+                onAction: () => work.resume(work.interrupted!),
+                onDismiss: () => work.dismiss(work.interrupted!.runId))
+            : work.failure != null
+                ? _notice(context,
+                    icon: Icons.error_outline,
+                    color: Theme.of(context).colorScheme.error,
+                    text: work.failure!.error.isEmpty
+                        ? '${work.failure!.botName} couldn’t finish'
+                        : '${work.failure!.botName} couldn’t finish: ${work.failure!.error}',
+                    action: work.failure!.prompt.trim().isEmpty
+                        ? null
+                        : 'Run again',
+                    onAction: () => onRunAgain(work.failure!),
+                    onDismiss: () => work.dismiss(work.failure!.runId))
+                : null;
+    if (row == null) return const SizedBox.shrink();
+    return Padding(padding: const EdgeInsets.only(bottom: 6), child: row);
+  }
+
+  Widget _answers(BuildContext context, AgentQuestion q) {
+    final scheme = Theme.of(context).colorScheme;
+    final choices = [
+      ...q.options,
+      if (q.options.isEmpty && q.approval) ...['Yes, go ahead', 'No'],
+      if (!q.approval) 'Use placeholders for now',
     ];
-    if (children.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        for (final c in children)
-          Padding(padding: const EdgeInsets.only(top: 4), child: c),
-      ]),
-    );
-  }
-
-  Widget _card(BuildContext context, {required Widget child, Color? tone}) {
-    final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: tone?.withValues(alpha: .10) ?? scheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(AppShape.card),
-      child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 6, 8), child: child),
-    );
-  }
-
-  Widget _status(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final running = work.running;
-    final names = {for (final r in running) r.botName}.toList();
-    final waiting = work.queued.length;
-    final detail = work.activity.isEmpty ? '' : work.activity.first.detail;
-    final title = names.isEmpty
-        ? 'Waiting to start'
-        : names.length == 1
-            ? '${names.first} is working'
-            : '${names.take(2).join(' and ')}${names.length > 2 ? ' and others' : ''} are working';
-    return _card(
-      context,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
       child: Row(children: [
-        const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2)),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700)),
-                if (detail.isNotEmpty || waiting > 0)
-                  Text(
-                      [
-                        if (detail.isNotEmpty) detail,
-                        if (waiting > 0)
-                          waiting == 1
-                              ? '1 more queued'
-                              : '$waiting more queued',
-                      ].join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 11, color: scheme.onSurfaceVariant)),
-              ]),
-        ),
-        TextButton(
-            onPressed: () => showRoomWorkSheet(context, work, onStop: onStop),
-            child: const Text('Details')),
-        FilledButton.tonalIcon(
-            onPressed: work.stopping ? null : onStop,
-            icon: const Icon(Icons.stop_rounded, size: 18),
-            label: const Text('Stop')),
-      ]),
-    );
-  }
-
-  Widget _question(BuildContext context, AgentQuestion q) {
-    final scheme = Theme.of(context).colorScheme;
-    final choices = q.options.isNotEmpty
-        ? q.options
-        : q.approval
-            ? const ['Yes, go ahead', 'No, don’t do it']
-            : const <String>[];
-    return _card(
-      context,
-      tone: AppColors.warning,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(q.approval ? Icons.verified_user_outlined : Icons.help_outline,
-              size: 16, color: AppColors.warning),
+        Icon(q.approval ? Icons.verified_user_outlined : Icons.reply_rounded,
+            size: 16, color: scheme.primary),
+        const SizedBox(width: 6),
+        Text(
+            q.approval ? '${q.agent} needs your go-ahead' : 'Answer ${q.agent}',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: scheme.onSurfaceVariant)),
+        for (final c in choices) ...[
           const SizedBox(width: 6),
-          Expanded(
-              child: Text(
-                  q.approval
-                      ? '${q.agent} needs your go-ahead'
-                      : '${q.agent} is asking you',
-                  style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w800))),
-        ]),
-        const SizedBox(height: 4),
-        Text(q.question, style: const TextStyle(fontSize: 13)),
-        const SizedBox(height: 6),
-        Wrap(spacing: 6, runSpacing: 4, children: [
-          for (final c in choices)
-            ActionChip(
-                visualDensity: VisualDensity.compact,
-                label: Text(c, style: const TextStyle(fontSize: 12)),
-                onPressed: () => onAnswer(q, c)),
-          if (!q.approval)
-            ActionChip(
-                visualDensity: VisualDensity.compact,
-                label: const Text('Use placeholders for now',
-                    style: TextStyle(fontSize: 12)),
-                onPressed: () => onAnswer(q,
-                    'Use reasonable placeholders for now and carry on; I will fill them in later.')),
-        ]),
-        const SizedBox(height: 2),
-        Text('Or type your answer below.',
-            style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
+          ActionChip(
+              visualDensity: VisualDensity.compact,
+              label: Text(c, style: const TextStyle(fontSize: 12)),
+              onPressed: () => onAnswer(
+                  q,
+                  c == 'Use placeholders for now'
+                      ? 'Use reasonable placeholders for now and carry on; I will fill them in later.'
+                      : c)),
+        ],
       ]),
     );
   }
 
-  Widget _interrupted(BuildContext context, WorkRun run) => _card(
-        context,
-        tone: AppColors.warning,
-        child: Row(children: [
-          const Icon(Icons.pause_circle_outline,
-              size: 18, color: AppColors.warning),
-          const SizedBox(width: 8),
-          Expanded(
-              child: Text('${run.botName} was interrupted before finishing.',
-                  style: const TextStyle(fontSize: 13))),
-          TextButton(
-              onPressed: () => work.dismiss(run.runId),
-              child: const Text('Dismiss')),
-          FilledButton.tonal(
-              onPressed: () => work.resume(run), child: const Text('Retry')),
-        ]),
-      );
-
-  Widget _failed(BuildContext context, WorkEntry e) {
-    final scheme = Theme.of(context).colorScheme;
-    return _card(
-      context,
-      tone: scheme.error,
-      child: Row(children: [
-        Icon(Icons.error_outline, size: 18, color: scheme.error),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('${e.botName} couldn’t finish',
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700)),
-                if (e.error.isNotEmpty)
-                  Text(e.error,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 11, color: scheme.onSurfaceVariant)),
-              ]),
-        ),
+  Widget _notice(BuildContext context,
+      {required IconData icon,
+      required Color color,
+      required String text,
+      String? action,
+      required VoidCallback onAction,
+      required VoidCallback onDismiss}) {
+    return Row(children: [
+      Icon(icon, size: 16, color: color),
+      const SizedBox(width: 6),
+      Expanded(
+          child: Text(text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12))),
+      if (action != null)
         TextButton(
-            onPressed: () => work.dismiss(e.runId),
-            child: const Text('Dismiss')),
-        if (onRunAgain != null && e.prompt.trim().isNotEmpty)
-          FilledButton.tonal(
-              onPressed: () => onRunAgain!(e), child: const Text('Run again')),
-      ]),
-    );
+            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+            onPressed: onAction,
+            child: Text(action)),
+      IconButton(
+          tooltip: 'Dismiss',
+          visualDensity: VisualDensity.compact,
+          iconSize: 16,
+          onPressed: onDismiss,
+          icon: const Icon(Icons.close_rounded)),
+    ]);
   }
 }
 
-/// The room's work in full: each agent's run now (with its own Stop) and
-/// what waits, then the history of finished runs.
-Future<void> showRoomWorkSheet(BuildContext context, RoomWorkController work,
-        {VoidCallback? onStop}) =>
+/// The room's work: what is running and waiting now, then what ran. What an
+/// agent is doing is shown in the thread and Stop is the composer's; here a
+/// waiting request can be dropped and a failed one run again.
+Future<void> showRoomWork(BuildContext context, RoomWorkController work,
+        {void Function(WorkEntry failed)? onRunAgain}) =>
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => FractionallySizedBox(
-          heightFactor: .7, child: RoomWorkDetails(work: work, onStop: onStop)),
+          heightFactor: .7,
+          child: RoomWorkPanel(work: work, onRunAgain: onRunAgain)),
     );
 
-class RoomWorkDetails extends StatelessWidget {
-  const RoomWorkDetails({super.key, required this.work, this.onStop});
+class RoomWorkPanel extends StatelessWidget {
+  const RoomWorkPanel({super.key, required this.work, this.onRunAgain});
   final RoomWorkController work;
-  final VoidCallback? onStop;
+  final void Function(WorkEntry failed)? onRunAgain;
 
   @override
-  Widget build(BuildContext context) => DefaultTabController(
-        length: 2,
-        child: ListenableBuilder(
-          listenable: work,
-          builder: (context, _) => Column(children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 12, 4),
-              child: Row(children: [
-                const Expanded(
-                    child: Text('Agent work',
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: work,
+        builder: (context, _) {
+          final scheme = Theme.of(context).colorScheme;
+          final now = [...work.live, ...work.queued];
+          final done = [
+            for (final e in work.history)
+              if (e.kind != 'accepted') e
+          ];
+          Widget heading(String text) => Padding(
+              padding: const EdgeInsets.fromLTRB(8, 16, 8, 4),
+              child: Text(text,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: scheme.onSurfaceVariant)));
+          return ListView(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+              children: [
+                const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Text('Work',
                         style: TextStyle(
                             fontSize: 18, fontWeight: FontWeight.w800))),
-                if (work.busy && onStop != null)
-                  FilledButton.tonalIcon(
-                      onPressed: work.stopping ? null : onStop,
-                      icon: const Icon(Icons.stop_rounded, size: 18),
-                      label: const Text('Stop all')),
-              ]),
-            ),
-            const TabBar(tabs: [Tab(text: 'Live'), Tab(text: 'History')]),
-            Expanded(
-                child:
-                    TabBarView(children: [_live(context), _history(context)])),
-          ]),
-        ),
+                if (now.isEmpty && done.isEmpty)
+                  Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Center(
+                          child: Text('No agent has worked in this room yet.',
+                              style:
+                                  TextStyle(color: scheme.onSurfaceVariant)))),
+                if (now.isNotEmpty) heading('NOW'),
+                for (final r in now) _run(context, r),
+                if (done.isNotEmpty) heading('EARLIER'),
+                for (final e in done) _entry(context, e),
+              ]);
+        },
       );
 
-  Widget _empty(BuildContext context, String text) => Center(
-      child: Text(text,
-          style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant)));
-
-  Widget _live(BuildContext context) {
-    final rows = [...work.live, ...work.queued];
-    if (rows.isEmpty) return _empty(context, 'No agent is working here now.');
-    return ListView(padding: const EdgeInsets.all(12), children: [
-      for (final r in rows)
-        Card(
-          child: ListTile(
-            leading: Icon(
-                r.blocked
-                    ? Icons.pause_circle_outline
-                    : r.status == 'queued'
-                        ? Icons.schedule_rounded
-                        : Icons.autorenew_rounded,
-                color: r.blocked ? AppColors.warning : null),
-            title: Text(r.botName,
-                style: const TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: Text(
-                [
-                  switch (r.status) {
-                    'queued' => 'Queued',
-                    'blocked' => 'Interrupted',
-                    _ => _activityFor(r) ?? 'Working',
-                  },
-                  if (r.startedAt != null)
-                    formatWorkDuration(DateTime.now().difference(r.startedAt!)),
-                  if (r.prompt.isNotEmpty) '“${_clip(r.prompt)}”',
-                ].join(' · '),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis),
-            trailing: r.blocked
-                ? TextButton(
-                    onPressed: () => work.resume(r), child: const Text('Retry'))
-                : TextButton(
-                    onPressed: () => work.stop(r), child: const Text('Stop')),
-          ),
-        ),
-    ]);
-  }
-
-  String? _activityFor(WorkRun r) {
-    for (final a in work.activity) {
-      if (a.agent == r.botName && a.detail.isNotEmpty) return a.detail;
-    }
-    return null;
-  }
-
-  Widget _history(BuildContext context) {
-    final rows = [
-      for (final e in work.history)
-        if (e.kind != 'accepted') e
-    ];
-    if (rows.isEmpty) return _empty(context, 'Nothing has finished here yet.');
-    final scheme = Theme.of(context).colorScheme;
-    return ListView.separated(
-      padding: const EdgeInsets.all(12),
-      itemCount: rows.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, i) {
-        final e = rows[i];
-        final (icon, color, label) = switch (e.kind) {
-          'done' => (Icons.check_circle_outline, AppColors.success, 'Done'),
-          'failed' => (Icons.error_outline, scheme.error, 'Failed'),
-          'cancelled' => (
-              Icons.stop_circle_outlined,
-              scheme.onSurfaceVariant,
-              'Stopped'
-            ),
-          _ => (Icons.circle_outlined, scheme.onSurfaceVariant, e.kind),
-        };
-        return ListTile(
-          leading: Icon(icon, color: color),
-          title: Text('${e.botName} · $label',
-              style: const TextStyle(fontWeight: FontWeight.w700)),
-          subtitle: Text(
-              [
-                if (e.durationMs > 0)
-                  formatWorkDuration(Duration(milliseconds: e.durationMs)),
-                _when(e.at),
-                if (e.prompt.isNotEmpty) '“${_clip(e.prompt)}”',
-                if (e.error.isNotEmpty) e.error,
-              ].join(' · '),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis),
-        );
+  Widget _run(BuildContext context, WorkRun r) {
+    final (icon, label) = switch (r.status) {
+      'queued' => (Icons.schedule_rounded, 'Waiting'),
+      'blocked' => (Icons.pause_circle_outline, 'Interrupted'),
+      _ => (Icons.autorenew_rounded, 'Working'),
+    };
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+      leading: Icon(icon, color: r.blocked ? AppColors.warning : null),
+      title:
+          Text(r.botName, style: const TextStyle(fontWeight: FontWeight.w700)),
+      subtitle: Text(
+          [
+            label,
+            if (r.startedAt != null)
+              formatWorkDuration(DateTime.now().difference(r.startedAt!)),
+            if (r.prompt.isNotEmpty) _clip(r.prompt),
+          ].join(' · '),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis),
+      trailing: switch (r.status) {
+        'queued' => TextButton(
+            onPressed: () => work.stop(r), child: const Text('Remove')),
+        'blocked' => TextButton(
+            onPressed: () => work.resume(r), child: const Text('Retry')),
+        _ => null,
       },
+    );
+  }
+
+  Widget _entry(BuildContext context, WorkEntry e) {
+    final scheme = Theme.of(context).colorScheme;
+    final (icon, color, label) = switch (e.kind) {
+      'done' => (Icons.check_circle_outline, AppColors.success, 'Done'),
+      'failed' => (Icons.error_outline, scheme.error, 'Failed'),
+      'cancelled' => (
+          Icons.stop_circle_outlined,
+          scheme.onSurfaceVariant,
+          'Stopped'
+        ),
+      _ => (Icons.circle_outlined, scheme.onSurfaceVariant, e.kind),
+    };
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+      leading: Icon(icon, color: color),
+      title:
+          Text(e.botName, style: const TextStyle(fontWeight: FontWeight.w700)),
+      subtitle: Text(
+          [
+            label,
+            if (e.durationMs > 0)
+              formatWorkDuration(Duration(milliseconds: e.durationMs)),
+            _when(e.at),
+            if (e.prompt.isNotEmpty) _clip(e.prompt),
+            if (e.error.isNotEmpty) e.error,
+          ].join(' · '),
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis),
+      trailing: e.failed && onRunAgain != null && e.prompt.trim().isNotEmpty
+          ? TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                onRunAgain!(e);
+              },
+              child: const Text('Run again'))
+          : null,
     );
   }
 
   static String _clip(String s) {
     final t = s.trim().replaceAll(RegExp(r'\s+'), ' ');
-    return t.length > 90 ? '${t.substring(0, 90)}…' : t;
+    return '“${t.length > 90 ? '${t.substring(0, 90)}…' : t}”';
   }
 
   static String _when(DateTime at) {

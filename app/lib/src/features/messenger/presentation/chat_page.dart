@@ -12,7 +12,7 @@ import 'report_dialog.dart';
 /// One conversation of the messenger, direct or a project room. Both are rooms
 /// of a space (a direct chat is a one-room space shared by two accounts), so
 /// the page is the project room chat itself: files, voice, agent mentions,
-/// the message designer, agent tasks and routines all work the same.
+/// the message designer, agent work and routines all work the same.
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key, required this.dependencies, required this.chat});
 
@@ -291,7 +291,6 @@ class _ChatPageState extends State<ChatPage> {
           dependencies: widget.dependencies,
           spaceId: chat.spaceId,
           roomId: chat.roomId,
-          canManageTasks: chat.canManage,
           canModerate: chat.canModerate,
           mentionable: _agents,
           onSend: _send,

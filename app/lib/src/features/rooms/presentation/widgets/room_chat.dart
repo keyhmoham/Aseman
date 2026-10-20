@@ -14,7 +14,6 @@ import '../../../../shared/widgets/mini_tag.dart';
 import '../../../home/presentation/widgets/routines_panel.dart';
 import '../../../search_feed/presentation/post_editor.dart';
 import '../../../search_feed/presentation/rich_post_content.dart';
-import '../../../workflows/presentation/workflow_panel.dart';
 import '../../domain/room_work.dart';
 import '../room_work_controller.dart';
 import 'attachment_bubble.dart';
@@ -36,7 +35,6 @@ class RoomChat extends StatefulWidget {
     this.dependencies,
     this.spaceId = '',
     this.roomId = '',
-    this.canManageTasks = false,
     this.mentionable = const [],
     this.onSend,
     this.flat = false,
@@ -66,7 +64,6 @@ class RoomChat extends StatefulWidget {
   final AppDependencies? dependencies;
   final String spaceId;
   final String roomId;
-  final bool canManageTasks;
   final List<Bot> mentionable;
   final Future<void> Function(
       String body, List<String> mentions, List<String> attachments,
@@ -84,7 +81,7 @@ class RoomChat extends StatefulWidget {
   /// Replaces the room's initial in the header.
   final Widget? avatar;
 
-  /// Replaces the message count under the title while no agent is working.
+  /// Replaces the message count under the title.
   final String? subtitle;
   final String hint;
 
@@ -902,17 +899,35 @@ class _RoomChatState extends State<RoomChat> {
     );
   }
 
-  /// Below the last message while an agent works: what it is doing, or the
-  /// answer it is writing as it comes.
+  /// The one place the room's work shows: below the last message, who is
+  /// working and on what (or the answer being written), and how much waits.
   Widget? _workingIndicator() {
-    final draft = _work?.drafting;
+    final work = _work;
+    final waiting = work?.queued.length ?? 0;
+    final draft = work?.drafting;
     if (draft != null) {
-      return _WorkingIndicator(agent: draft.agent, draft: draft.draft);
+      return _WorkingIndicator(
+          agent: draft.agent, draft: draft.draft, waiting: waiting);
     }
-    final activity = _work?.activity ?? const <LiveActivity>[];
+    final activity = work?.activity ?? const <LiveActivity>[];
     if (activity.isNotEmpty) {
       return _WorkingIndicator(
-          agent: activity.first.agent, detail: activity.first.detail);
+          agent: activity.first.agent,
+          detail: activity.first.detail,
+          waiting: waiting);
+    }
+    final running = work?.running ?? const <WorkRun>[];
+    if (running.isNotEmpty) {
+      return _WorkingIndicator(
+          agent: running.first.botName,
+          detail: widget.workingDetail,
+          waiting: waiting);
+    }
+    if (waiting > 0) {
+      return _WorkingIndicator(
+          agent: work!.queued.first.botName,
+          detail: 'waiting to start',
+          waiting: waiting - 1);
     }
     if (widget.working.isNotEmpty) {
       return _WorkingIndicator(
@@ -975,41 +990,22 @@ class _RoomChatState extends State<RoomChat> {
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 2),
-                Row(children: [
-                  Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                          color: widget.working.isNotEmpty
-                              ? scheme.primary
-                              : AppColors.success,
-                          shape: BoxShape.circle)),
-                  const SizedBox(width: 6),
-                  Flexible(
-                      child: Text(
-                          widget.working.isNotEmpty
-                              ? '${widget.working} is working'
-                              : widget.subtitle ??
-                                  (count == 0
-                                      ? 'Live room'
-                                      : '$count messages'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 12, color: scheme.onSurfaceVariant))),
-                ]),
+                Text(
+                    widget.subtitle ??
+                        (count == 0 ? 'Live room' : '$count messages'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 12, color: scheme.onSurfaceVariant)),
               ])),
           IconButton.filledTonal(
-              tooltip: 'Agent tasks',
+              tooltip: 'Work',
               visualDensity: VisualDensity.compact,
-              onPressed: deps == null ||
-                      widget.spaceId.isEmpty ||
-                      widget.roomId.isEmpty
+              onPressed: _work == null
                   ? null
-                  : () => showWorkflowPanel(context, deps.service,
-                      widget.spaceId, widget.roomId, widget.room,
-                      canManage: widget.canManageTasks),
-              icon: const Icon(Icons.account_tree_outlined, size: 18)),
+                  : () => showRoomWork(context, _work!,
+                      onRunAgain: widget.onSend == null ? null : _runAgain),
+              icon: const Icon(Icons.history_rounded, size: 18)),
           const SizedBox(width: 4),
           IconButton.filledTonal(
               tooltip: 'Routines',
@@ -1104,7 +1100,9 @@ class _RoomChatState extends State<RoomChat> {
                     textInputAction: TextInputAction.send,
                     style: const TextStyle(fontSize: 15),
                     decoration: InputDecoration(
-                        hintText: widget.hint,
+                        hintText: (_work?.questions.isNotEmpty ?? false)
+                            ? 'Answer ${_work!.questions.first.agent}…'
+                            : widget.hint,
                         hintMaxLines: 1,
                         filled: false,
                         isDense: true,
@@ -1159,11 +1157,7 @@ class _RoomChatState extends State<RoomChat> {
             ])));
     if (work == null) return box;
     return Column(mainAxisSize: MainAxisSize.min, children: [
-      RoomWorkStrip(
-          work: work,
-          onStop: _stopWork,
-          onAnswer: _answer,
-          onRunAgain: widget.onSend == null ? null : _runAgain),
+      RoomWorkNeeds(work: work, onAnswer: _answer, onRunAgain: _runAgain),
       box,
     ]);
   }
@@ -1539,18 +1533,23 @@ class _NoMessages extends StatelessWidget {
   }
 }
 
-// _WorkingIndicator shows, below the last message, which agent is currently
-// working and a live sentence describing what it is doing right now
-// ("running in the sandbox…", "generating an image…", "thinking…", …) with a
-// minimal pulsing-dots animation.
+// _WorkingIndicator shows, below the last message, which agent is working:
+// a live sentence of what it is doing ("running in the sandbox…") or the
+// answer it is writing as it comes, with how many requests wait after it.
 class _WorkingIndicator extends StatefulWidget {
   const _WorkingIndicator(
-      {required this.agent, this.detail = '', this.draft = ''});
+      {required this.agent,
+      this.detail = '',
+      this.draft = '',
+      this.waiting = 0});
   final String agent;
   final String detail;
 
   /// The answer being written, shown as it comes.
   final String draft;
+
+  /// Requests waiting after this one.
+  final int waiting;
 
   @override
   State<_WorkingIndicator> createState() => _WorkingIndicatorState();
@@ -1571,68 +1570,56 @@ class _WorkingIndicatorState extends State<_WorkingIndicator>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final detail =
-        widget.detail.trim().isEmpty ? 'agent is working' : widget.detail;
-    if (widget.draft.trim().isNotEmpty) {
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 560),
-          margin: const EdgeInsets.only(top: 10, left: 38),
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(widget.agent,
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: scheme.primary)),
-                  const SizedBox(width: 8),
-                  _WorkingDots(controller: _controller, color: scheme.primary),
-                ]),
-                const SizedBox(height: 4),
-                Text(widget.draft.trim(),
-                    key: const ValueKey('live-draft'),
-                    style: const TextStyle(fontSize: 14, height: 1.35)),
-              ]),
-        ),
-      );
-    }
+    final draft = widget.draft.trim();
+    final detail = draft.isNotEmpty
+        ? 'writing'
+        : widget.detail.trim().isEmpty
+            ? 'working'
+            : widget.detail.trim();
+    final muted = TextStyle(
+        fontSize: 12,
+        fontStyle: FontStyle.italic,
+        color: scheme.onSurfaceVariant);
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
+        constraints: const BoxConstraints(maxWidth: 560),
         margin: const EdgeInsets.only(top: 10, left: 38),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(draft.isEmpty ? 20 : 18),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text(widget.agent,
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: scheme.primary)),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(detail,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 12,
-                    fontStyle: FontStyle.italic,
-                    color: scheme.onSurfaceVariant)),
-          ),
-          const SizedBox(width: 8),
-          _WorkingDots(controller: _controller, color: scheme.primary),
-        ]),
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(widget.agent,
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: scheme.primary)),
+                const SizedBox(width: 6),
+                Flexible(
+                    child: Text(detail,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: muted)),
+                const SizedBox(width: 8),
+                _WorkingDots(controller: _controller, color: scheme.primary),
+                if (widget.waiting > 0) ...[
+                  const SizedBox(width: 8),
+                  Text('+${widget.waiting} waiting', style: muted),
+                ],
+              ]),
+              if (draft.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(draft,
+                    key: const ValueKey('live-draft'),
+                    style: const TextStyle(fontSize: 14, height: 1.35)),
+              ],
+            ]),
       ),
     );
   }

@@ -108,17 +108,34 @@ class _AddAppDialogState extends State<AddAppDialog> {
   }
 
   /// Adds the app to the space, then asks for the person's sign-in when it
-  /// runs with each person's own account.
+  /// runs with each person's own account. A cancelled sign-in takes the app
+  /// back out, so the space only gets apps the person finished adding.
   Future<void> _attach(String botId, String name, String auth) async {
     setState(() => _step = 'Adding $name…');
     await widget.service.addBotToSpace(widget.spaceId, botId);
-    _added = true;
     if (!mounted) return;
     setState(() => _step = null);
     if (auth == 'user') {
-      await connectMcpTool(context, widget.service,
+      final connected = await connectMcpTool(context, widget.service,
           botId: botId, spaceId: widget.spaceId, name: name);
+      if (!connected) {
+        try {
+          await widget.service.removeBotFromSpace(widget.spaceId, botId);
+        } catch (_) {
+          // It is still in the space; let the caller show it.
+          _added = true;
+          rethrow;
+        }
+        if (mounted) {
+          setState(() {
+            _busy = null;
+            _error = 'Sign-in was cancelled, so $name was not added.';
+          });
+        }
+        return;
+      }
     }
+    _added = true;
     if (mounted) Navigator.of(context).pop(true);
   }
 

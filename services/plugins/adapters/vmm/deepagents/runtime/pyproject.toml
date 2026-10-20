@@ -1,15 +1,12 @@
 [project]
 name = "tradera-agents"
 version = "0.1.0"
-description = "Tradera's agent runtime: agents on a self-hosted OpenCode, orchestrated as a swarm with LangChain Deep Agents."
-requires-python = ">=3.12"
+description = "Tradera's deep agents runtime: tradera agents on LangChain Deep Agents (LangGraph)."
+requires-python = ">=3.11"
 dynamic = ["dependencies"]
 
 [tool.setuptools]
-packages = ["tradera_agents", "tradera_agents.decision", "tradera_agents.opencode", "tradera_agents.swarm", "tradera_agents.harness"]
-
-[tool.setuptools.package-data]
-"tradera_agents.opencode" = ["plugin/*.ts"]
+packages = ["tradera_agents", "tradera_agents.decision", "tradera_agents.swarm", "tradera_agents.improve"]
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }

@@ -82,9 +82,8 @@ services:
     command: ["node", "server.mjs", "--compiler"]
     restart: unless-stopped
 
-  # The agent runtime that runs every agent: a self-hosted OpenCode as each
-  # agent's backbone, the swarm orchestrated with LangChain deepagents
-  # (LangGraph), self-improvement with harness2. Built here; the node runs it as a Nomad service on the stack's
+  # The deep agents runtime (LangChain deepagents on LangGraph) that runs every
+  # agent. Built here; the node runs it as a Nomad service on the stack's
   # network (alias tradera-deepagents) the first time an agent works. The
   # tag is pinned because Nomad always pulls ":latest" images.
   deepagents:
@@ -209,14 +208,12 @@ services:
       TRADERA_OPENVIKING_URL: ${TRADERA_OPENVIKING_URL:-http://openviking:1933}
       TRADERA_OPENVIKING_API_KEY: ${TRADERA_OPENVIKING_ROOT_KEY:-}
       TRADERA_OPENVIKING_RECALL_TOKENS: ${TRADERA_OPENVIKING_RECALL_TOKENS:-1500}
-      # The agent runtime: engine, swarm and self-improvement (passed on to it).
-      TRADERA_AGENT_ENGINE: ${TRADERA_AGENT_ENGINE:-opencode}
+      # The agent runtime's swarm and self-improvement (passed on to it).
       TRADERA_SWARM_PARALLEL: ${TRADERA_SWARM_PARALLEL:-}
-      TRADERA_HARNESS: ${TRADERA_HARNESS:-}
-      TRADERA_HARNESS_EVERY: ${TRADERA_HARNESS_EVERY:-}
-      TRADERA_HARNESS_COOLDOWN: ${TRADERA_HARNESS_COOLDOWN:-}
-      TRADERA_HARNESS_PROBE_TURNS: ${TRADERA_HARNESS_PROBE_TURNS:-}
-      TRADERA_HARNESS_PLUGINS: ${TRADERA_HARNESS_PLUGINS:-}
+      TRADERA_IMPROVE: ${TRADERA_IMPROVE:-}
+      TRADERA_IMPROVE_EVERY: ${TRADERA_IMPROVE_EVERY:-}
+      TRADERA_IMPROVE_COOLDOWN: ${TRADERA_IMPROVE_COOLDOWN:-}
+      TRADERA_IMPROVE_BUDGET: ${TRADERA_IMPROVE_BUDGET:-}
       # The spaces' timelines: the Utopia server above and the node's account
       # in it. Set TRADERA_TIMELINE_URL to an empty value to turn them off.
       TRADERA_TIMELINE_URL: ${TRADERA_TIMELINE_URL-http://timeline:1516}

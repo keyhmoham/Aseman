@@ -21,6 +21,11 @@ scope, on the agent's durable LangGraph thread (one per agent per room):
 * human in the loop — ``ask_user`` and any tool in the agent's interrupt_on
   pause the thread on a question people answer in the room;
 * tools — every platform tool, through ``spaces.ask``;
+* the swarm — a lead sets up a team from the space, the marketplace and new
+  specialists and runs plans with it in parallel (see swarm/); a delegated
+  task that reaches a busy agent runs as a parallel instance of it;
+* self-improvement — each agent's playbook in the space, evolved with GEPA
+  from its own turns (see improve/);
 * work log — every step written to the room as the agent works;
 * decisions — when the node admin turned on a decision model, tool selection
   and the turn's checks go to it, with the agent's own model (see decision/).
@@ -36,7 +41,7 @@ import logging
 import os
 import re
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable
 
 from deepagents import create_deep_agent
@@ -101,21 +106,6 @@ def slug(name: str) -> str:
 
 
 @dataclass
-class Kit:
-    """What a turn works with (Runner.assemble), whichever engine runs it."""
-
-    members: list[teamlib.Member]
-    backend: TraderaSandbox | None
-    tools: list[Any]
-    interrupt_on: dict[str, Any]
-    system: str
-    skills: list[str] = field(default_factory=list)
-    # The memory's notes for the system prompt (None: the turn has no memory).
-    notes: dict[str, str] | None = None
-    timeline: bool = False
-
-
-@dataclass
 class Outcome:
     reply: str
     status: str = "done"  # done | awaiting | failed | cancelled
@@ -131,11 +121,10 @@ class Runner:
 
     def __init__(self, store: Store, checkpointer: Any, *, model_factory: ModelFactory = openai_model,
                  gateway_factory: Callable[[str, str], Gateway] = Gateway,
-                 memory_settings: memlib.Settings | None = None, engine: Any = None) -> None:
+                 memory_settings: memlib.Settings | None = None, improver: Any = None) -> None:
         self.store = store
-        # The agents' backbone: an OpenCode engine (opencode/engine.py), or,
-        # without one, a LangChain deep agent per turn.
-        self.engine = engine
+        # The agents' self-improvement (improve.Improver); None: agents keep their prompts.
+        self.improver = improver
         self.memory_settings = memory_settings or memlib.Settings.from_env()
         self.recorder = memlib.Recorder()
         self.checkpointer = checkpointer
@@ -236,13 +225,12 @@ class Runner:
         return {"configurable": {"thread_id": ctx.thread_id},
                 "recursion_limit": guardlib.recursion_limit(graph, budget)}
 
-    async def assemble(self, ctx: TurnContext) -> Kit:
-        """What a turn works with, whichever engine runs it: the team, the
-        sandbox, the tools, the system prompt, the skills and the notes."""
+    async def _build(self, ctx: TurnContext) -> tuple[Any, guardlib.TurnGuard]:
         agent = ctx.agent
         decision = ctx.decision_config
         ctx.decision = DecisionClient(ctx.gateway, decision.model) if decision else None
-        ctx.llm = self.model_factory(agent, ctx.gateway)
+        model = self.model_factory(agent, ctx.gateway)
+        ctx.llm = model
         members = await teamlib.team(ctx)
         await ctx.space_tools()
         backend = None if ctx.turn.no_sandbox else TraderaSandbox(ctx)
@@ -290,40 +278,33 @@ class Runner:
         if restricted:
             for skill in agent.skills:
                 system += f"\n\nSkill: {skill.name}\n{skill.instructions}"
-        notes = None
+        if self.improver is not None:
+            # The agent's playbook in this space, learned from its own turns.
+            system = self.improver.prepare(ctx, system)
+        skills = [] if restricted else [SHARED_SKILLS, f"{own}/skills/"]
+        memory: list[Any] = []
         if ctx.memory is not None:
             # Loaded once per turn: the system prompt stays the same on every call.
-            notes = await ctx.memory.notes(self._legacy_notes(ctx, backend))
-        return Kit(members=members, backend=backend, tools=tools, interrupt_on=interrupt_on, system=system,
-                   skills=[] if restricted else [SHARED_SKILLS, f"{own}/skills/"], notes=notes,
-                   timeline=bool(timeline))
-
-    async def _build(self, ctx: TurnContext) -> tuple[Any, guardlib.TurnGuard]:
-        """The turn as a deep agent (the deepagents engine)."""
-        agent = ctx.agent
-        decision = ctx.decision_config
-        kit = await self.assemble(ctx)
-        model = ctx.llm
-        memory: list[Any] = [memlib.OpenVikingMemory(kit.notes)] if kit.notes is not None else []
+            memory.append(memlib.OpenVikingMemory(await ctx.memory.notes(self._legacy_notes(ctx, backend))))
         turn_guard = guardlib.TurnGuard(guardlib.max_calls(agent.max_turns))
-        middleware = [*economy.middleware(model, kit.backend, skills=kit.skills), *memory,
+        middleware = [*economy.middleware(model, backend, skills=skills), *memory,
                       WorkLogMiddleware(WorkLog(ctx)), turn_guard]
         if ctx.decision is not None:
             # Outermost: it sees every tool, and its checks pass the turn guard.
             middleware.insert(0, DecisionMiddleware(
                 ctx.decision, guard=turn_guard, lead=agent.lead,
-                agents=[m for m in kit.members if m.kind == "agent" and m.runtime],
-                interrupt_on=set(kit.interrupt_on), auto_approve=bool(decision and decision.auto_approve),
+                agents=[m for m in members if m.kind == "agent" and m.runtime],
+                interrupt_on=set(interrupt_on), auto_approve=bool(decision and decision.auto_approve),
                 worklog=WorkLog(ctx)))
         graph = create_deep_agent(
             model=model,
-            tools=kit.tools,
-            system_prompt=kit.system,
+            tools=tools,
+            system_prompt=system,
             middleware=middleware,
-            subagents=await subagents.subagents(ctx, kit.members),
-            skills=kit.skills,
-            backend=kit.backend,
-            interrupt_on=kit.interrupt_on,
+            subagents=await subagents.subagents(ctx, members),
+            skills=skills,
+            backend=backend,
+            interrupt_on=interrupt_on,
             checkpointer=self.checkpointer,
             name=slug(agent.name),
         )
@@ -463,8 +444,6 @@ class Runner:
         return toollib._format_messages(shown[-20:], clip=600)
 
     async def _run(self, ctx: TurnContext, payload: Any, *, fresh_retry: bool = True) -> Outcome:
-        if self.engine is not None:
-            return await self.engine.run(self, ctx, payload, fresh_retry=fresh_retry)
         log.info("turn %s agent=%s space=%s room=%s", ctx.thread_id, ctx.agent.name, ctx.space, ctx.room)
         graph = config = None
         before = 0
@@ -490,9 +469,15 @@ class Runner:
             log.exception("turn failed")
             return Outcome(reply="", status="failed", error=f"{type(exc).__name__}: {exc}")
         if state.interrupts:
-            return self._record(ctx, self._awaiting(ctx, state.interrupts))
-        self.store.drop_question(ctx.thread_id)
-        return self._record(ctx, Outcome(reply=_final_text(state.values.get("messages") or [])))
+            outcome = self._record(ctx, self._awaiting(ctx, state.interrupts))
+        else:
+            self.store.drop_question(ctx.thread_id)
+            outcome = self._record(ctx, Outcome(reply=_final_text(state.values.get("messages") or [])))
+        if self.improver is not None:
+            # What the turn did and how it went is what the agent's playbook learns from.
+            await self.improver.observe(ctx, outcome, (state.values.get("messages") or [])[before:], turn_guard,
+                                        graph)
+        return outcome
 
     async def _overflowed(self, ctx: TurnContext, graph: Any, config: Any, before: int, payload: Any,
                           exc: Exception, fresh_retry: bool) -> Outcome:
@@ -534,9 +519,6 @@ class Runner:
         return "\n\n".join(parts)
 
     async def _resume(self, ctx: TurnContext, pending: Question, answer: str, *, approve: bool) -> Outcome:
-        if self.engine is not None:
-            self.store.drop_question(ctx.thread_id)
-            return await self.engine.resume(self, ctx, pending, answer, approve=approve)
         decisions = []
         for action in pending.actions or [{"name": "ask_user"}]:
             if action.get("name") == "ask_user":

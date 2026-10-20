@@ -11,15 +11,16 @@ import (
 	"github.com/tradera/tradera/plugins/adapters/network/ports"
 )
 
-// Agents improve their own harness as they work (runtime/tradera_agents/
-// harness: harness2's editor, composer and reflector, run between turns). That
-// work belongs to no turn, so it is not on a turn's token: the runtime calls
-// the learn endpoint with its own secret, naming the project and the agent.
-// The agent's own model answers (the provider and model its definition names,
-// as for its turns), and the project pays for it like for its memory: at the
-// model's token prices, to the owner of the provider's key, in the project's
-// spend and budget, charged every memoryBillEvery by whoever runs its agents.
-// A project that cannot pay gets no learning until it can.
+// Agents improve their own playbook as they work (runtime/tradera_agents/
+// improve: GEPA, run between turns). That work belongs to no turn, so it is
+// not on a turn's token: the runtime calls the learn endpoints with its own
+// secret, naming the project and the agent. The agent's own model answers (the
+// provider and model its definition names, as for its turns) and the node's
+// decision model judges (serveLearnDecision), and the project pays for both
+// like for its memory: at the models' token prices, to the owners of the
+// providers' keys, in the project's spend and budget, charged every
+// memoryBillEvery by whoever runs its agents. A project that cannot pay gets
+// no learning until it can.
 const (
 	// LearnSpaceHeader names the project the learning is for.
 	LearnSpaceHeader = "X-Tradera-Space"
@@ -36,25 +37,35 @@ func headerValue(h map[string]string, name string) string {
 	return ""
 }
 
+// learnCaller lets in only the runtime, for a project that can pay; it returns
+// the project, or the response refusing the call.
+func (a *Adapter) learnCaller(req *network.Request) (identity.ID, *network.Response) {
+	if a.secret == "" || subtle.ConstantTimeCompare([]byte(headerValue(req.Header, "X-Tradera-Runtime")), []byte(a.secret)) != 1 {
+		return identity.ID{}, openAIError(http.StatusUnauthorized, "invalid runtime secret")
+	}
+	space, err := identity.Parse(headerValue(req.Header, LearnSpaceHeader))
+	if err != nil || space.IsZero() {
+		return identity.ID{}, openAIError(http.StatusBadRequest, "name the project the learning is for ("+LearnSpaceHeader+")")
+	}
+	if a.learn.isBlocked(space) {
+		return identity.ID{}, openAIError(http.StatusPaymentRequired, "this project cannot pay for its agents' learning now (wallet or budget)")
+	}
+	return space, nil
+}
+
 // serveLearn is the agents' model for learning: OpenAI's chat completions
 // with the agent's own model.
 //
 //	POST {gateway}/learn/chat/completions
 //	     X-Tradera-Runtime: the runtime secret; X-Tradera-Space, X-Tradera-Agent
 func (a *Adapter) serveLearn(ctx context.Context, req *network.Request) (*network.Response, error) {
-	if a.secret == "" || subtle.ConstantTimeCompare([]byte(headerValue(req.Header, "X-Tradera-Runtime")), []byte(a.secret)) != 1 {
-		return openAIError(http.StatusUnauthorized, "invalid runtime secret"), nil
-	}
-	space, err := identity.Parse(headerValue(req.Header, LearnSpaceHeader))
-	if err != nil || space.IsZero() {
-		return openAIError(http.StatusBadRequest, "name the project the learning is for ("+LearnSpaceHeader+")"), nil
+	space, refused := a.learnCaller(req)
+	if refused != nil {
+		return refused, nil
 	}
 	def, err := a.agent(headerValue(req.Header, LearnAgentHeader))
 	if err != nil {
 		return openAIError(http.StatusNotFound, "no such agent ("+LearnAgentHeader+")"), nil
-	}
-	if a.learn.isBlocked(space) {
-		return openAIError(http.StatusPaymentRequired, "this project cannot pay for its agents' learning now (wallet or budget)"), nil
 	}
 	def.mu.Lock()
 	spec := def.spec

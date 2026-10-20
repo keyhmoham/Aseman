@@ -3,9 +3,8 @@
 Open questions are the deep agents human-in-the-loop interrupts the runtime is
 waiting on (an agent's ``ask_user``, or a tool that needs approval); each
 thread has at most one. The room cursor is how far into its room an agent has
-read, so a turn starts by catching up on what was said since. On the OpenCode
-engine each thread's conversation is an OpenCode session (``sessions``) and its
-plan is kept here (``todos``).
+read, so a turn starts by catching up on what was said since. The team a
+lead last set up on a thread is kept for the swarm to plan with.
 """
 
 from __future__ import annotations
@@ -60,8 +59,6 @@ class Store:
                     id TEXT PRIMARY KEY, thread_id TEXT UNIQUE, vm_id TEXT, space_id TEXT, data TEXT);
                 CREATE TABLE IF NOT EXISTS cursors (thread_id TEXT PRIMARY KEY, seen TEXT);
                 CREATE TABLE IF NOT EXISTS generations (thread_id TEXT PRIMARY KEY, gen INTEGER);
-                CREATE TABLE IF NOT EXISTS sessions (thread_id TEXT PRIMARY KEY, session_id TEXT);
-                CREATE TABLE IF NOT EXISTS todos (thread_id TEXT PRIMARY KEY, data TEXT);
                 CREATE TABLE IF NOT EXISTS teams (thread_id TEXT PRIMARY KEY, data TEXT);
             """)
             self._db.commit()
@@ -121,33 +118,6 @@ class Store:
         with self._lock:
             self._db.execute("INSERT INTO cursors (thread_id, seen) VALUES (?, ?) "
                              "ON CONFLICT(thread_id) DO UPDATE SET seen = excluded.seen", (thread_id, created_at))
-            self._db.commit()
-
-    # --- the OpenCode engine --------------------------------------------------
-
-    def session(self, thread_id: str) -> str:
-        """The OpenCode session of a thread's conversation ('' when it has none yet)."""
-        with self._lock:
-            row = self._db.execute("SELECT session_id FROM sessions WHERE thread_id = ?", (thread_id,)).fetchone()
-        return row[0] if row else ""
-
-    def put_session(self, thread_id: str, session_id: str) -> None:
-        with self._lock:
-            self._db.execute("INSERT INTO sessions (thread_id, session_id) VALUES (?, ?) "
-                             "ON CONFLICT(thread_id) DO UPDATE SET session_id = excluded.session_id",
-                             (thread_id, session_id))
-            self._db.commit()
-
-    def todos(self, thread_id: str) -> list[dict[str, Any]]:
-        with self._lock:
-            row = self._db.execute("SELECT data FROM todos WHERE thread_id = ?", (thread_id,)).fetchone()
-        return list(json.loads(row[0])) if row else []
-
-    def put_todos(self, thread_id: str, todos: list[dict[str, Any]]) -> None:
-        with self._lock:
-            self._db.execute("INSERT INTO todos (thread_id, data) VALUES (?, ?) "
-                             "ON CONFLICT(thread_id) DO UPDATE SET data = excluded.data",
-                             (thread_id, json.dumps(todos)))
             self._db.commit()
 
     # --- the swarm --------------------------------------------------------------

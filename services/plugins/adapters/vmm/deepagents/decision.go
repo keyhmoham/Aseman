@@ -49,22 +49,60 @@ func (a *Adapter) serveDecision(ctx context.Context, req *network.Request) (*net
 			"message": err.Error(), "type": "tradera_error", "code": "decision_disabled",
 		}}), nil
 	}
+	answers, in, out, failed := a.askDecision(ctx, provider, req.Body)
+	if failed != nil {
+		return failed, nil
+	}
+	a.meterDecision(s, provider, in, out)
+	return decisionAnswer(provider, answers, in, out), nil
+}
+
+// serveLearnDecision is the decision model for the agents' learning (their
+// playbook improving between turns, runtime/tradera_agents/improve): the same
+// typed questions, on the runtime's own credential for a project, billed to
+// the project like the rest of its learning (learn.go).
+//
+//	POST {gateway}/learn/decision/evaluate
+//	     X-Tradera-Runtime: the runtime secret; X-Tradera-Space
+func (a *Adapter) serveLearnDecision(ctx context.Context, req *network.Request) (*network.Response, error) {
+	space, refused := a.learnCaller(req)
+	if refused != nil {
+		return refused, nil
+	}
+	provider, err := a.platform.ResolveDecision(ctx)
+	if err != nil {
+		return jsonResponse(http.StatusConflict, map[string]any{"error": map[string]any{
+			"message": err.Error(), "type": "tradera_error", "code": "decision_disabled",
+		}}), nil
+	}
+	answers, in, out, failed := a.askDecision(ctx, provider, req.Body)
+	if failed != nil {
+		return failed, nil
+	}
+	a.learn.add(space, provider, in, out)
+	return decisionAnswer(provider, answers, in, out), nil
+}
+
+// askDecision sends one evaluate request to the decision provider:
+// {"state", "questions"} → its answers and token usage, or the response to
+// answer with when it fails.
+func (a *Adapter) askDecision(ctx context.Context, provider vmm.ProviderConfig, body []byte) (json.RawMessage, int64, int64, *network.Response) {
 	var in struct {
 		State     json.RawMessage            `json:"state"`
 		Questions map[string]json.RawMessage `json:"questions"`
 	}
-	if err := json.Unmarshal(req.Body, &in); err != nil || len(in.Questions) == 0 || len(in.State) == 0 {
-		return openAIError(400, "a decision needs a state and at least one question"), nil
+	if err := json.Unmarshal(body, &in); err != nil || len(in.Questions) == 0 || len(in.State) == 0 {
+		return nil, 0, 0, openAIError(400, "a decision needs a state and at least one question")
 	}
 	if len(in.Questions) > maxDecisionQuestions {
-		return openAIError(400, "too many questions in one decision"), nil
+		return nil, 0, 0, openAIError(400, "too many questions in one decision")
 	}
 	payload, _ := json.Marshal(map[string]any{"model": provider.Model, "state": in.State, "questions": in.Questions})
 	callCtx, cancel := context.WithTimeout(ctx, decisionTimeout)
 	defer cancel()
 	up, err := http.NewRequestWithContext(callCtx, http.MethodPost, decisionURL(provider.BaseURL), bytes.NewReader(payload))
 	if err != nil {
-		return openAIError(500, err.Error()), nil
+		return nil, 0, 0, openAIError(500, err.Error())
 	}
 	up.Header.Set("Content-Type", "application/json")
 	if provider.APIKey != "" {
@@ -72,15 +110,15 @@ func (a *Adapter) serveDecision(ctx context.Context, req *network.Request) (*net
 	}
 	resp, err := a.client.Do(up)
 	if err != nil {
-		return openAIError(502, "decision provider unreachable: "+err.Error()), nil
+		return nil, 0, 0, openAIError(502, "decision provider unreachable: "+err.Error())
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
-		return openAIError(502, "decision provider response failed: "+err.Error()), nil
+		return nil, 0, 0, openAIError(502, "decision provider response failed: "+err.Error())
 	}
 	if resp.StatusCode >= 300 {
-		return openAIError(502, "decision provider refused the request: "+clip(strings.TrimSpace(string(data)), 500)), nil
+		return nil, 0, 0, openAIError(502, "decision provider refused the request: "+clip(strings.TrimSpace(string(data)), 500))
 	}
 	var out struct {
 		Answers json.RawMessage `json:"answers"`
@@ -90,11 +128,14 @@ func (a *Adapter) serveDecision(ctx context.Context, req *network.Request) (*net
 		} `json:"usage"`
 	}
 	if json.Unmarshal(data, &out) != nil || len(out.Answers) == 0 {
-		return openAIError(502, "decision provider answered without answers"), nil
+		return nil, 0, 0, openAIError(502, "decision provider answered without answers")
 	}
-	a.meterDecision(s, provider, out.Usage.InputTokens, out.Usage.OutputTokens)
-	return jsonResponse(200, map[string]any{"model": provider.Model, "answers": out.Answers,
-		"usage": map[string]any{"inputTokens": out.Usage.InputTokens, "outputTokens": out.Usage.OutputTokens}}), nil
+	return out.Answers, out.Usage.InputTokens, out.Usage.OutputTokens, nil
+}
+
+func decisionAnswer(provider vmm.ProviderConfig, answers json.RawMessage, in, out int64) *network.Response {
+	return jsonResponse(200, map[string]any{"model": provider.Model, "answers": answers,
+		"usage": map[string]any{"inputTokens": in, "outputTokens": out}})
 }
 
 // decisionURL is the decision API of a provider: its evaluate endpoint next

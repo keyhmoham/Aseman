@@ -9,5 +9,5 @@ fastapi==0.142.2
 uvicorn==0.54.0
 httpx==0.28.1
 openviking-sdk==0.1.14
-# google-research/harness2: agents improving their own harness (tradera_agents/harness).
-harness2 @ https://github.com/google-research/harness2/archive/1cfe254e8d25b15f37048c3730134686abe60335.tar.gz
+# GEPA (gepa-ai/gepa): agents improving their own playbook (tradera_agents/improve).
+gepa==0.1.4

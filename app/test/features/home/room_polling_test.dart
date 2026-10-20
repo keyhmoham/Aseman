@@ -7,9 +7,9 @@ import 'package:tradera/src/app.dart';
 import 'package:tradera/src/app_dependencies.dart';
 import 'package:tradera/src/core/network/api_client.dart';
 import 'package:tradera/src/data/models/space.dart';
+import 'package:tradera/src/features/rooms/domain/room_work.dart';
 
 import '../../fake_tradera_service.dart';
-import '../workflows/workflow_test.dart' show WorkflowClient, runJson;
 
 typedef _Page = ({
   List<RoomMessage> messages,
@@ -18,10 +18,16 @@ typedef _Page = ({
 });
 
 class _Service extends FakeTraderaService {
-  _Service({super.client});
   Completer<_Page>? pending;
   int pendingCalls = 0;
   bool failSending = false;
+  List<WorkEntry> entries = [];
+
+  @override
+  Future<({List<WorkRun> live, List<WorkRun> queued, List<WorkEntry> entries})>
+      roomWork(String spaceId, {int limit = 40}) async =>
+          (live: <WorkRun>[], queued: <WorkRun>[], entries: entries);
+
   @override
   Future<RoomMessage> sendRoomMessage(
       String spaceId, String roomId, String body,
@@ -79,24 +85,35 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('room task button opens the scoped workflow panel',
+  testWidgets('the room\'s Work button shows what its agents did',
       (tester) async {
-    final client = WorkflowClient()
-      ..rows = [
-        {
-          ...runJson(status: 'partial'),
-          'space_id': FakeTraderaService.atlasId,
-          'room_id': 'a1'
-        }
+    final service = _Service()
+      ..entries = [
+        WorkEntry(
+            at: DateTime.now(),
+            kind: 'done',
+            runId: 't1:bot',
+            turnId: 't1',
+            roomId: 'a1',
+            botId: 'bot',
+            botName: 'SignalBot',
+            prompt: 'Summarise the market',
+            durationMs: 4000),
+        WorkEntry(
+            at: DateTime.now(),
+            kind: 'done',
+            runId: 't2:bot',
+            turnId: 't2',
+            roomId: 'a2',
+            botId: 'bot',
+            botName: 'OtherRoomBot'),
       ];
-    await open(tester, _Service(client: client));
-    await tester.tap(find.byTooltip('Agent tasks'));
+    await open(tester, service);
+    await tester.tap(find.byTooltip('Work'));
     await tester.pumpAndSettle();
-    expect(find.text('Partially completed'), findsOneWidget);
-    expect(find.text('Delivered files (1)'), findsOneWidget);
-    expect(client.calls.first.body['space'], FakeTraderaService.atlasId);
-    await tester.tap(find.byTooltip('Close tasks'));
-    await tester.pumpAndSettle();
+    expect(find.text('SignalBot'), findsOneWidget);
+    expect(find.textContaining('Summarise the market'), findsOneWidget);
+    expect(find.text('OtherRoomBot'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 

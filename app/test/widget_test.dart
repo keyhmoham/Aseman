@@ -557,12 +557,12 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
 
     expect(find.text('dev'), findsOneWidget);
-    expect(find.text('agent is working'), findsOneWidget);
+    expect(find.text('working'), findsOneWidget);
 
     // When the agent finishes (backend clears the signal), the indicator goes.
     service.workingAgent = '';
     await tester.pump(const Duration(seconds: 4));
-    expect(find.text('agent is working'), findsNothing);
+    expect(find.text('working'), findsNothing);
   });
 
   testWidgets('proxy messages render an open-on-the-desk button',

@@ -100,7 +100,7 @@ void main() {
     await tester.tap(find.text('Maya Chen'));
     await tester.pumpAndSettle();
     expect(find.text('Message Maya Chen…'), findsOneWidget);
-    expect(find.byTooltip('Agent tasks'), findsOneWidget);
+    expect(find.byTooltip('Work'), findsOneWidget);
     expect(find.byTooltip('Attach file'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Back to chats'));

@@ -92,17 +92,22 @@ Future<void> _close(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('while agents work the composer stops them, queued work too',
+  testWidgets('agent work shows once in the thread, with one Stop',
       (tester) async {
     final node = _Node()
       ..live = [_run('t1', 'running')]
       ..queued = [_run('t2', 'queued', name: 'Bo', bot: 'bot-b')]
       ..activity = const [LiveActivity(agent: 'Ada', detail: 'searching')];
     await _pumpChat(tester, node);
+    await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Ada is working'), findsOneWidget);
-    expect(find.textContaining('1 more queued'), findsOneWidget);
+    // What the agent does is said once, below the messages, with the queue.
+    expect(find.text('searching'), findsOneWidget);
+    expect(find.text('+1 waiting'), findsOneWidget);
+    expect(find.textContaining('is working'), findsNothing);
+    // One Stop: the composer's.
     expect(find.byTooltip('Stop the work in progress'), findsOneWidget);
+    expect(find.text('Stop'), findsNothing);
 
     // Typing turns it back into Send.
     await tester.enterText(find.byType(TextField), 'also add a picture');
@@ -115,7 +120,7 @@ void main() {
     await tester.tap(find.byTooltip('Stop the work in progress'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(node.cancelled, unorderedEquals(['t1', 't2']));
-    expect(find.text('Ada is working'), findsNothing);
+    expect(find.text('searching'), findsNothing);
     expect(find.byTooltip('Send'), findsOneWidget);
     await _close(tester);
   });
@@ -129,10 +134,12 @@ void main() {
     await _pumpChat(tester, node);
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Here is a first take on the post'), findsOneWidget);
+    expect(find.text('writing'), findsOneWidget);
     await _close(tester);
   });
 
-  testWidgets('an agent\'s question is answered with a tap', (tester) async {
+  testWidgets('an agent\'s question is answered with a tap, not repeated',
+      (tester) async {
     final node = _Node()
       ..asked = const [
         AgentQuestion(
@@ -148,16 +155,19 @@ void main() {
             botId: 'bot-a',
             agent: 'Ada',
             roomId: 'room-2',
-            question: 'Elsewhere?'),
+            question: 'Elsewhere?',
+            options: ['Somewhere']),
       ];
     await _pumpChat(tester, node);
-    expect(find.text('Ada is asking you'), findsOneWidget);
-    expect(find.text('Which audience?'), findsOneWidget);
-    expect(find.text('Elsewhere?'), findsNothing);
+    expect(find.text('Answer Ada'), findsOneWidget);
+    // The question is the agent's message in the thread, not shown again.
+    expect(find.text('Which audience?'), findsNothing);
+    expect(find.text('Somewhere'), findsNothing);
+    expect(find.widgetWithText(TextField, 'Answer Ada…'), findsOneWidget);
     await tester.tap(find.text('Traders'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(node.answers, ['q1:Traders']);
-    expect(find.text('Which audience?'), findsNothing);
+    expect(find.text('Answer Ada'), findsNothing);
     await _close(tester);
   });
 
@@ -174,6 +184,7 @@ void main() {
       ];
     await _pumpChat(tester, node);
     expect(find.text('Ada needs your go-ahead'), findsOneWidget);
+    expect(find.text('No'), findsOneWidget);
     await tester.tap(find.text('Yes, go ahead'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(node.answers, ['q1:Yes, go ahead']);
@@ -195,22 +206,56 @@ void main() {
             prompt: 'Draft the launch post'),
       ];
     final sent = await _pumpChat(tester, node);
-    expect(find.text('Ada couldn’t finish'), findsOneWidget);
-    expect(find.text('the model provider timed out'), findsOneWidget);
+    expect(find.text('Ada couldn’t finish: the model provider timed out'),
+        findsOneWidget);
     await tester.tap(find.text('Run again'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(sent, ['Draft the launch post|bot-a']);
-    expect(find.text('Ada couldn’t finish'), findsNothing);
+    expect(find.textContaining('couldn’t finish'), findsNothing);
     await _close(tester);
   });
 
   testWidgets('interrupted work is retried as it was', (tester) async {
     final node = _Node()..live = [_run('t1', 'blocked')];
     await _pumpChat(tester, node);
-    expect(find.text('Ada was interrupted before finishing.'), findsOneWidget);
+    expect(find.text('Ada was interrupted'), findsOneWidget);
     await tester.tap(find.text('Retry'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(node.resumed, ['t1']);
+    await _close(tester);
+  });
+
+  testWidgets('Work lists what runs, what waits and what ran', (tester) async {
+    final node = _Node()
+      ..live = [_run('t1', 'running')]
+      ..queued = [_run('t2', 'queued', name: 'Bo', bot: 'bot-b')]
+      ..entries = [
+        WorkEntry(
+            at: DateTime.now(),
+            kind: 'done',
+            runId: 't0:bot-a',
+            turnId: 't0',
+            roomId: 'room-1',
+            botId: 'bot-a',
+            botName: 'Cy',
+            prompt: 'Find three competitors',
+            durationMs: 65000),
+      ];
+    await _pumpChat(tester, node);
+    await tester.tap(find.byTooltip('Work'));
+    // The working dots keep animating: pump through the sheet's opening.
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('NOW'), findsOneWidget);
+    expect(find.text('EARLIER'), findsOneWidget);
+    expect(find.textContaining('1 min 5 s'), findsOneWidget);
+    // Running work is stopped from the composer; a waiting request is
+    // dropped here.
+    expect(find.text('Stop'), findsNothing);
+    await tester.tap(find.text('Remove'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(node.cancelled, ['t2']);
     await _close(tester);
   });
 

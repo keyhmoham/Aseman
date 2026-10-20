@@ -465,3 +465,17 @@ def test_long_tool_descriptions_keep_their_usage_and_hint() -> None:
     assert usage.strip() in tool.description and "frontend_show(tool='bot-board'" in tool.description
     long = _app_command_tool(None, "board__draw", spec, {"name": "draw", "description": "x" * (DESCRIPTION_MAX * 2)})
     assert len(long.description) < DESCRIPTION_MAX + 1_000 and "frontend_show" in long.description
+
+
+def test_an_apps_json_answer_becomes_lines() -> None:
+    from tradera_agents.tools import _app_result
+
+    def reply(text: str) -> str:
+        return json.dumps({"content": [{"type": "text", "text": text}]})
+
+    assert _app_result(reply(json.dumps({"skill": "# Spec\nline 2"}))) == "# Spec\nline 2"
+    assert _app_result(reply(json.dumps({"a": "x\ny", "b": "z"}))) == "a:\nx\ny\n\nb: z"
+    long = json.dumps({"items": [{"id": i} for i in range(200)]})
+    assert "\n" in _app_result(reply(long))
+    assert _app_result(reply('{"id": 1}')) == '{"id": 1}'
+    assert _app_result(reply("plain words")) == "plain words"

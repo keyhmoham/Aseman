@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from langchain_core.exceptions import ContextOverflowError
@@ -177,3 +178,79 @@ def test_the_guard_counts_the_calls_it_warned_of_a_loop() -> None:
     assert g.loops == 0
     g._request(Request([HumanMessage("go"), *same]))
     assert g.loops == 1
+
+
+SPEC = "\n# Canvas Composer DSL Specification\n\n" + "\n".join(f"Rule {i}: shapes are SVG elements." for i in range(1500))
+
+
+def miro(platform) -> None:
+    platform.apps = [{"name": "Tool Miro", "kind": "tool", "bot_id": "bot-miro", "description": "Miro boards.",
+                      "commands": [{"name": "canvas_get_canvas_composer_skill", "description": "The DSL to draw with.",
+                                    "schema": {"type": "object", "properties": {"miro_url": {"type": "string"},
+                                                                                "step": {"type": "string"}}}}]}]
+    text = json.dumps({"skill": SPEC})
+    platform.app_reply = json.dumps({"content": [{"type": "text", "text": text}]})
+
+
+async def test_an_agent_that_keeps_reading_the_same_skill_is_stopped(platform, tmp_path: Path) -> None:
+    # What happened with Miro: the same call, the same answer, again and again.
+    miro(platform)
+    args = {"miro_url": "https://miro.com/app/board/x=/", "step": "dsl"}
+    r, model = runner(platform, tmp_path, [call("tool_miro__canvas_get_canvas_composer_skill", args, cid=f"m{i}")
+                                           for i in range(30)])
+    out = await r.prompt(turn_request(LEAD, "draw on the board", token="tok-lead", role="lead", message_id="m0"))
+    assert out.status == "done", out
+    # Run once; the repeats are refused until the agent's tools are taken away and it answers.
+    assert len([run for run in platform.tool_runs if run.get("bot") == "bot-miro"]) == 1
+    assert len(model.seen) == guard.BLOCKS + 2
+    refused = [m for m in model.seen[-1] if isinstance(m, ToolMessage) and "Not run" in str(m.content)]
+    assert len(refused) == guard.BLOCKS
+    assert "kept repeating" in notes_seen(model)[-1]
+    # The skill went to a file as lines the agent can page through, not one line of JSON.
+    first = next(m for m in model.seen[1] if isinstance(m, ToolMessage))
+    assert "large_tool_results" in str(first.content)
+    assert "# Canvas Composer DSL Specification" in str(first.content)
+    assert '{"skill"' not in str(first.content)
+
+
+async def test_the_same_call_twice_in_one_step_runs_once(platform, tmp_path: Path) -> None:
+    miro(platform)
+    platform.app_reply = '{"content": [{"type": "text", "text": "three stickies"}]}'
+    same = {"name": "tool_miro__canvas_get_canvas_composer_skill", "args": {"step": "items"}, "type": "tool_call"}
+    step = AIMessage(content="", tool_calls=[{**same, "id": f"p{i}"} for i in range(3)])
+    r, model = runner(platform, tmp_path, [step, AIMessage(content="done")])
+    out = await r.prompt(turn_request(LEAD, "list", token="tok-lead", role="lead", message_id="m0"))
+    assert out.status == "done", out
+    assert len([run for run in platform.tool_runs if run.get("bot") == "bot-miro"]) == 1
+    results = [str(m.content) for m in model.seen[-1] if isinstance(m, ToolMessage)]
+    assert results.count("three stickies") == 1
+    assert sum("already running in this step" in t for t in results) == 2
+
+
+async def test_a_call_whose_result_does_not_change_is_not_run_a_third_time() -> None:
+    class Request:
+        def __init__(self, cid, command="echo hi", name="execute"):
+            self.tool_call = {"name": name, "args": {"command": command}, "id": cid}
+
+    ran: list[str] = []
+
+    async def handler(request):
+        ran.append(request.tool_call["id"])
+        return ToolMessage(content="hi", tool_call_id=request.tool_call["id"], name=request.tool_call["name"])
+
+    g = guard.TurnGuard(budget=100)
+    for cid in ("a", "b", "c"):
+        await g.awrap_tool_call(Request(cid), handler)
+    assert ran == ["a", "b"]
+    assert g.blocked == 1 and g.loops == 1
+    # Other arguments run; so do tools whose result changes with time.
+    await g.awrap_tool_call(Request("d", "echo bye"), handler)
+    for cid in ("e", "f", "g"):
+        await g.awrap_tool_call(Request(cid, name="check_tasks"), handler)
+    assert ran == ["a", "b", "d", "e", "f", "g"]
+
+
+def test_skills_and_specs_are_instructions() -> None:
+    assert guard.reference({"name": "tool_miro__canvas_get_canvas_composer_skill", "args": {}})
+    assert guard.reference({"name": "api__get_spec", "args": {}})
+    assert not guard.reference({"name": "skills__create_skill", "args": {}})

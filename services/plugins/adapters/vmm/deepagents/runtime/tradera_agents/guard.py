@@ -10,6 +10,10 @@ turn with an error and no answer. Instead:
 * it is told, too, when it fetches again what it already has: the same call
   earlier in the turn, or instructions it already read (they stay whole in its
   context, see ``reference``);
+* what it is told is enforced where the tools run: a call that would only
+  repeat itself is not run (the same call twice in one step, instructions read
+  again, a call that already returned the same result twice) and the agent
+  gets why instead; one that keeps doing so has its tools taken away;
 * a few calls before its budget it is told to wrap up;
 * its last call has no tools: it writes its final answer, so the turn ends
   with the result and what is left rather than an error.
@@ -27,7 +31,7 @@ from collections import Counter
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 #: Model calls a turn may make when the agent sets no max_turns.
 DEFAULT_MAX_CALLS = 150
@@ -42,12 +46,17 @@ POLLS = 6
 WARN_BEFORE = 5
 #: The same read of instructions this many times in a turn is re-reading.
 REFERENCE_READS = 2
+#: Calls not run for repeating themselves before the agent's tools are taken away.
+BLOCKS = 4
+#: Tools whose result changes with time, whatever their arguments: never refused for repeating.
+LIVE_TOOLS = POLL_TOOLS | {"wait_tasks"}
 
 #: Tools that return instructions, documentation or rules (an app's "get instructions"
 #: or "help"): what the agent reads to know how to work, not results of the work.
 REFERENCE_TOOLS = re.compile(
     r"(?:^|_)(?:instructions?|help|guides?|docs?|documentation|usage|manual|readme|reference|howto|how_to|"
-    r"rules|tutorial|get_started|getting_started|best_practices)(?:_|$)", re.I)
+    r"rules|tutorial|get_started|getting_started|best_practices|skills?|specs?|specification|guidelines?|"
+    r"conventions?)(?:_|$)", re.I)
 #: ...unless the tool changes something (``create_doc``, ``set_rules``).
 WRITE_TOOLS = re.compile(r"(?:^|_)(?:create|update|delete|remove|set|add|write|edit|post|send|upload|publish|"
                          r"move|rename|insert|replace)(?:_|$)", re.I)
@@ -94,7 +103,8 @@ def _run_calls(messages: list[Any]) -> list[dict[str, Any]]:
     """The tool calls the agent made since the last message from a person."""
     calls: list[dict[str, Any]] = []
     for m in reversed(messages):
-        if isinstance(m, HumanMessage):
+        # The runtime's own notes in the history are not a new request.
+        if isinstance(m, HumanMessage) and not str(m.content).startswith(NOTE):
             break
         if isinstance(m, AIMessage) and m.tool_calls:
             calls[:0] = m.tool_calls
@@ -145,16 +155,28 @@ class TurnGuard(AgentMiddleware):
         # Model calls the agent was told it was looping before (repeats, polling,
         # re-reading): the agent's learning takes such a turn up sooner.
         self.loops = 0
+        # What each call (name and arguments) returned this turn, and the calls running now.
+        self.results: dict[str, list[str]] = {}
+        self.running: set[str] = set()
+        # Calls not run because they only repeated themselves.
+        self.blocked = 0
 
     @property
     def exhausted(self) -> bool:
         return self.calls >= self.budget
 
+    @property
+    def final(self) -> bool:
+        """Whether the next model call may run no tools."""
+        return self.exhausted or self.blocked >= BLOCKS
+
     def _request(self, request: Any) -> Any:
         self.calls += 1
-        if self.calls >= self.budget:
-            note = ("This turn has used all its steps: no more tools can run. Write your final answer now: "
-                    "what you did, the results and where they are, and what is left to do.")
+        if self.final:
+            note = ("This turn has used all its steps: no more tools can run. " if self.exhausted else
+                    "You kept repeating calls that could only return what you already have, so no more tools "
+                    "can run in this turn. ")
+            note += "Write your final answer now: what you did, the results and where they are, and what is left to do."
             return request.override(messages=[*request.messages, HumanMessage(NOTE + note)], tool_choice="none")
         found = notes(request.messages, self.calls, self.budget)
         if not found:
@@ -164,7 +186,7 @@ class TurnGuard(AgentMiddleware):
         return request.override(messages=[*request.messages, HumanMessage(NOTE + "\n".join(found))])
 
     def _response(self, response: Any) -> Any:
-        if self.calls < self.budget:
+        if not self.final:
             return response
         # The last call may not run tools, whatever the model answered.
         result = getattr(response, "result", None)
@@ -178,6 +200,63 @@ class TurnGuard(AgentMiddleware):
                                                    "Ask me to continue and I will pick up where I left off.",
                     })
         return response
+
+    def _refusal(self, call: dict[str, Any]) -> str:
+        """Why a tool call is not run, or nothing when it runs."""
+        sig = _signature(call)
+        if sig in self.running:
+            return ("Not run: the same call (same tool and arguments) is already running in this step. "
+                    "Use its result.")
+        if call.get("name") in LIVE_TOOLS:
+            return ""
+        done = self.results.get(sig, [])
+        if done and reference(call):
+            return ("Not run: you already read these instructions in this turn with the same arguments, and they "
+                    "have not changed. They are earlier in this conversation, in full; if they were saved to a "
+                    "file, read that file in parts with read_file (offset and limit). Follow them now.")
+        if len(done) >= REPEATS - 1 and len(set(done[-(REPEATS - 1):])) == 1:
+            return (f"Not run: this exact call already returned the same result {len(done)} times in this turn, "
+                    "and it will not change. Use that result (it is earlier in this conversation), try a "
+                    "different approach, or finish and say what is left.")
+        return ""
+
+    def _before_tool(self, request: Any) -> ToolMessage | None:
+        call = request.tool_call
+        refusal = self._refusal(call)
+        if not refusal:
+            self.running.add(_signature(call))
+            return None
+        self.blocked += 1
+        self.loops += 1
+        return ToolMessage(content=NOTE + refusal, name=call.get("name", ""), tool_call_id=call.get("id", ""),
+                           status="error")
+
+    def _after_tool(self, request: Any, result: Any) -> Any:
+        sig = _signature(request.tool_call)
+        if isinstance(result, ToolMessage) and getattr(result, "status", "") != "error":
+            content = result.content
+            text = content if isinstance(content, str) else json.dumps(content, sort_keys=True, default=str)
+            if not text.startswith(("error:", "The app reported an error")):
+                self.results.setdefault(sig, []).append(text)
+        return result
+
+    def wrap_tool_call(self, request: Any, handler: Any) -> Any:
+        refused = self._before_tool(request)
+        if refused is not None:
+            return refused
+        try:
+            return self._after_tool(request, handler(request))
+        finally:
+            self.running.discard(_signature(request.tool_call))
+
+    async def awrap_tool_call(self, request: Any, handler: Any) -> Any:
+        refused = self._before_tool(request)
+        if refused is not None:
+            return refused
+        try:
+            return self._after_tool(request, await handler(request))
+        finally:
+            self.running.discard(_signature(request.tool_call))
 
     def wrap_model_call(self, request: Any, handler: Any) -> Any:
         return self._response(handler(self._request(request)))

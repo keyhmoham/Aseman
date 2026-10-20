@@ -155,8 +155,10 @@ class TurnGuard(AgentMiddleware):
         # Model calls the agent was told it was looping before (repeats, polling,
         # re-reading): the agent's learning takes such a turn up sooner.
         self.loops = 0
-        # What each call (name and arguments) returned this turn, and the calls running now.
+        # What each call (name and arguments) returned this turn, the id of its
+        # latest run, and the calls running now.
         self.results: dict[str, list[str]] = {}
+        self.last_run: dict[str, str] = {}
         self.running: set[str] = set()
         # Calls not run because they only repeated themselves.
         self.blocked = 0
@@ -201,7 +203,22 @@ class TurnGuard(AgentMiddleware):
                     })
         return response
 
-    def _refusal(self, call: dict[str, Any]) -> str:
+    def _kept(self, sig: str, state: Any) -> str:
+        """Where the latest result of a call still is, whole: "context", a file's
+        path, or nothing when it was trimmed or summarized away."""
+        messages = state.get("messages") if isinstance(state, dict) else getattr(state, "messages", None)
+        cid = self.last_run.get(sig)
+        found = next((m for m in reversed(messages or []) if isinstance(m, ToolMessage) and m.tool_call_id == cid),
+                     None) if cid else None
+        if found is None or (found.response_metadata or {}).get("trimmed"):
+            return ""
+        text = found.content if isinstance(found.content, str) else str(found.content)
+        if text.startswith("Tool result too large"):
+            path = re.search(r"at this path: (\S+)", text)
+            return path.group(1) if path else ""
+        return "context"
+
+    def _refusal(self, call: dict[str, Any], state: Any = None) -> str:
         """Why a tool call is not run, or nothing when it runs."""
         sig = _signature(call)
         if sig in self.running:
@@ -210,10 +227,15 @@ class TurnGuard(AgentMiddleware):
         if call.get("name") in LIVE_TOOLS:
             return ""
         done = self.results.get(sig, [])
-        if done and reference(call):
+        kept = self._kept(sig, state) if done and reference(call) else ""
+        if kept == "context":
             return ("Not run: you already read these instructions in this turn with the same arguments, and they "
-                    "have not changed. They are earlier in this conversation, in full; if they were saved to a "
-                    "file, read that file in parts with read_file (offset and limit). Follow them now.")
+                    "have not changed. They are earlier in this conversation, in full (the result of call "
+                    f"{self.last_run[sig]}). Follow them now: do the next step of the work.")
+        if kept:
+            return ("Not run: you already read these instructions in this turn with the same arguments, and they "
+                    f"have not changed. They are in the file {kept}: read them with read_file, 500 lines "
+                    "at a time (offset and limit), instead of asking for them again.")
         if len(done) >= REPEATS - 1 and len(set(done[-(REPEATS - 1):])) == 1:
             return (f"Not run: this exact call already returned the same result {len(done)} times in this turn, "
                     "and it will not change. Use that result (it is earlier in this conversation), try a "
@@ -222,7 +244,7 @@ class TurnGuard(AgentMiddleware):
 
     def _before_tool(self, request: Any) -> ToolMessage | None:
         call = request.tool_call
-        refusal = self._refusal(call)
+        refusal = self._refusal(call, getattr(request, "state", None))
         if not refusal:
             self.running.add(_signature(call))
             return None
@@ -238,6 +260,7 @@ class TurnGuard(AgentMiddleware):
             text = content if isinstance(content, str) else json.dumps(content, sort_keys=True, default=str)
             if not text.startswith(("error:", "The app reported an error")):
                 self.results.setdefault(sig, []).append(text)
+                self.last_run[sig] = result.tool_call_id
         return result
 
     def wrap_tool_call(self, request: Any, handler: Any) -> Any:

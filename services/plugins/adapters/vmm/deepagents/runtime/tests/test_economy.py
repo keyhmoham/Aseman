@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -100,3 +102,37 @@ def test_a_large_window_keeps_more(monkeypatch) -> None:
     # An operator can bound what a call costs.
     monkeypatch.setenv("TRADERA_SUMMARIZE_MAX_TOKENS", "48000")
     assert economy.summarize_above(Model()) == 48_000
+
+
+def test_long_lines_are_broken_to_fit_pages() -> None:
+    assert economy.reflow("short\nlines") == "short\nlines"
+    # JSON is indented first: nothing is lost.
+    data = {"items": [{"id": i, "name": f"item {i}"} for i in range(300)]}
+    out = economy.reflow(json.dumps(data))
+    assert json.loads(out) == data and max(map(len, out.splitlines())) <= economy.LINE_MAX
+    # Anything else is broken at spaces, or cut where there are none.
+    words = economy.reflow("word " * 3000)
+    assert words.startswith("[Lines longer") and max(map(len, words.splitlines())) <= economy.LINE_MAX
+    assert "".join(words.splitlines()[1:]).replace(" ", "") == "word" * 3000
+    assert max(map(len, economy.reflow("x" * 9000).splitlines())) <= economy.LINE_MAX
+
+
+async def test_a_large_one_line_result_can_be_paged_through(platform, tmp_path: Path) -> None:
+    def page(offset):
+        def step(messages):
+            saved = next(m for m in messages if isinstance(m, ToolMessage) and m.tool_call_id == "e0")
+            path = re.search(r"at this path: (\S+)", str(saved.content)).group(1)
+            return call("read_file", {"file_path": path, "offset": offset, "limit": 500}, cid=f"r{offset}")
+        return step
+
+    r, model = runner(platform, tmp_path, [
+        call("execute", {"command": "python3 -c \"print('word ' * 16000)\""}, cid="e0"),
+        page(0), page(20), AIMessage(content="done"),
+    ])
+    out = await r.prompt(turn_request(LEAD, "run it", token="tok-lead", role="lead", message_id="m0"))
+    assert out.status == "done", out
+    results = {m.tool_call_id: str(m.content) for m in model.seen[-1] if isinstance(m, ToolMessage)}
+    assert "large_tool_results" in results["e0"]
+    # Each page shows whole lines and says where the next one starts; the second goes on from there.
+    assert "truncated mid-line" not in results["r0"] and "next offset" in results["r0"]
+    assert results["r20"].count("word") > 100

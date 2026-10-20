@@ -454,3 +454,14 @@ def test_web_show_survives_an_allow_list() -> None:
 
     tool = StructuredTool.from_function(func=lambda: "", name="web_show", description="web_show")
     assert [t.name for t in filter_allowed([tool], ["file_send"])] == ["web_show"]
+
+
+def test_long_tool_descriptions_keep_their_usage_and_hint() -> None:
+    from tradera_agents.tools import DESCRIPTION_MAX, _app_command_tool
+
+    usage = "Use it like this. " * 300
+    spec = {"name": "Board", "bot_id": "bot-board", "commands": [{"name": "draw"}]}
+    tool = _app_command_tool(None, "board__draw", spec, {"name": "draw", "description": usage})
+    assert usage.strip() in tool.description and "frontend_show(tool='bot-board'" in tool.description
+    long = _app_command_tool(None, "board__draw", spec, {"name": "draw", "description": "x" * (DESCRIPTION_MAX * 2)})
+    assert len(long.description) < DESCRIPTION_MAX + 1_000 and "frontend_show" in long.description

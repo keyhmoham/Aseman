@@ -7,7 +7,8 @@ repeated, an answer that fell short, steps that worked. Every few turns, or
 soon after a turn that went badly, a learning cycle runs in the background:
 GEPA replays those moments with candidate playbooks, the agent's own model
 taking the next step and a judge scoring it (replay.py), and reflects on the
-feedback to write better ones. A new playbook is adopted only when it scores
+feedback to write better ones. A turn where the agent looped (it was told it
+repeated calls or read instructions it already had) is taken up much sooner. A new playbook is adopted only when it scores
 better than the current one on the same moments; every version stays in the
 playbook's history (store.py).
 
@@ -42,8 +43,10 @@ log = logging.getLogger("tradera.agents.improve")
 class Settings:
     #: A cycle once this many turns were recorded since the last one...
     every: int = 10
-    #: ...or sooner after a turn with problems, but never twice within this (seconds).
+    #: ...or sooner after a turn with problems, but never twice within this (seconds)...
     cooldown: float = 3 * 3600.0
+    #: ...or this, after a turn where the agent looped.
+    loop_cooldown: float = 15 * 60.0
     #: GEPA's budget for one cycle: replayed steps, all candidates together.
     budget: int = 60
     #: Decision points a cycle needs, at least, and uses, at most.
@@ -62,6 +65,7 @@ class Settings:
 
         return cls(every=max(1, int(num("TRADERA_IMPROVE_EVERY", cls.every))),
                    cooldown=max(0.0, num("TRADERA_IMPROVE_COOLDOWN", cls.cooldown)),
+                   loop_cooldown=max(0.0, num("TRADERA_IMPROVE_LOOP_COOLDOWN", cls.loop_cooldown)),
                    budget=max(10, int(num("TRADERA_IMPROVE_BUDGET", cls.budget))))
 
 
@@ -120,8 +124,10 @@ class Improver:
         state = store.state()
         state.turns_since += 1
         troubled = quality < 0.5 or any(p["kind"] != "good" for p in turn["points"])
-        due = (state.turns_since >= self.settings.every or troubled) and \
-            time.time() - state.last_cycle >= self.settings.cooldown and store.dir not in self._running
+        looped = getattr(guard, "loops", 0) > 0 or any(p["kind"] == "repeat" for p in turn["points"])
+        cooldown = min(self.settings.cooldown, self.settings.loop_cooldown) if looped else self.settings.cooldown
+        due = (state.turns_since >= self.settings.every or troubled or looped) and \
+            time.time() - state.last_cycle >= cooldown and store.dir not in self._running
         points = gather(store.turns(), self.settings.max_points) if due else []
         if len(points) >= self.settings.min_points:
             state.turns_since, state.last_cycle, state.cycles = 0, time.time(), state.cycles + 1

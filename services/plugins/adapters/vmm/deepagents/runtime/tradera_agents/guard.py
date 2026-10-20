@@ -7,6 +7,9 @@ turn with an error and no answer. Instead:
 
 * the agent is told when it repeats the same tool call, or keeps polling for
   tasks, that the result will not change and it should change approach;
+* it is told, too, when it fetches again what it already has: the same call
+  earlier in the turn, or instructions it already read (they stay whole in its
+  context, see ``reference``);
 * a few calls before its budget it is told to wrap up;
 * its last call has no tools: it writes its final answer, so the turn ends
   with the result and what is left rather than an error.
@@ -19,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections import Counter
 from typing import Any
 
@@ -36,6 +40,19 @@ POLL_TOOLS = frozenset({"check_tasks", "read_room", "read_direct_messages"})
 POLLS = 6
 #: Calls before the budget at which the agent is told to wrap up.
 WARN_BEFORE = 5
+#: The same read of instructions this many times in a turn is re-reading.
+REFERENCE_READS = 2
+
+#: Tools that return instructions, documentation or rules (an app's "get instructions"
+#: or "help"): what the agent reads to know how to work, not results of the work.
+REFERENCE_TOOLS = re.compile(
+    r"(?:^|_)(?:instructions?|help|guides?|docs?|documentation|usage|manual|readme|reference|howto|how_to|"
+    r"rules|tutorial|get_started|getting_started|best_practices)(?:_|$)", re.I)
+#: ...unless the tool changes something (``create_doc``, ``set_rules``).
+WRITE_TOOLS = re.compile(r"(?:^|_)(?:create|update|delete|remove|set|add|write|edit|post|send|upload|publish|"
+                         r"move|rename|insert|replace)(?:_|$)", re.I)
+#: Files that hold instructions: skills and agents' notes.
+REFERENCE_FILES = re.compile(r"(?:^|/)(?:SKILL|AGENTS|README)\.md$|/skills/.+\.md$", re.I)
 
 NOTE = "[runtime note] "
 
@@ -59,6 +76,14 @@ def recursion_limit(graph: Any, calls: int) -> int:
     except Exception:  # noqa: BLE001 - a conservative guess
         per_call = 10
     return (calls + 5) * per_call + 50
+
+
+def reference(call: dict[str, Any]) -> bool:
+    """Whether a tool call reads instructions rather than doing work."""
+    name = call.get("name", "")
+    if name == "read_file":
+        return bool(REFERENCE_FILES.search(str((call.get("args") or {}).get("file_path", ""))))
+    return bool(REFERENCE_TOOLS.search(name)) and not WRITE_TOOLS.search(name)
 
 
 def _signature(call: dict[str, Any]) -> str:
@@ -86,6 +111,18 @@ def notes(messages: list[Any], calls_made: int, budget: int) -> list[str]:
         out.append(f"You called {', '.join(repeated)} with the same arguments {REPEATS} or more times recently. "
                    "Its result will not change: use what you already have, try a different approach, or finish "
                    "with what you have and say what is left.")
+    # The same call again much later: what it returned dropped out of view and is fetched again.
+    whole = Counter(_signature(c) for c in calls)
+    refetched = sorted({c.get("name", "") for c in calls if whole[_signature(c)] >= REPEATS} - set(repeated))
+    if refetched:
+        out.append(f"You have made the same {', '.join(refetched)} call {REPEATS} or more times this turn. If you "
+                   "are fetching again something you already read, stop: write down what you need from it (in "
+                   "your plan with write_todos, or a file) and go on with the work.")
+    reread = sorted({c.get("name", "") for c in calls
+                     if reference(c) and whole[_signature(c)] >= REFERENCE_READS} - set(repeated) - set(refetched))
+    if reread:
+        out.append(f"You have already read these instructions this turn: {', '.join(reread)}. They stay in full "
+                   "in your context: use them as they are instead of reading them again.")
     polls = Counter(c.get("name", "") for c in calls if c.get("name") in POLL_TOOLS)
     polled = sorted(name for name, n in polls.items() if n >= POLLS)
     if polled:
@@ -105,6 +142,9 @@ class TurnGuard(AgentMiddleware):
         super().__init__()
         self.budget = budget
         self.calls = 0
+        # Model calls the agent was told it was looping before (repeats, polling,
+        # re-reading): the agent's learning takes such a turn up sooner.
+        self.loops = 0
 
     @property
     def exhausted(self) -> bool:
@@ -119,6 +159,8 @@ class TurnGuard(AgentMiddleware):
         found = notes(request.messages, self.calls, self.budget)
         if not found:
             return request
+        if any("steps left" not in n for n in found):
+            self.loops += 1
         return request.override(messages=[*request.messages, HumanMessage(NOTE + "\n".join(found))])
 
     def _response(self, response: Any) -> Any:

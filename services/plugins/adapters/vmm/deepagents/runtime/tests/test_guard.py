@@ -137,3 +137,43 @@ async def test_attached_text_has_a_budget(platform, tmp_path: Path) -> None:
     assert len(str(first.content)) < 70_000
     assert "read it with read_attachment" in str(first.content)
     assert not [m for m in model.seen[0] if isinstance(m, ToolMessage)]
+
+
+def test_fetching_again_what_the_agent_already_read_is_noticed() -> None:
+    def calls(*named: tuple[str, dict]) -> list[AIMessage]:
+        return [AIMessage(content="", tool_calls=[{"name": n, "args": a, "id": f"x{i}"}]) for i, (n, a) in enumerate(named)]
+
+    work = [("execute", {"command": f"echo {i}"}) for i in range(guard.WINDOW)]
+    # The same call a third time, long after the first two: out of the recent window.
+    late = calls(("execute", {"command": "cat big.txt"}), *work[:7], ("execute", {"command": "cat big.txt"}),
+                 *work[7:], ("execute", {"command": "cat big.txt"}))
+    found = guard.notes([HumanMessage("go"), *late], 20, 100)
+    assert any("same execute call" in n and "this turn" in n for n in found)
+    # Instructions read a second time.
+    twice = calls(("board__get_instructions", {}), *work[:3], ("board__get_instructions", {}))
+    found = guard.notes([HumanMessage("go"), *twice], 5, 100)
+    assert any("already read these instructions" in n and "board__get_instructions" in n for n in found)
+    # Paging through a skill is reading it, not reading it again.
+    pages = calls(*[("read_file", {"file_path": "/w/skills/x/SKILL.md", "offset": o}) for o in (0, 100, 200)])
+    assert guard.notes([HumanMessage("go"), *pages], 3, 100) == []
+    # A tool that changes something is not instructions.
+    assert not guard.reference({"name": "docs__create_doc", "args": {}})
+    assert guard.reference({"name": "app__help", "args": {}})
+    assert guard.reference({"name": "read_file", "args": {"file_path": "/w/.tradera/skills/shared/a/SKILL.md"}})
+    assert not guard.reference({"name": "read_file", "args": {"file_path": "/w/main.py"}})
+
+
+def test_the_guard_counts_the_calls_it_warned_of_a_loop() -> None:
+    class Request:
+        def __init__(self, messages):
+            self.messages = messages
+
+        def override(self, messages, **_):
+            return Request(messages)
+
+    same = [AIMessage(content="", tool_calls=[{"name": "app__help", "args": {}, "id": f"h{i}"}]) for i in range(2)]
+    g = guard.TurnGuard(budget=100)
+    g._request(Request([HumanMessage("go")]))
+    assert g.loops == 0
+    g._request(Request([HumanMessage("go"), *same]))
+    assert g.loops == 1

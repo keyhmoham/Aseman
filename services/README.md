@@ -512,8 +512,14 @@ Every deep agents feature is on, mapped onto the platform:
 Configuration of the runtime (all optional, passed on by the node):
 `TRADERA_SWARM_PARALLEL`; `TRADERA_IMPROVE=0` turns self-improvement off,
 `TRADERA_IMPROVE_EVERY` (turns between cycles, 10), `TRADERA_IMPROVE_COOLDOWN`
-(seconds between cycles of one agent in one space, 3 h) and
-`TRADERA_IMPROVE_BUDGET` (steps a cycle replays, 60).
+(seconds between cycles of one agent in one space, 3 h),
+`TRADERA_IMPROVE_LOOP_COOLDOWN` (the same after a turn where the agent looped:
+repeated calls or read instructions it already had, 15 min) and
+`TRADERA_IMPROVE_BUDGET` (steps a cycle replays, 60). A turn's history is
+summarized at 60% of the model's window and old tool output trimmed at half
+that; `TRADERA_SUMMARIZE_MAX_TOKENS` caps the summarization size to bound what
+a call costs. Instructions an agent read (an app's instructions or help, a
+skill) are never trimmed.
 
 ### Image model
 

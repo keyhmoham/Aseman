@@ -21,9 +21,10 @@ import (
 // (its URL, root key and how much is recalled with each message), how many
 // swarm tasks run at once, and how agents improve their playbook (GEPA).
 var runtimeTuning = []string{"TRADERA_MAX_MODEL_CALLS", "TRADERA_DEFAULT_CONTEXT_WINDOW",
+	"TRADERA_SUMMARIZE_MAX_TOKENS",
 	"TRADERA_OPENVIKING_URL", "TRADERA_OPENVIKING_API_KEY", "TRADERA_OPENVIKING_RECALL_TOKENS",
 	"TRADERA_SWARM_PARALLEL", "TRADERA_IMPROVE", "TRADERA_IMPROVE_EVERY", "TRADERA_IMPROVE_COOLDOWN",
-	"TRADERA_IMPROVE_BUDGET"}
+	"TRADERA_IMPROVE_LOOP_COOLDOWN", "TRADERA_IMPROVE_BUDGET"}
 
 // healthTTL is how long a successful health check is trusted.
 const healthTTL = 30 * time.Second

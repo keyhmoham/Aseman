@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import pytest
 from langchain_core.messages import AIMessage
 
 from tradera_agents import memory
@@ -15,6 +16,12 @@ from test_runtime import modified_request, platform, runner, tool_results  # noq
 WORKSPACE = Path(os.environ["TRADERA_WORKSPACE"])
 ACCOUNT = "space-space-1"
 LEAD_NOTES = "viking://user/agent-bot-lead/memories/notes.md"
+
+
+@pytest.fixture(autouse=True)
+def fresh_policies() -> None:
+    # Which sessions have their commit policy is kept for the process: each test starts without.
+    memory._POLICIES.clear()
 
 
 def system_text(model) -> str:
@@ -59,8 +66,21 @@ async def test_memory_lives_in_openviking(platform: Platform, tmp_path: Path) ->
     [(key, messages)] = viking.sessions.items()
     assert key[:2] == (ACCOUNT, "agent-bot-lead") and key[2].startswith("room-")
     assert messages[0] == {"role": "user", "content": "ann: remember how we deploy", "peer_id": "acc-ann"}
-    assert messages[1] == {"role": "assistant", "content": "Noted."}
-    assert viking.commits == [key]
+    # The answer comes with the tools the agent ran on the way.
+    parts = messages[1]["parts"]
+    assert [p["tool_name"] for p in parts[:-1]] == ["remember", "remember", "recall", "read_memory"]
+    assert parts[0]["tool_input"] == {"note": "deploys go through staging", "shared": True}
+    assert parts[0]["tool_status"] == "completed" and "saved to" in parts[0]["tool_output"]
+    assert parts[-1] == {"type": "text", "text": "Noted."}
+    # OpenViking commits the session itself, once enough gathered or the room is quiet.
+    assert viking.commits == [] and viking.policies[key] == memory.AUTO_COMMIT
+    # Recall is made as the person who asked, within the room's session.
+    assert ("/api/v1/search/search", "acc-ann") in viking.actors and ("/api/v1/search/find", "acc-ann") in viking.actors
+    assert context["session_id"] == key[2] and context["purpose"] == "chat" and context["query_expansion"] == "auto"
+    assert "dedup_turns" not in context  # the conversation starts here: nothing served before is in view
+    # Notes are only embedded, not summarized: they go into the prompt whole.
+    writes = [b for _, _, path, b in viking.requests if path == "/api/v1/content/write"]
+    assert writes and all(w["processing_mode"] == "vectors_only" for w in writes)
     # Every request was the space's account and the agent's user.
     assert {(a, u) for a, u, _, _ in viking.requests} == {(ACCOUNT, "agent-bot-lead")}
     # Nothing of memory is kept in the sandbox any more.
@@ -167,3 +187,78 @@ def test_identities_are_valid_openviking_ids() -> None:
     assert memory.Memory.for_turn(ctx, memory.Settings()) is None
     ctx.turn.no_memory = True
     assert memory.Memory.for_turn(ctx, memory.Settings(url="http://ov")) is None
+
+
+async def test_a_conversation_that_starts_fresh_begins_from_the_rooms_session(platform: Platform, tmp_path: Path) -> None:
+    viking = FakeViking()
+    viking.archived = "The team chose Postgres for the app."
+    r, model = runner(platform, tmp_path, [AIMessage(content="first"), AIMessage(content="second"),
+                                           AIMessage(content="third")], viking)
+    await r.prompt(turn_request(LEAD, "pick a database", token="tok-lead", role="lead", message_id="m1"))
+    await r.recorder.drain()
+    # Nothing earlier on the first turn: the room's session does not exist yet.
+    assert "Earlier in this room" not in human_text(model)
+
+    # The conversation no longer fit and starts again: it begins from the session.
+    base = f"{LEAD['vm_id']}:space-1:room-1"
+    r.store.next_generation(base)
+    await r.prompt(turn_request(LEAD, "what did we pick?", token="tok-lead", role="lead", message_id="m2"))
+    seen = "\n".join(str(m.content) for m in model.seen[-1] if m.type == "human")
+    assert "Earlier in this room" in seen and "chose Postgres" in seen
+    assert "They: ann: pick a database" in seen and "You: first" in seen
+    searches = [b for _, _, path, b in viking.requests if path == "/api/v1/search/search"]
+    assert "dedup_turns" not in searches[-1]
+
+    # Within the conversation, recall leaves out what it served in the last turns.
+    await r.prompt(turn_request(LEAD, "and why?", token="tok-lead", role="lead", message_id="m3"))
+    last = "\n".join(str(m.content) for m in model.seen[-1] if m.type == "human" and "and why?" in str(m.content))
+    assert "Earlier in this room" not in last
+    searches = [b for _, _, path, b in viking.requests if path == "/api/v1/search/search"]
+    assert searches[-1]["dedup_turns"] == memory.DEDUP_MESSAGES
+
+
+async def test_a_server_without_auto_commit_is_committed_after_every_turn(platform: Platform, tmp_path: Path) -> None:
+    viking = FakeViking()
+    viking.no_auto_commit = True
+    r, _ = runner(platform, tmp_path, [AIMessage(content="ok")], viking)
+    await r.prompt(turn_request(CODER, "hi", token="tok-coder", message_id="m-solo"))
+    await r.recorder.drain()
+    assert len(viking.commits) == 1
+
+
+async def test_attached_text_files_become_the_spaces_resources(platform: Platform, tmp_path: Path) -> None:
+    viking = FakeViking()
+    r, _ = runner(platform, tmp_path, [AIMessage(content="read"), AIMessage(content="again")], viking)
+    for i in range(2):
+        req = turn_request(LEAD, "see the spec", token="tok-lead", role="lead", message_id=f"m{i}")
+        req["turn"]["attachments"] = [{"id": "f1", "name": "spec v2.txt", "mime": "text/plain", "content": "The API is REST."},
+                                      {"id": "f2", "name": "photo.png", "mime": "image/png", "image_data": "AAAA"}]
+        await r.prompt(req)
+        await r.recorder.drain()
+    kept = [uri for (acc, uri) in viking.files if uri.startswith(memory.FILES)]
+    assert kept == [f"{memory.FILES}/f1-spec-v2.txt"]
+    assert viking.files[(ACCOUNT, kept[0])] == "The API is REST."
+
+
+async def test_memories_can_be_read_in_brief_and_searched_by_time(platform: Platform, tmp_path: Path) -> None:
+    viking = FakeViking()
+    viking.files[(ACCOUNT, "viking://user/agent-bot-lead/memories/events/launch.md")] = "The launch went well. " * 200
+    viking.summaries["viking://user/agent-bot-lead/memories/events/launch.md"] = "The launch, in short."
+    r, model = runner(platform, tmp_path, [
+        call("read_memory", {"uri": "viking://user/agent-bot-lead/memories/events/launch.md", "detail": "overview"}),
+        call("recall", {"query": "launch", "since": "2026-05-01"}),
+        AIMessage(content="ok"),
+    ], viking)
+    await r.prompt(turn_request(LEAD, "how did the launch go?", token="tok-lead", role="lead"))
+    assert tool_results(model)["read_memory"] == "The launch, in short."
+    find = next(b for _, _, path, b in viking.requests if path == "/api/v1/search/find")
+    assert find["since"] == "2026-05-01" and "until" not in find
+
+
+def test_specialists_at_work_recall_for_their_work() -> None:
+    def purpose(role: str, no_sandbox: bool = False) -> str:
+        ctx = TurnContext(gateway=None, agent=AgentDef(name="a", bot_id="b", account_id="c", vm_id="v", role=role),
+                          turn=Turn(space_id="s", room_id="r", message="hi", sender_id="acc-1", no_sandbox=no_sandbox))
+        return memory.Memory.for_turn(ctx, memory.Settings(url="http://ov")).purpose
+
+    assert purpose("") == "coding" and purpose("lead") == "chat" and purpose("", no_sandbox=True) == "chat"

@@ -346,7 +346,34 @@ def _app_result(reply: str) -> str:
         text = json.dumps(result["structuredContent"], ensure_ascii=False)
     if not text:
         text = reply
+    text = _readable(text)
     return f"The app reported an error: {text}" if result.get("isError") else text
+
+
+def _readable(text: str) -> str:
+    """An app's JSON answer as lines the agent can page through.
+
+    Apps often answer with JSON whose strings hold whole documents
+    (``{"skill": "# Spec\\n..."}``): one line, so a large answer that goes to a
+    file cannot be read back past its first line, and the agent asks again.
+    """
+    stripped = text.strip()
+    if not stripped.startswith(("{", "[", '"')):
+        return text
+    try:
+        data = json.loads(stripped)
+    except ValueError:
+        return text
+    if isinstance(data, str):
+        return data
+    if isinstance(data, dict) and data and all(isinstance(v, str) for v in data.values()) and \
+            any("\n" in v for v in data.values()):
+        if len(data) == 1:
+            return next(iter(data.values()))
+        return "\n\n".join(f"{k}:\n{v}" if "\n" in v else f"{k}: {v}" for k, v in data.items())
+    if "\n" not in stripped and len(stripped) > 1000:
+        return json.dumps(data, ensure_ascii=False, indent=1)
+    return text
 
 
 def _app_command_tool(ctx: TurnContext, name: str, spec: dict[str, Any], command: dict[str, Any]) -> BaseTool:

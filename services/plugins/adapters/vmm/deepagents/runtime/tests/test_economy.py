@@ -44,7 +44,7 @@ def test_old_tool_output_is_trimmed_once_the_conversation_is_large() -> None:
 
 
 async def test_a_long_turn_keeps_its_context_small(platform, tmp_path: Path) -> None:
-    steps = [call("execute", {"command": "python3 -c \"print('x' * 12000)\""}, cid=f"e{i}") for i in range(12)]
+    steps = [call("execute", {"command": f"python3 -c \"print('x' * 12000, {i})\""}, cid=f"e{i}") for i in range(12)]
     r, model = runner(platform, tmp_path, [*steps, AIMessage(content="done")])
     out = await r.prompt(turn_request(LEAD, "run them", token="tok-lead", role="lead", message_id="m0"))
     assert out.status == "done", out

@@ -13,11 +13,20 @@ server's root key and names, per request, whose memory it works on.
   cases, patterns ...).
 * Both notes files go into the system prompt (capped), what is relevant to the
   message at hand is recalled into the turn's input, and the agent searches,
-  reads and writes memory with tools.
-* Every finished turn is added to the agent's OpenViking session of the room
-  and committed: OpenViking archives it and extracts long-term memories from
-  it in the background, including what it learned about the people involved
-  (their peer memory).
+  reads and writes memory with tools. Recall is made as the person who asked
+  (their peer memory comes first) and within the room's session: OpenViking
+  reads the conversation to expand a short follow-up into what it is about,
+  and leaves out what it served the agent in the last turns.
+* Every finished turn is added to the agent's OpenViking session of the room,
+  the tools it ran included: OpenViking archives the session and extracts
+  long-term memories from it in the background (what was learned about the
+  people involved, how tasks were done), committing it once enough has
+  gathered or the room goes quiet rather than after every turn.
+* A conversation that starts fresh (the first in a room, or a new one after
+  the last no longer fit the model) begins from the session's summary of the
+  earlier ones.
+* Text files people attach are kept as the space's resources, so they can be
+  found again from any room.
 
 OpenViking has no models of its own: it calls them through the node, which
 uses the ones the admin picked (Admin → Memory models). The node tells each
@@ -31,7 +40,9 @@ Without ``TRADERA_OPENVIKING_URL`` the agents run without long-term memory.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
+import json
 import logging
 import os
 import re
@@ -55,6 +66,22 @@ RECALL_TOKENS = 1_500
 READ_MAX_CHARS = 20_000
 # What one finished turn adds to its session, at most per message (characters).
 RECORD_MAX_CHARS = 12_000
+# The tool calls of a turn its session keeps, at most, and how much of each.
+RECORD_TOOLS = 30
+TOOL_INPUT_CHARS = 1_000
+TOOL_OUTPUT_CHARS = 1_500
+# Session messages recall leaves out what it already served the agent for (two a turn).
+DEDUP_MESSAGES = 6
+# When a session is committed (its memories extracted): once this much gathered,
+# or once the room has been quiet this long (seconds).
+AUTO_COMMIT = {"message_count_threshold": 20, "pending_token_threshold": 24_000, "idle_timeout_seconds": 1_800}
+# What a fresh conversation is given of the room's earlier ones (tokens).
+EARLIER_TOKENS = 3_000
+# Where the space keeps the files people attached, and how much of one.
+FILES = "viking://resources/files"
+FILE_MAX_CHARS = 200_000
+# Notes go into the prompt whole: they only need to be found, not summarized.
+NOTES_WRITE = {"processing_mode": "vectors_only"}
 
 _ID = re.compile(r"[^a-zA-Z0-9_.-]+")
 
@@ -101,6 +128,9 @@ class Settings:
     url: str = ""
     api_key: str = ""
     recall_tokens: int = RECALL_TOKENS
+    # "auto": a follow-up is expanded with the conversation into what it is
+    # about (a memory-model call per recall); "off": recalled by its words alone.
+    query_expansion: str = "auto"
     timeout: float = 30.0
     # An httpx transport to reach OpenViking through (tests).
     transport: Any = None
@@ -111,9 +141,10 @@ class Settings:
             recall = int(os.environ.get("TRADERA_OPENVIKING_RECALL_TOKENS", "") or RECALL_TOKENS)
         except ValueError:
             recall = RECALL_TOKENS
+        expansion = os.environ.get("TRADERA_OPENVIKING_QUERY_EXPANSION", "").strip().lower()
         return cls(url=os.environ.get("TRADERA_OPENVIKING_URL", "").strip().rstrip("/"),
                    api_key=os.environ.get("TRADERA_OPENVIKING_API_KEY", "").strip(),
-                   recall_tokens=max(0, recall))
+                   recall_tokens=max(0, recall), query_expansion="off" if expansion == "off" else "auto")
 
     @property
     def enabled(self) -> bool:
@@ -128,6 +159,10 @@ def _clip(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit].rstrip() + f"\n[… {len(text) - limit} more characters]"
 
 
+# Sessions whose commit policy this process has set (account, user, session).
+_POLICIES: set[tuple[str, str, str]] = set()
+
+
 @dataclass
 class Memory:
     """One agent's memory in one space, for the length of a turn."""
@@ -137,6 +172,15 @@ class Memory:
     user: str
     agent_name: str
     session_id: str
+    # The person the turn is for, as OpenViking's peer: recall puts what it knows
+    # of them first.
+    actor: str = ""
+    # What recall is for: "chat" leans to what was said and who said it,
+    # "coding" to resources and skills.
+    purpose: str = "chat"
+    # Whether the agent's conversation starts with this turn: what recall served
+    # it before is not in its context any more.
+    fresh: bool = False
     # Which of the memory's models the admin picked (the node says, per turn):
     # recall by meaning needs the embedding model, learning the chat model.
     recall_enabled: bool = True
@@ -151,9 +195,20 @@ class Memory:
         if not settings.enabled or ctx.turn.no_memory:
             return None
         agent = ctx.agent
+        # A specialist working on the space's computer recalls for its work, a
+        # lead or a conversation without a computer for the people in it.
+        working = not agent.lead and not ctx.turn.no_sandbox
         return cls(settings=settings, account=_id("space-", ctx.space or "default"),
                    user=_id("agent-", agent.bot_id or agent.account_id or agent.name),
-                   agent_name=agent.name, session_id=_id("room-", ctx.base_thread))
+                   agent_name=agent.name, session_id=_id("room-", ctx.base_thread),
+                   actor=_id("", ctx.turn.sender_id) if ctx.turn.sender_id else "",
+                   purpose="coding" if working else "chat")
+
+    def as_actor(self) -> Any:
+        """Requests made as the person the turn is for (their peer memory first)."""
+        from openviking_sdk import use_actor_peer
+
+        return use_actor_peer(self.actor) if self.actor else contextlib.nullcontext()
 
     @property
     def own_notes(self) -> str:
@@ -196,7 +251,7 @@ class Memory:
         return out if isinstance(out, str) else str(out or "")
 
     async def write(self, uri: str, content: str, *, mode: str = "replace") -> None:
-        await (await self.client()).write(uri, content, mode=mode)
+        await (await self.client()).write(uri, content, mode=mode, options=NOTES_WRITE)
 
     async def notes(self, seed: Callable[[str], Awaitable[str | None]] | None = None) -> dict[str, str]:
         """Both notes files, created when missing: from ``seed(uri)`` (the notes
@@ -223,13 +278,20 @@ class Memory:
         budget = self.settings.recall_tokens if max_tokens is None else max_tokens
         if not query or budget < 64:
             return ""
-        out = await (await self.client()).search_context(query[:4000], options={
-            "max_tokens": min(budget, 32_000), "exclude_uris": list(exclude or []), "purpose": "chat",
-        })
+        options: dict[str, Any] = {"max_tokens": min(budget, 32_000), "exclude_uris": list(exclude or []),
+                                   "purpose": self.purpose, "query_expansion": self.settings.query_expansion}
+        if not self.fresh:
+            options["dedup_turns"] = DEDUP_MESSAGES
+        client = await self.client()
+        with self.as_actor():
+            out = await client.search_context(query[:4000], session_id=self.session_id, options=options)
         return str((out or {}).get("rendered") or "").strip()
 
-    async def find(self, query: str, limit: int = 8) -> list[dict[str, Any]]:
-        out = await (await self.client()).find(query[:4000], limit=max(1, min(limit, 30)))
+    async def find(self, query: str, limit: int = 8, *, since: str = "", until: str = "") -> list[dict[str, Any]]:
+        options = {k: v for k, v in (("since", since), ("until", until)) if v}
+        client = await self.client()
+        with self.as_actor():
+            out = await client.find(query[:4000], limit=max(1, min(limit, 30)), options=options or None)
         hits: list[dict[str, Any]] = []
         for kind in ("memories", "resources", "skills"):
             for hit in (out or {}).get(kind) or []:
@@ -259,18 +321,84 @@ class Memory:
                                  "kind": "notes", "score": 0})
         return hits[:limit]
 
+    async def summary(self, uri: str, detail: str) -> str:
+        """A memory's one-line abstract or its overview, as OpenViking keeps them."""
+        client = await self.client()
+        out = await (client.abstract(uri) if detail == "abstract" else client.overview(uri))
+        return out if isinstance(out, str) else str(out or "")
+
     # --- sessions -------------------------------------------------------------
 
     async def record(self, messages: list[dict[str, Any]], *, commit: bool = True) -> None:
-        """Add a finished turn to the agent's session of the room and commit it:
-        OpenViking extracts long-term memory from it in the background."""
-        messages = [m for m in messages if str(m.get("content") or "").strip()]
+        """Add a finished turn to the agent's session of the room. OpenViking
+        commits the session (extracts long-term memory from it, in the
+        background) once enough has gathered or the room goes quiet; a server
+        that cannot is asked to commit after every turn."""
+        messages = [m for m in messages if str(m.get("content") or "").strip() or m.get("parts")]
         if not messages:
             return
         client = await self.client()
         await client.batch_add_messages(self.session_id, messages)
-        if commit:
+        if commit and not await self._auto_commit(client):
             await client.commit_session(self.session_id)
+
+    async def _auto_commit(self, client: Any) -> bool:
+        key = (self.account, self.user, self.session_id)
+        if key in _POLICIES:
+            return True
+        try:
+            await client.update_session_config(self.session_id, {"auto_commit_policy": AUTO_COMMIT})
+        except Exception as exc:  # noqa: BLE001 - commit after the turn instead
+            log.warning("openviking auto-commit for %s: %s", self.session_id, exc)
+            return False
+        _POLICIES.add(key)
+        return True
+
+    async def earlier(self, max_tokens: int = EARLIER_TOKENS) -> str:
+        """The room's earlier conversations as the session keeps them: the
+        summary of what was archived, then the latest messages that fit."""
+        try:
+            out = await (await self.client()).get_session_context(self.session_id, token_budget=max_tokens)
+        except Exception as exc:
+            if _not_found(exc):
+                return ""
+            raise
+        parts = []
+        overview = str((out or {}).get("latest_archive_overview") or "").strip()
+        if overview:
+            parts.append(overview)
+        lines = []
+        for m in (out or {}).get("messages") or []:
+            text = _message_text(m)
+            if text:
+                lines.append(f"{'You' if m.get('role') == 'assistant' else 'They'}: {_clip(text, 1_500)}")
+        if lines:
+            parts.append("Latest:\n" + "\n".join(lines))
+        return "\n\n".join(parts)
+
+    async def keep_file(self, attachment: dict[str, Any]) -> None:
+        """Keep an attached text file as one of the space's resources (once)."""
+        name = _ID.sub("-", str(attachment.get("name") or "file")).strip("-.") or "file"
+        uri = f"{FILES}/{_id('', str(attachment.get('id') or name))}-{name}"
+        if not uri.endswith((".md", ".txt")):
+            uri += ".md"
+        text = _clip(str(attachment.get("content") or ""), FILE_MAX_CHARS)
+        if not text.strip():
+            return
+        try:
+            await (await self.client()).write(uri, text, mode="create")
+        except Exception as exc:
+            if getattr(exc, "code", "") in ("ALREADY_EXISTS", "CONFLICT"):
+                return
+            raise
+
+
+def _message_text(message: dict[str, Any]) -> str:
+    text = str(message.get("content") or "").strip()
+    if text:
+        return text
+    return " ".join(str(p.get("text") or "") for p in message.get("parts") or []
+                    if isinstance(p, dict) and p.get("type") == "text").strip()
 
 
 def notes_block(notes: dict[str, str]) -> str:
@@ -355,13 +483,17 @@ def memory_tools(memory: Memory) -> list[BaseTool]:
         return f"rewrote {which(shared)}"
 
     @tool
-    async def recall(query: str, limit: int = 8) -> str:
+    async def recall(query: str, limit: int = 8, since: str = "", until: str = "") -> str:
         """Search your memory and the space's knowledge (notes, extracted memories,
-        resources) for what is relevant to a query. Returns matches with their
-        uri and summary; read one in full with read_memory."""
+        resources, files people shared) for what is relevant to a query. Returns
+        matches with their uri and summary; read one with read_memory.
+
+        since, until: only what was updated in that time (ISO dates, e.g. 2026-05-01).
+        """
         try:
             # By meaning when there is an embedding model, else by its words.
-            hits = await (memory.find(query, limit) if memory.recall_enabled else memory.grep(query, limit))
+            hits = await (memory.find(query, limit, since=since, until=until) if memory.recall_enabled
+                          else memory.grep(query, limit))
         except Exception as exc:  # noqa: BLE001
             return f"error: {exc}"
         if not hits:
@@ -374,9 +506,17 @@ def memory_tools(memory: Memory) -> list[BaseTool]:
         return "\n".join(lines)
 
     @tool
-    async def read_memory(uri: str) -> str:
-        """Read a memory or note in full by its viking:// uri (from recall or the notes)."""
+    async def read_memory(uri: str, detail: str = "full") -> str:
+        """Read a memory, note or file by its viking:// uri (from recall or the notes).
+
+        detail: "full" (default) for all of it; "overview" for OpenViking's summary
+        of it, or "abstract" for one line, to see whether it is worth reading in full.
+        """
         try:
+            if detail in ("overview", "abstract"):
+                summary = await memory.summary(uri, detail)
+                if summary.strip():
+                    return _clip(summary, READ_MAX_CHARS)
             text = await memory.read(uri)
         except Exception as exc:  # noqa: BLE001
             return f"error: {exc}"
@@ -394,13 +534,19 @@ class Recorder:
     def __init__(self) -> None:
         self._tasks: set[asyncio.Task[Any]] = set()
 
-    def record(self, memory: Memory, messages: list[dict[str, Any]]) -> None:
+    def record(self, memory: Memory, messages: list[dict[str, Any]],
+               files: list[dict[str, Any]] | None = None) -> None:
         # Its own client: the turn's closes when the turn ends.
         mine = Memory(settings=memory.settings, account=memory.account, user=memory.user,
                       agent_name=memory.agent_name, session_id=memory.session_id)
 
         async def run() -> None:
             try:
+                for attachment in files or []:
+                    try:
+                        await mine.keep_file(attachment)
+                    except Exception as exc:  # noqa: BLE001 - the turn is recorded all the same
+                        log.warning("openviking file %s: %s", attachment.get("name", ""), exc)
                 await mine.record(messages)
             except Exception as exc:  # noqa: BLE001 - memory is best effort
                 log.warning("openviking record %s: %s", mine.session_id, exc)
@@ -416,11 +562,40 @@ class Recorder:
             await asyncio.gather(*list(self._tasks), return_exceptions=True)
 
 
-def turn_messages(ctx: TurnContext, said: str, reply: str) -> list[dict[str, Any]]:
-    """A finished turn as OpenViking session messages."""
+def turn_messages(ctx: TurnContext, said: str, reply: str, steps: list[Any] | None = None) -> list[dict[str, Any]]:
+    """A finished turn as OpenViking session messages: what was asked, then the
+    agent's answer with the tools it ran on the way (``steps``: the turn's
+    LangChain messages), which OpenViking learns how tasks are done from."""
     turn = ctx.turn
     who = turn.sender_name or "Someone"
     user: dict[str, Any] = {"role": "user", "content": _clip(f"{who}: {said}", RECORD_MAX_CHARS)}
     if turn.sender_id:
         user["peer_id"] = _id("", turn.sender_id)
-    return [user, {"role": "assistant", "content": _clip(reply, RECORD_MAX_CHARS)}]
+    parts = tool_parts(steps or [])
+    if not parts:
+        return [user, {"role": "assistant", "content": _clip(reply, RECORD_MAX_CHARS)}]
+    if reply.strip():
+        parts.append({"type": "text", "text": _clip(reply, RECORD_MAX_CHARS)})
+    return [user, {"role": "assistant", "parts": parts}]
+
+
+def tool_parts(steps: list[Any]) -> list[dict[str, Any]]:
+    """The tool calls of a turn as OpenViking tool parts, each with what it returned."""
+    results = {getattr(m, "tool_call_id", ""): m for m in steps if getattr(m, "type", "") == "tool"}
+    calls = [c for m in steps if getattr(m, "type", "") == "ai" for c in getattr(m, "tool_calls", None) or []]
+    parts: list[dict[str, Any]] = []
+    for call in calls[-RECORD_TOOLS:]:
+        result = results.get(call.get("id", ""))
+        content = getattr(result, "content", "") if result is not None else ""
+        if isinstance(content, list):
+            content = " ".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+        output = str(content)
+        failed = result is not None and (getattr(result, "status", "") == "error"
+                                         or output.lower().startswith(("error", "traceback")))
+        args = json.dumps(call.get("args") or {}, ensure_ascii=False, default=str)
+        parts.append({"type": "tool", "tool_id": str(call.get("id") or ""), "tool_name": str(call.get("name") or ""),
+                      "tool_input": {"args": _clip(args, TOOL_INPUT_CHARS)} if len(args) > TOOL_INPUT_CHARS
+                      else call.get("args") or {},
+                      "tool_output": _clip(output, TOOL_OUTPUT_CHARS),
+                      "tool_status": "pending" if result is None else "error" if failed else "completed"})
+    return parts

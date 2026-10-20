@@ -367,6 +367,11 @@ class Runner:
     async def _input(self, ctx: TurnContext) -> dict[str, Any]:
         turn = ctx.turn
         parts: list[str] = []
+        if ctx.memory is not None:
+            ctx.memory.fresh = await self._fresh(ctx)
+            earlier = await self._earlier(ctx) if ctx.memory.fresh else ""
+            if earlier:
+                parts.append("Earlier in this room (your memory of it, summarized):\n" + earlier + "\n")
         catch_up = await self._catch_up(ctx)
         if catch_up:
             parts.append("Messages in the room since your last turn:\n" + catch_up + "\n")
@@ -404,6 +409,22 @@ class Runner:
         content: Any = [{"type": "text", "text": text}, *blocks] if blocks else text
         return {"messages": [HumanMessage(content=content)]}
 
+    async def _fresh(self, ctx: TurnContext) -> bool:
+        """Whether the thread's conversation starts with this turn."""
+        try:
+            return await self.checkpointer.aget_tuple({"configurable": {"thread_id": ctx.thread_id,
+                                                                        "checkpoint_ns": ""}}) is None
+        except Exception:  # noqa: BLE001 - assume it goes on
+            return False
+
+    async def _earlier(self, ctx: TurnContext) -> str:
+        """What the room's session keeps of the conversations before this one."""
+        try:
+            return await ctx.memory.earlier()
+        except Exception as exc:  # noqa: BLE001 - the turn goes on without it
+            log.warning("openviking session context failed: %s", exc)
+            return ""
+
     async def _recall(self, ctx: TurnContext) -> str:
         """What the agent's memory holds about the message (the notes are in
         the system prompt already)."""
@@ -415,10 +436,12 @@ class Runner:
             log.warning("openviking recall failed: %s", exc)
             return ""
 
-    def _record(self, ctx: TurnContext, outcome: Outcome) -> Outcome:
-        """Commits a finished turn to the agent's OpenViking session."""
+    def _record(self, ctx: TurnContext, outcome: Outcome, steps: list[Any] | None = None) -> Outcome:
+        """Adds a finished turn (``steps``: its messages) to the agent's
+        OpenViking session, and the text files attached to it to the space's."""
         if ctx.memory is not None and ctx.memory.learn_enabled and outcome.reply:
-            self.recorder.record(ctx.memory, memlib.turn_messages(ctx, ctx.turn.message, outcome.reply))
+            files = [a for a in ctx.turn.attachments if a.get("content")] if ctx.memory.recall_enabled else []
+            self.recorder.record(ctx.memory, memlib.turn_messages(ctx, ctx.turn.message, outcome.reply, steps), files)
         return outcome
 
     async def _catch_up(self, ctx: TurnContext) -> str:
@@ -468,15 +491,15 @@ class Runner:
                 return await self._overflowed(ctx, graph, config, before, payload, exc, fresh_retry)
             log.exception("turn failed")
             return Outcome(reply="", status="failed", error=f"{type(exc).__name__}: {exc}")
+        steps = (state.values.get("messages") or [])[before:]
         if state.interrupts:
-            outcome = self._record(ctx, self._awaiting(ctx, state.interrupts))
+            outcome = self._record(ctx, self._awaiting(ctx, state.interrupts), steps)
         else:
             self.store.drop_question(ctx.thread_id)
-            outcome = self._record(ctx, Outcome(reply=_final_text(state.values.get("messages") or [])))
+            outcome = self._record(ctx, Outcome(reply=_final_text(state.values.get("messages") or [])), steps)
         if self.improver is not None:
             # What the turn did and how it went is what the agent's playbook learns from.
-            await self.improver.observe(ctx, outcome, (state.values.get("messages") or [])[before:], turn_guard,
-                                        graph)
+            await self.improver.observe(ctx, outcome, steps, turn_guard, graph)
         return outcome
 
     async def _overflowed(self, ctx: TurnContext, graph: Any, config: Any, before: int, payload: Any,

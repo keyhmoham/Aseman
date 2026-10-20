@@ -333,8 +333,13 @@ class FakeViking:
         self.sessions: dict[tuple[str, str, str], list[dict[str, Any]]] = {}  # (account, user, id) → messages
         self.commits: list[tuple[str, str, str]] = []
         self.requests: list[tuple[str, str, str, dict[str, Any]]] = []  # (account, user, path, body)
+        self.actors: list[tuple[str, str]] = []  # (path, actor peer) of the requests made as a peer
+        self.policies: dict[tuple[str, str, str], dict[str, Any]] = {}  # session → auto-commit policy
+        self.archived = ""  # the summary of a session's archived history
+        self.summaries: dict[str, str] = {}  # uri → its overview
         self.recalled = ""  # what context search renders
         self.down = False
+        self.no_auto_commit = False  # a server without session config
 
     def settings(self) -> Any:
         from tradera_agents.memory import Settings
@@ -354,14 +359,21 @@ class FakeViking:
         path = request.url.path
         body = json.loads(request.content) if request.content else dict(request.url.params)
         self.requests.append((account, user, path, body))
+        if request.headers.get("X-OpenViking-Actor-Peer"):
+            self.actors.append((path, request.headers["X-OpenViking-Actor-Peer"]))
         if path == "/api/v1/content/read":
             text = self.files.get((account, body["uri"]))
             if text is None:
                 return httpx.Response(404, json={"status": "error", "error": {
                     "code": "NOT_FOUND", "message": "not found", "details": {"resource": body["uri"]}}})
             return self._ok(text)
+        if path in ("/api/v1/content/abstract", "/api/v1/content/overview"):
+            return self._ok(self.summaries.get(body["uri"], ""))
         if path == "/api/v1/content/write":
             key = (account, body["uri"])
+            if body["mode"] == "create" and key in self.files:
+                return httpx.Response(409, json={"status": "error", "error": {
+                    "code": "ALREADY_EXISTS", "message": "exists", "details": {"resource": body["uri"]}}})
             text = (self.files.get(key, "") + body["content"]) if body["mode"] == "append" else body["content"]
             # Like OpenViking, a memory file is kept without its last newline.
             self.files[key] = text.rstrip("\n") if "/memories/" in body["uri"] else text
@@ -383,6 +395,15 @@ class FakeViking:
             sid = path.split("/")[-3]
             self.sessions.setdefault((account, user, sid), []).extend(body["messages"])
             return self._ok({"added": len(body["messages"])})
+        if path.endswith("/config") and request.method == "PATCH" and not self.no_auto_commit:
+            self.policies[(account, user, path.split("/")[-2])] = body["auto_commit_policy"]
+            return self._ok({})
+        if path.endswith("/context") and request.method == "GET":
+            sid = path.split("/")[-2]
+            messages = self.sessions.get((account, user, sid))
+            if messages is None:
+                return httpx.Response(404, json={"status": "error", "error": {"code": "NOT_FOUND", "message": "no"}})
+            return self._ok({"latest_archive_overview": self.archived, "messages": messages})
         if path.endswith("/commit"):
             self.commits.append((account, user, path.split("/")[-2]))
             return self._ok({"task_id": "t1", "status": "accepted"})

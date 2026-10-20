@@ -15,7 +15,10 @@ import '../../../home/presentation/widgets/routines_panel.dart';
 import '../../../search_feed/presentation/post_editor.dart';
 import '../../../search_feed/presentation/rich_post_content.dart';
 import '../../../workflows/presentation/workflow_panel.dart';
+import '../../domain/room_work.dart';
+import '../room_work_controller.dart';
 import 'attachment_bubble.dart';
+import 'room_work_view.dart';
 import 'workspace_links.dart';
 
 /// A room's conversation: the message list (chat bubbles, agent logs, files,
@@ -130,12 +133,19 @@ class _RoomChatState extends State<RoomChat> {
   final Set<String> _expandedLogs = {};
   bool _sending = false;
 
+  /// The room's agent work (runs, live drafts, questions), when the chat
+  /// knows its project and room.
+  RoomWorkController? _work;
+
   /// The message the next one answers, and the message being changed.
   RoomMessage? _replyTo;
   RoomMessage? _editing;
   DateTime _typedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   void _typed(String _) {
+    // The send button turns into Stop on an empty composer, and a leading /
+    // offers the prompt commands.
+    setState(() {});
     final now = DateTime.now();
     if (widget.onTyping == null ||
         _editing != null ||
@@ -149,12 +159,81 @@ class _RoomChatState extends State<RoomChat> {
   @override
   void initState() {
     super.initState();
+    _followWork();
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+  }
+
+  void _followWork() {
+    _work?.removeListener(_workChanged);
+    _work?.dispose();
+    _work = null;
+    final service = widget.dependencies?.service;
+    if (service == null || widget.spaceId.isEmpty || widget.roomId.isEmpty) {
+      return;
+    }
+    _work = RoomWorkController(service,
+        spaceId: widget.spaceId, roomId: widget.roomId)
+      ..addListener(_workChanged)
+      ..start();
+  }
+
+  void _workChanged() {
+    if (!mounted) return;
+    setState(() {});
+    if (_work?.drafting != null) _scrollToBottom();
+  }
+
+  /// Agents are on it in this room.
+  bool get _busy => _work?.busy ?? false;
+
+  Future<void> _stopWork() async {
+    final work = _work;
+    if (work == null) return;
+    final error = await work.stopAll();
+    if (error != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Some work could not be stopped: only the person who asked for it or a project manager can stop it.')));
+    }
+  }
+
+  Future<void> _answer(AgentQuestion q, String answer) async {
+    try {
+      await _work?.answer(q, answer);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Could not answer: $e')));
+      }
+    }
+  }
+
+  /// Sends a failed run's prompt to its agent again.
+  Future<void> _runAgain(WorkEntry failed) async {
+    _work?.dismiss(failed.runId);
+    try {
+      await widget.onSend
+          ?.call(failed.prompt, [failed.botId], const <String>[]);
+    } catch (_) {
+      // The parent reports the error.
+    }
+  }
+
+  void _pickCommand(PromptCommand c) {
+    final text = '${c.command} ';
+    input.value = TextEditingValue(
+        text: text, selection: TextSelection.collapsed(offset: text.length));
+    setState(() {});
   }
 
   @override
   void didUpdateWidget(covariant RoomChat oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.spaceId != widget.spaceId ||
+        oldWidget.roomId != widget.roomId ||
+        oldWidget.dependencies != widget.dependencies) {
+      _followWork();
+    }
     // New messages arrived (async agent replies / logs): follow the bottom when
     // the user was already near it, so tradera's flow appears live.
     if (widget.messages.length != oldWidget.messages.length) {
@@ -180,6 +259,8 @@ class _RoomChatState extends State<RoomChat> {
 
   @override
   void dispose() {
+    _work?.removeListener(_workChanged);
+    _work?.dispose();
     input.dispose();
     _chatScroll.dispose();
     super.dispose();
@@ -763,6 +844,7 @@ class _RoomChatState extends State<RoomChat> {
         final c = a.createdAt.compareTo(b.createdAt);
         return c != 0 ? c : a.id.compareTo(b.id);
       });
+    final working = _workingIndicator();
     if (widget.flat) {
       return _Panel(
           flat: true,
@@ -778,17 +860,14 @@ class _RoomChatState extends State<RoomChat> {
                   children: [
                     _chatHeader(),
                     const SizedBox(height: 10),
-                    if (messages.isEmpty)
+                    if (messages.isEmpty && working == null)
                       const _NoMessages()
                     else ...[
                       ...List.generate(
                           messages.length,
                           (i) => _chatBubble(context, messages[i],
                               previous: i == 0 ? null : messages[i - 1])),
-                      if (widget.working.isNotEmpty)
-                        _WorkingIndicator(
-                            agent: widget.working,
-                            detail: widget.workingDetail),
+                      if (working != null) working,
                     ],
                     if (widget.typing.isNotEmpty) _typingRow(),
                   ]),
@@ -804,7 +883,7 @@ class _RoomChatState extends State<RoomChat> {
             child: CustomPaint(
           painter: _ChatPatternPainter(
               Theme.of(context).colorScheme.primary, widget.room),
-          child: messages.isEmpty && widget.typing.isEmpty
+          child: messages.isEmpty && widget.typing.isEmpty && working == null
               ? const _NoMessages()
               : ListView(
                   controller: _chatScroll,
@@ -814,16 +893,32 @@ class _RoomChatState extends State<RoomChat> {
                           (i) => _chatBubble(context, messages[i],
                               previous: i == 0 ? null : messages[i - 1])) +
                       [
-                        if (widget.working.isNotEmpty)
-                          _WorkingIndicator(
-                              agent: widget.working,
-                              detail: widget.workingDetail),
+                        if (working != null) working,
                         if (widget.typing.isNotEmpty) _typingRow(),
                       ]),
         )),
         Padding(padding: const EdgeInsets.all(10), child: _composer()),
       ]),
     );
+  }
+
+  /// Below the last message while an agent works: what it is doing, or the
+  /// answer it is writing as it comes.
+  Widget? _workingIndicator() {
+    final draft = _work?.drafting;
+    if (draft != null) {
+      return _WorkingIndicator(agent: draft.agent, draft: draft.draft);
+    }
+    final activity = _work?.activity ?? const <LiveActivity>[];
+    if (activity.isNotEmpty) {
+      return _WorkingIndicator(
+          agent: activity.first.agent, detail: activity.first.detail);
+    }
+    if (widget.working.isNotEmpty) {
+      return _WorkingIndicator(
+          agent: widget.working, detail: widget.workingDetail);
+    }
+    return null;
   }
 
   Widget _typingRow() {
@@ -947,7 +1042,8 @@ class _RoomChatState extends State<RoomChat> {
         ]),
       );
     }
-    return Material(
+    final work = _work;
+    final box = Material(
         color: scheme.surfaceContainerHigh,
         elevation: widget.flat ? 3 : 0,
         shadowColor: Colors.black.withValues(alpha: .25),
@@ -985,6 +1081,10 @@ class _RoomChatState extends State<RoomChat> {
                                 onDeleted: () => _removeMention(id)),
                         ]))),
               if (_editing != null || _replyTo != null) _composerBanner(),
+              if (_editing == null &&
+                  PromptCommandSuggestions.matches(input.text))
+                PromptCommandSuggestions(
+                    typed: input.text, onPick: _pickCommand),
               LayoutBuilder(builder: (context, box) {
                 final actions = [
                   _composerAction(Icons.add_rounded, 'Attach file',
@@ -1014,15 +1114,31 @@ class _RoomChatState extends State<RoomChat> {
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
                         disabledBorder: InputBorder.none));
-                final send = IconButton.filled(
-                    tooltip: 'Send',
-                    onPressed: _sending ? null : () => _submit(input.text),
-                    icon: _sending
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.send_rounded, size: 20));
+                // While agents work, an empty composer's button stops them.
+                final stop = _busy &&
+                    !_sending &&
+                    _editing == null &&
+                    input.text.trim().isEmpty &&
+                    _drafts.isEmpty;
+                final send = stop
+                    ? IconButton.filled(
+                        tooltip: 'Stop the work in progress',
+                        style: IconButton.styleFrom(
+                            backgroundColor: scheme.error,
+                            foregroundColor: scheme.onError),
+                        onPressed:
+                            (_work?.stopping ?? false) ? null : _stopWork,
+                        icon: const Icon(Icons.stop_rounded, size: 20))
+                    : IconButton.filled(
+                        tooltip: 'Send',
+                        onPressed: _sending ? null : () => _submit(input.text),
+                        icon: _sending
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.send_rounded, size: 20));
                 // Narrow panels give the text its own line above the actions.
                 if (box.maxWidth < 340) {
                   return Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1041,6 +1157,15 @@ class _RoomChatState extends State<RoomChat> {
                     ]);
               }),
             ])));
+    if (work == null) return box;
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      RoomWorkStrip(
+          work: work,
+          onStop: _stopWork,
+          onAnswer: _answer,
+          onRunAgain: widget.onSend == null ? null : _runAgain),
+      box,
+    ]);
   }
 
   Widget _composerAction(IconData icon, String tooltip, VoidCallback? onTap) =>
@@ -1419,9 +1544,13 @@ class _NoMessages extends StatelessWidget {
 // ("running in the sandbox…", "generating an image…", "thinking…", …) with a
 // minimal pulsing-dots animation.
 class _WorkingIndicator extends StatefulWidget {
-  const _WorkingIndicator({required this.agent, this.detail = ''});
+  const _WorkingIndicator(
+      {required this.agent, this.detail = '', this.draft = ''});
   final String agent;
   final String detail;
+
+  /// The answer being written, shown as it comes.
+  final String draft;
 
   @override
   State<_WorkingIndicator> createState() => _WorkingIndicatorState();
@@ -1444,6 +1573,38 @@ class _WorkingIndicatorState extends State<_WorkingIndicator>
     final scheme = Theme.of(context).colorScheme;
     final detail =
         widget.detail.trim().isEmpty ? 'agent is working' : widget.detail;
+    if (widget.draft.trim().isNotEmpty) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 560),
+          margin: const EdgeInsets.only(top: 10, left: 38),
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(widget.agent,
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: scheme.primary)),
+                  const SizedBox(width: 8),
+                  _WorkingDots(controller: _controller, color: scheme.primary),
+                ]),
+                const SizedBox(height: 4),
+                Text(widget.draft.trim(),
+                    key: const ValueKey('live-draft'),
+                    style: const TextStyle(fontSize: 14, height: 1.35)),
+              ]),
+        ),
+      );
+    }
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(

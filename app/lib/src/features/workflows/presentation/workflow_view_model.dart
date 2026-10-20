@@ -56,7 +56,7 @@ class WorkflowViewModel extends ChangeNotifier {
   }
 
   Future<List<Map<String, dynamic>>> execution(String id) =>
-      repository.execution(id);
+      repository.execution(spaceId, id);
 
   Future<bool> cancel(WorkflowRun run) =>
       _command(run.id, 'cancel', () => repository.cancel(run.id));

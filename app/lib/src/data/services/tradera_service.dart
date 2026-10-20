@@ -10,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../domain/models/market_quote.dart';
 import '../../domain/models/message.dart';
 import '../../domain/models/room.dart';
+import '../../features/rooms/domain/room_work.dart';
 import '../../features/tools/domain/widget_dsl.dart';
 import '../models/bot.dart';
 import '../models/llm_provider.dart';
@@ -608,6 +609,79 @@ class TraderaService implements BackendService {
   Future<void> deleteRoomMessage(String spaceId, String messageId) async {
     await client.call('spaces', 'message_delete',
         body: {'space': spaceId, 'message': messageId});
+  }
+
+  // ── room work: agent turns ───────────────────────────────────────────────
+
+  /// The project's agent work (newest first): runs live and queued now, and
+  /// each run's history. Every room's; callers keep their own.
+  Future<({List<WorkRun> live, List<WorkRun> queued, List<WorkEntry> entries})>
+      roomWork(String spaceId, {int limit = 40}) async {
+    final resp = await client
+        .call('spaces', 'turn_log', body: {'space': spaceId, 'limit': limit});
+    final body = (resp.body as Map?) ?? const {};
+    List<Map<String, dynamic>> rows(String key) => [
+          for (final r in (body[key] as List? ?? const []))
+            if (r is Map) Map<String, dynamic>.from(r)
+        ];
+    return (
+      live: rows('live').map(WorkRun.fromJson).toList(),
+      queued: rows('queued').map(WorkRun.fromJson).toList(),
+      entries: rows('entries').map(WorkEntry.fromJson).toList(),
+    );
+  }
+
+  /// What the room's agents are doing now and the answers they are writing.
+  /// Pass the last [seq] to wait (up to about 20 s) for the next change.
+  Future<({int seq, List<LiveActivity> activity})> roomLive(
+      String spaceId, String roomId,
+      {int seq = 0}) async {
+    final resp = await client.call('spaces', 'live',
+        body: {'space': spaceId, 'room': roomId, if (seq > 0) 'seq': seq},
+        requestTimeout: const Duration(seconds: 40));
+    final body = (resp.body as Map?) ?? const {};
+    return (
+      seq: (body['seq'] as num?)?.toInt() ?? 0,
+      activity: [
+        for (final a in (body['activity'] as List? ?? const []))
+          if (a is Map) LiveActivity.fromJson(Map<String, dynamic>.from(a))
+      ],
+    );
+  }
+
+  /// Stops a queued or running turn.
+  Future<void> cancelTurn(String turnId) async {
+    await client.call('spaces', 'turn_cancel', body: {'turn': turnId});
+  }
+
+  /// Runs an interrupted turn again, as it was.
+  Future<void> resumeTurn(String turnId) async {
+    await client.call('spaces', 'turn_resume',
+        body: {'turn': turnId, 'verdict': 'not_executed'});
+  }
+
+  /// The questions the project's agents are waiting on people for.
+  Future<List<AgentQuestion>> agentQuestions(String spaceId) async {
+    final resp = await client
+        .call('spaces', 'agent_questions', body: {'space': spaceId});
+    return [
+      for (final q in ((resp.body as Map?)?['questions'] as List? ?? const []))
+        if (q is Map) AgentQuestion.fromJson(Map<String, dynamic>.from(q))
+    ];
+  }
+
+  /// Answers an agent's question; the agent carries on with it.
+  Future<void> answerAgent(
+      String spaceId, AgentQuestion question, String answer) async {
+    await client.call('spaces', 'agent_answer',
+        body: {
+          'space': spaceId,
+          'room': question.roomId,
+          'bot': question.botId,
+          'question_id': question.id,
+          'answer': answer,
+        },
+        requestTimeout: const Duration(minutes: 10));
   }
 
   Future<RoomMessage> sendRoomMessage(

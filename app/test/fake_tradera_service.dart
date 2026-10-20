@@ -11,6 +11,7 @@ import 'package:tradera/src/data/services/tradera_service.dart';
 import 'package:tradera/src/domain/models/market_quote.dart';
 import 'package:tradera/src/domain/models/message.dart';
 import 'package:tradera/src/domain/models/room.dart';
+import 'package:tradera/src/features/rooms/domain/room_work.dart';
 import 'package:tradera/src/features/tools/domain/widget_dsl.dart';
 
 /// Deterministic in-memory `TraderaService` used by widget tests. It stands
@@ -635,6 +636,20 @@ class FakeTraderaService extends TraderaService {
 
   /// Simulates the backend live status sentence ("running in the sandbox…").
   String workingDetailAgent = '';
+
+  @override
+  Future<({List<WorkRun> live, List<WorkRun> queued, List<WorkEntry> entries})>
+      roomWork(String spaceId, {int limit = 40}) async =>
+          (live: <WorkRun>[], queued: <WorkRun>[], entries: <WorkEntry>[]);
+
+  @override
+  Future<({int seq, List<LiveActivity> activity})> roomLive(
+          String spaceId, String roomId,
+          {int seq = 0}) async =>
+      (seq: seq + 1, activity: <LiveActivity>[]);
+
+  @override
+  Future<List<AgentQuestion>> agentQuestions(String spaceId) async => const [];
 
   @override
   Future<RoomMessage> sendRoomMessage(

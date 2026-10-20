@@ -41,8 +41,7 @@ Future<void> openWorkspaceLink(
     if (!uri.hasScheme &&
         !uri.hasAuthority &&
         RegExp(r'^/v1/proxy/[0-9a-fA-F]{32}/').hasMatch(uri.path)) {
-      await openWorkspacePage(context, service, link,
-          title: 'Website preview');
+      await openWorkspacePage(context, service, link, title: 'Website preview');
       return;
     }
     if (!['http', 'https', 'mailto'].contains(uri.scheme)) {

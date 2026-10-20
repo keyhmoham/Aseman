@@ -53,14 +53,14 @@ func (s *Service) turnLog(ctx context.Context, req *api.ActionRequest) (*api.Act
 			if !t.StartedAt.IsZero() {
 				run["started_at"] = t.StartedAt
 			}
-			entries = append(entries, map[string]any{"at": t.CreatedAt, "kind": "accepted", "run_id": id, "bot_id": seed, "bot_name": name, "text": "Turn accepted and persisted"})
+			entries = append(entries, map[string]any{"at": t.CreatedAt, "kind": "accepted", "run_id": id, "turn_id": t.ID.String(), "room_id": t.RoomID.String(), "bot_id": seed, "bot_name": name, "text": "Turn accepted and persisted"})
 			switch t.Status {
 			case "queued":
 				queued = append(queued, run)
 			case "running", "blocked":
 				live = append(live, run)
 			default:
-				entries = append(entries, map[string]any{"at": t.UpdatedAt, "kind": t.Status, "run_id": id, "bot_id": seed, "bot_name": name, "text": t.Status, "error": t.Error, "duration_ms": max(positiveTime(t.EndedAt)-positiveTime(t.StartedAt), 0)})
+				entries = append(entries, map[string]any{"at": t.UpdatedAt, "kind": t.Status, "run_id": id, "turn_id": t.ID.String(), "room_id": t.RoomID.String(), "bot_id": seed, "bot_name": name, "text": t.Status, "error": t.Error, "prompt": t.Prompt, "duration_ms": max(positiveTime(t.EndedAt)-positiveTime(t.StartedAt), 0)})
 			}
 		}
 	}

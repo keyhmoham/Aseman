@@ -187,7 +187,10 @@ void main() {
       'answer': 'Builders'
     });
     expect(client.calls.last.timeout, const Duration(minutes: 10));
-    expect((await repository.execution('run')).single['result'], 'File sent');
+    expect((await repository.execution('space', 'run')).single['result'],
+        'File sent');
+    expect(client.calls.last.body,
+        {'space': 'space', 'turn': 'run', 'limit': 200});
     await repository.reconcile(
         'run', 'event', 'not_executed', 'No attachment exists');
     expect(client.calls.last.body, {

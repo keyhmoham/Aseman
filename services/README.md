@@ -322,6 +322,22 @@ A static app frontend talks to its backend through two actions:
 and `message.send` (fire-and-forget). Every such call is signed by the user,
 so the backend always sees the caller's identity.
 
+### A turn is the team's
+
+A room turn (`spaces.turn_submit`) runs as one **run** whose id is the turn's
+(`vmm.Execution.RunID`). Everything the turn's agents start joins it: agents
+they bring in by mentioning them (`spaces.message_send`) or messaging them
+(`users.dm_send`), and so on down the chain, and every command they run in the
+project computer, which carries the run's mark (`TRADERA_RUN`) into every
+process it starts. The turn stays `running` until every member is done, so it
+can be stopped for as long as anyone works on it. `spaces.turn_cancel` stops
+the whole run: the turn's agents, the agents they brought in (their runtime
+requests are dropped, which cancels them in the runtime), and the processes
+marked with the run in the project computer, backgrounded ones included. A
+stopped run refuses new work for a while (a message bringing in another
+agent, a command), so calls already on their way cannot restart it. A worker
+on another node sees the cancelled status at its next lease renewal (15 s).
+
 ## Tools: one form, three backends, two frontends
 
 A tool is created from one form (`tools.tool_create`) with two halves.

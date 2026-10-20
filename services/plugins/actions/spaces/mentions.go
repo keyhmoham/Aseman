@@ -33,6 +33,21 @@ type MentionReply struct {
 // message returns immediately. Agent replies are stored as their own chat
 // messages inside DeliverMentions, and each agent turn bills itself there.
 func (s *Service) deliverMentionsAsync(ctx context.Context, spaceID, roomID identity.ID, msg *message.Message, caller identity.ID) {
+	// Agents brought in by an agent work on its run and stop with it. They
+	// join before the delivery goes off on its own, so the run's turn cannot
+	// end first.
+	ctx, done := s.joinRun(ctx)
+	if ctx.Err() != nil {
+		done()
+		return
+	}
+	go func() {
+		defer done()
+		s.deliverMentions(ctx, spaceID, roomID, msg)
+	}()
+}
+
+func (s *Service) deliverMentions(ctx context.Context, spaceID, roomID identity.ID, msg *message.Message) {
 	if _, err := s.DeliverMentions(ctx, spaceID, roomID, msg); err != nil {
 		s.L.Warn("mention delivery failed", "space", spaceID.String(), "err", err)
 	}

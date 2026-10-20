@@ -239,9 +239,10 @@ func (s *Service) turnCancel(ctx context.Context, req *api.ActionRequest) (*api.
 	if !changed {
 		return nil, errs.Conflict("turn changed")
 	}
-	if c, ok := s.turnCancels.Load(t.ID.String()); ok {
-		c.(context.CancelFunc)()
-	}
+	// The whole team stops: the turn's agents, the agents they brought in and
+	// what they left running in the project computer. A worker on another
+	// node sees the status within its lease renewal and stops there.
+	s.stopRun(t.ID.String())
 	return helper.JSON(t)
 }
 func (s *Service) turnResume(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
@@ -330,8 +331,8 @@ func (s *Service) executeTurn(parent context.Context, t turn.Turn) {
 	}
 	ctx, cancel := context.WithTimeout(parent, 30*time.Minute)
 	defer cancel()
-	s.turnCancels.Store(t.ID.String(), context.CancelFunc(cancel))
-	defer s.turnCancels.Delete(t.ID.String())
+	team := s.openRun(t.ID.String(), t.SpaceID, cancel)
+	defer s.closeRun(t.ID.String(), team)
 	stop := make(chan struct{})
 	renewDone := make(chan struct{})
 	go func() {
@@ -347,7 +348,8 @@ func (s *Service) executeTurn(parent context.Context, t turn.Turn) {
 			case <-tick.C:
 				var current turn.Turn
 				if e := s.R.Get(ctx, "room_turns", t.ID, &current); e != nil || current.Status != "running" {
-					cancel()
+					// Stopped from another node (or gone): stop the team here.
+					s.stopRun(t.ID.String())
 					return
 				}
 				old := current.LeaseUntil
@@ -383,6 +385,9 @@ func (s *Service) executeTurn(parent context.Context, t turn.Turn) {
 	tracer.Add("queue", "waiting for a worker and the room", t.CreatedAt, t.StartedAt.Sub(t.CreatedAt))
 	// Each agent turn bills the turn's actor itself (runAgentTurn).
 	_, runErr := s.DeliverMentions(execution, t.SpaceID, t.RoomID, msg)
+	// The turn is the team's: it runs, and can be stopped, until every agent
+	// brought in on it is done too.
+	team.waitTeam(ctx)
 	close(stop)
 	<-renewDone
 	finishCtx := context.WithoutCancel(parent)

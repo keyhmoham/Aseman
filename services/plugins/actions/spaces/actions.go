@@ -957,6 +957,9 @@ func (a *msgSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	if err := helper.RequireAuthenticated(req); err != nil {
 		return nil, err
 	}
+	if a.s.runStopped(ctx) {
+		return nil, errs.New(errs.CodeUnavailable, "the work was stopped")
+	}
 	var in struct {
 		Space       string   `json:"space"`
 		Room        string   `json:"room"`
@@ -1037,7 +1040,7 @@ func (a *msgSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	if payer == req.Caller.ID {
 		deliveryCtx = context.Background()
 	}
-	go a.s.deliverMentionsAsync(deliveryCtx, spID, roomID, msg, req.Caller.ID)
+	a.s.deliverMentionsAsync(deliveryCtx, spID, roomID, msg, req.Caller.ID)
 	out := map[string]any{"message_id": id.String(), "ok": true}
 	return helper.JSON(out)
 }

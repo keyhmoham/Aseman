@@ -4,6 +4,7 @@ relay) and its tools are the runtime's MCP server."""
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -402,3 +403,82 @@ async def test_the_runtimes_http_contract_on_opencode(platform: Platform, tmp_pa
             assert qs and qs[0]["question"] == "Sure?"
             res = await client.post("/v1/answers", headers=headers, json=turn_request(CODER, "yes", token="tok-coder"))
             assert res.json() == {"reply": "went ahead", "status": "done", "answered": True, "error": ""}
+
+
+# --- what made agents loop and repeat themselves (regressions) ---------------------
+
+
+async def test_a_large_conversation_is_compacted_between_turns_and_never_continued(
+        platform: Platform, tmp_path: Path, engine: Any) -> None:
+    """OpenCode's automatic compaction compacted after the agent's final answer
+    and made it "continue": the agent went back over finished work, and the
+    compaction itself ran on the agent's prompt, so its summary was one more
+    answer and the agent lost its history."""
+    r = runner(platform, tmp_path, engine)
+    platform.llm = [say("first answer", prompt_tokens=7000)]
+    out = await r.prompt(turn_request(CODER, "hello", token="tok-coder", context_window=8000))
+    assert out.reply == "first answer" and len(platform.llm_requests) == 1  # no compaction, no "continue"
+    platform.llm = [say("SUMMARY: ann said hello; the agent answered."), say("second answer")]
+    out = await r.prompt(turn_request(CODER, "second", token="tok-coder", context_window=8000))
+    assert out.status == "done" and out.reply == "second answer", out
+    compaction, answer = platform.llm_requests[1:]
+    assert system_of(compaction).startswith("You summarize an AI agent's conversation")
+    assert "tools" not in compaction and "[runtime note]" not in user_text(compaction)
+    assert system_of(answer).startswith("You are coder.")
+    assert "SUMMARY: ann said hello" in str(answer["messages"]) and "first answer" not in str(answer["messages"])
+    assert "Continue if you have next steps" not in str(platform.llm_requests)
+    # Only the agent's own calls count against its turn.
+    assert len(platform.llm_requests) == 3
+
+
+async def test_large_tool_output_is_never_hidden_behind_a_path_the_agent_cannot_read(
+        platform: Platform, tmp_path: Path, engine: Any) -> None:
+    """OpenCode truncated large output and pointed the agent to a file in the
+    runtime, which its sandbox tools cannot read: it tried again and again."""
+    platform.llm = [use("execute", {"command": "seq 1 4000"}), use("execute", {"command": "seq 1 40000"}), say("ok")]
+    r = runner(platform, tmp_path, engine)
+    out = await r.prompt(turn_request(CODER, "count", token="tok-coder"))
+    assert out.reply == "ok", out
+    tools = [m for m in platform.llm_requests[-1]["messages"] if m.get("role") == "tool"]
+    small, large = (str(t["content"]) for t in tools)
+    assert "truncated" not in small and small.rstrip().endswith("4000") or "4000" in small
+    assert "tool-output" not in small + large and "Use Grep" not in small + large
+    # A result too large for the context is in a file in the sandbox, which read_file reads.
+    assert "/large_tool_results/" in large
+    path = large.split("/large_tool_results/")[1].split()[0].strip("`'\".,)")
+    assert (WORKSPACE.parent / "large_tool_results" / path).exists() or "read_file" in large
+
+
+async def test_a_turn_that_runs_past_its_budget_is_stopped(platform: Platform, tmp_path: Path, engine: Any) -> None:
+    # A model that keeps calling tools even when it is given none.
+    platform.llm = [use("execute", {"command": "echo again"})] * 30
+    r = runner(platform, tmp_path, engine)
+    out = await r.prompt(turn_request(CODER, "loop", token="tok-coder", max_turns=3))
+    assert out.status == "done" and "ran out of steps" in out.reply, out
+    assert len(platform.llm_requests) <= 3 + 3
+
+
+async def test_tool_schemas_are_the_deepagents_engines(platform: Platform, tmp_path: Path, engine: Any) -> None:
+    platform.llm = [say("hi")]
+    await runner(platform, tmp_path, engine).prompt(turn_request(LEAD, "hi", token="tok-lead", role="lead"))
+    for t in platform.llm_requests[0]["tools"]:
+        params = json.dumps(t["function"]["parameters"])
+        assert '"title"' not in params and "$ref" not in params, t["function"]["name"]
+    todos = next(t for t in platform.llm_requests[0]["tools"] if t["function"]["name"] == "write_todos")
+    status = todos["function"]["parameters"]["properties"]["todos"]["items"]["properties"]["status"]
+    assert status["enum"] == ["pending", "in_progress", "completed"]
+
+
+@pytest.mark.parametrize("status,message", [(504, "LLM provider did not start responding within 2m0s"),
+                                            (429, "rate limit exceeded"), (502, "the provider is overloaded")])
+async def test_a_failed_model_call_ends_the_turn_with_the_nodes_words(
+        platform: Platform, tmp_path: Path, engine: Any, status: int, message: str) -> None:
+    """OpenCode retried such failures without end (by status or by wording),
+    which turned a dead provider into minutes of silence."""
+    import httpx
+
+    platform.llm = [lambda req: httpx.Response(status, json={"error": {"message": message}})] * 10
+    out = await runner(platform, tmp_path, engine).prompt(turn_request(CODER, "hi", token="tok-coder"))
+    assert out.status == "failed" and out.error == message, out
+    assert len(platform.llm_requests) == 1
+    assert any(e.get("status") == "model request failed" and message in e.get("text", "") for e in platform.logs)

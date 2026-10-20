@@ -34,13 +34,22 @@ from ..decision import approval, completion, progress, routing
 from ..decision import tools as choosing
 from ..decision.middleware import DELIVERY_TOOLS, last_request
 from ..worklog import WorkLog, _STATUS, _TODO_MARK, _args, _clip
-from . import convert
+from . import convert, diet
 
 log = logging.getLogger("tradera.agents.opencode")
 
 NOTE = guardlib.NOTE
+#: The agent's own OpenCode agent (workspace.py); OpenCode's others are its own work.
+AGENT = "tradera"
 #: What a paused turn's model is answered with (it is not shown to anyone).
 PAUSED_REPLY = "(waiting for people to answer)"
+#: Model calls past the budget, or compactions in one turn, after which the turn is ended.
+OVERRUN = 3
+MAX_COMPACTIONS = 3
+#: A tool result kept whole when there is no sandbox to put the rest in (characters).
+NO_SANDBOX_MAX_CHARS = 40_000
+STOPPED_REPLY = ("I ran out of steps for this turn before finishing. Ask me to continue and I will pick up "
+                 "where I left off.")
 
 ASKED = ("Your question is posted in the room and your work pauses until a person answers. End your turn now "
          "without another tool call; the answer arrives as the next message.")
@@ -58,6 +67,9 @@ class Run:
     """A project OpenCode is working on right now (subclasses set ``key`` and
     ``root_session``, the session the run's own prompt goes to)."""
 
+    #: The node's own words for the last model call that failed (relay.py).
+    failure = ""
+
     #: Whether the model sees tools under the agent's names (convert.py), or as OpenCode names them.
     translate = True
 
@@ -69,8 +81,8 @@ class Run:
         """The HTTP client its model calls go out on."""
         raise NotImplementedError
 
-    async def prepare(self, body: dict[str, Any], session: str) -> dict[str, Any] | None:
-        """The model request to send (None: answer it with PAUSED_REPLY)."""
+    async def prepare(self, body: dict[str, Any], session: str, agent: str = "") -> dict[str, Any] | str:
+        """The model request to send, or the text to answer it with right away."""
         return body
 
     async def model_started(self) -> None:
@@ -121,17 +133,15 @@ class Registry:
 
 
 def schema_of(tool: Any) -> dict[str, Any]:
-    """A LangChain tool's arguments as JSON schema (injected arguments left out)."""
-    raw = getattr(tool, "args_schema", None)
-    if isinstance(raw, dict):
-        schema = dict(raw)
-    else:
-        try:
-            schema = tool.tool_call_schema.model_json_schema()
-        except Exception:  # noqa: BLE001
-            schema = {"type": "object", "properties": {}}
-    schema.pop("title", None)
-    schema.pop("description", None)
+    """A LangChain tool's arguments as the model sees them on the deepagents
+    engine: LangChain's own conversion (references resolved, titles dropped,
+    injected arguments left out)."""
+    from langchain_core.utils.function_calling import convert_to_openai_tool
+
+    try:
+        schema = dict(convert_to_openai_tool(tool)["function"].get("parameters") or {})
+    except Exception:  # noqa: BLE001 - a tool whose schema cannot be converted takes free-form arguments
+        schema = {}
     schema["type"] = "object"
     schema.setdefault("properties", {})
     return schema
@@ -199,6 +209,10 @@ class TurnRun(Run):
     acted: bool = False
     delivered: list[str] = field(default_factory=list)
     trajectory: list[dict[str, Any]] = field(default_factory=list)  # for the harness (harness/)
+    compactions: int = 0
+    stopped: bool = False
+    # Called when the turn is stopped (engine.py aborts OpenCode's loop).
+    on_stop: Any = None
     _chosen: set[str] | None = None
     _hint: str = ""
     _decided: bool = False
@@ -216,25 +230,41 @@ class TurnRun(Run):
     def http(self) -> Any:
         return self.ctx.gateway.http
 
-    async def prepare(self, body: dict[str, Any], session: str) -> dict[str, Any] | None:
+    async def prepare(self, body: dict[str, Any], session: str, agent: str = "") -> dict[str, Any] | str:
         if self.paused:
-            return None
+            return PAUSED_REPLY
         body = convert.model_request(body)
         messages = list(body.get("messages") or [])
-        root = not session or session == self.root_session
+        # The agent's own calls (its OpenCode agent on its own session) get its
+        # prompt, guard, decision model and context diet. OpenCode's own work
+        # on the session (compacting it) and harness subagents keep their
+        # prompts: replacing a compaction's prompt with the agent's turned the
+        # summary into one more answer, and the agent lost its history.
+        own = agent == AGENT if agent else (not session or session == self.root_session)
+        if agent == "compaction":
+            self.compactions += 1
         if messages and messages[0].get("role") == "system":
-            # The agent's own prompt in its turn; a harness subagent keeps its
-            # own (without OpenCode's description of a directory nobody works in).
-            content = self.system if root else convert.strip_env(convert.text_of(messages[0].get("content")))
+            content = self.system if own else convert.strip_env(convert.text_of(messages[0].get("content")))
             messages[0] = {"role": "system", "content": content}
-        elif root:
+        elif own:
             messages.insert(0, {"role": "system", "content": self.system})
         tools = list(body.get("tools") or [])
-        lc = convert.to_langchain(messages)
-        notes: list[str] = []
-        if root:
+        if own:
             self.guard.calls += 1
             self._calls += 1
+            if self.stopped or self.guard.calls > self.guard.budget + OVERRUN or self.compactions > MAX_COMPACTIONS:
+                # The model was told to finish and OpenCode still goes on: end
+                # its loop rather than let it run on.
+                if not self.stopped:
+                    self.stopped = True
+                    log.warning("turn %s stopped: %d model calls, %d compactions", self.key, self.guard.calls,
+                                self.compactions)
+                    if self.on_stop is not None:
+                        asyncio.get_running_loop().create_task(self.on_stop())
+                return STOPPED_REPLY
+            # The guard and the decision model read the whole conversation; the model gets it on its diet.
+            lc = convert.to_langchain(messages)
+            messages = diet.trim(messages)
             tools, notes = await self._decide(lc, tools)
             if self.guard.exhausted:
                 notes.append("This turn has used all its steps: no more tools can run. Write your final answer "
@@ -242,8 +272,8 @@ class TurnRun(Run):
                 tools = []
             else:
                 notes += guardlib.notes(lc, self.guard.calls, self.guard.budget)
-        if notes:
-            messages.append(convert.note_message(NOTE + "\n".join(notes)))
+            if notes:
+                messages.append(convert.note_message(NOTE + "\n".join(notes)))
         body["messages"] = messages
         if tools:
             body["tools"] = tools
@@ -251,16 +281,16 @@ class TurnRun(Run):
             body.pop("tools", None)
             body.pop("tool_choice", None)
             body.pop("parallel_tool_calls", None)
-        agent = self.ctx.agent
+        definition = self.ctx.agent
         # The node picks the provider and model of the agent; its own output
         # limit applies unless the agent sets one.
-        body["model"] = agent.model or "default"
+        body["model"] = definition.model or "default"
         body.pop("max_tokens", None)
         body.pop("max_completion_tokens", None)
-        if agent.max_tokens:
-            body["max_tokens"] = agent.max_tokens
-        if agent.reasoning_effort:
-            body["reasoning_effort"] = agent.reasoning_effort
+        if definition.max_tokens:
+            body["max_tokens"] = definition.max_tokens
+        if definition.reasoning_effort and own:
+            body["reasoning_effort"] = definition.reasoning_effort
         if os.environ.get("TRADERA_STREAM", "1") == "0":
             body["stream"] = False
             body.pop("stream_options", None)
@@ -383,6 +413,9 @@ class TurnRun(Run):
             content = result.content
         else:
             content = result
+            if self.fs is None and isinstance(content, str) and len(content) > NO_SANDBOX_MAX_CHARS:
+                # Nowhere to put it: the start of it, as the deepagents engine's truncation would.
+                content = content[:NO_SANDBOX_MAX_CHARS] + f"\n… [{len(content) - NO_SANDBOX_MAX_CHARS} more characters cut]"
             if self.fs is not None and isinstance(content, str) and len(content) > 6000:
                 try:
                     msg, _ = await self.fs._aprocess_large_message(
@@ -448,11 +481,11 @@ class EditorRun(Run):
         return (self.node_url.rstrip("/") + "/deepagents/v1/learn/chat/completions",
                 {"X-Tradera-Runtime": self.secret, "X-Tradera-Space": self.space, "X-Tradera-Agent": self.agent_vm})
 
-    async def prepare(self, body: dict[str, Any], session: str) -> dict[str, Any] | None:
+    async def prepare(self, body: dict[str, Any], session: str, agent: str = "") -> dict[str, Any] | str:
         self.calls += 1
         messages = list(body.get("messages") or [])
-        if messages and messages[0].get("role") == "system" and self.system:
-            # The editor's mission first; OpenCode's own (its working directory
+        if messages and messages[0].get("role") == "system" and self.system and agent in ("", "editor"):
+            # The editor's mission first (not on OpenCode compacting its session); OpenCode's own (its working directory
             # is the editor's evidence) after it.
             text = convert.text_of(messages[0].get("content"))
             messages[0] = {"role": "system", "content": (self.system + "\n\n" + text).strip()}

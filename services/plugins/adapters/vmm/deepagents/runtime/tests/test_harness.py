@@ -62,9 +62,21 @@ class FakeEditor:
         raise AssertionError(stage)
 
 
-def ctx_for(platform: Platform, tmp_path: Path, agent: dict[str, Any] = CODER, **extra: Any) -> Any:
+def delivered(state: dict[str, Any], questions: dict[str, Any]) -> dict[str, Any]:
+    """The decision model: an answer delivers unless it is empty."""
+    return {k: {"probability": 0.9 if state.get("answer", "").strip() else 0.1} for k in questions}
+
+
+def ctx_for(platform: Platform, tmp_path: Path, agent: dict[str, Any] = CODER, *, judge: bool = True,
+            **extra: Any) -> Any:
+    from tradera_agents.decision import DecisionClient
+
     r = Runner(Store(str(tmp_path / "rt.db")), InMemorySaver(), gateway_factory=platform.gateway)
-    return r._context(turn_request(agent, "write the release notes", token="tok-coder", **extra))
+    ctx = r._context(turn_request(agent, "write the release notes", token="tok-coder", **extra))
+    if judge:
+        platform.decide = platform.decide or delivered
+        ctx.decision = DecisionClient(ctx.gateway, "jev")
+    return ctx
 
 
 def a_run(calls: int = 3, failed_tools: int = 0) -> Any:
@@ -134,6 +146,34 @@ async def test_a_probed_harness_that_does_worse_is_dropped(platform: Platform, t
     assert not ah.challenger.exists() and h2tree.read_tree(OPENCODE_SURFACE, ah.champion) == {}
     entry = next((ah.library / "harnesses").iterdir())
     assert "dropped" in (entry / "EXPERIENCE.md").read_text()
+
+
+async def test_no_cycle_without_a_decision_model_to_judge_it(platform: Platform, tmp_path: Path) -> None:
+    editor = FakeEditor()
+    h = Harness(tmp_path / "harness", editor, Settings(every=1, cooldown=0, probe_turns=1))
+    ctx = ctx_for(platform, tmp_path, judge=False)
+    view = await h.view(ctx)
+    await h.observe(ctx, a_run(failed_tools=3), Outcome(reply="", status="failed"), view)
+    await h.drain()
+    assert not editor.missions and view.agent.state().probe is None
+    assert view.agent.turns(1)[0]["status"] == "failed"  # still recorded
+
+
+async def test_a_probe_without_judged_turns_is_not_adopted(platform: Platform, tmp_path: Path) -> None:
+    h = Harness(tmp_path / "harness", FakeEditor(), Settings(every=50, cooldown=0, probe_turns=2))
+    ctx = ctx_for(platform, tmp_path)
+    view = await h.view(ctx)
+    await h.observe(ctx, a_run(failed_tools=3), Outcome(reply="", status="failed"), view)
+    await h.drain()
+    ctx.decision = None  # the decision model went off: the probed turns go unjudged
+    probe_view = await h.view(ctx)
+    for _ in range(2):
+        await h.observe(ctx, a_run(), Outcome(reply="Release notes for v2"), probe_view)
+    await h.drain()
+    ah = view.agent
+    assert ah.state().adopted == 0 and not ah.challenger.exists()
+    entry = next((ah.library / "harnesses").iterdir())
+    assert "not proven" in (entry / "EXPERIENCE.md").read_text()
 
 
 async def test_no_harness_for_requests_without_memory_or_when_off(platform: Platform, tmp_path: Path) -> None:
@@ -270,8 +310,11 @@ async def test_a_failed_turn_on_opencode_starts_an_improvement_cycle(platform: P
     engine.harness = h
     try:
         platform.llm_status = 400
+        platform.decide = delivered
         r = Runner(Store(str(tmp_path / "rt.db")), InMemorySaver(), gateway_factory=platform.gateway, engine=engine)
-        out = await r.prompt(turn_request(CODER, "write the release notes", token="tok-coder"))
+        req = turn_request(CODER, "write the release notes", token="tok-coder")
+        req["decision"] = {"enabled": True, "model": "jev"}
+        out = await r.prompt(req)
         assert out.status == "failed"
         await h.drain()
         ah = h.agent(ctx_for(platform, tmp_path))
@@ -280,7 +323,9 @@ async def test_a_failed_turn_on_opencode_starts_an_improvement_cycle(platform: P
         # The next turn works with the probed harness.
         platform.llm_status = 200
         platform.llm = [say("v2 notes")]
-        out = await r.prompt(turn_request(CODER, "again", token="tok-coder"))
+        req = turn_request(CODER, "again", token="tok-coder")
+        req["decision"] = {"enabled": True, "model": "jev"}
+        out = await r.prompt(req)
         assert out.reply == "v2 notes"
         assert "load the `release-notes` skill" in system_of(platform.llm_requests[-1])
         await h.drain()

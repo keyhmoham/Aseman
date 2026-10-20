@@ -159,7 +159,8 @@ class Platform:
         if calls:
             message["tool_calls"] = calls
         finish = "tool_calls" if calls else "stop"
-        usage = {"prompt_tokens": 100, "completion_tokens": 10, "total_tokens": 110}
+        prompt = int(step.get("prompt_tokens", 100))
+        usage = {"prompt_tokens": prompt, "completion_tokens": 10, "total_tokens": prompt + 10}
         if not req.get("stream"):
             return httpx.Response(200, json={"id": "c1", "object": "chat.completion", "created": 1, "model": "m",
                                              "choices": [{"index": 0, "message": message, "finish_reason": finish}],
@@ -328,9 +329,10 @@ class ScriptedModel(BaseChatModel):
         return ChatResult(generations=[ChatGeneration(message=step)])
 
 
-def say(text: str) -> dict[str, Any]:
-    """An LLM step (Platform.llm): the model answers with text."""
-    return {"content": text}
+def say(text: str, prompt_tokens: int = 100) -> dict[str, Any]:
+    """An LLM step (Platform.llm): the model answers with text (its call having
+    carried ``prompt_tokens``)."""
+    return {"content": text, "prompt_tokens": prompt_tokens}
 
 
 def use(name: str, args: dict[str, Any] | None = None, *more: tuple[str, dict[str, Any]], text: str = "") -> dict[str, Any]:

@@ -83,3 +83,31 @@ def test_tool_schemas_leave_injected_arguments_out() -> None:
     tools = {t.name: t for t in FilesystemMiddleware().tools}
     schema = schema_of(tools["read_file"])
     assert "file_path" in schema["properties"] and "runtime" not in schema["properties"]
+
+
+def test_the_diet_trims_old_output_long_arguments_and_old_pictures() -> None:
+    import json
+
+    from tradera_agents.opencode import diet
+
+    big = "x" * 20_000
+    msgs: list[dict] = [{"role": "system", "content": "s"}, {"role": "user", "content": "go"}]
+    for i in range(12):
+        msgs.append({"role": "assistant", "content": "", "tool_calls": [
+            {"id": f"c{i}", "type": "function", "function": {"name": "write_file" if i == 0 else "execute",
+                                                             "arguments": json.dumps({"content": big, "n": i})}}]})
+        msgs.append({"role": "tool", "tool_call_id": f"c{i}", "content": big})
+    msgs.append({"role": "user", "content": [{"type": "text", "text": "a"}, {"type": "image_url", "image_url": {"url": "data:1"}}]})
+    msgs.insert(2, {"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:0"}}]})
+    msgs.insert(3, {"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:00"}}]})
+    out = diet.trim(msgs)
+    tools = [m for m in out if m["role"] == "tool"]
+    assert all(len(t["content"]) < 1000 for t in tools[:-8]) and all(t["content"] == big for t in tools[-8:])
+    first_call = json.loads(out[4]["tool_calls"][0]["function"]["arguments"])  # still valid JSON
+    assert len(first_call["content"]) < 1100 and first_call["n"] == 0
+    assert json.loads(out[-3]["tool_calls"][0]["function"]["arguments"])["content"] == big
+    pictures = [m for m in out if isinstance(m["content"], list) and any(p.get("type") == "image_url" for p in m["content"])]
+    assert len(pictures) == 2 and out[-1]["content"][1]["type"] == "image_url"
+    assert out == diet.trim(msgs)  # the same every call: the prompt cache keeps matching
+    small = [{"role": "user", "content": "hi"}, {"role": "tool", "tool_call_id": "1", "content": "short"}]
+    assert diet.trim(small) == small

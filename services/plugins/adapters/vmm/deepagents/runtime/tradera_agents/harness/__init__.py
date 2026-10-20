@@ -22,9 +22,11 @@ effects: messages, files, purchases):
   practitioner of its work knows). **Compose**: harness2's composer merges
   what the evidence supports into one harness (or keeps the current one).
   **Probe**: the composed harness works the agent's next turns instead of the
-  current one, and how those turns go is compared with how the current
-  harness's turns went; it is adopted when it does at least as well, and
-  dropped otherwise.
+  current one, and how those turns go — whether they delivered, as the
+  decision model judges, how many steps they took, how many tools failed — is
+  compared with how the current harness's turns went; it is adopted only when
+  it does at least as well on that evidence, and dropped otherwise. Without a
+  decision model nothing could be shown to do better, so no cycle runs.
 * harnessing level: harness2's experience reflector reads the whole cycle and
   writes the lesson the evidence supports into the agent's experience library
   (harness2's Library: the adopted harness and its EXPERIENCE.md), which every
@@ -298,6 +300,7 @@ class Harness:
         if view.arm == "challenger" and state.probe is not None:
             state.probe.turns += 1
             state.probe.outcomes.append(quality)
+            state.probe.judged += int(complete is not None or outcome.status == "failed")
             if state.probe.turns >= self.settings.probe_turns:
                 self._spawn(ah, self._settle(ah, state, bench, ctx.space, ctx.agent.vm_id))
                 return
@@ -305,6 +308,11 @@ class Harness:
             return
         state.baseline = (state.baseline + [quality])[-20:]
         state.turns_since += 1
+        if decision is None or not decision.enabled:
+            # Without the decision model a new harness could never be shown to
+            # do better (see _settle): no cycle is spent on one.
+            ah.save(state)
+            return
         due = quality < self.settings.low or state.turns_since >= self.settings.every
         cooled = time.time() - state.last_cycle >= self.settings.cooldown
         if due and cooled and state.probe is None and str(ah.dir) not in self._busy:
@@ -441,7 +449,11 @@ class Harness:
         challenger = h2tree.read_tree(OPENCODE_SURFACE, ah.challenger)
         baseline = _mean(state.baseline[-10:]) if state.baseline else 0.6
         probed = _mean(probe.outcomes)
-        adopted = probed >= baseline - self.settings.tolerance
+        # Adopted only on evidence: enough probed turns judged (did they deliver?),
+        # going at least as well as the current harness. A harness whose turns
+        # only show that the agent answered is not kept.
+        judged = probe.judged * 2 >= len(probe.outcomes)
+        adopted = judged and probed >= baseline - self.settings.tolerance
         if adopted:
             ah.adopt()
             state.adopted += 1
@@ -457,10 +469,12 @@ class Harness:
             layout = self._evidence(work, ah, challenger)
             h2tree.write_tree(OPENCODE_SURFACE, base, work / "context" / "base_harness")
             layout += "\ncontext/base_harness/           the harness before this cycle"
+            verdict = ("at least as well, so it was ADOPTED" if adopted else
+                       "worse, so it was DROPPED" if judged else
+                       "without an independent judgement of whether they delivered, so it was DROPPED (not proven)")
             what = (f"The edited harness (context/harness/) worked the agent's next {len(probe.outcomes)} real "
                     f"requests (the rollouts marked 'probed harness'). Compared with how the requests before went "
-                    f"under the base harness, they went {'at least as well' if adopted else 'worse'}, so it was "
-                    f"{'ADOPTED' if adopted else 'DROPPED'}. The proposers' notes:\n\n{probe.notes or '(none)'}")
+                    f"under the base harness, they went {verdict}. The proposers' notes:\n\n{probe.notes or '(none)'}")
             text = await self._stage(work, h2prompts.experience(bench) + "\n\n# WHAT HAPPENED\n\n" + what, layout,
                                      space, agent_vm, f"harness {probe.cycle} reflect")
             experience = _parse_experience(text)

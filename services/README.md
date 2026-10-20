@@ -535,7 +535,9 @@ Every feature is on, mapped onto the platform:
   agent's recent trajectories: the editor proposes an INV (how it works) and a
   DOM (what a practitioner knows) candidate, the composer merges what the
   evidence supports, the composed harness is **probed on the agent's next real
-  turns** and adopted only if they go at least as well, and the experience
+  turns** and adopted only if they go at least as well — whether they
+  delivered is judged by the decision model, so self-improvement runs only
+  when the admin has one on — and the experience
   reflector writes the lesson into the agent's harness2 library, which later
   cycles read. Requests are never re-run (that would repeat their effects).
   It runs on the agent's own model through the learn endpoint, billed to the

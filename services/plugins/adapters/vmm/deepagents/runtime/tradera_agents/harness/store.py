@@ -38,6 +38,8 @@ class Probe:
     started: float
     turns: int = 0
     outcomes: list[float] = field(default_factory=list)
+    # Probed turns whose delivery the decision model judged (not only "it answered").
+    judged: int = 0
     notes: str = ""
 
 

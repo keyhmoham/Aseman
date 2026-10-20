@@ -26,7 +26,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from . import convert
-from .runs import PAUSED_REPLY, Registry
+from .runs import Registry
 
 log = logging.getLogger("tradera.agents.opencode")
 
@@ -66,6 +66,36 @@ def _as_stream(out: dict[str, Any]) -> StreamingResponse:
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+#: What OpenCode is told when the node fails a model call.
+FAILED = "The model call failed; the agent's work log has the details."
+
+
+def _final_failure(run: Any, status: int, data: bytes, content_type: str) -> Response:
+    """The node's failure, as one OpenCode does not retry.
+
+    The node owns provider deadlines and retries and says precisely what
+    failed (no first event, an idle stream, a rate limit, a provider down).
+    OpenCode retries without end any failure whose status or wording looks
+    transient ("rate limit", "overloaded", "server error", a 5xx code ...),
+    turning one dead provider into minutes of silence; the deepagents engine
+    made its calls with no retries for the same reason. So OpenCode gets a
+    plain, final failure, and the node's own words are kept on the run for the
+    turn's outcome (and are in the work log already). A window overflow is
+    passed on as it is: OpenCode recognizes it and the engine recovers from it.
+    """
+    text = data[:2000].decode(errors="replace")
+    if status == 400 and "context_length_exceeded" in text:
+        return Response(data, status_code=status, media_type=content_type)
+    try:
+        body = json.loads(data)
+        error = body.get("error")
+        message = error.get("message") if isinstance(error, dict) else error
+    except (ValueError, AttributeError):
+        message = None
+    run.failure = str(message or text or f"HTTP {status}").strip()[:1000]
+    return _error(400, FAILED)
 
 
 class Assembled:
@@ -114,9 +144,10 @@ def router(registry: Registry) -> APIRouter:
             return _error(409, "this agent is not working on a turn now")
         body = await request.json()
         wanted_stream = bool(body.get("stream"))
-        prepared = await run.prepare(body, request.headers.get("x-tradera-session", ""))
-        if prepared is None:
-            return _synthetic(PAUSED_REPLY, wanted_stream)
+        prepared = await run.prepare(body, request.headers.get("x-tradera-session", ""),
+                                     request.headers.get("x-tradera-agent", ""))
+        if isinstance(prepared, str):
+            return _synthetic(prepared, wanted_stream)
         stream = bool(prepared.get("stream"))
         url, headers = run.upstream()
         await run.model_started()
@@ -125,14 +156,14 @@ def router(registry: Registry) -> APIRouter:
             resp = await client.send(client.build_request("POST", url, json=prepared, headers=headers,
                                                           timeout=LLM_TIMEOUT), stream=True)
         except httpx.HTTPError as exc:
-            await run.model_finished(None, f"the node's model endpoint is unreachable: {exc}")
-            return _error(502, f"model endpoint unreachable: {exc}")
+            run.failure = f"the node's model endpoint is unreachable: {exc}"
+            await run.model_finished(None, run.failure)
+            return _error(400, FAILED)
         if resp.status_code >= 300:
             data = await resp.aread()
             await resp.aclose()
             await run.model_finished(None, f"HTTP {resp.status_code}: {data[:800].decode(errors='replace')}")
-            return Response(data, status_code=resp.status_code,
-                            media_type=resp.headers.get("content-type", "application/json"))
+            return _final_failure(run, resp.status_code, data, resp.headers.get("content-type", "application/json"))
         if not stream or "event-stream" not in resp.headers.get("content-type", ""):
             data = await resp.aread()
             await resp.aclose()

@@ -227,6 +227,11 @@ class OpenCodeServer:
         return await self.request("POST", f"/session/{session_id}/message", directory, json=body,
                                   timeout=PROMPT_TIMEOUT)
 
+    async def summarize(self, directory: str, session_id: str) -> None:
+        """Compact a session's conversation (its next prompt starts from the summary)."""
+        await self.request("POST", f"/session/{session_id}/summarize", directory,
+                           json={"providerID": "tradera", "modelID": "agent"}, timeout=PROMPT_TIMEOUT)
+
     async def abort(self, directory: str, session_id: str) -> None:
         try:
             await self.request("POST", f"/session/{session_id}/abort", directory)

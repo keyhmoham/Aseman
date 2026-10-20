@@ -5,9 +5,17 @@ instance) is an OpenCode project directory under the runtime's data volume,
 with an ``opencode.json`` the runtime writes:
 
 * the one provider, ``tradera``: the relay to the node for this project
-  (relay.py), whatever model the admin configured for the agent — the model's
-  window and output limit are given so OpenCode compacts the conversation in
-  time;
+  (relay.py), whatever model the admin configured for the agent;
+* compaction between turns only (engine.py compacts a session when it has
+  grown past where the deepagents engine summarized, well before the model's
+  window is full), with a prompt that keeps what a Tradera agent needs to go
+  on. OpenCode's own automatic compaction is off: it compacts after the
+  agent's final answer too and then makes the agent "continue", which sends
+  it back over work it had finished and replaces its answer;
+* no truncation of tool output by OpenCode: it would save the rest in the
+  runtime and point the agent to a file its tools cannot reach (they work in
+  the space's sandbox). Large results go to a file in the sandbox instead
+  (runs.py, the deepagents engine's own eviction);
 * the one MCP server, ``tradera``: the agent's tools (mcp.py);
 * the agent ``tradera``: every tool but the runtime's denied, OpenCode's
   ``skill`` and ``task`` tools on when the agent's harness has skills or
@@ -29,6 +37,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .. import economy
 from ..context import AgentDef
 from . import convert
 
@@ -51,6 +60,32 @@ class HarnessFiles:
 
 def project_key(base_thread: str) -> str:
     return hashlib.sha256(base_thread.encode()).hexdigest()[:24]
+
+
+COMPACTION_PROMPT = """\
+You summarize an AI agent's conversation so that it can go on with its work from
+your summary alone: everything before it is dropped from its context.
+
+The agent works on Tradera, in a shared project space: it answers requests of
+people and of other agents in chat rooms, works on the project's shared Linux
+computer (files under /workspace), uses the project's tools and hands work to
+other agents. Write, in this order and only what the conversation shows:
+
+1. The request being worked on, in the requester's words, with who asked.
+2. What is done: results, decisions and their reasons, and where every file,
+   page or artifact made is (exact paths, ids, URLs).
+3. What failed and why, and what was learned from it (so it is not repeated).
+4. What is still open: the plan's remaining steps, questions waiting on people,
+   tasks handed to other agents (their task ids and who has them).
+5. Facts the next steps need: names, ids, numbers, commands that worked.
+
+Be complete on these and brief on everything else. Do not continue the work,
+do not answer the request, and do not address anyone: write only the summary."""
+
+
+def compaction_limit(window_tokens: int) -> int:
+    """Where the conversation is compacted: where the deepagents engine summarized."""
+    return max(4_000, min(economy.SUMMARIZE_ABOVE, int(window_tokens * economy.SUMMARIZE_SHARE)))
 
 
 def window(agent: AgentDef) -> int:
@@ -85,11 +120,13 @@ class Projects:
             permission["skill"] = "allow"
         if harness.subagents:
             permission["task"] = "allow"
+        output = agent.max_tokens or DEFAULT_OUTPUT
         model: dict[str, Any] = {"name": agent.model or "agent", "tool_call": True, "attachment": True,
                                  "temperature": True, "reasoning": bool(agent.reasoning_effort),
-                                 "limit": {"context": window(agent), "output": agent.max_tokens or DEFAULT_OUTPUT}}
+                                 "limit": {"context": window(agent), "output": output}}
         agents: dict[str, Any] = {"tradera": {"mode": "primary", "prompt": "", "steps": steps,
-                                              "permission": permission, "description": agent.description[:200]}}
+                                              "permission": permission, "description": agent.description[:200]},
+                                  "compaction": {"prompt": COMPACTION_PROMPT}}
         for name, sub in harness.subagents.items():
             agents[name] = {"mode": "subagent", "description": str(sub.get("description") or name)[:500],
                             "prompt": str(sub.get("prompt") or ""), "steps": max(5, steps // 3),
@@ -114,7 +151,8 @@ class Projects:
             "agent": agents,
             "plugin": plugin_files,
             "skills": {"paths": [str(directory / "harness" / "skills")]} if harness.skills else {},
-            "compaction": {"auto": True, "prune": True},
+            "compaction": {"auto": False, "prune": True},
+            "tool_output": {"max_lines": 1_000_000, "max_bytes": 1_000_000_000},
             "experimental": {"mcp_timeout": 3_600_000},
         }
 

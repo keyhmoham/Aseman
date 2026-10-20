@@ -55,7 +55,8 @@ class Editor:
                                  "permission": {"*": "deny", **tools, "external_directory": "deny",
                                                 "doom_loop": "allow", "question": "deny"}}},
             "plugin": [PLUGIN.as_uri()],
-            "compaction": {"auto": True, "prune": True},
+            # No automatic compaction: OpenCode would make the editor "continue" after it.
+            "compaction": {"auto": False, "prune": True},
         }
 
     async def session(self, workdir: Path, mission: str, *, space: str, agent_vm: str, label: str) -> str:

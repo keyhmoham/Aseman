@@ -28,10 +28,11 @@ import asyncio
 import hashlib
 import json
 import logging
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import BaseTool, tool
+from pydantic import BaseModel, Field
 
 from .. import economy, guard as guardlib, subagents
 from ..context import TurnContext
@@ -39,9 +40,9 @@ from ..decision import completion
 from ..gateway import GatewayError
 from ..store import Question, Store
 from . import convert
-from .runs import NOTE, Registry, TurnRun
+from .runs import NOTE, STOPPED_REPLY, Registry, TurnRun
 from .server import OpenCodeError, OpenCodeServer
-from .workspace import HarnessFiles, Projects, project_key
+from .workspace import HarnessFiles, Projects, compaction_limit, project_key, window
 
 log = logging.getLogger("tradera.agents.opencode")
 
@@ -49,13 +50,18 @@ _OVERFLOW = ("context_length_exceeded", "context length", "context window", "max
              "too many input tokens", "exceeds model limit", "context limit")
 
 
+class Todo(BaseModel):
+    content: str = Field(description="The step.")
+    status: Literal["pending", "in_progress", "completed"] = Field(description="Where the step is.")
+
+
 def planning_tool(ctx: TurnContext, store: Store) -> BaseTool:
-    """``write_todos`` on the OpenCode engine: the plan is kept per thread."""
+    """``write_todos`` on the OpenCode engine (the deepagents engine's own
+    schema and wording); the plan is kept per thread."""
 
     @tool(description=economy.TODO_TOOL)
-    async def write_todos(todos: list[dict[str, str]]) -> str:
-        clean = [{"content": str(t.get("content", "")), "status": str(t.get("status") or "pending")}
-                 for t in todos if isinstance(t, dict) and t.get("content")]
+    async def write_todos(todos: list[Todo]) -> str:
+        clean = [{"content": t.content, "status": t.status} for t in todos if t.content.strip()]
         store.put_todos(ctx.thread_id, clean)
         marks = {"completed": "[x]", "in_progress": "[~]", "pending": "[ ]"}
         return "Plan updated:\n" + "\n".join(f"{marks.get(t['status'], '[ ]')} {t['content']}" for t in clean)
@@ -222,7 +228,13 @@ class OpenCodeEngine:
             await self._connect(directory, run)
             session = await self._session(runner.store, ctx, directory)
             run.root_session = session
+            await self._compact(ctx, directory, session)
+            run.on_stop = lambda: self.server.abort(directory, session)
             out = await self.server.prompt(directory, session, parts=parts, system=run.system)
+            if run.stopped:
+                # The turn ran past its budget and OpenCode was stopped: what it got done.
+                text = await self._progress(runner, ctx, directory, session)
+                return runner._record(ctx, runner_outcome(reply=f"{text}\n\n{STOPPED_REPLY}".strip())), True
             error = (out.get("info") or {}).get("error")
             if isinstance(error, dict) and error:
                 if is_overflow(error):
@@ -230,7 +242,9 @@ class OpenCodeEngine:
                                                   retry_input), False
                 if run.paused:
                     return runner._record(ctx, runner._awaiting(ctx, [{"action_requests": run.actions}])), True
-                message = str((error.get("data") or {}).get("message") or error.get("name") or "the agent's run failed")
+                # The node's own words for a failed model call (relay.py), else OpenCode's.
+                message = run.failure or str((error.get("data") or {}).get("message") or error.get("name")
+                                             or "the agent's run failed")
                 return runner_outcome(reply=await self._progress(runner, ctx, directory, session), status="failed",
                                       error=message), True
             if run.paused:
@@ -282,6 +296,31 @@ class OpenCodeEngine:
         sid = await self.server.create_session(directory, title)
         store.put_session(ctx.thread_id, sid)
         return sid
+
+    async def _compact(self, ctx: TurnContext, directory: str, session: str) -> None:
+        """Compact the session before the turn when its last call carried more
+        than the deepagents engine let a conversation grow to: the turn starts
+        from a summary instead of the whole history."""
+        limit = compaction_limit(window(ctx.agent))
+        try:
+            messages = await self.server.messages(directory, session)
+        except OpenCodeError:
+            return
+        for m in reversed(messages):
+            info = m.get("info") or {}
+            if info.get("role") != "assistant" or info.get("summary"):
+                if info.get("summary"):
+                    return  # already compacted since
+                continue
+            tokens = info.get("tokens") or {}
+            used = int(tokens.get("input") or 0) + int((tokens.get("cache") or {}).get("read") or 0) + \
+                int(tokens.get("output") or 0)
+            if not used:
+                continue  # an answer the runtime gave itself (a pause, a stop): no measure of the context
+            if used > limit:
+                log.info("compacting %s for %s (%d tokens > %d)", session, ctx.agent.name, used, limit)
+                await self.server.summarize(directory, session)
+            return
 
     async def _last_text(self, directory: str, session: str) -> str:
         """The agent's last words since the message it answers."""

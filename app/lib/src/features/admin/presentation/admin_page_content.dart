@@ -59,6 +59,10 @@ class AdminPageContent extends StatefulWidget {
 
 class _AppPageContentState extends State<AdminPageContent> {
   final search = TextEditingController();
+
+  /// A provider picked on a model picker that offers no model for it yet:
+  /// shown, but not saved (the node takes a provider only with a model).
+  final Map<String, String> _pickedProvider = {};
   String filter = 'all';
 
   /// Which chat reports are listed (the page starts with the open ones).
@@ -2855,23 +2859,26 @@ class _AppPageContentState extends State<AdminPageContent> {
               title: enabled ? 'On' : 'Off',
               subtitle: enabled
                   ? 'Decisions use the fast model below together with each agent’s own model.'
-                  : 'Every agent decides with its own model.',
+                  : modelId.isEmpty
+                      ? 'Pick a provider and model below to turn it on. Until then every agent decides with its own model.'
+                      : 'Every agent decides with its own model.',
               value: enabled,
-              onChanged: (value) => widget.onDirectAction('llm',
-                  'llm_decision_set', _decisionBody(setting, enabled: value)),
+              onChanged: modelId.isEmpty && !enabled
+                  ? null
+                  : (value) => widget.onDirectAction('llm', 'llm_decision_set',
+                      _decisionBody(setting, enabled: value)),
             ),
             const SizedBox(height: 20),
             _modelPicker(
+              slot: 'decision',
               providers: providers,
               providerId: providerId,
               modelId: modelId,
-              models: _decisionModels(providers, providerId),
-              onProvider: (value) => widget.onDirectAction(
+              modelsOf: (id) => _decisionModels(providers, id),
+              onSelect: (provider, model) => widget.onDirectAction(
                   'llm',
                   'llm_decision_set',
-                  _decisionBody(setting, provider: value, model: '')),
-              onModel: (value) => widget.onDirectAction('llm',
-                  'llm_decision_set', _decisionBody(setting, model: value)),
+                  _decisionBody(setting, provider: provider, model: model)),
             ),
           ]),
         ),
@@ -2902,9 +2909,10 @@ class _AppPageContentState extends State<AdminPageContent> {
           'provider_id': provider ?? providerId,
           'model_id': model ?? modelId,
         };
-    final provider = providers
+    List<Map<String, dynamic>> imageModels(String id) => _listOfMaps(providers
         .cast<Map<String, dynamic>?>()
-        .firstWhere((p) => '${p?['id']}' == providerId, orElse: () => null);
+        .firstWhere((p) => '${p?['id']}' == id,
+            orElse: () => null)?['image_models']);
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 760),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2922,21 +2930,24 @@ class _AppPageContentState extends State<AdminPageContent> {
               title: enabled ? 'On' : 'Off',
               subtitle: enabled
                   ? 'Images are made with the model below and charged at its prices on the Models page.'
-                  : 'Agents cannot make images.',
+                  : modelId.isEmpty
+                      ? 'Pick a provider and model below to turn it on. Until then agents cannot make images.'
+                      : 'Agents cannot make images.',
               value: enabled,
-              onChanged: (value) => widget.onDirectAction(
-                  'llm', 'llm_image_set', body(on: value)),
+              onChanged: modelId.isEmpty && !enabled
+                  ? null
+                  : (value) => widget.onDirectAction(
+                      'llm', 'llm_image_set', body(on: value)),
             ),
             const SizedBox(height: 20),
             _modelPicker(
+              slot: 'image',
               providers: providers,
               providerId: providerId,
               modelId: modelId,
-              models: _listOfMaps(provider?['image_models']),
-              onProvider: (value) => widget.onDirectAction(
-                  'llm', 'llm_image_set', body(provider: value, model: '')),
-              onModel: (value) => widget.onDirectAction(
-                  'llm', 'llm_image_set', body(model: value)),
+              modelsOf: imageModels,
+              onSelect: (provider, model) => widget.onDirectAction('llm',
+                  'llm_image_set', body(provider: provider, model: model)),
             ),
           ]),
         ),
@@ -2944,17 +2955,24 @@ class _AppPageContentState extends State<AdminPageContent> {
     );
   }
 
-  /// Provider then model, each picked with chips; options the node no longer
-  /// offers stay visible (marked unavailable) so the current choice shows.
+  /// Provider then model, each picked with chips. The node takes a provider
+  /// only with one of its models, so picking a provider picks its first
+  /// model too and saves both; a provider with no model for this purpose is
+  /// shown with a hint and not saved. Options the node no longer offers stay
+  /// visible (marked unavailable) so the current choice shows.
   Widget _modelPicker({
+    required String slot,
     required List<Map<String, dynamic>> providers,
     required String providerId,
     required String modelId,
-    required List<Map<String, dynamic>> models,
-    required ValueChanged<String> onProvider,
-    required ValueChanged<String> onModel,
+    required List<Map<String, dynamic>> Function(String providerId) modelsOf,
+    required void Function(String providerId, String modelId) onSelect,
     bool allowNone = false,
   }) {
+    final picked = _pickedProvider[slot];
+    final shownProvider = picked ?? providerId;
+    final models = modelsOf(shownProvider);
+    final shownModel = picked != null ? '' : modelId;
     List<AppChoice<String>> choices(
             List<Map<String, dynamic>> options, String value, IconData icon) =>
         [
@@ -2967,29 +2985,38 @@ class _AppPageContentState extends State<AdminPageContent> {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       AppChoiceField<String>(
         label: 'Provider',
-        value: providerId,
+        value: shownProvider,
         onChanged: (v) {
-          if (v != providerId) onProvider(v);
+          if (v == shownProvider) return;
+          final offered = modelsOf(v);
+          if (v.isEmpty || offered.isNotEmpty) {
+            setState(() => _pickedProvider.remove(slot));
+            onSelect(v, v.isEmpty ? '' : '${offered.first['id']}');
+          } else {
+            setState(() => _pickedProvider[slot] = v);
+          }
         },
         choices: [
           if (allowNone)
             const AppChoice('', 'None — not used',
                 icon: Icons.do_not_disturb_on_outlined),
-          ...choices(providers, providerId, Icons.hub_outlined),
+          ...choices(providers, shownProvider, Icons.hub_outlined),
         ],
       ),
-      if (providerId.isNotEmpty) ...[
+      if (shownProvider.isNotEmpty) ...[
         const SizedBox(height: 18),
         AppChoiceField<String>(
           label: 'Model',
           hint: models.isEmpty
-              ? 'This provider offers no model for this purpose yet. Add one under Models.'
+              ? 'This provider offers no model for this purpose yet. Mark one for it on the Models page.'
               : null,
-          value: modelId,
+          value: shownModel,
           onChanged: (v) {
-            if (v != modelId) onModel(v);
+            if (v == shownModel) return;
+            setState(() => _pickedProvider.remove(slot));
+            onSelect(shownProvider, v);
           },
-          choices: choices(models, modelId, Icons.memory_rounded),
+          choices: choices(models, shownModel, Icons.memory_rounded),
         ),
       ],
     ]);
@@ -3050,9 +3077,13 @@ class _AppPageContentState extends State<AdminPageContent> {
     bool confirm = false,
   }) {
     final providerId = '${setting[providerKey] ?? ''}';
-    final provider = providers
-        .cast<Map<String, dynamic>?>()
-        .firstWhere((p) => '${p?['id']}' == providerId, orElse: () => null);
+    List<Map<String, dynamic>> modelsOf(String id) {
+      final provider = providers
+          .cast<Map<String, dynamic>?>()
+          .firstWhere((p) => '${p?['id']}' == id, orElse: () => null);
+      return _listOfMaps(provider?[listKey] ?? provider?['models']);
+    }
+
     Future<void> save(Map<String, dynamic> body) async {
       if (confirm &&
           !await _confirm(
@@ -3072,19 +3103,16 @@ class _AppPageContentState extends State<AdminPageContent> {
           ? null
           : AdminStatusPill(active == true ? 'active' : 'off'),
       child: _modelPicker(
+        slot: providerKey,
         allowNone: true,
         providers: providers,
         providerId: providerId,
         modelId: '${setting[modelKey] ?? ''}',
-        models: _listOfMaps(provider?[listKey] ?? provider?['models']),
-        onProvider: (value) => save({
+        modelsOf: modelsOf,
+        onSelect: (provider, model) => save({
           ..._memoryBody(setting),
-          providerKey: value,
-          modelKey: '',
-        }),
-        onModel: (value) => save({
-          ..._memoryBody(setting),
-          modelKey: value,
+          providerKey: provider,
+          modelKey: model,
         }),
       ),
     );

@@ -63,26 +63,26 @@ class WorkLog:
             pass  # the log is best effort; the work goes on
 
 
+def _status(calls: list[dict[str, Any]]) -> str:
+    """The live status of a step: what its tool calls are doing."""
+    shown = list(dict.fromkeys(_STATUS.get(c.get("name", ""), f"using {c.get('name', '')}") for c in calls))
+    return ", ".join(shown[:3]) + (" …" if len(shown) > 3 else "") if shown else "thinking…"
+
+
 class WorkLogMiddleware(AgentMiddleware):
-    """Logs every model step and tool call of the agent."""
+    """Logs every model step and tool call of the agent: one write per step.
+
+    Before a model call the status says it waits for the model; with the
+    model's answer, one write logs its reasoning (when it goes on to use tools)
+    and sets the status to what those tools do; each tool call then logs what
+    it ran and what came of it, in one write.
+    """
 
     def __init__(self, log: WorkLog) -> None:
         super().__init__()
         self.log = log
 
-    async def aafter_model(self, state: Any, runtime: Any) -> dict[str, Any] | None:
-        messages = state.get("messages") or []
-        if not messages or not isinstance(messages[-1], AIMessage):
-            return None
-        msg = messages[-1]
-        thought = msg.text.strip()
-        if thought and msg.tool_calls:
-            # The agent's reasoning between steps; its final answer is its reply.
-            await self.log.write(f"Thought\n{_clip(thought, 1500)}")
-        return None
-
     async def awrap_model_call(self, request: Any, handler: Any) -> Any:
-        """Keep the visible status accurate and persist provider failures."""
         await self.log.write(status="waiting for the model")
         try:
             response = await handler(request)
@@ -92,14 +92,17 @@ class WorkLogMiddleware(AgentMiddleware):
         except Exception as exc:
             await self.log.write(f"Model failed\n{_clip(str(exc), 800)}", status="model request failed")
             raise
-        await self.log.write(status="thinking…")
+        message = next((m for m in reversed(getattr(response, "result", None) or []) if isinstance(m, AIMessage)), None)
+        calls = (message.tool_calls or []) if message is not None else []
+        thought = message.text.strip() if message is not None and calls else ""
+        # The agent's reasoning between steps; its final answer is its reply.
+        await self.log.write(f"Thought\n{_clip(thought, 1500)}" if thought else "", status=_status(calls))
         return response
 
     async def awrap_tool_call(self, request: Any, handler: Any) -> Any:
         call = request.tool_call
         name = call.get("name", "")
         args = call.get("args") or {}
-        await self.log.write(status=_STATUS.get(name, f"using {name}"))
         try:
             result = await handler(request)
         except asyncio.CancelledError:
@@ -108,18 +111,14 @@ class WorkLogMiddleware(AgentMiddleware):
             raise
         except Exception as exc:
             await self.log.write(f"Tool failed · {name}\n{_args(args)}\n→ {_clip(str(exc), 800)}")
-            await self.log.write(status="thinking…")
             raise
-        output = result.text if isinstance(result, ToolMessage) else ""
-        failed = isinstance(result, ToolMessage) and getattr(result, "status", "") == "error"
         if name == "write_todos":
             todos = args.get("todos") or []
             plan = "\n".join(f"{_TODO_MARK.get(t.get('status', ''), '[ ]')} {t.get('content', '')}" for t in todos)
             await self.log.write(f"Plan\n{plan}")
-        else:
-            entry = f"{'Tool failed' if failed else 'Tool'} · {name}\n{_args(args)}"
-            if output:
-                entry += f"\n→ {_clip(output, 1200)}"
-            await self.log.write(entry)
-        await self.log.write(status="thinking…")
+            return result
+        output = result.text if isinstance(result, ToolMessage) else ""
+        failed = isinstance(result, ToolMessage) and getattr(result, "status", "") == "error"
+        entry = f"{'Tool failed' if failed else 'Tool'} · {name}\n{_args(args)}"
+        await self.log.write(entry + (f"\n→ {_clip(output, 1200)}" if output else ""))
         return result

@@ -72,6 +72,9 @@ async def test_lead_plans_works_in_the_sandbox_and_logs(platform: Platform, tmp_
     assert any(t.startswith("Tool · execute\n") for t in texts)
     assert any(entry.get("status") == "running a command in the sandbox" for entry in platform.logs)
     assert any(entry.get("status") == "waiting for the model" for entry in platform.logs)
+    # One write per step: two per model call (waiting, then its answer) and one per tool call.
+    calls = sum(isinstance(m, ToolMessage) for m in model.seen[-1])
+    assert len(platform.logs) == 2 * len(model.seen) + calls
     # Memory is OpenViking's (see test_memory.py): nothing of it in the sandbox.
     assert not (WORKSPACE / ".tradera/agents/tradera/AGENTS.md").exists()
 

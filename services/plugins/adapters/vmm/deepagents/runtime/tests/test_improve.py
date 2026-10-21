@@ -242,3 +242,38 @@ async def test_a_turn_that_looped_is_learned_from_soon(platform: Platform, tmp_p
         await improver.drain()
         # A failing turn waits out the cooldown; one that looped does not.
         assert store.state().cycles == cycles, message
+
+
+def test_old_playbooks_and_turns_are_not_used(tmp_path: Path) -> None:
+    store = AgentStore(tmp_path, SPACE, "vm-a")
+    book = store.adopt("Read the skill once.", score=0.8, baseline=0.5, evidence=4)
+    since, month = improve.LEARNED_SINCE, 30 * 86400.0
+    assert book.current(since, month)
+    assert not book.current(since, month, now=book.adopted_at + month + 1)  # expired
+    assert book.current(since, 0, now=book.adopted_at + 10 * month)  # no age limit
+    assert not book.current(book.adopted_at + 1, month)  # learned before the cutoff
+    # A playbook written before playbooks recorded when they were adopted is from before the cutoff.
+    old = AgentStore(tmp_path, SPACE, "vm-b")
+    old.dir.mkdir(parents=True)
+    (old.dir / "playbook.json").write_text(json.dumps({"text": "Stop re-reading the skill.", "version": 3}))
+    assert not old.playbook().current(since, month)
+    # Turns recorded before the cutoff are not learned from.
+    store.record({"at": since - 60, "points": []}, "system")
+    store.record({"at": since + 60, "points": []}, "system")
+    assert [t["at"] for t in store.turns(since=since)] == [since + 60]
+
+
+def test_reset_forgets_what_agents_learned(tmp_path: Path) -> None:
+    learner = improve.Improver(tmp_path, "http://node", "secret")
+    for space, agent in (("s1", "a"), ("s1", "b"), ("s2", "a")):
+        store = AgentStore(tmp_path, space, agent)
+        store.adopt("lesson", score=0.8, baseline=0.5, evidence=4)
+        store.record({"at": improve.LEARNED_SINCE + 60, "points": []}, "system")
+    assert learner.reset("s1", "a") == 1
+    assert AgentStore(tmp_path, "s1", "a").playbook().text == ""
+    assert AgentStore(tmp_path, "s1", "a").turns() == []
+    assert list(AgentStore(tmp_path, "s1", "a").dir.glob("playbook.reset-*.json"))  # history kept aside
+    assert AgentStore(tmp_path, "s1", "b").playbook().text == "lesson"
+    assert learner.reset("s1") == 2
+    assert learner.reset() == 3
+    assert all(AgentStore(tmp_path, s, a).playbook().text == "" for s, a in (("s1", "b"), ("s2", "a")))

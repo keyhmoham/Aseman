@@ -4,6 +4,7 @@
     POST /v1/turns                    run a turn         → {reply, status, answered, error}
     POST /v1/answers                  answer a question  → {reply, status, answered, error}
     GET  /v1/questions?vm=&space=     open questions     → {questions: [...]}
+    POST /v1/playbooks/reset          forget what agents learned → {reset: n}
 
 Every request carries the runtime secret the node started the runtime with
 (``X-Tradera-Runtime``). A turn's own access to the platform is the turn
@@ -101,6 +102,18 @@ def create_app(runner_factory: Any = None, *, secret: str | None = None, data_di
     async def questions(request: Request, vm: str = "", space: str = "") -> dict[str, Any]:
         authorize(request)
         return {"questions": request.app.state.runner.questions(vm, space)}
+
+    @app.post("/v1/playbooks/reset")
+    async def reset_playbooks(request: Request) -> dict[str, Any]:
+        """Forget what agents learned: {"space", "agent"} (an agent's vm id),
+        either or both empty for every agent of a space, or every agent."""
+        authorize(request)
+        improver = request.app.state.runner.improver
+        if improver is None:
+            return {"reset": 0}
+        body = await request.json()
+        return {"reset": await asyncio.to_thread(improver.reset, str(body.get("space") or ""),
+                                                 str(body.get("agent") or ""))}
 
     @app.exception_handler(HTTPException)
     async def http_error(_: Request, exc: HTTPException) -> JSONResponse:

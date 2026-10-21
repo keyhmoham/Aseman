@@ -516,8 +516,13 @@ Configuration of the runtime (all optional, passed on by the node):
 `TRADERA_IMPROVE_EVERY` (turns between cycles, 10), `TRADERA_IMPROVE_COOLDOWN`
 (seconds between cycles of one agent in one space, 3 h),
 `TRADERA_IMPROVE_LOOP_COOLDOWN` (the same after a turn where the agent looped:
-repeated calls or read instructions it already had, 15 min) and
-`TRADERA_IMPROVE_BUDGET` (steps a cycle replays, 60). A turn's history is
+repeated calls or read instructions it already had, 15 min),
+`TRADERA_IMPROVE_BUDGET` (steps a cycle replays, 60) and
+`TRADERA_IMPROVE_MAX_AGE_DAYS` (how long an adopted playbook is used, 30; 0
+for always). Playbooks and turns learned before 2026-10-21, while the runtime
+refused calls and hid tools, are not used, and `POST /v1/playbooks/reset`
+(`{"space", "agent"}`, either empty for all; the runtime secret) forgets what
+agents learned. A turn's history is
 summarized at 60% of the model's window and old tool output trimmed at half
 that; `TRADERA_SUMMARIZE_MAX_TOKENS` caps the summarization size to bound what
 a call costs. Instructions an agent read (an app's instructions or help, a

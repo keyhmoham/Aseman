@@ -49,6 +49,14 @@ class Playbook:
     version: int = 0
     score: float = 0.0
     history: list[dict[str, Any]] = field(default_factory=list)
+    adopted_at: float = 0.0
+
+    def current(self, since: float, max_age: float, now: float | None = None) -> bool:
+        """Whether the playbook may still be used: adopted after ``since`` and
+        no longer than ``max_age`` seconds ago (0: no limit)."""
+        adopted = self.adopted_at or float((self.history[-1] if self.history else {}).get("adopted_at") or 0)
+        now = time.time() if now is None else now
+        return bool(self.text) and adopted >= since and (not max_age or now - adopted <= max_age)
 
 
 @dataclass
@@ -79,11 +87,24 @@ class AgentStore:
         """A new playbook version (the one before it stays in its history)."""
         with self.lock:
             book = self.playbook()
+            now = time.time()
             book.history.append({"version": book.version + 1, "text": text, "score": round(score, 4),
-                                 "baseline": round(baseline, 4), "evidence": evidence, "adopted_at": time.time()})
-            book = Playbook(text=text, version=book.version + 1, score=score, history=book.history[-20:])
+                                 "baseline": round(baseline, 4), "evidence": evidence, "adopted_at": now})
+            book = Playbook(text=text, version=book.version + 1, score=score, history=book.history[-20:],
+                            adopted_at=now)
             _write(self.dir / "playbook.json", json.dumps(asdict(book), indent=2, ensure_ascii=False))
             return book
+
+    def reset(self) -> None:
+        """Forget what was learned: the playbook (its history stays on disk as
+        ``playbook.reset-<time>.json``) and the turns it was learned from."""
+        with self.lock:
+            book = self.dir / "playbook.json"
+            if book.exists():
+                book.replace(self.dir / f"playbook.reset-{int(time.time())}.json")
+            for old in (self.dir / "turns").glob("*.json"):
+                old.unlink(missing_ok=True)
+            (self.dir / "state.json").unlink(missing_ok=True)
 
     # --- what the agent learns from --------------------------------------------------
 
@@ -114,11 +135,12 @@ class AgentStore:
             if any(known.get(k) != v for k, v in schemas.items()):
                 _write(self.dir / "tools.json", json.dumps({**known, **schemas}, ensure_ascii=False))
 
-    def turns(self, n: int = KEEP_TURNS) -> list[dict[str, Any]]:
+    def turns(self, n: int = KEEP_TURNS, *, since: float = 0.0) -> list[dict[str, Any]]:
+        """The latest turns, those recorded after ``since`` only."""
         out = []
         for path in sorted((self.dir / "turns").glob("*.json"))[-n:]:
             raw = _read_json(path)
-            if isinstance(raw, dict):
+            if isinstance(raw, dict) and float(raw.get("at") or 0) >= since:
                 out.append(raw)
         return out
 

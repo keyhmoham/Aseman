@@ -12,6 +12,12 @@ repeated calls or read instructions it already had) is taken up much sooner. A n
 better than the current one on the same moments; every version stays in the
 playbook's history (store.py).
 
+A playbook expires (``TRADERA_IMPROVE_MAX_AGE_DAYS``, 30 days by default):
+an old one stops shaping the agent's work until a new cycle adopts a better
+one. Nothing learned before ``LEARNED_SINCE`` is used, playbooks or turns:
+they were learned while the runtime itself refused calls and hid tools, and
+teach workarounds for that. ``Improver.reset`` forgets an agent's learning.
+
 Nothing of a turn runs again and nothing slows one down: the cycle runs after
 it, off the turn's path, on the node's learn endpoints (billed to the project
 as its agents' learning). A turn that asked for no memory neither uses the
@@ -38,6 +44,9 @@ from .store import AgentStore
 
 log = logging.getLogger("tradera.agents.improve")
 
+#: What was learned before this (2026-10-21T00:00:00Z) is not used.
+LEARNED_SINCE = 1792540800.0
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -54,6 +63,8 @@ class Settings:
     max_points: int = 10
     #: How much better on the same moments a new playbook must score to be adopted.
     margin: float = 0.05
+    #: A playbook is used this long after it was adopted (seconds; 0: always).
+    max_age: float = 30 * 86400.0
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -66,7 +77,8 @@ class Settings:
         return cls(every=max(1, int(num("TRADERA_IMPROVE_EVERY", cls.every))),
                    cooldown=max(0.0, num("TRADERA_IMPROVE_COOLDOWN", cls.cooldown)),
                    loop_cooldown=max(0.0, num("TRADERA_IMPROVE_LOOP_COOLDOWN", cls.loop_cooldown)),
-                   budget=max(10, int(num("TRADERA_IMPROVE_BUDGET", cls.budget))))
+                   budget=max(10, int(num("TRADERA_IMPROVE_BUDGET", cls.budget))),
+                   max_age=max(0.0, num("TRADERA_IMPROVE_MAX_AGE_DAYS", cls.max_age / 86400.0) * 86400.0))
 
 
 @dataclass
@@ -93,13 +105,31 @@ class Improver:
     def _store(self, ctx: Any) -> AgentStore:
         return AgentStore(self.root, ctx.space, ctx.agent.vm_id)
 
+    def _playbook(self, store: AgentStore) -> str:
+        """The playbook's text while it may be used, else ''."""
+        book = store.playbook()
+        return book.text if book.current(LEARNED_SINCE, self.settings.max_age) else ""
+
+    def reset(self, space: str = "", agent_vm: str = "") -> int:
+        """Forget what agents learned: one agent in one space, every agent of a
+        space, or (both empty) every agent. Returns how many were reset."""
+        if space and agent_vm:
+            stores = [AgentStore(self.root, space, agent_vm)]
+        else:
+            spaces = [AgentStore(self.root, space, "x").dir.parent] if space else \
+                [p for p in self.root.glob("*") if p.is_dir()]
+            stores = [AgentStore(self.root, s.name, a.name) for s in spaces for a in s.glob("*") if a.is_dir()]
+        for store in stores:
+            store.reset()
+        return len(stores)
+
     def prepare(self, ctx: Any, system: str) -> str:
         """The system prompt with the agent's playbook in this space."""
         if ctx.turn.no_memory:
             return system
-        book = self._store(ctx).playbook()
-        ctx.learning = TurnNotes(system=system, version=book.version)
-        playbook = replay.render(book.text)
+        store = self._store(ctx)
+        ctx.learning = TurnNotes(system=system, version=store.playbook().version)
+        playbook = replay.render(self._playbook(store))
         return f"{system}\n\n{playbook}" if playbook else system
 
     async def observe(self, ctx: Any, outcome: Any, messages: list[Any], guard: Any, graph: Any) -> None:
@@ -128,7 +158,7 @@ class Improver:
         cooldown = min(self.settings.cooldown, self.settings.loop_cooldown) if looped else self.settings.cooldown
         due = (state.turns_since >= self.settings.every or troubled or looped) and \
             time.time() - state.last_cycle >= cooldown and store.dir not in self._running
-        points = gather(store.turns(), self.settings.max_points) if due else []
+        points = gather(store.turns(since=LEARNED_SINCE), self.settings.max_points) if due else []
         if len(points) >= self.settings.min_points:
             state.turns_since, state.last_cycle, state.cycles = 0, time.time(), state.cycles + 1
             self._start(store, points, ctx.space, ctx.agent.vm_id, ctx.agent.model)
@@ -147,11 +177,11 @@ class Improver:
 
     async def _cycle(self, store: AgentStore, points: list[dict[str, Any]], space: str, agent_vm: str,
                      model: str) -> None:
-        book = store.playbook()
+        current = self._playbook(store)
         learn = replay.Learn(self.node_url, self.secret, space, agent_vm, model, transport=self.transport)
         try:
             best, score, seed = await asyncio.to_thread(
-                replay.optimize, points, playbook=book.text, system=store.system(), tools=store.tools(),
+                replay.optimize, points, playbook=current, system=store.system(), tools=store.tools(),
                 learn=learn, budget=self.settings.budget)
         except Exception:  # noqa: BLE001 - learning never fails the runtime
             log.exception("learning cycle failed (%s)", store.dir)
@@ -159,7 +189,7 @@ class Improver:
         finally:
             learn.close()
             self._running.discard(store.dir)
-        if best.strip() and best.strip() != book.text.strip() and score >= seed + self.settings.margin:
+        if best.strip() and best.strip() != current.strip() and score >= seed + self.settings.margin:
             adopted = store.adopt(best.strip(), score=score, baseline=seed, evidence=len(points))
             log.info("playbook v%d adopted (%s): %.2f over %.2f on %d moments", adopted.version, store.dir, score,
                      seed, len(points))

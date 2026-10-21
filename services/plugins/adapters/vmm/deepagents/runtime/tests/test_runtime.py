@@ -203,6 +203,8 @@ def test_server_contract(platform: Platform, tmp_path: Path) -> None:
         assert res.json()["answered"] is False
         res = client.post("/v1/turns", headers=headers, json=turn_request(CODER, "x", token="bad"))
         assert res.json()["status"] == "failed"
+        assert client.post("/v1/playbooks/reset", json={}).status_code == 401
+        assert client.post("/v1/playbooks/reset", headers=headers, json={}).json() == {"reset": 0}  # no learning
 
 
 def modified_request(message: str, *, no_sandbox: bool = False, no_memory: bool = False, scope: str = "request-1") -> dict[str, Any]:

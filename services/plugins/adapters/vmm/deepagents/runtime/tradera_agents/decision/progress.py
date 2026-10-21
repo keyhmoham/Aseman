@@ -14,6 +14,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from ..guard import NOTE as GUARD_NOTE
 from .client import DecisionClient, probability
 
 #: Check every this many model calls, once the run has this many tool calls.
@@ -29,23 +30,15 @@ NOTE = ("An independent check of your latest steps finds they are not moving the
         "finish with what you have and say what is left.")
 
 
-def _text(content: Any) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return " ".join(b.get("text", "") for b in content if isinstance(b, dict))
-    return str(content)
-
-
 def recent_steps(messages: list[Any]) -> list[dict[str, str]]:
     """The run's latest tool calls with their outcomes (since the person's message)."""
     results: dict[str, str] = {}
     calls: list[dict[str, Any]] = []
     for m in reversed(messages):
-        if isinstance(m, HumanMessage) and not _text(m.content).startswith("[runtime note]"):
+        if isinstance(m, HumanMessage) and not m.text.startswith(GUARD_NOTE):
             break
         if isinstance(m, ToolMessage):
-            results[m.tool_call_id] = _text(m.content)
+            results[m.tool_call_id] = m.text
         elif isinstance(m, AIMessage) and m.tool_calls:
             calls[:0] = m.tool_calls
     return [{"tool": c.get("name", ""),

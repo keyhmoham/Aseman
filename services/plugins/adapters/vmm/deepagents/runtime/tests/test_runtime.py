@@ -475,7 +475,8 @@ def test_an_apps_json_answer_becomes_lines() -> None:
 
     assert _app_result(reply(json.dumps({"skill": "# Spec\nline 2"}))) == "# Spec\nline 2"
     assert _app_result(reply(json.dumps({"a": "x\ny", "b": "z"}))) == "a:\nx\ny\n\nb: z"
+    # Other JSON stays as it is: a large result is made pageable when it goes to a file (economy.reflow).
     long = json.dumps({"items": [{"id": i} for i in range(200)]})
-    assert "\n" in _app_result(reply(long))
+    assert _app_result(reply(long)) == long
     assert _app_result(reply('{"id": 1}')) == '{"id": 1}'
     assert _app_result(reply("plain words")) == "plain words"

@@ -45,14 +45,6 @@ def _args(args: dict[str, Any]) -> str:
     return _clip(json.dumps(args, ensure_ascii=False, default=str), 300)
 
 
-def _text(content: Any) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in content)
-    return str(content)
-
-
 class WorkLog:
     """Writes one agent's work log entries and status for a turn."""
 
@@ -84,7 +76,7 @@ class WorkLogMiddleware(AgentMiddleware):
         if not messages or not isinstance(messages[-1], AIMessage):
             return None
         msg = messages[-1]
-        thought = _text(msg.content).strip()
+        thought = msg.text.strip()
         if thought and msg.tool_calls:
             # The agent's reasoning between steps; its final answer is its reply.
             await self.log.write(f"Thought\n{_clip(thought, 1500)}")
@@ -119,7 +111,7 @@ class WorkLogMiddleware(AgentMiddleware):
             await self.log.write(f"Tool failed · {name}\n{_args(args)}\n→ {_clip(str(exc), 800)}")
             await self.log.write(status="thinking…")
             raise
-        output = _text(result.content) if isinstance(result, ToolMessage) else ""
+        output = result.text if isinstance(result, ToolMessage) else ""
         failed = isinstance(result, ToolMessage) and getattr(result, "status", "") == "error"
         if name == "write_todos":
             todos = args.get("todos") or []

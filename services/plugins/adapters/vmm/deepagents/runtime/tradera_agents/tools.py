@@ -351,11 +351,9 @@ def _app_result(reply: str) -> str:
 
 
 def _readable(text: str) -> str:
-    """An app's JSON answer as lines the agent can page through.
-
-    Apps often answer with JSON whose strings hold whole documents
-    (``{"skill": "# Spec\\n..."}``): one line, so a large answer that goes to a
-    file cannot be read back past its first line, and the agent asks again.
+    """An app's JSON answer whose strings hold whole documents
+    (``{"skill": "# Spec\\n..."}``) as those documents. A large result that
+    goes to a file is made pageable there (economy.reflow).
     """
     stripped = text.strip()
     if not stripped.startswith(("{", "[", '"')):
@@ -371,8 +369,6 @@ def _readable(text: str) -> str:
         if len(data) == 1:
             return next(iter(data.values()))
         return "\n\n".join(f"{k}:\n{v}" if "\n" in v else f"{k}: {v}" for k, v in data.items())
-    if "\n" not in stripped and len(stripped) > 1000:
-        return json.dumps(data, ensure_ascii=False, indent=1)
     return text
 
 

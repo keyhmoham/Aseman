@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any
 
 from deepagents.backends import StateBackend
@@ -37,7 +38,29 @@ from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately
 
-from .guard import reference
+from .guard import signature
+
+# --- instructions ------------------------------------------------------------
+
+#: Tools that return instructions, documentation or rules (an app's "get instructions"
+#: or "help"): what the agent reads to know how to work, not results of the work.
+REFERENCE_TOOLS = re.compile(
+    r"(?:^|_)(?:instructions?|help|guides?|docs?|documentation|usage|manual|readme|reference|howto|how_to|"
+    r"rules|tutorial|get_started|getting_started|best_practices|skills?|specs?|specification|guidelines?|"
+    r"conventions?)(?:_|$)", re.I)
+#: ...unless the tool changes something (``create_doc``, ``set_rules``).
+WRITE_TOOLS = re.compile(r"(?:^|_)(?:create|update|delete|remove|set|add|write|edit|post|send|upload|publish|"
+                         r"move|rename|insert|replace)(?:_|$)", re.I)
+#: Files that hold instructions: skills and agents' notes.
+REFERENCE_FILES = re.compile(r"(?:^|/)(?:SKILL|AGENTS|README)\.md$|/skills/.+\.md$", re.I)
+
+
+def reference(call: dict[str, Any]) -> bool:
+    """Whether a tool call reads instructions rather than doing work."""
+    name = call.get("name", "")
+    if name == "read_file":
+        return bool(REFERENCE_FILES.search(str((call.get("args") or {}).get("file_path", ""))))
+    return bool(REFERENCE_TOOLS.search(name)) and not WRITE_TOOLS.search(name)
 
 # --- the fixed prompt --------------------------------------------------------
 
@@ -231,8 +254,7 @@ def pinned(messages: list[Any], pin_max: int = PIN_MAX_CHARS) -> set[str]:
         captured = bool(path) and "large_tool_results" in path and any(cid in path for cid in captures)
         if (reference(call) or captured) and sizes.get(call.get("id", ""), 0) <= pin_max:
             # Read again: only the newest copy stays whole.
-            key = call.get("name", "") + json.dumps(call.get("args") or {}, sort_keys=True, default=str)
-            latest[key] = call.get("id", "")
+            latest[signature(call)] = call.get("id", "")
     return set(latest.values())
 
 

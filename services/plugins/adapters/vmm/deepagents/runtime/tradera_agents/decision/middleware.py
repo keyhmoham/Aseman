@@ -23,28 +23,19 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware, hook_config
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from ..guard import NOTE
 from . import approval, completion, progress, routing
 from . import tools as choosing
 from .client import DecisionClient
 
 log = logging.getLogger("tradera.agents.decision")
 
-NOTE = "[runtime note] "
-
-
-def _text(content: Any) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return " ".join(b.get("text", "") for b in content if isinstance(b, dict))
-    return str(content)
-
 
 def last_request(messages: list[Any]) -> str:
     """The message the agent is working on (runtime notes aside)."""
     for m in reversed(messages):
         if isinstance(m, HumanMessage):
-            text = _text(m.content)
+            text = m.text
             if not text.startswith(NOTE):
                 return text
     return ""
@@ -58,10 +49,10 @@ def delivered(messages: list[Any]) -> list[str]:
     """What the delivery tools sent to the chat since the request (their reports)."""
     out: list[str] = []
     for m in reversed(messages):
-        if isinstance(m, HumanMessage) and not _text(m.content).startswith(NOTE):
+        if isinstance(m, HumanMessage) and not m.text.startswith(NOTE):
             break
         if isinstance(m, ToolMessage) and m.name in DELIVERY_TOOLS and getattr(m, "status", "success") != "error":
-            text = _text(m.content).strip()
+            text = m.text.strip()
             if text and not text.lower().startswith("error"):
                 out.append(f"{m.name}: {text[:300]}")
     out.reverse()
@@ -116,7 +107,7 @@ class DecisionMiddleware(AgentMiddleware):
             used = {c.get("name") for m in messages if isinstance(m, AIMessage) for c in m.tool_calls or []}
             waiting = [n for n in names if n not in self.chosen and n not in choosing.PINNED]
             if waiting:
-                said = "\n".join(_text(m.content) for m in messages)
+                said = "\n".join(m.text for m in messages)
                 self.chosen |= choosing.unlocked(waiting, used) | choosing.unlocked(waiting, said)
             keep = choosing.PINNED | self.chosen | used
             shown = [t for t in tools if choosing.tool_name(t) in keep]
@@ -169,7 +160,7 @@ class DecisionMiddleware(AgentMiddleware):
         if not isinstance(last, AIMessage) or last.tool_calls:
             return None
         self._completion_checked = True
-        if not await completion.incomplete(self.client, last_request(messages), _text(last.content), delivered(messages)):
+        if not await completion.incomplete(self.client, last_request(messages), last.text, delivered(messages)):
             return None
         await self._log("Decision · completion check: the answer does not deliver the request yet; continuing")
         return {"messages": [HumanMessage(NOTE + completion.NOTE)], "jump_to": "model"}

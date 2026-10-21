@@ -219,12 +219,6 @@ class Runner:
             await ctx.memory.aclose()
         await ctx.gateway.aclose()
 
-    def _config(self, ctx: TurnContext, graph: Any, budget: int) -> dict[str, Any]:
-        # The turn is bounded by its model calls (TurnGuard); the step limit
-        # is only a backstop the budget never reaches.
-        return {"configurable": {"thread_id": ctx.thread_id},
-                "recursion_limit": guardlib.recursion_limit(graph, budget)}
-
     async def _build(self, ctx: TurnContext) -> tuple[Any, guardlib.TurnGuard]:
         agent = ctx.agent
         decision = ctx.decision_config
@@ -472,7 +466,9 @@ class Runner:
         before = 0
         try:
             graph, turn_guard = await self._build(ctx)
-            config = self._config(ctx, graph, turn_guard.budget)
+            # The turn is bounded by its model calls (TurnGuard); the graph's
+            # own recursion limit (the deep agents default) is only a backstop.
+            config = {"configurable": {"thread_id": ctx.thread_id}}
             before = len((await graph.aget_state(config)).values.get("messages") or [])
             await graph.ainvoke(payload, config)
             state = await graph.aget_state(config)

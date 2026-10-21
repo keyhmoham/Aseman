@@ -324,7 +324,7 @@ func (p *guardedVMM) WriteWorkspace(ctx context.Context, id, path string, data [
 	defer release()
 	writer, ok := p.port.(vmm.WorkspaceWriter)
 	if !ok {
-		return errs.New(errs.CodeUnavailable, "provider cannot write a stopped machine's files")
+		return vmm.ErrUnsupported
 	}
 	return writer.WriteWorkspace(ctx, id, path, data)
 }
@@ -336,9 +336,34 @@ func (p *guardedVMM) DeleteWorkspace(ctx context.Context, id, path string) error
 	defer release()
 	writer, ok := p.port.(vmm.WorkspaceWriter)
 	if !ok {
-		return errs.New(errs.CodeUnavailable, "provider cannot delete a stopped machine's files")
+		return vmm.ErrUnsupported
 	}
 	return writer.DeleteWorkspace(ctx, id, path)
+}
+
+func (p *guardedVMM) MakeWorkspaceDir(ctx context.Context, id, path string) error {
+	ctx, release, e := p.gate.Acquire(ctx)
+	if e != nil {
+		return e
+	}
+	defer release()
+	organizer, ok := p.port.(vmm.WorkspaceOrganizer)
+	if !ok {
+		return vmm.ErrUnsupported
+	}
+	return organizer.MakeWorkspaceDir(ctx, id, path)
+}
+func (p *guardedVMM) MoveWorkspace(ctx context.Context, id, from, to string) error {
+	ctx, release, e := p.gate.Acquire(ctx)
+	if e != nil {
+		return e
+	}
+	defer release()
+	organizer, ok := p.port.(vmm.WorkspaceOrganizer)
+	if !ok {
+		return vmm.ErrUnsupported
+	}
+	return organizer.MoveWorkspace(ctx, id, from, to)
 }
 
 func (p *guardedVMM) CostReport(ctx context.Context, since, until time.Time) ([]vmm.ProviderCost, error) {

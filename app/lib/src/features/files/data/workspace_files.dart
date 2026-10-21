@@ -29,6 +29,16 @@ class WorkspaceFileUnavailable implements Exception {
   String toString() => message;
 }
 
+/// A change the workspace's stored files cannot take while the computer
+/// sleeps (a file too large, or what the provider cannot do without it):
+/// made again with `wake`, it wakes the computer and goes through it.
+class WorkspaceNeedsComputer implements Exception {
+  const WorkspaceNeedsComputer(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
 /// Lists and reads the files of a space's shared workspace
 /// (`spaces.sandbox_files`), which takes paths relative to /workspace.
 class WorkspaceFiles {
@@ -61,6 +71,54 @@ class WorkspaceFiles {
     }
     return map;
   }
+
+  /// Changes the workspace. Files are changed while the computer sleeps
+  /// (it is not woken for them); what needs it throws
+  /// [WorkspaceNeedsComputer] unless [wake] allows waking it.
+  Future<void> _change(
+    String operation,
+    String path, {
+    String? to,
+    Uint8List? data,
+    bool wake = false,
+  }) async {
+    final res = await service.invokeAction(
+      'spaces',
+      'sandbox_files',
+      body: {
+        'space': spaceId,
+        'operation': operation,
+        'path': relative(path),
+        if (to != null) 'to': relative(to),
+        if (data != null) 'data_base64': base64Encode(data),
+        if (wake) 'wake': true,
+      },
+      // Waking the computer for a change can take a while.
+      timeout: Duration(minutes: wake ? 5 : 2),
+    );
+    final map = res is Map ? res.cast<String, dynamic>() : <String, dynamic>{};
+    if (map['ok'] == false) {
+      final message = '${map['error'] ?? 'The workspace could not be changed.'}';
+      if (map['asleep'] == true) throw WorkspaceNeedsComputer(message);
+      throw WorkspaceFileUnavailable(message);
+    }
+  }
+
+  /// Saves a file (made with its folders when new).
+  Future<void> write(String path, Uint8List data, {bool wake = false}) =>
+      _change('write', path, data: data, wake: wake);
+
+  /// Makes a folder (and its parents).
+  Future<void> mkdir(String path, {bool wake = false}) =>
+      _change('mkdir', path, wake: wake);
+
+  /// Moves or renames a file or folder; [to] must not exist yet.
+  Future<void> move(String from, String to, {bool wake = false}) =>
+      _change('move', from, to: to, wake: wake);
+
+  /// Deletes a file or a folder with everything in it.
+  Future<void> delete(String path, {bool wake = false}) =>
+      _change('delete', path, wake: wake);
 
   /// The folder's entries, folders first, each in name order.
   Future<List<WorkspaceEntry>> list([String folder = root]) async {

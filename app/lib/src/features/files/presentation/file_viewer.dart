@@ -13,6 +13,7 @@ import '../domain/documents.dart';
 import '../domain/file_types.dart';
 import 'code_view.dart';
 import 'document_views.dart';
+import 'file_actions.dart';
 import 'html_preview/html_preview.dart';
 import 'media_players.dart';
 
@@ -76,6 +77,70 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> {
   Object? _error;
   bool _source = false;
 
+  /// The text being edited, while it is.
+  TextEditingController? _editor;
+  bool _saving = false;
+
+  bool get _dirty =>
+      _editor != null && _bytes != null && _editor!.text != _text(_bytes!);
+
+  @override
+  void dispose() {
+    _editor?.dispose();
+    super.dispose();
+  }
+
+  void _edit(Uint8List bytes) => setState(() {
+    _editor = TextEditingController(text: _text(bytes))
+      ..addListener(() => setState(() {}));
+  });
+
+  Future<void> _stopEditing() async {
+    if (_dirty) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: const Text('Discard your changes?'),
+          content: Text('$_name has changes that are not saved.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog, false),
+              child: const Text('Keep editing'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialog, true),
+              child: const Text('Discard'),
+            ),
+          ],
+        ),
+      );
+      if (discard != true || !mounted) return;
+    }
+    setState(() {
+      _editor?.dispose();
+      _editor = null;
+    });
+  }
+
+  /// Saves the edited text. The computer is not woken for it.
+  Future<void> _save() async {
+    final editor = _editor;
+    if (editor == null || !_dirty || _saving) return;
+    setState(() => _saving = true);
+    final bytes = Uint8List.fromList(utf8.encode(editor.text));
+    final files = WorkspaceFiles(widget.service, widget.spaceId);
+    final saved = await runWorkspaceChange(
+      context,
+      ({required wake}) => files.write(widget.path, bytes, wake: wake),
+      done: '$_name saved',
+    );
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      if (saved) _bytes = bytes;
+    });
+  }
+
   String get _name => widget.path.split('/').last;
   FileType get _type => FileType.of(_name);
 
@@ -95,6 +160,8 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> {
     setState(() {
       _bytes = null;
       _error = null;
+      _editor?.dispose();
+      _editor = null;
     });
     try {
       final bytes = await WorkspaceFiles(
@@ -163,6 +230,38 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> {
                   )
                 : bytes == null
                 ? const Center(child: CircularProgressIndicator())
+                : _editor != null
+                ? CallbackShortcuts(
+                    bindings: {
+                      const SingleActivator(
+                        LogicalKeyboardKey.keyS,
+                        control: true,
+                      ): _save,
+                      const SingleActivator(
+                        LogicalKeyboardKey.keyS,
+                        meta: true,
+                      ): _save,
+                    },
+                    child: TextField(
+                      controller: _editor,
+                      autofocus: true,
+                      expands: true,
+                      maxLines: null,
+                      textAlignVertical: TextAlignVertical.top,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12.5,
+                        height: 1.45,
+                      ),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        filled: false,
+                        contentPadding: EdgeInsets.all(14),
+                      ),
+                    ),
+                  )
                 : _body(context, bytes, kind),
           ),
         ],
@@ -223,45 +322,82 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> {
               ],
             ),
           ),
-          if (bytes != null && _renderable.contains(kind))
-            SegmentedButton<bool>(
-              showSelectedIcon: false,
-              style: const ButtonStyle(visualDensity: VisualDensity.compact),
-              segments: const [
-                ButtonSegment(
-                  value: false,
-                  tooltip: 'Preview',
-                  icon: Icon(Icons.visibility_outlined, size: 16),
-                ),
-                ButtonSegment(
-                  value: true,
-                  tooltip: 'Source',
-                  icon: Icon(Icons.code_rounded, size: 16),
-                ),
-              ],
-              selected: {_source},
-              onSelectionChanged: (v) => setState(() => _source = v.first),
+          if (bytes != null && _editor != null) ...[
+            Text(
+              _saving
+                  ? 'Saving…'
+                  : _dirty
+                  ? 'Unsaved'
+                  : 'Saved',
+              style: TextStyle(
+                fontSize: 11,
+                color: _dirty ? scheme.primary : scheme.onSurfaceVariant,
+              ),
             ),
-          if (bytes != null && _textual.contains(kind))
+            const SizedBox(width: 8),
+            FilledButton.tonal(
+              onPressed: _dirty && !_saving ? _save : null,
+              style: FilledButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+              ),
+              child: const Text('Save'),
+            ),
             IconButton(
-              tooltip: 'Copy',
+              tooltip: 'Stop editing',
               visualDensity: VisualDensity.compact,
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: _text(bytes)));
-                if (context.mounted) {
-                  ScaffoldMessenger.maybeOf(
-                    context,
-                  )?.showSnackBar(SnackBar(content: Text('Copied $_name')));
-                }
-              },
-              icon: const Icon(Icons.copy_rounded, size: 18),
+              onPressed: _stopEditing,
+              icon: const Icon(Icons.done_rounded, size: 19),
             ),
-          IconButton(
-            tooltip: 'Reload',
-            visualDensity: VisualDensity.compact,
-            onPressed: _load,
-            icon: const Icon(Icons.refresh_rounded, size: 19),
-          ),
+          ] else ...[
+            if (bytes != null &&
+                _textual.contains(kind) &&
+                kind != FileKind.svg)
+              IconButton(
+                tooltip: 'Edit',
+                visualDensity: VisualDensity.compact,
+                onPressed: () => _edit(bytes),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+              ),
+            if (bytes != null && _renderable.contains(kind))
+              SegmentedButton<bool>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                segments: const [
+                  ButtonSegment(
+                    value: false,
+                    tooltip: 'Preview',
+                    icon: Icon(Icons.visibility_outlined, size: 16),
+                  ),
+                  ButtonSegment(
+                    value: true,
+                    tooltip: 'Source',
+                    icon: Icon(Icons.code_rounded, size: 16),
+                  ),
+                ],
+                selected: {_source},
+                onSelectionChanged: (v) => setState(() => _source = v.first),
+              ),
+            if (bytes != null && _textual.contains(kind))
+              IconButton(
+                tooltip: 'Copy',
+                visualDensity: VisualDensity.compact,
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: _text(bytes)));
+                  if (context.mounted) {
+                    ScaffoldMessenger.maybeOf(
+                      context,
+                    )?.showSnackBar(SnackBar(content: Text('Copied $_name')));
+                  }
+                },
+                icon: const Icon(Icons.copy_rounded, size: 18),
+              ),
+            IconButton(
+              tooltip: 'Reload',
+              visualDensity: VisualDensity.compact,
+              onPressed: _load,
+              icon: const Icon(Icons.refresh_rounded, size: 19),
+            ),
+          ],
           if (widget.onClose != null)
             IconButton(
               tooltip: 'Close',

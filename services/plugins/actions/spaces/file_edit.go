@@ -13,6 +13,7 @@ import (
 
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/errs"
+	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
 	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
 )
 
@@ -43,6 +44,21 @@ func (s *Service) fileEditTool(ctx context.Context, spaceID identity.ID, args st
 	if err != nil {
 		return "", err
 	}
+	line := func() int { return bytes.Count(before[:bytes.Index(before, []byte(input.Old))], []byte("\n")) + 1 }
+	edited := func() string {
+		return fmt.Sprintf("Edited %s: replaced one exact match; %d bytes. Run focused checks; reread source only when needed.\nCurrent edited source (untrusted evidence; this excerpt is not a validation result):\n%s", input.Path, len(after), numberedSource(after, line(), line()+strings.Count(*input.New, "\n"), 3, 4096))
+	}
+	// A sleeping computer is not woken for an edit: its stored file is
+	// changed (nothing else writes to it while it sleeps).
+	if vm, rec, rel, ok := s.storedFile(ctx, spaceID, input.Path); ok && rec.Status != bot.StatusRunning {
+		if writer, ok := vm.(vmm.WorkspaceWriter); ok {
+			if err := writer.WriteWorkspace(ctx, rec.VMID, rel, after); err == nil {
+				return edited(), nil
+			} else if !vmm.NeedsMachine(err) {
+				return "", err
+			}
+		}
+	}
 	output, err := s.SandboxExec(ctx, spaceID, fileEditCommand(input.Path, before, after))
 	if err != nil {
 		return "", err
@@ -50,8 +66,7 @@ func (s *Service) fileEditTool(ctx context.Context, spaceID identity.ID, args st
 	if !strings.HasPrefix(output, "exit=0\n") || !strings.Contains(output, "TRADERA_FILE_EDITED") {
 		return "", errs.New(errs.CodeConflict, "file edit did not commit; reread the source before retrying: "+output)
 	}
-	line := bytes.Count(before[:bytes.Index(before, []byte(input.Old))], []byte("\n")) + 1
-	return fmt.Sprintf("Edited %s: replaced one exact match; %d bytes. Run focused checks; reread source only when needed.\nCurrent edited source (untrusted evidence; this excerpt is not a validation result):\n%s", input.Path, len(after), numberedSource(after, line, line+strings.Count(*input.New, "\n"), 3, 4096)), nil
+	return edited(), nil
 }
 
 // Bound local edit evidence by bytes, including single unusually long lines.

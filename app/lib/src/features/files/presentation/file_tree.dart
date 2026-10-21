@@ -1,12 +1,22 @@
+import 'dart:typed_data';
+
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/utils/context_extensions.dart';
 import '../../../data/services/tradera_service.dart';
 import '../data/workspace_files.dart';
 import '../domain/file_types.dart';
+import 'file_actions.dart';
 import 'file_viewer.dart' show formatBytes;
 
+/// The largest file uploaded from here.
+const _uploadLimit = 48 << 20;
+
 /// The space's workspace as a tree of folders and files, each folder read
-/// when first opened. Tapping a file calls [onOpen].
+/// when first opened. Tapping a file calls [onOpen]. Files and folders are
+/// made, uploaded, renamed and deleted from its menus, while the computer
+/// sleeps too: it is not woken for its files.
 class WorkspaceFileTree extends StatefulWidget {
   const WorkspaceFileTree({
     super.key,
@@ -81,6 +91,203 @@ class _WorkspaceFileTreeState extends State<WorkspaceFileTree> {
     }
   }
 
+  static String _parentOf(String path) {
+    final i = path.lastIndexOf('/');
+    return i <= 0 ? WorkspaceFiles.root : path.substring(0, i);
+  }
+
+  bool _taken(String folder, String name) =>
+      _children[folder]?.any((e) => e.name == name) ?? false;
+
+  /// Reads [folder] again after a change, and opens it.
+  Future<void> _changed(String folder) async {
+    if (folder != WorkspaceFiles.root) setState(() => _expanded.add(folder));
+    await _read(folder);
+  }
+
+  Future<void> _newFile(String folder) async {
+    final name = await askFileName(
+      context,
+      title: 'New file',
+      action: 'Create',
+      hint: 'notes.md',
+    );
+    if (name == null || !mounted) return;
+    if (_taken(folder, name)) {
+      context.showMessage('$name is already there.');
+      return;
+    }
+    final path = '$folder/$name';
+    final made = await runWorkspaceChange(
+      context,
+      ({required wake}) => _files.write(path, Uint8List(0), wake: wake),
+    );
+    if (!made || !mounted) return;
+    await _changed(folder);
+    widget.onOpen(WorkspaceEntry(name: name, path: path, isDirectory: false));
+  }
+
+  Future<void> _newFolder(String folder) async {
+    final name = await askFileName(
+      context,
+      title: 'New folder',
+      action: 'Create',
+      hint: 'docs',
+    );
+    if (name == null || !mounted) return;
+    if (_taken(folder, name)) {
+      context.showMessage('$name is already there.');
+      return;
+    }
+    final made = await runWorkspaceChange(
+      context,
+      ({required wake}) => _files.mkdir('$folder/$name', wake: wake),
+    );
+    if (made && mounted) await _changed(folder);
+  }
+
+  Future<void> _upload(String folder) async {
+    final picked = await openFiles();
+    if (picked.isEmpty || !mounted) return;
+    var count = 0;
+    for (final file in picked) {
+      if (await file.length() > _uploadLimit) {
+        if (mounted) {
+          context.showMessage('${file.name} is too large to upload here.');
+        }
+        continue;
+      }
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      final path = '$folder/${file.name}';
+      if (await runWorkspaceChange(
+        context,
+        ({required wake}) => _files.write(path, bytes, wake: wake),
+      )) {
+        count++;
+      }
+      if (!mounted) return;
+    }
+    if (count > 0) {
+      context.showMessage(count == 1 ? 'Uploaded' : 'Uploaded $count files');
+      await _changed(folder);
+    }
+  }
+
+  Future<void> _rename(WorkspaceEntry e) async {
+    final name = await askFileName(
+      context,
+      title: 'Rename',
+      action: 'Rename',
+      initial: e.name,
+    );
+    if (name == null || name == e.name || !mounted) return;
+    final folder = _parentOf(e.path);
+    if (_taken(folder, name)) {
+      context.showMessage('$name is already there.');
+      return;
+    }
+    final to = '$folder/$name';
+    final moved = await runWorkspaceChange(
+      context,
+      ({required wake}) => _files.move(e.path, to, wake: wake),
+    );
+    if (!moved || !mounted) return;
+    setState(() {
+      if (_expanded.remove(e.path)) _expanded.add(to);
+      _children.remove(e.path);
+    });
+    await _changed(folder);
+  }
+
+  Future<void> _delete(WorkspaceEntry e) async {
+    if (!await confirmFileDelete(context, e) || !mounted) return;
+    final deleted = await runWorkspaceChange(
+      context,
+      ({required wake}) => _files.delete(e.path, wake: wake),
+      done: '${e.name} deleted',
+    );
+    if (!deleted || !mounted) return;
+    setState(() {
+      _expanded.removeWhere((p) => p == e.path || p.startsWith('${e.path}/'));
+      _children.removeWhere(
+        (p, _) => p == e.path || p.startsWith('${e.path}/'),
+      );
+    });
+    await _changed(_parentOf(e.path));
+  }
+
+  /// What can be done in [folder]: make a file or folder, or upload.
+  List<PopupMenuEntry<VoidCallback>> _folderItems(String folder) => [
+    PopupMenuItem(
+      value: () => _newFile(folder),
+      child: const ListTile(
+        dense: true,
+        leading: Icon(Icons.note_add_outlined),
+        title: Text('New file'),
+      ),
+    ),
+    PopupMenuItem(
+      value: () => _newFolder(folder),
+      child: const ListTile(
+        dense: true,
+        leading: Icon(Icons.create_new_folder_outlined),
+        title: Text('New folder'),
+      ),
+    ),
+    PopupMenuItem(
+      value: () => _upload(folder),
+      child: const ListTile(
+        dense: true,
+        leading: Icon(Icons.upload_file_rounded),
+        title: Text('Upload files'),
+      ),
+    ),
+  ];
+
+  /// The menu of a file or folder, where it was pressed.
+  Future<void> _menu(WorkspaceEntry e, Offset at) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final chosen = await showMenu<VoidCallback>(
+      context: context,
+      position: RelativeRect.fromRect(
+        at & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        if (e.isDirectory) ...[
+          ..._folderItems(e.path),
+          const PopupMenuDivider(),
+        ] else
+          PopupMenuItem(
+            value: () => widget.onOpen(e),
+            child: const ListTile(
+              dense: true,
+              leading: Icon(Icons.open_in_new_rounded),
+              title: Text('Open'),
+            ),
+          ),
+        PopupMenuItem(
+          value: () => _rename(e),
+          child: const ListTile(
+            dense: true,
+            leading: Icon(Icons.drive_file_rename_outline_rounded),
+            title: Text('Rename'),
+          ),
+        ),
+        PopupMenuItem(
+          value: () => _delete(e),
+          child: const ListTile(
+            dense: true,
+            leading: Icon(Icons.delete_outline_rounded),
+            title: Text('Delete'),
+          ),
+        ),
+      ],
+    );
+    chosen?.call();
+  }
+
   void _toggle(WorkspaceEntry folder) {
     setState(() {
       if (!_expanded.remove(folder.path)) _expanded.add(folder.path);
@@ -111,6 +318,8 @@ class _WorkspaceFileTreeState extends State<WorkspaceFileTree> {
         rows.add(_Row.message(depth, 'Empty folder'));
       }
       for (final e in entries) {
+        // What holds a folder made while the computer slept.
+        if (!e.isDirectory && e.name == '.keep') continue;
         rows.add(_Row.entry(depth, e));
         if (e.isDirectory && _expanded.contains(e.path)) add(e.path, depth + 1);
       }
@@ -143,6 +352,13 @@ class _WorkspaceFileTreeState extends State<WorkspaceFileTree> {
                 ),
               ),
             ),
+            PopupMenuButton<VoidCallback>(
+              tooltip: 'New',
+              icon: const Icon(Icons.add_rounded, size: 18),
+              style: IconButton.styleFrom(visualDensity: VisualDensity.compact),
+              onSelected: (action) => action(),
+              itemBuilder: (_) => _folderItems(WorkspaceFiles.root),
+            ),
             IconButton(
               tooltip: 'Collapse folders',
               visualDensity: VisualDensity.compact,
@@ -170,10 +386,11 @@ class _WorkspaceFileTreeState extends State<WorkspaceFileTree> {
                   onRetry: _refresh,
                 )
               : rows.isEmpty
-              ? const _Note(
+              ? _Note(
                   icon: Icons.folder_open_outlined,
                   text:
                       'No files yet. Files agents and people make in the workspace show up here.',
+                  action: ('New file', () => _newFile(WorkspaceFiles.root)),
                 )
               : RefreshIndicator(
                   onRefresh: _refresh,
@@ -217,60 +434,117 @@ class _WorkspaceFileTreeState extends State<WorkspaceFileTree> {
     final open = _expanded.contains(e.path);
     final type = FileType.of(e.name);
     final selected = !e.isDirectory && e.path == widget.selected;
-    return Material(
-      color: selected ? scheme.primaryContainer : Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
+    return _HoverRow(
+      selected: selected,
+      onTap: () => e.isDirectory ? _toggle(e) : widget.onOpen(e),
+      onMenu: (at) => _menu(e, at),
+      builder: (hovered, menuButton) => Padding(
+        padding: EdgeInsets.fromLTRB(indent, 5, hovered ? 2 : 8, 5),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              child: e.isDirectory
+                  ? AnimatedRotation(
+                      turns: open ? .25 : 0,
+                      duration: const Duration(milliseconds: 160),
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        size: 17,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 2),
+            Icon(
+              e.isDirectory
+                  ? (open ? Icons.folder_open_rounded : Icons.folder_rounded)
+                  : type.icon,
+              size: 17,
+              color: e.isDirectory ? FileType.folder : type.color,
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                e.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: e.isDirectory ? FontWeight.w700 : FontWeight.w500,
+                  color: selected ? scheme.onPrimaryContainer : null,
+                ),
+              ),
+            ),
+            if (hovered)
+              menuButton
+            else if (!e.isDirectory && e.size > 0)
+              Text(
+                formatBytes(e.size),
+                style: TextStyle(fontSize: 9, color: scheme.onSurfaceVariant),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A row of the tree: tapped to open, its menu on a right click, a long
+/// press, or the button shown while the pointer is over it.
+class _HoverRow extends StatefulWidget {
+  const _HoverRow({
+    required this.selected,
+    required this.onTap,
+    required this.onMenu,
+    required this.builder,
+  });
+  final bool selected;
+  final VoidCallback onTap;
+  final ValueChanged<Offset> onMenu;
+  final Widget Function(bool hovered, Widget menuButton) builder;
+  @override
+  State<_HoverRow> createState() => _HoverRowState();
+}
+
+class _HoverRowState extends State<_HoverRow> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final menuButton = Builder(
+      builder: (button) => SizedBox(
+        width: 26,
+        height: 20,
+        child: IconButton(
+          tooltip: 'More',
+          padding: EdgeInsets.zero,
+          iconSize: 16,
+          onPressed: () {
+            final box = button.findRenderObject()! as RenderBox;
+            widget.onMenu(box.localToGlobal(box.size.bottomLeft(Offset.zero)));
+          },
+          icon: const Icon(Icons.more_horiz_rounded),
+        ),
+      ),
+    );
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: widget.selected ? scheme.primaryContainer : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
-        onTap: () => e.isDirectory ? _toggle(e) : widget.onOpen(e),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(indent, 5, 8, 5),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 18,
-                child: e.isDirectory
-                    ? AnimatedRotation(
-                        turns: open ? .25 : 0,
-                        duration: const Duration(milliseconds: 160),
-                        child: Icon(
-                          Icons.chevron_right_rounded,
-                          size: 17,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 2),
-              Icon(
-                e.isDirectory
-                    ? (open ? Icons.folder_open_rounded : Icons.folder_rounded)
-                    : type.icon,
-                size: 17,
-                color: e.isDirectory ? FileType.folder : type.color,
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  e.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: e.isDirectory
-                        ? FontWeight.w700
-                        : FontWeight.w500,
-                    color: selected ? scheme.onPrimaryContainer : null,
-                  ),
-                ),
-              ),
-              if (!e.isDirectory && e.size > 0)
-                Text(
-                  formatBytes(e.size),
-                  style: TextStyle(fontSize: 9, color: scheme.onSurfaceVariant),
-                ),
-            ],
-          ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: widget.onTap,
+          onLongPress: () {
+            final box = context.findRenderObject()! as RenderBox;
+            widget.onMenu(box.localToGlobal(box.size.centerLeft(Offset.zero)));
+          },
+          onSecondaryTapUp: (d) => widget.onMenu(d.globalPosition),
+          child: widget.builder(_hovered, menuButton),
         ),
       ),
     );
@@ -290,10 +564,16 @@ class _Row {
 }
 
 class _Note extends StatelessWidget {
-  const _Note({required this.icon, required this.text, this.onRetry});
+  const _Note({
+    required this.icon,
+    required this.text,
+    this.onRetry,
+    this.action,
+  });
   final IconData icon;
   final String text;
   final VoidCallback? onRetry;
+  final (String, VoidCallback)? action;
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -312,6 +592,14 @@ class _Note extends StatelessWidget {
             ),
             if (onRetry != null)
               TextButton(onPressed: onRetry, child: const Text('Try again')),
+            if (action != null) ...[
+              const SizedBox(height: 8),
+              FilledButton.tonalIcon(
+                onPressed: action!.$2,
+                icon: const Icon(Icons.note_add_outlined, size: 17),
+                label: Text(action!.$1),
+              ),
+            ],
           ],
         ),
       ),

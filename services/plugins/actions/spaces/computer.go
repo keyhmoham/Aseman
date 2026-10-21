@@ -197,6 +197,11 @@ func (s *Service) sandboxFilesAction(ctx context.Context, req *api.ActionRequest
 		Path      string `json:"path"`
 		Content   string `json:"content"`
 		Base64    string `json:"data_base64"`
+		// To is where a move puts the file or folder.
+		To string `json:"to"`
+		// Wake: a change the stored files cannot take while the computer
+		// sleeps is made by waking it (else the answer says it needs waking).
+		Wake bool `json:"wake"`
 	}
 	if e := helper.Decode(req, &in); e != nil {
 		return nil, e
@@ -212,6 +217,15 @@ func (s *Service) sandboxFilesAction(ctx context.Context, req *api.ActionRequest
 	}
 	if inBrowserProfile(target) {
 		return nil, errs.Permission("the browser's saved logins are not files you can open")
+	}
+	destination := ""
+	if in.Operation == "move" {
+		if destination, e = workspacePath(in.To); e != nil {
+			return nil, e
+		}
+		if inBrowserProfile(destination) || destination == "/workspace" || target == "/workspace" {
+			return nil, errs.InvalidArgument("that cannot be moved there")
+		}
 	}
 	// An agent's request carries its turn's limits (a person's has none).
 	if policy := vmm.ExecutionFrom(ctx); policy.NoSandbox {
@@ -289,37 +303,46 @@ func (s *Service) sandboxFilesAction(ctx context.Context, req *api.ActionRequest
 			return helper.JSON(map[string]any{"ok": false, "asleep": true, "error": "This provider cannot read sleeping files."})
 		}
 	}
-	if rec.Status != bot.StatusRunning {
-		// Saving or deleting a file does not need the computer awake when the
-		// provider can change the stored files directly.
-		if writer, ok := vm.(vmm.WorkspaceWriter); ok && (in.Operation == "write" || in.Operation == "delete") {
-			rel := strings.TrimPrefix(strings.TrimPrefix(target, "/workspace"), "/")
-			var werr error
-			if in.Operation == "delete" {
-				werr = writer.DeleteWorkspace(ctx, rec.VMID, rel)
-			} else {
-				data := []byte(in.Content)
-				if in.Base64 != "" {
-					decoded, derr := base64.StdEncoding.DecodeString(in.Base64)
-					if derr != nil {
-						return nil, errs.InvalidArgument("invalid file data")
-					}
-					data = decoded
-				}
-				werr = writer.WriteWorkspace(ctx, rec.VMID, rel, data)
-			}
-			if werr == nil {
+	data := []byte(in.Content)
+	if in.Base64 != "" {
+		decoded, derr := base64.StdEncoding.DecodeString(in.Base64)
+		if derr != nil {
+			return nil, errs.InvalidArgument("invalid file data")
+		}
+		data = decoded
+	}
+	rel := func(p string) string { return strings.TrimPrefix(strings.TrimPrefix(p, "/workspace"), "/") }
+	change := in.Operation == "write" || in.Operation == "delete" || in.Operation == "mkdir" || in.Operation == "move"
+	if change && rec.Status != bot.StatusRunning {
+		// Changing files is no reason to wake the computer: the provider
+		// changes its stored files directly when it can.
+		_ = s.Bots.EnsureVM(ctx, rec)
+		err := changeStoredFiles(ctx, vm, rec.VMID, in.Operation, rel(target), rel(destination), data)
+		switch {
+		case err == nil:
+			return helper.JSON(map[string]any{"ok": true})
+		case errors.Is(err, vmm.ErrExists):
+			return nil, errs.Conflict("something with that name is already there")
+		case !vmm.NeedsMachine(err):
+			return nil, err
+		case !in.Wake:
+			return helper.JSON(map[string]any{"ok": false, "asleep": true, "needs_wake": true, "error": "This change needs the computer awake."})
+		}
+		// Asked to: woken by the command below.
+	}
+	if in.Operation == "write" && rec.Status == bot.StatusRunning && len(data) > 64<<10 {
+		// Too large for one command: the provider writes it in pieces.
+		if writer, ok := vm.(vmm.WorkspaceWriter); ok {
+			if err := writer.WriteWorkspace(ctx, rec.VMID, rel(target), data); err == nil {
 				return helper.JSON(map[string]any{"ok": true})
-			}
-			if !errors.Is(werr, vmm.ErrTooLarge) {
-				return nil, werr
+			} else if !vmm.NeedsMachine(err) {
+				return nil, err
 			}
 		}
-		return helper.JSON(map[string]any{"ok": false, "asleep": true, "error": "Start the computer before changing its files."})
 	}
 	ctx = helper.WithActor(ctx, req.Caller.ID)
 	// File operations run through the existing serialized sandbox command path.
-	args := map[string]any{"op": in.Operation, "path": target, "content": in.Content, "base64": in.Base64}
+	args := map[string]any{"op": in.Operation, "path": target, "to": destination, "content": in.Content, "base64": in.Base64}
 	b, _ := json.Marshal(args)
 	script := `import os,json,base64,shutil
 p=json.loads(base64.b64decode('` + base64.StdEncoding.EncodeToString(b) + `')); target=os.path.realpath(p['path']); root=os.path.realpath('/workspace')
@@ -333,6 +356,12 @@ elif op=='read':
 elif op=='write':
  os.makedirs(os.path.dirname(target),exist_ok=True);data=base64.b64decode(p['base64']) if p.get('base64') else p['content'].encode();open(target,'wb').write(data);result={'ok':True}
 elif op=='mkdir': os.makedirs(target,exist_ok=True);result={'ok':True}
+elif op=='move':
+ dest=os.path.realpath(p['to'])
+ if dest==root or not dest.startswith(root+'/') or target==root: raise ValueError('Path escapes workspace')
+ if not os.path.lexists(target): result={'ok':False,'missing':True,'error':'That file does not exist.'}
+ elif os.path.lexists(dest): result={'ok':False,'exists':True,'error':'Something with that name is already there.'}
+ else: os.makedirs(os.path.dirname(dest),exist_ok=True);shutil.move(target,dest);result={'ok':True}
 elif op=='delete':
  if target==root: raise ValueError('Cannot delete workspace root')
  shutil.rmtree(target) if os.path.isdir(target) else os.unlink(target);result={'ok':True}
@@ -358,6 +387,37 @@ print(json.dumps(result))`
 	}
 	return helper.JSON(response)
 }
+
+// changeStoredFiles makes one change to a stopped computer's stored files
+// through its provider. vmm.NeedsMachine(err) means only the running
+// computer can make it.
+func changeStoredFiles(ctx context.Context, vm vmm.VMM, vmID, op, rel, to string, data []byte) error {
+	switch op {
+	case "write", "delete":
+		writer, ok := vm.(vmm.WorkspaceWriter)
+		if !ok {
+			return vmm.ErrUnsupported
+		}
+		if op == "delete" {
+			if rel == "" {
+				return errs.InvalidArgument("cannot delete the workspace root")
+			}
+			return writer.DeleteWorkspace(ctx, vmID, rel)
+		}
+		return writer.WriteWorkspace(ctx, vmID, rel, data)
+	case "mkdir", "move":
+		organizer, ok := vm.(vmm.WorkspaceOrganizer)
+		if !ok {
+			return vmm.ErrUnsupported
+		}
+		if op == "mkdir" {
+			return organizer.MakeWorkspaceDir(ctx, vmID, rel)
+		}
+		return organizer.MoveWorkspace(ctx, vmID, rel, to)
+	}
+	return errs.InvalidArgument("invalid file operation")
+}
+
 func (s *Service) websitePreview(ctx context.Context, sp, actor identity.ID) (*api.ActionResponse, error) {
 	command := `cd /workspace; if test -f package.json; then if test -f package-lock.json; then npm ci >/tmp/tradera-install.log 2>&1; else npm install >/tmp/tradera-install.log 2>&1; fi; (nohup npm run dev -- --host 0.0.0.0 --port 4173 >/tmp/tradera-preview.log 2>&1 </dev/null &); elif test -f index.html; then (nohup python3 -m http.server 4173 --bind 0.0.0.0 >/tmp/tradera-preview.log 2>&1 </dev/null &); else exit 3; fi; for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173/ >/dev/null && exit 0; sleep 1; done; tail -30 /tmp/tradera-preview.log; exit 1`
 	out, e := s.SandboxExec(ctx, sp, command)

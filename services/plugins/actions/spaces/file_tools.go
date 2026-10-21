@@ -253,6 +253,14 @@ func (s *Service) sandboxReadFile(ctx context.Context, spaceID identity.ID, path
 	if strings.TrimSpace(path) == "" {
 		return nil, errs.InvalidArgument("sandbox path required")
 	}
+	// A file of the workspace is read from the stored files: reading is no
+	// reason to wake the computer.
+	if data, found, ok := s.readStoredFile(ctx, spaceID, path); ok {
+		if !found {
+			return nil, errs.New(errs.CodeNotFound, "cannot read sandbox file: "+path)
+		}
+		return data, nil
+	}
 	out, err := s.SandboxExec(ctx, spaceID, "base64 -w0 "+shellFilePath(path)+" 2>/dev/null || base64 "+shellFilePath(path))
 	if err != nil {
 		return nil, err
@@ -320,4 +328,51 @@ func (s *Service) resolveRoomID(ctx context.Context, spaceID identity.ID, room s
 		return identity.ID{}, err
 	}
 	return gr.ID, nil
+}
+
+// storedFile is where a workspace path is kept while the computer sleeps:
+// the computer's provider, its record and the path relative to /workspace.
+// ok is false for a path outside the workspace (or in the browser's
+// logins), or a project without a computer.
+func (s *Service) storedFile(ctx context.Context, spaceID identity.ID, p string) (vm vmm.VMM, rec *bot.Bot, rel string, ok bool) {
+	if !strings.HasPrefix(p, "/workspace/") {
+		return nil, nil, "", false
+	}
+	target, err := workspacePath(p)
+	if err != nil || target == "/workspace" || inBrowserProfile(target) {
+		return nil, nil, "", false
+	}
+	id, found := s.sandboxBotID(ctx, spaceID)
+	if !found {
+		return nil, nil, "", false
+	}
+	if rec, err = s.Bots.GetBot(ctx, id); err != nil {
+		return nil, nil, "", false
+	}
+	if vm = s.K.VMMFor(vmm.Type(rec.VMType)); vm == nil {
+		return nil, nil, "", false
+	}
+	_ = s.Bots.EnsureVM(ctx, rec)
+	return vm, rec, strings.TrimPrefix(target, "/workspace/"), true
+}
+
+// readStoredFile reads a workspace file from the stored files. ok is false
+// when they cannot serve it (the caller reads it through the computer).
+func (s *Service) readStoredFile(ctx context.Context, spaceID identity.ID, p string) (data []byte, found, ok bool) {
+	vm, rec, rel, ok := s.storedFile(ctx, spaceID, p)
+	if !ok {
+		return nil, false, false
+	}
+	reader, ok := vm.(vmm.WorkspaceReader)
+	if !ok {
+		return nil, false, false
+	}
+	data, err := reader.ReadWorkspace(ctx, rec.VMID, rel)
+	if err == nil {
+		return data, true, true
+	}
+	if errs.CodeOf(err) == errs.CodeNotFound {
+		return nil, false, true
+	}
+	return nil, false, false
 }

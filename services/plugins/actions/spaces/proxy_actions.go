@@ -85,7 +85,7 @@ func (a *proxyListAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 	for _, p := range list {
 		out = append(out, map[string]any{
 			"id": p.ID.String(), "port": p.Port, "title": p.Title, "url": p.GatewayPath(),
-			"created_at": p.CreatedAt,
+			"created_at": p.CreatedAt, "kind": proxyKind(&p),
 		})
 	}
 	return helper.JSON(map[string]any{"proxies": out})

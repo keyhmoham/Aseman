@@ -12,7 +12,6 @@ import (
 	"github.com/tradera/tradera/pkg/jsonpatch"
 	"github.com/tradera/tradera/plugins/actions/spaces/models/proxy"
 	"github.com/tradera/tradera/plugins/actions/support/helper"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
 )
 
 // A preview is a page the project's computer serves. The computer sleeps when
@@ -92,8 +91,7 @@ func (s *Service) ProxyOpen(ctx context.Context, id, actor identity.ID) (map[str
 	if err := s.requireFundsForComputer(ctx, p.SpaceID, actor); err != nil {
 		return nil, err
 	}
-	rec, err := s.SandboxStart(ctx, p.SpaceID)
-	if err != nil {
+	if _, err := s.SandboxStart(ctx, p.SpaceID); err != nil {
 		return nil, err
 	}
 	out := map[string]any{"id": p.ID.String(), "title": p.Title, "port": p.Port, "url": p.GatewayPath()}
@@ -109,21 +107,7 @@ func (s *Service) ProxyOpen(ctx context.Context, id, actor identity.ID) (map[str
 	}
 	// The computer may be a new machine since the preview was published: the
 	// gateway is pointed at this one.
-	vm := s.K.VMMFor(vmm.Type(rec.VMType))
-	tv, ok := vm.(tunnelVM)
-	if !ok {
-		return nil, errs.New(errs.CodeUnavailable, "sandbox provider does not support proxying")
-	}
-	target, token, err := tv.CreateTunnel(ctx, rec.VMID, p.Port)
-	if err != nil {
-		return nil, err
-	}
-	preserve := p.PreservesPath()
-	p.TargetURL, p.Token, p.UpdatedAt = target, token, time.Now().UTC()
-	if preserve {
-		p.TargetURL = strings.TrimRight(target, "/") + p.GatewayPath()
-	}
-	if err := s.saveProxy(ctx, p, false); err != nil {
+	if err := s.repointProxy(ctx, p); err != nil {
 		return nil, err
 	}
 	s.holdPreview(p.SpaceID)

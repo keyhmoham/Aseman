@@ -1,52 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../app_dependencies.dart';
 import '../../../../core/utils/context_extensions.dart';
 import '../../../../data/models/bot.dart';
-import '../../../../shared/widgets/backend_action_ui.dart';
-import '../../../admin/presentation/admin_widgets.dart';
+import '../../../../data/services/tradera_service.dart';
 import '../../../computer/computer_view.dart';
+import '../../../computer/preview_view.dart';
 import '../../../computer/space_computer.dart';
+import '../../../search_feed/presentation/rich_post_content.dart';
 
 // The space's own facilities, shown as tabs of the workspace's left panel:
 // its computer, the agent team's memory and the published previews. Files,
-// apps, routines and usage live elsewhere (the Sandbox Explorer and file
-// tabs, the Apps tab, each room's routines and the space settings).
-
-/// Runs a backend action through its form (which doubles as the
-/// confirmation), reports the outcome and reloads the tab.
-mixin _SpaceActions<T extends StatefulWidget> on State<T> {
-  AppDependencies get dependencies;
-  Future<void> reload();
-
-  Future<void> run(
-    String namespace,
-    String action,
-    Map<String, dynamic> body, {
-    required String done,
-  }) async {
-    final form = await showBackendActionForm(
-      context,
-      namespace: namespace,
-      action: action,
-      initialBody: body,
-    );
-    if (form == null || !mounted) return;
-    try {
-      await dependencies.service.invokeAction(
-        namespace,
-        action,
-        body: form,
-        timeout: const Duration(minutes: 10),
-      );
-      if (!mounted) return;
-      context.showMessage(done);
-      await reload();
-    } catch (e) {
-      if (mounted) context.showMessage('$done failed: $e');
-    }
-  }
-}
+// apps, routines and usage live elsewhere (the file tree and file windows,
+// the Apps tab, each room's routines and the space settings).
 
 /// The space's computer: its screen, live, and its power. It follows the
 /// node as the computer changes (whoever changed it), so it never needs
@@ -245,7 +214,8 @@ String _trim(num v) => v == v.roundToDouble() ? '${v.round()}' : '$v';
 String _minutes(Duration d) =>
     d.inMinutes >= 1 ? '${d.inMinutes} min' : '${d.inSeconds} s';
 
-/// The agent team's memory: the shared AGENTS.md and each agent's own.
+/// The agent team's memory: the shared AGENTS.md every agent reads, and
+/// each agent's own notes. Written as Markdown, read back rendered.
 class SpaceMemoryTab extends StatefulWidget {
   const SpaceMemoryTab({
     super.key,
@@ -267,15 +237,21 @@ class _SpaceMemoryTabState extends State<SpaceMemoryTab> {
 
   /// The agent whose notes are open; empty for the shared notes.
   String _agent = '';
+
+  /// What is saved: the editor differs from it while there are changes.
+  String _saved = '';
   bool _loading = true;
   bool _saving = false;
+  bool _preview = false;
 
   String get _path =>
       _agent.isEmpty ? 'AGENTS.md' : '.tradera/agents/$_agent/AGENTS.md';
+  bool get _dirty => !_loading && _text.text != _saved;
 
   @override
   void initState() {
     super.initState();
+    _text.addListener(_edited);
     _load();
   }
 
@@ -283,6 +259,11 @@ class _SpaceMemoryTabState extends State<SpaceMemoryTab> {
   void dispose() {
     _text.dispose();
     super.dispose();
+  }
+
+  bool _wasDirty = false;
+  void _edited() {
+    if (_dirty != _wasDirty) setState(() => _wasDirty = _dirty);
   }
 
   Future<void> _load() async {
@@ -303,13 +284,17 @@ class _SpaceMemoryTabState extends State<SpaceMemoryTab> {
     }
     if (!mounted) return;
     setState(() {
+      _saved = content;
       _text.text = content;
       _loading = false;
+      _wasDirty = false;
     });
   }
 
   Future<void> _save() async {
+    if (!_dirty || _saving) return;
     setState(() => _saving = true);
+    final content = _text.text;
     try {
       await widget.dependencies.service.invokeAction(
         'spaces',
@@ -318,95 +303,294 @@ class _SpaceMemoryTabState extends State<SpaceMemoryTab> {
           'space': widget.spaceId,
           'operation': 'write',
           'path': _path,
-          'content': _text.text,
+          'content': content,
         },
         timeout: const Duration(minutes: 5),
       );
-      if (mounted) context.showMessage('Memory saved.');
+      _saved = content;
+      if (mounted) context.showMessage('Memory saved');
     } catch (e) {
       if (mounted) context.showMessage('Save failed: $e');
     }
-    if (mounted) setState(() => _saving = false);
+    if (mounted) {
+      setState(() {
+        _saving = false;
+        _wasDirty = _dirty;
+      });
+    }
   }
 
-  void _choose(String agent) {
+  void _discard() => setState(() {
+    _text.text = _saved;
+    _wasDirty = false;
+  });
+
+  Future<void> _choose(String agent) async {
     if (agent == _agent) return;
+    if (_dirty) {
+      final leave = await showDialog<bool>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: const Text('Discard your changes?'),
+          content: const Text('These notes have changes that are not saved.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog, false),
+              child: const Text('Keep editing'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialog, true),
+              child: const Text('Discard'),
+            ),
+          ],
+        ),
+      );
+      if (leave != true || !mounted) return;
+    }
     setState(() => _agent = agent);
-    _load();
+    await _load();
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          _agent.isEmpty
-              ? 'Notes and instructions every agent here uses.'
-              : 'This agent’s own notes.',
-          style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
-        ),
-        if (widget.agents.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: _agent,
-            isExpanded: true,
-            isDense: true,
-            style: TextStyle(fontSize: 12, color: scheme.onSurface),
-            decoration: const InputDecoration(
-              labelText: 'Whose memory',
-              isDense: true,
-            ),
-            items: [
-              const DropdownMenuItem(value: '', child: Text('Shared')),
-              for (final a in widget.agents)
-                DropdownMenuItem(
-                  value: a.id,
-                  child: Text(
-                    a.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+    final agent = widget.agents.where((a) => a.id == _agent).firstOrNull;
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true): _save,
+        const SingleActivator(LogicalKeyboardKey.keyS, meta: true): _save,
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            agent == null
+                ? 'What every agent here knows: conventions, decisions, where things are.'
+                : 'What ${agent.name} keeps for itself.',
+            style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+          ),
+          if (widget.agents.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 34,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _WhoseChip(
+                    label: 'Shared',
+                    icon: Icons.groups_2_outlined,
+                    selected: _agent.isEmpty,
+                    onTap: () => _choose(''),
                   ),
+                  for (final a in widget.agents)
+                    _WhoseChip(
+                      label: a.name,
+                      initial: a.name.isEmpty ? '?' : a.name[0].toUpperCase(),
+                      selected: a.id == _agent,
+                      onTap: () => _choose(a.id),
+                    ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: _dirty
+                      ? scheme.primary.withValues(alpha: .55)
+                      : scheme.outlineVariant.withValues(alpha: .5),
                 ),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.description_outlined,
+                          size: 15,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'AGENTS.md',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                _loading
+                                    ? 'Loading…'
+                                    : _saving
+                                    ? 'Saving…'
+                                    : _dirty
+                                    ? 'Unsaved changes'
+                                    : 'Saved',
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  color: _dirty
+                                      ? scheme.primary
+                                      : scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: _preview ? 'Edit' : 'Preview',
+                          visualDensity: VisualDensity.compact,
+                          iconSize: 18,
+                          isSelected: _preview,
+                          onPressed: _loading
+                              ? null
+                              : () => setState(() => _preview = !_preview),
+                          icon: const Icon(Icons.visibility_outlined),
+                          selectedIcon: const Icon(Icons.edit_outlined),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Divider(
+                    height: 1,
+                    color: scheme.outlineVariant.withValues(alpha: .5),
+                  ),
+                  Expanded(
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _preview
+                        ? (_text.text.trim().isEmpty
+                              ? Center(
+                                  child: Text(
+                                    'Nothing written yet.',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                )
+                              : SingleChildScrollView(
+                                  padding: const EdgeInsets.all(12),
+                                  child: RichPostContent(_text.text),
+                                ))
+                        : TextField(
+                            controller: _text,
+                            expands: true,
+                            maxLines: null,
+                            textAlignVertical: TextAlignVertical.top,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 11.5,
+                              height: 1.5,
+                            ),
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              filled: false,
+                              contentPadding: EdgeInsets.all(12),
+                              hintText:
+                                  '# Project memory\n\nDecisions, preferences and ways of working…',
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (_dirty) ...[
+                TextButton(
+                  onPressed: _saving ? null : _discard,
+                  child: const Text('Discard'),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _dirty && !_saving ? _save : null,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          _dirty ? Icons.save_outlined : Icons.check_rounded,
+                          size: 17,
+                        ),
+                  label: Text(_dirty ? 'Save' : 'Saved'),
+                ),
+              ),
             ],
-            onChanged: (v) => _choose(v ?? ''),
           ),
         ],
-        const SizedBox(height: 10),
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : TextField(
-                  controller: _text,
-                  expands: true,
-                  maxLines: null,
-                  textAlignVertical: TextAlignVertical.top,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 11,
-                    height: 1.45,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'AGENTS.md',
-                    hintText:
-                        '# Project memory\n\nDecisions, preferences and ways of working…',
-                    alignLabelWithHint: true,
-                  ),
-                ),
-        ),
-        const SizedBox(height: 8),
-        FilledButton.icon(
-          onPressed: _loading || _saving ? null : _save,
-          icon: const Icon(Icons.save_outlined, size: 17),
-          label: const Text('Save'),
-        ),
-      ],
+      ),
     );
   }
 }
 
-/// The space's published sandbox ports and their secure preview links.
+class _WhoseChip extends StatelessWidget {
+  const _WhoseChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+    this.initial,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final IconData? icon;
+  final String? initial;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        selected: selected,
+        onSelected: (_) => onTap(),
+        showCheckmark: false,
+        visualDensity: VisualDensity.compact,
+        labelStyle: const TextStyle(fontSize: 11.5),
+        avatar: icon != null
+            ? Icon(icon, size: 16)
+            : CircleAvatar(
+                backgroundColor: scheme.tertiaryContainer,
+                child: Text(
+                  initial ?? '',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onTertiaryContainer,
+                  ),
+                ),
+              ),
+        label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+    );
+  }
+}
+
+/// The pages the space's computer serves through the node's gateway, each
+/// shown as a small browser window: live while the computer is awake, dark
+/// while it sleeps. Opening one wakes the computer and starts its app when
+/// needed, then shows it on the desk or in a sheet.
 class SpacePreviewsTab extends StatefulWidget {
   const SpacePreviewsTab({
     super.key,
@@ -419,34 +603,55 @@ class SpacePreviewsTab extends StatefulWidget {
   State<SpacePreviewsTab> createState() => _SpacePreviewsTabState();
 }
 
-class _SpacePreviewsTabState extends State<SpacePreviewsTab>
-    with _SpaceActions {
-  List<Map<String, dynamic>> _previews = const [];
+class _SpacePreviewsTabState extends State<SpacePreviewsTab> {
+  late final SpaceComputer _computer = SpaceComputer.of(
+    widget.dependencies.service,
+    widget.spaceId,
+  );
+  List<PublishedPreview> _previews = const [];
   bool _loading = true;
-
-  @override
-  AppDependencies get dependencies => widget.dependencies;
+  String _rev = '';
 
   @override
   void initState() {
     super.initState();
+    _computer.addListener(_computerChanged);
     reload();
   }
 
   @override
-  Future<void> reload() async {
-    setState(() => _loading = true);
-    var previews = const <Map<String, dynamic>>[];
+  void dispose() {
+    _computer.removeListener(_computerChanged);
+    super.dispose();
+  }
+
+  void _computerChanged() {
+    if (!mounted) return;
+    // A computer that changed may have new previews (an agent publishing
+    // one as it works): read them again.
+    if (_computer.info.rev != _rev) {
+      _rev = _computer.info.rev;
+      unawaited(reload(quiet: true));
+    }
+    setState(() {});
+  }
+
+  Future<void> reload({bool quiet = false}) async {
+    if (!quiet) setState(() => _loading = true);
+    var previews = _previews;
     try {
       final listed = _map(
         await widget.dependencies.service.invokeAction(
           'spaces',
           'proxy_list',
           body: {'space': widget.spaceId},
-          timeout: const Duration(minutes: 5),
+          timeout: const Duration(minutes: 1),
         ),
       );
-      previews = _maps(listed['proxies'] ?? listed['previews']);
+      previews = [
+        for (final m in _maps(listed['proxies'] ?? listed['previews']))
+          PublishedPreview.fromJson(m),
+      ].where((p) => p.kind == 'preview').toList();
     } catch (_) {}
     if (!mounted) return;
     setState(() {
@@ -455,100 +660,124 @@ class _SpacePreviewsTabState extends State<SpacePreviewsTab>
     });
   }
 
+  void _open(PublishedPreview p) => openPreview(
+    context,
+    widget.dependencies.service,
+    spaceId: widget.spaceId,
+    page: p.page,
+    title: p.title,
+  );
+
+  Future<void> _publish() async {
+    final published = await showDialog<PublishedPreview>(
+      context: context,
+      builder: (_) => _PublishDialog(
+        service: widget.dependencies.service,
+        spaceId: widget.spaceId,
+      ),
+    );
+    if (published == null || !mounted) return;
+    await reload(quiet: true);
+    if (mounted) context.showMessage('${published.title} published');
+  }
+
+  Future<void> _remove(PublishedPreview p) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        icon: const Icon(Icons.link_off_rounded),
+        title: Text('Remove ${p.title}?'),
+        content: const Text(
+          'Its link stops working. The app itself keeps running on the '
+          'computer and can be published again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await widget.dependencies.service.invokeAction(
+        'spaces',
+        'proxy_delete',
+        body: {'proxy': p.id},
+      );
+      setState(() => _previews = [..._previews]..remove(p));
+    } catch (e) {
+      if (mounted) context.showMessage('Remove failed: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final state = _computer.state;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        FilledButton.icon(
-          onPressed: () => run('spaces', 'proxy_create', {
-            'space': widget.spaceId,
-          }, done: 'Port published'),
+        FilledButton.tonalIcon(
+          onPressed: _publish,
           icon: const Icon(Icons.add_link_rounded, size: 17),
-          label: const Text('Publish port'),
+          label: const Text('Publish a port'),
         ),
         const SizedBox(height: 10),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
-              : _previews.isEmpty
-              ? Center(
-                  child: Text(
-                    'No previews. Publish a sandbox port to get a secure link.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                )
-              : ListView.separated(
-                  padding: EdgeInsets.zero,
-                  itemCount: _previews.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 7),
-                  itemBuilder: (context, i) {
-                    final p = _previews[i];
-                    return _Card(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.language_rounded, size: 16),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  '${p['title'] ?? 'Port ${p['port']}'}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                              Flexible(
-                                child: AdminStatusPill(
-                                  '${p['status'] ?? 'live'}',
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 5),
-                          SelectableText(
-                            '${p['url'] ?? p['id']}',
-                            style: TextStyle(
-                              fontSize: 9,
+              : RefreshIndicator(
+                  onRefresh: reload,
+                  child: _previews.isEmpty
+                      ? ListView(
+                          children: [
+                            const SizedBox(height: 40),
+                            Icon(
+                              Icons.web_asset_rounded,
+                              size: 40,
                               color: scheme.onSurfaceVariant,
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          Wrap(
-                            alignment: WrapAlignment.end,
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              _SmallAction(
-                                icon: Icons.link_off_rounded,
-                                label: 'Remove',
-                                onTap: () => run('spaces', 'proxy_delete', {
-                                  'proxy': p['id'],
-                                }, done: 'Preview removed'),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'No previews yet',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
                               ),
-                              _SmallAction(
-                                icon: Icons.open_in_new_rounded,
-                                label: 'Open',
-                                onTap: () => run('spaces', 'proxy_open', {
-                                  'proxy': p['id'],
-                                }, done: 'Preview opened'),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'When an app runs on the computer, publish its '
+                              'port to open it here. Agents publish what they '
+                              'build too.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: scheme.onSurfaceVariant,
                               ),
-                            ],
+                            ),
+                          ],
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          itemCount: _previews.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 10),
+                          itemBuilder: (context, i) => _PreviewCard(
+                            service: widget.dependencies.service,
+                            preview: _previews[i],
+                            state: state,
+                            onOpen: () => _open(_previews[i]),
+                            onRemove: () => _remove(_previews[i]),
                           ),
-                        ],
-                      ),
-                    );
-                  },
+                        ),
                 ),
         ),
       ],
@@ -556,38 +785,237 @@ class _SpacePreviewsTabState extends State<SpacePreviewsTab>
   }
 }
 
-class _Card extends StatelessWidget {
-  const _Card({required this.child});
-  final Widget child;
+class _PreviewCard extends StatelessWidget {
+  const _PreviewCard({
+    required this.service,
+    required this.preview,
+    required this.state,
+    required this.onOpen,
+    required this.onRemove,
+  });
+  final TraderaService service;
+  final PublishedPreview preview;
+  final ComputerState state;
+  final VoidCallback onOpen;
+  final VoidCallback onRemove;
+
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(10),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(17),
-    ),
-    child: child,
-  );
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PreviewThumbnail(
+                service: service,
+                preview: preview,
+                state: state,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          preview.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          'Port ${preview.port}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  FilledButton.tonal(
+                    onPressed: onOpen,
+                    style: FilledButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                    ),
+                    child: const Text('Open'),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'More',
+                    iconSize: 19,
+                    padding: EdgeInsets.zero,
+                    onSelected: (v) => switch (v) {
+                      'copy' => copyPreviewLink(context, service, preview.page),
+                      _ => onRemove(),
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'copy',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.link_rounded),
+                          title: Text('Copy link'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'remove',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.link_off_rounded),
+                          title: Text('Remove'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _SmallAction extends StatelessWidget {
-  const _SmallAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
+/// Publishes a port of the computer: what is served there gets a link.
+class _PublishDialog extends StatefulWidget {
+  const _PublishDialog({required this.service, required this.spaceId});
+  final TraderaService service;
+  final String spaceId;
   @override
-  Widget build(BuildContext context) => OutlinedButton.icon(
-    style: OutlinedButton.styleFrom(
-      visualDensity: VisualDensity.compact,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+  State<_PublishDialog> createState() => _PublishDialogState();
+}
+
+class _PublishDialogState extends State<_PublishDialog> {
+  final _port = TextEditingController();
+  final _name = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _port.dispose();
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final port = int.tryParse(_port.text.trim());
+    if (port == null || port < 1 || port > 65535) {
+      setState(() => _error = 'A port is a number from 1 to 65535.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final r = _map(
+        await widget.service.invokeAction(
+          'spaces',
+          'proxy_create',
+          body: {
+            'space': widget.spaceId,
+            'port': port,
+            if (_name.text.trim().isNotEmpty) 'title': _name.text.trim(),
+          },
+          // Publishing wakes the computer when it sleeps.
+          timeout: const Duration(minutes: 5),
+        ),
+      );
+      if (!mounted) return;
+      Navigator.pop(
+        context,
+        PublishedPreview.fromJson({...r, 'id': r['proxy_id'] ?? r['id']}),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = '$e';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    icon: const Icon(Icons.add_link_rounded),
+    title: const Text('Publish a port'),
+    content: SizedBox(
+      width: 340,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Gives what an app serves on the computer a private link that '
+            'members of this space can open.',
+            style: TextStyle(fontSize: 12.5),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _port,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(
+              labelText: 'Port',
+              hintText: '3000',
+            ),
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _name,
+            decoration: const InputDecoration(
+              labelText: 'Name (optional)',
+              hintText: 'My app',
+            ),
+            onSubmitted: (_) => _submit(),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _error!,
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ],
+        ],
+      ),
     ),
-    onPressed: onTap,
-    icon: Icon(icon, size: 15),
-    label: Text(label, style: const TextStyle(fontSize: 11)),
+    actions: [
+      TextButton(
+        onPressed: _busy ? null : () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: _busy ? null : _submit,
+        child: _busy
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Text('Publish'),
+      ),
+    ],
   );
 }
 

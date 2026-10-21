@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../data/services/tradera_service.dart';
-import '../../../desk/presentation/web_page_view.dart';
+import '../../../computer/preview_view.dart';
 
 /// A web page of the space (a sandbox preview behind the gateway) full
 /// screen, where no desk is on screen (the messenger); in the same view the
@@ -29,7 +29,9 @@ class ProxyWebView extends StatelessWidget {
         ),
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
-      body: WebPageView(service: service, page: page, embed: 'screen'),
+      // Woken and started when needed, then shown.
+      body: LivePreview(
+          service: service, page: page, title: title, embed: 'screen'),
     );
   }
 }

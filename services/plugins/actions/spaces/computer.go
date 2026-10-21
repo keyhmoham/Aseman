@@ -462,7 +462,7 @@ func (s *Service) desktopInstall(ctx context.Context, req *api.ActionRequest) (*
 	if password == "" {
 		return nil, errs.New(errs.CodeUnavailable, "The desktop started without a password: "+output)
 	}
-	p, e := s.ProxyCreate(ctx, sp, identity.ID{}, req.Caller.ID, 6080, "Desktop")
+	p, e := s.desktopProxy(ctx, sp, req.Caller.ID)
 	if e != nil {
 		return nil, e
 	}

@@ -295,6 +295,78 @@ func (s *Service) proxyManageTool(ctx context.Context, spaceID identity.ID, name
 	return string(data), err
 }
 
+// desktopPort is the port the computer's desktop (noVNC) is served on;
+// desktopTitle names its proxy.
+const (
+	desktopPort  = 6080
+	desktopTitle = "Desktop"
+	toolPrefix   = "Tool · "
+)
+
+// proxyKind tells what a proxy fronts: the computer's desktop, an app
+// installed on the computer (EnsureToolProxy), or a preview someone
+// published, which is the only kind the Previews list shows.
+func proxyKind(p *proxy.Proxy) string {
+	switch {
+	case p.Port == desktopPort && p.Title == desktopTitle:
+		return "desktop"
+	case strings.HasPrefix(p.Title, toolPrefix):
+		return "tool"
+	}
+	return "preview"
+}
+
+// desktopProxy is the one proxy of the project's desktop, pointed at the
+// machine awake now. Older nodes made a new one on every start: the extras
+// are removed.
+func (s *Service) desktopProxy(ctx context.Context, sp, owner identity.ID) (*proxy.Proxy, error) {
+	list, err := s.ProxyList(ctx, sp)
+	if err != nil {
+		return nil, err
+	}
+	var keep *proxy.Proxy
+	for i := range list {
+		if proxyKind(&list[i]) != "desktop" {
+			continue
+		}
+		if keep == nil {
+			keep = &list[i] // the newest
+			continue
+		}
+		_ = s.ProxyDelete(ctx, list[i].ID)
+	}
+	if keep == nil {
+		return s.ProxyCreate(ctx, sp, identity.ID{}, owner, desktopPort, desktopTitle)
+	}
+	if err := s.repointProxy(ctx, keep); err != nil {
+		return nil, err
+	}
+	s.holdPreview(sp)
+	return keep, nil
+}
+
+// repointProxy points a proxy at the project's computer as it is now (a
+// machine woken or replaced since answers on a new address).
+func (s *Service) repointProxy(ctx context.Context, p *proxy.Proxy) error {
+	rec, err := s.SandboxStart(ctx, p.SpaceID)
+	if err != nil {
+		return err
+	}
+	tv, ok := s.K.VMMFor(vmm.Type(rec.VMType)).(tunnelVM)
+	if !ok {
+		return errs.New(errs.CodeUnavailable, "sandbox provider does not support proxying")
+	}
+	target, token, err := tv.CreateTunnel(ctx, rec.VMID, p.Port)
+	if err != nil {
+		return err
+	}
+	p.TargetURL, p.Token, p.UpdatedAt = target, token, time.Now().UTC()
+	if p.PreservesPath() {
+		p.TargetURL = strings.TrimRight(target, "/") + p.GatewayPath()
+	}
+	return s.saveProxy(ctx, p, false)
+}
+
 func reusablePathProxy(records []proxy.Proxy, room, owner identity.ID, port int) *proxy.Proxy {
 	for i := range records {
 		p := &records[i]

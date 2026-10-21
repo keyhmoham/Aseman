@@ -24,13 +24,13 @@ import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../admin/presentation/admin_screen.dart';
 import '../../computer/computer_view.dart';
+import '../../computer/preview_view.dart';
 import '../../desk/data/desk_api.dart';
 import '../../desk/domain/desk_models.dart';
 import '../../desk/presentation/compact_desk.dart';
 import '../../desk/presentation/designed_window.dart';
 import '../../desk/presentation/desk_controller.dart';
 import '../../desk/presentation/floating_desk.dart';
-import '../../desk/presentation/web_page_view.dart';
 import '../../files/domain/file_types.dart';
 import '../../files/presentation/file_tree.dart';
 import '../../files/presentation/file_viewer.dart';
@@ -1882,9 +1882,12 @@ class _CenterDesk extends StatelessWidget {
                   title: title.isEmpty ? 'Web page' : title,
                   caption: 'Tap to open',
                   icon: 'language'))
-          : WebPageView(
+          // Woken and started when needed, then shown.
+          : LivePreview(
               key: ValueKey('web-$id-$page'),
               service: dependencies.service,
+              spaceId: spaceId,
+              title: title,
               page: page);
 
   /// A window's frontend, whatever its kind; the enclosing

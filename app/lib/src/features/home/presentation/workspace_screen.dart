@@ -45,6 +45,7 @@ import '../../tools/presentation/tool_frontend_view.dart';
 import '../../tools/presentation/tool_screen.dart';
 import '../../tools/runtime/tool_media.dart';
 import 'space_settings_panel.dart';
+import 'widgets/space_facility_tabs.dart';
 
 class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({
@@ -127,6 +128,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   /// are only shown (and usable) here once added via [addBotToSpace].
   List<Bot> get spaceBots => _spaceBots[workspace] ?? const [];
 
+  /// Whether each app of a workspace needs each person's own account, and
+  /// whether the caller has connected theirs, by bot id.
+  final Map<String, Map<String, ({String auth, bool connected, String name})>>
+      _appConnections = {};
+
   Future<void> _loadSpaceBots() async {
     final requestedWorkspace = workspace;
     final sp = _spaceFor(workspace);
@@ -135,6 +141,23 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       final list = await widget.dependencies.service.fetchSpaceBots(sp.id);
       if (mounted) setState(() => _spaceBots[requestedWorkspace] = list);
     } catch (_) {}
+    try {
+      final connections =
+          await widget.dependencies.service.toolConnections(sp.id);
+      if (mounted) {
+        setState(() => _appConnections[requestedWorkspace] = connections);
+      }
+    } catch (_) {}
+  }
+
+  /// Connects (or reconnects) the caller's own account to an app of the
+  /// workspace that each person signs in to.
+  Future<void> _connectApp(Bot bot, bool reconnect) async {
+    final sp = _spaceFor(workspace);
+    if (sp == null) return;
+    final connected = await connectMcpTool(context, widget.dependencies.service,
+        botId: bot.id, spaceId: sp.id, name: bot.name, reconnect: reconnect);
+    if (connected && mounted) await _loadSpaceBots();
   }
 
   Future<void> _addBotToWorkspace(Bot bot) async {
@@ -501,6 +524,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                           onAddBot: _addBotToWorkspace,
                           onRemoveBot: _removeBotFromWorkspace,
                           onAddApp: _addAppToWorkspace,
+                          appConnections:
+                              _appConnections[workspace] ?? const {},
+                          onConnectApp: _connectApp,
                           openRoom: (value) {
                             Navigator.pop(context);
                             openRoom(value);
@@ -575,6 +601,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                       onAddBot: _addBotToWorkspace,
                                       onRemoveBot: _removeBotFromWorkspace,
                                       onAddApp: _addAppToWorkspace,
+                                      appConnections:
+                                          _appConnections[workspace] ??
+                                              const {},
+                                      onConnectApp: _connectApp,
                                       openRoom: openRoom))),
                           const SizedBox(width: 16),
                           Expanded(
@@ -834,6 +864,8 @@ class _LibraryPanel extends StatelessWidget {
       this.onAddBot,
       this.onRemoveBot,
       this.onAddApp,
+      this.appConnections = const {},
+      this.onConnectApp,
       required this.openRoom});
   final String? room;
   final String workspace;
@@ -861,6 +893,16 @@ class _LibraryPanel extends StatelessWidget {
 
   /// Adds an MCP app (from the catalog or by its address) to the space.
   final VoidCallback? onAddApp;
+
+  /// Each app's sign-in state here, by bot id: an app each person connects
+  /// with their own account offers Connect, or Reconnect once connected.
+  final Map<String, ({String auth, bool connected, String name})>
+      appConnections;
+  final void Function(Bot bot, bool reconnect)? onConnectApp;
+
+  /// The first of the space's facility tabs (Computer, Memory, Previews),
+  /// which follow the library tabs.
+  static const facilitiesTab = 8;
   static const icons = [
     Icons.forum_outlined,
     Icons.smart_toy_outlined,
@@ -869,7 +911,10 @@ class _LibraryPanel extends StatelessWidget {
     Icons.link,
     Icons.gif_box_outlined,
     Icons.perm_media_outlined,
-    Icons.graphic_eq_rounded
+    Icons.graphic_eq_rounded,
+    Icons.desktop_windows_outlined,
+    Icons.psychology_outlined,
+    Icons.open_in_browser_outlined,
   ];
   static const labels = [
     'Rooms',
@@ -879,7 +924,10 @@ class _LibraryPanel extends StatelessWidget {
     'Links',
     'GIFs',
     'Media',
-    'Audio'
+    'Audio',
+    'Computer',
+    'Memory',
+    'Previews',
   ];
   @override
   Widget build(BuildContext context) => _Panel(
@@ -895,11 +943,21 @@ class _LibraryPanel extends StatelessWidget {
                     .surfaceContainerHighest
                     .withValues(alpha: .58),
                 borderRadius: BorderRadius.circular(24)),
-            child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                    icons.length,
-                    (i) => Padding(
+            // The library tabs, then (past a divider) the space's
+            // facilities; the rail scrolls when the panel is short.
+            child: Center(
+                child: SingleChildScrollView(
+                    child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                  for (var i = 0; i < icons.length; i++) ...[
+                    if (i == facilitiesTab)
+                      Container(
+                          width: 26,
+                          height: 1,
+                          margin: const EdgeInsets.symmetric(vertical: 5),
+                          color: Theme.of(context).colorScheme.outlineVariant),
+                    Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2),
                         child: Tooltip(
                             message: labels[i],
@@ -926,7 +984,9 @@ class _LibraryPanel extends StatelessWidget {
                                             size: 20,
                                             color: i == tab
                                                 ? Theme.of(context).colorScheme.onPrimaryContainer
-                                                : Theme.of(context).colorScheme.onSurfaceVariant))))))))),
+                                                : Theme.of(context).colorScheme.onSurfaceVariant)))))),
+                  ]
+                ])))),
         Expanded(
             child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 16, 14, 14),
@@ -952,17 +1012,21 @@ class _LibraryPanel extends StatelessWidget {
                                           .colorScheme
                                           .onSurfaceVariant))
                             ])),
-                        IconButton.filledTonal(
-                            visualDensity: VisualDensity.compact,
-                            tooltip: 'Find ${labels[tab].toLowerCase()}',
-                            onPressed: onSearch,
-                            icon: const Icon(Icons.search_rounded, size: 18)),
-                        const SizedBox(width: 3),
-                        IconButton(
-                            visualDensity: VisualDensity.compact,
-                            tooltip: tab == 0 ? 'New room' : 'Add',
-                            onPressed: tab == 0 ? onCreateRoom : null,
-                            icon: const Icon(Icons.add_rounded, size: 19))
+                        // A facility tab carries its own actions.
+                        if (tab < facilitiesTab) ...[
+                          IconButton.filledTonal(
+                              visualDensity: VisualDensity.compact,
+                              tooltip: 'Find ${labels[tab].toLowerCase()}',
+                              onPressed: onSearch,
+                              icon:
+                                  const Icon(Icons.search_rounded, size: 18)),
+                          const SizedBox(width: 3),
+                          IconButton(
+                              visualDensity: VisualDensity.compact,
+                              tooltip: tab == 0 ? 'New room' : 'Add',
+                              onPressed: tab == 0 ? onCreateRoom : null,
+                              icon: const Icon(Icons.add_rounded, size: 19))
+                        ],
                       ]),
                       const SizedBox(height: 12),
                       Expanded(
@@ -989,6 +1053,24 @@ class _LibraryPanel extends StatelessWidget {
                 spaceId: spaceId,
                 onTap: () => openRoom(name));
           });
+    }
+    if (tab >= facilitiesTab) {
+      final deps = dependencies;
+      if (deps == null || spaceId.isEmpty) {
+        return const _LibraryEmpty(
+            icon: Icons.cloud_off_outlined,
+            message: 'Open a workspace to manage its facilities.');
+      }
+      if (tab == facilitiesTab) {
+        return SpaceComputerTab(dependencies: deps, spaceId: spaceId);
+      }
+      if (tab == facilitiesTab + 1) {
+        return SpaceMemoryTab(
+            dependencies: deps,
+            spaceId: spaceId,
+            agents: spaceBots.where((b) => b.isAgent).toList());
+      }
+      return SpacePreviewsTab(dependencies: deps, spaceId: spaceId);
     }
     if (tab >= 3) {
       // Docs / Links / GIFs / Media / Audio are backed by the space's file
@@ -1072,12 +1154,20 @@ class _LibraryPanel extends StatelessWidget {
                   onAdd: (b) => onAddBot?.call(b));
             }
             final bot = tools[index];
+            final connection = appConnections[bot.id];
+            final connect = onConnectApp;
             return _LibraryToolCard(
                 label: bot.name,
-                subtitle: '${bot.toolModeLabel} · ${bot.status}',
+                subtitle: connection?.auth == 'user' && !connection!.connected
+                    ? 'Needs your sign-in'
+                    : '${bot.toolModeLabel} · ${bot.status}',
                 icon: Icons.widgets_outlined,
                 dependencies: dependencies,
                 spaceId: spaceId,
+                connected: connection?.connected ?? true,
+                onConnect: connect == null || connection?.auth != 'user'
+                    ? null
+                    : () => connect(bot, connection!.connected),
                 onTap: () => onOpenApp?.call(bot),
                 onRemove: onRemoveBot == null ? null : () => onRemoveBot!(bot));
           });
@@ -1685,6 +1775,8 @@ class _LibraryToolCard extends StatelessWidget {
       this.subtitle,
       this.onTap,
       this.onRemove,
+      this.onConnect,
+      this.connected = true,
       this.dependencies,
       this.spaceId = ''});
   final String label;
@@ -1692,6 +1784,11 @@ class _LibraryToolCard extends StatelessWidget {
   final String? subtitle;
   final VoidCallback? onTap;
   final VoidCallback? onRemove;
+
+  /// Signs the caller's own account in to an app each person connects;
+  /// null for an app everyone shares.
+  final VoidCallback? onConnect;
+  final bool connected;
   final AppDependencies? dependencies;
   final String spaceId;
   @override
@@ -1731,8 +1828,10 @@ class _LibraryToolCard extends StatelessWidget {
                         Container(
                             width: 6,
                             height: 6,
-                            decoration: const BoxDecoration(
-                                color: Colors.greenAccent,
+                            decoration: BoxDecoration(
+                                color: connected
+                                    ? Colors.greenAccent
+                                    : AppColors.warning,
                                 shape: BoxShape.circle)),
                         const SizedBox(width: 5),
                         Expanded(
@@ -1746,6 +1845,17 @@ class _LibraryToolCard extends StatelessWidget {
                                         .onSurfaceVariant)))
                       ])
                     ])),
+                if (onConnect != null)
+                  IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: connected
+                          ? 'Reconnect your account'
+                          : 'Connect your account',
+                      onPressed: onConnect,
+                      icon: Icon(
+                          connected ? Icons.sync_rounded : Icons.login_rounded,
+                          size: 17,
+                          color: connected ? null : AppColors.warning)),
                 if (onRemove != null)
                   IconButton(
                       visualDensity: VisualDensity.compact,

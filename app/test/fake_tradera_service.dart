@@ -786,6 +786,10 @@ class FakeTraderaService extends TraderaService {
   }
 
   @override
+  Future<Map<String, ({String auth, bool connected, String name})>>
+      toolConnections(String spaceId) async => const {};
+
+  @override
   Future<void> addBotToSpace(String spaceId, String botId,
       {String roomId = ''}) async {}
 

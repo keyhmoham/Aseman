@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tradera/src/data/models/bot.dart';
-import 'package:tradera/src/features/home/presentation/project_control_content.dart';
 import 'package:tradera/src/features/tools/connect/mcp_connect_dialog.dart';
 import 'package:tradera/src/features/tools/connect/mcp_sign_in.dart';
 import 'package:tradera/src/features/tools/data/tools_api.dart';
@@ -160,43 +159,6 @@ void main() {
     expect(service.connections.single['token'], 'secret-token');
     expect(service.prepared, isEmpty);
     expect(await result, isTrue);
-  });
-
-  testWidgets('the project apps say which ones need your account',
-      (tester) async {
-    final asked = <String>[];
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ProjectControlContent(
-          area: 'Apps',
-          spaceId: 'space-1',
-          results: const {
-            'spaces.tools_list': {
-              'tools': [
-                {'id': 'gh', 'name': 'GitHub'},
-                {'id': 'ln', 'name': 'Linear'},
-                {'id': 'wx', 'name': 'Weather'},
-              ]
-            },
-            'tools.commands_list': {
-              'tools': [
-                {'bot_id': 'gh', 'auth': 'user', 'connected': false},
-                {'bot_id': 'ln', 'auth': 'user', 'connected': true},
-                {'bot_id': 'wx', 'auth': '', 'connected': true},
-              ]
-            },
-          },
-          onAction: (_, __, ___) async {},
-          onConnect: (bot, name, reconnect) async =>
-              asked.add('$bot:$name:$reconnect'),
-        ),
-      ),
-    ));
-    expect(find.text('Connect'), findsOneWidget);
-    expect(find.text('Reconnect'), findsOneWidget);
-    await tester.tap(find.text('Connect'));
-    await tester.tap(find.text('Reconnect'));
-    expect(asked, ['gh:GitHub:false', 'ln:Linear:true']);
   });
 
   testWidgets(

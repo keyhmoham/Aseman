@@ -64,6 +64,10 @@ void main() {
     expect(find.text('Members'), findsWidgets);
     expect(find.text('LLM usage'), findsOneWidget);
     expect(find.text('Danger zone'), findsOneWidget);
+    // The one settings panel: the budget is set here, and nothing opens a
+    // second panel for the space's facilities.
+    expect(find.text('Set budget'), findsOneWidget);
+    expect(find.byIcon(Icons.dashboard_customize_outlined), findsNothing);
 
     // Token usage rollups render per room chat and per agent.
     expect(find.text('Per room chat'), findsOneWidget);

@@ -20,10 +20,10 @@ function repeat(host, list, path) {
   if (path == null) {
     host._listPath ||= `/__lists/${++listSeq}`;
     path = host._listPath;
-    const prev = Tradera.data.data.__lists?.[host._listPath.split('/').pop()];
+    const prev = Aseman.data.data.__lists?.[host._listPath.split('/').pop()];
     if (JSON.stringify(prev) !== JSON.stringify(list)) {
       const was = Tracker.active; Tracker.active = null;
-      Tradera.data.set(path, list);
+      Aseman.data.set(path, list);
       Tracker.active = was;
     }
   }
@@ -59,10 +59,10 @@ function repeat(host, list, path) {
 function eachOf(el, prop = 'each') {
   const raw = el._raw[prop];
   if (raw == null) return null;
-  if (typeof raw === 'string' && raw.startsWith('/')) return { list: Tradera.data.get(raw), path: raw };
+  if (typeof raw === 'string' && raw.startsWith('/')) return { list: Aseman.data.get(raw), path: raw };
   if (isMap(raw) && typeof raw.path === 'string') {
     const path = joinPath(scopeOf(el), raw.path);
-    return { list: Tradera.data.get(path), path };
+    return { list: Aseman.data.get(path), path };
   }
   return { list: resolve(raw, scopeOf(el)), path: null };
 }
@@ -421,25 +421,25 @@ define('draggable', class extends LayoutElement {
     this.draggable = true;
     this.addEventListener('dragstart', (e) => {
       this.dataset.dragging = '';
-      e.dataTransfer.setData('application/x-tradera', JSON.stringify(this.p('data') ?? null));
+      e.dataTransfer.setData('application/x-aseman', JSON.stringify(this.p('data') ?? null));
       e.dataTransfer.effectAllowed = 'move';
-      Tradera._dragging = this.p('data');
+      Aseman._dragging = this.p('data');
       this.emit('t-drag-start', { data: this.p('data') });
     });
-    this.addEventListener('dragend', () => { delete this.dataset.dragging; Tradera._dragging = undefined; this.emit('t-drag-end', {}); });
+    this.addEventListener('dragend', () => { delete this.dataset.dragging; Aseman._dragging = undefined; this.emit('t-drag-end', {}); });
   }
   layout() { if (this.p('feedbackOpacity') != null) this.style.setProperty('--t-drag-opacity', this.p('feedbackOpacity')); }
 });
 /** DragTarget {accepts?: [values], action}: runs its action with {data} when something is dropped on it. */
 define('drag-target', class extends LayoutElement {
   init() {
-    const ok = () => { const acc = this.p('accepts') ?? this.p('accept'); return acc == null || asList(acc).some((a) => JSON.stringify(a) === JSON.stringify(Tradera._dragging) || (isMap(Tradera._dragging) && Tradera._dragging.type === a)); };
+    const ok = () => { const acc = this.p('accepts') ?? this.p('accept'); return acc == null || asList(acc).some((a) => JSON.stringify(a) === JSON.stringify(Aseman._dragging) || (isMap(Aseman._dragging) && Aseman._dragging.type === a)); };
     this.addEventListener('dragover', (e) => { if (ok()) { e.preventDefault(); this.dataset.over = ''; } });
     this.addEventListener('dragleave', () => delete this.dataset.over);
     this.addEventListener('drop', (e) => {
       e.preventDefault(); delete this.dataset.over;
       let data = null;
-      try { data = JSON.parse(e.dataTransfer.getData('application/x-tradera')); } catch { data = Tradera._dragging; }
+      try { data = JSON.parse(e.dataTransfer.getData('application/x-aseman')); } catch { data = Aseman._dragging; }
       this.emit('t-drop', { data });
       const a = actionOf(this) ?? this._raw.onAccept;
       if (a) busy(this, () => runAction(a, this, { data, value: data }));
@@ -460,4 +460,4 @@ layout('vertical-divider', (el, P) => {
   if (P('width') != null) el.style.margin = `0 ${asDouble(P('width'), 8) / 2}px`;
 });
 
-Object.assign(Tradera, { repeat });
+Object.assign(Aseman, { repeat });

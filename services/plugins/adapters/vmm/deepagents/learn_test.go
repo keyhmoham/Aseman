@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 func learnRequest(t *testing.T, a *Adapter, secret string, space identity.ID, agent string) *network.Response {
 	t.Helper()
-	header := map[string]string{"X-Tradera-Runtime": secret, LearnAgentHeader: agent}
+	header := map[string]string{"X-Aseman-Runtime": secret, LearnAgentHeader: agent}
 	if !space.IsZero() {
 		header[LearnSpaceHeader] = space.String()
 	}
@@ -80,7 +80,7 @@ func TestTheDecisionModelJudgesAgentsLearningAndTheirProjectPays(t *testing.T) {
 	a.memory.notePayer(space.String(), person.String())
 	judge := func(secret string) *network.Response {
 		resp, err := a.serveLearnDecision(context.Background(), &network.Request{Body: []byte(question),
-			Header: map[string]string{"X-Tradera-Runtime": secret, LearnSpaceHeader: space.String()}})
+			Header: map[string]string{"X-Aseman-Runtime": secret, LearnSpaceHeader: space.String()}})
 		if err != nil {
 			t.Fatal(err)
 		}

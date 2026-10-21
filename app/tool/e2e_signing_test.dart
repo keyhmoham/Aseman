@@ -3,10 +3,10 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:tradera/src/core/network/signing.dart';
+import 'package:aseman/src/core/network/signing.dart';
 
 /// End-to-end smoke test of the client signing protocol against a live
-/// Tradera node. Run with the daemon up:
+/// Aseman node. Run with the daemon up:
 ///   dart run tool/e2e_signing_test.dart
 Future<void> main(List<String> args) async {
   const base = 'http://localhost:8080';

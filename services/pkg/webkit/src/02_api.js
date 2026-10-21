@@ -1,37 +1,37 @@
 // ---------------------------------------------------------------------------
-// The Tradera API from a page: the space's tools' microtools, called as the
+// The Aseman API from a page: the space's tools' microtools, called as the
 // person viewing the page, through the preview gateway the page is served by
-// (<preview>/_tradera/api/…, authorized by the preview's own sign-in), the
+// (<preview>/_aseman/api/…, authorized by the preview's own sign-in), the
 // way a frontend calls its backend. Also the app's theme, followed live.
 // ---------------------------------------------------------------------------
 
-class TraderaError extends Error {
-  constructor(message, code, status) { super(message); this.name = 'TraderaError'; this.code = code; this.status = status; }
+class AsemanError extends Error {
+  constructor(message, code, status) { super(message); this.name = 'AsemanError'; this.code = code; this.status = status; }
 }
-Tradera.Error = TraderaError;
+Aseman.Error = AsemanError;
 
 const config = { base: null, mock: null, timeout: 120000 };
 
 /** The preview's prefix (/v1/proxy/<id>), when the page is served through one. */
 function previewPrefix() {
-  if (typeof window.__traderaProxy === 'string') return window.__traderaProxy.replace(/\/$/, '');
+  if (typeof window.__asemanProxy === 'string') return window.__asemanProxy.replace(/\/$/, '');
   const m = /^(\/v1\/proxy\/[0-9a-fA-F]{32})(\/|$)/.exec(location.pathname);
   return m ? m[1] : '';
 }
-const apiBase = () => config.base ?? previewPrefix() + '/_tradera/api/';
+const apiBase = () => config.base ?? previewPrefix() + '/_aseman/api/';
 
 /**
- * Tradera.configure({base, mock}): base overrides where the API is (a page
+ * Aseman.configure({base, mock}): base overrides where the API is (a page
  * served elsewhere); mock answers calls locally while developing without the
  * gateway: {weather: {forecast: (args) => ({…})}}.
  */
-Tradera.configure = (opts) => { Object.assign(config, opts || {}); return config; };
+Aseman.configure = (opts) => { Object.assign(config, opts || {}); return config; };
 
 /** An MCP tool result as its value (as the app's microtoolValue). */
 function microtoolValue(result) {
   if (!isMap(result) || !('content' in result || 'structuredContent' in result)) return result;
   const text = asList(result.content).filter((b) => isMap(b) && b.type === 'text').map((b) => asText(b.text)).join('\n');
-  if (result.isError === true) throw new TraderaError(text || 'the tool reported an error', 'tool_error');
+  if (result.isError === true) throw new AsemanError(text || 'the tool reported an error', 'tool_error');
   if (result.structuredContent != null) return result.structuredContent;
   try { return JSON.parse(text); } catch { return text; }
 }
@@ -42,7 +42,7 @@ async function api(op, body) {
   const mock = previewPrefix() && !config.mockAlways ? null : config.mock;
   if (mock && op === 'call') {
     const fn = field(mock, `${body.tool}.${body.microtool}`) ?? mock[body.tool]?.[body.microtool];
-    if (typeof fn !== 'function') throw new TraderaError(`no mock for ${body.tool}/${body.microtool}`, 'not_found');
+    if (typeof fn !== 'function') throw new AsemanError(`no mock for ${body.tool}/${body.microtool}`, 'not_found');
     return { result: await fn(body.args || {}) };
   }
   if (mock && op !== 'call') {
@@ -61,62 +61,62 @@ async function api(op, body) {
       signal: ctrl.signal,
     });
   } catch (e) {
-    throw new TraderaError(e.name === 'AbortError' ? 'The request timed out' : 'Could not reach Tradera: ' + e.message, 'unavailable');
+    throw new AsemanError(e.name === 'AbortError' ? 'The request timed out' : 'Could not reach Aseman: ' + e.message, 'unavailable');
   } finally { clearTimeout(timer); }
   let data = null;
   const text = await res.text();
   try { data = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
   if (!res.ok) {
-    const msg = (data && data.error) || (res.status === 401 ? 'Sign in to Tradera to use this page' : res.status === 404 && !data
-      ? 'The Tradera API is reached through the preview gateway: open this page from the desk (or its preview link), or use Tradera.configure({mock}) locally'
+    const msg = (data && data.error) || (res.status === 401 ? 'Sign in to Aseman to use this page' : res.status === 404 && !data
+      ? 'The Aseman API is reached through the preview gateway: open this page from the desk (or its preview link), or use Aseman.configure({mock}) locally'
       : `Request failed (${res.status})`);
-    throw new TraderaError(msg, data && data.code, res.status);
+    throw new AsemanError(msg, data && data.code, res.status);
   }
   return data;
 }
 
 let contextPromise = null;
 /** Who is viewing, in which space and room, through which preview. */
-Tradera.context = () => (contextPromise ||= api('context').catch((e) => { contextPromise = null; throw e; }));
+Aseman.context = () => (contextPromise ||= api('context').catch((e) => { contextPromise = null; throw e; }));
 /** The space's tools, each with its microtools ({name, description, schema}). */
-Tradera.tools = async () => (await api('tools')).tools;
+Aseman.tools = async () => (await api('tools')).tools;
 /** One tool's microtools, asked live from its backend. */
-Tradera.microtools = async (tool) => (await api('microtools', { tool })).microtools;
+Aseman.microtools = async (tool) => (await api('microtools', { tool })).microtools;
 
 /**
  * Calls a microtool of one of the space's tools (by name or id) as the
  * person, and returns its value (an MCP result is unwrapped to its JSON).
- *   const forecast = await Tradera.call('Weather', 'forecast', {city: 'Oslo'});
+ *   const forecast = await Aseman.call('Weather', 'forecast', {city: 'Oslo'});
  */
-Tradera.call = async (tool, microtool, args = {}) => {
+Aseman.call = async (tool, microtool, args = {}) => {
   if (microtool === undefined && typeof tool === 'string') [tool, microtool] = splitCall(tool);
   const out = await api('call', { tool, microtool, args });
   return microtoolValue(out.result);
 };
 /** The raw result of a call (MCP content blocks kept). */
-Tradera.callRaw = async (tool, microtool, args = {}) => (await api('call', { tool, microtool, args })).result;
+Aseman.callRaw = async (tool, microtool, args = {}) => (await api('call', { tool, microtool, args })).result;
 
 /**
- * A tool as an object: Tradera.tool('Weather').forecast({city}) calls its
+ * A tool as an object: Aseman.tool('Weather').forecast({city}) calls its
  * forecast microtool; .call(name, args), .microtools(), .frontend(), .show().
  */
-Tradera.tool = (name) => new Proxy({
+Aseman.tool = (name) => new Proxy({
   name,
-  call: (microtool, args) => Tradera.call(name, microtool, args),
-  microtools: () => Tradera.microtools(name),
-  frontend: (opts) => Tradera.frontend(name, opts),
-  show: (opts) => Tradera.show(name, opts),
-}, { get: (t, k) => (k in t || typeof k === 'symbol' ? t[k] : (args) => Tradera.call(name, k, args)) });
+  call: (microtool, args) => Aseman.call(name, microtool, args),
+  microtools: () => Aseman.microtools(name),
+  frontend: (opts) => Aseman.frontend(name, opts),
+  show: (opts) => Aseman.show(name, opts),
+}, { get: (t, k) => (k in t || typeof k === 'symbol' ? t[k] : (args) => Aseman.call(name, k, args)) });
 
 /** A tool's own frontend: {mode, messages (A2UI, for generative), template, …}. */
-Tradera.frontend = (tool, opts = {}) => api('frontend', { tool, ...opts });
+Aseman.frontend = (tool, opts = {}) => api('frontend', { tool, ...opts });
 /** Runs an action of a tool's generative frontend; returns {data}. */
-Tradera.frontendAction = (tool, action, opts = {}) => api('action', { tool, action, ...opts });
+Aseman.frontendAction = (tool, action, opts = {}) => api('action', { tool, action, ...opts });
 /** Opens a tool's frontend (on a result) as a card window on the desk, next to this page. */
-Tradera.show = (tool, opts = {}) => api('show', { tool, ...opts });
+Aseman.show = (tool, opts = {}) => api('show', { tool, ...opts });
 
 /** Calls [fn] now and every [ms] (paused while the page is hidden); returns stop(). */
-Tradera.poll = (fn, ms = 30000) => {
+Aseman.poll = (fn, ms = 30000) => {
   let stopped = false, timer = null;
   const tick = async () => {
     if (stopped) return;
@@ -129,21 +129,21 @@ Tradera.poll = (fn, ms = 30000) => {
 
 /**
  * Loads a microtool's value into the data model (and refreshes it):
- *   Tradera.load('/forecast', 'Weather', 'forecast', {city: 'Oslo'}, {every: 60})
+ *   Aseman.load('/forecast', 'Weather', 'forecast', {city: 'Oslo'}, {every: 60})
  */
-Tradera.load = async (path, tool, microtool, args = {}, opts = {}) => {
+Aseman.load = async (path, tool, microtool, args = {}, opts = {}) => {
   const run = async () => {
-    Tradera.data.set(path + '__loading', true);
+    Aseman.data.set(path + '__loading', true);
     try {
-      const v = await Tradera.call(tool, microtool, resolve(args, '', Tradera.data));
-      Tradera.data.batch(() => { Tradera.data.set(path, v); Tradera.data.set(path + '__error', null); });
+      const v = await Aseman.call(tool, microtool, resolve(args, '', Aseman.data));
+      Aseman.data.batch(() => { Aseman.data.set(path, v); Aseman.data.set(path + '__error', null); });
       return v;
     } catch (e) {
-      Tradera.data.set(path + '__error', e.message);
+      Aseman.data.set(path + '__error', e.message);
       throw e;
-    } finally { Tradera.data.set(path + '__loading', false); }
+    } finally { Aseman.data.set(path + '__loading', false); }
   };
-  if (opts.every) return Tradera.poll(run, opts.every * 1000);
+  if (opts.every) return Aseman.poll(run, opts.every * 1000);
   return run();
 };
 
@@ -172,12 +172,12 @@ function setTheme(theme = {}) {
       if (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v)) root.style.setProperty('--t-' + kebab(role), v);
     }
   }
-  try { sessionStorage.setItem('tradera-theme', JSON.stringify({ ...readStoredTheme(), ...theme })); } catch { /* private mode */ }
+  try { sessionStorage.setItem('aseman-theme', JSON.stringify({ ...readStoredTheme(), ...theme })); } catch { /* private mode */ }
   document.dispatchEvent(new CustomEvent('t-theme', { detail: theme }));
   for (const e of document.querySelectorAll('t-chart, t-sparkline, t-gauge, t-heatmap, t-treemap, t-graph, t-avatar, t-avatar-group, t-badge, t-tag, t-allocation-bar')) e.update?.();
 }
 function readStoredTheme() {
-  try { return JSON.parse(sessionStorage.getItem('tradera-theme') || '{}') || {}; } catch { return {}; }
+  try { return JSON.parse(sessionStorage.getItem('aseman-theme') || '{}') || {}; } catch { return {}; }
 }
 function b64json(s) {
   try {
@@ -185,7 +185,7 @@ function b64json(s) {
     return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
   } catch { return null; }
 }
-Tradera.theme = {
+Aseman.theme = {
   set: setTheme,
   get mode() { const t = document.documentElement.dataset.theme; return t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); },
   toggle() { setTheme({ mode: this.mode === 'dark' ? 'light' : 'dark' }); },
@@ -194,16 +194,16 @@ Tradera.theme = {
 function initTheme() {
   const q = new URLSearchParams(location.search);
   const theme = { ...readStoredTheme() };
-  if (q.get('tradera_theme')) theme.mode = q.get('tradera_theme');
-  if (q.get('tradera_embed')) theme.embed = q.get('tradera_embed');
-  if (q.get('tradera_scheme')) theme.scheme = b64json(q.get('tradera_scheme')) || theme.scheme;
+  if (q.get('aseman_theme')) theme.mode = q.get('aseman_theme');
+  if (q.get('aseman_embed')) theme.embed = q.get('aseman_embed');
+  if (q.get('aseman_scheme')) theme.scheme = b64json(q.get('aseman_scheme')) || theme.scheme;
   if (Object.keys(theme).length) setTheme(theme);
   window.addEventListener('message', (e) => {
     const m = e.data;
-    if (!isMap(m) || m.type !== 'tradera:theme') return;
+    if (!isMap(m) || m.type !== 'aseman:theme') return;
     // Only the app that frames the page (or the web view host) sends it.
     if (e.source && e.source !== window.parent && e.source !== window) return;
     setTheme(m);
   });
-  window.__traderaSetTheme = setTheme; // the native web view host calls it
+  window.__asemanSetTheme = setTheme; // the native web view host calls it
 }

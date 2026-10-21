@@ -5,7 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 /// Owns the native/provider SDK sessions and emits identity tokens that the
-/// Tradera backend exchanges for a platform session.
+/// Aseman backend exchanges for a platform session.
 class FederatedSignIn {
   FederatedSignIn._();
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/tradera/tradera/plugins/adapters/vmm/models/execution"
+	"github.com/aseman/aseman/plugins/adapters/vmm/models/execution"
 )
 
 func NewExecutionEvent(ctx context.Context, agentName, tool, args, result, status string) execution.Event {

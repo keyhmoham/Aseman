@@ -13,9 +13,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // stoppedEngine is a Docker engine with one stopped computer whose
@@ -54,7 +54,7 @@ func (e *stoppedEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			e.tarData[h.Name] = string(b)
 		}
 	case r.URL.Path == "/containers/c/json":
-		_, _ = w.Write([]byte(`{"Config":{"Image":"tradera/sandbox:1"},"Mounts":[{"Type":"volume","Name":"tradera-workspace-b1","Destination":"/workspace"}]}`))
+		_, _ = w.Write([]byte(`{"Config":{"Image":"aseman/sandbox:1"},"Mounts":[{"Type":"volume","Name":"aseman-workspace-b1","Destination":"/workspace"}]}`))
 	case r.URL.Path == "/containers/create":
 		var body struct {
 			Image      string   `json:"Image"`
@@ -67,7 +67,7 @@ func (e *stoppedEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			} `json:"HostConfig"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		if body.Image != "tradera/sandbox:1" || len(body.HostConfig.Mounts) != 1 || body.HostConfig.Mounts[0].Source != "tradera-workspace-b1" || body.HostConfig.NetworkMode != "none" {
+		if body.Image != "aseman/sandbox:1" || len(body.HostConfig.Mounts) != 1 || body.HostConfig.Mounts[0].Source != "aseman-workspace-b1" || body.HostConfig.NetworkMode != "none" {
 			http.Error(w, "unexpected helper", 400)
 			return
 		}

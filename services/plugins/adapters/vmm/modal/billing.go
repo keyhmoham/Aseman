@@ -8,20 +8,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 
 	pb "github.com/modal-labs/modal-client/go/proto/modal_proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // sandboxApp is the Modal app every project computer runs under.
-const sandboxApp = "tradera-sandboxes"
+const sandboxApp = "aseman-sandboxes"
 
 var _ vmm.CostReporter = (*Adapter)(nil)
 
 // CostReport (vmm.CostReporter) is what Modal billed for the project computers
-// (the "tradera-sandboxes" app) from [since] to [until], by day (UTC) and by
+// (the "aseman-sandboxes" app) from [since] to [until], by day (UTC) and by
 // resource (CPU, memory, network). It is Modal's own workspace billing report,
 // so it is the real bill, not an estimate. Modal may take a little while to
 // include the latest minutes.

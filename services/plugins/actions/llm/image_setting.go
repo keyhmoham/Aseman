@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/errs"
-	llmprovider "github.com/tradera/tradera/plugins/actions/llm/models"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/errs"
+	llmprovider "github.com/aseman/aseman/plugins/actions/llm/models"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 )
 
 // imageTable is the database model of the image model setting.

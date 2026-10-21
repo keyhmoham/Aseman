@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import '../../../../app_dependencies.dart';
 import '../../../../core/utils/context_extensions.dart';
 import '../../../../data/models/bot.dart';
-import '../../../../data/services/tradera_service.dart';
+import '../../../../data/services/aseman_service.dart';
 import '../../../../shared/widgets/avatar.dart';
 import '../../../computer/computer_view.dart';
 import '../../../computer/preview_view.dart';
@@ -246,7 +246,7 @@ class _SpaceMemoryTabState extends State<SpaceMemoryTab> {
   bool _preview = false;
 
   String get _path =>
-      _agent.isEmpty ? 'AGENTS.md' : '.tradera/agents/$_agent/AGENTS.md';
+      _agent.isEmpty ? 'AGENTS.md' : '.aseman/agents/$_agent/AGENTS.md';
   bool get _dirty => !_loading && _text.text != _saved;
 
   @override
@@ -801,7 +801,7 @@ class _PreviewCard extends StatelessWidget {
     required this.onOpen,
     required this.onRemove,
   });
-  final TraderaService service;
+  final AsemanService service;
   final PublishedPreview preview;
   final ComputerState state;
   final VoidCallback onOpen;
@@ -901,7 +901,7 @@ class _PreviewCard extends StatelessWidget {
 /// Publishes a port of the computer: what is served there gets a link.
 class _PublishDialog extends StatefulWidget {
   const _PublishDialog({required this.service, required this.spaceId});
-  final TraderaService service;
+  final AsemanService service;
   final String spaceId;
   @override
   State<_PublishDialog> createState() => _PublishDialogState();

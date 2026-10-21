@@ -5,13 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/tradera/tradera/plugins/actions/spaces/models/proxy"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
 )
 
 func TestProxyProbeHTTPIdentityAndCredentialBoundary(t *testing.T) {

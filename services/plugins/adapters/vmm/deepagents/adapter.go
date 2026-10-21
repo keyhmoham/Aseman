@@ -1,4 +1,4 @@
-// Package deepagents runs tradera's agents on LangChain Deep Agents
+// Package deepagents runs aseman's agents on LangChain Deep Agents
 // (deepagents on LangGraph) as a VM runtime.
 //
 // A deepagents VM is an agent definition (instructions, skills, LLM backbone).
@@ -6,7 +6,7 @@
 // node supervises as a Nomad job through the VMM port. Every agent of every
 // space is served by it, each turn in its own LangGraph thread.
 //
-// Tradera stays the only bridge between an agent and the platform, and the
+// Aseman stays the only bridge between an agent and the platform, and the
 // platform's own action API is the transport:
 //   - people and agents talk to agents through space messaging
 //     (spaces.message_send) and direct messages (users.dm_send); the lead hands
@@ -36,43 +36,43 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/idutil"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/pkg/openviking"
-	"github.com/tradera/tradera/plugins/adapters/base"
-	"github.com/tradera/tradera/plugins/adapters/cfg"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/idutil"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/pkg/openviking"
+	"github.com/aseman/aseman/plugins/adapters/base"
+	"github.com/aseman/aseman/plugins/adapters/cfg"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // Environment fallbacks for the adapter options.
 const (
-	EnvNodeURL        = "TRADERA_AGENT_NODE_URL"
-	EnvRuntimeImage   = "TRADERA_AGENT_RUNTIME_IMAGE"
-	EnvRuntimeURL     = "TRADERA_AGENT_RUNTIME_URL"
-	EnvRuntimeSecret  = "TRADERA_AGENT_RUNTIME_SECRET"
-	EnvRuntimeNetwork = "TRADERA_AGENT_RUNTIME_NETWORK"
+	EnvNodeURL        = "ASEMAN_AGENT_NODE_URL"
+	EnvRuntimeImage   = "ASEMAN_AGENT_RUNTIME_IMAGE"
+	EnvRuntimeURL     = "ASEMAN_AGENT_RUNTIME_URL"
+	EnvRuntimeSecret  = "ASEMAN_AGENT_RUNTIME_SECRET"
+	EnvRuntimeNetwork = "ASEMAN_AGENT_RUNTIME_NETWORK"
 	// EnvRuntimeMemoryMB is the memory the runtime reserves on Nomad (MB).
-	EnvRuntimeMemoryMB = "TRADERA_AGENT_RUNTIME_MEMORY_MB"
+	EnvRuntimeMemoryMB = "ASEMAN_AGENT_RUNTIME_MEMORY_MB"
 	// Model calls have a generous total deadline, but a provider must start and
 	// keep producing its OpenAI-compatible stream. All three accept Go duration
 	// strings (for example "2m" or "45s").
-	EnvLLMCallTimeout       = "TRADERA_LLM_CALL_TIMEOUT"
-	EnvLLMFirstEventTimeout = "TRADERA_LLM_FIRST_EVENT_TIMEOUT"
-	EnvLLMStreamIdleTimeout = "TRADERA_LLM_STREAM_IDLE_TIMEOUT"
+	EnvLLMCallTimeout       = "ASEMAN_LLM_CALL_TIMEOUT"
+	EnvLLMFirstEventTimeout = "ASEMAN_LLM_FIRST_EVENT_TIMEOUT"
+	EnvLLMStreamIdleTimeout = "ASEMAN_LLM_STREAM_IDLE_TIMEOUT"
 )
 
 const (
 	// A pinned tag: Nomad always pulls ":latest", so a locally built runtime
 	// image must carry another tag.
-	defaultImage   = "tradera/deepagents:v2"
-	defaultAlias   = "tradera-deepagents"
+	defaultImage   = "aseman/deepagents:v2"
+	defaultAlias   = "aseman-deepagents"
 	defaultPort    = "8000"
-	defaultVolume  = "tradera-deepagents:/data"
-	defaultNetwork = "tradera_default"
+	defaultVolume  = "aseman-deepagents:/data"
+	defaultNetwork = "aseman_default"
 	// defaultRuntimeMemoryMB fits a 4 GB server next to the database, the node and
 	// Nomad; raise it (EnvRuntimeMemoryMB) on a larger one.
 	defaultRuntimeMemoryMB      int64 = 2048
@@ -192,7 +192,7 @@ func (a *Adapter) Init(ctx context.Context, deps *api.Dependencies) error {
 	a.nodeURL = strings.TrimRight(a.nodeURL, "/")
 	a.runtimeURL = strings.TrimRight(firstNonEmpty(o["runtime_url"], os.Getenv(EnvRuntimeURL)), "/")
 	a.image = firstNonEmpty(o["image"], os.Getenv(EnvRuntimeImage), a.image)
-	a.network = firstNonEmpty(o["network"], os.Getenv(EnvRuntimeNetwork), os.Getenv("TRADERA_SANDBOX_DOCKER_NETWORK"), defaultNetwork)
+	a.network = firstNonEmpty(o["network"], os.Getenv(EnvRuntimeNetwork), os.Getenv("ASEMAN_SANDBOX_DOCKER_NETWORK"), defaultNetwork)
 	a.alias = firstNonEmpty(o["alias"], a.alias)
 	a.port = firstNonEmpty(o["port"], a.port)
 	a.volume = firstNonEmpty(o["volume"], a.volume)

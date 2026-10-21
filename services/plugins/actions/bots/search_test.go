@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 )
 
 func TestSearchBotsPlatformWide(t *testing.T) {

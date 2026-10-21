@@ -3,7 +3,7 @@ package bridge
 import (
 	"encoding/json"
 
-	"github.com/tradera/tradera/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/api"
 )
 
 func GlobalConfig(d *api.Dependencies, out any) error {

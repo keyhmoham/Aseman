@@ -8,22 +8,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/invitation"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/permission"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/space"
-	"github.com/tradera/tradera/plugins/actions/support/kvs"
-	"github.com/tradera/tradera/plugins/actions/support/metasvc"
-	"github.com/tradera/tradera/plugins/actions/support/models/metadata"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/invitation"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/permission"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/space"
+	"github.com/aseman/aseman/plugins/actions/support/kvs"
+	"github.com/aseman/aseman/plugins/actions/support/metasvc"
+	"github.com/aseman/aseman/plugins/actions/support/models/metadata"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // zeroRoom is the universal id string of a zero room id (space-level rows).
@@ -58,7 +58,7 @@ type Service struct {
 	Routines RoutineManager
 
 	// Msg is the fire-and-forget message service (wired by the root); it lets
-	// tradera send direct messages to individuals via the message_send tool.
+	// aseman send direct messages to individuals via the message_send tool.
 	Msg MessagePort
 
 	sandboxMu sync.Mutex
@@ -73,7 +73,7 @@ type Service struct {
 	// activity is the live per-room agent status registry backing the chat's
 	// working indicator: which agent is working in a room and what it is doing
 	// right now. It is written by the agent runtime (via a status hook on the
-	// context) and by the tradera orchestrator, and read by spaces.message_list.
+	// context) and by the aseman orchestrator, and read by spaces.message_list.
 	activityMu sync.Mutex
 	activity   map[string]map[string]roomActivity
 	// liveSeq counts changes to the live activity; liveCh is closed (and
@@ -348,7 +348,7 @@ func (s *Service) CreateSpace(ctx context.Context, owner identity.ID, name, desc
 }
 
 // createSpace creates a space with its first room. A non-empty directKey makes
-// it a direct conversation, which the tradera lead does not join.
+// it a direct conversation, which the aseman lead does not join.
 func (s *Service) createSpace(ctx context.Context, owner identity.ID, name, description, directKey string) (*space.Space, error) {
 	if name == "" {
 		return nil, errs.InvalidArgument("space name required")
@@ -398,7 +398,7 @@ func (s *Service) createSpace(ctx context.Context, owner identity.ID, name, desc
 		return nil, err
 	}
 	if !sp.Direct {
-		s.ensureTradera(ctx, spID)
+		s.ensureAseman(ctx, spID)
 	}
 	return sp, nil
 }

@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/posts/models"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/posts/models"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // searchWindow bounds how many of the newest posts a search scans per source.

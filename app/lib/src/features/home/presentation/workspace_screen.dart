@@ -108,7 +108,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     _loadWorkspaces();
     _loadBots();
     _loadSpaceBots();
-    // Async messaging: agent replies (and tradera's message/log flow) arrive
+    // Async messaging: agent replies (and aseman's message/log flow) arrive
     // after a message is sent, so the open room is polled frequently and new
     // content shows up live without needing another message to trigger it.
     _roomTimer = Timer.periodic(const Duration(seconds: 3), (_) {
@@ -2546,7 +2546,7 @@ class _Post extends StatelessWidget {
   }
 }
 
-/// Opens Explore from the feed: a search across Tradera with no space scope,
+/// Opens Explore from the feed: a search across Aseman with no space scope,
 /// so it has no "in this space" tab. [onOpenSpace] opens a space the user is
 /// a member of by name.
 Future<void> showExplore(BuildContext context, AppDependencies dependencies,
@@ -2670,14 +2670,14 @@ class _SearchPanelState extends State<_SearchPanel>
                   prefixIcon: const Icon(Icons.search),
                   hintText: _local
                       ? 'Search ${widget.workspace}…'
-                      : 'Search all of Tradera…')),
+                      : 'Search all of Aseman…')),
           // Outside a space there is nothing to scope the search to.
           if (!widget.feed) ...[
             const SizedBox(height: 9),
             SegmentedTabBar(
               controller: tabs,
               compact: compact,
-              labels: ['In ${widget.workspace}', 'Explore Tradera'],
+              labels: ['In ${widget.workspace}', 'Explore Aseman'],
               icons: const [Icons.hub_outlined, Icons.travel_explore_rounded],
             ),
           ],
@@ -3000,7 +3000,7 @@ class _SearchResultsState extends State<_SearchResults> {
     return null;
   }
 
-  /// One page of results inside a space or across Tradera.
+  /// One page of results inside a space or across Aseman.
   Future<List<_SearchHit>> _fetchTitles(
       AppDependencies deps, int offset) async {
     final q = widget.query.trim().toLowerCase();
@@ -3291,7 +3291,7 @@ class _SearchResultCard extends StatelessWidget {
   }
 
   String _description() => switch (section) {
-        'Users' => 'Person on Tradera',
+        'Users' => 'Person on Aseman',
         'Agents' => 'Agent',
         'Apps' => 'App',
         'Rooms' => 'Room',
@@ -3977,7 +3977,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
       'Apps' => 'App profile',
       'Workspaces' => 'Workspace profile',
       'Rooms' => 'Room profile',
-      _ => 'Tradera profile'
+      _ => 'Aseman profile'
     };
   }
 

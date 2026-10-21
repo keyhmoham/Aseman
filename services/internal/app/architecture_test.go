@@ -71,7 +71,7 @@ func TestNamespacesDoNotImportSiblingServices(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		prefix := "github.com/tradera/tradera/plugins/actions/"
+		prefix := "github.com/aseman/aseman/plugins/actions/"
 		for _, spec := range file.Imports {
 			importPath, _ := strconv.Unquote(spec.Path.Value)
 			if !strings.HasPrefix(importPath, prefix) {

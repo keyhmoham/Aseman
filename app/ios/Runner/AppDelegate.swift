@@ -5,7 +5,7 @@ import UserNotifications
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var pendingPushTokenResult: FlutterResult?
-  private let pushTokenKey = "tradera.apns.token"
+  private let pushTokenKey = "aseman.apns.token"
 
   override func application(
     _ application: UIApplication,
@@ -17,10 +17,10 @@ import UserNotifications
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     let registrar = engineBridge.pluginRegistry.registrar(
-      forPlugin: "TraderaPushNotifications"
+      forPlugin: "AsemanPushNotifications"
     )
     let channel = FlutterMethodChannel(
-      name: "tradera/push_notifications",
+      name: "aseman/push_notifications",
       binaryMessenger: registrar.messenger()
     )
     channel.setMethodCallHandler { [weak self] call, result in

@@ -1,12 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/app_dependencies.dart';
-import 'package:tradera/src/data/models/post.dart';
-import 'package:tradera/src/features/search_feed/presentation/search_feed_view_model.dart';
+import 'package:aseman/src/app_dependencies.dart';
+import 'package:aseman/src/data/models/post.dart';
+import 'package:aseman/src/features/search_feed/presentation/search_feed_view_model.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
 /// Follows people too, so the Following feed has both of its sources.
-class _FollowingFake extends FakeTraderaService {
+class _FollowingFake extends FakeAsemanService {
   final DateTime now = DateTime.now();
 
   @override
@@ -19,12 +19,12 @@ class _FollowingFake extends FakeTraderaService {
           ? [
               SocialPost(
                   id: 'f1',
-                  authorId: FakeTraderaService.atlasId,
+                  authorId: FakeAsemanService.atlasId,
                   body: 'Newest from someone I follow.',
                   createdAt: now.subtract(const Duration(minutes: 1))),
               SocialPost(
                   id: 'f2',
-                  authorId: FakeTraderaService.atlasId,
+                  authorId: FakeAsemanService.atlasId,
                   body: 'Older from someone I follow.',
                   createdAt: now.subtract(const Duration(minutes: 9))),
             ]

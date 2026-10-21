@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/features/talent/presentation/talent_requests_panel.dart';
+import 'package:aseman/src/features/talent/presentation/talent_requests_panel.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
-class _Service extends FakeTraderaService {
+class _Service extends FakeAsemanService {
   final requests = <Map<String, dynamic>>[
     {
       'id': 'r1',

@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/utils/context_extensions.dart';
-import '../../data/services/tradera_service.dart';
+import '../../data/services/aseman_service.dart';
 import '../desk/presentation/desk_controller.dart';
 import '../desk/presentation/web/web_page_frame.dart';
 import '../desk/presentation/web_page_view.dart';
@@ -64,7 +64,7 @@ class PublishedPreview {
 /// preview's app when needed, then shows it.
 Future<void> openPreview(
   BuildContext context,
-  TraderaService service, {
+  AsemanService service, {
   required String spaceId,
   required String page,
   required String title,
@@ -117,7 +117,7 @@ class LivePreview extends StatefulWidget {
     this.onClose,
   });
 
-  final TraderaService service;
+  final AsemanService service;
 
   /// The gateway path: /v1/proxy/<id>/….
   final String page;
@@ -528,7 +528,7 @@ class PreviewThumbnail extends StatelessWidget {
     required this.state,
   });
 
-  final TraderaService service;
+  final AsemanService service;
   final PublishedPreview preview;
   final ComputerState state;
 
@@ -658,7 +658,7 @@ class _DarkPage extends StatelessWidget {
 /// Copies a preview's address (without the sign-in it is opened with).
 Future<void> copyPreviewLink(
   BuildContext context,
-  TraderaService service,
+  AsemanService service,
   String page,
 ) async {
   final url = Uri.parse(service.proxyUrl(page));

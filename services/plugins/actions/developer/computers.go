@@ -11,18 +11,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/developer/models"
-	"github.com/tradera/tradera/plugins/actions/finance/models/wallet"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/developer/models"
+	"github.com/aseman/aseman/plugins/actions/finance/models/wallet"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // DefaultImage is the standard computer: the machine the app's own project
 // computers run.
-const DefaultImage = "tradera/sandbox-computer:latest"
+const DefaultImage = "aseman/sandbox-computer:latest"
 
 const (
 	// IdleStop is how long a computer may sit without a command before it is stopped.
@@ -153,7 +153,7 @@ func (s *Service) imageList() []ImageView {
 		id = DefaultImage
 	}
 	return []ImageView{{
-		ID: id, Name: "Tradera standard computer", Builtin: true,
+		ID: id, Name: "Aseman standard computer", Builtin: true,
 		Description: "The same machine the project computers run: Debian with the tools agents and developers reach for, and a desktop with a browser.",
 		Includes:    []string{"Debian 12 (bookworm)", "Node.js 22 and Python 3 with pip and venv", "git, curl, wget, jq, ripgrep, fd, tree, sqlite3", "build-essential (gcc, make)", "Chromium and a remote desktop (Xvfb, VNC, noVNC)"},
 	}}
@@ -199,7 +199,7 @@ func (s *Service) vm(kind string) (vmm.VMM, error) {
 func vmSpec(c models.Computer) vmm.VMSpec {
 	return vmm.VMSpec{Name: c.VMName, Type: vmm.Type(c.VMType), ImageRef: c.Image, Args: []string{"sleep", "infinity"},
 		Resources: vmm.ResourceSpec{CPU: c.CPU, MemoryMB: c.MemoryMB, DiskMB: c.DiskMB},
-		Labels:    map[string]string{"tradera.bot_id": c.ID.String()}}
+		Labels:    map[string]string{"aseman.bot_id": c.ID.String()}}
 }
 
 // adopt tells the provider what a machine was made from, so one it lost track
@@ -298,7 +298,7 @@ func (s *Service) CreateComputer(ctx context.Context, org, by identity.ID, in Co
 		image = opts.Images[0].ID
 	}
 	if !imageRX.MatchString(image) {
-		return nil, errs.InvalidArgument("image must be a container image reference, such as tradera/sandbox-computer:latest.")
+		return nil, errs.InvalidArgument("image must be a container image reference, such as aseman/sandbox-computer:latest.")
 	}
 	kind := s.SandboxType()
 	v, err := s.vm(kind)

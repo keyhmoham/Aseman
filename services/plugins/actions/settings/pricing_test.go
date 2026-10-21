@@ -3,7 +3,7 @@ package settings
 import (
 	"testing"
 
-	"github.com/tradera/tradera/plugins/actions/settings/models"
+	"github.com/aseman/aseman/plugins/actions/settings/models"
 )
 
 func TestParsePricing(t *testing.T) {

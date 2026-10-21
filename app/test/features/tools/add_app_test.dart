@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/data/models/bot.dart';
-import 'package:tradera/src/features/tools/connect/add_app.dart';
+import 'package:aseman/src/data/models/bot.dart';
+import 'package:aseman/src/features/tools/connect/add_app.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
 /// A node with one catalog app that needs each person's account, and a
 /// server that only answers once it is registered for per-person sign-in.
-class _Service extends FakeTraderaService {
+class _Service extends FakeAsemanService {
   final registered = <Map<String, Object>>[];
   final added = <String>[];
   final removed = <String>[];

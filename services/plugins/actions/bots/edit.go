@@ -3,16 +3,16 @@ package bots
 import (
 	"context"
 	"encoding/json"
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/jsonpatch"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/jsonpatch"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 	"gopkg.in/yaml.v3"
 	"strings"
 	"time"
@@ -102,7 +102,7 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 	if e = s.canEdit(ctx, req, rec); e != nil {
 		return nil, e
 	}
-	builtin := IsTradera(rec)
+	builtin := IsAseman(rec)
 	if builtin && in.Instructions != nil {
 		return nil, errs.Permission("the built-in lead's instructions are managed by the node; you can change its name, avatar, username, model and price")
 	}
@@ -358,7 +358,7 @@ func (s *Service) Rebuild(ctx context.Context, id identity.ID, image string) (*b
 	if image == "" {
 		image = rec.ImageRef
 	}
-	created, e := vm.CreateVM(ctx, vmm.VMSpec{Name: rec.Name, Type: vmm.Type(rec.VMType), ImageRef: image, YML: rec.SpecYML, Args: []string{"sleep", "infinity"}, Resources: vmm.ResourceSpec{CPU: res.CPU, MemoryMB: res.Memory, DiskMB: res.Disk}, Labels: map[string]string{"tradera.bot_id": rec.ID.String()}})
+	created, e := vm.CreateVM(ctx, vmm.VMSpec{Name: rec.Name, Type: vmm.Type(rec.VMType), ImageRef: image, YML: rec.SpecYML, Args: []string{"sleep", "infinity"}, Resources: vmm.ResourceSpec{CPU: res.CPU, MemoryMB: res.Memory, DiskMB: res.Disk}, Labels: map[string]string{"aseman.bot_id": rec.ID.String()}})
 	if e != nil {
 		return nil, e
 	}
@@ -380,8 +380,8 @@ func (s *Service) Rebuild(ctx context.Context, id identity.ID, image string) (*b
 // are unique across people and agents.
 func (s *Service) usernameTaken(ctx context.Context, username string, self *bot.Bot) (bool, error) {
 	switch username {
-	case "tradera", "lead":
-		if !IsTradera(self) {
+	case "aseman", "lead":
+		if !IsAseman(self) {
 			return true, nil
 		}
 	}

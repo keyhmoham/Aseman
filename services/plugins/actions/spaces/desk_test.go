@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 func f(v float64) *float64 { return &v }
@@ -118,7 +118,7 @@ func TestComposedWidgetsOpenOnTheDeskNotInTheChat(t *testing.T) {
 	}
 	room := identity.ID{Node: 1, Entity: 9}
 	compose := func(text string) string {
-		out, err := s.composeUI(ctx, sp.ID, room, "tradera",
+		out, err := s.composeUI(ctx, sp.ID, room, "aseman",
 			`{"title":"Portfolio","x":30,"y":40,"components":[{"id":"root","component":"Text","text":"`+text+`"}]}`)
 		if err != nil {
 			t.Fatal(err)
@@ -185,7 +185,7 @@ func TestDesignedWindowsBelongToTheirRequest(t *testing.T) {
 		t.Fatal("the same request again is the same window")
 	}
 	tpl := map[string]any{"title": "Tax notes", "components": []any{map[string]any{"id": "root", "component": "Text", "text": "x"}}}
-	if _, err := d.Apply(DeskOp{Op: "designed", ID: a, Template: tpl, Status: "ready"}, "tradera", now); err != nil {
+	if _, err := d.Apply(DeskOp{Op: "designed", ID: a, Template: tpl, Status: "ready"}, "aseman", now); err != nil {
 		t.Fatal(err)
 	}
 	if w := d.window(a); w.Status != "ready" || w.Template["title"] != "Tax notes" {
@@ -198,7 +198,7 @@ func TestDesignedWindowsBelongToTheirRequest(t *testing.T) {
 		t.Fatal("redesign starts over", err)
 	}
 	// Pinned with its design, so reopening it needs no new one.
-	d.Apply(DeskOp{Op: "designed", ID: b, Template: tpl, Status: "ready"}, "tradera", now)
+	d.Apply(DeskOp{Op: "designed", ID: b, Template: tpl, Status: "ready"}, "aseman", now)
 	p, _ := d.Apply(DeskOp{Op: "pin", ID: b}, "ann", now)
 	if pin := d.Pins[0]; pin.ID != p || pin.Request == "" || pin.Template == nil {
 		t.Fatalf("pin: %+v", pin)

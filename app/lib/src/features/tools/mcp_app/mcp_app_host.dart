@@ -101,7 +101,7 @@ class McpAppHost {
         final asked = params['protocolVersion'];
         return {
           'protocolVersion': asked is String ? asked : protocolVersion,
-          'hostInfo': {'name': 'Tradera', 'version': '1.0.0'},
+          'hostInfo': {'name': 'Aseman', 'version': '1.0.0'},
           'hostCapabilities': {
             'openLinks': <String, dynamic>{},
             'serverTools': <String, dynamic>{},

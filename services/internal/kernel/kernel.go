@@ -1,4 +1,4 @@
-// Package kernel is the minimal tradera core. It owns no business logic; it
+// Package kernel is the minimal aseman core. It owns no business logic; it
 // wires plugins, resolves capabilities, tracks the active adapter per category
 // and exposes the action router. Reprogramming is done at runtime: loading or
 // unloading adapter plugins changes what Resolve/DB/Cache/... return
@@ -15,24 +15,24 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/host"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/internal/plugins/manager"
-	"github.com/tradera/tradera/internal/plugins/registry"
-	"github.com/tradera/tradera/internal/routing"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/adapters/cache/ports"
-	cacheruntime "github.com/tradera/tradera/plugins/adapters/cache/runtime"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	databaseruntime "github.com/tradera/tradera/plugins/adapters/database/runtime"
-	"github.com/tradera/tradera/plugins/adapters/filesystem/ports"
-	filesystemruntime "github.com/tradera/tradera/plugins/adapters/filesystem/runtime"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
-	vmmruntime "github.com/tradera/tradera/plugins/adapters/vmm/runtime"
-	"github.com/tradera/tradera/plugins/config"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/host"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/manager"
+	"github.com/aseman/aseman/internal/plugins/registry"
+	"github.com/aseman/aseman/internal/routing"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/adapters/cache/ports"
+	cacheruntime "github.com/aseman/aseman/plugins/adapters/cache/runtime"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	databaseruntime "github.com/aseman/aseman/plugins/adapters/database/runtime"
+	"github.com/aseman/aseman/plugins/adapters/filesystem/ports"
+	filesystemruntime "github.com/aseman/aseman/plugins/adapters/filesystem/runtime"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
+	vmmruntime "github.com/aseman/aseman/plugins/adapters/vmm/runtime"
+	"github.com/aseman/aseman/plugins/config"
 )
 
 // ProxyFunc forwards an action to the node owning an entity.

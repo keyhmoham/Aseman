@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/jsonpatch"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/proxy"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/jsonpatch"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 )
 
 // A preview is a page the project's computer serves. The computer sleeps when
@@ -70,7 +70,7 @@ func (s *Service) servePreview(ctx context.Context, spaceID identity.ID, port in
 	if strings.HasPrefix(probe, "exit=0") || start == "" {
 		return strings.HasPrefix(probe, "exit=0"), false, ""
 	}
-	file := fmt.Sprintf("/tmp/tradera-preview-%d.log", port)
+	file := fmt.Sprintf("/tmp/aseman-preview-%d.log", port)
 	command := fmt.Sprintf("cd /workspace && (nohup sh -c %s >%s 2>&1 </dev/null &); for i in $(seq 1 %d); do %s && exit 0; sleep 1; done; tail -n 20 %s; exit 1",
 		shellQuote(start), file, int(wait.Seconds()), answering(port), file)
 	out, _ := s.SandboxExec(ctx, spaceID, command)

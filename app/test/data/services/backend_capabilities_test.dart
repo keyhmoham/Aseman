@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/data/services/backend_capabilities.dart';
+import 'package:aseman/src/data/services/backend_capabilities.dart';
 
-/// The admin console sends its calls through TraderaService.invokeAction,
+/// The admin console sends its calls through AsemanService.invokeAction,
 /// which refuses any action missing from the client contract before it
 /// reaches the node. Every action the console names must be listed.
 void main() {

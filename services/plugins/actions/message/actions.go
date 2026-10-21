@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // sendAction implements message.send: a fire-and-forget packet to a user or bot.
@@ -75,9 +75,9 @@ func (a *askAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.Ac
 	if in.Timeout > 0 {
 		timeout = time.Duration(in.Timeout) * time.Second
 	}
-	// The built-in tradera agent is the workflow orchestrator.
-	if isDec, derr := a.s.Bots.IsTradera(ctx, to); derr == nil && isDec {
-		result, rerr := a.s.Bots.RunTradera(ctx, req.Caller.ID, in.Body)
+	// The built-in aseman agent is the workflow orchestrator.
+	if isDec, derr := a.s.Bots.IsAseman(ctx, to); derr == nil && isDec {
+		result, rerr := a.s.Bots.RunAseman(ctx, req.Caller.ID, in.Body)
 		if rerr != nil {
 			return nil, rerr
 		}

@@ -22,7 +22,7 @@ func TestFollowStreamPublishesTheAnswerAndReturnsItWhole(t *testing.T) {
 	a := &Adapter{draftFn: func(_, _, text string) { drafts = append(drafts, text) }}
 	body := sse(`{"choices":[{"delta":{"content":"Light "}}]}`, `{"choices":[{"delta":{"content":"attracts bugs."}}]}`,
 		`{"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":4}}`)
-	data, stats, err := a.followStream(context.Background(), &session{base: context.Background()}, "tradera",
+	data, stats, err := a.followStream(context.Background(), &session{base: context.Background()}, "aseman",
 		io.NopCloser(strings.NewReader(body)), true, time.Second, time.Second)
 	if err != nil || string(data) != body {
 		t.Fatalf("the runtime must get the stream unchanged: %v", err)
@@ -44,7 +44,7 @@ func TestFollowStreamWithdrawsAStepThatCallsATool(t *testing.T) {
 	body := sse(`{"choices":[{"delta":{"content":"Let me check."}}]}`,
 		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"execute"}}]}}]}`,
 		`{"choices":[{"delta":{"content":"ignored"}}]}`)
-	if _, _, err := a.followStream(context.Background(), &session{base: context.Background()}, "tradera",
+	if _, _, err := a.followStream(context.Background(), &session{base: context.Background()}, "aseman",
 		io.NopCloser(strings.NewReader(body)), true, time.Second, time.Second); err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestFollowStreamReturnsAtDoneWithoutWaitingForHTTPToClose(t *testing.T) {
 	result := make(chan error, 1)
 	go func() {
 		_, stats, err := (&Adapter{}).followStream(context.Background(), &session{base: context.Background()},
-			"tradera", reader, false, time.Second, time.Second)
+			"aseman", reader, false, time.Second, time.Second)
 		if err == nil && !stats.done {
 			err = io.ErrUnexpectedEOF
 		}
@@ -87,7 +87,7 @@ func TestFollowStreamFailsWhenAnOpenStreamGoesIdle(t *testing.T) {
 		_, _ = io.WriteString(writer, "data: {\"choices\":[{\"delta\":{\"content\":\"started\"}}]}\n\n")
 	}()
 	_, _, err := (&Adapter{}).followStream(context.Background(), &session{base: context.Background()},
-		"tradera", reader, false, time.Second, 20*time.Millisecond)
+		"aseman", reader, false, time.Second, 20*time.Millisecond)
 	if !isStreamTimeout(err) {
 		t.Fatalf("idle stream error = %v, want a stream timeout", err)
 	}

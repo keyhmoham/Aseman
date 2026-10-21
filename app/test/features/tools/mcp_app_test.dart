@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/features/tools/data/tools_api.dart';
-import 'package:tradera/src/features/tools/mcp_app/mcp_app_frame_io.dart'
+import 'package:aseman/src/features/tools/data/tools_api.dart';
+import 'package:aseman/src/features/tools/mcp_app/mcp_app_frame_io.dart'
     show withMcpShim;
-import 'package:tradera/src/features/tools/mcp_app/mcp_app_host.dart';
-import 'package:tradera/src/features/tools/presentation/mcp_app_view.dart';
+import 'package:aseman/src/features/tools/mcp_app/mcp_app_host.dart';
+import 'package:aseman/src/features/tools/presentation/mcp_app_view.dart';
 
 void main() {
   group('McpAppHost', () {
@@ -108,8 +108,8 @@ void main() {
 
   test('the web-view shim goes first in the head', () {
     final html = withMcpShim('<html><head><title>x</title></head></html>');
-    expect(html.indexOf('TraderaMcpHost'), lessThan(html.indexOf('<title>')));
-    expect(html.indexOf('<head>'), lessThan(html.indexOf('TraderaMcpHost')));
+    expect(html.indexOf('AsemanMcpHost'), lessThan(html.indexOf('<title>')));
+    expect(html.indexOf('<head>'), lessThan(html.indexOf('AsemanMcpHost')));
   });
 
   testWidgets('a window runs the tool\'s app with its call', (tester) async {

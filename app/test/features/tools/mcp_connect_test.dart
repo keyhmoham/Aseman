@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/data/models/bot.dart';
-import 'package:tradera/src/features/tools/connect/mcp_connect_dialog.dart';
-import 'package:tradera/src/features/tools/connect/mcp_sign_in.dart';
-import 'package:tradera/src/features/tools/data/tools_api.dart';
-import 'package:tradera/src/features/tools/presentation/tool_frontend_view.dart';
+import 'package:aseman/src/data/models/bot.dart';
+import 'package:aseman/src/features/tools/connect/mcp_connect_dialog.dart';
+import 'package:aseman/src/features/tools/connect/mcp_sign_in.dart';
+import 'package:aseman/src/features/tools/data/tools_api.dart';
+import 'package:aseman/src/features/tools/presentation/tool_frontend_view.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
 /// Plays the node's side of an MCP sign-in.
-class _Service extends FakeTraderaService {
+class _Service extends FakeAsemanService {
   bool needsClient = true;
   final prepared = <Map<String, String>>[];
   final exchanged = <String>[];

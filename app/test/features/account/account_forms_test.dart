@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/core/theme/app_theme.dart';
-import 'package:tradera/src/features/account/presentation/account_forms.dart';
+import 'package:aseman/src/core/theme/app_theme.dart';
+import 'package:aseman/src/features/account/presentation/account_forms.dart';
 
 void main() {
   Future<Future<Map<String, dynamic>?>> open(

@@ -47,7 +47,7 @@ class Session {
 
 /// Persists the session across app launches.
 class SessionStore {
-  static const _key = 'tradera.session';
+  static const _key = 'aseman.session';
 
   static Future<Session?> load() async {
     final prefs = await SharedPreferences.getInstance();

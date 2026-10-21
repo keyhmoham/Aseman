@@ -5,5 +5,5 @@ import 'src/app_dependencies.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(TraderaApp(dependencies: AppDependencies.create()));
+  runApp(AsemanApp(dependencies: AppDependencies.create()));
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // storedFiles is a provider that changes a stopped computer's files and

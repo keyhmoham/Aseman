@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/core/network/api_client.dart';
-import 'package:tradera/src/data/services/tradera_service.dart';
+import 'package:aseman/src/core/network/api_client.dart';
+import 'package:aseman/src/data/services/aseman_service.dart';
 
-class _ProfileStubClient extends TraderaApiClient {
+class _ProfileStubClient extends AsemanApiClient {
   _ProfileStubClient() : super(baseUrl: 'http://localhost');
 
   final follows = <String>[];
@@ -106,7 +106,7 @@ class _ProfileStubClient extends TraderaApiClient {
 void main() {
   test('fetchUserProfile parses profile + follow relationship', () async {
     final client = _ProfileStubClient();
-    final service = TraderaService(client);
+    final service = AsemanService(client);
 
     final p = await service.fetchUserProfile('u-1');
     expect(p.handle, 'macroalex');
@@ -119,7 +119,7 @@ void main() {
 
   test('follow/unfollow update the relationship', () async {
     final client = _ProfileStubClient();
-    final service = TraderaService(client);
+    final service = AsemanService(client);
 
     await service.followUser('u-1');
     expect(client.follows, contains('u-1'));
@@ -128,14 +128,14 @@ void main() {
   });
 
   test('fetchFollowing parses account summaries', () async {
-    final service = TraderaService(_ProfileStubClient());
+    final service = AsemanService(_ProfileStubClient());
     final list = await service.fetchFollowing(accountId: 'u-1');
     expect(list.single.handle, 'algoquant');
   });
 
   test('fetchBotProfile parses resources, usage, entities and listing',
       () async {
-    final service = TraderaService(_ProfileStubClient());
+    final service = AsemanService(_ProfileStubClient());
     final b = await service.fetchBotProfile('b-1');
     expect(b.name, 'SignalBot');
     expect(b.kind, 'agent');
@@ -150,7 +150,7 @@ void main() {
   });
 
   test('fetchSpaceProfile parses counts and rooms', () async {
-    final service = TraderaService(_ProfileStubClient());
+    final service = AsemanService(_ProfileStubClient());
     final s = await service.fetchSpaceProfile('s-1');
     expect(s.name, 'Atlas Capital');
     expect(s.memberCount, 8);
@@ -160,7 +160,7 @@ void main() {
   });
 
   test('fetchRoomProfile parses activity and counts', () async {
-    final service = TraderaService(_ProfileStubClient());
+    final service = AsemanService(_ProfileStubClient());
     final r = await service.fetchRoomProfile('r-1');
     expect(r.spaceName, 'Atlas Capital');
     expect(r.messageCount, 50);
@@ -169,7 +169,7 @@ void main() {
   });
 
   test('joinSpace calls the join action', () async {
-    final service = TraderaService(_ProfileStubClient());
+    final service = AsemanService(_ProfileStubClient());
     await service.joinSpace('s-1');
   });
 }

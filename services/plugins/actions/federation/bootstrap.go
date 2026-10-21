@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	nodetypes "github.com/tradera/tradera/plugins/actions/federation/models/node"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	nodetypes "github.com/aseman/aseman/plugins/actions/federation/models/node"
 )
 
 // Bootstrap registers this node and its discovered central peer.

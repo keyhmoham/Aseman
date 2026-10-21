@@ -8,7 +8,7 @@ import (
 
 // A preview is served under /v1/proxy/{id}/, but the app was built for the
 // site root: its links, forms and client-side router (Next.js, React Router…)
-// navigate to "/about", which leaves the proxy and lands on the Tradera app
+// navigate to "/about", which leaves the proxy and lands on the Aseman app
 // that shares the origin. The gateway keeps the page inside its prefix in two
 // ways: root-relative attributes in the served HTML are prefixed, and a small
 // script, injected before the app's own, prefixes the URLs the page navigates
@@ -17,8 +17,8 @@ import (
 // proxyShim is the injected script; %s is the JSON-encoded prefix without its
 // trailing slash. It leaves relative, already-prefixed and cross-origin URLs
 // untouched, so running it on an app built for the prefix changes nothing.
-const proxyShim = `<script data-tradera-proxy>(function(){
-var P=%s;if(window.__traderaProxy)return;window.__traderaProxy=P;
+const proxyShim = `<script data-aseman-proxy>(function(){
+var P=%s;if(window.__asemanProxy)return;window.__asemanProxy=P;
 var O=location.origin,H=location.host;
 function inside(p){return p===P||p.indexOf(P+"/")===0||p.indexOf("/v1/proxy/")===0;}
 function fix(u){
@@ -29,7 +29,7 @@ try{var x=new URL(u);}catch(e){return u;}
 if(x.host!==H||inside(x.pathname))return u;
 if(/^https?:$/.test(x.protocol)&&x.origin!==O)return u;
 x.pathname=P+x.pathname;return x.href;}
-window.__traderaProxyFix=fix;
+window.__asemanProxyFix=fix;
 var h=window.history;
 ["pushState","replaceState"].forEach(function(m){var o=h[m];if(!o)return;h[m]=function(s,t,u){return arguments.length>2&&u!=null?o.call(this,s,t,fix(u)):o.apply(this,arguments);};});
 if(window.fetch){var of=window.fetch;window.fetch=function(i,n){
@@ -59,7 +59,7 @@ func injectProxyShim(body []byte, ctype, prefix string) []byte {
 	if !strings.Contains(strings.ToLower(ctype), "text/html") {
 		return body
 	}
-	if strings.Contains(string(body), "data-tradera-proxy") {
+	if strings.Contains(string(body), "data-aseman-proxy") {
 		return body
 	}
 	quoted, _ := json.Marshal(strings.TrimRight(prefix, "/"))

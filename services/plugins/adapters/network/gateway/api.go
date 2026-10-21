@@ -15,17 +15,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/internal/plugins/signing"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/filedata"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/proxy"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/signing"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/filedata"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
 type Authenticator interface {
@@ -84,7 +84,7 @@ func (a *API) Register(net network.Network) error {
 	if err := net.Handle(network.MethodGet, "/v1/proxy/{id}", a.proxyServe); err != nil {
 		return err
 	}
-	// Tradera's web UI kit for pages served from anywhere (pkg/webkit);
+	// Aseman's web UI kit for pages served from anywhere (pkg/webkit);
 	// previews also have it under their own prefix (proxy_page.go).
 	if err := net.Handle(network.MethodGet, "/v1/webkit/{file}", a.webkitServe); err != nil {
 		return err
@@ -242,7 +242,7 @@ func (a *API) proxyServe(ctx context.Context, req *network.Request) (*network.Re
 	}
 
 	rest := params["*"]
-	// The kit and the page's Tradera API are the gateway's own, never the
+	// The kit and the page's Aseman API are the gateway's own, never the
 	// sandbox's (proxy_page.go).
 	if page, ok := strings.CutPrefix(strings.TrimLeft(rest, "/"), pagePrefix); ok {
 		return a.proxyPage(ctx, req, p, acc, method, page)
@@ -324,7 +324,7 @@ func (a *API) proxyServe(ctx context.Context, req *network.Request) (*network.Re
 		body = rewriteProxyLinks(body, ctype, p.GatewayPath())
 	}
 	// Keep the page's own navigation (links, forms, client-side routers,
-	// fetches) under the proxy prefix instead of the Tradera app's routes.
+	// fetches) under the proxy prefix instead of the Aseman app's routes.
 	// It is a no-op for an app already built for the prefix.
 	body = injectProxyShim(body, ctype, p.GatewayPath())
 	hdr := map[string]string{

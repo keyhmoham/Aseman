@@ -3,10 +3,10 @@ package finance
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/module"
-	"github.com/tradera/tradera/plugins/actions/finance/schema"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/module"
+	"github.com/aseman/aseman/plugins/actions/finance/schema"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
 )
 
 func NewPlugin() api.Plugin {

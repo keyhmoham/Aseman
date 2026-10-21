@@ -2,14 +2,14 @@ package posts
 
 import (
 	"context"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/posts/models"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/filedata"
-	"github.com/tradera/tradera/plugins/actions/support/metasvc"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/posts/models"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/filedata"
+	"github.com/aseman/aseman/plugins/actions/support/metasvc"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // visible reports whether caller may read p: global posts are public, a

@@ -14,11 +14,11 @@ import pytest
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from tradera_agents.agent import Runner
-from tradera_agents.decision import DecisionClient
-from tradera_agents.store import Store
-from tradera_agents.swarm import planner, team_setup
-from tradera_agents.swarm.tools import swarm_tools
+from aseman_agents.agent import Runner
+from aseman_agents.decision import DecisionClient
+from aseman_agents.store import Store
+from aseman_agents.swarm import planner, team_setup
+from aseman_agents.swarm.tools import swarm_tools
 from fakes import CODER, LEAD, Platform, ScriptedModel, call, listing, turn_request
 
 

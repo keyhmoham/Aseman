@@ -20,11 +20,11 @@ function mediaUrl(u) {
   if (s.startsWith('<svg')) return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s);
   if (/^(https?:|data:|blob:)/i.test(s)) return s;
   const file = /^\/?v1\/files\/([0-9a-fA-F]{32})\/content/.exec(s) || /^([0-9a-fA-F]{32})$/.exec(s);
-  if (file) return previewPrefix() + '/_tradera/api/file/' + file[1];
+  if (file) return previewPrefix() + '/_aseman/api/file/' + file[1];
   if (s.startsWith('/workspace/')) s = s.slice('/workspace'.length);
   return s;
 }
-Tradera.mediaUrl = mediaUrl;
+Aseman.mediaUrl = mediaUrl;
 
 // ---- markdown ---------------------------------------------------------------
 
@@ -108,7 +108,7 @@ function markdown(src) {
   return out.join('');
 }
 const MD_HINT = /(^|\n)\s*(#{1,6}\s|[-*+]\s|\d+[.)]\s|>|```|\|.*\|)|\*\*|__|`|\[[^\]]+\]\(|~~/;
-Tradera.markdown = markdown;
+Aseman.markdown = markdown;
 
 // ---- code -----------------------------------------------------------------
 
@@ -292,7 +292,7 @@ function pill(p) {
   if (variant === 'filled') span.style.setProperty('--t-ink', onFill(c));
   return span;
 }
-Tradera.pill = pill;
+Aseman.pill = pill;
 /** Badge / Tag {text, status?|color?, variant?: tonal|filled|outline, icon?}; Elpian Badge {label|count} on its child. */
 for (const n of ['badge', 'tag', 'status-tag']) {
   define(n, class extends TElement {
@@ -341,7 +341,7 @@ function avatar(p) {
   }
   return box;
 }
-Tradera.avatar = avatar;
+Aseman.avatar = avatar;
 /** Avatar {name, url?, size?, color?}: initials on a series hue when there is no picture. */
 component('avatar', (el, p) => el.replaceChildren(avatar(p)));
 /** AvatarGroup {people: [{name, url?}], max?, size?}. */
@@ -455,11 +455,11 @@ define('scaffold', class extends TElement {
     this.replaceChildren(...bar, body, ...(fabEl ? [fabEl] : []));
   }
 });
-/** Brand {size?}: the Tradera mark. */
+/** Brand {size?}: the Aseman mark. */
 component('brand', (el, p) => {
   const s = asDouble(p.size, 28);
   el.style.display = 'inline-flex'; el.style.alignItems = 'center'; el.style.gap = '8px';
-  el.innerHTML = `<svg width="${s}" height="${s}" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="tg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b7bff"/><stop offset="1" stop-color="#58d7ff"/></linearGradient></defs><rect width="32" height="32" rx="10" fill="url(#tg)"/><path d="M9 21l5-6 4 3 5-7" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>${p.label === false ? '' : `<b style="font-weight:900;font-size:${s * 0.62}px;letter-spacing:-.3px">${esc(p.label ?? 'Tradera')}</b>`}`;
+  el.innerHTML = `<svg width="${s}" height="${s}" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="tg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b7bff"/><stop offset="1" stop-color="#58d7ff"/></linearGradient></defs><rect width="32" height="32" rx="10" fill="url(#tg)"/><path d="M9 21l5-6 4 3 5-7" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>${p.label === false ? '' : `<b style="font-weight:900;font-size:${s * 0.62}px;letter-spacing:-.3px">${esc(p.label ?? 'Aseman')}</b>`}`;
 });
 
 // ---- math, canvas --------------------------------------------------------------

@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/bots/dto"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/finance/models/wallet"
-	settings "github.com/tradera/tradera/plugins/actions/settings/models"
-	"github.com/tradera/tradera/plugins/actions/usage/models"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/dto"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/finance/models/wallet"
+	settings "github.com/aseman/aseman/plugins/actions/settings/models"
+	"github.com/aseman/aseman/plugins/actions/usage/models"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // Biller charges a customer's wallet for bot/sandbox execution and credits the
@@ -371,7 +371,7 @@ func (s *Service) usageDelta(ctx context.Context, rec *bot.Bot) (usage.Delta, er
 }
 
 // RecordDelta records a fixed usage delta into the ledger without metering a
-// VM (used by tradera to log its own orchestrator brain's token usage, which
+// VM (used by aseman to log its own orchestrator brain's token usage, which
 // is not tied to a bot VM meter).
 func (s *Service) RecordDelta(ctx context.Context, actor, botID identity.ID, d usage.Delta, uc usage.UsageCtx) error {
 	// Charging must outlive the work: a person stopping a turn cancels its

@@ -3,7 +3,7 @@ package llmprovider
 import (
 	"time"
 
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // ImageSetting is the node's image model, chosen by the admin: one image model

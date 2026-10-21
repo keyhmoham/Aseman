@@ -6,8 +6,8 @@ import (
 )
 
 func TestDesktopSocketOrigins(t *testing.T) {
-	t.Setenv("TRADERA_ALLOWED_ORIGINS", "app.example.com, https://studio.example.com")
-	t.Setenv("TRADERA_NODE_URL", "https://api.example.com")
+	t.Setenv("ASEMAN_ALLOWED_ORIGINS", "app.example.com, https://studio.example.com")
+	t.Setenv("ASEMAN_NODE_URL", "https://api.example.com")
 	cases := []struct {
 		name, origin, host, forwarded string
 		want                          bool
@@ -16,12 +16,12 @@ func TestDesktopSocketOrigins(t *testing.T) {
 		{"same host", "https://api.example.com", "api.example.com", "", true},
 		{"app and node on different localhost ports (dev)", "http://localhost:8081", "localhost:8080", "", true},
 		{"loopback address vs localhost", "http://127.0.0.1:3000", "localhost:8080", "", true},
-		{"a proxy forwarded the page's host", "https://app.example.com", "tradera:8080", "app.example.com", true},
-		{"listed origin (bare host)", "https://app.example.com", "tradera:8080", "", true},
-		{"listed origin (url)", "https://studio.example.com", "tradera:8080", "", true},
-		{"the node's own public URL", "https://api.example.com", "tradera:8080", "", true},
+		{"a proxy forwarded the page's host", "https://app.example.com", "aseman:8080", "app.example.com", true},
+		{"listed origin (bare host)", "https://app.example.com", "aseman:8080", "", true},
+		{"listed origin (url)", "https://studio.example.com", "aseman:8080", "", true},
+		{"the node's own public URL", "https://api.example.com", "aseman:8080", "", true},
 		{"a proxy passed the host without its port", "http://pixelar.games:3000", "pixelar.games", "", true},
-		{"a proxy forwarded the host with its port", "http://pixelar.games:3000", "tradera:8080", "pixelar.games:3000", true},
+		{"a proxy forwarded the host with its port", "http://pixelar.games:3000", "aseman:8080", "pixelar.games:3000", true},
 		{"another port of a host the request named with its port", "http://api.example.com:9999", "api.example.com:8080", "", false},
 		{"a foreign page against a portless host", "http://evil.example.net:3000", "pixelar.games", "", false},
 		{"a foreign page", "https://evil.example.net", "api.example.com", "", false},

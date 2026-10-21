@@ -8,19 +8,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/adapters/database/memory"
-	dbmodel "github.com/tradera/tradera/plugins/testutil"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/adapters/database/memory"
+	dbmodel "github.com/aseman/aseman/plugins/testutil"
 )
 
 // TestAgainstUtopia runs the feeds and the agents' MCP against a real Utopia
-// (the stack's "timeline" service): TRADERA_TEST_UTOPIA=http://host:1516.
+// (the stack's "timeline" service): ASEMAN_TEST_UTOPIA=http://host:1516.
 func TestAgainstUtopia(t *testing.T) {
-	url := getenv("TRADERA_TEST_UTOPIA")
+	url := getenv("ASEMAN_TEST_UTOPIA")
 	if url == "" {
-		t.Skip("set TRADERA_TEST_UTOPIA to run the Utopia integration test")
+		t.Skip("set ASEMAN_TEST_UTOPIA to run the Utopia integration test")
 	}
 	db := memory.New(logger.Global())
 	ctx := helper.WithInternalAccess(context.Background())

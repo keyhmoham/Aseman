@@ -5,12 +5,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/openviking"
-	"github.com/tradera/tradera/plugins/actions/llm/models"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/openviking"
+	"github.com/aseman/aseman/plugins/actions/llm/models"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // memoryTable is the database model of the memory models setting.

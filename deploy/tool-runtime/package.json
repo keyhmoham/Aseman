@@ -1,8 +1,8 @@
 {
-  "name": "tradera-tool-runtime",
+  "name": "aseman-tool-runtime",
   "version": "1.0.0",
   "private": true,
-  "description": "Runs a Tradera tool backend written for the Elpian VM or QuickJS and serves its microtools over MCP.",
+  "description": "Runs an Aseman tool backend written for the Elpian VM or QuickJS and serves its microtools over MCP.",
   "type": "module",
   "main": "server.mjs",
   "scripts": {

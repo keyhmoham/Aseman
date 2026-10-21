@@ -10,9 +10,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 	"golang.org/x/net/html"
 )
 
@@ -223,14 +223,14 @@ func (s *Service) inspectSandboxHTML(ctx context.Context, spaceID identity.ID, n
 // are parsed, never executed; module syntax uses Node's normal module parser.
 func scriptCheckCommand(scripts []inlineScript) string {
 	encoded, _ := json.Marshal(scripts)
-	return "node - <<'TRADERA_JS_CHECK'\n" + `const fs = require('fs'), vm = require('vm'), os = require('os'), path = require('path'), cp = require('child_process');
+	return "node - <<'ASEMAN_JS_CHECK'\n" + `const fs = require('fs'), vm = require('vm'), os = require('os'), path = require('path'), cp = require('child_process');
 const scripts = JSON.parse(Buffer.from('` + base64.StdEncoding.EncodeToString(encoded) + `', 'base64').toString('utf8'));
 const checks = scripts.map((script, index) => {
   const check = {name: 'Inline JavaScript syntax #' + (index + 1), passed: false};
   let dir;
   try {
     if (script.module) {
-      dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tradera-js-check-'));
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aseman-js-check-'));
       const file = path.join(dir, 'script.mjs'); fs.writeFileSync(file, script.source);
       const result = cp.spawnSync(process.execPath, ['--check', file], {encoding: 'utf8', timeout: 10000});
       if (result.status !== 0) throw new Error((result.stderr || 'Module syntax check failed').slice(-1000));
@@ -241,5 +241,5 @@ const checks = scripts.map((script, index) => {
   return check;
 });
 console.log(JSON.stringify(checks));
-TRADERA_JS_CHECK`
+ASEMAN_JS_CHECK`
 }

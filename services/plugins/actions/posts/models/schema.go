@@ -1,6 +1,6 @@
 package post
 
-import "github.com/tradera/tradera/plugins/adapters/database/ports"
+import "github.com/aseman/aseman/plugins/adapters/database/ports"
 
 func f(name string, k database.Kind) database.Field { return database.Field{Name: name, Kind: k} }
 

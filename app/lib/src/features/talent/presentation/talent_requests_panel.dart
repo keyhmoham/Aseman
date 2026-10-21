@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_header.dart';
@@ -41,7 +41,7 @@ const talentTimelines = [
 /// and get in touch; nothing here moves money.
 class TalentRequestsPanel extends StatefulWidget {
   const TalentRequestsPanel({super.key, required this.service});
-  final TraderaService service;
+  final AsemanService service;
 
   @override
   State<TalentRequestsPanel> createState() => _TalentRequestsPanelState();
@@ -280,7 +280,7 @@ class _RequestCard extends StatelessWidget {
 /// Posts a request for talent. Pops with true once it is posted.
 class TalentRequestForm extends StatefulWidget {
   const TalentRequestForm({super.key, required this.service});
-  final TraderaService service;
+  final AsemanService service;
 
   @override
   State<TalentRequestForm> createState() => _TalentRequestFormState();

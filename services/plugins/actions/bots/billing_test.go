@@ -6,15 +6,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/bots/dto"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/llm"
-	"github.com/tradera/tradera/plugins/actions/llm/models"
-	settings "github.com/tradera/tradera/plugins/actions/settings/models"
-	usage "github.com/tradera/tradera/plugins/actions/usage/models"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/bots/dto"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/llm"
+	"github.com/aseman/aseman/plugins/actions/llm/models"
+	settings "github.com/aseman/aseman/plugins/actions/settings/models"
+	usage "github.com/aseman/aseman/plugins/actions/usage/models"
 )
 
 type recordingBiller struct {

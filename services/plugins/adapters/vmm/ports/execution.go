@@ -98,7 +98,7 @@ func WorkingDirectory(runID string) string {
 		return ""
 	}
 	sum := sha256.Sum256([]byte(runID))
-	return "/tmp/tradera/runs/" + hex.EncodeToString(sum[:16])
+	return "/tmp/aseman/runs/" + hex.EncodeToString(sum[:16])
 }
 
 func (b *Budget) Totals() (int64, int64) {

@@ -3,7 +3,7 @@ package llmprovider
 import (
 	"time"
 
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // Memory is the node's memory models setting, chosen by the admin: the models

@@ -1,4 +1,4 @@
-/// A2UI inside Elpian, rendered by genui with Tradera's catalog: the
+/// A2UI inside Elpian, rendered by genui with Aseman's catalog: the
 /// `A2UISurface` widget (also `a2ui-surface`), the
 /// per-app conversation registry it and the host APIs share, and the guest
 /// host APIs `agent.send`, `agent.action` and `a2ui.dataModel`.
@@ -168,7 +168,7 @@ Widget buildA2UISurface(ElpianNode node, List<Widget> children) {
 }
 
 /// The widget behind an `A2UISurface` node: renders the surfaces of its
-/// conversation with genui (Tradera's catalog), rebuilds when the
+/// conversation with genui (Aseman's catalog), rebuilds when the
 /// conversation changes, and delivers conversation events to the node's
 /// `events`.
 class A2UISurfaceView extends StatefulWidget {

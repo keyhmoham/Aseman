@@ -8,15 +8,15 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/tradera/tradera/internal/kernel"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/filedata"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/adapters/database/memory"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/filesystem/ports"
-	dbmodel "github.com/tradera/tradera/plugins/testutil"
+	"github.com/aseman/aseman/internal/kernel"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/filedata"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/adapters/database/memory"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/filesystem/ports"
+	dbmodel "github.com/aseman/aseman/plugins/testutil"
 )
 
 // objects is an object store in memory.

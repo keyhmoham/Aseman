@@ -3,13 +3,13 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/core/theme/app_theme.dart';
-import 'package:tradera/src/features/desk/data/desk_api.dart';
-import 'package:tradera/src/features/desk/domain/desk_models.dart';
-import 'package:tradera/src/features/desk/presentation/desk_controller.dart';
-import 'package:tradera/src/features/desk/presentation/web_page_view.dart';
+import 'package:aseman/src/core/theme/app_theme.dart';
+import 'package:aseman/src/features/desk/data/desk_api.dart';
+import 'package:aseman/src/features/desk/domain/desk_models.dart';
+import 'package:aseman/src/features/desk/presentation/desk_controller.dart';
+import 'package:aseman/src/features/desk/presentation/web_page_view.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
 const _page = '/v1/proxy/0000000000000001626f3df602aaad3d/orders';
 
@@ -58,15 +58,15 @@ void main() {
   });
 
   test('the page loads signed in, in the app theme', () async {
-    final service = FakeTraderaService();
+    final service = FakeAsemanService();
     final theme = webPageTheme(AppTheme.dark);
     expect(theme['mode'], 'dark');
     expect((theme['scheme'] as Map)['primary'], '#c7bfff');
     final url = Uri.parse(webPageUrl(service, _page, theme));
     expect(url.path, _page);
-    expect(url.queryParameters['tradera_theme'], 'dark');
-    expect(url.queryParameters['tradera_embed'], 'desk');
-    final scheme = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(url.queryParameters['tradera_scheme']!))));
+    expect(url.queryParameters['aseman_theme'], 'dark');
+    expect(url.queryParameters['aseman_embed'], 'desk');
+    final scheme = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(url.queryParameters['aseman_scheme']!))));
     expect(scheme['surface'], '#111119');
     expect(() => webPageUrl(service, 'https://evil.example/', theme), throwsFormatException);
   });
@@ -75,7 +75,7 @@ void main() {
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;
     await tester.pumpWidget(MaterialApp(
         theme: AppTheme.light,
-        home: Scaffold(body: WebPageView(service: FakeTraderaService(), page: _page))));
+        home: Scaffold(body: WebPageView(service: FakeAsemanService(), page: _page))));
     expect(find.text('/orders'), findsOneWidget);
     expect(find.text('Opens in your browser'), findsOneWidget);
     expect(find.text('Open page'), findsOneWidget);

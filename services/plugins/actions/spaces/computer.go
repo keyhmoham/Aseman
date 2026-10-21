@@ -7,14 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/jsonpatch"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/permission"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/jsonpatch"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/permission"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 	"path"
 	"slices"
 	"strings"
@@ -145,7 +145,7 @@ func (s *Service) computerStatus(ctx context.Context, sp identity.ID, probe bool
 // browserProfileDir is where the desktop's browser keeps its cookies and
 // logins, on the project's own disk so they outlive a sleeping or rebuilt
 // computer (see desktop.sh). It is a live session: no file tool shows it.
-const browserProfileDir = "/workspace/.tradera/browser-profile"
+const browserProfileDir = "/workspace/.aseman/browser-profile"
 
 // inBrowserProfile reports whether a cleaned workspace path is the browser's
 // saved logins or inside them.
@@ -164,7 +164,7 @@ func (s *Service) forgetBrowserLogins(ctx context.Context, sp identity.ID) error
 		return e
 	}
 	if rec.Status == bot.StatusRunning {
-		out, e := s.SandboxExec(ctx, sp, desktopInstallCommand()+" && tradera-desktop forget-logins")
+		out, e := s.SandboxExec(ctx, sp, desktopInstallCommand()+" && aseman-desktop forget-logins")
 		if e != nil {
 			return e
 		}
@@ -230,7 +230,7 @@ func (s *Service) sandboxFilesAction(ctx context.Context, req *api.ActionRequest
 	// An agent's request carries its turn's limits (a person's has none).
 	if policy := vmm.ExecutionFrom(ctx); policy.NoSandbox {
 		return nil, errs.Permission("sandbox access is disabled for this request")
-	} else if policy.NoMemory && (strings.Contains(target, "AGENTS.md") || strings.Contains(target, "/.tradera/")) {
+	} else if policy.NoMemory && (strings.Contains(target, "AGENTS.md") || strings.Contains(target, "/.aseman/")) {
 		return nil, errs.Permission("saved space memory is disabled for this request")
 	}
 	// The agents' notes are in their memory server, not in the sandbox.
@@ -348,7 +348,7 @@ func (s *Service) sandboxFilesAction(ctx context.Context, req *api.ActionRequest
 p=json.loads(base64.b64decode('` + base64.StdEncoding.EncodeToString(b) + `')); target=os.path.realpath(p['path']); root=os.path.realpath('/workspace')
 if target!=root and not target.startswith(root+'/'): raise ValueError('Path escapes workspace')
 op=p['op']
-if op=='list': result={'items':[{'name':f,'type':'dir' if os.path.isdir(os.path.join(target,f)) else 'file','size':os.path.getsize(os.path.join(target,f))} for f in sorted(os.listdir(target)) if os.path.join(target,f)!='/workspace/.tradera/browser-profile']}
+if op=='list': result={'items':[{'name':f,'type':'dir' if os.path.isdir(os.path.join(target,f)) else 'file','size':os.path.getsize(os.path.join(target,f))} for f in sorted(os.listdir(target)) if os.path.join(target,f)!='/workspace/.aseman/browser-profile']}
 elif op=='read':
  data=open(target,'rb').read(67108865)
  if len(data)>67108864: raise ValueError('File too large')
@@ -419,7 +419,7 @@ func changeStoredFiles(ctx context.Context, vm vmm.VMM, vmID, op, rel, to string
 }
 
 func (s *Service) websitePreview(ctx context.Context, sp, actor identity.ID) (*api.ActionResponse, error) {
-	command := `cd /workspace; if test -f package.json; then if test -f package-lock.json; then npm ci >/tmp/tradera-install.log 2>&1; else npm install >/tmp/tradera-install.log 2>&1; fi; (nohup npm run dev -- --host 0.0.0.0 --port 4173 >/tmp/tradera-preview.log 2>&1 </dev/null &); elif test -f index.html; then (nohup python3 -m http.server 4173 --bind 0.0.0.0 >/tmp/tradera-preview.log 2>&1 </dev/null &); else exit 3; fi; for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173/ >/dev/null && exit 0; sleep 1; done; tail -30 /tmp/tradera-preview.log; exit 1`
+	command := `cd /workspace; if test -f package.json; then if test -f package-lock.json; then npm ci >/tmp/aseman-install.log 2>&1; else npm install >/tmp/aseman-install.log 2>&1; fi; (nohup npm run dev -- --host 0.0.0.0 --port 4173 >/tmp/aseman-preview.log 2>&1 </dev/null &); elif test -f index.html; then (nohup python3 -m http.server 4173 --bind 0.0.0.0 >/tmp/aseman-preview.log 2>&1 </dev/null &); else exit 3; fi; for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173/ >/dev/null && exit 0; sleep 1; done; tail -30 /tmp/aseman-preview.log; exit 1`
 	out, e := s.SandboxExec(ctx, sp, command)
 	if strings.HasPrefix(out, "exit=3") {
 		// Nothing to serve at the top of the files (a site in a folder of its
@@ -439,7 +439,7 @@ func (s *Service) websitePreview(ctx context.Context, sp, actor identity.ID) (*a
 	return helper.JSON(map[string]any{"ok": true, "dir": ".", "port": 4173, "url": p.GatewayPath(), "live": true})
 }
 
-// desktopScript is tradera-desktop: the one program that starts, drives and
+// desktopScript is aseman-desktop: the one program that starts, drives and
 // stops the project's desktop. It is written onto the machine on every start, so
 // a machine built from an older image gets the current one too (the image bakes
 // the same file for agents).
@@ -453,7 +453,7 @@ func DesktopScript() []byte { return desktopScript }
 // desktopRun installs the desktop program on the machine and runs one of its
 // commands. The output starts with exit=<code> (see SandboxExec).
 func (s *Service) desktopRun(ctx context.Context, sp identity.ID, args string) (string, error) {
-	return s.SandboxExec(ctx, sp, desktopInstallCommand()+" && tradera-desktop "+args)
+	return s.SandboxExec(ctx, sp, desktopInstallCommand()+" && aseman-desktop "+args)
 }
 
 // requireFundsForComputer fails when the person cannot pay for the project's
@@ -472,11 +472,11 @@ func (s *Service) requireFundsForComputer(ctx context.Context, spaceID, payer id
 // desktopInstallCommand writes the desktop program onto the machine.
 func desktopInstallCommand() string {
 	return "echo " + base64.StdEncoding.EncodeToString(desktopScript) +
-		" | base64 -d >/usr/local/bin/tradera-desktop && chmod +x /usr/local/bin/tradera-desktop"
+		" | base64 -d >/usr/local/bin/aseman-desktop && chmod +x /usr/local/bin/aseman-desktop"
 }
 
 // provideDesktopScript puts the desktop program on a machine that has just
-// woken, so agents can run `tradera-desktop` even when the machine's image is
+// woken, so agents can run `aseman-desktop` even when the machine's image is
 // older than the program. Best effort: a machine without it still works.
 func (s *Service) provideDesktopScript(ctx context.Context, rec *bot.Bot) {
 	vm := s.K.VMMFor(vmm.Type(rec.VMType))

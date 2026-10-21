@@ -1,4 +1,4 @@
-// Package identity implements the tradera universal identifier.
+// Package identity implements the aseman universal identifier.
 //
 // Every entity in the federated network is addressed by a universal ID made of
 // two fixed 64-bit parts, each rendered as 16 lowercase hex characters:
@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/idutil"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/idutil"
 )
 
 const (

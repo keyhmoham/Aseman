@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
-	llmprovider "github.com/tradera/tradera/plugins/actions/llm/models"
+	"github.com/aseman/aseman/pkg/errs"
+	llmprovider "github.com/aseman/aseman/plugins/actions/llm/models"
 )
 
 const defaultImageModel = "gpt-image-1"

@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/logger"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/logger"
 )
 
 // Base is embedded into adapter plugins.

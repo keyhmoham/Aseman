@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/finance/models"
-	"github.com/tradera/tradera/plugins/actions/finance/models/wallet"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/finance/models"
+	"github.com/aseman/aseman/plugins/actions/finance/models/wallet"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 const (
@@ -165,7 +165,7 @@ func withGrantExpiry(tx map[string]any, desc string, g models.Record) {
 	}
 	base := desc
 	if base == "" || base == "mint" {
-		base = "Added by Tradera"
+		base = "Added by Aseman"
 	}
 	note := "expires " + at.UTC().Format("2 Jan 2006")
 	if g.Status == grantExpired {

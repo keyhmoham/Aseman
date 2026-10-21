@@ -4,16 +4,16 @@ import (
 	"context"
 	"strings"
 
-	"github.com/tradera/tradera/pkg/crypto"
-	"github.com/tradera/tradera/pkg/errs"
-	models "github.com/tradera/tradera/plugins/actions/llm/models"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/pkg/crypto"
+	"github.com/aseman/aseman/pkg/errs"
+	models "github.com/aseman/aseman/plugins/actions/llm/models"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 func keyContext(p *models.Provider) string { return "llm_providers/" + p.ID.String() + "/api_key" }
 
 func (s *Service) openProviderKey(p *models.Provider) error {
-	if !strings.HasPrefix(p.APIKey, "tradera:secret:") {
+	if !strings.HasPrefix(p.APIKey, "aseman:secret:") {
 		return nil
 	} // Legacy key, migrated at bootstrap.
 	key, err := crypto.OpenSecret(p.APIKey, s.K.Env()["node_private_key"], keyContext(p))
@@ -49,7 +49,7 @@ func (s *Service) encryptLegacyKeys(ctx context.Context) error {
 		if p.APIKey == "" {
 			continue
 		}
-		if strings.HasPrefix(p.APIKey, "tradera:secret:") {
+		if strings.HasPrefix(p.APIKey, "aseman:secret:") {
 			if err := s.openProviderKey(&p); err != nil {
 				return err
 			}

@@ -7,7 +7,7 @@ Two workflows, independent of each other:
    `docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build`.
 2. [`sandbox-image.yml`](../.github/workflows/sandbox-image.yml): **only when `deploy/sandbox-computer/**` changes**
    (or run by hand from the Actions tab). Builds the sandbox computer (amd64 + arm64) and pushes
-   `ghcr.io/<owner>/tradera-sandbox-computer:latest` (and `:<sha>`). The workflow file itself is in the path
+   `ghcr.io/<owner>/aseman-sandbox-computer:latest` (and `:<sha>`). The workflow file itself is in the path
    filter, so the push that first adds it builds the first image.
 
 ## Fast deploys from your own machine (`[self-hosted]`)
@@ -36,7 +36,7 @@ BUILD_ONLY=1 ./deploy/ship.sh     # just build locally, push and deploy nothing
 ```
 
 How it works: [`ship.sh`](ship.sh) builds the four images in parallel for the server's CPU, pushes them as
-`ghcr.io/<owner>/tradera-prod-{node,web,agents,sandbox}:<commit>`, logs the server in to GHCR for
+`ghcr.io/<owner>/aseman-prod-{node,web,agents,sandbox}:<commit>`, logs the server in to GHCR for
 the pull only (and logs out again), re-tags them to the names `docker-compose.yml` uses, and runs
 `docker compose up -d --no-build`. Runtime settings remain in the server's `.env`.
 The workflow's own token is enough for GHCR; no extra secret.
@@ -50,7 +50,7 @@ web app, and **Caddy** as the only public entrypoint (HTTPS, automatic certifica
 - Docker Engine with Compose **≥ 2.24** (`docker compose version`).
 - Ports **80, 443** (and 443/udp) open in the security group / firewall; 22 for SSH.
 - A user that can run `docker` (`sudo usermod -aG docker $USER`) and write to the
-  deploy path (default `/opt/tradera`: `sudo mkdir -p /opt/tradera && sudo chown $USER /opt/tradera`).
+  deploy path (default `/opt/aseman`: `sudo mkdir -p /opt/aseman && sudo chown $USER /opt/aseman`).
 - 4 GB RAM or more is comfortable (the web image is built on the server).
 
 ### 2. DNS
@@ -66,36 +66,36 @@ Point both names at the server's IP (A/AAAA records):
 Create it once on the server, in the deploy path:
 ```bash
 ssh you@server
-nano /opt/tradera/.env      # contents: see .env.example, minimum below
-chmod 600 /opt/tradera/.env
+nano /opt/aseman/.env      # contents: see .env.example, minimum below
+chmod 600 /opt/aseman/.env
 ```
 Minimum:
 ```bash
 APP_DOMAIN=app.example.com
 API_DOMAIN=api.example.com
 ACME_EMAIL=you@example.com
-TRADERA_PUBLIC_URL=https://api.example.com
-TRADERA_ADMIN_PASSWORD=<a long random password>
+ASEMAN_PUBLIC_URL=https://api.example.com
+ASEMAN_ADMIN_PASSWORD=<a long random password>
 POSTGRES_PASSWORD=<a long random password>
 
 # Node identity (admin handle, Google client, Modal token) is optional; create
-# /opt/tradera/services/configs/config.yml from services/configs/config.example.yml
-# and add TRADERA_CONFIG_FILE=./services/configs/config.yml to .env.
+# /opt/aseman/services/configs/config.yml from services/configs/config.example.yml
+# and add ASEMAN_CONFIG_FILE=./services/configs/config.yml to .env.
 
 # Modal sandboxes instead of local docker ones (optional):
-# TRADERA_SANDBOX_BACKEND=modal
-# TRADERA_MODAL_TOKEN_ID=ak-...
-# TRADERA_MODAL_TOKEN_SECRET=as-...
+# ASEMAN_SANDBOX_BACKEND=modal
+# ASEMAN_MODAL_TOKEN_ID=ak-...
+# ASEMAN_MODAL_TOKEN_SECRET=as-...
 ```
 The platform needs nothing from GHCR: with the default `docker` sandbox backend the stack builds
-its own `tradera/sandbox-computer` image. Only for **Modal** add to `.env`:
-`TRADERA_SANDBOX_BACKEND=modal` and
-`TRADERA_SANDBOX_IMAGE=ghcr.io/<owner-lowercase>/tradera-sandbox-computer:latest`.
+its own `aseman/sandbox-computer` image. Only for **Modal** add to `.env`:
+`ASEMAN_SANDBOX_BACKEND=modal` and
+`ASEMAN_SANDBOX_IMAGE=ghcr.io/<owner-lowercase>/aseman-sandbox-computer:latest`.
 The agents' memory server (OpenViking) needs nothing here: its root key
-(`TRADERA_OPENVIKING_ROOT_KEY`) is generated into `.env` on the first deploy,
+(`ASEMAN_OPENVIKING_ROOT_KEY`) is generated into `.env` on the first deploy,
 and its models are picked in the app under **Admin → Memory models**.
 The projects' timelines (Utopia, on the stack's own Postgres) need nothing either:
-the node's password there (`TRADERA_TIMELINE_PASSWORD`) is generated into `.env`
+the node's password there (`ASEMAN_TIMELINE_PASSWORD`) is generated into `.env`
 the same way. The Postgres image now carries pgvector (`deploy/postgres`, same
 `postgres:16-alpine` base), so the existing data volume is used as it is.
 Everything else in [`.env.example`](../.env.example) is optional. The
@@ -110,7 +110,7 @@ Only SSH access:
 | `DEPLOY_HOST` | server hostname or IP |
 | `DEPLOY_USER` | SSH user |
 | `DEPLOY_SSH_KEY` | private key (the matching public key in the server's `~/.ssh/authorized_keys`) |
-| `DEPLOY_PATH` | optional, default `/opt/tradera` |
+| `DEPLOY_PATH` | optional, default `/opt/aseman` |
 
 ### Dev server (optional): every push to `dev`
 [`deploy-dev.yml`](../.github/workflows/deploy-dev.yml) deploys the `dev` branch to a separate server,
@@ -122,19 +122,19 @@ to run if `DEPLOY_HOST_DEV` is empty or equals `DEPLOY_HOST`.
 | `DEPLOY_HOST_DEV` | the dev server's hostname or IP |
 | `DEPLOY_USER_DEV` | SSH user |
 | `DEPLOY_SSH_KEY_DEV` | private key (public half in the dev server's `~/.ssh/authorized_keys`) |
-| `DEPLOY_PATH_DEV` | optional, default `/opt/tradera` |
+| `DEPLOY_PATH_DEV` | optional, default `/opt/aseman` |
 
 On the dev server, once: install Docker with Compose >= 2.24, create the deploy folder, and write its own
-`.env` (never copied from production): `APP_DOMAIN`, `API_DOMAIN`, `ACME_EMAIL`, `TRADERA_PUBLIC_URL`, a
-**strong `TRADERA_ADMIN_PASSWORD`**, a separate Modal token with `TRADERA_MODAL_ENVIRONMENT=dev`, and
-`TRADERA_SANDBOX_IMAGE=ghcr.io/<owner>/tradera-sandbox-computer:dev`. Point both domains at the server
+`.env` (never copied from production): `APP_DOMAIN`, `API_DOMAIN`, `ACME_EMAIL`, `ASEMAN_PUBLIC_URL`, a
+**strong `ASEMAN_ADMIN_PASSWORD`**, a separate Modal token with `ASEMAN_MODAL_ENVIRONMENT=dev`, and
+`ASEMAN_SANDBOX_IMAGE=ghcr.io/<owner>/aseman-sandbox-computer:dev`. Point both domains at the server
 (A records), open ports 80/443, and add the dev web origin to the Google OAuth client. The `:dev` sandbox image
 is published by `sandbox-image.yml` when `deploy/sandbox-computer/**` changes on `dev` (`:latest` stays main-only),
 and, like `:latest`, its GHCR package must be made public for Modal.
 
 ### 4. Make the GHCR package public
 New GHCR packages are not always public. After the first run: GitHub → your profile/org →
-**Packages** → `tradera-sandbox-computer` → **Package settings** → **Change visibility → Public**.
+**Packages** → `aseman-sandbox-computer` → **Package settings** → **Change visibility → Public**.
 (GitHub has no API for this, so it is a one-time click. Only Modal needs it: it pulls the image
 without credentials. The deploy does not use it.)
 
@@ -152,16 +152,16 @@ The node answers cross-origin requests from any origin, so giving the API its ow
 ## Day to day
 ```bash
 ssh you@server
-cd /opt/tradera
+cd /opt/aseman
 docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml ps
-docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml logs -f tradera
+docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml logs -f aseman
 ```
-Data lives in the `postgres-data` and `tradera-data` volumes; the workflow never deletes them.
+Data lives in the `postgres-data` and `aseman-data` volumes; the workflow never deletes them.
 
 ## Credential storage
 
 Account passwords are stored as bcrypt hashes, never as recoverable plaintext. Changing
-`TRADERA_ADMIN_PASSWORD` only sets the password of a newly bootstrapped account; to change
+`ASEMAN_ADMIN_PASSWORD` only sets the password of a newly bootstrapped account; to change
 an existing administrator's password, use Profile settings or password recovery.
 `/admin/health` checks the current stored hashes of active administrators, including renamed
 and role-based admins, rather than the bootstrap environment variable.
@@ -173,7 +173,7 @@ a failed upgrade or an undecryptable credential prevents startup. MCP connection
 credentials and account private/recovery keys already use authenticated encryption. Generic
 admin table responses redact credentials and hashes.
 
-Back up **both** database and `tradera-data` together. Preserve the node identity key in
+Back up **both** database and `aseman-data` together. Preserve the node identity key in
 `/app/data` (or the configured identity key); replacing it makes stored credentials unreadable.
 Do not rotate/delete the identity key without decrypting and re-encrypting credentials first.
 Database encryption does not encrypt deployment `.env` files, YAML configuration, Docker

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:genui/genui.dart';
-import 'package:tradera/src/genui/genui.dart';
+import 'package:aseman/src/genui/genui.dart';
 
 /// [child] in an app, in a scroll view.
 Widget host(Widget child) => MaterialApp(
@@ -41,5 +41,5 @@ Future<Object?> call(String name, Map<String, Object?> args,
         [Object? data]) =>
     DataContext(InMemoryDataModel()..update(DataPath.root, data ?? {}),
             DataPath.root,
-            functions: traderaCatalog.functions)
+            functions: asemanCatalog.functions)
         .resolve({'call': name, 'args': args}).first;

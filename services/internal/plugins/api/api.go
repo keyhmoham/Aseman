@@ -7,13 +7,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/adapters/cache/ports"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/filesystem/ports"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/adapters/cache/ports"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/filesystem/ports"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // Type classifies plugins.
@@ -157,7 +157,7 @@ type Dependencies struct {
 	Global map[string]any
 }
 
-// Plugin is the interface every tradera plugin implements. The lifecycle is
+// Plugin is the interface every aseman plugin implements. The lifecycle is
 // deterministic: Init -> Start -> (Stop)* -> Unload, with Update at any point
 // while started.
 type Plugin interface {

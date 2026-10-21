@@ -11,10 +11,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 func (s *Service) fileEditTool(ctx context.Context, spaceID identity.ID, args string) (string, error) {
@@ -63,7 +63,7 @@ func (s *Service) fileEditTool(ctx context.Context, spaceID identity.ID, args st
 	if err != nil {
 		return "", err
 	}
-	if !strings.HasPrefix(output, "exit=0\n") || !strings.Contains(output, "TRADERA_FILE_EDITED") {
+	if !strings.HasPrefix(output, "exit=0\n") || !strings.Contains(output, "ASEMAN_FILE_EDITED") {
 		return "", errs.New(errs.CodeConflict, "file edit did not commit; reread the source before retrying: "+output)
 	}
 	return edited(), nil
@@ -231,8 +231,8 @@ cp -p %s "$updated"
 printf '%%s' %s | base64 -d > "$updated"
 if ! cmp -s "$original" %s; then printf 'Source changed; edit aborted.\n'; exit 1; fi
 mv -f "$updated" %s
-printf 'TRADERA_FILE_EDITED\n'
-`, shellFilePath(path+".tradera-edit.XXXXXX"), shellFilePath(base64.StdEncoding.EncodeToString(before)), shellFilePath(path), shellFilePath(base64.StdEncoding.EncodeToString(after)), shellFilePath(path), shellFilePath(path))
+printf 'ASEMAN_FILE_EDITED\n'
+`, shellFilePath(path+".aseman-edit.XXXXXX"), shellFilePath(base64.StdEncoding.EncodeToString(before)), shellFilePath(path), shellFilePath(base64.StdEncoding.EncodeToString(after)), shellFilePath(path), shellFilePath(path))
 }
 
 func (s *Service) readSandboxText(ctx context.Context, spaceID identity.ID, path string, start, end, maxChars int) (string, error) {

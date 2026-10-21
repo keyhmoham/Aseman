@@ -1,6 +1,6 @@
 package vmm
 
-import "github.com/tradera/tradera/pkg/errs"
+import "github.com/aseman/aseman/pkg/errs"
 
 // CodeExecutionStalled identifies a bounded execution that stopped making
 // progress. Its partial report must still be verified; it is not completion.

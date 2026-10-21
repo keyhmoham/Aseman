@@ -3,7 +3,7 @@ package deepagents
 import (
 	"strings"
 
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/pkg/errs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,7 +26,7 @@ type Spec struct {
 	Provider     string `yaml:"provider" json:"provider,omitempty"`
 	Model        string `yaml:"model" json:"model,omitempty"`
 	Instructions string `yaml:"instructions" json:"instructions,omitempty"`
-	// Role "lead" runs the agent as the swarm's leader (the built-in tradera
+	// Role "lead" runs the agent as the swarm's leader (the built-in aseman
 	// agent); every other agent is a specialist the lead delegates to.
 	Role         string   `yaml:"role" json:"role,omitempty"`
 	MaxTokens    int      `yaml:"max_tokens" json:"max_tokens,omitempty"`

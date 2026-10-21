@@ -1,4 +1,4 @@
-/// Every backend action used by the Tradera client.
+/// Every backend action used by the Aseman client.
 ///
 /// Keeping the contract in one place makes it possible to audit the Flutter
 /// client against the server and gives generic administration surfaces a safe

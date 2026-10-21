@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/tradera/tradera/internal/plugins/api"
-	namespace "github.com/tradera/tradera/plugins/actions/admin"
+	"github.com/aseman/aseman/internal/plugins/api"
+	namespace "github.com/aseman/aseman/plugins/actions/admin"
 )
 
 func New() (api.Plugin, error) { return namespace.NewPlugin(), nil }

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 func TestAskUserPreservesConcreteOptionsAndRequiresLaterAnswer(t *testing.T) {

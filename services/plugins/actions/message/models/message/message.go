@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 // Direct is a direct message between two accounts (no space).
@@ -79,7 +79,7 @@ type Packet struct {
 }
 
 // Message kinds: KindMessage is a normal conversation message (users, agent
-// replies, tradera's final answers); KindLog is agentic-flow content (plans,
+// replies, aseman's final answers); KindLog is agentic-flow content (plans,
 // dispatches, tool/sandbox outputs) that the client renders as a collapsible
 // log section instead of a chat bubble. KindTool is a tool's reply to a
 // command a person ran in the room (body: JSON {command, result}). Tools'

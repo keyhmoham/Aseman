@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/developer/models"
-	"github.com/tradera/tradera/plugins/actions/finance/models/wallet"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/developer/models"
+	"github.com/aseman/aseman/plugins/actions/finance/models/wallet"
 )
 
 // minFunds is what an organization must hold to start a request (a tenth of a cent).
@@ -92,7 +92,7 @@ func errorBody(status int, typ, code, message, reqID string, extra map[string]an
 		e[k] = v
 	}
 	body, _ := json.Marshal(map[string]any{"error": e})
-	return &Result{Status: status, Body: body, Header: map[string]string{"Content-Type": "application/json", "X-Tradera-Request-Id": reqID}}
+	return &Result{Status: status, Body: body, Header: map[string]string{"Content-Type": "application/json", "X-Aseman-Request-Id": reqID}}
 }
 
 func authFailure(err *AuthError, reqID string) *Result {
@@ -398,7 +398,7 @@ func (s *Service) finish(ctx context.Context, c Call, a Attempt, data []byte, re
 	}
 	body, _ := json.Marshal(reply)
 	res := &Result{Status: 200, Body: body, Model: a.Model.ID, Provider: a.Endpoint.Provider, Cost: cost, Header: map[string]string{
-		"Content-Type": "application/json", "X-Tradera-Model": a.Model.ID, "X-Tradera-Request-Id": reqID}}
+		"Content-Type": "application/json", "X-Aseman-Model": a.Model.ID, "X-Aseman-Request-Id": reqID}}
 	res.Skipped = skipped
 	logCall(res, a.Model.ID, a.Endpoint.Provider, in, out, cost, reply, "")
 	return res
@@ -409,7 +409,7 @@ func (s *Service) finish(ctx context.Context, c Call, a Attempt, data []byte, re
 // call is billed and logged when the stream ends.
 func (s *Service) streamResult(ctx context.Context, c Call, a Attempt, resp *http.Response, reqID string, started time.Time, skipped []attemptNote, logCall func(*Result, string, string, int64, int64, int64, any, string)) *Result {
 	res := &Result{Status: 200, Model: a.Model.ID, Provider: a.Endpoint.Provider, Header: map[string]string{
-		"Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Tradera-Model": a.Model.ID, "X-Tradera-Request-Id": reqID}}
+		"Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Aseman-Model": a.Model.ID, "X-Aseman-Request-Id": reqID}}
 	res.Stream = func(ctx context.Context, w io.Writer) error {
 		defer resp.Body.Close()
 		reader := bufio.NewReaderSize(resp.Body, 64<<10)
@@ -516,8 +516,8 @@ func (s *Service) finishMedia(ctx context.Context, c Call, a Attempt, reply map[
 	}
 	cost := costOf(c.Type, a.Endpoint, u)
 	s.bill(ctx, c, a, cost)
-	header := map[string]string{"X-Tradera-Model": a.Model.ID,
-		"X-Tradera-Request-Id": reqID, "X-Tradera-Cost": strconv.FormatFloat(usd(float64(cost)), 'f', -1, 64)}
+	header := map[string]string{"X-Aseman-Model": a.Model.ID,
+		"X-Aseman-Request-Id": reqID, "X-Aseman-Cost": strconv.FormatFloat(usd(float64(cost)), 'f', -1, 64)}
 	res := &Result{Status: 200, Header: header, Model: a.Model.ID, Provider: a.Endpoint.Provider, Cost: cost, Skipped: skipped}
 	var logged any
 	if audio != nil {

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/features/account/presentation/account_hub_content.dart';
-import 'package:tradera/src/features/account/presentation/account_panel.dart';
-import 'package:tradera/src/features/admin/presentation/admin_page_content.dart';
-import 'package:tradera/src/features/admin/presentation/admin_widgets.dart';
+import 'package:aseman/src/features/account/presentation/account_hub_content.dart';
+import 'package:aseman/src/features/account/presentation/account_panel.dart';
+import 'package:aseman/src/features/admin/presentation/admin_page_content.dart';
+import 'package:aseman/src/features/admin/presentation/admin_widgets.dart';
 
 void main() {
   Future<void> pumpWide(WidgetTester tester, Widget child) async {

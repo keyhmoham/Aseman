@@ -2,11 +2,11 @@ package runtime_test
 
 import (
 	"context"
-	"github.com/tradera/tradera/internal/kernel"
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/plugins/adapters/base"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
-	"github.com/tradera/tradera/plugins/config"
+	"github.com/aseman/aseman/internal/kernel"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/plugins/adapters/base"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/plugins/config"
 	"testing"
 )
 

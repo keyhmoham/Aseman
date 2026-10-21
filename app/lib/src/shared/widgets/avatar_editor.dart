@@ -1,7 +1,7 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
-import '../../data/services/tradera_service.dart';
+import '../../data/services/aseman_service.dart';
 
 /// The largest picture taken as an avatar.
 const int maxAvatarBytes = 5 * 1024 * 1024;
@@ -41,7 +41,7 @@ class AvatarEditor extends StatefulWidget {
     this.subject = 'avatar',
   });
 
-  final TraderaService service;
+  final AsemanService service;
 
   /// The current avatar: a stored picture's id, "" when there is none.
   final String avatar;

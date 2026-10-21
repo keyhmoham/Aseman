@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // providerCostTTL is how long a provider's bill is reused: the report can take

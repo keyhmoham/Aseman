@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/permission"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/permission"
 )
 
 func directPerson(t *testing.T, s *Service, ctx context.Context, hex, handle string) identity.ID {
@@ -66,9 +66,9 @@ func TestDirectConversationIsOneHiddenRoomPerPair(t *testing.T) {
 	if err != nil || again.ID != sp.ID || againRoom.ID != room.ID {
 		t.Fatalf("the other side opened another conversation: %v", err)
 	}
-	if s.traderaAccount(ctx) != (identity.ID{}) {
-		if _, err := s.SpaceMembership(ctx, sp.ID, s.traderaAccount(ctx)); err == nil {
-			t.Fatal("the tradera lead joined a direct conversation")
+	if s.asemanAccount(ctx) != (identity.ID{}) {
+		if _, err := s.SpaceMembership(ctx, sp.ID, s.asemanAccount(ctx)); err == nil {
+			t.Fatal("the aseman lead joined a direct conversation")
 		}
 	}
 	if err := s.Can(ctx, sp.ID, room.ID, bob, permission.RoomSend); err != nil {

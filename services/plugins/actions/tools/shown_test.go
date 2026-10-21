@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tradera/tradera/plugins/actions/tools/models"
+	"github.com/aseman/aseman/plugins/actions/tools/models"
 )
 
 func TestShownPointsTheBindingsAtOneResult(t *testing.T) {

@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../../../elpian/core/media.dart';
 
 /// Reads a file of the space's project computer (`/workspace/...`) as bytes.
@@ -31,7 +31,7 @@ class ToolMedia {
 
   /// The space's media resolver, one per space (its file cache shared by the
   /// frontends shown there).
-  static ToolMedia forSpace(TraderaService service, String spaceId) {
+  static ToolMedia forSpace(AsemanService service, String spaceId) {
     final key = '${identityHashCode(service)}/$spaceId';
     final media = _spaces.remove(key) ?? ToolMedia.of(service, spaceId);
     _spaces[key] = media;
@@ -43,7 +43,7 @@ class ToolMedia {
 
   static final Map<String, ToolMedia> _spaces = {};
 
-  factory ToolMedia.of(TraderaService service, String spaceId) => ToolMedia(
+  factory ToolMedia.of(AsemanService service, String spaceId) => ToolMedia(
         baseUrl: service.client.baseUrl,
         headers: service.authHeaders,
         fileUrl: service.fileContentUrl,

@@ -1,4 +1,4 @@
-# Tradera VM configuration (YAML).
+# Aseman VM configuration (YAML).
 # This file is given to the bots.bot_create action (spec_yml) or to a VMM
 # adapter's BuildImage. Each VM type interprets the fields it needs.
 

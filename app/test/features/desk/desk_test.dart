@@ -1,9 +1,9 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/features/desk/data/desk_api.dart';
-import 'package:tradera/src/features/desk/presentation/desk_controller.dart';
-import 'package:tradera/src/features/desk/presentation/floating_desk.dart';
+import 'package:aseman/src/features/desk/data/desk_api.dart';
+import 'package:aseman/src/features/desk/presentation/desk_controller.dart';
+import 'package:aseman/src/features/desk/presentation/floating_desk.dart';
 
 /// A node keeping one desk, applying ops roughly as spaces/desktop.go does.
 class _Node {

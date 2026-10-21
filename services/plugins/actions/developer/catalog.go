@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/plugins/actions/llm/dto"
+	"github.com/aseman/aseman/plugins/actions/llm/dto"
 )
 
 // Model types: what a model is for decides its endpoint and what it is charged by.

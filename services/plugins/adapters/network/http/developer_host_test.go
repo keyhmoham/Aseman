@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
 func serve(t *testing.T, a *Adapter, host, path string) *httptest.ResponseRecorder {

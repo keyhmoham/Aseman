@@ -1,4 +1,4 @@
-// Package dconfig loads and exposes tradera's runtime configuration. Config
+// Package dconfig loads and exposes aseman's runtime configuration. Config
 // may be JSON or YAML; the file layout is deterministic and fully mapped to
 // typed structs (no magic keys except inside plugin config maps).
 package dconfig
@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	spacesconfig "github.com/tradera/tradera/plugins/actions/spaces/config"
+	spacesconfig "github.com/aseman/aseman/plugins/actions/spaces/config"
 
 	"gopkg.in/yaml.v3"
 )
@@ -37,7 +37,7 @@ type SandboxConfig = spacesconfig.SandboxConfig
 // DefaultSandboxImage is the sandbox computer image (deploy/sandbox-computer):
 // the shared per-space machine (shell, filesystem and a development toolchain)
 // every agent of a space works on.
-const DefaultSandboxImage = "tradera/sandbox-computer:latest"
+const DefaultSandboxImage = "aseman/sandbox-computer:latest"
 
 // NodeConfig identifies this federation node.
 type NodeConfig struct {

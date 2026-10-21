@@ -1,7 +1,7 @@
-// Weather — a Tradera tool backend for QuickJS.
+// Weather — an Aseman tool backend for QuickJS.
 //
 // Weather data comes from Open-Meteo (https://open-meteo.com): free, no API
-// key. Requests go out through the runtime's `tradera.fetch` host API (the
+// key. Requests go out through the runtime's `aseman.fetch` host API (the
 // program itself has no network). Every microtool takes a place either by
 // name (`city`) or by coordinates (`latitude` + `longitude`), and `units`
 // (`metric`, the default, or `imperial`).
@@ -127,7 +127,7 @@ function query(params) {
 }
 
 function getJSON(url) {
-  var res = askHost('tradera.fetch', { url: url });
+  var res = askHost('aseman.fetch', { url: url });
   if (!res || !res.ok) {
     var reason = res && res.json && res.json.reason ? res.json.reason : (res ? 'HTTP ' + res.status : 'no response');
     throw new Error('Open-Meteo: ' + reason);

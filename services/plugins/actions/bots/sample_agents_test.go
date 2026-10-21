@@ -17,7 +17,7 @@ func TestSampleAgentsAreWellFormed(t *testing.T) {
 			t.Errorf("%s: slug or username used twice", a.Name)
 		}
 		slugs[a.Slug], names[a.Username] = true, true
-		if !username.MatchString(a.Username) || a.Username == "tradera" || a.Username == "lead" {
+		if !username.MatchString(a.Username) || a.Username == "aseman" || a.Username == "lead" {
 			t.Errorf("%s: @%s is not a usable username", a.Name, a.Username)
 		}
 		if !categories[a.Category] {

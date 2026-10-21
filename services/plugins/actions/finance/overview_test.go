@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/kernel"
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	financial "github.com/tradera/tradera/plugins/actions/finance/models"
-	"github.com/tradera/tradera/plugins/actions/finance/models/wallet"
+	"github.com/aseman/aseman/internal/kernel"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	financial "github.com/aseman/aseman/plugins/actions/finance/models"
+	"github.com/aseman/aseman/plugins/actions/finance/models/wallet"
 )
 
 func TestOverviewSplitsSpendByPartAndSeparatesCreatorsFromThePlatform(t *testing.T) {

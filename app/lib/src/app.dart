@@ -6,16 +6,16 @@ import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/auth_screen.dart';
 import 'features/navigation/presentation/app_shell.dart';
 
-class TraderaApp extends StatefulWidget {
-  const TraderaApp({super.key, required this.dependencies});
+class AsemanApp extends StatefulWidget {
+  const AsemanApp({super.key, required this.dependencies});
 
   final AppDependencies dependencies;
 
   @override
-  State<TraderaApp> createState() => _TraderaAppState();
+  State<AsemanApp> createState() => _AsemanAppState();
 }
 
-class _TraderaAppState extends State<TraderaApp> {
+class _AsemanAppState extends State<AsemanApp> {
   final settings = AppSettingsController();
   @override
   void dispose() {
@@ -30,7 +30,7 @@ class _TraderaAppState extends State<TraderaApp> {
           controller: settings,
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
-            title: 'Tradera',
+            title: 'Aseman',
             theme: AppTheme.lightWith(settings.accent),
             darkTheme: AppTheme.darkWith(settings.accent),
             themeMode: settings.themeMode,

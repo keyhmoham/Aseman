@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // A project's files are on its workspace volume, so they can be changed while
@@ -189,7 +189,7 @@ func (a *Adapter) helperOutput(ctx context.Context, id, script string, args ...s
 		"Cmd":             append([]string{script, "sh"}, args...),
 		"User":            "0",
 		"NetworkDisabled": true,
-		"Labels":          map[string]string{"tradera.files_helper_of": id},
+		"Labels":          map[string]string{"aseman.files_helper_of": id},
 		"HostConfig": map[string]any{
 			"Mounts":      []map[string]any{{"Type": "volume", "Source": volume, "Target": "/workspace"}},
 			"NetworkMode": "none",

@@ -5,8 +5,8 @@
 // ---------------------------------------------------------------------------
 
 const KIT_VERSION = '1.0.0';
-const Tradera = (window.Tradera = window.Tradera || {});
-Tradera.version = KIT_VERSION;
+const Aseman = (window.Aseman = window.Aseman || {});
+Aseman.version = KIT_VERSION;
 
 // ---- values ---------------------------------------------------------------
 
@@ -461,7 +461,7 @@ function joinPath(scope, path) {
  * Resolves a prop value against the store: {"path"} bindings, {"call", args}
  * functions, A2UI literal wrappers, and nested maps and lists.
  */
-function resolve(v, scope, store = Tradera.data) {
+function resolve(v, scope, store = Aseman.data) {
   if (v == null || typeof v !== 'object') return v;
   if (Array.isArray(v)) return v.map((x) => resolve(x, scope, store));
   const keys = Object.keys(v);
@@ -549,14 +549,14 @@ const FUNCTIONS = {
   or: (a) => asList(a.values).some((x) => asBool(x)),
   not: (a) => !asBool(a.value),
 };
-function callFunction(name, args, scope, store = Tradera.data) {
+function callFunction(name, args, scope, store = Aseman.data) {
   const fn = FUNCTIONS[name];
   if (!fn) throw new Error('unknown function ' + name);
   const resolved = name === 'formatString' ? { ...args, value: args.value ?? args.text } : resolve(args, scope, store);
   return fn(resolved, scope, store);
 }
 // A ticking clock for now/formatRelative bindings.
-setInterval(() => { if (Tradera.data) Tradera.data.notify('/__clock'); }, 30000);
+setInterval(() => { if (Aseman.data) Aseman.data.notify('/__clock'); }, 30000);
 
 // ---- actions -------------------------------------------------------------
 
@@ -578,10 +578,10 @@ const CLIENT_ACTIONS = {
   openUrl: (a, s, st) => { const u = asText(resolve(a.url, s, st)); if (/^(https?:|mailto:|\/|\.)/.test(u)) window.open(u, '_blank', 'noopener'); },
   closeModal: () => { const o = [...document.querySelectorAll('.t-overlay')].pop(); if (o && o._close) o._close(); },
 };
-Tradera.actions = CLIENT_ACTIONS;
+Aseman.actions = CLIENT_ACTIONS;
 const eventHandlers = {};
-/** Tradera.on('submit_order', (context, element) => …): handles A2UI-style event actions on the page. */
-Tradera.on = (name, fn) => { (eventHandlers[name] ||= []).push(fn); return () => { eventHandlers[name] = eventHandlers[name].filter((f) => f !== fn); }; };
+/** Aseman.on('submit_order', (context, element) => …): handles A2UI-style event actions on the page. */
+Aseman.on = (name, fn) => { (eventHandlers[name] ||= []).push(fn); return () => { eventHandlers[name] = eventHandlers[name].filter((f) => f !== fn); }; };
 
 /** "weather/forecast", "weather.forecast" or "weather:forecast" → [tool, microtool]. */
 function splitCall(spec) {
@@ -592,13 +592,13 @@ function splitCall(spec) {
 
 /**
  * Runs an action from an element: a client functionCall, an A2UI event
- * (dispatched as a t-action DOM event and to Tradera.on handlers), a
- * Tradera API call {tool, microtool, args, into}, or a list of them in order.
+ * (dispatched as a t-action DOM event and to Aseman.on handlers), a
+ * Aseman API call {tool, microtool, args, into}, or a list of them in order.
  * [extra] (a tapped row, an input's value) joins the event's context.
  */
 async function runAction(action, el, extra = {}, scope = el ? scopeOf(el) : '') {
   if (action == null) return;
-  const store = Tradera.data;
+  const store = Aseman.data;
   if (Array.isArray(action)) { let last; for (const a of action) last = await runAction(a, el, extra, scope); return last; }
   if (typeof action === 'string') action = { call: action };
   if (action.functionCall) {
@@ -614,14 +614,14 @@ async function runAction(action, el, extra = {}, scope = el ? scopeOf(el) : '') 
     el && el.dispatchEvent(new CustomEvent('t-action', { bubbles: true, composed: true, detail: { name, context } }));
     let out;
     for (const fn of eventHandlers[name] || []) out = await fn(context, el);
-    if (!eventHandlers[name] && !(el && el.closest('[data-t-handles]'))) console.warn(`[tradera-ui] no handler for event "${name}": add Tradera.on("${name}", fn)`);
+    if (!eventHandlers[name] && !(el && el.closest('[data-t-handles]'))) console.warn(`[aseman-ui] no handler for event "${name}": add Aseman.on("${name}", fn)`);
     return out;
   }
   if (action.call || action.tool) {
     let [tool, microtool] = action.tool ? [action.tool, action.microtool] : splitCall(action.call);
     if (!microtool && action.microtool) microtool = action.microtool;
     const args = { ...resolve(asMap(action.args), scope, store), ...(action.passValue && extra.value !== undefined ? { value: extra.value } : {}) };
-    const result = await Tradera.call(tool, microtool, args);
+    const result = await Aseman.call(tool, microtool, args);
     store.batch(() => {
       if (action.into) store.set(joinPath(scope, action.into), result);
       if (action.then) runAction(action.then, el, { ...extra, result }, scope);
@@ -631,9 +631,9 @@ async function runAction(action, el, extra = {}, scope = el ? scopeOf(el) : '') 
     return result;
   }
   if (action.set) { for (const [p, v] of Object.entries(action.set)) store.set(joinPath(scope, p), resolve(v, scope, store)); return; }
-  console.warn('[tradera-ui] unknown action', action);
+  console.warn('[aseman-ui] unknown action', action);
 }
-Tradera.run = runAction;
+Aseman.run = runAction;
 
 /** The action an element declares: its action prop, or call/args/into/then attributes. */
 function actionOf(el, prop = 'action') {
@@ -671,7 +671,7 @@ function toast(message, opts = {}) {
   setTimeout(() => { t.style.transition = 'opacity .2s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 220); }, opts.duration ?? 3500);
   return t;
 }
-Tradera.toast = toast;
+Aseman.toast = toast;
 
 // ---- elements ------------------------------------------------------------
 
@@ -705,7 +705,7 @@ const PROPS_ATTRS = new Set(['class', 'style', 'id', 'slot', 'hidden', 'role', '
 /**
  * The base of every <t-*> element. Props come from attributes (JSON where it
  * parses: data='[…]'), from properties (el.data = rows, el.props = {…}) and
- * from bindings ({"path": "/x"} or bind-x="/x") to Tradera.data, which
+ * from bindings ({"path": "/x"} or bind-x="/x") to Aseman.data, which
  * re-render the element when they change. Subclasses implement render().
  */
 class TElement extends HTMLElement {
@@ -742,7 +742,7 @@ class TElement extends HTMLElement {
   /** Writes [value] where the prop is bound (two-way inputs), or keeps it locally. */
   write(name, value) {
     const raw = this._raw[name];
-    if (isMap(raw) && typeof raw.path === 'string') Tradera.data.set(joinPath(scopeOf(this), raw.path), value);
+    if (isMap(raw) && typeof raw.path === 'string') Aseman.data.set(joinPath(scopeOf(this), raw.path), value);
     else { this._raw[name] = value; this.update(); }
     this.dispatchEvent(new CustomEvent('t-change', { bubbles: true, detail: { prop: name, value } }));
   }
@@ -796,7 +796,7 @@ class TElement extends HTMLElement {
       this._observer.observe(this, { attributes: true, attributeOldValue: true });
       this.init?.();
     }
-    this._unsub = Tradera.data.subscribe((path) => {
+    this._unsub = Aseman.data.subscribe((path) => {
       if (this._deps && [...this._deps].some((d) => touches(d, path))) this.update();
     });
     this.update(true);
@@ -817,7 +817,7 @@ class TElement extends HTMLElement {
     const deps = new Set();
     Tracker.active = deps;
     try { this.render(); } catch (e) {
-      console.error(`[tradera-ui] <${this.localName}>`, e);
+      console.error(`[aseman-ui] <${this.localName}>`, e);
       this.replaceChildren(problem(e.message || String(e)));
     } finally { Tracker.active = prev; }
     this._deps = deps;
@@ -861,7 +861,7 @@ function el(name, props = {}, ...kids) {
   return e;
 }
 
-Object.assign(Tradera, {
+Object.assign(Aseman, {
   data: new Store({}),
   Store, h, el, icon, hasIcon, color, series, sequential, diverging, onFill, format: formatValue, formatNumber,
   formatCompact, formatDate, asNum, asText, asList, asRows, field, niceTicks, resolve, functions: FUNCTIONS,

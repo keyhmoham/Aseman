@@ -15,18 +15,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/tradera/tradera/internal/app"
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/space"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
-	"github.com/tradera/tradera/plugins/config"
+	"github.com/aseman/aseman/internal/app"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/space"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/plugins/config"
 )
 
 func must(err error) {
@@ -37,7 +37,7 @@ func must(err error) {
 func main() {
 	root, err := os.Getwd()
 	must(err)
-	scratch, err := os.MkdirTemp("", "tradera-plugin-smoke-")
+	scratch, err := os.MkdirTemp("", "aseman-plugin-smoke-")
 	must(err)
 	defer os.RemoveAll(scratch)
 	cfg := &dconfig.Config{Node: dconfig.NodeConfig{ID: "0000000000000001", Name: "smoke-admin", Central: true}, Plugins: dconfig.PluginsConfig{SourceRoot: root, Directory: filepath.Join(root, "bin/plugins"), Adapters: []dconfig.PluginSpec{{Name: "memory", Enabled: true}, {Name: "local-cache", Enabled: true}, {Name: "local", Enabled: true, Config: map[string]any{"base_path": filepath.Join(scratch, "files")}}}}}
@@ -89,12 +89,12 @@ func main() {
 	// A fake deep agents runtime exercises agent creation, direct asks, room
 	// turns, provider resolution and turn tokens through dynamically loaded
 	// modules.
-	for _, name := range []string{"TRADERA_LLM_BASE_URL", "TRADERA_LLM_API_KEY", "TRADERA_LLM_MODEL", "TRADERA_IMAGE_MODEL"} {
+	for _, name := range []string{"ASEMAN_LLM_BASE_URL", "ASEMAN_LLM_API_KEY", "ASEMAN_LLM_MODEL", "ASEMAN_IMAGE_MODEL"} {
 		must(os.Unsetenv(name))
 	}
 	var turnsScoped atomic.Bool
 	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Tradera-Runtime") != "smoke-secret" {
+		if r.Header.Get("X-Aseman-Runtime") != "smoke-secret" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/kernel"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/internal/kernel"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 )
 
 // The node is owned by the account named after it, and when that account has
@@ -32,7 +32,7 @@ func TestNodeOwnerSurvivesTheAdminChangingItsHandle(t *testing.T) {
 		t.Fatalf("a node with no admin has no owner, got %s", got)
 	}
 	add("former", "admin", account.StatusDisabled, 5*time.Hour)
-	renamed := add("traderaai", "admin", account.StatusActive, 4*time.Hour)
+	renamed := add("asemanai", "admin", account.StatusActive, 4*time.Hour)
 	add("newer", "admin", account.StatusActive, time.Hour)
 	if got := s.NodeOwnerID(ctx); got != renamed {
 		t.Fatalf("owner = %s, want the oldest active admin %s", got, renamed)

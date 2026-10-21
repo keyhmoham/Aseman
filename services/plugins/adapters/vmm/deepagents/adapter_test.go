@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // fakeRouter records dispatched actions and answers with a fixed body.
@@ -65,7 +65,7 @@ type fakeRuntime struct {
 }
 
 func (f *fakeRuntime) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-Tradera-Runtime") != "secret" {
+	if r.Header.Get("X-Aseman-Runtime") != "secret" {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"error":"bad runtime secret"}`))
 		return

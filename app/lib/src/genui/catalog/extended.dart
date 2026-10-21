@@ -1,4 +1,4 @@
-/// Components new with Tradera's genui catalog: richer inputs
+/// Components new with Aseman's genui catalog: richer inputs
 /// (SegmentedControl, Dropdown, RangeSlider, NumberStepper, SearchField),
 /// navigation and actions (Link, IconButton, Menu, Steps, Carousel,
 /// Accordion), feedback (EmptyState, Skeleton, Loading, Tooltip, Countdown),
@@ -102,7 +102,7 @@ const _changeAction =
 // Inputs
 // ---------------------------------------------------------------------------
 
-final segmentedControlItem = traderaItem(
+final segmentedControlItem = asemanItem(
   'SegmentedControl',
   description: 'A pill row of mutually exclusive choices (periods, views, '
       'buy / sell), bound to the chosen value.',
@@ -150,7 +150,7 @@ final segmentedControlItem = traderaItem(
   ),
 );
 
-final dropdownItem = traderaItem(
+final dropdownItem = asemanItem(
   'Dropdown',
   description: 'A select menu bound to the chosen value.',
   properties: {
@@ -196,7 +196,7 @@ final dropdownItem = traderaItem(
   ),
 );
 
-final rangeSliderItem = traderaItem(
+final rangeSliderItem = asemanItem(
   'RangeSlider',
   description: 'Picks a low–high range, bound to [low, high].',
   properties: {
@@ -254,7 +254,7 @@ final rangeSliderItem = traderaItem(
   ),
 );
 
-final numberStepperItem = traderaItem(
+final numberStepperItem = asemanItem(
   'NumberStepper',
   description: 'A number with − / + buttons (quantities, order sizes), '
       'bound to the number.',
@@ -326,7 +326,7 @@ final numberStepperItem = traderaItem(
   ),
 );
 
-final searchFieldItem = traderaItem(
+final searchFieldItem = asemanItem(
   'SearchField',
   description: 'A search box bound to its text; "action" fires on submit '
       'with {"value": text}.',
@@ -411,7 +411,7 @@ class _SearchFieldState extends State<_SearchField> {
 // Actions and navigation
 // ---------------------------------------------------------------------------
 
-final linkItem = traderaItem(
+final linkItem = asemanItem(
   'Link',
   description: 'Inline link text: opens "url", or fires "action".',
   properties: {
@@ -453,7 +453,7 @@ final linkItem = traderaItem(
   }),
 );
 
-final iconButtonItem = traderaItem(
+final iconButtonItem = asemanItem(
   'IconButton',
   description: 'A round icon button with a tooltip.',
   properties: {
@@ -495,7 +495,7 @@ final iconButtonItem = traderaItem(
   }),
 );
 
-final menuItem = traderaItem(
+final menuItem = asemanItem(
   'Menu',
   description: 'An overflow menu (⋮) of actions.',
   properties: {
@@ -556,7 +556,7 @@ final menuItem = traderaItem(
   ),
 );
 
-final stepsItem = traderaItem(
+final stepsItem = asemanItem(
   'Steps',
   description: 'Progress through ordered steps (an order\'s lifecycle, an '
       'onboarding flow).',
@@ -690,7 +690,7 @@ final stepsItem = traderaItem(
   }),
 );
 
-final carouselItem = traderaItem(
+final carouselItem = asemanItem(
   'Carousel',
   description: 'Children as swipeable pages with dots.',
   properties: {
@@ -769,7 +769,7 @@ class _CarouselState extends State<_Carousel> {
   }
 }
 
-final accordionItem = traderaItem(
+final accordionItem = asemanItem(
   'Accordion',
   description: 'Collapsible sections, one open at a time (FAQs, details).',
   properties: {
@@ -864,7 +864,7 @@ class _AccordionState extends State<_Accordion> {
 // Feedback and display
 // ---------------------------------------------------------------------------
 
-final emptyStateItem = traderaItem(
+final emptyStateItem = asemanItem(
   'EmptyState',
   description: 'What to show when there is nothing yet: icon, title, text '
       'and an optional action component.',
@@ -907,7 +907,7 @@ final emptyStateItem = traderaItem(
   }),
 );
 
-final skeletonItem = traderaItem(
+final skeletonItem = asemanItem(
   'Skeleton',
   description: 'A shimmering placeholder while data loads.',
   properties: _props({
@@ -1008,7 +1008,7 @@ class _SkeletonState extends State<_Skeleton>
   }
 }
 
-final loadingItem = traderaItem(
+final loadingItem = asemanItem(
   'Loading',
   description: 'A spinner with optional text.',
   properties: _props({'text': 'What is loading.'}),
@@ -1027,7 +1027,7 @@ final loadingItem = traderaItem(
   }),
 );
 
-final tooltipItem = traderaItem(
+final tooltipItem = asemanItem(
   'Tooltip',
   description: 'Explains its child on hover or long-press.',
   properties: {
@@ -1040,7 +1040,7 @@ final tooltipItem = traderaItem(
       child: item.child(item.raw['child'])),
 );
 
-final avatarGroupItem = traderaItem(
+final avatarGroupItem = asemanItem(
   'AvatarGroup',
   description: 'Overlapping avatars of several people, "+n" beyond max.',
   properties: _props({
@@ -1108,7 +1108,7 @@ final avatarGroupItem = traderaItem(
   }),
 );
 
-final markdownItem = traderaItem(
+final markdownItem = asemanItem(
   'Markdown',
   description: 'Long-form Markdown: headings, lists, tables, quotes, code '
       'blocks, links.',
@@ -1128,7 +1128,7 @@ bool truthy(Object? v) => switch (v) {
       _ => false,
     };
 
-final showItem = traderaItem(
+final showItem = asemanItem(
   'Show',
   description: 'Shows its child only while "when" is true (else "fallback"): '
       'conditional UI on the data model, e.g. {"call": "equals", "args": '
@@ -1153,7 +1153,7 @@ final showItem = traderaItem(
   },
 );
 
-final countdownItem = traderaItem(
+final countdownItem = asemanItem(
   'Countdown',
   description: 'Time left until "target" (an ISO date-time), ticking every '
       'second; "doneText" after.',

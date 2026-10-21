@@ -1,4 +1,4 @@
-/// Tradera's UI kit for tool frontends: charts, graphs, tables and data
+/// Aseman's UI kit for tool frontends: charts, graphs, tables and data
 /// views, and the layout pieces the Flutter widget set lacks as single
 /// nodes. Each is an Elpian node type, so
 ///
@@ -6,8 +6,8 @@
 ///   returning nodes like `{"type": "Chart", "props": {...}}`, next to every
 ///   Flutter and HTML node the engine already has; taps arrive as the node's
 ///   `select` (or `change`) event, its data the tapped row or point;
-/// * a **generative** frontend (A2UI) uses them as components of Tradera's
-///   genui catalog (see `lib/src/genui/catalog/tradera.dart`), which builds
+/// * a **generative** frontend (A2UI) uses them as components of Aseman's
+///   genui catalog (see `lib/src/genui/catalog/aseman.dart`), which builds
 ///   the same widgets.
 ///
 /// Props for each type are documented in `README.md` next to this file.

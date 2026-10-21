@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/tradera/tradera/plugins/actions/usage/models/usage"
+	"github.com/aseman/aseman/plugins/actions/usage/models/usage"
 )
 
 type invocationKey struct{}

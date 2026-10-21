@@ -3,7 +3,7 @@ package llm
 import (
 	"testing"
 
-	"github.com/tradera/tradera/plugins/actions/llm/models"
+	"github.com/aseman/aseman/plugins/actions/llm/models"
 )
 
 func TestADisabledModelIsOfferedNowhereButKeepsRunning(t *testing.T) {

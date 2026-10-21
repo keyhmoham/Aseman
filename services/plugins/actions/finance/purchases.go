@@ -10,24 +10,24 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/finance/models"
-	"github.com/tradera/tradera/plugins/actions/finance/models/wallet"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/finance/models"
+	"github.com/aseman/aseman/plugins/actions/finance/models/wallet"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // Verification contacts the configured purchase authority. Client price/credit
 // assertions are never used to mint funds.
 func (s *Service) verifyPurchase(ctx context.Context, owner, product, transaction string) (int64, map[string]any, error) {
-	key := os.Getenv("TRADERA_REVENUECAT_SECRET")
+	key := os.Getenv("ASEMAN_REVENUECAT_SECRET")
 	if key == "" {
 		return 0, nil, errs.New(errs.CodeUnavailable, "purchase verification is not configured")
 	}
-	packs := map[string]int64{"tradera_topup_20": 20000000, "tradera_topup_50": 50000000, "tradera_topup_100": 100000000}
-	if raw := os.Getenv("TRADERA_REVENUECAT_PRODUCTS"); raw != "" {
+	packs := map[string]int64{"aseman_topup_20": 20000000, "aseman_topup_50": 50000000, "aseman_topup_100": 100000000}
+	if raw := os.Getenv("ASEMAN_REVENUECAT_PRODUCTS"); raw != "" {
 		if e := json.Unmarshal([]byte(raw), &packs); e != nil {
 			return 0, nil, errs.New(errs.CodeUnavailable, "invalid purchase product configuration")
 		}
@@ -57,7 +57,7 @@ func (s *Service) verifyPurchase(ctx context.Context, owner, product, transactio
 // subscriberPurchases reads the account's one-time purchases from the purchase
 // authority, by product.
 func (s *Service) subscriberPurchases(ctx context.Context, owner string) (map[string][]map[string]any, error) {
-	base := os.Getenv("TRADERA_REVENUECAT_URL")
+	base := os.Getenv("ASEMAN_REVENUECAT_URL")
 	if base == "" {
 		base = "https://api.revenuecat.com/v1"
 	}
@@ -65,7 +65,7 @@ func (s *Service) subscriberPurchases(ctx context.Context, owner string) (map[st
 	if e != nil {
 		return nil, e
 	}
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("TRADERA_REVENUECAT_SECRET"))
+	req.Header.Set("Authorization", "Bearer "+os.Getenv("ASEMAN_REVENUECAT_SECRET"))
 	req.Header.Set("Accept", "application/json")
 	resp, e := (&http.Client{Timeout: 20 * time.Second}).Do(req)
 	if e != nil {
@@ -101,22 +101,22 @@ type storeCharge struct {
 }
 
 // revenueConfigured reports whether the node can ask for what purchases
-// actually cost (TRADERA_REVENUECAT_PROJECT is set).
-func revenueConfigured() bool { return os.Getenv("TRADERA_REVENUECAT_PROJECT") != "" }
+// actually cost (ASEMAN_REVENUECAT_PROJECT is set).
+func revenueConfigured() bool { return os.Getenv("ASEMAN_REVENUECAT_PROJECT") != "" }
 
 // storeCharges lists what the account's purchases actually cost.
 func (s *Service) storeCharges(ctx context.Context, owner string) ([]storeCharge, error) {
-	project := os.Getenv("TRADERA_REVENUECAT_PROJECT")
-	key := os.Getenv("TRADERA_REVENUECAT_V2_SECRET")
+	project := os.Getenv("ASEMAN_REVENUECAT_PROJECT")
+	key := os.Getenv("ASEMAN_REVENUECAT_V2_SECRET")
 	if key == "" {
-		key = os.Getenv("TRADERA_REVENUECAT_SECRET")
+		key = os.Getenv("ASEMAN_REVENUECAT_SECRET")
 	}
 	if project == "" || key == "" {
 		return nil, errs.New(errs.CodeUnavailable, "purchase revenue lookup is not configured")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	base := os.Getenv("TRADERA_REVENUECAT_V2_URL")
+	base := os.Getenv("ASEMAN_REVENUECAT_V2_URL")
 	if base == "" {
 		base = "https://api.revenuecat.com/v2"
 	}

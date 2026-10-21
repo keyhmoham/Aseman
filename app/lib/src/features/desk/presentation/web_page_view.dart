@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import 'web/web_page_frame.dart';
 
-/// The app's theme as Tradera's web UI kit takes it: the brightness, the
+/// The app's theme as Aseman's web UI kit takes it: the brightness, the
 /// color scheme's roles and where the page is shown.
 Map<String, dynamic> webPageTheme(ThemeData theme, {String embed = 'desk'}) {
   String hex(Color c) =>
@@ -53,7 +53,7 @@ Map<String, dynamic> webPageTheme(ThemeData theme, {String embed = 'desk'}) {
 /// The address of [page] (a preview gateway path) as the frame loads it:
 /// signed in, with the app's theme for the kit to start in.
 String webPageUrl(
-  TraderaService service,
+  AsemanService service,
   String page,
   Map<String, dynamic> theme,
 ) {
@@ -65,9 +65,9 @@ String webPageUrl(
       .replace(
         queryParameters: {
           ...base.queryParameters,
-          'tradera_theme': '${theme['mode']}',
-          'tradera_embed': '${theme['embed']}',
-          'tradera_scheme': scheme,
+          'aseman_theme': '${theme['mode']}',
+          'aseman_embed': '${theme['embed']}',
+          'aseman_scheme': scheme,
         },
       )
       .toString();
@@ -88,7 +88,7 @@ class WebPageView extends StatefulWidget {
     this.claimGestures = false,
   });
 
-  final TraderaService service;
+  final AsemanService service;
 
   /// The gateway path: /v1/proxy/<id>/….
   final String page;

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 // dbTag is the struct tag used to name persisted fields.

@@ -5,10 +5,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
-// The components devices render: the A2UI v0.9 basic catalog plus Tradera's
+// The components devices render: the A2UI v0.9 basic catalog plus Aseman's
 // (app/lib/src/genui/catalog, rendered with Flutter's genui in the app's
 // design language). Models are taught them with CatalogPrompt; what they
 // write is checked with Check, so an invented component comes back as an
@@ -19,7 +19,7 @@ var basic = []string{
 	"ChoicePicker", "Slider", "DateTimeInput",
 }
 
-var tradera = []string{
+var aseman = []string{
 	"Chart", "Sparkline", "Gauge", "Heatmap", "Treemap", "Graph", "Table",
 	"Stat", "KeyValue", "Timeline", "TreeView", "JsonView", "CodeBlock",
 	"Progress", "Badge", "Rating", "Callout", "Avatar",
@@ -36,7 +36,7 @@ var tradera = []string{
 
 var known = func() map[string]bool {
 	m := map[string]bool{}
-	for _, c := range append(append([]string{}, basic...), tradera...) {
+	for _, c := range append(append([]string{}, basic...), aseman...) {
 		m[c] = true
 	}
 	return m
@@ -44,7 +44,7 @@ var known = func() map[string]bool {
 
 // Components lists every component type devices render.
 func Components() []string {
-	return append(append([]string{}, basic...), tradera...)
+	return append(append([]string{}, basic...), aseman...)
 }
 
 // Known reports whether devices render the component type.
@@ -83,7 +83,7 @@ func Check(components []map[string]any) error {
 	if len(unknown) > 0 {
 		sort.Strings(unknown)
 		return errs.InvalidArgument("unknown component type(s) " + strings.Join(unknown, ", ") +
-			"; use only: " + strings.Join(basic, ", ") + ", " + strings.Join(tradera, ", "))
+			"; use only: " + strings.Join(basic, ", ") + ", " + strings.Join(aseman, ", "))
 	}
 	return nil
 }

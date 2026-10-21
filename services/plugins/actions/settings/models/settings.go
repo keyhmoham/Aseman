@@ -1,7 +1,7 @@
 package models
 
 import (
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 	"time"
 )
 

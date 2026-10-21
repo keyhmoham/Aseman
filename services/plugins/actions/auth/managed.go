@@ -5,15 +5,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 )
 
 // managedEmailDomain names the mailbox of an account made for someone who
 // does not sign in to it themselves; the reserved .invalid domain never
 // receives mail.
-const managedEmailDomain = "managed.tradera.invalid"
+const managedEmailDomain = "managed.aseman.invalid"
 
 // CreateManagedAccount registers an ordinary user account that an
 // administrator — or the admins space's tool working for one — makes for

@@ -10,17 +10,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/execution"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
-	"github.com/tradera/tradera/plugins/actions/usage/models/usage"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/execution"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/actions/usage/models/usage"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 	"gopkg.in/yaml.v3"
 )
 
@@ -288,9 +288,9 @@ func (s *Service) sandboxReadFile(ctx context.Context, spaceID identity.ID, path
 
 // agentBotByName returns the bot member of a space whose name matches, used to
 // attribute agent tool actions (uploads, file messages) to the right account.
-// The built-in tradera orchestrator is skipped: it is never a tool caller, and
+// The built-in aseman orchestrator is skipped: it is never a tool caller, and
 // skipping it keeps attribution correct even if a worker agent's name ever
-// collides with "tradera".
+// collides with "aseman".
 func (s *Service) agentBotByName(ctx context.Context, spaceID identity.ID, name string) *bot.Bot {
 	if strings.TrimSpace(name) == "" {
 		return nil

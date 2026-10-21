@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/data/models/post.dart';
-import 'package:tradera/src/data/models/uploaded_file.dart';
-import 'package:tradera/src/features/search_feed/presentation/post_media_grid.dart';
+import 'package:aseman/src/data/models/post.dart';
+import 'package:aseman/src/data/models/uploaded_file.dart';
+import 'package:aseman/src/features/search_feed/presentation/post_media_grid.dart';
 
 void main() {
   test('a post carries its attachments and source', () {

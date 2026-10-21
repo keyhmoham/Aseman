@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/kernel"
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/internal/kernel"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 )
 
 func TestExpiringGrantTakesBackOnlyUnspentCredits(t *testing.T) {
@@ -140,7 +140,7 @@ func TestAccountActivityShowsWhenAGrantLapses(t *testing.T) {
 		}
 	}
 	g := grant(read())
-	if g["description"] != "Added by Tradera · expires "+day || g["base_description"] != "Added by Tradera" || g["grant_status"] != "active" || g["expires_at"] != at.Format(time.RFC3339) {
+	if g["description"] != "Added by Aseman · expires "+day || g["base_description"] != "Added by Aseman" || g["grant_status"] != "active" || g["expires_at"] != at.Format(time.RFC3339) {
 		t.Fatalf("lapsing grant = %+v", g)
 	}
 	// 20 credits of the 120 are spent; the other 100 are taken back.
@@ -151,7 +151,7 @@ func TestAccountActivityShowsWhenAGrantLapses(t *testing.T) {
 		t.Fatal(err)
 	}
 	g = grant(read())
-	if g["description"] != "Added by Tradera · expired "+day || g["grant_status"] != "expired" {
+	if g["description"] != "Added by Aseman · expired "+day || g["grant_status"] != "expired" {
 		t.Fatalf("lapsed grant = %+v", g)
 	}
 }

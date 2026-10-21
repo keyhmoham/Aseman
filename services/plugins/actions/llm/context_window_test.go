@@ -3,7 +3,7 @@ package llm
 import (
 	"testing"
 
-	llmprovider "github.com/tradera/tradera/plugins/actions/llm/models"
+	llmprovider "github.com/aseman/aseman/plugins/actions/llm/models"
 )
 
 func TestContextWindow(t *testing.T) {

@@ -26,7 +26,7 @@ var greeted = 0;
 
 function greet(args) {
   // Who asks, from which space and room (an agent acting for them is named).
-  var ctx = askHost('tradera.context', null);
+  var ctx = askHost('aseman.context', null);
   greeted++;
   return { text: 'Hello, ' + args.name + '!', asked_by: ctx.actor, space: ctx.space };
 }
@@ -49,7 +49,7 @@ List tools() => [
 
 Map greet(Map args) {
   // Who asks, from which space and room (an agent acting for them is named).
-  var ctx = askHost('tradera.context', null);
+  var ctx = askHost('aseman.context', null);
   return {'text': 'Hello, ' + args['name'] + '!', 'asked_by': ctx['actor']};
 }
 ''';

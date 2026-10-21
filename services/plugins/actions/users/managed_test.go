@@ -6,16 +6,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/kernel"
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/auth"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/kernel"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/auth"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 type adminsSpaceStub struct{ id string }
@@ -113,7 +113,7 @@ func TestManagedAccounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if acc.Status != account.StatusActive || !acc.EmailVerified || acc.Role != "user" || acc.Email != "daniel_crypto365@managed.tradera.invalid" {
+	if acc.Status != account.StatusActive || !acc.EmailVerified || acc.Role != "user" || acc.Email != "daniel_crypto365@managed.aseman.invalid" {
 		t.Fatalf("account %+v", acc)
 	}
 	// It signs in with its password, without verifying an email.

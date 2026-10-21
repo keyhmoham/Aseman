@@ -141,16 +141,16 @@ type VMSpec struct {
 const (
 	// LabelServiceID gives the VM a stable id: creating it again replaces the
 	// running one instead of starting a second copy.
-	LabelServiceID = "tradera.service_id"
+	LabelServiceID = "aseman.service_id"
 	// LabelNetworkAlias is the DNS name the VM answers to on
 	// ResourceSpec.Network.
-	LabelNetworkAlias = "tradera.network_alias"
+	LabelNetworkAlias = "aseman.network_alias"
 	// LabelVolume mounts a named volume, "name:/path", so the VM's state
 	// survives restarts.
-	LabelVolume = "tradera.volume"
+	LabelVolume = "aseman.volume"
 	// LabelServicePort is the port a service VM answers on; with
 	// LabelNetworkAlias it makes the VM's Address (http://alias:port).
-	LabelServicePort = "tradera.service_port"
+	LabelServicePort = "aseman.service_port"
 )
 
 // ServiceAddress is where a service VM answers on its network: its alias and

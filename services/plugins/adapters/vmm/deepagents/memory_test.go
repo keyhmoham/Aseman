@@ -13,8 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 func memoryCall(t *testing.T, serve func(context.Context, *network.Request) (*network.Response, error), key, body string) *network.Response {
@@ -64,7 +64,7 @@ func TestMemoryChatUsesTheAdminsModel(t *testing.T) {
 	a, _, _ := newTestAdapter(t)
 	a.memoryKey = "root-key"
 	a.platform = fakePlatform{memoryChat: &vmm.ProviderConfig{BaseURL: srv.URL + "/v1", APIKey: "sk-admin", Model: "gpt-5.4-mini"}}
-	resp := memoryCall(t, a.serveMemoryChat, "root-key", `{"model":"tradera-memory","messages":[{"role":"user","content":"hi"}]}`)
+	resp := memoryCall(t, a.serveMemoryChat, "root-key", `{"model":"aseman-memory","messages":[{"role":"user","content":"hi"}]}`)
 	if resp.Status != 200 || !strings.Contains(string(resp.Body), "remembered") {
 		t.Fatalf("%d %s", resp.Status, resp.Body)
 	}

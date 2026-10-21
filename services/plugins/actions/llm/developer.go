@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/tradera/tradera/plugins/actions/llm/dto"
-	"github.com/tradera/tradera/plugins/actions/llm/models"
+	"github.com/aseman/aseman/plugins/actions/llm/dto"
+	"github.com/aseman/aseman/plugins/actions/llm/models"
 )
 
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)

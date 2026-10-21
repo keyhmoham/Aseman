@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../../data/services/tradera_service.dart';
+import '../../../../data/services/aseman_service.dart';
 import '../../../desk/presentation/desk_controller.dart';
 import '../../../desk/presentation/web/web_page_frame.dart';
 import 'attachment_bubble.dart';
@@ -10,7 +10,7 @@ import 'proxy_webview.dart';
 /// Resolve server report links through the current signed-in workspace client.
 /// Never attach credentials to an arbitrary external URL from model output.
 Future<void> openWorkspaceLink(
-    BuildContext context, TraderaService service, String link) async {
+    BuildContext context, AsemanService service, String link) async {
   try {
     final uri = Uri.tryParse(link);
     if (uri == null) throw const FormatException('Invalid link');
@@ -72,7 +72,7 @@ WorkspacePageTarget workspacePageTarget(BuildContext context) =>
 
 /// Opens [page] (a preview gateway path, /v1/proxy/<id>/…) in the app.
 Future<void> openWorkspacePage(
-    BuildContext context, TraderaService service, String page,
+    BuildContext context, AsemanService service, String page,
     {required String title}) async {
   switch (workspacePageTarget(context)) {
     case WorkspacePageTarget.desk:

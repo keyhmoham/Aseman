@@ -1,14 +1,14 @@
-# Sandbox computer: the default per-space sandbox image of tradera.
+# Sandbox computer: the default per-space sandbox image of aseman.
 #
 # Every space runs one. It is the shared computer of the space's agents: the
 # deep agents runtime runs their shell commands and file tools here (through
 # spaces.ask), so the lead and every specialist work on the same files under
 # /workspace. The deep agents file tools run python3 in the sandbox.
 #
-#   docker build -t tradera/tool-runtime:v1 deploy/tool-runtime
-#   docker build -t tradera/sandbox-computer:latest deploy/sandbox-computer
+#   docker build -t aseman/tool-runtime:v1 deploy/tool-runtime
+#   docker build -t aseman/sandbox-computer:latest deploy/sandbox-computer
 # The tool runtime (deploy/tool-runtime), whose files are copied in below.
-ARG TOOL_RUNTIME_IMAGE=tradera/tool-runtime:v1
+ARG TOOL_RUNTIME_IMAGE=aseman/tool-runtime:v1
 FROM ${TOOL_RUNTIME_IMAGE} AS tool-runtime
 
 # The official node image from Amazon's public mirror of Docker Hub: anonymous
@@ -29,14 +29,14 @@ RUN apt-get update \
       xvfb x11vnc openbox novnc websockify xdotool scrot xterm x11-utils x11-xserver-utils dbus-x11 tint2 thunar python3-tk \
       fonts-dejavu-core fonts-liberation adwaita-icon-theme chromium \
  && rm -rf /var/lib/apt/lists/*
-# tradera-desktop starts and drives that desktop for people and agents alike
+# aseman-desktop starts and drives that desktop for people and agents alike
 # (kept identical to services/plugins/actions/spaces/desktop.sh, which the node
 # also writes onto older machines).
-COPY tradera-desktop /usr/local/bin/tradera-desktop
-RUN chmod +x /usr/local/bin/tradera-desktop
+COPY aseman-desktop /usr/local/bin/aseman-desktop
+RUN chmod +x /usr/local/bin/aseman-desktop
 # The tool runtime: tools installed into a space run here, one process per
 # tool, started by the node.
-COPY --from=tool-runtime /opt/tradera-tool-runtime /opt/tradera-tool-runtime
+COPY --from=tool-runtime /opt/aseman-tool-runtime /opt/aseman-tool-runtime
 # /workspace is the space's shared working tree.
 RUN mkdir -p /workspace && git config --system init.defaultBranch main \
  && git config --system --add safe.directory '*'

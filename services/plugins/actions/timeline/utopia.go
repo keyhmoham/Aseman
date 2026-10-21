@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 // utopia talks to the node's Utopia server (https://github.com/deeplethe/utopia),
@@ -103,7 +103,7 @@ func (u *utopia) session(ctx context.Context) (string, string, error) {
 	if err != nil && errs.CodeOf(err) != errs.CodeUnavailable {
 		// No such account yet: register it. On a fresh Utopia the first
 		// account is its administrator.
-		reg := map[string]any{"email": u.email, "password": u.password, "display_name": "Tradera"}
+		reg := map[string]any{"email": u.email, "password": u.password, "display_name": "Aseman"}
 		if regErr := u.do(ctx, http.MethodPost, "/auth/register", "", reg, &auth); regErr != nil {
 			return "", "", errs.Wrap(errs.CodeUnavailable, regErr, "utopia: cannot sign in or register the node's account ("+err.Error()+")")
 		}
@@ -162,7 +162,7 @@ func (u *utopia) createBase(ctx context.Context, name, description string) (kbID
 			IngestToken string `json:"ingest_token"`
 		}
 		if err := u.do(ctx, http.MethodPost, "/kbs/"+kb.ID+"/sources", jwt,
-			map[string]any{"kind": "statements", "name": "Tradera events"}, &src); err != nil {
+			map[string]any{"kind": "statements", "name": "Aseman events"}, &src); err != nil {
 			return err
 		}
 		if kb.ID == "" || src.Source.ID == "" || src.IngestToken == "" {
@@ -180,7 +180,7 @@ func (u *utopia) issueReadToken(ctx context.Context) (string, error) {
 		Token string `json:"token"`
 	}
 	err := u.admin(ctx, func(jwt, _ string) error {
-		body := map[string]any{"name": "tradera-agents", "scope": "read", "expires_in_days": 0}
+		body := map[string]any{"name": "aseman-agents", "scope": "read", "expires_in_days": 0}
 		return u.do(ctx, http.MethodPost, "/me/tokens", jwt, body, &out)
 	})
 	if err == nil && out.Token == "" {

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/plugins/actions/usage/models/usage"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/plugins/actions/usage/models/usage"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // decisionTimeout bounds one decision: the runtime falls back to the agent's
@@ -46,7 +46,7 @@ func (a *Adapter) serveDecision(ctx context.Context, req *network.Request) (*net
 	provider, err := a.platform.ResolveDecision(s.base)
 	if err != nil {
 		return jsonResponse(http.StatusConflict, map[string]any{"error": map[string]any{
-			"message": err.Error(), "type": "tradera_error", "code": "decision_disabled",
+			"message": err.Error(), "type": "aseman_error", "code": "decision_disabled",
 		}}), nil
 	}
 	answers, in, out, failed := a.askDecision(ctx, provider, req.Body)
@@ -58,12 +58,12 @@ func (a *Adapter) serveDecision(ctx context.Context, req *network.Request) (*net
 }
 
 // serveLearnDecision is the decision model for the agents' learning (their
-// playbook improving between turns, runtime/tradera_agents/improve): the same
+// playbook improving between turns, runtime/aseman_agents/improve): the same
 // typed questions, on the runtime's own credential for a project, billed to
 // the project like the rest of its learning (learn.go).
 //
 //	POST {gateway}/learn/decision/evaluate
-//	     X-Tradera-Runtime: the runtime secret; X-Tradera-Space
+//	     X-Aseman-Runtime: the runtime secret; X-Aseman-Space
 func (a *Adapter) serveLearnDecision(ctx context.Context, req *network.Request) (*network.Response, error) {
 	space, refused := a.learnCaller(req)
 	if refused != nil {
@@ -72,7 +72,7 @@ func (a *Adapter) serveLearnDecision(ctx context.Context, req *network.Request) 
 	provider, err := a.platform.ResolveDecision(ctx)
 	if err != nil {
 		return jsonResponse(http.StatusConflict, map[string]any{"error": map[string]any{
-			"message": err.Error(), "type": "tradera_error", "code": "decision_disabled",
+			"message": err.Error(), "type": "aseman_error", "code": "decision_disabled",
 		}}), nil
 	}
 	answers, in, out, failed := a.askDecision(ctx, provider, req.Body)

@@ -60,7 +60,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _clearCache() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      const sessionKey = 'tradera.session';
+      const sessionKey = 'aseman.session';
       final session = prefs.getString(sessionKey);
       await prefs.clear();
       if (session != null) {

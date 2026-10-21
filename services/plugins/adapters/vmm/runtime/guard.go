@@ -5,9 +5,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/lifetime"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/lifetime"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 type guardedVMM struct {

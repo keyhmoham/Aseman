@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 func TestLiveAliveSeesASandboxEndedOutsideTheNode(t *testing.T) {
@@ -16,7 +16,7 @@ func TestLiveAliveSeesASandboxEndedOutsideTheNode(t *testing.T) {
 		t.Skip("set MODAL_LIVE_TEST=1 to run against Modal")
 	}
 	a := New(logger.Global())
-	a.tokenID, a.tokenSecret = os.Getenv("TRADERA_MODAL_TOKEN_ID"), os.Getenv("TRADERA_MODAL_TOKEN_SECRET")
+	a.tokenID, a.tokenSecret = os.Getenv("ASEMAN_MODAL_TOKEN_ID"), os.Getenv("ASEMAN_MODAL_TOKEN_SECRET")
 	if err := a.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func TestLiveAliveSeesASandboxEndedOutsideTheNode(t *testing.T) {
 	}
 	defer func() {
 		_ = a.DeleteVM(context.Background(), vm.ID)
-		_ = a.client.Volumes.Delete(context.Background(), "tradera-"+name, nil)
+		_ = a.client.Volumes.Delete(context.Background(), "aseman-"+name, nil)
 	}()
 	if !a.Alive(ctx, vm.ID) {
 		t.Fatal("a running sandbox reads as not alive")

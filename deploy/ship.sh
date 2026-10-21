@@ -15,7 +15,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-DEPLOY_PATH="${DEPLOY_PATH:-/opt/tradera}"
+DEPLOY_PATH="${DEPLOY_PATH:-/opt/aseman}"
 SSH=(ssh ${SSH_CONFIG:+-F "$SSH_CONFIG"} -o BatchMode=yes "${DEPLOY_USER:-ubuntu}@${DEPLOY_HOST:-deploy}")
 [ -n "${SSH_TARGET:-}" ] && SSH=(ssh ${SSH_CONFIG:+-F "$SSH_CONFIG"} -o BatchMode=yes "$SSH_TARGET")
 TAG="${IMAGE_TAG:-$(git rev-parse --short=12 HEAD)}"
@@ -36,13 +36,13 @@ echo "==> platform $PLATFORM, tag $TAG"
 
 # name | build context | name the compose file uses for it on the server
 IMAGES=(
-  "node|./services|tradera/traderad:latest"
-  "web|./app|tradera/flutter-web:latest"
-  "agents|./services/plugins/adapters/vmm/deepagents/runtime|tradera/deepagents:v2"
-  "sandbox|./deploy/sandbox-computer|tradera/sandbox-computer:latest"
-  "tools|./deploy/tool-runtime|tradera/tool-runtime:v1"
-  "memory|./deploy/openviking|tradera/openviking:v1"
-  "db|./deploy/postgres|tradera/postgres:16-pgvector"
+  "node|./services|aseman/asemand:latest"
+  "web|./app|aseman/flutter-web:latest"
+  "agents|./services/plugins/adapters/vmm/deepagents/runtime|aseman/deepagents:v2"
+  "sandbox|./deploy/sandbox-computer|aseman/sandbox-computer:latest"
+  "tools|./deploy/tool-runtime|aseman/tool-runtime:v1"
+  "memory|./deploy/openviking|aseman/openviking:v1"
+  "db|./deploy/postgres|aseman/postgres:16-pgvector"
 )
 
 logdir="$(mktemp -d)"
@@ -52,8 +52,8 @@ build() { # name context
   local start=$SECONDS
   local args=()
   # The sandbox computer carries the tool runtime, built first.
-  [ "$name" = sandbox ] && args=(--build-arg "TOOL_RUNTIME_IMAGE=$REGISTRY/tradera-prod-tools:$TAG")
-  if docker build --platform "$PLATFORM" ${args[@]+"${args[@]}"} -t "$REGISTRY/tradera-prod-$name:$TAG" "$ctx" >"$logdir/$name.log" 2>&1; then
+  [ "$name" = sandbox ] && args=(--build-arg "TOOL_RUNTIME_IMAGE=$REGISTRY/aseman-prod-tools:$TAG")
+  if docker build --platform "$PLATFORM" ${args[@]+"${args[@]}"} -t "$REGISTRY/aseman-prod-$name:$TAG" "$ctx" >"$logdir/$name.log" 2>&1; then
     echo "    built $name in $((SECONDS - start))s"
   else
     echo "    BUILD FAILED: $name" >&2; tail -30 "$logdir/$name.log" >&2; return 1
@@ -74,7 +74,7 @@ fail=0; for p in "${pids[@]}"; do wait "$p" || fail=1; done
 echo "==> pushing to $REGISTRY"
 trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
 printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin >/dev/null
-for entry in "${IMAGES[@]}"; do IFS='|' read -r name _ _ <<<"$entry"; docker push -q "$REGISTRY/tradera-prod-$name:$TAG" >/dev/null & done
+for entry in "${IMAGES[@]}"; do IFS='|' read -r name _ _ <<<"$entry"; docker push -q "$REGISTRY/aseman-prod-$name:$TAG" >/dev/null & done
 wait
 
 echo "==> deploying on the server"
@@ -82,7 +82,7 @@ printf '%s' "$GHCR_TOKEN" | "${SSH[@]}" "docker login ghcr.io -u '$GHCR_USER' --
 pull_cmds=""
 for entry in "${IMAGES[@]}"; do
   IFS='|' read -r name _ local_name <<<"$entry"
-  pull_cmds+="docker pull -q '$REGISTRY/tradera-prod-$name:$TAG' >/dev/null && docker tag '$REGISTRY/tradera-prod-$name:$TAG' '$local_name'; "
+  pull_cmds+="docker pull -q '$REGISTRY/aseman-prod-$name:$TAG' >/dev/null && docker tag '$REGISTRY/aseman-prod-$name:$TAG' '$local_name'; "
 done
 "${SSH[@]}" bash -s <<REMOTE
 set -euo pipefail
@@ -90,10 +90,10 @@ trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
 cd '$DEPLOY_PATH'
 [ -f .env ] || { echo "Missing $DEPLOY_PATH/.env on the server. See deploy/README.md." >&2; exit 1; }
 # The agents' memory server (OpenViking) needs a root key: made once, kept in .env.
-grep -qs '^TRADERA_OPENVIKING_ROOT_KEY=.' .env || printf '\\nTRADERA_OPENVIKING_ROOT_KEY=%s\\n' "\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')" >> .env
+grep -qs '^ASEMAN_OPENVIKING_ROOT_KEY=.' .env || printf '\\nASEMAN_OPENVIKING_ROOT_KEY=%s\\n' "\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')" >> .env
 # The node's account in the timelines' server (Utopia): made once, kept in .env.
-grep -qs '^TRADERA_TIMELINE_PASSWORD=.' .env || printf '\\nTRADERA_TIMELINE_PASSWORD=%s\\n' "\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')" >> .env
-mkdir -p /tmp/tradera-nomad
+grep -qs '^ASEMAN_TIMELINE_PASSWORD=.' .env || printf '\\nASEMAN_TIMELINE_PASSWORD=%s\\n' "\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')" >> .env
+mkdir -p /tmp/aseman-nomad
 $pull_cmds
 # The images are already here under the names the compose file uses: nothing to build.
 # Remove only service containers; keep volumes and networks.

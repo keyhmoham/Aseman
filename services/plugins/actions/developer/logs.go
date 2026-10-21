@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/developer/models"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/developer/models"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // LogRetention is how long a request is kept.

@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	llmprovider "github.com/tradera/tradera/plugins/actions/llm/models"
+	llmprovider "github.com/aseman/aseman/plugins/actions/llm/models"
 )
 
 func TestGeminiImageRouting(t *testing.T) {

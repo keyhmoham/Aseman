@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/developer/models"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/developer/models"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
 // apiError maps an error onto the API's status, type and code. What is not a
@@ -90,7 +90,7 @@ func (s *Service) resource(res, lvl, service string, fn func(ctx context.Context
 				status, errText = code, msg
 				resp = fromResult(errorBody(code, typ, ecode, msg, reqID, nil))
 			} else {
-				resp = jsonResponse(status, out, map[string]string{"X-Tradera-Request-Id": reqID})
+				resp = jsonResponse(status, out, map[string]string{"X-Aseman-Request-Id": reqID})
 			}
 			request := ""
 			if len(req.Body) > 0 && strings.Contains(header(req, "Content-Type"), "json") {
@@ -289,7 +289,7 @@ func (s *Service) fileContentAPI(ctx context.Context, req *network.Request) (*ne
 			code, typ, ecode, msg := s.apiError(err)
 			return fromResult(errorBody(code, typ, ecode, msg, reqID, nil))
 		}
-		return &network.Response{Status: 200, Body: data, Header: map[string]string{"Content-Type": f.Mime, "X-Tradera-Request-Id": reqID,
+		return &network.Response{Status: 200, Body: data, Header: map[string]string{"Content-Type": f.Mime, "X-Aseman-Request-Id": reqID,
 			"Content-Disposition": "attachment; filename=" + quoteFilename(f.Name)}}
 	}), nil
 }

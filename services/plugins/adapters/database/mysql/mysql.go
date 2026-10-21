@@ -6,13 +6,13 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/adapters/base"
-	"github.com/tradera/tradera/plugins/adapters/cfg"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/database/sqlcommon"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/adapters/base"
+	"github.com/aseman/aseman/plugins/adapters/cfg"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/database/sqlcommon"
 
 	_ "github.com/go-sql-driver/mysql"
 )

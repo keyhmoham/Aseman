@@ -3,7 +3,7 @@ package llmprovider
 import (
 	"time"
 
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // Decision is the node's decision model setting, chosen by the admin: one

@@ -8,17 +8,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/pkg/errs"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 var _ vmm.Inventory = (*Adapter)(nil)
 
-// Sandboxes returns the running Tradera containers known to Docker. The
+// Sandboxes returns the running Aseman containers known to Docker. The
 // stable VM id and project-computer name come from the labels written when the
 // container is created, so the inventory remains useful after a daemon restart.
 func (a *Adapter) Sandboxes(ctx context.Context) ([]vmm.ProviderSandbox, error) {
-	filters, _ := json.Marshal(map[string][]string{"label": {"tradera.vmid"}})
+	filters, _ := json.Marshal(map[string][]string{"label": {"aseman.vmid"}})
 	b, err := a.do(ctx, http.MethodGet,
 		"/containers/json?all=false&filters="+url.QueryEscape(string(filters)), nil)
 	if err != nil {
@@ -35,11 +35,11 @@ func (a *Adapter) Sandboxes(ctx context.Context) ([]vmm.ProviderSandbox, error) 
 	}
 	out := make([]vmm.ProviderSandbox, 0, len(rows))
 	for _, row := range rows {
-		vmID := row.Labels["tradera.vmid"]
+		vmID := row.Labels["aseman.vmid"]
 		if vmID == "" {
 			continue
 		}
-		name := row.Labels["tradera.vm"]
+		name := row.Labels["aseman.vm"]
 		if name == "" && len(row.Names) > 0 {
 			name = strings.TrimPrefix(row.Names[0], "/")
 		}
@@ -59,7 +59,7 @@ func (a *Adapter) Sandboxes(ctx context.Context) ([]vmm.ProviderSandbox, error) 
 			}
 		}
 		out = append(out, vmm.ProviderSandbox{
-			ID: vmID, Name: name, Machine: row.Labels["tradera.vm"],
+			ID: vmID, Name: name, Machine: row.Labels["aseman.vm"],
 			CreatedAt: created, StartedAt: started,
 		})
 	}
@@ -85,7 +85,7 @@ func (a *Adapter) Volumes(ctx context.Context) ([]vmm.ProviderVolume, error) {
 	}
 	out := make([]vmm.ProviderVolume, 0, len(response.Volumes))
 	for _, volume := range response.Volumes {
-		if !strings.HasPrefix(volume.Name, "tradera-workspace-") {
+		if !strings.HasPrefix(volume.Name, "aseman-workspace-") {
 			continue
 		}
 		created := time.Time{}

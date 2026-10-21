@@ -3,7 +3,7 @@ package dto
 import (
 	"math"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 type Price struct {

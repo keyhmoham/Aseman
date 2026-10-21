@@ -659,7 +659,7 @@ class _PayoutFormState extends State<_PayoutForm> {
       title: '${amount == null ? 'Payout' : formatLedgerUsd(_num(amount))}'
           '${name.isEmpty ? '' : ' to @$name'}',
       subtitle: paid
-          ? 'Pay the creator outside Tradera first, then record the transfer here.'
+          ? 'Pay the creator outside Aseman first, then record the transfer here.'
           : 'The reserved amount goes back to the creator’s wallet.',
       submit: paid ? 'Mark paid' : 'Reject and return funds',
       onSubmit: paid && reference.text.trim().isEmpty

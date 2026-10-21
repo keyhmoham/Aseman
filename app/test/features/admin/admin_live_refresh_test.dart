@@ -2,14 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/app_dependencies.dart';
-import 'package:tradera/src/features/admin/presentation/admin_screen.dart';
+import 'package:aseman/src/app_dependencies.dart';
+import 'package:aseman/src/features/admin/presentation/admin_screen.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
 /// Serves admin calls from [responses] and lets a test hold one action's
 /// reply open to observe the page while that panel is still refreshing.
-class _LiveService extends FakeTraderaService {
+class _LiveService extends FakeAsemanService {
   final responses = <String, dynamic>{};
   final held = <String, Completer<void>>{};
 

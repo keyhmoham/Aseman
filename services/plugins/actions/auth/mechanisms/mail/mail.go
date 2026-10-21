@@ -1,5 +1,5 @@
 // Package mail delivers the auth namespace's transactional email (one-time
-// codes). It supports the Resend API (via TRADERA_RESEND_API_KEY) or standard
+// codes). It supports the Resend API (via ASEMAN_RESEND_API_KEY) or standard
 // SMTP. If neither is configured, messages are written to the node log so a
 // development node stays usable without external services.
 package mail
@@ -17,17 +17,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/pkg/logger"
+	"github.com/aseman/aseman/pkg/logger"
 )
 
 // Environment variables configuring email delivery.
 const (
-	EnvResendKey = "TRADERA_RESEND_API_KEY" // Resend API key (re_...)
+	EnvResendKey = "ASEMAN_RESEND_API_KEY" // Resend API key (re_...)
 
-	EnvHost     = "TRADERA_SMTP_HOST" // host[:port], port defaults to 587
-	EnvFrom     = "TRADERA_SMTP_FROM" // sender address (e.g. noreply@yourdomain.com)
-	EnvUser     = "TRADERA_SMTP_USER"
-	EnvPassword = "TRADERA_SMTP_PASSWORD"
+	EnvHost     = "ASEMAN_SMTP_HOST" // host[:port], port defaults to 587
+	EnvFrom     = "ASEMAN_SMTP_FROM" // sender address (e.g. noreply@yourdomain.com)
+	EnvUser     = "ASEMAN_SMTP_USER"
+	EnvPassword = "ASEMAN_SMTP_PASSWORD"
 )
 
 // Sender delivers one message.
@@ -38,8 +38,8 @@ type Sender interface {
 }
 
 // FromEnv returns the configured email sender:
-// 1. Resend API sender if TRADERA_RESEND_API_KEY is set.
-// 2. SMTP sender if TRADERA_SMTP_HOST is set.
+// 1. Resend API sender if ASEMAN_RESEND_API_KEY is set.
+// 2. SMTP sender if ASEMAN_SMTP_HOST is set.
 // 3. Fallback log sender for local development.
 func FromEnv(log *logger.Logger) Sender {
 	from := strings.TrimSpace(os.Getenv(EnvFrom))

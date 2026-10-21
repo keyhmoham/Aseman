@@ -7,21 +7,21 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tradera/src/app.dart';
-import 'package:tradera/src/app_dependencies.dart';
-import 'package:tradera/src/core/network/api_client.dart';
-import 'package:tradera/src/features/desk/data/desk_api.dart';
-import 'package:tradera/src/features/desk/domain/desk_models.dart';
-import 'package:tradera/src/features/desk/presentation/desk_controller.dart';
-import 'package:tradera/src/features/files/data/workspace_files.dart';
-import 'package:tradera/src/features/files/domain/documents.dart';
-import 'package:tradera/src/features/files/domain/file_types.dart';
-import 'package:tradera/src/features/files/presentation/code_view.dart';
-import 'package:tradera/src/features/files/presentation/document_views.dart';
-import 'package:tradera/src/features/files/presentation/file_tree.dart';
-import 'package:tradera/src/features/files/presentation/file_viewer.dart';
+import 'package:aseman/src/app.dart';
+import 'package:aseman/src/app_dependencies.dart';
+import 'package:aseman/src/core/network/api_client.dart';
+import 'package:aseman/src/features/desk/data/desk_api.dart';
+import 'package:aseman/src/features/desk/domain/desk_models.dart';
+import 'package:aseman/src/features/desk/presentation/desk_controller.dart';
+import 'package:aseman/src/features/files/data/workspace_files.dart';
+import 'package:aseman/src/features/files/domain/documents.dart';
+import 'package:aseman/src/features/files/domain/file_types.dart';
+import 'package:aseman/src/features/files/presentation/code_view.dart';
+import 'package:aseman/src/features/files/presentation/document_views.dart';
+import 'package:aseman/src/features/files/presentation/file_tree.dart';
+import 'package:aseman/src/features/files/presentation/file_viewer.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
 Uint8List _zip(Map<String, String> files) {
   final archive = Archive();
@@ -66,7 +66,7 @@ final _png = base64Decode(
 );
 
 /// Plays the node's desk: windows opened are kept and read back.
-class _DeskClient extends TraderaApiClient {
+class _DeskClient extends AsemanApiClient {
   _DeskClient() : super(baseUrl: 'http://localhost:8080');
   final windows = <Map<String, dynamic>>[];
   var version = 1;
@@ -116,7 +116,7 @@ class _DeskClient extends TraderaApiClient {
 }
 
 /// A workspace with a few files, answering `spaces.sandbox_files`.
-class _Service extends FakeTraderaService {
+class _Service extends FakeAsemanService {
   _Service({super.client});
   final reads = <String>[];
   final changes = <String>[];
@@ -603,7 +603,7 @@ void main() {
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({
-      'tradera.session':
+      'aseman.session':
           '{"account_id":"00000000000000010000000000000001","handle":"test",'
           '"token":"x","private_key":"","public_key":"",'
           '"home_space_id":"00000000000000010000000000000002"}',
@@ -613,10 +613,10 @@ void main() {
     final client = _DeskClient();
     final service = _Service(client: client);
     await tester.pumpWidget(
-      TraderaApp(dependencies: AppDependencies.withService(service)),
+      AsemanApp(dependencies: AppDependencies.withService(service)),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
@@ -643,7 +643,7 @@ void main() {
     'a file opens in a bottom sheet',
     (tester) async {
       SharedPreferences.setMockInitialValues({
-        'tradera.session':
+        'aseman.session':
             '{"account_id":"00000000000000010000000000000001","handle":"test",'
             '"token":"x","private_key":"","public_key":"",'
             '"home_space_id":"00000000000000010000000000000002"}',
@@ -652,10 +652,10 @@ void main() {
       tester.view.devicePixelRatio = 1;
       final service = _Service();
       await tester.pumpWidget(
-        TraderaApp(dependencies: AppDependencies.withService(service)),
+        AsemanApp(dependencies: AppDependencies.withService(service)),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('TRADERA'));
+      await tester.tap(find.text('ASEMAN'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Atlas Capital').last);
       await tester.pumpAndSettle();

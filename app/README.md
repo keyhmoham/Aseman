@@ -1,7 +1,7 @@
-# Tradera Flutter client
+# Aseman Flutter client
 
-The Flutter client for the **Tradera** federated super app. Every screen is
-connected to the Tradera Go gateway (`services/`): a federated, decentralized
+The Flutter client for the **Aseman** federated super app. Every screen is
+connected to the Aseman Go gateway (`services/`): a federated, decentralized
 VM platform where users publish posts, build workspaces (each account gets a
 home workspace), deploy and chat with **agents**, and add **apps** — a
 backend (an MCP server, an Elpian VM, QuickJS or docker program, or one
@@ -12,7 +12,7 @@ the wire an app is a bot of kind `tool`, served by the `tools` namespace.
 
 ```bash
 flutter pub get
-# point the app at your Tradera node:
+# point the app at your Aseman node:
 flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8080
 # android emulator default: http://10.0.2.2:8080 (set in app_dependencies.dart)
 # optional: where the developer API answers, shown in Profile → Developer API
@@ -32,7 +32,7 @@ sign-in (`tools.connection_set` with its `grant`) so the node renews it. On
 the web the page opens in a popup that returns to `/oauth.html`; on Android,
 iOS, macOS and Windows in an in-app web view that stops at the redirect;
 elsewhere in the browser, with the returned address pasted back. A provider
-that will not register Tradera needs an OAuth client: a person can enter one
+that will not register Aseman needs an OAuth client: a person can enter one
 in the connect dialog, or an admin saves one per server (Admin → Apps →
 Sign-in client), created with the redirect address shown there. Override that
 address with `--dart-define=OAUTH_REDIRECT_URI=…`. A pasted access token works
@@ -80,7 +80,7 @@ managed (an Elpian VM, QuickJS or docker backend the node runs) or installed
   `tool.expand()`;
 * **generative** — A2UI the node generated from the deployer's skill (cached
   in its component registry) rendered with Flutter's genui by `GenUiView`
-  (`lib/src/genui`: Tradera's catalog in the app's design language), its
+  (`lib/src/genui`: Aseman's catalog in the app's design language), its
   buttons running microtools through `tools.frontend_action`.
 
 Tools open as card windows on the room's desk (`features/desk`): a
@@ -114,7 +114,7 @@ lib/
     │   ├── settings/ theme/ utils/ # Theme, breakpoints, shared utilities
     ├── data/
     │   ├── models/                 # Server-aligned entities (space, bot, post...)
-    │   ├── services/               # TraderaService (real) + Mock (tests)
+    │   ├── services/               # AsemanService (real) + Mock (tests)
     │   └── repositories/           # Sources of truth and caching
     ├── shared/widgets/             # Reusable design-system components
     └── features/

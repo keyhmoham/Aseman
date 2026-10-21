@@ -7,7 +7,7 @@ import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_surfaces.dart';
 import '../../data/models/space.dart';
 
-/// Shared top app bar of the workspace and the feed: the TRADERA name in the
+/// Shared top app bar of the workspace and the feed: the ASEMAN name in the
 /// middle, the account avatar (its menu) on the right edge. On phones the
 /// left edge opens the navigation drawer; on wider screens it shows the
 /// current space. On the feed the left edge holds the notifications. The workspace
@@ -100,7 +100,7 @@ class WorkspaceHeader extends StatelessWidget {
           ],
         ])),
         SizedBox(width: compact ? 6 : 12),
-        const Text('TRADERA',
+        const Text('ASEMAN',
             maxLines: 1,
             style: TextStyle(
                 fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 2)),

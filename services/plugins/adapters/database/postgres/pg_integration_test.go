@@ -5,17 +5,17 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	dbmodel "github.com/tradera/tradera/plugins/testutil"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	dbmodel "github.com/aseman/aseman/plugins/testutil"
 )
 
 // TestListAccountsRequiresDSN guards the integration test below.
 func TestPostgresIntegration(t *testing.T) {
-	dsn := os.Getenv("TRADERA_TEST_PG")
+	dsn := os.Getenv("ASEMAN_TEST_PG")
 	if dsn == "" {
-		t.Skip("set TRADERA_TEST_PG to run postgres integration tests")
+		t.Skip("set ASEMAN_TEST_PG to run postgres integration tests")
 	}
 	ad := New(logger.Global())
 	if err := ad.Open(context.Background(), database.Config{DSN: dsn}); err != nil {

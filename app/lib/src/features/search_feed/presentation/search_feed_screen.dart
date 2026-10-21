@@ -8,7 +8,7 @@ import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../data/models/space.dart';
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/mini_tag.dart';
@@ -573,7 +573,7 @@ class _BigSearchBar extends StatelessWidget {
                                   enabledBorder: InputBorder.none,
                                   focusedBorder: InputBorder.none,
                                   hintText:
-                                      'Search Tradera — signals, traders, agents…',
+                                      'Search Aseman — signals, traders, agents…',
                                   hintStyle: TextStyle(
                                       fontSize: 15,
                                       color: scheme.onSurfaceVariant)))),
@@ -588,7 +588,7 @@ class _BigSearchBar extends StatelessWidget {
 class _SuggestionChips extends StatelessWidget {
   const _SuggestionChips({required this.onSuggestion});
   final ValueChanged<String> onSuggestion;
-  static const suggestions = ['About Tradera', 'Best agents', 'News'];
+  static const suggestions = ['About Aseman', 'Best agents', 'News'];
   @override
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
         return SingleChildScrollView(
@@ -667,7 +667,7 @@ class _FeedPostCard extends StatelessWidget {
   const _FeedPostCard(
       {required this.post, required this.service, this.onToggleLike});
   final FeedPost post;
-  final TraderaService service;
+  final AsemanService service;
   final VoidCallback? onToggleLike;
 
   void _copy(BuildContext context, String message) {

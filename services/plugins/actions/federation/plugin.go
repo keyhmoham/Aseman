@@ -3,14 +3,14 @@ package federation
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/module"
-	"github.com/tradera/tradera/pkg/errs"
-	fed "github.com/tradera/tradera/plugins/actions/federation/gateway"
-	"github.com/tradera/tradera/plugins/actions/federation/schema"
-	"github.com/tradera/tradera/plugins/actions/finance/models/wallet"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/module"
+	"github.com/aseman/aseman/pkg/errs"
+	fed "github.com/aseman/aseman/plugins/actions/federation/gateway"
+	"github.com/aseman/aseman/plugins/actions/federation/schema"
+	"github.com/aseman/aseman/plugins/actions/finance/models/wallet"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
 )
 
 // NewPlugin constructs the namespace using only the host bridge.

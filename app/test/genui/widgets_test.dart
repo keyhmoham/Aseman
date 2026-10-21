@@ -3,7 +3,7 @@
 // rendering, navigation and feedback, and the market components.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/genui/genui.dart';
+import 'package:aseman/src/genui/genui.dart';
 
 import 'support.dart';
 
@@ -86,7 +86,7 @@ void main() {
             'id': 'link',
             'component': 'Link',
             'text': 'Docs',
-            'url': 'https://tradera.app'
+            'url': 'https://aseman.app'
           },
           {
             'id': 'ib',

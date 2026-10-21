@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/formatting/billing_units.dart';
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_inputs.dart';
 
 /// Where the developer API answers, set at build time
@@ -41,7 +41,7 @@ String _date(dynamic v) {
 /// as the person; the API itself is called with the keys made here.
 class DeveloperConsole extends StatefulWidget {
   const DeveloperConsole({super.key, required this.service});
-  final TraderaService service;
+  final AsemanService service;
 
   @override
   State<DeveloperConsole> createState() => _DeveloperConsoleState();
@@ -278,7 +278,7 @@ Future<bool> _confirm(BuildContext context, String title, String body,
 /// Loads one view of the console and shows it once it is there.
 abstract class _Loaded extends StatefulWidget {
   const _Loaded({super.key, required this.service, this.org = 'personal'});
-  final TraderaService service;
+  final AsemanService service;
   final String org;
 }
 

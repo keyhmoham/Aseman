@@ -2,15 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/core/network/api_client.dart';
-import 'package:tradera/src/core/theme/app_colors.dart';
-import 'package:tradera/src/data/services/tradera_service.dart';
-import 'package:tradera/src/features/tools/elpian/app_bridge.dart';
-import 'package:tradera/src/features/tools/presentation/app_frontend_theme.dart';
+import 'package:aseman/src/core/network/api_client.dart';
+import 'package:aseman/src/core/theme/app_colors.dart';
+import 'package:aseman/src/data/services/aseman_service.dart';
+import 'package:aseman/src/features/tools/elpian/app_bridge.dart';
+import 'package:aseman/src/features/tools/presentation/app_frontend_theme.dart';
 
 /// A service whose sandbox methods return canned values (no network).
-class _SandboxStubService extends TraderaService {
-  _SandboxStubService() : super(TraderaApiClient(baseUrl: 'http://localhost'));
+class _SandboxStubService extends AsemanService {
+  _SandboxStubService() : super(AsemanApiClient(baseUrl: 'http://localhost'));
 
   String lastCommand = '';
 

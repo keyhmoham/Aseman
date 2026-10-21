@@ -8,13 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tradera/tradera/pkg/a2ui"
+	"github.com/aseman/aseman/pkg/a2ui"
 )
 
 // kitJS is the built kit script.
 func kitJS(t *testing.T) string {
 	t.Helper()
-	body, ctype, ok := File("tradera-ui.js")
+	body, ctype, ok := File("aseman-ui.js")
 	if !ok || !strings.Contains(ctype, "javascript") {
 		t.Fatalf("no kit script (%q)", ctype)
 	}
@@ -38,17 +38,17 @@ func TestKitIsBuiltFromItsSources(t *testing.T) {
 		parts = append(parts, "// ==== "+filepath.Base(f)+" ====\n"+string(b))
 	}
 	if !strings.Contains(kitJS(t), strings.Join(parts, "\n")) {
-		t.Fatal("kit/tradera-ui.js is out of date: run node services/pkg/webkit/tools/build.mjs")
+		t.Fatal("kit/aseman-ui.js is out of date: run node services/pkg/webkit/tools/build.mjs")
 	}
 }
 
 func TestFile(t *testing.T) {
-	for _, name := range []string{"tradera-ui.js", "tradera-ui.css", "gallery.html"} {
+	for _, name := range []string{"aseman-ui.js", "aseman-ui.css", "gallery.html"} {
 		if _, _, ok := File(name); !ok {
 			t.Errorf("%s missing", name)
 		}
 	}
-	for _, bad := range []string{"", "../webkit.go", "kit/tradera-ui.js", "nope.js", "/etc/passwd"} {
+	for _, bad := range []string{"", "../webkit.go", "kit/aseman-ui.js", "nope.js", "/etc/passwd"} {
 		if _, _, ok := File(bad); ok {
 			t.Errorf("served %q", bad)
 		}
@@ -122,7 +122,7 @@ func TestKitStylesEveryHTMLWidget(t *testing.T) {
 	if len(files) == 0 {
 		t.Skip("app sources not here")
 	}
-	css, _, _ := File("tradera-ui.css")
+	css, _, _ := File("aseman-ui.css")
 	structural := map[string]bool{"br": true, "div": true, "span": true, "param": true, "source": true, "track": true, "area": true,
 		"map": true, "picture": true, "datalist": true, "optgroup": true, "option": true, "widgets": true, "table_layout": true,
 		"embedded_content_io": true, "embedded_content_stub": true, "embedded_content_web": true}

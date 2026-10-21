@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/usage/models/usage"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/usage/models/usage"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // gatewayPrefix is where the runtime reaches the node during a turn.
@@ -499,7 +499,7 @@ func (a *Adapter) serveModels(ctx context.Context, req *network.Request) (*netwo
 		model = "default"
 	}
 	return jsonResponse(200, map[string]any{"object": "list", "data": []map[string]any{
-		{"id": model, "object": "model", "owned_by": "tradera"},
+		{"id": model, "object": "model", "owned_by": "aseman"},
 	}}), nil
 }
 
@@ -824,7 +824,7 @@ func errorResponse(err error) *network.Response {
 }
 
 func openAIError(status int, msg string) *network.Response {
-	return jsonResponse(status, map[string]any{"error": map[string]any{"message": msg, "type": "tradera_error"}})
+	return jsonResponse(status, map[string]any{"error": map[string]any{"message": msg, "type": "aseman_error"}})
 }
 
 // skipThoughtSignature is Google's documented placeholder for a tool call whose

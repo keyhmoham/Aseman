@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import 'oauth_window.dart';
 
 /// Overrides where providers send people back after signing in
@@ -9,7 +9,7 @@ import 'oauth_window.dart';
 const String kOAuthRedirectUri = String.fromEnvironment('OAUTH_REDIRECT_URI');
 
 /// The provider wants an OAuth client someone creates (it will not register
-/// Tradera by itself): the person supplies its id, or a token.
+/// Aseman by itself): the person supplies its id, or a token.
 class McpNeedsClient implements Exception {
   McpNeedsClient(this.message, this.redirectUri);
   final String message;
@@ -33,7 +33,7 @@ typedef OAuthOpener = Future<String> Function(
 /// so the node can renew it without the person.
 class McpSignIn {
   McpSignIn(this.service);
-  final TraderaService service;
+  final AsemanService service;
 
   String get redirectUri => kOAuthRedirectUri.isNotEmpty
       ? kOAuthRedirectUri

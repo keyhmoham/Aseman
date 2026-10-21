@@ -26,7 +26,7 @@ func TestSecretEncryption(t *testing.T) {
 		{a, master, "provider/2"},
 		{a[:len(a)-4] + "AAAA", master, "provider/1"},
 		{SecretPrefix + "AA", master, "provider/1"},
-		{"tradera:secret:v2:AA", master, "provider/1"},
+		{"aseman:secret:v2:AA", master, "provider/1"},
 	} {
 		if _, err := OpenSecret(tc.sealed, tc.key, tc.context); err == nil {
 			t.Fatal("invalid ciphertext/key/context was accepted")

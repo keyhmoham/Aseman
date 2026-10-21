@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# tradera node daemon (traderad) + CLI (tradera).
+# aseman node daemon (asemand) + CLI (aseman).
 FROM golang:1.26-alpine AS build
 WORKDIR /src
 # Optional extra CA for building behind a TLS-intercepting proxy:
@@ -13,21 +13,21 @@ RUN go env -w GOPROXY=https://goproxy.cn,direct
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=1 go build -trimpath -o /out/traderad ./cmd/traderad && \
-    CGO_ENABLED=1 go build -trimpath -o /out/tradera ./cmd/tradera && \
+    CGO_ENABLED=1 go build -trimpath -o /out/asemand ./cmd/asemand && \
+    CGO_ENABLED=1 go build -trimpath -o /out/aseman ./cmd/aseman && \
     CGO_ENABLED=1 go run -trimpath ./cmd/pluginbuild
 
 # Retain the matching Go toolchain and module source for admin runtime builds.
 FROM build AS runtime
-RUN cp /out/traderad /out/tradera /usr/local/bin/
-ENV TRADERA_PLUGIN_SOURCE_ROOT=/src \
-    TRADERA_PLUGIN_DIRECTORY=/src/bin/plugins
+RUN cp /out/asemand /out/aseman /usr/local/bin/
+ENV ASEMAN_PLUGIN_SOURCE_ROOT=/src \
+    ASEMAN_PLUGIN_DIRECTORY=/src/bin/plugins
 # The daemon keeps its node identity, logs, uploaded files and wasm modules
 # under ./data relative to the working directory.
 WORKDIR /app
 VOLUME /app/data
 EXPOSE 8080
-ENV TRADERA_CONFIG=/app/config.yml
+ENV ASEMAN_CONFIG=/app/config.yml
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=6 \
     CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1
-ENTRYPOINT ["traderad"]
+ENTRYPOINT ["asemand"]

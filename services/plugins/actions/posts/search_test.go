@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/posts/models"
-	"github.com/tradera/tradera/plugins/actions/users/models/follow"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/posts/models"
+	"github.com/aseman/aseman/plugins/actions/users/models/follow"
 )
 
 func searchPost(t *testing.T, s *Service, ctx context.Context, author, space identity.ID, body string, at time.Time) identity.ID {

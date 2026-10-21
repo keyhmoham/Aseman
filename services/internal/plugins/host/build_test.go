@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/host"
+	"github.com/aseman/aseman/internal/plugins/host"
 )
 
 func TestBuildRejectsEmptyOrRecursiveSource(t *testing.T) {

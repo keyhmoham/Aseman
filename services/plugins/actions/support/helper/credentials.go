@@ -57,7 +57,7 @@ func RedactCredentials(value any) any {
 			return RedactCredentials(decoded)
 		}
 	case string:
-		if strings.HasPrefix(v, "tradera:secret:") || strings.HasPrefix(v, "$2a$") || strings.HasPrefix(v, "$2b$") || strings.HasPrefix(v, "$2y$") {
+		if strings.HasPrefix(v, "aseman:secret:") || strings.HasPrefix(v, "$2a$") || strings.HasPrefix(v, "$2b$") || strings.HasPrefix(v, "$2y$") {
 			return "[redacted]"
 		}
 		var decoded any

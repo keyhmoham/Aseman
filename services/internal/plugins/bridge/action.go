@@ -3,7 +3,7 @@ package bridge
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/api"
 )
 
 // ActionAlias preserves an existing API name in its owning namespace while

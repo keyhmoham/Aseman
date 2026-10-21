@@ -13,12 +13,12 @@ import (
 // The sandbox image carries the same desktop program the node writes onto older
 // machines; they must not drift apart.
 func TestSandboxImageCarriesTheNodesDesktopScript(t *testing.T) {
-	image, err := os.ReadFile("../../../../deploy/sandbox-computer/tradera-desktop")
+	image, err := os.ReadFile("../../../../deploy/sandbox-computer/aseman-desktop")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(image, DesktopScript()) {
-		t.Fatal("deploy/sandbox-computer/tradera-desktop differs from spaces/desktop.sh; copy one over the other")
+		t.Fatal("deploy/sandbox-computer/aseman-desktop differs from spaces/desktop.sh; copy one over the other")
 	}
 }
 
@@ -31,8 +31,8 @@ func runDesktopCommand(t *testing.T, setup string, args ...string) (string, erro
 		t.Fatal("desktop command dispatch missing")
 	}
 	program := prefix + "\nSTATE=" + shellFilePath(t.TempDir()) + "\n" + setup + "\ncmd=" + dispatch
-	command := exec.Command("bash", append([]string{"-c", program, "tradera-desktop"}, args...)...)
-	command.Env = append(os.Environ(), "TRADERA_BROWSER_PROFILE="+t.TempDir()+"/profile")
+	command := exec.Command("bash", append([]string{"-c", program, "aseman-desktop"}, args...)...)
+	command.Env = append(os.Environ(), "ASEMAN_BROWSER_PROFILE="+t.TempDir()+"/profile")
 	out, err := command.CombinedOutput()
 	return string(out), err
 }
@@ -105,7 +105,7 @@ detach() { printf '%s\n' "$@" >` + shellFilePath(record) + `; }`
 }
 
 func TestDesktopMissingApplicationFails(t *testing.T) {
-	out, err := runDesktopCommand(t, "do_start() { return 0; }", "open", "tradera-test-missing-app")
+	out, err := runDesktopCommand(t, "do_start() { return 0; }", "open", "aseman-test-missing-app")
 	if err == nil || !strings.Contains(out, "application not found") {
 		t.Fatalf("missing app must not be reported as started: %v\n%s", err, out)
 	}
@@ -145,7 +145,7 @@ func TestDesktopScriptIsValidShell(t *testing.T) {
 // The browser keeps its logins on the project's disk, not in /tmp, so they
 // outlive a sleeping or rebuilt computer; an old machine's lock does not block it.
 func TestDesktopBrowserKeepsItsLoginsOnTheProjectDisk(t *testing.T) {
-	profile := filepath.Join(t.TempDir(), ".tradera", "browser-profile")
+	profile := filepath.Join(t.TempDir(), ".aseman", "browser-profile")
 	record := filepath.Join(t.TempDir(), "arguments")
 	if err := os.MkdirAll(profile, 0o700); err != nil {
 		t.Fatal(err)
@@ -199,10 +199,10 @@ func TestDesktopForgetLoginsErasesTheProfile(t *testing.T) {
 
 func TestTheBrowsersSavedLoginsAreNoFile(t *testing.T) {
 	for path, hidden := range map[string]bool{
-		"/workspace/.tradera/browser-profile":           true,
-		"/workspace/.tradera/browser-profile/Cookies":   true,
-		"/workspace/.tradera/browser-profile-notes.txt": false,
-		"/workspace/.tradera":                           false,
+		"/workspace/.aseman/browser-profile":           true,
+		"/workspace/.aseman/browser-profile/Cookies":   true,
+		"/workspace/.aseman/browser-profile-notes.txt": false,
+		"/workspace/.aseman":                           false,
 		"/workspace/index.html":                         false,
 	} {
 		if inBrowserProfile(path) != hidden {
@@ -224,15 +224,15 @@ func TestDesktopMakesTheBrowserTheDefaultForFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, mime := range []string{"application/pdf", "image/png", "image/jpeg", "text/html"} {
-		if !strings.Contains(string(list), mime+"=tradera-browser.desktop\n") {
+		if !strings.Contains(string(list), mime+"=aseman-browser.desktop\n") {
 			t.Errorf("%s is not opened with the browser:\n%s", mime, list)
 		}
 	}
-	entry, err := os.ReadFile(filepath.Join(home, ".local", "share", "applications", "tradera-browser.desktop"))
+	entry, err := os.ReadFile(filepath.Join(home, ".local", "share", "applications", "aseman-browser.desktop"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(entry), "Exec=/usr/local/bin/tradera-desktop open %U\n") {
+	if !strings.Contains(string(entry), "Exec=/usr/local/bin/aseman-desktop open %U\n") {
 		t.Fatalf("the entry must run the desktop's own open:\n%s", entry)
 	}
 }
@@ -296,11 +296,11 @@ func TestDesktopPythonHelpersCompile(t *testing.T) {
 func TestDesktopWritesItsThemeAndOpenboxSettings(t *testing.T) {
 	home := t.TempDir()
 	setup := "x_up() { return 0; }\nwm_up() { return 0; }\nstream_ok() { return 0; }\nHOME=" + shellFilePath(home) +
-		"\nTHEME_DIR=" + shellFilePath(filepath.Join(home, ".themes/Tradera/openbox-3")) + "\nwrite_theme\nwrite_gtk_settings"
+		"\nTHEME_DIR=" + shellFilePath(filepath.Join(home, ".themes/Aseman/openbox-3")) + "\nwrite_theme\nwrite_gtk_settings"
 	if out, err := runDesktopCommand(t, setup, "status"); err != nil {
 		t.Fatalf("write theme: %v\n%s", err, out)
 	}
-	theme, err := os.ReadFile(filepath.Join(home, ".themes/Tradera/openbox-3/themerc"))
+	theme, err := os.ReadFile(filepath.Join(home, ".themes/Aseman/openbox-3/themerc"))
 	if err != nil {
 		t.Fatal(err)
 	}

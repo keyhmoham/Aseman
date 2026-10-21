@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tradera/src/app.dart';
-import 'package:tradera/src/app_dependencies.dart';
-import 'package:tradera/src/core/network/api_client.dart';
-import 'package:tradera/src/data/models/space.dart';
-import 'package:tradera/src/features/rooms/domain/room_work.dart';
+import 'package:aseman/src/app.dart';
+import 'package:aseman/src/app_dependencies.dart';
+import 'package:aseman/src/core/network/api_client.dart';
+import 'package:aseman/src/data/models/space.dart';
+import 'package:aseman/src/features/rooms/domain/room_work.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
 typedef _Page = ({
   List<RoomMessage> messages,
@@ -17,7 +17,7 @@ typedef _Page = ({
   String workingDetail
 });
 
-class _Service extends FakeTraderaService {
+class _Service extends FakeAsemanService {
   Completer<_Page>? pending;
   int pendingCalls = 0;
   bool failSending = false;
@@ -54,7 +54,7 @@ class _Service extends FakeTraderaService {
 
 RoomMessage _message(String id, String room, String body) => RoomMessage(
       id: id,
-      spaceId: FakeTraderaService.atlasId,
+      spaceId: FakeAsemanService.atlasId,
       roomId: room,
       senderId: '00000000000000010000000000000099',
       body: body,
@@ -67,7 +67,7 @@ void main() {
       .clearAllTestValues());
   Future<void> open(WidgetTester tester, _Service service) async {
     SharedPreferences.setMockInitialValues({
-      'tradera.session':
+      'aseman.session':
           '{"account_id":"00000000000000010000000000000001","handle":"test",'
               '"token":"x","private_key":"","public_key":"",'
               '"home_space_id":"00000000000000010000000000000002"}'
@@ -75,9 +75,9 @@ void main() {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
     await tester.pumpWidget(
-        TraderaApp(dependencies: AppDependencies.withService(service)));
+        AsemanApp(dependencies: AppDependencies.withService(service)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
@@ -135,12 +135,12 @@ void main() {
       'same-size message page rotation updates the visible conversation',
       (tester) async {
     final service = _Service();
-    service.roomMessages['${FakeTraderaService.atlasId}/a1'] = [
+    service.roomMessages['${FakeAsemanService.atlasId}/a1'] = [
       _message('old', 'a1', 'Old delivery')
     ];
     await open(tester, service);
     expect(find.text('Old delivery'), findsOneWidget);
-    service.roomMessages['${FakeTraderaService.atlasId}/a1'] = [
+    service.roomMessages['${FakeAsemanService.atlasId}/a1'] = [
       _message('new', 'a1', 'Corrected delivery')
     ];
     await tester.pump(const Duration(seconds: 4));
@@ -153,7 +153,7 @@ void main() {
       'late room response cannot replace a different room or its composer',
       (tester) async {
     final service = _Service();
-    service.roomMessages['${FakeTraderaService.atlasId}/a2'] = [
+    service.roomMessages['${FakeAsemanService.atlasId}/a2'] = [
       _message('macro', 'a2', 'Macro room content')
     ];
     await open(tester, service);

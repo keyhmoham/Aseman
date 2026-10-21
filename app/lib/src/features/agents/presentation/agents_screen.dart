@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/bot.dart';
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar_editor.dart';
 import '../../../shared/widgets/panel_header.dart';
@@ -399,7 +399,7 @@ class _AgentsTab extends StatelessWidget {
     required this.onToggle,
   });
 
-  final TraderaService service;
+  final AsemanService service;
   final Future<void> Function(Bot bot, String fileId) onAvatar;
   final List<Bot> agents;
   final ValueChanged<Bot> onChat;
@@ -446,7 +446,7 @@ class _ToolsTab extends StatelessWidget {
       required this.onOpen,
       required this.onEdit});
 
-  final TraderaService service;
+  final AsemanService service;
   final Future<void> Function(Bot bot, String fileId) onAvatar;
   final List<Bot> tools;
   final ValueChanged<Bot> onOpen;
@@ -568,7 +568,7 @@ class _AgentCard extends StatelessWidget {
     required this.onToggle,
   });
 
-  final TraderaService service;
+  final AsemanService service;
   final Future<void> Function(String fileId) onAvatar;
   final Bot bot;
   final VoidCallback onChat;
@@ -647,7 +647,7 @@ class _ToolCard extends StatelessWidget {
       required this.onOpen,
       required this.onEdit});
 
-  final TraderaService service;
+  final AsemanService service;
   final Future<void> Function(String fileId) onAvatar;
   final Bot bot;
   final VoidCallback onOpen;

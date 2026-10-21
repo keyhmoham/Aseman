@@ -14,13 +14,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/adapters/base"
-	"github.com/tradera/tradera/plugins/adapters/cfg"
-	"github.com/tradera/tradera/plugins/adapters/network/ncore"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/adapters/base"
+	"github.com/aseman/aseman/plugins/adapters/cfg"
+	"github.com/aseman/aseman/plugins/adapters/network/ncore"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
 // Adapter is the HTTP network plugin.
@@ -359,8 +359,8 @@ func setCORS(w http.ResponseWriter) {
 	h.Set("Access-Control-Allow-Origin", "*")
 	h.Set("Access-Control-Allow-Methods", "POST, GET, PUT, PATCH, DELETE, OPTIONS")
 	h.Set("Access-Control-Allow-Headers",
-		"Content-Type, Authorization, X-Tradera-Nonce, X-Tradera-Timestamp, X-Tradera-Signature, X-Tradera-Node")
-	h.Set("Access-Control-Expose-Headers", "X-Tradera-Model, X-Tradera-Cost, X-Tradera-Request-Id, X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After")
+		"Content-Type, Authorization, X-Aseman-Nonce, X-Aseman-Timestamp, X-Aseman-Signature, X-Aseman-Node")
+	h.Set("Access-Control-Expose-Headers", "X-Aseman-Model, X-Aseman-Cost, X-Aseman-Request-Id, X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After")
 	h.Set("Access-Control-Max-Age", "600")
 }
 

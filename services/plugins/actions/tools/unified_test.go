@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/plugins/actions/tools/models"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/plugins/actions/tools/models"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 type keyKernel struct {

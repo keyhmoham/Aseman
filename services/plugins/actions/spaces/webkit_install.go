@@ -1,7 +1,7 @@
 package spaces
 
-// Tradera's web UI kit on the space's computer: agents read its guide there
-// (/opt/tradera/webkit/README.md) and copy it into a page they check locally;
+// Aseman's web UI kit on the space's computer: agents read its guide there
+// (/opt/aseman/webkit/README.md) and copy it into a page they check locally;
 // previews get it from the gateway itself. The node writes it onto a machine
 // that has just woken when the machine's copy is missing or older, like the
 // desktop program.
@@ -13,13 +13,13 @@ import (
 	"encoding/hex"
 	"strings"
 
-	"github.com/tradera/tradera/pkg/webkit"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/pkg/webkit"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // WebkitDir is where the kit lives on the computer.
-const WebkitDir = "/opt/tradera/webkit"
+const WebkitDir = "/opt/aseman/webkit"
 
 // webkitChunk keeps every command under the kernel's limit on one argument
 // (128 KiB), base64 included.

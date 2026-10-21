@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 var sidecarName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$`)
@@ -26,7 +26,7 @@ func (a *Adapter) EnsureSidecar(ctx context.Context, vmID, name, image string, e
 	if err := a.ensureRunning(ctx, cid); err != nil {
 		return err
 	}
-	container := "tradera-sidecar-" + vmID + "-" + name
+	container := "aseman-sidecar-" + vmID + "-" + name
 	if b, err := a.do(ctx, http.MethodGet, "/containers/"+container+"/json", nil); err == nil {
 		var state struct {
 			State struct {
@@ -47,8 +47,8 @@ func (a *Adapter) EnsureSidecar(ctx context.Context, vmID, name, image string, e
 		"Image": image,
 		"Env":   envSlice(env),
 		"Labels": map[string]string{
-			"tradera.sidecar_of": vmID,
-			"tradera.sidecar":    name,
+			"aseman.sidecar_of": vmID,
+			"aseman.sidecar":    name,
 		},
 		"HostConfig": map[string]any{
 			"NetworkMode": "container:" + cid,
@@ -69,7 +69,7 @@ func (a *Adapter) RemoveSidecar(ctx context.Context, vmID, name string) error {
 	if !sidecarName.MatchString(name) {
 		return errs.InvalidArgument("invalid sidecar name")
 	}
-	container := "tradera-sidecar-" + vmID + "-" + name
+	container := "aseman-sidecar-" + vmID + "-" + name
 	if _, err := a.do(ctx, http.MethodGet, "/containers/"+container+"/json", nil); err != nil {
 		return nil
 	}

@@ -9,19 +9,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/jsonpatch"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/space"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	usage "github.com/tradera/tradera/plugins/actions/usage/models"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/jsonpatch"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/space"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	usage "github.com/aseman/aseman/plugins/actions/usage/models"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // Every agent runs on the deep agents runtime and is reached only through
@@ -755,11 +755,11 @@ func (s *Service) sharedSpace(ctx context.Context, person, agent identity.ID) (*
 // routine's room. The task is posted as the routine creator's message so the
 // room shows what ran, and the lead's reply is stored as its answer.
 func (s *Service) RunScheduledTask(ctx context.Context, spaceID, roomID, actor identity.ID, task string) (string, error) {
-	lead, err := s.Bots.InstallTradera(ctx)
+	lead, err := s.Bots.InstallAseman(ctx)
 	if err != nil {
 		return "", err
 	}
-	s.ensureTradera(ctx, spaceID)
+	s.ensureAseman(ctx, spaceID)
 	if roomID.IsZero() {
 		room, err := s.generalRoom(ctx, spaceID)
 		if err != nil {

@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/space.dart';
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import 'report_dialog.dart';
@@ -33,7 +33,7 @@ class _ChatPageState extends State<ChatPage> {
   late ChatSummary _chat = widget.chat;
 
   ChatSummary get chat => _chat;
-  TraderaService get _service => widget.dependencies.service;
+  AsemanService get _service => widget.dependencies.service;
   String get _me =>
       widget.dependencies.sessionController.session?.accountId ?? '';
 

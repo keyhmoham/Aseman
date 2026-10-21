@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/core/network/api_client.dart';
-import 'package:tradera/src/data/models/bot.dart';
-import 'package:tradera/src/data/models/post.dart';
-import 'package:tradera/src/data/models/profile.dart';
-import 'package:tradera/src/data/models/space.dart';
-import 'package:tradera/src/data/services/tradera_service.dart';
-import 'package:tradera/src/shared/widgets/avatar.dart';
-import 'package:tradera/src/shared/widgets/avatar_editor.dart';
+import 'package:aseman/src/core/network/api_client.dart';
+import 'package:aseman/src/data/models/bot.dart';
+import 'package:aseman/src/data/models/post.dart';
+import 'package:aseman/src/data/models/profile.dart';
+import 'package:aseman/src/data/models/space.dart';
+import 'package:aseman/src/data/services/aseman_service.dart';
+import 'package:aseman/src/shared/widgets/avatar.dart';
+import 'package:aseman/src/shared/widgets/avatar_editor.dart';
 
 const fileId = '00000000000000010000000000000001';
 
-TraderaService _service() =>
-    TraderaService(TraderaApiClient(baseUrl: 'https://node.example'));
+AsemanService _service() =>
+    AsemanService(AsemanApiClient(baseUrl: 'https://node.example'));
 
 void main() {
   test('an avatar reference resolves onto its stored picture', () {

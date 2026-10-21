@@ -13,7 +13,7 @@ if [ -z "${OPENVIKING_ROOT_API_KEY:-}" ]; then
   echo "openviking: set OPENVIKING_ROOT_API_KEY (the runtime and the node authenticate with it)" >&2
   exit 1
 fi
-export OPENVIKING_NODE_URL="${OPENVIKING_NODE_URL:-http://tradera:8080}"
+export OPENVIKING_NODE_URL="${OPENVIKING_NODE_URL:-http://aseman:8080}"
 
 rendered="${OPENVIKING_RENDERED_CONFIG:-/tmp/ov.conf}"
 python - "${OPENVIKING_CONFIG:-/etc/openviking/ov.conf}" "$rendered" <<'PY'

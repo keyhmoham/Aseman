@@ -11,7 +11,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
   jni
-  tradera_elpian_vm
+  aseman_elpian_vm
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

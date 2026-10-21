@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tradera/tradera/pkg/webkit"
+	"github.com/aseman/aseman/pkg/webkit"
 )
 
 // The commands that put the kit on a computer write it exactly, each under
@@ -24,7 +24,7 @@ func TestWebkitInstallCommands(t *testing.T) {
 		t.Skip("no shell")
 	}
 	dir := t.TempDir()
-	root := filepath.Join(dir, "opt", "tradera", "webkit")
+	root := filepath.Join(dir, "opt", "aseman", "webkit")
 	if err := os.MkdirAll(filepath.Dir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}

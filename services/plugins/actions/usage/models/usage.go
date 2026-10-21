@@ -3,9 +3,9 @@ package usage
 import (
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	metrics "github.com/tradera/tradera/plugins/actions/usage/models/usage"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	metrics "github.com/aseman/aseman/plugins/actions/usage/models/usage"
 )
 
 // Usage is one metered LLM token consumption event, attributed to the space,
@@ -15,7 +15,7 @@ type Usage struct {
 	SpaceID identity.ID `db:"space_id" json:"space_id"`
 	RoomID  identity.ID `db:"room_id" json:"room_id,omitempty"`
 	BotID   identity.ID `db:"bot_id" json:"bot_id,omitempty"`
-	// BotName is the human-readable agent name (or "tradera").
+	// BotName is the human-readable agent name (or "aseman").
 	BotName string `db:"bot_name" json:"bot_name,omitempty"`
 	// ActorID is the account whose request consumed the tokens.
 	ActorID identity.ID `db:"actor_id" json:"actor_id"`

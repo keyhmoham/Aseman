@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/app_dependencies.dart';
-import 'package:tradera/src/features/rooms/domain/room_work.dart';
-import 'package:tradera/src/features/rooms/presentation/room_work_controller.dart';
-import 'package:tradera/src/features/rooms/presentation/widgets/room_chat.dart';
+import 'package:aseman/src/app_dependencies.dart';
+import 'package:aseman/src/features/rooms/domain/room_work.dart';
+import 'package:aseman/src/features/rooms/presentation/room_work_controller.dart';
+import 'package:aseman/src/features/rooms/presentation/widgets/room_chat.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
 WorkRun _run(String turn, String status,
         {String room = 'room-1', String bot = 'bot-a', String name = 'Ada'}) =>
@@ -19,7 +19,7 @@ WorkRun _run(String turn, String status,
         prompt: 'Draft the launch post');
 
 /// A node whose room has whatever work, drafts and questions a test sets.
-class _Node extends FakeTraderaService {
+class _Node extends FakeAsemanService {
   List<WorkRun> live = [];
   List<WorkRun> queued = [];
   List<WorkEntry> entries = [];

@@ -1,4 +1,4 @@
-/// A2UI actions fired by Tradera's components.
+/// A2UI actions fired by Aseman's components.
 ///
 /// An action is either `{"event": {"name", "context"}}` — sent to whoever
 /// hosts the surface (a tool's backend, an agent), its context resolved in

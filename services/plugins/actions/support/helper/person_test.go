@@ -18,7 +18,7 @@ func TestPersonName(t *testing.T) {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
 		}
 	}
-	if got := BotName(map[string]any{"displayName": "Tradera"}, "tradera"); got != "Tradera" {
+	if got := BotName(map[string]any{"displayName": "Aseman"}, "aseman"); got != "Aseman" {
 		t.Errorf("a bot keeps the name it was created with: %q", got)
 	}
 }

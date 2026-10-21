@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -43,7 +43,7 @@ func adminPasswordHealth(ctx context.Context, r *repo.Repo, handle string) healt
 	}
 	if !found {
 		c.Status, c.Detail = "warn", "No active administrator account was found."
-		c.Fix = "Create a bootstrap administrator with TRADERA_ADMIN_PASSWORD, then restart"
+		c.Fix = "Create a bootstrap administrator with ASEMAN_ADMIN_PASSWORD, then restart"
 		return c
 	}
 	c.Status, c.Detail = "ok", "No active administrator uses the default password"

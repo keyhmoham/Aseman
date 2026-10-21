@@ -1,6 +1,6 @@
-# tradera_elpian_vm
+# aseman_elpian_vm
 
-The native half of the Elpian VM Tradera's app runs tool frontends on: an
+The native half of the Elpian VM Aseman's app runs tool frontends on: an
 FFI plugin that builds `libelpian_vm` (Android `.so`, iOS/macOS static
 library, Linux `.so`, Windows `.dll`) from the Rust sources under `rust/`. It
 has no Dart API of its own — the bindings, the rendering engine, the
@@ -17,7 +17,7 @@ Copied from [Elpian](https://github.com/cosmopole-org/elpian) (BSD-3-Clause):
 | `guest-sdk/dart/gui.dart` | `guest-sdk/dart/gui.dart` (embedded by elpian-dart-runtime) |
 | `android/`, `ios/`, `linux/`, `macos/`, `windows/`, `tool/` | `flutter/rust_builder/` |
 
-Tradera does not depend on Elpian's packages: to refresh the VM, copy the
+Aseman does not depend on Elpian's packages: to refresh the VM, copy the
 directories above again (keeping this layout) and rebuild.
 
 ## Build

@@ -10,8 +10,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/proxy"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
 )
 
 // probeProxy checks only the persisted, workspace-authorized tunnel target.

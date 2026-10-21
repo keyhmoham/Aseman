@@ -3,9 +3,9 @@ package kernel
 import (
 	"sync"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
 type networkBinding struct{ bind, unbind func(network.Network) error }

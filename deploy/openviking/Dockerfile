@@ -19,8 +19,8 @@ RUN --mount=type=secret,id=extra_ca,required=false \
 
 COPY ov.conf /etc/openviking/ov.conf
 # Tags each model call with the project it is for, so the node bills it.
-COPY sitecustomize.py /opt/tradera/sitecustomize.py
-ENV PYTHONPATH=/opt/tradera
+COPY sitecustomize.py /opt/aseman/sitecustomize.py
+ENV PYTHONPATH=/opt/aseman
 COPY entrypoint.sh /usr/local/bin/openviking-entrypoint
 RUN chmod +x /usr/local/bin/openviking-entrypoint
 

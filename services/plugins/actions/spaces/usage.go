@@ -3,8 +3,8 @@ package spaces
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/usage/models"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/usage/models"
 )
 
 // MeterBotUsage meters a bot's LLM token consumption since its last recorded
@@ -18,7 +18,7 @@ func (s *Service) MeterBotUsage(ctx context.Context, spaceID, roomID, botID, act
 	return s.Bots.RecordUsage(ctx, actor, botID, uc)
 }
 
-// RecordBotUsage records a fixed usage delta (tradera's own orchestrator
+// RecordBotUsage records a fixed usage delta (aseman's own orchestrator
 // brain usage, which has no bot VM meter).
 func (s *Service) RecordBotUsage(ctx context.Context, spaceID, roomID, botID, actor identity.ID, requestID, kind, botName string, d usage.Delta) error {
 	if s.Bots == nil {

@@ -1,4 +1,4 @@
-name: tradera_elpian_godot
+name: aseman_elpian_godot
 description: The embedded Godot 4 engine behind the Scene3D widget of the app's Elpian engine (Android/iOS platform views and the op transport). The Dart side lives in lib/src/elpian/godot of the app.
 version: 0.1.0
 publish_to: none

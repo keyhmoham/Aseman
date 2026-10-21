@@ -4,25 +4,25 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/internal/plugins/module"
-	"github.com/tradera/tradera/pkg/crypto"
-	"github.com/tradera/tradera/pkg/errs"
-	botdto "github.com/tradera/tradera/plugins/actions/bots/dto"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	market "github.com/tradera/tradera/plugins/actions/market/models"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/actions/support/metasvc"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/actions/support/schema"
-	"github.com/tradera/tradera/plugins/actions/tools/mechanisms/mcp"
-	"github.com/tradera/tradera/plugins/actions/tools/models"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/module"
+	"github.com/aseman/aseman/pkg/crypto"
+	"github.com/aseman/aseman/pkg/errs"
+	botdto "github.com/aseman/aseman/plugins/actions/bots/dto"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	market "github.com/aseman/aseman/plugins/actions/market/models"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/metasvc"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/actions/support/schema"
+	"github.com/aseman/aseman/plugins/actions/tools/mechanisms/mcp"
+	"github.com/aseman/aseman/plugins/actions/tools/models"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 	"os"
 	"strings"
 	"sync"
@@ -37,7 +37,7 @@ type Service struct {
 	// and sandbox-installed tools), which live on private addresses that the
 	// public-facing Client refuses.
 	Internal *mcp.Client
-	// Compiler compiles Elpian VM programs (TRADERA_TOOL_COMPILER_URL).
+	// Compiler compiles Elpian VM programs (ASEMAN_TOOL_COMPILER_URL).
 	Compiler *Compiler
 
 	// commandCache holds what each connected app offers, per person and
@@ -777,7 +777,7 @@ func (s *Service) commandsList(ctx context.Context, req *api.ActionRequest) (*ap
 }
 func NewPlugin() api.Plugin {
 	return module.New(api.Info{Name: "tools-ns", Version: "1.0.0", Provides: []string{"service/tools"}}, func(ctx context.Context, d *api.Dependencies) (module.Instance, error) {
-		s := &Service{K: d.Kernel, R: repo.New(d.Kernel), Client: mcp.New(os.Getenv("TRADERA_MCP_ALLOW_PRIVATE") == "true"), Internal: mcp.New(true), Compiler: NewCompiler(os.Getenv("TRADERA_TOOL_COMPILER_URL"))}
+		s := &Service{K: d.Kernel, R: repo.New(d.Kernel), Client: mcp.New(os.Getenv("ASEMAN_MCP_ALLOW_PRIVATE") == "true"), Internal: mcp.New(true), Compiler: NewCompiler(os.Getenv("ASEMAN_TOOL_COMPILER_URL"))}
 		actions := []api.Action{helper.Action{Namespace: "tools", Name: "mcp_register", Summary: "Register a remote MCP tool", Handler: s.mcpRegister}, helper.Action{Namespace: "tools", Name: "mcp_update", Summary: "Update remote MCP configuration", Handler: s.mcpUpdate}, helper.Action{Namespace: "tools", Name: "mcp_oauth_get", Summary: "Read the OAuth client saved for an MCP server", Handler: s.mcpOAuthGet}, helper.Action{Namespace: "tools", Name: "mcp_oauth_set", Summary: "Save the OAuth client people sign in to an MCP server with", Handler: s.mcpOAuthSet}, helper.Action{Namespace: "tools", Name: "mcp_delete", Summary: "Delete a registered MCP server", Handler: s.mcpDelete}, helper.Action{Namespace: "tools", Name: "mcp_samples", Summary: "Admin: the sample MCP servers and which are already in the catalog", Handler: s.mcpSamples}, helper.Action{Namespace: "tools", Name: "mcp_import_samples", Summary: "Admin: add the sample MCP servers to the catalog", Handler: s.mcpImportSamples}, helper.Action{Namespace: "tools", Name: "connection_set", Summary: "Set a personal project connection", Handler: s.connectionSet}, helper.Action{Namespace: "tools", Name: "commands_list", Summary: "Discover tool commands", Handler: s.commandsList}, helper.Action{Namespace: "tools", Name: "invoke", Summary: "Invoke a project tool as its caller", Handler: s.invoke}}
 		actions = append(actions,
 			helper.Action{Namespace: "tools", Name: "tool_create", Summary: "Create a tool: an external, managed or installed backend and a static or generative frontend", Handler: s.toolCreate},

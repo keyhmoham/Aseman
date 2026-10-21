@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tradera web UI kit</title>
-<link rel="stylesheet" href="tradera-ui.css">
-<script src="tradera-ui.js"></script>
+<title>Aseman web UI kit</title>
+<link rel="stylesheet" href="aseman-ui.css">
+<script src="aseman-ui.js"></script>
 <style>
   .g-swatch { display: flex; align-items: center; gap: 8px; font-size: 12px; }
   .g-swatch i { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--t-card-border); }
@@ -14,7 +14,7 @@
 <body class="t-page">
 <script>
   // The gallery answers its own microtool calls (its tools are made up).
-  Tradera.configure({ mockAlways: true, mock: {
+  Aseman.configure({ mockAlways: true, mock: {
     Weather: {
       forecast: ({ city = 'Oslo' }) => ({ city, temp: 12 + city.length, humidity: 0.64, wind: 5.2, conditions: 'Partly cloudy',
         days: [ { day: 'Mon', high: 14, low: 7 }, { day: 'Tue', high: 16, low: 8 }, { day: 'Wed', high: 13, low: 6 }, { day: 'Thu', high: 17, low: 9 }, { day: 'Fri', high: 18, low: 11 } ] }),
@@ -23,20 +23,20 @@
       quote: ({ symbol = 'BTC' }) => ({ symbol, price: 64000 + Math.random() * 400, change: (Math.random() - 0.45) / 20 }),
     },
   } });
-  Tradera.data.set('/form', { city: 'Oslo', qty: 2, side: 'buy', notify: true, range: [20, 70], level: 40, when: '2026-10-19', rating: 3, tags: ['crypto'] });
-  Tradera.data.set('/prices', Array.from({ length: 30 }, (_, i) => ({ date: new Date(2026, 8, i + 1).toISOString(), btc: 60000 + Math.sin(i / 3) * 3000 + i * 120, eth: 3000 + Math.cos(i / 4) * 200 + i * 9 })));
-  Tradera.data.set('/positions', [
+  Aseman.data.set('/form', { city: 'Oslo', qty: 2, side: 'buy', notify: true, range: [20, 70], level: 40, when: '2026-10-19', rating: 3, tags: ['crypto'] });
+  Aseman.data.set('/prices', Array.from({ length: 30 }, (_, i) => ({ date: new Date(2026, 8, i + 1).toISOString(), btc: 60000 + Math.sin(i / 3) * 3000 + i * 120, eth: 3000 + Math.cos(i / 4) * 200 + i * 9 })));
+  Aseman.data.set('/positions', [
     { symbol: 'BTC', name: 'Bitcoin', value: 42100, change: 0.023, weight: 0.42, status: 'good', trend: [1, 3, 2, 5, 4, 6] },
     { symbol: 'ETH', name: 'Ether', value: 18300, change: -0.011, weight: 0.18, status: 'warning', trend: [5, 4, 4, 3, 4, 2] },
     { symbol: 'SOL', name: 'Solana', value: 9100, change: 0.051, weight: 0.09, status: 'good', trend: [2, 2, 3, 4, 6, 7] },
     { symbol: 'USDT', name: 'Tether', value: 30500, change: 0, weight: 0.31, status: 'critical', trend: [1, 1, 1, 1, 1, 1] },
   ]);
-  Tradera.on('remove', (ctx) => Tradera.toast(`Remove ${ctx.symbol}`));
+  Aseman.on('remove', (ctx) => Aseman.toast(`Remove ${ctx.symbol}`));
 </script>
 
 <t-column gap="20">
   <t-row justify="spaceBetween">
-    <t-column gap="2"><t-text variant="h3" text="Tradera web UI kit"></t-text><t-text variant="caption" text="Every component of the app, for web pages"></t-text></t-column>
+    <t-column gap="2"><t-text variant="h3" text="Aseman web UI kit"></t-text><t-text variant="caption" text="Every component of the app, for web pages"></t-text></t-column>
     <t-row gap="4"><t-brand size="28" label="false"></t-brand><t-icon-button icon="dark_mode" tooltip="Toggle theme" id="theme"></t-icon-button></t-row>
   </t-row>
 
@@ -44,10 +44,10 @@
     <t-card>
       <t-text variant="h1">Heading 1</t-text><t-text variant="h2">Heading 2</t-text><t-text variant="h3">Heading 3</t-text>
       <t-text variant="h4">Heading 4</t-text><t-text variant="h5">Heading 5</t-text>
-      <t-text variant="body" text="Body text with **bold**, _italic_, `code` and a [link](https://tradera.app)."></t-text>
+      <t-text variant="body" text="Body text with **bold**, _italic_, `code` and a [link](https://aseman.app)."></t-text>
       <t-text variant="caption" text="Caption: units, timestamps, help."></t-text>
       <t-markdown text="### Markdown&#10;- one&#10;- [x] done task&#10;&#10;| a | b |&#10;|---|--:|&#10;| 1 | 2 |&#10;&#10;> A quote"></t-markdown>
-      <p>Plain HTML: <strong>strong</strong> <em>em</em> <mark>mark</mark> <kbd>Ctrl</kbd> <del>del</del> <ins>ins</ins> <abbr title="Tradera">TRD</abbr> x<sup>2</sup> H<sub>2</sub>O <code>code</code></p>
+      <p>Plain HTML: <strong>strong</strong> <em>em</em> <mark>mark</mark> <kbd>Ctrl</kbd> <del>del</del> <ins>ins</ins> <abbr title="Aseman">TRD</abbr> x<sup>2</sup> H<sub>2</sub>O <code>code</code></p>
       <t-math-expression expression="E = mc^2 + \frac{a}{b} \cdot \alpha"></t-math-expression>
     </t-card>
   </t-section>
@@ -80,7 +80,7 @@
       <t-avatar name="Ada Lovelace"></t-avatar><t-avatar-group people='[{"name":"Ann"},{"name":"Bo Li"},{"name":"Cy"},{"name":"Dee"},{"name":"Eve"},{"name":"Fay"}]'></t-avatar-group>
       <t-trend value="0.034" format="+percent:1"></t-trend><t-trend value="-12.5"></t-trend>
       <t-rating value="3.5" show-value></t-rating>
-      <t-link text="A link" url="https://tradera.app"></t-link>
+      <t-link text="A link" url="https://aseman.app"></t-link>
     </t-wrap>
   </t-section>
 
@@ -138,7 +138,7 @@
       <t-card><t-timeline data='[{"title":"Order placed","time":"2026-10-18T09:12:00Z","status":"good"},{"title":"Partially filled","description":"0.4 of 1 BTC","time":"2026-10-18T09:40:00Z","status":"warning"},{"title":"Cancelled","time":"2026-10-18T10:02:00Z","status":"critical","icon":"close"}]'></t-timeline></t-card>
       <t-card><t-tree-view expanded="1" data='{"label":"Portfolio","children":[{"label":"Crypto","value":69500,"children":[{"label":"BTC","value":42100},{"label":"ETH","value":18300}]},{"label":"Cash","value":30500}]}'></t-tree-view></t-card>
       <t-card><t-json-view value='{"symbol":"BTC","price":64012.5,"live":true,"tags":["a","b"],"meta":null}'></t-json-view></t-card>
-      <t-card><t-code-block language="js" line-numbers code="const r = await Tradera.call('Weather', 'forecast', {city: 'Oslo'});&#10;// returns the microtool's value"></t-code-block></t-card>
+      <t-card><t-code-block language="js" line-numbers code="const r = await Aseman.call('Weather', 'forecast', {city: 'Oslo'});&#10;// returns the microtool's value"></t-code-block></t-card>
     </t-grid>
   </t-section>
 
@@ -227,7 +227,7 @@
 
   <t-section title="A2UI surface" icon="auto_awesome" subtitle="The same JSON the app renders">
     <t-surface>
-      <script type="application/json">{"components":[{"id":"root","component":"Column","children":["h","g","b"]},{"id":"h","component":"Text","variant":"h5","text":"Hello ${/name}"},{"id":"g","component":"Grid","minColumnWidth":150,"children":{"componentId":"s","path":"/stats"}},{"id":"s","component":"Stat","label":{"path":"label"},"value":{"path":"value"}},{"id":"b","component":"Button","variant":"primary","child":"bt","action":{"functionCall":{"call":"increment","args":{"path":"/stats/0/value"}}}},{"id":"bt","component":"Text","text":"Increment"}],"data":{"name":"Tradera","stats":[{"label":"Clicks","value":1},{"label":"Users","value":42}]}}</script>
+      <script type="application/json">{"components":[{"id":"root","component":"Column","children":["h","g","b"]},{"id":"h","component":"Text","variant":"h5","text":"Hello ${/name}"},{"id":"g","component":"Grid","minColumnWidth":150,"children":{"componentId":"s","path":"/stats"}},{"id":"s","component":"Stat","label":{"path":"label"},"value":{"path":"value"}},{"id":"b","component":"Button","variant":"primary","child":"bt","action":{"functionCall":{"call":"increment","args":{"path":"/stats/0/value"}}}},{"id":"bt","component":"Text","text":"Increment"}],"data":{"name":"Aseman","stats":[{"label":"Clicks","value":1},{"label":"Users","value":42}]}}</script>
     </t-surface>
   </t-section>
 
@@ -244,8 +244,8 @@
 <script>
   const sw = document.getElementById('swatches');
   for (const n of ['primary', 'primary-container', 'secondary-container', 'tertiary', 'error', 'surface', 'surface-container-high', 'outline-variant', 'series-1', 'series-2', 'series-3', 'series-4', 'series-5', 'series-6', 'series-7', 'series-8', 'good', 'warning', 'serious', 'critical'])
-    sw.appendChild(Tradera.h('span', { class: 'g-swatch' }, Tradera.h('i', { style: { background: `var(--t-${n})` } }), n));
-  document.getElementById('theme').addEventListener('t-press', () => Tradera.theme.toggle());
+    sw.appendChild(Aseman.h('span', { class: 'g-swatch' }, Aseman.h('i', { style: { background: `var(--t-${n})` } }), n));
+  document.getElementById('theme').addEventListener('t-press', () => Aseman.theme.toggle());
 </script>
 </body>
 </html>

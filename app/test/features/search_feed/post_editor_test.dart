@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/features/search_feed/presentation/post_editor.dart';
-import 'package:tradera/src/features/search_feed/presentation/rich_post_content.dart';
+import 'package:aseman/src/features/search_feed/presentation/post_editor.dart';
+import 'package:aseman/src/features/search_feed/presentation/rich_post_content.dart';
 
 void main() {
   testWidgets('rich post content renders formatted markdown and info cards',

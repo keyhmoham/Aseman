@@ -3,7 +3,7 @@ package modal
 import (
 	"testing"
 
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 func TestSandboxReservesLittleAndMayUseFarMoreThanItIsSoldAt(t *testing.T) {

@@ -3,8 +3,8 @@ package admin
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 )
 
 type pluginsBuildAction struct{ s *Service }

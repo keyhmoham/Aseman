@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
-// Agents improve their own playbook as they work (runtime/tradera_agents/
+// Agents improve their own playbook as they work (runtime/aseman_agents/
 // improve: GEPA, run between turns). That work belongs to no turn, so it is
 // not on a turn's token: the runtime calls the learn endpoints with its own
 // secret, naming the project and the agent. The agent's own model answers (the
@@ -23,9 +23,9 @@ import (
 // no learning until it can.
 const (
 	// LearnSpaceHeader names the project the learning is for.
-	LearnSpaceHeader = "X-Tradera-Space"
+	LearnSpaceHeader = "X-Aseman-Space"
 	// LearnAgentHeader names the agent (its VM id) that is learning.
-	LearnAgentHeader = "X-Tradera-Agent"
+	LearnAgentHeader = "X-Aseman-Agent"
 )
 
 func headerValue(h map[string]string, name string) string {
@@ -40,7 +40,7 @@ func headerValue(h map[string]string, name string) string {
 // learnCaller lets in only the runtime, for a project that can pay; it returns
 // the project, or the response refusing the call.
 func (a *Adapter) learnCaller(req *network.Request) (identity.ID, *network.Response) {
-	if a.secret == "" || subtle.ConstantTimeCompare([]byte(headerValue(req.Header, "X-Tradera-Runtime")), []byte(a.secret)) != 1 {
+	if a.secret == "" || subtle.ConstantTimeCompare([]byte(headerValue(req.Header, "X-Aseman-Runtime")), []byte(a.secret)) != 1 {
 		return identity.ID{}, openAIError(http.StatusUnauthorized, "invalid runtime secret")
 	}
 	space, err := identity.Parse(headerValue(req.Header, LearnSpaceHeader))
@@ -57,7 +57,7 @@ func (a *Adapter) learnCaller(req *network.Request) (identity.ID, *network.Respo
 // with the agent's own model.
 //
 //	POST {gateway}/learn/chat/completions
-//	     X-Tradera-Runtime: the runtime secret; X-Tradera-Space, X-Tradera-Agent
+//	     X-Aseman-Runtime: the runtime secret; X-Aseman-Space, X-Aseman-Agent
 func (a *Adapter) serveLearn(ctx context.Context, req *network.Request) (*network.Response, error) {
 	space, refused := a.learnCaller(req)
 	if refused != nil {

@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/data/repositories/room_repository.dart';
-import 'package:tradera/src/data/services/mock_tradera_service.dart';
-import 'package:tradera/src/domain/models/message.dart';
+import 'package:aseman/src/data/repositories/room_repository.dart';
+import 'package:aseman/src/data/services/mock_aseman_service.dart';
+import 'package:aseman/src/domain/models/message.dart';
 
 void main() {
   test('keeps messages sent during the current session', () async {
-    final repository = RoomRepository(MockTraderaService());
+    final repository = RoomRepository(MockAsemanService());
     await repository.getMessages('crypto-alpha');
     repository.send('crypto-alpha',
         const Message(author: 'Alex', body: 'Hello', sentAt: 'now'));

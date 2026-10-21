@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tradera/src/app.dart';
-import 'package:tradera/src/app_dependencies.dart';
-import 'package:tradera/src/data/models/bot.dart';
-import 'package:tradera/src/features/home/presentation/widgets/space_facility_tabs.dart';
+import 'package:aseman/src/app.dart';
+import 'package:aseman/src/app_dependencies.dart';
+import 'package:aseman/src/data/models/bot.dart';
+import 'package:aseman/src/features/home/presentation/widgets/space_facility_tabs.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
 /// Answers the facility tabs' actions and records what they sent.
-class _Service extends FakeTraderaService {
+class _Service extends FakeAsemanService {
   final calls = <String>[];
   final written = <String, String>{};
   final operations = <String>[];
@@ -123,7 +123,7 @@ void main() {
       tester,
       SpaceComputerTab(
         dependencies: AppDependencies.withService(service),
-        spaceId: FakeTraderaService.atlasId,
+        spaceId: FakeAsemanService.atlasId,
       ),
     );
     // Asleep: a dark screen, and the buttons to wake, replace and open it.
@@ -160,7 +160,7 @@ void main() {
       tester,
       SpaceComputerTab(
         dependencies: AppDependencies.withService(service),
-        spaceId: FakeTraderaService.atlasId,
+        spaceId: FakeAsemanService.atlasId,
       ),
     );
     expect(find.text('Wake up'), findsOneWidget);
@@ -183,7 +183,7 @@ void main() {
       tester,
       SpaceComputerTab(
         dependencies: AppDependencies.withService(service),
-        spaceId: FakeTraderaService.atlasId,
+        spaceId: FakeAsemanService.atlasId,
       ),
     );
     await tester.tap(find.text('Open'));
@@ -213,9 +213,9 @@ void main() {
       tester,
       SpaceMemoryTab(
         dependencies: AppDependencies.withService(service),
-        spaceId: FakeTraderaService.atlasId,
+        spaceId: FakeAsemanService.atlasId,
         agents: await service
-            .fetchSpaceBots(FakeTraderaService.atlasId)
+            .fetchSpaceBots(FakeAsemanService.atlasId)
             .then((b) => b.where((x) => x.isAgent).toList()),
       ),
     );
@@ -234,7 +234,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('SignalBot').last);
     await tester.pumpAndSettle();
-    expect(service.calls.last, 'read .tradera/agents/agent-1/AGENTS.md');
+    expect(service.calls.last, 'read .aseman/agents/agent-1/AGENTS.md');
     expect(find.text('# Own notes'), findsOneWidget);
   });
 
@@ -245,7 +245,7 @@ void main() {
       tester,
       SpacePreviewsTab(
         dependencies: AppDependencies.withService(_Service()..state = 'asleep'),
-        spaceId: FakeTraderaService.atlasId,
+        spaceId: FakeAsemanService.atlasId,
       ),
     );
     expect(find.text('Publish a port'), findsOneWidget);
@@ -261,7 +261,7 @@ void main() {
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({
-      'tradera.session':
+      'aseman.session':
           '{"account_id":"00000000000000010000000000000001","handle":"test",'
           '"token":"x","private_key":"","public_key":"",'
           '"home_space_id":"00000000000000010000000000000002"}',
@@ -269,10 +269,10 @@ void main() {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
     await tester.pumpWidget(
-      TraderaApp(dependencies: AppDependencies.withService(_Service())),
+      AsemanApp(dependencies: AppDependencies.withService(_Service())),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();

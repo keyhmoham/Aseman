@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/features/admin/presentation/admin_page_content.dart';
+import 'package:aseman/src/features/admin/presentation/admin_page_content.dart';
 
 Map<String, dynamic> _provider(
         String id, String name, String key, List<String> models) =>

@@ -1,4 +1,4 @@
-module github.com/tradera/tradera
+module github.com/aseman/aseman
 
 go 1.26
 

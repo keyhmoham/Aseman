@@ -2,15 +2,15 @@ package docker
 
 import (
 	"context"
-	"github.com/tradera/tradera/pkg/errs"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/pkg/errs"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/pkg/logger"
+	"github.com/aseman/aseman/pkg/logger"
 )
 
 func TestDaemonShutdownPreservesVMUntilExplicitDeletion(t *testing.T) {

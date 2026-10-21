@@ -13,13 +13,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/adapters/base"
-	"github.com/tradera/tradera/plugins/adapters/cfg"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/adapters/base"
+	"github.com/aseman/aseman/plugins/adapters/cfg"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 
 	modal "github.com/modal-labs/modal-client/go"
 	"google.golang.org/grpc"
@@ -479,7 +479,7 @@ func (a *Adapter) StopVM(ctx context.Context, id string) error {
 	// (and keeps its files) until it is replaced.
 	// /workspace is a link to the volume's mount under /__modal/volumes.
 	marker := strconv.FormatInt(time.Now().UnixNano(), 10)
-	out, err := a.exec(ctx, sb, `readlink -f /workspace | grep -q '^/__modal/volumes/' && mkdir -p /workspace/.tradera && echo `+marker+` > /workspace/.tradera/sync && sync`)
+	out, err := a.exec(ctx, sb, `readlink -f /workspace | grep -q '^/__modal/volumes/' && mkdir -p /workspace/.aseman && echo `+marker+` > /workspace/.aseman/sync && sync`)
 	if err != nil || !strings.HasPrefix(out, "exit=0") {
 		if err != nil {
 			return errs.Wrap(errs.CodeVMM, err, "prepare modal sandbox for stop")
@@ -684,7 +684,7 @@ func workspaceVolumeName(spec vmm.VMSpec) string {
 		}
 	}
 	if strings.HasPrefix(spec.Name, "sbx-") {
-		return "tradera-" + spec.Name
+		return "aseman-" + spec.Name
 	}
 	return ""
 }
@@ -823,7 +823,7 @@ func (a *Adapter) waitForCommit(ctx context.Context, id, marker string) {
 			st.slept = true // reads below go to the volume API
 		}
 		a.mu.Unlock()
-		if got, err := a.ReadWorkspace(ctx, id, ".tradera/sync"); err == nil && strings.TrimSpace(string(got)) == marker {
+		if got, err := a.ReadWorkspace(ctx, id, ".aseman/sync"); err == nil && strings.TrimSpace(string(got)) == marker {
 			return
 		}
 		select {

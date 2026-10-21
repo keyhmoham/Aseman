@@ -1,4 +1,4 @@
-/// A workspace (space) as returned by the Tradera spaces namespace.
+/// A workspace (space) as returned by the Aseman spaces namespace.
 import 'dart:convert';
 
 import 'uploaded_file.dart';
@@ -115,7 +115,7 @@ class RoomMessage {
   final DateTime createdAt;
 
   /// "message" (normal conversation) or "log" (agentic-flow content rendered as
-  /// a collapsible section, e.g. tradera's plans/dispatches/tool outputs).
+  /// a collapsible section, e.g. aseman's plans/dispatches/tool outputs).
   final String kind;
 
   /// Explicitly mentioned member ids (users and agents) attached to the

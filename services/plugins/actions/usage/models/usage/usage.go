@@ -1,5 +1,5 @@
 // Package usage defines shared invocation attribution and metric values. Every metered request
-// (a direct ask, a room-chat mention, a tradera orchestration step) records a
+// (a direct ask, a room-chat mention, an aseman orchestration step) records a
 // Usage row attributed to the space, room, bot and request that consumed the
 // tokens, so spending can be rolled up per space, per room chat and per agent.
 package usage
@@ -7,11 +7,11 @@ package usage
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 // requestIDCtxKey carries the current request id in the context so nested agent
-// dispatches (e.g. tradera's team steps) share one correlation id across the
+// dispatches (e.g. aseman's team steps) share one correlation id across the
 // spaces and workflow services.
 type requestIDCtxKey struct{}
 
@@ -37,7 +37,7 @@ const (
 	KindMention  = "mention"  // agent triggered by a room chat mention
 	KindMessage  = "message"  // direct message to a bot
 	KindSandbox  = "sandbox"  // shared sandbox command execution
-	KindWorkflow = "workflow" // tradera orchestration (its own brain)
+	KindWorkflow = "workflow" // aseman orchestration (its own brain)
 )
 
 // UsageCtx attributes a metered request: where it happened (space/room), which

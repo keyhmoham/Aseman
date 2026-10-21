@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Navigation, overlays and conditional UI: Tabs, Modal (and Tradera.dialog /
+// Navigation, overlays and conditional UI: Tabs, Modal (and Aseman.dialog /
 // confirm), Expandable, Accordion, Carousel, Menu, Steps, Tooltip, Show.
 // ---------------------------------------------------------------------------
 
@@ -79,12 +79,12 @@ function dialog(opts = {}) {
     setTimeout(() => (box.querySelector('input, textarea, select, button.t-btn') || box).focus?.(), 50);
   });
 }
-Tradera.dialog = dialog;
-/** await Tradera.confirm('Delete this alert?', {confirm: 'Delete', destructive: true}) → true/false. */
-Tradera.confirm = async (message, o = {}) => (await dialog({ title: o.title ?? 'Are you sure?', content: message,
+Aseman.dialog = dialog;
+/** await Aseman.confirm('Delete this alert?', {confirm: 'Delete', destructive: true}) → true/false. */
+Aseman.confirm = async (message, o = {}) => (await dialog({ title: o.title ?? 'Are you sure?', content: message,
   actions: [{ label: o.cancel ?? 'Cancel', value: false }, { label: o.confirm ?? 'OK', value: true, variant: o.destructive ? 'destructive' : 'primary' }] })) === true;
-/** await Tradera.prompt('Name the watchlist', {value}) → the text, or null. */
-Tradera.prompt = async (message, o = {}) => {
+/** await Aseman.prompt('Name the watchlist', {value}) → the text, or null. */
+Aseman.prompt = async (message, o = {}) => {
   const input = h('input', { type: 'text', value: o.value ?? '', placeholder: o.placeholder ?? '' });
   const r = await dialog({ title: o.title ?? message, content: [o.title ? h('p', null, message) : null, input],
     actions: [{ label: 'Cancel', value: false }, { label: o.confirm ?? 'OK', value: true, variant: 'primary' }] });
@@ -240,7 +240,7 @@ function openMenu(anchor, items, owner) {
   menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
   return menu;
 }
-Tradera.menu = openMenu;
+Aseman.menu = openMenu;
 /** Menu {items: [{label, icon?, action, destructive?}], icon?, label?}: an overflow menu. */
 define('menu', class extends TElement {
   render() {
@@ -280,7 +280,7 @@ define('show', class extends TElement {
   render() {
     const raw = this._raw.when ?? this._raw.if ?? this._raw.condition;
     let on;
-    if (typeof raw === 'string' && raw.startsWith('/')) on = Tradera.data.get(joinPath(scopeOf(this), raw));
+    if (typeof raw === 'string' && raw.startsWith('/')) on = Aseman.data.get(joinPath(scopeOf(this), raw));
     else on = this.p('when') ?? this.p('if') ?? this.p('condition');
     on = Array.isArray(on) ? on.length > 0 : isMap(on) ? Object.keys(on).length > 0 : asBool(on, on != null && on !== '' && on !== 0);
     if (this.hasAttribute('not')) on = !on;

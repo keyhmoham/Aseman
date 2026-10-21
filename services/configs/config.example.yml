@@ -1,4 +1,4 @@
-# Tradera Node Configuration (Docker Compose stack)
+# Aseman Node Configuration (Docker Compose stack)
 #
 # This file defines node-level identity, authentication client IDs, and sandbox backends.
 # Default settings are used automatically if services/configs/config.yml is absent.
@@ -20,7 +20,7 @@ sandbox:
   # "docker" = one isolated Docker container per space on the host daemon (default)
   # "modal"  = one remote Modal sandbox container per space
   backend: "docker"
-  docker_network: "tradera_default"
+  docker_network: "aseman_default"
 
 # Modal credentials (required only when sandbox.backend is set to "modal"):
 # modal:

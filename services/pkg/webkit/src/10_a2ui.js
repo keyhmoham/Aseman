@@ -2,7 +2,7 @@
 // A2UI surfaces and Elpian nodes on the web, the same JSON the app renders:
 //   <t-surface>: A2UI v0.9 messages (createSurface / updateComponents /
 //     updateDataModel), or {components, data}; event actions reach
-//     Tradera.on handlers.
+//     Aseman.on handlers.
 //   <t-tool-frontend tool microtool args>: a tool's own frontend: its
 //     generative surface with its actions run by the tool (frontend_action),
 //     or, for a tool without one, its result in an automatic view.
@@ -12,7 +12,7 @@
 //     into the data model, again when its bound args change.
 // ---------------------------------------------------------------------------
 
-/** Component types → elements (A2UI basic + Tradera catalog). */
+/** Component types → elements (A2UI basic + Aseman catalog). */
 const A2UI_TAGS = {
   Text: 't-text', Image: 't-image', Icon: 't-icon', Video: 't-video', AudioPlayer: 't-audio-player', Row: 't-row', Column: 't-column',
   List: 't-list', Card: 't-card', Tabs: 't-tabs', Modal: 't-modal', Divider: 't-divider', Button: 't-button', TextField: 't-text-field',
@@ -79,7 +79,7 @@ class Surface {
     if (dm) {
       const path = dm.path && dm.path !== '/' ? this.root + (dm.path.startsWith('/') ? dm.path : '/' + dm.path) : this.root;
       const value = dm.value !== undefined ? dm.value : dm.contents;
-      if (path === this.root) Tradera.data.set(this.root, value ?? {}); else Tradera.data.set(path, value);
+      if (path === this.root) Aseman.data.set(this.root, value ?? {}); else Aseman.data.set(path, value);
     }
     if (m.beginRendering?.root) this.rootId = m.beginRendering.root;
     if (m.deleteSurface) this.host.replaceChildren();
@@ -90,8 +90,8 @@ class Surface {
     if (isMap(c.component)) { const [type, props] = Object.entries(c.component)[0] || []; c = { id: c.id, component: type, ...asMap(props), weight: c.weight }; }
     this.components[c.id] = c;
   }
-  setData(value) { Tradera.data.set(this.root, value ?? {}); }
-  get data() { return Tradera.data.get(this.root); }
+  setData(value) { Aseman.data.set(this.root, value ?? {}); }
+  get data() { return Aseman.data.get(this.root); }
   render(rootId) {
     const id = rootId || this.rootId || (this.components.root ? 'root' : Object.keys(this.components)[0]);
     this.host.replaceChildren(id ? this.build(id) : '');
@@ -173,7 +173,7 @@ define('surface', class extends TElement {
   get data() { return this._surface?.data; }
   set data(v) { this._surface ||= new Surface(this); this._surface.setData(v); }
 });
-Tradera.Surface = Surface;
+Aseman.Surface = Surface;
 
 // ---- automatic views -------------------------------------------------------------------
 
@@ -205,7 +205,7 @@ function autoView(value, title) {
   if (typeof value === 'number') return el('stat', { label: title ?? 'Value', value });
   return el('markdown', { text: asText(value) });
 }
-Tradera.autoView = autoView;
+Aseman.autoView = autoView;
 /** AutoView {value}: a value in the view that fits it. */
 component('auto-view', (e, p) => e.replaceChildren(autoView(p.value ?? p.data, p.title)));
 
@@ -230,7 +230,7 @@ define('tool-frontend', class extends TElement {
   }
   async _load(p) {
     let fe = null;
-    try { fe = await Tradera.frontend(p.tool, { microtool: p.microtool, args: p.args, request: p.request }); } catch (e) { if (!p.microtool) throw e; }
+    try { fe = await Aseman.frontend(p.tool, { microtool: p.microtool, args: p.args, request: p.request }); } catch (e) { if (!p.microtool) throw e; }
     const mode = fe?.mode;
     if (mode === 'generative' && asList(fe.messages).length) {
       const surface = document.createElement('t-surface');
@@ -241,7 +241,7 @@ define('tool-frontend', class extends TElement {
         ev.stopPropagation();
         const { name, context } = ev.detail;
         busy(ev.target, async () => {
-          const out = await Tradera.frontendAction(p.tool, name, { context, data: surface.data ?? {}, microtool: p.microtool, args: p.args, template: fe.template });
+          const out = await Aseman.frontendAction(p.tool, name, { context, data: surface.data ?? {}, microtool: p.microtool, args: p.args, template: fe.template });
           if (out && out.data) surface.data = out.data;
           this.emit('t-frontend-action', { name, context, data: out?.data });
         });
@@ -250,12 +250,12 @@ define('tool-frontend', class extends TElement {
       return;
     }
     if (p.microtool) {
-      const value = await Tradera.call(p.tool, p.microtool, p.args || {});
+      const value = await Aseman.call(p.tool, p.microtool, p.args || {});
       this.replaceChildren(autoView(value, p.title));
       return;
     }
     const open = el('button', { text: 'Open on the desk', icon: 'open_in_new', variant: 'tonal' });
-    open.addEventListener('t-press', () => busy(open, () => Tradera.show(p.tool, { microtool: p.microtool, args: p.args })));
+    open.addEventListener('t-press', () => busy(open, () => Aseman.show(p.tool, { microtool: p.microtool, args: p.args })));
     this.replaceChildren(el('empty-state', { icon: 'apps', title: asText(p.tool), text: 'This tool has its own app, which opens on the desk.' }, open));
   }
 });
@@ -300,7 +300,7 @@ function elpian(node, surface) {
   if (isMap(style) && !(e instanceof TElement)) applyStyle(e, style);
   if (typeof style === 'string') e.style.cssText = style;
   if (node.key) e.dataset.key = node.key;
-  // Events: an action (A2UI or Tradera call), or a name reported as a t-elpian event.
+  // Events: an action (A2UI or Aseman call), or a name reported as a t-elpian event.
   for (const [ev, handler] of Object.entries(asMap(node.events))) {
     const domEv = { tap: 'click', onTap: 'click', onClick: 'click', onPressed: 'click', onChanged: 'change', onChange: 'change', onSubmit: 'submit', onInput: 'input' }[ev] || ev.replace(/^on/, '').toLowerCase();
     e.addEventListener(domEv, (x) => {
@@ -314,7 +314,7 @@ function elpian(node, surface) {
   if (node.child) e.appendChild(elpian(node.child, surface));
   return e;
 }
-Tradera.elpian = elpian;
+Aseman.elpian = elpian;
 /** Elpian {node}: an Elpian node tree (inside a surface, {"slot": id} places a component). */
 component('elpian', (e, p) => {
   const key = JSON.stringify(e._raw.node);
@@ -352,15 +352,15 @@ define('data', class extends TElement {
     const [tool, microtool] = splitCall(this.getAttribute('call') ?? this.p('call'));
     const into = joinPath(scopeOf(this), this.getAttribute('into') ?? this.p('into'));
     const seq = (this._seq = (this._seq || 0) + 1);
-    Tradera.data.set(into + '__loading', true);
+    Aseman.data.set(into + '__loading', true);
     try {
-      const v = await Tradera.call(tool, microtool, args);
+      const v = await Aseman.call(tool, microtool, args);
       if (seq !== this._seq) return;
-      Tradera.data.batch(() => { Tradera.data.set(into, v); Tradera.data.set(into + '__error', null); Tradera.data.set(into + '__loading', false); });
+      Aseman.data.batch(() => { Aseman.data.set(into, v); Aseman.data.set(into + '__error', null); Aseman.data.set(into + '__loading', false); });
       this.emit('t-result', { tool, microtool, args, result: v });
     } catch (e) {
       if (seq !== this._seq) return;
-      Tradera.data.batch(() => { Tradera.data.set(into + '__error', e.message); Tradera.data.set(into + '__loading', false); });
+      Aseman.data.batch(() => { Aseman.data.set(into + '__error', e.message); Aseman.data.set(into + '__loading', false); });
       this.emit('t-error', { error: e });
       if (!this.hasAttribute('quiet')) toast(e.message, { status: 'critical' });
     }

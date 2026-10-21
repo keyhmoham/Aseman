@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tradera/src/app.dart';
-import 'package:tradera/src/app_dependencies.dart';
-import 'package:tradera/src/data/models/bot.dart';
-import 'package:tradera/src/data/models/space.dart';
-import 'package:tradera/src/features/messenger/presentation/messenger_panel.dart';
+import 'package:aseman/src/app.dart';
+import 'package:aseman/src/app_dependencies.dart';
+import 'package:aseman/src/data/models/bot.dart';
+import 'package:aseman/src/data/models/space.dart';
+import 'package:aseman/src/features/messenger/presentation/messenger_panel.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
 /// Records what the messenger sends, and installs the direct chat's agent.
-class _MessengerService extends FakeTraderaService {
+class _MessengerService extends FakeAsemanService {
   final sent =
       <({String space, String body, List<String> mentions, String replyTo})>[];
 
   @override
   Future<List<Bot>> fetchSpaceBots(String spaceId) async =>
-      spaceId == FakeTraderaService.agentDirectId
+      spaceId == FakeAsemanService.agentDirectId
           ? const <Bot>[
               Bot(
                   id: 'bot-alpha',
@@ -50,7 +50,7 @@ void main() {
 
   Future<_MessengerService> openMessenger(WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({
-      'tradera.session':
+      'aseman.session':
           '{"account_id":"00000000000000010000000000000001","handle":"test",'
               '"token":"x","private_key":"","public_key":"",'
               '"home_space_id":"00000000000000010000000000000002"}',
@@ -60,7 +60,7 @@ void main() {
     addTearDown(tester.view.reset);
     final service = _MessengerService();
     await tester.pumpWidget(
-        TraderaApp(dependencies: AppDependencies.withService(service)));
+        AsemanApp(dependencies: AppDependencies.withService(service)));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(CircleAvatar).first);
     await tester.pumpAndSettle();
@@ -123,21 +123,21 @@ void main() {
     await tester.tap(find.byTooltip('Send'));
     await tester.pumpAndSettle();
     expect(service.sent, hasLength(1));
-    expect(service.sent.single.space, FakeTraderaService.agentDirectId);
+    expect(service.sent.single.space, FakeAsemanService.agentDirectId);
     expect(service.sent.single.mentions, ['bot-alpha']);
     // The read cursor follows the open chat.
-    expect(service.seen, contains(FakeTraderaService.agentDirectId));
+    expect(service.seen, contains(FakeAsemanService.agentDirectId));
   });
 
   const me = '00000000000000010000000000000001';
   const maya = '00000000000000010000000000000042';
-  const mayaRoom = '${FakeTraderaService.directId}/d1';
+  const mayaRoom = '${FakeAsemanService.directId}/d1';
 
   RoomMessage msg(String id, String sender, String body, int minute,
           {String replyTo = '', DateTime? editedAt}) =>
       RoomMessage(
           id: id,
-          spaceId: FakeTraderaService.directId,
+          spaceId: FakeAsemanService.directId,
           roomId: 'd1',
           senderId: sender,
           body: body,
@@ -159,7 +159,7 @@ void main() {
       msg('m3', me, 'Bring the charts', 3,
           editedAt: DateTime(2026, 3, 4, 9, 4)),
     ];
-    service.chatState[FakeTraderaService.directId] = RoomChatPage(
+    service.chatState[FakeAsemanService.directId] = RoomChatPage(
         typing: const ['Maya Chen'], peerSeenAt: DateTime(2026, 3, 4, 9, 2));
     await openMaya(tester);
     // The reply quotes what it answers; the edit says so.
@@ -241,7 +241,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Block'));
     await tester.pumpAndSettle();
-    expect(service.chatCalls, contains('block:${FakeTraderaService.directId}'));
+    expect(service.chatCalls, contains('block:${FakeAsemanService.directId}'));
     expect(find.textContaining('You blocked this chat'), findsOneWidget);
     expect(find.byTooltip('Send'), findsNothing);
 

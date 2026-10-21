@@ -18,11 +18,11 @@ function tools() {
 var calls = 0;
 function greet(args) {
   calls++;
-  var ctx = askHost('tradera.context', null);
+  var ctx = askHost('aseman.context', null);
   return { text: 'hello ' + args.name, actor: ctx.actor, space: ctx.space, calls: calls };
 }
 function announce(args) {
-  return askHost('tradera.send', { body: 'news: ' + args.text });
+  return askHost('aseman.send', { body: 'news: ' + args.text });
 }
 async function later(args) { return { doubled: args.n * 2 }; }
 function fail() { throw new Error('nope'); }
@@ -34,11 +34,11 @@ List tools() => [
   {'name': 'announce', 'description': 'Posts into the room'},
 ];
 Map greet(Map args) {
-  var ctx = askHost('tradera.context', null);
+  var ctx = askHost('aseman.context', null);
   return {'text': 'hello ' + args['name'], 'actor': ctx['actor'], 'space': ctx['space']};
 }
 Map announce(Map args) {
-  return askHost('tradera.send', {'body': 'news: ' + args['text']});
+  return askHost('aseman.send', {'body': 'news: ' + args['text']});
 }
 `;
 
@@ -71,8 +71,8 @@ async function serve(handler) {
 }
 
 const SCOPE = {
-  'x-tradera-token': 'secret', 'x-tradera-tool': 'b1', 'x-tradera-actor': 'alice',
-  'x-tradera-space': 'S', 'x-tradera-room': 'R', 'x-tradera-scope': 'scope-token',
+  'x-aseman-token': 'secret', 'x-aseman-tool': 'b1', 'x-aseman-actor': 'alice',
+  'x-aseman-space': 'S', 'x-aseman-room': 'R', 'x-aseman-scope': 'scope-token',
 };
 
 for (const [label, program, available] of [
@@ -86,9 +86,9 @@ for (const [label, program, available] of [
     const node = fakeNode();
     const { server, rpc } = await serve(backendHandler({ engine, tools, token: 'secret', node }));
     try {
-      assert.equal((await rpc('tools/list', {}, { 'x-tradera-token': 'wrong' })).status, 401, 'only the node may call');
+      assert.equal((await rpc('tools/list', {}, { 'x-aseman-token': 'wrong' })).status, 401, 'only the node may call');
       const init = await rpc('initialize', {}, SCOPE);
-      assert.equal(init.body.result.serverInfo.name, 'tradera-tool-runtime');
+      assert.equal(init.body.result.serverInfo.name, 'aseman-tool-runtime');
       const listed = await rpc('tools/list', {}, SCOPE);
       assert.deepEqual(listed.body.result.tools.map((t) => t.name).slice(0, 2), ['greet', 'announce']);
 
@@ -116,7 +116,7 @@ for (const [label, program, available] of [
 
 test('quickjs: async microtools, errors and warm module state', async () => {
   const engine = await createEngine({ engine: 'quickjs', source: QUICKJS });
-  const host = async (api) => (api === 'tradera.context' ? { actor: 'a', space: 's' } : null);
+  const host = async (api) => (api === 'aseman.context' ? { actor: 'a', space: 's' } : null);
   assert.deepEqual(await engine.call('later', { n: 21 }, host), { doubled: 42 });
   await assert.rejects(engine.call('fail', {}, host), /nope/);
   const first = await engine.call('greet', { name: 'x' }, host);

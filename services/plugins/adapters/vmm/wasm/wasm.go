@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/adapters/base"
-	"github.com/tradera/tradera/plugins/adapters/cfg"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/adapters/base"
+	"github.com/aseman/aseman/plugins/adapters/cfg"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 
 	"github.com/tetratelabs/wazero"
 	wazeroapi "github.com/tetratelabs/wazero/api"
@@ -159,7 +159,7 @@ func (a *Adapter) CreateVM(ctx context.Context, spec vmm.VMSpec) (vmm.VM, error)
 	}
 	id := spec.Name
 	cfg := wazero.NewModuleConfig().
-		WithName("tradera-" + id).
+		WithName("aseman-" + id).
 		WithArgs(spec.Args...).
 		WithStdout(os.Stdout).WithStderr(os.Stderr).WithStdin(os.Stdin)
 	for k, v := range spec.Environment {

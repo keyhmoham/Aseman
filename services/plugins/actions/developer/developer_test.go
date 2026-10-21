@@ -12,19 +12,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/kernel"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/finance/models/wallet"
-	"github.com/tradera/tradera/plugins/actions/llm/dto"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/adapters/database/memory"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	nethttp "github.com/tradera/tradera/plugins/adapters/network/http"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	dbmodel "github.com/tradera/tradera/plugins/testutil"
+	"github.com/aseman/aseman/internal/kernel"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/finance/models/wallet"
+	"github.com/aseman/aseman/plugins/actions/llm/dto"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/adapters/database/memory"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	nethttp "github.com/aseman/aseman/plugins/adapters/network/http"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	dbmodel "github.com/aseman/aseman/plugins/testutil"
 )
 
 // fakeFinance keeps balances in memory and records every charge.
@@ -620,7 +620,7 @@ func TestStreamingPassesEventsOnAndBillsAtTheEnd(t *testing.T) {
 	c := chatCall(p, "gemini-3.8-flash")
 	c.Stream = true
 	res := f.s.Execute(f.ctx, c)
-	if res.Status != 200 || res.Stream == nil || res.Header["Content-Type"] != "text/event-stream" || res.Header["X-Tradera-Model"] != "google/gemini-3.8-flash" || res.Header["X-Tradera-Provider"] != "" {
+	if res.Status != 200 || res.Stream == nil || res.Header["Content-Type"] != "text/event-stream" || res.Header["X-Aseman-Model"] != "google/gemini-3.8-flash" || res.Header["X-Aseman-Provider"] != "" {
 		t.Fatalf("%+v", res)
 	}
 	if opts, _ := f.http.bodies[0]["stream_options"].(map[string]any); opts["include_usage"] != true {
@@ -848,7 +848,7 @@ func TestTheRealRouterServesTheAPIOnTheDeveloperHost(t *testing.T) {
 		t.Fatalf("video status: %d %s", r.StatusCode, body)
 	}
 	r, body := do("POST", "/v1/chat/completions", `{"model":"gemini-3.8-flash","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
-	if r.StatusCode != 200 || r.Header.Get("X-Tradera-Model") != "google/gemini-3.8-flash" || r.Header.Get("X-Tradera-Provider") != "" {
+	if r.StatusCode != 200 || r.Header.Get("X-Aseman-Model") != "google/gemini-3.8-flash" || r.Header.Get("X-Aseman-Provider") != "" {
 		t.Fatalf("stream: %d %v %s", r.StatusCode, r.Header, body)
 	}
 	if r2, _ := do("POST", "/v1/chat/completions", `{"model":"gemini-3.8-flash","messages":[{"role":"user","content":"hi"}]}`); r2.StatusCode != 200 || r2.Header.Get("X-RateLimit-Limit") == "" {

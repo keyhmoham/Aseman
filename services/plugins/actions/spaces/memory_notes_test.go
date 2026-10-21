@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/openviking"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/openviking"
 )
 
 // fakeViking answers OpenViking's read and write like the server, keeping
@@ -96,7 +96,7 @@ func TestTheMemoryScreenReadsTheAgentsNotesFromOpenViking(t *testing.T) {
 		t.Fatalf("read: %v", out)
 	}
 	// Each agent's notes: listed by folder, read as that agent.
-	out := call("person", `"operation":"list","path":".tradera/agents"`)
+	out := call("person", `"operation":"list","path":".aseman/agents"`)
 	items, _ := out["items"].([]any)
 	// Every agent of the space, the built-in lead included, by folder name.
 	names := []string{}
@@ -106,10 +106,10 @@ func TestTheMemoryScreenReadsTheAgentsNotesFromOpenViking(t *testing.T) {
 		}
 		names = append(names, it.(map[string]any)["name"].(string))
 	}
-	if len(names) != 2 || names[0] != "data-wiz" || names[1] != "tradera" {
+	if len(names) != 2 || names[0] != "aseman" || names[1] != "data-wiz" {
 		t.Fatalf("list: %v", names)
 	}
-	if out := call("person", `"operation":"read","path":".tradera/agents/data-wiz/AGENTS.md"`); out["content"] != "# Data Wiz notes\n- ann likes tabs\n" {
+	if out := call("person", `"operation":"read","path":".aseman/agents/data-wiz/AGENTS.md"`); out["content"] != "# Data Wiz notes\n- ann likes tabs\n" {
 		t.Fatalf("agent notes: %v", out)
 	}
 	if ov.asked[len(ov.asked)-1] != account+"|"+user+"|/api/v1/content/read" {

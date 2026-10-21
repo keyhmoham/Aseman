@@ -9,16 +9,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/llm/models"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/turn"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/actions/support/metasvc"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/llm/models"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/turn"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/metasvc"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // productActions are the operator dashboards (admin-only through adminGuard,
@@ -95,7 +95,7 @@ func (s *Service) botsList(ctx context.Context, req *api.ActionRequest) (*api.Ac
 		row := botRow{Bot: b}
 		row.Provider, row.Model = bot.AgentBackbone(b.SpecYML)
 		if b.IsBuiltinLead() {
-			row.Builtin, row.Handle = true, "tradera"
+			row.Builtin, row.Handle = true, "aseman"
 		}
 		if b.Kind == bot.KindAgent {
 			var cost bot.CostModel

@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/developer/models"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/developer/models"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
 // Video generation takes minutes, so it is a job: POST /videos/generations
@@ -209,7 +209,7 @@ func (s *Service) StartVideo(ctx context.Context, c Call, in videoInput) *Result
 		}
 		body, _ := json.Marshal(view)
 		res := &Result{Status: http.StatusAccepted, Body: body, Model: a.Model.ID, Provider: a.Endpoint.Provider, Cost: cost, Skipped: skipped,
-			Header: map[string]string{"Content-Type": "application/json", "X-Tradera-Model": a.Model.ID, "X-Tradera-Request-Id": reqID}}
+			Header: map[string]string{"Content-Type": "application/json", "X-Aseman-Model": a.Model.ID, "X-Aseman-Request-Id": reqID}}
 		logCall(res, a.Model.ID, a.Endpoint.Provider, cost, view, "")
 		return res
 	}
@@ -254,7 +254,7 @@ func (s *Service) apiVideoStatus(ctx context.Context, req *network.Request) (*ne
 		if err != nil {
 			return fromResult(errorBody(502, "api_error", "provider_error", err.Error(), reqID, nil))
 		}
-		return jsonResponse(http.StatusOK, view, map[string]string{"X-Tradera-Request-Id": reqID})
+		return jsonResponse(http.StatusOK, view, map[string]string{"X-Aseman-Request-Id": reqID})
 	}), nil
 }
 

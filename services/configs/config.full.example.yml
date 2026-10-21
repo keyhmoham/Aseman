@@ -1,9 +1,9 @@
-# tradera node configuration — FULL REFERENCE (explicit plugin wiring).
+# aseman node configuration — FULL REFERENCE (explicit plugin wiring).
 #
 # You normally do NOT need this: configs/config.yml only carries node identity,
 # Google sign-in and the Modal credentials, and the infrastructure is wired
-# automatically (docker compose / TRADERA_* environment variables). Use this
-# format only to wire adapters by hand; TRADERA_* variables still override the
+# automatically (docker compose / ASEMAN_* environment variables). Use this
+# format only to wire adapters by hand; ASEMAN_* variables still override the
 # matching settings (DSN, nomad URL, docker host, ...).
 node:
   # id is the 16-hex federation node id. Leave EMPTY on first run to have it
@@ -29,7 +29,7 @@ http:
 sandbox:                      # shared per-space sandbox backbone
   backend: "docker"           # "docker" = one docker container per space (default)
                               # "modal"  = one Modal remote sandbox per space
-  # docker_network: "tradera_default"  # network the node is on; sandbox containers
+  # docker_network: "aseman_default"  # network the node is on; sandbox containers
                               # join it so proxied ports are reachable from a
                               # containerized node (empty = docker bridge)
 
@@ -41,7 +41,7 @@ plugins:
     - name: postgres          # PostgreSQL database (persistent)
       enabled: true
       config:
-        dsn: "postgres://tradera:tradera@localhost:5432/tradera?sslmode=disable"
+        dsn: "postgres://aseman:aseman@localhost:5432/aseman?sslmode=disable"
     - name: local-cache       # in-process cache (default)
       enabled: true
     - name: local             # local filesystem storage (default)
@@ -65,9 +65,9 @@ plugins:
       enabled: true
       config:
         options:
-          node_url: "http://tradera:8080"        # the node as the runtime reaches it
-          image: "tradera/deepagents:v2"         # runtime image, run on Nomad
-          network: "tradera_default"             # docker network the runtime joins
+          node_url: "http://aseman:8080"        # the node as the runtime reaches it
+          image: "aseman/deepagents:v2"         # runtime image, run on Nomad
+          network: "aseman_default"             # docker network the runtime joins
           # runtime_url: "http://localhost:8000"   # or run the runtime yourself
           image_model: "gpt-image-1"   # model behind the agents' image_generate tool
     - name: modal             # shared per-space agent sandbox (Modal remote sandbox VM)
@@ -86,13 +86,13 @@ plugins:
     # - name: mysql
     #   enabled: true
     #   config:
-    #     dsn: "user:pass@tcp(localhost:3306)/tradera"
+    #     dsn: "user:pass@tcp(localhost:3306)/aseman"
     # - name: mongodb
     #   enabled: true
     #   config:
     #     dsn: "mongodb://localhost:27017"
     #     options:
-    #       database: "tradera"
+    #       database: "aseman"
     # - name: redis
     #   enabled: true
     #   config:
@@ -100,7 +100,7 @@ plugins:
     # - name: s3
     #   enabled: true
     #   config:
-    #     bucket: "tradera"
+    #     bucket: "aseman"
     #     region: "us-east-1"
     # - name: tcp
     #   enabled: true

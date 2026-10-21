@@ -8,19 +8,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/kernel"
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/jsonpatch"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
-	"github.com/tradera/tradera/plugins/adapters/base"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/kernel"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/jsonpatch"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/adapters/base"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // fakeAgentRuntime stands in for the deep agents runtime and records the turns
@@ -184,13 +184,13 @@ func TestRoomMessagesReachAgentsThroughSpaceMessaging(t *testing.T) {
 	if len(replies) != 1 || replies[0].BotID != helper.ID.String() || replies[0].Reply != "done by helper" || replies[0].MessageID == "" {
 		t.Fatalf("unexpected replies %+v", replies)
 	}
-	// Every other agent (the observer and the built-in tradera lead) records
+	// Every other agent (the observer and the built-in aseman lead) records
 	// the message for its next turn.
 	observedBy := map[string]bool{}
 	for _, o := range rt.observed {
 		observedBy[o.Agent.Name] = true
 	}
-	if len(rt.prompts) != 1 || !observedBy["observer"] || !observedBy["tradera"] || observedBy["helper"] {
+	if len(rt.prompts) != 1 || !observedBy["observer"] || !observedBy["aseman"] || observedBy["helper"] {
 		t.Fatalf("prompts=%d observed=%v", len(rt.prompts), observedBy)
 	}
 	turn := rt.prompts[0]
@@ -497,7 +497,7 @@ func TestAFailedTurnTellsPeopleOneSentenceAndKeepsTheDetailForAdmins(t *testing.
 		contains string
 		hides    string
 	}{
-		{errs.New(errs.CodeUnavailable, "the agent runtime did not become healthy at http://tradera-deepagents:8000"), "temporarily unavailable", "tradera-deepagents"},
+		{errs.New(errs.CodeUnavailable, "the agent runtime did not become healthy at http://aseman-deepagents:8000"), "temporarily unavailable", "aseman-deepagents"},
 		{errs.New(errs.CodeVMM, "OpenAIInvalidRequestError: Error code: 400 - thought_signature"), "ran into a problem", "thought_signature"},
 		{context.Canceled, "was stopped", "canceled"},
 		{&refusedError{errs.New(errs.CodeFinance, "insufficient balance to run metered execution")}, "insufficient balance", ""},

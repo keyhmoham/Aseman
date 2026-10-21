@@ -3,23 +3,23 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tradera/src/app.dart';
-import 'package:tradera/src/app_dependencies.dart';
-import 'package:tradera/src/core/network/session_store.dart';
-import 'package:tradera/src/core/settings/app_settings.dart';
-import 'package:tradera/src/core/theme/app_theme.dart';
-import 'package:tradera/src/data/models/space.dart';
-import 'package:tradera/src/features/account/presentation/account_panel.dart';
-import 'package:tradera/src/features/agents/presentation/agents_screen.dart';
-import 'package:tradera/src/features/home/presentation/space_settings_panel.dart';
-import 'package:tradera/src/features/home/presentation/widgets/routines_panel.dart';
-import 'package:tradera/src/features/home/presentation/widgets/space_facility_tabs.dart';
-import 'package:tradera/src/features/market/presentation/market_screen.dart';
-import 'package:tradera/src/features/messenger/presentation/chat_page.dart';
-import 'package:tradera/src/features/messenger/presentation/messenger_panel.dart';
-import 'package:tradera/src/features/settings/presentation/settings_screen.dart';
+import 'package:aseman/src/app.dart';
+import 'package:aseman/src/app_dependencies.dart';
+import 'package:aseman/src/core/network/session_store.dart';
+import 'package:aseman/src/core/settings/app_settings.dart';
+import 'package:aseman/src/core/theme/app_theme.dart';
+import 'package:aseman/src/data/models/space.dart';
+import 'package:aseman/src/features/account/presentation/account_panel.dart';
+import 'package:aseman/src/features/agents/presentation/agents_screen.dart';
+import 'package:aseman/src/features/home/presentation/space_settings_panel.dart';
+import 'package:aseman/src/features/home/presentation/widgets/routines_panel.dart';
+import 'package:aseman/src/features/home/presentation/widgets/space_facility_tabs.dart';
+import 'package:aseman/src/features/market/presentation/market_screen.dart';
+import 'package:aseman/src/features/messenger/presentation/chat_page.dart';
+import 'package:aseman/src/features/messenger/presentation/messenger_panel.dart';
+import 'package:aseman/src/features/settings/presentation/settings_screen.dart';
 
-import '../fake_tradera_service.dart';
+import '../fake_aseman_service.dart';
 import '../features/admin/admin_fixtures.dart' show loadFonts;
 
 /// Renders every main screen at phone and desktop sizes and fails on any
@@ -39,21 +39,21 @@ void main() {
   });
 
   AppDependencies deps() {
-    final d = AppDependencies.withService(FakeTraderaService());
+    final d = AppDependencies.withService(FakeAsemanService());
     d.sessionController.setSession(const Session(
       accountId: 'me',
       handle: 'test',
       token: 'x',
       privateKey: '',
       publicKey: '',
-      homeSpaceId: FakeTraderaService.homeId,
+      homeSpaceId: FakeAsemanService.homeId,
     ));
     return d;
   }
 
   Future<void> seedSession() async {
     SharedPreferences.setMockInitialValues({
-      'tradera.session':
+      'aseman.session':
           '{"account_id":"00000000000000010000000000000001","handle":"test",'
               '"token":"x","private_key":"","public_key":"",'
               '"home_space_id":"00000000000000010000000000000002"}',
@@ -104,9 +104,9 @@ void main() {
     'settings': (d) => SettingsScreen(dependencies: d),
     'messenger': (d) => MessengerPanel(dependencies: d),
     'chat_direct': (d) =>
-        ChatPage(dependencies: d, chat: FakeTraderaService().chats.first),
+        ChatPage(dependencies: d, chat: FakeAsemanService().chats.first),
     'chat_agent': (d) =>
-        ChatPage(dependencies: d, chat: FakeTraderaService().chats[1]),
+        ChatPage(dependencies: d, chat: FakeAsemanService().chats[1]),
     'market': (d) => MarketScreen(dependencies: d),
     'my_bots': (d) => AgentsScreen(dependencies: d),
     for (final area in AccountArea.values)
@@ -120,42 +120,42 @@ void main() {
                   height: 600,
                   child: switch (tab) {
                     'computer' => SpaceComputerTab(
-                        dependencies: d, spaceId: FakeTraderaService.atlasId),
+                        dependencies: d, spaceId: FakeAsemanService.atlasId),
                     'memory' => SpaceMemoryTab(
-                        dependencies: d, spaceId: FakeTraderaService.atlasId),
+                        dependencies: d, spaceId: FakeAsemanService.atlasId),
                     _ => SpacePreviewsTab(
-                        dependencies: d, spaceId: FakeTraderaService.atlasId),
+                        dependencies: d, spaceId: FakeAsemanService.atlasId),
                   }))),
     'space_settings': (d) => Scaffold(
         body: SpaceSettingsPanel(
             dependencies: d,
             space: const Workspace(
-                id: FakeTraderaService.atlasId,
+                id: FakeAsemanService.atlasId,
                 ownerId: 'me',
                 name: 'Atlas Capital'))),
     'routines': (d) => Scaffold(
         body: RoutinesPanel(
             dependencies: d,
-            spaceId: FakeTraderaService.atlasId,
+            spaceId: FakeAsemanService.atlasId,
             roomId: 'room-1',
             roomName: 'General')),
   };
 
   // A fake service whose Atlas "general" room already holds a conversation.
-  FakeTraderaService roomService() {
-    final service = FakeTraderaService();
+  FakeAsemanService roomService() {
+    final service = FakeAsemanService();
     final t = DateTime(2026, 3, 4, 9, 30);
     RoomMessage msg(String id, String sender, String body, int minute,
             {String kind = 'message'}) =>
         RoomMessage(
             id: id,
-            spaceId: FakeTraderaService.atlasId,
+            spaceId: FakeAsemanService.atlasId,
             roomId: 'a1',
             senderId: sender,
             body: body,
             kind: kind,
             createdAt: t.add(Duration(minutes: minute)));
-    service.roomMessages['${FakeTraderaService.atlasId}/a1'] = [
+    service.roomMessages['${FakeAsemanService.atlasId}/a1'] = [
       msg('m1', '00000000000000010000000000000042',
           'Morning team. BTC broke above the weekly range overnight.', 0),
       msg('m2', '00000000000000010000000000000001',
@@ -184,13 +184,13 @@ void main() {
     testWidgets('${size.key} · app flows', (tester) async {
       Future<void> app(String name,
           [Future<void> Function()? interact,
-          FakeTraderaService? service]) async {
+          FakeAsemanService? service]) async {
         await seedSession();
         final errors =
             await capture(tester, size.value, '${size.key}_$name', () async {
-          await tester.pumpWidget(TraderaApp(
+          await tester.pumpWidget(AsemanApp(
               dependencies: AppDependencies.withService(
-                  service ?? FakeTraderaService())));
+                  service ?? FakeAsemanService())));
           await tester.pumpAndSettle();
           await interact?.call();
           await tester.pumpAndSettle();
@@ -202,12 +202,12 @@ void main() {
       await app(
           'profile_menu', () => tester.tap(find.byType(CircleAvatar).first));
       await app('workspace', () async {
-        await tester.tap(find.text('TRADERA'));
+        await tester.tap(find.text('ASEMAN'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Atlas Capital').last);
       });
       await app('room', () async {
-        await tester.tap(find.text('TRADERA'));
+        await tester.tap(find.text('ASEMAN'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Atlas Capital').last);
         await tester.pumpAndSettle();
@@ -264,8 +264,8 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final errors =
           await capture(tester, size.value, '${size.key}_auth', () async {
-        await tester.pumpWidget(TraderaApp(
-            dependencies: AppDependencies.withService(FakeTraderaService())));
+        await tester.pumpWidget(AsemanApp(
+            dependencies: AppDependencies.withService(FakeAsemanService())));
         await tester.pumpAndSettle();
       });
       expect(errors, isEmpty, reason: 'auth');

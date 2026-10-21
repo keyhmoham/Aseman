@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../data/models/bot.dart';
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar.dart';
 import 'mcp_connect_dialog.dart';
@@ -12,7 +12,7 @@ import 'mcp_sign_in.dart';
 /// account asks them to sign in right after it is added. Returns whether
 /// something was added. Opens as a dialog on wide screens and a bottom sheet
 /// on phones, like the app's other forms.
-Future<bool> showAddApp(BuildContext context, TraderaService service,
+Future<bool> showAddApp(BuildContext context, AsemanService service,
         {required String spaceId}) async =>
     await showAppForm<bool>(
         context, AddAppDialog(service: service, spaceId: spaceId)) ==
@@ -46,7 +46,7 @@ String mcpAddFailure(Object error) {
 
 class AddAppDialog extends StatefulWidget {
   const AddAppDialog({super.key, required this.service, required this.spaceId});
-  final TraderaService service;
+  final AsemanService service;
   final String spaceId;
 
   @override

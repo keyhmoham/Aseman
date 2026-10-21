@@ -5,13 +5,13 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/auth/schema"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/adapters/database/memory"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/auth/schema"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/adapters/database/memory"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -38,7 +38,7 @@ func TestAdminPasswordUsesPersistedCredentials(t *testing.T) {
 		{"malformed hash", "", "fail", []account.Account{{Kind: account.KindUser, Status: account.StatusActive, Role: "admin", PasswordHash: "malformed"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("TRADERA_ADMIN_PASSWORD", tc.env)
+			t.Setenv("ASEMAN_ADMIN_PASSWORD", tc.env)
 			db := memory.New(logger.Global())
 			for _, m := range schema.Models() {
 				if err := db.RegisterModel(ctx, m); err != nil {

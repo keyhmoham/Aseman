@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/features/navigation/domain/app_destination.dart';
-import 'package:tradera/src/features/navigation/presentation/navigation_view_model.dart';
+import 'package:aseman/src/features/navigation/domain/app_destination.dart';
+import 'package:aseman/src/features/navigation/presentation/navigation_view_model.dart';
 
 void main() {
   test('changes the selected destination and notifies listeners', () {

@@ -1,10 +1,10 @@
 # Weather tool
 
-A ready-made Tradera tool, deployed with one script:
+A ready-made Aseman tool, deployed with one script:
 
 | | |
 |---|---|
-| **Backend** | managed, QuickJS — [`backend.js`](backend.js), run by the node as a Nomad service of the tool runtime image. Weather from [Open-Meteo](https://open-meteo.com) (free, no API key), reached through the runtime's `tradera.fetch`. |
+| **Backend** | managed, QuickJS — [`backend.js`](backend.js), run by the node as a Nomad service of the tool runtime image. Weather from [Open-Meteo](https://open-meteo.com) (free, no API key), reached through the runtime's `aseman.fetch`. |
 | **Frontend** | generative — A2UI generated from [`frontend-skill.md`](frontend-skill.md) the first time the tool is opened, kept in the component registry, filled with a fresh `weather_report` on every open: a search row, current conditions, detail tiles with a UV gauge, an hourly temperature chart, a 7-day chart and table, and a °C/°F switch. |
 
 Microtools (agents get them as tools too): `weather_report`, `current_weather`,
@@ -14,8 +14,8 @@ Microtools (agents get them as tools too): `weather_report`, `current_weather`,
 ## Deploy
 
 ```bash
-# sign in once (or set TRADERA_HANDLE / TRADERA_PASSWORD for the script)
-services/bin/tradera login --server http://localhost:8080 <handle> <password>
+# sign in once (or set ASEMAN_HANDLE / ASEMAN_PASSWORD for the script)
+services/bin/aseman login --server http://localhost:8080 <handle> <password>
 
 deploy/tools/weather/upsert.sh --server http://localhost:8080 --space <space-id> --city Lisbon
 ```
@@ -24,8 +24,8 @@ It **upserts**: a tool named `weather` you own is updated in place (new
 program and skill — the frontend is generated again on next use); one
 deployed some other way (not managed QuickJS) is replaced; otherwise it is
 created. `--space` also adds it to a space, `--dry-run` prints the calls
-without sending them. The tradera CLI is taken from `PATH`, else
-`services/bin/tradera`, else built with Go.
+without sending them. The aseman CLI is taken from `PATH`, else
+`services/bin/aseman`, else built with Go.
 
 Needs a node with the Nomad VMM, the tool runtime image and a chat model (for
 generating the frontend); the stack in `docker-compose.yml` has all three.

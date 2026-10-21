@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 func TestRoomActivityRegistry(t *testing.T) {
@@ -28,7 +28,7 @@ func TestRoomActivityRegistry(t *testing.T) {
 func TestRoomActivityTTLDropsStale(t *testing.T) {
 	s := &Service{activity: map[string]map[string]roomActivity{}}
 	room := idFromHex(t, "00000000000000020000000000000001")
-	s.activity[room.String()] = map[string]roomActivity{"tradera": {Agent: "tradera", Detail: "planning", At: time.Now().Add(-4 * time.Minute)}}
+	s.activity[room.String()] = map[string]roomActivity{"aseman": {Agent: "aseman", Detail: "planning", At: time.Now().Add(-4 * time.Minute)}}
 	if _, _, ok := s.RoomActivity(room); ok {
 		t.Fatal("expected stale activity to be dropped")
 	}
@@ -95,21 +95,21 @@ func TestRoomDraftIsFollowedLive(t *testing.T) {
 	s := &Service{activity: map[string]map[string]roomActivity{}}
 	room := idFromHex(t, "00000000000000010000000000000009")
 	seq, changed := s.liveWait()
-	s.SetRoomActivity(context.Background(), room, "tradera", "thinking…")
+	s.SetRoomActivity(context.Background(), room, "aseman", "thinking…")
 	select {
 	case <-changed:
 	default:
 		t.Fatal("a status change did not wake the room's followers")
 	}
-	s.SetRoomDraft(context.Background(), room, "tradera", "Light attracts")
-	s.SetRoomActivity(context.Background(), room, "tradera", "thinking…")
+	s.SetRoomDraft(context.Background(), room, "aseman", "Light attracts")
+	s.SetRoomActivity(context.Background(), room, "aseman", "thinking…")
 	if all := s.RoomActivities(room); len(all) != 1 || all[0].Draft != "Light attracts" {
 		t.Fatalf("draft lost: %+v", all)
 	}
 	if next, _ := s.liveWait(); next <= seq {
 		t.Fatalf("seq did not advance: %d -> %d", seq, next)
 	}
-	s.SetRoomActivity(context.Background(), room, "tradera", "")
+	s.SetRoomActivity(context.Background(), room, "aseman", "")
 	if all := s.RoomActivities(room); len(all) != 0 {
 		t.Fatalf("draft outlived the turn: %+v", all)
 	}

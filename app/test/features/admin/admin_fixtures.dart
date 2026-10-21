@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
-import 'package:tradera/src/data/models/llm_provider.dart';
+import 'package:aseman/src/data/models/llm_provider.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
 /// Backend responses shaped like the node's admin actions, with long values
 /// so layout problems surface in tests rather than in production.
@@ -98,7 +98,7 @@ Map<String, dynamic> adminFixtures() {
           'label': 'Admin password changed from the default value',
           'status': 'fail',
           'detail': 'The node still accepts the default admin password.',
-          'fix': 'Set TRADERA_ADMIN_PASSWORD and restart the node.'
+          'fix': 'Set ASEMAN_ADMIN_PASSWORD and restart the node.'
         },
         {
           'group': 'Payments',
@@ -158,14 +158,14 @@ Map<String, dynamic> adminFixtures() {
       'nodes': [
         {
           'id': 'node-a',
-          'url': 'https://node-a.tradera.example.com',
+          'url': 'https://node-a.aseman.example.com',
           'status': 'healthy',
           'is_central': true,
           'last_seen': now
         },
         {
           'id': 'node-b',
-          'url': 'https://node-b.tradera.example.com',
+          'url': 'https://node-b.aseman.example.com',
           'status': 'unreachable',
           'last_seen': now
         },
@@ -396,11 +396,11 @@ Map<String, dynamic> adminFixtures() {
       'volumes': [
         {
           'id': 'vol_0123456789abcdef',
-          'name': 'tradera-space-1',
+          'name': 'aseman-space-1',
           'project': {'id': 'space-1', 'name': 'Atlas Capital research desk'},
           'created_at': now,
         },
-        {'id': 'vol_orphan_0123', 'name': 'tradera-old', 'created_at': now},
+        {'id': 'vol_orphan_0123', 'name': 'aseman-old', 'created_at': now},
       ]
     },
     'settings.get': {
@@ -482,7 +482,7 @@ Map<String, dynamic> adminFixtures() {
 }
 
 /// Fake service answering every admin action from [fixtures].
-class AdminFakeService extends FakeTraderaService {
+class AdminFakeService extends FakeAsemanService {
   AdminFakeService(this.fixtures);
   final Map<String, dynamic> fixtures;
 

@@ -3,11 +3,11 @@
 // arrangement.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/features/desk/data/desk_api.dart';
-import 'package:tradera/src/features/desk/domain/desk_models.dart';
-import 'package:tradera/src/features/desk/presentation/compact_desk.dart';
-import 'package:tradera/src/features/desk/presentation/desk_controller.dart';
-import 'package:tradera/src/genui/genui.dart';
+import 'package:aseman/src/features/desk/data/desk_api.dart';
+import 'package:aseman/src/features/desk/domain/desk_models.dart';
+import 'package:aseman/src/features/desk/presentation/compact_desk.dart';
+import 'package:aseman/src/features/desk/presentation/desk_controller.dart';
+import 'package:aseman/src/genui/genui.dart';
 
 Map<String, dynamic> window(String id, String tool, int order,
         {String shape = '', String size = ''}) =>

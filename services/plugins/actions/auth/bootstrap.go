@@ -3,9 +3,9 @@ package auth
 import (
 	"context"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // Bootstrap creates the configured administrator using the namespace's normal registration path

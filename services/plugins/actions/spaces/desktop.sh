@@ -1,30 +1,30 @@
 #!/bin/bash
-# tradera-desktop: the project's shared desktop (Xvfb + openbox + x11vnc +
+# aseman-desktop: the project's shared desktop (Xvfb + openbox + x11vnc +
 # noVNC). People watch and drive it from Computer; agents drive it from their
 # shell with the subcommands below, so both work on the very same screen.
 #
-#   tradera-desktop start        ensure the desktop is running (idempotent)
-#   tradera-desktop restart      stop it and start it again
-#   tradera-desktop stop         stop it and forget its password
-#   tradera-desktop forget-logins   close the browser and erase its saved logins
-#   tradera-desktop status       exit 0 when the VNC stream is up
-#   tradera-desktop screenshot [file.png]   saves the screen (default /workspace/screenshot.png)
-#   tradera-desktop open <url|file|app>     opens a URL or a file (image, PDF, ...) in the browser, a folder in Files, or runs an app
-#   tradera-desktop click <x> <y> [button]  moves the mouse and clicks (1 left, 3 right)
-#   tradera-desktop type <text>             types text into the focused window
-#   tradera-desktop key <key>...            presses keys, e.g. Return ctrl+l
+#   aseman-desktop start        ensure the desktop is running (idempotent)
+#   aseman-desktop restart      stop it and start it again
+#   aseman-desktop stop         stop it and forget its password
+#   aseman-desktop forget-logins   close the browser and erase its saved logins
+#   aseman-desktop status       exit 0 when the VNC stream is up
+#   aseman-desktop screenshot [file.png]   saves the screen (default /workspace/screenshot.png)
+#   aseman-desktop open <url|file|app>     opens a URL or a file (image, PDF, ...) in the browser, a folder in Files, or runs an app
+#   aseman-desktop click <x> <y> [button]  moves the mouse and clicks (1 left, 3 right)
+#   aseman-desktop type <text>             types text into the focused window
+#   aseman-desktop key <key>...            presses keys, e.g. Return ctrl+l
 #
 # The screen is 1440x900. `start` prints DESKTOP_PASSWORD:<secret> on success.
 set -u
 export DISPLAY=:99
 export HOME="${HOME:-/root}"
 STATE=/workspace/.desktop
-LOG=/tmp/tradera-desktop.log
+LOG=/tmp/aseman-desktop.log
 # The browser's profile (its cookies and logins) lives on the project's own disk,
 # so a site stays signed in when the computer sleeps or is rebuilt. It holds
 # live sessions: the file tools of people and agents never show it, and
-# `tradera-desktop forget-logins` erases it. Not under $STATE, which `stop` removes.
-BROWSER_PROFILE="${TRADERA_BROWSER_PROFILE:-/workspace/.tradera/browser-profile}"
+# `aseman-desktop forget-logins` erases it. Not under $STATE, which `stop` removes.
+BROWSER_PROFILE="${ASEMAN_BROWSER_PROFILE:-/workspace/.aseman/browser-profile}"
 WEB_PORT=6080
 VNC_PORT=5900
 # Anchor to the actual proxy command; agent shell text can also mention websockify.
@@ -54,11 +54,11 @@ ensure_packages() {
 
 x_up() { have xdpyinfo && xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; }
 wm_up() { xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q 'window id # 0x'; }
-dock_up() { xdotool search --onlyvisible --class 'TraderaDock|tint2' >/dev/null 2>&1; }
+dock_up() { xdotool search --onlyvisible --class 'AsemanDock|tint2' >/dev/null 2>&1; }
 
 # Everything the browser can show opens in it, from the dock's Files, from
 # xdg-open and from agents: the image's default for images is ImageMagick's
-# viewer, which shows no PDF. The desktop entry runs `tradera-desktop open`, so
+# viewer, which shows no PDF. The desktop entry runs `aseman-desktop open`, so
 # the browser gets the project's profile and the flags a root machine needs.
 BROWSER_TYPES="text/html application/xhtml+xml x-scheme-handler/http x-scheme-handler/https application/pdf image/png image/jpeg image/gif image/webp image/svg+xml image/bmp image/avif image/x-icon video/mp4 video/webm video/ogg audio/mpeg audio/ogg audio/wav audio/webm audio/flac text/plain text/markdown text/csv application/json application/xml text/xml"
 configure_default_apps() {
@@ -68,15 +68,15 @@ configure_default_apps() {
     echo "[Desktop Entry]"
     echo "Type=Application"
     echo "Name=Browser"
-    echo "Exec=/usr/local/bin/tradera-desktop open %U"
+    echo "Exec=/usr/local/bin/aseman-desktop open %U"
     echo "Icon=chromium"
     echo "Terminal=false"
     echo "Categories=Network;WebBrowser;"
     echo "MimeType=$(printf '%s;' $BROWSER_TYPES)"
-  } >"$apps/tradera-browser.desktop"
+  } >"$apps/aseman-browser.desktop"
   {
     echo "[Default Applications]"
-    for t in $BROWSER_TYPES; do echo "$t=tradera-browser.desktop"; done
+    for t in $BROWSER_TYPES; do echo "$t=aseman-browser.desktop"; done
   } >"$list"
   update-desktop-database "$apps" >/dev/null 2>&1 || true
 }
@@ -87,11 +87,11 @@ file_url() { python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).res
 # The look of the desktop: a soft dark wallpaper, flat dark window frames in the
 # dock's colours, dark Files. All of it is drawn once (no gradients, shadows or
 # animations to repaint over VNC), so it costs nothing while the desktop is idle.
-THEME_DIR="$HOME/.themes/Tradera/openbox-3"
+THEME_DIR="$HOME/.themes/Aseman/openbox-3"
 write_theme() {
   mkdir -p "$THEME_DIR" "$HOME/.config/openbox" 2>/dev/null || return 0
   cat >"$THEME_DIR/themerc.new" <<'THEME'
-# Tradera: flat, dark, quiet.
+# Aseman: flat, dark, quiet.
 border.width: 3
 padding.width: 14
 padding.height: 8
@@ -199,7 +199,7 @@ write_openbox_config() {
   python3 - "$base" "$out.new" <<'PYRC' || { rm -f "$out.new"; return 0; }
 import re, sys
 s = open(sys.argv[1]).read()
-s = re.sub(r"(<theme>\s*<name>)[^<]*(</name>)", r"\1Tradera\2", s, count=1)
+s = re.sub(r"(<theme>\s*<name>)[^<]*(</name>)", r"\1Aseman\2", s, count=1)
 s = s.replace("<titleLayout>NLIMC</titleLayout>", "<titleLayout>LIMC</titleLayout>")
 s = s.replace("<animateIconify>yes</animateIconify>", "<animateIconify>no</animateIconify>")
 s = re.sub(r"(<resize>\s*<drawContents>)yes(</drawContents>)", r"\1no\2", s, count=1)
@@ -231,7 +231,7 @@ GTK
 
 # The wallpaper is made once per computer (a soft teal glow on deep green) and
 # painted onto the root window, where it costs nothing to keep.
-WALLPAPER=/tmp/tradera-wallpaper-v2.png
+WALLPAPER=/tmp/aseman-wallpaper-v2.png
 set_wallpaper() {
   if have convert && have display; then
     [ -s "$WALLPAPER" ] || convert -size 1440x900 gradient:"#143630-#0a1514" \
@@ -253,13 +253,13 @@ set_wallpaper() {
 # sits on, which is not the project's storage and only confuses. A small preload
 # (loaded into Files alone, not into anything else) leaves both out; copying and
 # moving files are unaffected.
-FILES_SHIM=/tmp/tradera-files.so
-FILES_LAUNCHER=/usr/local/bin/tradera-thunar
+FILES_SHIM=/tmp/aseman-files.so
+FILES_LAUNCHER=/usr/local/bin/aseman-thunar
 # The app's viewer of the desktop (DESKTOP_VIEWER): the screen alone, scaled
 # to fit its window, reconnecting by itself. Its fragment carries the
 # password (#password=…) and, for a live preview, view=1 (no input). Written
 # next to noVNC on every start, so older images get it too; best effort.
-VIEWER_PAGE=tradera-view.html
+VIEWER_PAGE=aseman-view.html
 write_viewer() {
   cat >"$1/$VIEWER_PAGE.tmp" <<'HTML' && mv -f "$1/$VIEWER_PAGE.tmp" "$1/$VIEWER_PAGE"
 <!doctype html>
@@ -365,7 +365,7 @@ kbd.addEventListener('input', () => {
   kbd.value = '';
 });
 // Theme messages of the app are not needed: the screen is the screen.
-window.__traderaSetTheme = () => {};
+window.__asemanSetTheme = () => {};
 connect();
 </script>
 </body>
@@ -376,7 +376,7 @@ HTML
 write_files_launcher() {
   have thunar || return 0
   if [ ! -s "$FILES_SHIM" ]; then
-    local cc src=/tmp/tradera-files.c
+    local cc src=/tmp/aseman-files.c
     cc=$(command -v cc || command -v gcc) || cc=""
     if [ -n "$cc" ]; then
       cat >"$src" <<'CSHIM'
@@ -422,7 +422,7 @@ write_corners() {
   mkdir -p "$STATE"
   cat >"$STATE/corners.py.new" <<'PYCORNERS'
 #!/usr/bin/env python3
-"""tradera corners: rounds the corners of the desktop's windows (X Shape).
+"""aseman corners: rounds the corners of the desktop's windows (X Shape).
 
 It only reacts to windows being mapped or resized, so it costs nothing while the
 desktop is idle. A window that fills the screen keeps square corners."""
@@ -599,7 +599,7 @@ write_dock() {
   mkdir -p "$STATE"
   cat >"$STATE/dock.py.new" <<'PY'
 #!/usr/bin/env python3
-"""tradera dock: Terminal, Browser (Chrome), Files."""
+"""aseman dock: Terminal, Browser (Chrome), Files."""
 import ctypes
 import subprocess
 import tkinter as tk
@@ -618,7 +618,7 @@ PILL_W = N * ICON + (N - 1) * GAP + 2 * PAD
 PILL_H = ICON + 2 * PAD
 WIN_W, WIN_H = PILL_W, PILL_H   # the window is exactly the bar: no margin, no wallpaper around it
 
-root = tk.Tk(className="TraderaDock")
+root = tk.Tk(className="AsemanDock")
 root.title("Dock")
 root.overrideredirect(True)
 root.configure(bg=BG)
@@ -761,7 +761,7 @@ def on_release(e):
     i, state["press"] = hit(e), None
     render()
     if i is not None:
-        subprocess.Popen(["/usr/local/bin/tradera-desktop", "launch", ITEMS[i][0]], start_new_session=True,
+        subprocess.Popen(["/usr/local/bin/aseman-desktop", "launch", ITEMS[i][0]], start_new_session=True,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
 
 
@@ -826,7 +826,7 @@ configure_tint2() {
 [Desktop Entry]
 Type=Application
 Name=$label
-Exec=/usr/local/bin/tradera-desktop launch $app
+Exec=/usr/local/bin/aseman-desktop launch $app
 Icon=$icon
 Terminal=false
 EOF
@@ -897,7 +897,7 @@ do_stop() {
   pkill -x tint2 2>/dev/null
   pkill -f "$STATE/dock.py" 2>/dev/null
   pkill -f "$STATE/corners.py" 2>/dev/null
-  rm -f /tmp/tradera-wallpaper.set
+  rm -f /tmp/aseman-wallpaper.set
   pkill -x openbox 2>/dev/null
   pkill -x Xvfb 2>/dev/null
   rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
@@ -927,8 +927,8 @@ do_start() {
   for _ in $(seq 1 40); do wm_up && break; sleep 0.25; done
   wm_up || { echo "the desktop window manager did not start" >&2; tail -n 15 "$LOG" >&2; return 1; }
   xsetroot -cursor_name left_ptr
-  if [ "$fresh_x" = 1 ] || [ ! -e /tmp/tradera-wallpaper.set ]; then
-    set_wallpaper && touch /tmp/tradera-wallpaper.set
+  if [ "$fresh_x" = 1 ] || [ ! -e /tmp/aseman-wallpaper.set ]; then
+    set_wallpaper && touch /tmp/aseman-wallpaper.set
   fi
   start_corners
   # VNC, its web proxy and the dock only need the X server, so they come up
@@ -968,13 +968,13 @@ case "$cmd" in
     # Closes the browser first, so it cannot write the sessions back.
     pkill -f -- "--user-data-dir=$BROWSER_PROFILE" 2>/dev/null
     sleep 1
-    rm -rf "$BROWSER_PROFILE" /tmp/tradera-browser
+    rm -rf "$BROWSER_PROFILE" /tmp/aseman-browser
     echo "the browser's saved logins are erased"
     ;;
   status) x_up && wm_up && stream_ok ;;
   screenshot)
     out="${1:-/workspace/screenshot.png}"
-    x_up || { echo "the desktop is not running; run: tradera-desktop start" >&2; exit 1; }
+    x_up || { echo "the desktop is not running; run: aseman-desktop start" >&2; exit 1; }
     mkdir -p "$(dirname "$out")"
     scrot -o "$out" && echo "$out"
     ;;
@@ -1019,7 +1019,7 @@ case "$cmd" in
           have "$b" || continue
           profile="$BROWSER_PROFILE"
           if ! { mkdir -p "$profile" && chmod 700 "$profile" "$(dirname "$profile")"; } 2>/dev/null; then
-            profile=/tmp/tradera-browser
+            profile=/tmp/aseman-browser
             mkdir -p "$profile"
           fi
           # A machine that slept or was rebuilt leaves the old browser's lock
@@ -1058,5 +1058,5 @@ case "$cmd" in
     x_up || { echo "the desktop is not running" >&2; exit 1; }
     xdotool key -- "$@"
     ;;
-  *) echo "usage: tradera-desktop start|restart|stop|status|screenshot|open|click|type|key" >&2; exit 2 ;;
+  *) echo "usage: aseman-desktop start|restart|stop|status|screenshot|open|click|type|key" >&2; exit 2 ;;
 esac

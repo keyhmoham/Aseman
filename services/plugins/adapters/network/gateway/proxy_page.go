@@ -4,10 +4,10 @@ package apihttp
 // preview gateway (/v1/proxy/{id}/). Under its own prefix the gateway also
 // answers two things itself, never forwarded to the sandbox:
 //
-//   - _tradera/kit/<file>: Tradera's web UI kit (pkg/webkit), the app's look
-//     and components for web pages, so "/_tradera/kit/tradera-ui.js" works
+//   - _aseman/kit/<file>: Aseman's web UI kit (pkg/webkit), the app's look
+//     and components for web pages, so "/_aseman/kit/aseman-ui.js" works
 //     whatever the page's base path;
-//   - _tradera/api/<op>: the page's client for the Tradera API. It calls the
+//   - _aseman/api/<op>: the page's client for the Aseman API. It calls the
 //     space's tools' microtools as the person viewing the page, in the
 //     preview's space, the way a frontend calls its backend:
 //     context, tools, microtools {tool} and call {tool, microtool, args}.
@@ -22,17 +22,17 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/webkit"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/proxy"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/webkit"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
 // pagePrefix is the part of a preview's path the gateway answers itself.
-const pagePrefix = "_tradera/"
+const pagePrefix = "_aseman/"
 
 // webkitServe serves the kit's files at /v1/webkit/{file}, for pages served
 // from anywhere (they hold no data, so no sign-in is needed).
@@ -56,7 +56,7 @@ func kitFile(name string) (*network.Response, error) {
 	}}, nil
 }
 
-// proxyPage answers a preview's _tradera/ request (rest is the path after
+// proxyPage answers a preview's _aseman/ request (rest is the path after
 // the prefix) for [acc], a member of the preview's space.
 func (a *API) proxyPage(ctx context.Context, req *network.Request, p *proxy.Proxy, acc *account.Account, method, rest string) (*network.Response, error) {
 	if file, ok := strings.CutPrefix(rest, "kit/"); ok {

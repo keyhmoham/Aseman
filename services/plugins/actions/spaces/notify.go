@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/invitation"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/invitation"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // Telling people on their phones what happened in a project while they were
@@ -81,7 +81,7 @@ func (s *Service) announceMessage(ctx context.Context, msg *message.Message) {
 	if len(to) == 0 {
 		return
 	}
-	title := "Tradera"
+	title := "Aseman"
 	if sp, err := s.GetSpace(ctx, msg.SpaceID); err == nil && strings.TrimSpace(sp.Name) != "" {
 		title = sp.Name
 	}

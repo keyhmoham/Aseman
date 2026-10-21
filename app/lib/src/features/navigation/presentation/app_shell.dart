@@ -45,18 +45,8 @@ class _AppShellState extends State<AppShell> {
       onBackToFeed: _openFeed,
       onWorkspaceChanged: _setWorkspace,
     );
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 320),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: .985, end: 1).animate(animation),
-          child: child,
-        ),
-      ),
-      child: _page == 0 ? feed : desk,
-    );
+    // Each page moves its own panels in and out, like a workspace switch,
+    // so the shell swaps them without a transition of its own.
+    return _page == 0 ? feed : desk;
   }
 }

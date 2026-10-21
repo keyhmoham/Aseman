@@ -23,6 +23,7 @@ import '../../../shared/widgets/profile_menu.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../../shared/widgets/workspace_header.dart';
+import '../../../shared/widgets/workspace_panel_motion.dart';
 import '../../admin/presentation/admin_screen.dart';
 import '../../computer/computer_view.dart';
 import '../../computer/preview_view.dart';
@@ -96,11 +97,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   String _workingAgent = '';
   String _workingDetail = '';
   final Set<String> _messageLoads = {};
-  late final AnimationController workspaceMotion = AnimationController(
-      vsync: this,
-      value: 1,
-      duration: const Duration(milliseconds: 420),
-      reverseDuration: const Duration(milliseconds: 260));
+  // Starts away: the workspace arrives the way a switched-to one does.
+  late final AnimationController workspaceMotion =
+      workspaceMotionController(this, value: 0);
 
   @override
   void initState() {
@@ -115,6 +114,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     _roomTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (room != null) _loadRoomMessages(room!);
     });
+    workspaceMotion.forward();
+  }
+
+  /// Leaves for the feed the way a workspace switch leaves: the panels move
+  /// out, then the feed moves in.
+  Future<void> _leaveToFeed() async {
+    final toFeed = widget.onBackToFeed;
+    if (toFeed == null || workspaceMotion.isAnimating) return;
+    await workspaceMotion.reverse();
+    if (mounted) toFeed();
   }
 
   @override
@@ -569,10 +578,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               ),
               Expanded(child: LayoutBuilder(builder: (context, box) {
                 if (box.maxWidth < 820) {
-                  return _WorkspacePanelMotion(
+                  return WorkspacePanelMotion(
                       animation: workspaceMotion,
-                      hiddenOffset: const Offset(0, .06),
-                      scaleFrom: .98,
+                      hiddenOffset: WorkspacePanelMotions.mobileOffset,
+                      scaleFrom: WorkspacePanelMotions.mobileScale,
                       child: _mobile());
                 }
                 return Padding(
@@ -580,9 +589,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                     child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          _WorkspacePanelMotion(
+                          WorkspacePanelMotion(
                               animation: workspaceMotion,
-                              hiddenOffset: const Offset(-.24, 0),
+                              hiddenOffset: WorkspacePanelMotions.left,
                               child: SizedBox(
                                   width: math.min(286, box.maxWidth * .22),
                                   height: box.maxHeight * .82,
@@ -619,9 +628,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                       openRoom: openRoom))),
                           const SizedBox(width: 16),
                           Expanded(
-                              child: _WorkspacePanelMotion(
+                              child: WorkspacePanelMotion(
                                   animation: workspaceMotion,
-                                  scaleFrom: .94,
+                                  scaleFrom: WorkspacePanelMotions.centerScale,
                                   child: _CenterDesk(
                                       workspace: workspace,
                                       room: room,
@@ -631,9 +640,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                       spaceId: _spaceFor(workspace)?.id ?? '',
                                       roomId: _currentRoomId))),
                           const SizedBox(width: 16),
-                          _WorkspacePanelMotion(
+                          WorkspacePanelMotion(
                               animation: workspaceMotion,
-                              hiddenOffset: const Offset(.24, 0),
+                              hiddenOffset: WorkspacePanelMotions.right,
                               child: SizedBox(
                                   width: math.min(330, box.maxWidth * .25),
                                   height: box.maxHeight * .88,
@@ -746,15 +755,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       showFloatingPanel(context, child, maxWidth: maxWidth);
 
   void _workspacePicker(BuildContext context) {
-    final toFeed = widget.onBackToFeed;
     final picker = WorkspacePicker(
         current: workspace,
         dependencies: widget.dependencies,
-        onOpenFeed: toFeed == null
+        onOpenFeed: widget.onBackToFeed == null
             ? null
-            : () {
+            : () async {
                 Navigator.pop(context);
-                toFeed();
+                await Future<void>.delayed(const Duration(milliseconds: 320));
+                if (mounted) await _leaveToFeed();
               },
         onSettings: (space) {
           Navigator.pop(context);
@@ -810,36 +819,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               _loadWorkspaces();
             }),
         maxWidth: 720);
-  }
-}
-
-class _WorkspacePanelMotion extends StatelessWidget {
-  const _WorkspacePanelMotion({
-    required this.animation,
-    required this.child,
-    this.hiddenOffset = Offset.zero,
-    this.scaleFrom = 1,
-  });
-  final Animation<double> animation;
-  final Widget child;
-  final Offset hiddenOffset;
-  final double scaleFrom;
-  @override
-  Widget build(BuildContext context) {
-    final curved = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic);
-    return FadeTransition(
-      opacity: curved,
-      child: SlideTransition(
-        position: Tween<Offset>(begin: hiddenOffset, end: Offset.zero)
-            .animate(curved),
-        child: ScaleTransition(
-            scale: Tween<double>(begin: scaleFrom, end: 1).animate(curved),
-            child: child),
-      ),
-    );
   }
 }
 
@@ -3200,6 +3179,15 @@ class _SearchResultsState extends State<_SearchResults> {
                 ));
               }
               final hit = _items[index];
+              // A post shows as itself: its rich content, charts and all.
+              final post = hit.payload;
+              if (post is SocialPost) {
+                return _Post(post,
+                    author: post.authorHandle.isNotEmpty
+                        ? '@${post.authorHandle}'
+                        : 'Post',
+                    time: _timeAgo(post.createdAt));
+              }
               return _SearchResultCard(
                   section: section,
                   title: hit.title,

@@ -12,6 +12,7 @@ import '../../domain/models/message.dart';
 import '../../domain/models/room.dart';
 import '../../features/rooms/domain/room_work.dart';
 import '../../features/tools/domain/widget_dsl.dart';
+import '../models/app_notification.dart';
 import '../models/bot.dart';
 import '../models/llm_provider.dart';
 import '../models/post.dart';
@@ -172,6 +173,28 @@ class TraderaService implements BackendService {
       );
 
   // ── spaces ────────────────────────────────────────────────────────────────
+
+  /// The latest notifications of the signed-in user, newest first, and how
+  /// many of them are unread.
+  Future<({List<AppNotification> items, int unread})> fetchNotifications(
+      {int limit = 30}) async {
+    final resp = await client.call('users', 'notifications_list',
+        body: {'limit': limit});
+    final body = (resp.body as Map?) ?? const {};
+    final list = body['notifications'] as List? ?? const [];
+    return (
+      items: list
+          .whereType<Map<String, dynamic>>()
+          .map(AppNotification.fromJson)
+          .toList(),
+      unread: (body['unread'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  /// Marks every notification of the signed-in user read.
+  Future<void> markNotificationsRead() async {
+    await client.call('users', 'notifications_read');
+  }
 
   Future<List<Workspace>> fetchSpaces({int limit = 100, int offset = 0}) async {
     final resp = await client.call('spaces', 'space_list', body: {

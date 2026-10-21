@@ -59,7 +59,7 @@ func BuildActions(s *Service) []api.Action {
 		&fileUploadAction{s: s},
 		&fileDownloadAction{s: s},
 		&fileDeleteAction{s: s},
-	}, append(accountActions(s), pushActions(s)...)...)
+	}, append(accountActions(s), append(pushActions(s), notificationActions(s)...)...)...)
 }
 
 // GetAccount resolves an account by universal id or handle.

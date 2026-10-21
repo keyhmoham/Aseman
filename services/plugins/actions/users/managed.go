@@ -16,9 +16,9 @@ import (
 )
 
 // Managed accounts are ordinary user accounts an administrator makes for
-// someone who does not sign up themselves — the traders the admins space's
-// evaluator follows. A tool of the platform admins space may make them too,
-// while it works for a platform administrator (the same rule that opens the
+// someone who does not sign up themselves (such as a trader whose posts are
+// imported from elsewhere). A tool of the platform admins space may make them
+// too, while it works for a platform administrator (the same rule that opens the
 // platform database to that space's tools); the accounts it makes are
 // tagged with it (metadata "managed_by", never public), and a tool deletes
 // only the accounts it made.

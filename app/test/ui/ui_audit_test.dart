@@ -204,12 +204,12 @@ void main() {
       await app('workspace', () async {
         await tester.tap(find.text('TRADERA'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Atlas Capital'));
+        await tester.tap(find.text('Atlas Capital').last);
       });
       await app('room', () async {
         await tester.tap(find.text('TRADERA'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Atlas Capital'));
+        await tester.tap(find.text('Atlas Capital').last);
         await tester.pumpAndSettle();
         if (size.key == 'phone') {
           await tester.tap(find.byTooltip('Rooms and workspace').first);
@@ -249,6 +249,12 @@ void main() {
       }, roomService());
       await app('feed_following', () async {
         await tester.tap(find.text('Following').first);
+      });
+      await app('feed_spaces', () async {
+        await tester.tap(find.text('Spaces').first);
+      });
+      await app('feed_chats', () async {
+        await tester.tap(find.text('Chats').first);
       });
       SharedPreferences.setMockInitialValues({});
       final errors =

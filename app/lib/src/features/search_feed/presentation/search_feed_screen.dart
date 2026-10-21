@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
+import '../../../data/models/space.dart';
 import '../../../data/services/tradera_service.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/glow_painter.dart';
@@ -18,16 +19,20 @@ import '../../../shared/widgets/spark_painter.dart';
 import '../../../shared/widgets/status_tag.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../admin/presentation/admin_screen.dart';
+import '../../messenger/presentation/chat_page.dart';
+import '../../messenger/presentation/messenger_panel.dart';
 import '../domain/feed_post.dart';
 import 'post_editor.dart';
 import 'post_media_grid.dart';
 import 'rich_post_content.dart';
 import 'search_feed_view_model.dart';
-import 'traders_leaderboard.dart';
 
-/// Landing page: a Google-like search engine fused with a Global/Following
-/// posts feed. The robot head + search bar live in a collapsible header and
-/// the workspace switcher stays pinned on top.
+/// Landing page: a Google-like search engine fused with the Following feed
+/// (the posts of the people and agents the user follows mixed with the posts
+/// of their spaces). The robot head + search bar live in a collapsible header
+/// and the workspace switcher stays pinned on top. Beside the feed, like the
+/// workspace's panels, the user's spaces sit on the left and their direct
+/// chats on the right; on phones they are the feed's first two tabs.
 class SearchFeedScreen extends StatefulWidget {
   const SearchFeedScreen({
     super.key,
@@ -50,6 +55,10 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   late final TabController tabs;
   final searchController = TextEditingController();
   final scrollController = ScrollController();
+  Timer? _chatsPoll;
+
+  /// The phone tabs: the spaces, the direct chats and the feed.
+  static const _spacesTab = 0, _chatsTab = 1, _feedTab = 2;
 
   @override
   void initState() {
@@ -58,19 +67,25 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
       dependencies: widget.dependencies,
       workspace: widget.workspace,
     );
-    tabs = TabController(length: 5, vsync: this)
+    tabs = TabController(length: 3, initialIndex: _feedTab, vsync: this)
       ..addListener(() {
         if (!tabs.indexIsChanging) setState(() {});
       });
     searchController.addListener(() => model.setQuery(searchController.text));
     scrollController.addListener(_onScroll);
     model.load();
+    // New messages arrive on their own time, like in the messenger.
+    _chatsPoll =
+        Timer.periodic(const Duration(seconds: 10), (_) => model.loadChats());
   }
+
+  bool get _compact => MediaQuery.sizeOf(context).width < 820;
 
   void _onScroll() {
     if (!scrollController.hasClients) return;
-    if (scrollController.position.extentAfter < 300 && tabs.index != 4) {
-      unawaited(model.loadMore(tabs.index));
+    if (_compact && tabs.index != _feedTab) return;
+    if (scrollController.position.extentAfter < 300) {
+      unawaited(model.loadMore());
     }
   }
 
@@ -84,11 +99,24 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
 
   @override
   void dispose() {
+    _chatsPoll?.cancel();
     searchController.dispose();
     scrollController.dispose();
     tabs.dispose();
     model.dispose();
     super.dispose();
+  }
+
+  Future<void> _openChat(ChatSummary chat) async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) =>
+            ChatPage(dependencies: widget.dependencies, chat: chat)));
+    if (mounted) unawaited(model.loadChats());
+  }
+
+  Future<void> _openMessenger() async {
+    await showMessenger(context, widget.dependencies);
+    if (mounted) unawaited(model.loadChats());
   }
 
   void _openWorkspaces(BuildContext context) {
@@ -135,38 +163,60 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final compact = MediaQuery.sizeOf(context).width < 820;
+    final compact = _compact;
     return Scaffold(
       body: Stack(children: [
         Positioned.fill(
             child: CustomPaint(
                 painter: GlowPainter(scheme.primary, scheme.tertiary))),
-        SafeArea(child: LayoutBuilder(builder: (context, box) {
-          final horizontalPad = math.max(16.0, (box.maxWidth - 760) / 2);
-          return AnimatedBuilder(
-              animation: model,
-              builder: (context, _) =>
-                  CustomScrollView(controller: scrollController, slivers: [
-                    SliverPersistentHeader(
-                        pinned: true,
-                        delegate: _FixedHeaderDelegate(
-                            extent: 68,
-                            child: _workspaceBar(context, compact, scheme))),
-                    SliverPersistentHeader(
-                        pinned: false,
-                        delegate: _SearchHeroDelegate(
-                            compact: compact,
-                            controller: searchController,
-                            model: model,
-                            onSuggestion: _applySuggestion)),
-                    SliverPersistentHeader(
-                        pinned: true,
-                        delegate: _FixedHeaderDelegate(
-                            extent: 60,
-                            child: _FeedTabs(tabs: tabs, compact: compact))),
-                    ..._feedSlivers(horizontalPad),
-                  ]));
-        })),
+        SafeArea(
+            child: AnimatedBuilder(
+                animation: model,
+                builder: (context, _) => Column(children: [
+                      SizedBox(
+                          height: 68,
+                          child: _workspaceBar(context, compact, scheme)),
+                      Expanded(child: LayoutBuilder(builder: (context, box) {
+                        if (compact) return _feedScroll(compact: true);
+                        // Placed and sized like the workspace's side panels.
+                        return Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
+                            child: Row(children: [
+                              SizedBox(
+                                  width: math.min(286, box.maxWidth * .22),
+                                  height: box.maxHeight * .82,
+                                  child: _SidePanel(
+                                      title: 'Spaces',
+                                      icon: Icons.workspaces_outline,
+                                      child: _SpacesList(
+                                          spaces: model.spaces,
+                                          current: model.workspace,
+                                          loading: model.loading &&
+                                              model.spaces.isEmpty,
+                                          onOpen: _openSpace))),
+                              const SizedBox(width: 16),
+                              Expanded(child: _feedScroll(compact: false)),
+                              const SizedBox(width: 16),
+                              SizedBox(
+                                  width: math.min(330, box.maxWidth * .25),
+                                  height: box.maxHeight * .88,
+                                  child: _SidePanel(
+                                      title: 'Chats',
+                                      icon: Icons.forum_outlined,
+                                      action: IconButton(
+                                          tooltip: 'All messages',
+                                          onPressed: _openMessenger,
+                                          icon: const Icon(
+                                              Icons.edit_square,
+                                              size: 19)),
+                                      child: _ChatsList(
+                                          chats: model.chats,
+                                          me: _me,
+                                          loading: model.chatsLoading,
+                                          onOpen: _openChat))),
+                            ]));
+                      })),
+                    ]))),
       ]),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'feed-composer',
@@ -176,6 +226,60 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
       ),
     );
   }
+
+  String get _me =>
+      widget.dependencies.sessionController.session?.accountId ?? '';
+
+  void _openSpace(Workspace space) => widget.onOpenWorkspace?.call(space.name);
+
+  /// The search hero over the feed; on phones the tabs switch the content
+  /// below it between the spaces, the direct chats and the feed.
+  Widget _feedScroll({required bool compact}) =>
+      LayoutBuilder(builder: (context, box) {
+        final horizontalPad = math.max(16.0, (box.maxWidth - 760) / 2);
+        final tab = compact ? tabs.index : _feedTab;
+        return CustomScrollView(controller: scrollController, slivers: [
+          SliverPersistentHeader(
+              pinned: false,
+              delegate: _SearchHeroDelegate(
+                  compact: compact,
+                  controller: searchController,
+                  model: model,
+                  onSuggestion: _applySuggestion)),
+          if (compact)
+            SliverPersistentHeader(
+                pinned: true,
+                delegate: _FixedHeaderDelegate(
+                    extent: 60, child: _FeedTabs(tabs: tabs, compact: true))),
+          ...switch (tab) {
+            _spacesTab => [
+                SliverPadding(
+                    padding:
+                        EdgeInsets.fromLTRB(horizontalPad, 12, horizontalPad, 96),
+                    sliver: SliverToBoxAdapter(
+                        child: _SpacesList(
+                            spaces: model.spaces,
+                            current: model.workspace,
+                            loading: model.loading && model.spaces.isEmpty,
+                            shrinkWrap: true,
+                            onOpen: _openSpace))),
+              ],
+            _chatsTab => [
+                SliverPadding(
+                    padding:
+                        EdgeInsets.fromLTRB(horizontalPad, 12, horizontalPad, 96),
+                    sliver: SliverToBoxAdapter(
+                        child: _ChatsList(
+                            chats: model.chats,
+                            me: _me,
+                            loading: model.chatsLoading,
+                            shrinkWrap: true,
+                            onOpen: _openChat))),
+              ],
+            _ => _feedSlivers(horizontalPad),
+          },
+        ]);
+      });
 
   Widget _workspaceBar(
           BuildContext context, bool compact, ColorScheme scheme) =>
@@ -201,26 +305,18 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                   showProfileMenu(context, widget.dependencies)));
 
   List<Widget> _feedSlivers(double horizontalPad) {
-    if (tabs.index == 4) return _traderSlivers(horizontalPad);
-    final posts = model.search(model.postsFor(tabs.index));
+    final posts = model.search(model.followingPosts);
     return [
       SliverPadding(
           padding: EdgeInsets.fromLTRB(horizontalPad, 16, horizontalPad, 12),
           sliver: SliverToBoxAdapter(
-              child: _FeedHeader(
-                  tab: tabs.index,
-                  count: posts.length,
-                  workspace: model.workspace,
-                  query: model.query))),
+              child: _FeedHeader(count: posts.length, query: model.query))),
       if (posts.isEmpty)
-        SliverFillRemaining(
+        const SliverFillRemaining(
             hasScrollBody: false,
             child: _EmptyFeed(
-                message: tabs.index == 2
-                    ? 'No workspace posts yet — create one in your workspace.'
-                    : tabs.index == 3
-                        ? 'You have not posted anything yet.'
-                        : 'Nothing here yet.'))
+                message:
+                    'Nothing here yet — follow people or join spaces to fill your feed.'))
       else
         SliverPadding(
             padding: EdgeInsets.fromLTRB(horizontalPad, 0, horizontalPad, 32),
@@ -242,9 +338,6 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
         )),
     ];
   }
-
-  List<Widget> _traderSlivers(double horizontalPad) =>
-      traderLeaderboardSlivers(context, model, horizontalPad);
 }
 
 class _FixedHeaderDelegate extends SliverPersistentHeaderDelegate {
@@ -479,41 +572,27 @@ class _FeedTabs extends StatelessWidget {
   Widget build(BuildContext context) => SegmentedTabBar(
         controller: tabs,
         compact: compact,
-        labels: const ['Global', 'Following', 'Spaces', 'Me', 'Traders'],
+        labels: const ['Spaces', 'Chats', 'Following'],
         icons: const [
-          Icons.public_rounded,
-          Icons.person_pin_circle_outlined,
           Icons.workspaces_outline,
-          Icons.person_outline,
-          Icons.emoji_events_outlined,
+          Icons.forum_outlined,
+          Icons.person_pin_circle_outlined,
         ],
       );
 }
 
 class _FeedHeader extends StatelessWidget {
-  const _FeedHeader({
-    required this.tab,
-    required this.count,
-    required this.workspace,
-    required this.query,
-  });
+  const _FeedHeader({required this.count, required this.query});
 
-  final int tab;
   final int count;
-  final String workspace;
   final String query;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final trimmed = query.trim();
-    final (title, subtitle) = switch (tab) {
-      0 => ('Global feed', 'Public signals, agents and ideas across Tradera'),
-      1 => ('Following', 'People and agents you follow · $workspace context'),
-      2 => ('Spaces', 'Private posts from all your workspaces'),
-      3 => ('My posts', 'Everything you have published'),
-      _ => ('Traders leaderboard', 'Top performers ranked by verified score'),
-    };
+    const title = 'Following';
+    const subtitle = 'People and agents you follow, and your spaces';
     final shownSubtitle = trimmed.isEmpty
         ? subtitle
         : '${count} result${count == 1 ? '' : 's'} for “$trimmed”';
@@ -521,8 +600,8 @@ class _FeedHeader extends StatelessWidget {
       Expanded(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title,
-            style: const TextStyle(
+        const Text(title,
+            style: TextStyle(
                 fontSize: 22, letterSpacing: -.3, fontWeight: FontWeight.w800)),
         const SizedBox(height: 3),
         Text(shownSubtitle,
@@ -777,5 +856,329 @@ class _EmptyFeed extends StatelessWidget {
       Text('Try a different search or tab',
           style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant))
     ]));
+  }
+}
+
+/// A side panel of the feed, styled like the workspace's side panels.
+class _SidePanel extends StatelessWidget {
+  const _SidePanel(
+      {required this.title,
+      required this.icon,
+      required this.child,
+      this.action});
+  final String title;
+  final IconData icon;
+  final Widget child;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+            color: scheme.surface.withValues(alpha: .92),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(
+                color: scheme.outlineVariant.withValues(alpha: .6)),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: .12),
+                  blurRadius: 30,
+                  offset: const Offset(0, 12))
+            ]),
+        child: Material(
+            type: MaterialType.transparency,
+            child: Column(children: [
+              Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 12, 8, 4),
+                  child: SizedBox(
+                      height: 40,
+                      child: Row(children: [
+                        Icon(icon, size: 19, color: scheme.primary),
+                        const SizedBox(width: 9),
+                        Expanded(
+                            child: Text(title,
+                                style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800))),
+                        if (action != null) action!,
+                      ]))),
+              Expanded(child: child),
+            ])));
+  }
+}
+
+/// A short centered note in an empty or loading panel list.
+class _PanelNote extends StatelessWidget {
+  const _PanelNote({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 30, color: scheme.onSurfaceVariant),
+          const SizedBox(height: 10),
+          Text(text,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
+        ]));
+  }
+}
+
+/// The spaces the user is a member of; tapping one opens it.
+class _SpacesList extends StatelessWidget {
+  const _SpacesList({
+    required this.spaces,
+    required this.current,
+    required this.loading,
+    required this.onOpen,
+    this.shrinkWrap = false,
+  });
+  final List<Workspace> spaces;
+  final String current;
+  final bool loading;
+  final ValueChanged<Workspace> onOpen;
+
+  /// Laid out inside the phone feed's scroll view instead of scrolling itself.
+  final bool shrinkWrap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Center(
+          child: Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(strokeWidth: 2.5)));
+    }
+    if (spaces.isEmpty) {
+      return const _PanelNote(
+          icon: Icons.workspaces_outline,
+          text: 'You are not a member of any space yet.');
+    }
+    return ListView.builder(
+        shrinkWrap: shrinkWrap,
+        physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+        itemCount: spaces.length,
+        itemBuilder: (context, i) => _SpaceTile(
+            space: spaces[i],
+            selected: spaces[i].name == current,
+            onTap: () => onOpen(spaces[i])));
+  }
+}
+
+class _SpaceTile extends StatelessWidget {
+  const _SpaceTile(
+      {required this.space, required this.selected, required this.onTap});
+  final Workspace space;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final role = space.role.isEmpty
+        ? ''
+        : '${space.role[0].toUpperCase()}${space.role.substring(1)}';
+    final details = [
+      if (space.home) 'Home',
+      if (role.isNotEmpty) role,
+      space.public ? 'Public' : 'Private',
+    ].join(' · ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: selected
+            ? scheme.primaryContainer.withValues(alpha: .45)
+            : Colors.transparent,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppShape.inner)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            child: Row(children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: ShapeDecoration(
+                    color: scheme.secondaryContainer,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12))),
+                child: Text(space.initials,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: scheme.onSecondaryContainer)),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(space.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 2),
+                      Text(details,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 12, color: scheme.onSurfaceVariant)),
+                    ]),
+              ),
+              Icon(Icons.chevron_right_rounded,
+                  size: 20, color: scheme.onSurfaceVariant),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The user's direct chats; tapping one opens the chat.
+class _ChatsList extends StatelessWidget {
+  const _ChatsList({
+    required this.chats,
+    required this.me,
+    required this.loading,
+    required this.onOpen,
+    this.shrinkWrap = false,
+  });
+  final List<ChatSummary> chats;
+  final String me;
+  final bool loading;
+  final ValueChanged<ChatSummary> onOpen;
+
+  /// Laid out inside the phone feed's scroll view instead of scrolling itself.
+  final bool shrinkWrap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading && chats.isEmpty) {
+      return const Center(
+          child: Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(strokeWidth: 2.5)));
+    }
+    if (chats.isEmpty) {
+      return const _PanelNote(
+          icon: Icons.forum_outlined, text: 'No direct chats yet.');
+    }
+    return ListView.builder(
+        shrinkWrap: shrinkWrap,
+        physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+        itemCount: chats.length,
+        itemBuilder: (context, i) => _DirectChatTile(
+            chat: chats[i], me: me, onTap: () => onOpen(chats[i])));
+  }
+}
+
+class _DirectChatTile extends StatelessWidget {
+  const _DirectChatTile(
+      {required this.chat, required this.me, required this.onTap});
+  final ChatSummary chat;
+  final String me;
+  final VoidCallback onTap;
+
+  String get _preview {
+    if (chat.working) return 'Agent is working…';
+    if (chat.typing) return 'typing…';
+    final body = chat.lastBody.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final text = body.isNotEmpty
+        ? body
+        : chat.lastAttachments > 0
+            ? '📎 Attachment'
+            : chat.saved
+                ? 'Notes, links and files for yourself'
+                : 'Say hello';
+    return body.isNotEmpty && chat.lastSenderId == me ? 'You: $text' : text;
+  }
+
+  static String _when(DateTime? t) {
+    if (t == null) return '';
+    final d = DateTime.now().difference(t);
+    if (d.inMinutes < 1) return 'now';
+    if (d.inMinutes < 60) return '${d.inMinutes}m';
+    if (d.inHours < 24) return '${d.inHours}h';
+    return '${d.inDays}d';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final unread = chat.unread > 0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: unread
+            ? scheme.primaryContainer.withValues(alpha: .35)
+            : Colors.transparent,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppShape.inner)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            child: Row(children: [
+              ChatAvatar(chat: chat, radius: 20),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(chat.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight:
+                                  unread ? FontWeight.w800 : FontWeight.w700)),
+                      const SizedBox(height: 2),
+                      Text(_preview,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: chat.working || chat.typing
+                                  ? scheme.primary
+                                  : unread
+                                      ? scheme.onSurface
+                                      : scheme.onSurfaceVariant)),
+                    ]),
+              ),
+              const SizedBox(width: 8),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text(_when(chat.updatedAt),
+                    style: TextStyle(
+                        fontSize: 11,
+                        color:
+                            unread ? scheme.primary : scheme.onSurfaceVariant)),
+                const SizedBox(height: 5),
+                if (unread)
+                  Badge(
+                      label:
+                          Text(chat.unread > 99 ? '99+' : '${chat.unread}'),
+                      backgroundColor: scheme.primary,
+                      textColor: scheme.onPrimary)
+                else
+                  const SizedBox(height: 16),
+              ]),
+            ]),
+          ),
+        ),
+      ),
+    );
   }
 }

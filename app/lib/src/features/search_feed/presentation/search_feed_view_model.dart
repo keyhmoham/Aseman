@@ -3,12 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
-import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/post.dart';
 import '../../../data/models/space.dart';
 import '../domain/feed_post.dart';
-import '../domain/trader.dart';
 
 class SearchFeedViewModel extends ChangeNotifier {
   SearchFeedViewModel({
@@ -24,59 +22,48 @@ class SearchFeedViewModel extends ChangeNotifier {
   bool loadingMore = false;
   String? error;
   static const pageSize = 20;
-  List<SocialPost> _serverGlobal = [];
+
+  /// The two sources the Following feed mixes: posts of the people and
+  /// agents the caller follows, and the private posts of their spaces.
   List<SocialPost> _serverFollowing = [];
   List<SocialPost> _serverSpaces = [];
-  List<SocialPost> _serverMine = [];
-  final _offsets = [0, 0, 0, 0];
-  final _hasMore = [true, true, true, true];
+  final _offsets = [0, 0];
+  final _hasMore = [true, true];
   Map<String, String> _spaceNames = {};
-  List<Trader> _serverTraders = const [];
 
-  /// The traders leaderboard (kept by the admins space's evaluator tool).
-  TraderBoard board = TraderBoard.overall;
-  bool tradersLoading = false;
-  String? tradersError;
-  int tradersTotal = 0;
-  int tradersEvaluated = 0;
-  DateTime? tradersUpdatedAt;
+  /// The spaces the caller is a member of (the feed's left panel).
+  List<Workspace> spaces = const [];
+
+  /// The caller's direct chats (the feed's right panel).
+  List<ChatSummary> chats = const [];
+  bool chatsLoading = true;
+  bool _refreshingChats = false;
 
   String get workspace => _workspace;
 
-  /// Loads the first page of every feed tab from the server.
+  /// Loads the first page of the feed, the caller's spaces and their direct
+  /// chats from the server.
   Future<void> load() async {
     final deps = dependencies?.service;
     if (deps == null) return;
     loading = true;
     error = null;
     notifyListeners();
-    unawaited(loadTraders());
+    unawaited(loadChats());
     try {
-      final me = dependencies?.sessionController.session?.accountId ?? '';
       final results = await Future.wait([
-        deps.fetchFeed(following: false, limit: pageSize),
         deps.fetchFeed(following: true, limit: pageSize),
         deps.fetchSpacesFeed(limit: pageSize),
-        me.isEmpty
-            ? Future.value(const <SocialPost>[])
-            : deps.fetchUserPosts(me, limit: pageSize),
         deps.fetchSpaces(),
       ]);
-      _serverGlobal = (results[0] as List).cast<SocialPost>();
-      _serverFollowing = (results[1] as List).cast<SocialPost>();
-      _serverSpaces = (results[2] as List).cast<SocialPost>();
-      _serverMine = (results[3] as List).cast<SocialPost>();
-      _spaceNames = {
-        for (final sp in (results[4] as List).cast<Workspace>()) sp.id: sp.name,
-      };
-      _offsets[0] = _serverGlobal.length;
-      _offsets[1] = _serverFollowing.length;
-      _offsets[2] = _serverSpaces.length;
-      _offsets[3] = _serverMine.length;
-      _hasMore[0] = _serverGlobal.length >= pageSize;
-      _hasMore[1] = _serverFollowing.length >= pageSize;
-      _hasMore[2] = _serverSpaces.length >= pageSize;
-      _hasMore[3] = _serverMine.length >= pageSize;
+      _serverFollowing = (results[0] as List).cast<SocialPost>();
+      _serverSpaces = (results[1] as List).cast<SocialPost>();
+      spaces = (results[2] as List).cast<Workspace>();
+      _spaceNames = {for (final sp in spaces) sp.id: sp.name};
+      _offsets[0] = _serverFollowing.length;
+      _offsets[1] = _serverSpaces.length;
+      _hasMore[0] = _serverFollowing.length >= pageSize;
+      _hasMore[1] = _serverSpaces.length >= pageSize;
     } catch (e) {
       error = e.toString();
     }
@@ -84,42 +71,50 @@ class SearchFeedViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Fetches the next page of the given feed tab and appends it.
-  Future<void> loadMore(int tab) async {
-    if (tab < 0 || tab > 3 || loading || loadingMore || !_hasMore[tab]) return;
+  /// Refreshes the caller's direct chats.
+  Future<void> loadChats() async {
+    final deps = dependencies?.service;
+    if (deps == null || _refreshingChats) return;
+    _refreshingChats = true;
+    try {
+      chats = await deps.fetchChats(kind: 'direct');
+    } catch (_) {
+      // Keep showing what loaded before.
+    }
+    _refreshingChats = false;
+    chatsLoading = false;
+    notifyListeners();
+  }
+
+  /// Fetches the next page of each source that has more and appends it.
+  Future<void> loadMore() async {
+    if (loading || loadingMore || !_hasMore.contains(true)) return;
     final deps = dependencies?.service;
     if (deps == null) return;
     loadingMore = true;
     notifyListeners();
     try {
-      final me = dependencies?.sessionController.session?.accountId ?? '';
-      final offset = _offsets[tab];
-      final List<SocialPost> page = switch (tab) {
-        0 => await deps.fetchFeed(
-            following: false, limit: pageSize, offset: offset),
-        1 => await deps.fetchFeed(
-            following: true, limit: pageSize, offset: offset),
-        2 => await deps.fetchSpacesFeed(limit: pageSize, offset: offset),
-        _ => me.isEmpty
-            ? const <SocialPost>[]
-            : await deps.fetchUserPosts(me, limit: pageSize, offset: offset),
-      };
-      _listFor(tab).addAll(page);
-      _offsets[tab] = offset + page.length;
-      _hasMore[tab] = page.length >= pageSize;
+      final pages = await Future.wait([
+        _hasMore[0]
+            ? deps.fetchFeed(
+                following: true, limit: pageSize, offset: _offsets[0])
+            : Future.value(const <SocialPost>[]),
+        _hasMore[1]
+            ? deps.fetchSpacesFeed(limit: pageSize, offset: _offsets[1])
+            : Future.value(const <SocialPost>[]),
+      ]);
+      for (final (i, page) in pages.indexed) {
+        if (!_hasMore[i]) continue;
+        (i == 0 ? _serverFollowing : _serverSpaces).addAll(page);
+        _offsets[i] += page.length;
+        _hasMore[i] = page.length >= pageSize;
+      }
     } catch (e) {
       error = e.toString();
     }
     loadingMore = false;
     notifyListeners();
   }
-
-  List<SocialPost> _listFor(int tab) => switch (tab) {
-        0 => _serverGlobal,
-        1 => _serverFollowing,
-        2 => _serverSpaces,
-        _ => _serverMine,
-      };
 
   /// Publish a post from the composer; returns the created post id or null.
   Future<String?> publish(String body) async {
@@ -161,103 +156,27 @@ class SearchFeedViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Posts for a feed tab: 0 = Global, 1 = Following, 2 = Spaces, 3 = Me.
-  List<FeedPost> postsFor(int tab) => switch (tab) {
-        0 => globalPosts,
-        1 => followingPosts,
-        2 => spacesPosts,
-        _ => myPosts,
-      };
-
-  /// The leaderboard's traders, ranked on [board].
-  List<Trader> get traders => _serverTraders;
-
-  /// Loads the traders leaderboard for [board] from the evaluator.
-  Future<void> loadTraders() async {
-    final deps = dependencies?.service;
-    if (deps == null) return;
-    tradersLoading = true;
-    tradersError = null;
-    notifyListeners();
-    try {
-      final out = await deps.fetchTraderLeaderboard(board: board.api);
-      _serverTraders = [
-        for (final row in (out['traders'] as List? ?? const []))
-          if (row is Map) Trader.fromJson(Map<String, dynamic>.from(row)),
-      ];
-      tradersTotal = (out['total'] as num?)?.toInt() ?? _serverTraders.length;
-      tradersEvaluated = (out['evaluated'] as num?)?.toInt() ??
-          _serverTraders.where((t) => t.evaluated).length;
-      tradersUpdatedAt = DateTime.tryParse('${out['updated_at'] ?? ''}');
-    } on ApiException catch (e) {
-      _serverTraders = const [];
-      tradersError = e.isNotFound
-          ? 'The traders leaderboard is not set up yet: an administrator deploys the evaluator in the admins space.'
-          : e.message;
-    } catch (e) {
-      _serverTraders = const [];
-      tradersError = e.toString();
+  /// The Following feed: posts of the people and agents the caller follows
+  /// mixed with the posts of their spaces, newest first. Each source is paged
+  /// on its own, so the list stops at the oldest post every source that has
+  /// more has reached: older posts of one source appear once the other's
+  /// next page has loaded, keeping the order right.
+  List<FeedPost> get followingPosts {
+    final byId = <String, SocialPost>{
+      for (final p in [..._serverFollowing, ..._serverSpaces]) p.id: p,
+    };
+    DateTime? cutoff;
+    for (final (i, list) in [_serverFollowing, _serverSpaces].indexed) {
+      if (!_hasMore[i] || list.isEmpty) continue;
+      final last = list.last.createdAt;
+      if (cutoff == null || last.isAfter(cutoff)) cutoff = last;
     }
-    tradersLoading = false;
-    notifyListeners();
+    final mixed = byId.values
+        .where((p) => cutoff == null || !p.createdAt.isBefore(cutoff))
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return mixed.map(_feedFromServer).toList();
   }
-
-  /// Ranks the leaderboard on another board.
-  Future<void> setBoard(TraderBoard value) async {
-    if (board == value && _serverTraders.isNotEmpty) return;
-    board = value;
-    notifyListeners();
-    await loadTraders();
-  }
-
-  /// Whether the signed-in person administers the platform (and so the
-  /// evaluator's traders).
-  bool get isAdmin => dependencies?.sessionController.isAdmin ?? false;
-
-  /// Admin: a trader's Tradera account: username and password.
-  Future<Map<String, dynamic>> traderCredentials(String handle) async =>
-      await dependencies!.service
-          .evaluatorAdmin('trader_credentials', {'handle': handle});
-
-  /// Admin: removes a trader from the evaluator's list — with their Tradera
-  /// account and the posts published there unless [keepAccount] — and
-  /// reloads the leaderboard.
-  Future<Map<String, dynamic>> removeTrader(String handle,
-      {bool keepAccount = false}) async {
-    final out = await dependencies!.service.evaluatorAdmin('trader_remove',
-        {'handle': handle, if (keepAccount) 'keep_account': true});
-    await loadTraders();
-    return out;
-  }
-
-  /// One trader's full reliability report.
-  Future<TraderReport?> traderReport(String handle) async {
-    final deps = dependencies?.service;
-    if (deps == null) return null;
-    return TraderReport.fromJson(await deps.fetchTraderProfile(handle));
-  }
-
-  List<Trader> searchTraders(List<Trader> source) {
-    final q = query.trim().toLowerCase();
-    if (q.isEmpty) return source;
-    return source
-        .where((t) =>
-            t.name.toLowerCase().contains(q) ||
-            t.handle.toLowerCase().contains(q) ||
-            t.rating.toLowerCase().contains(q))
-        .toList();
-  }
-
-  List<FeedPost> get globalPosts => _serverGlobal.map(_feedFromServer).toList();
-
-  List<FeedPost> get followingPosts =>
-      _serverFollowing.map(_feedFromServer).toList();
-
-  /// Private posts across all workspaces the caller is a member of.
-  List<FeedPost> get spacesPosts => _serverSpaces.map(_feedFromServer).toList();
-
-  /// Only the caller's own posts.
-  List<FeedPost> get myPosts => _serverMine.map(_feedFromServer).toList();
 
   /// Map a server post onto the UI feed card model.
   FeedPost _feedFromServer(SocialPost p) => FeedPost(

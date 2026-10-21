@@ -7,6 +7,7 @@ import '../../app_dependencies.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/bot.dart';
 import '../../data/models/post.dart';
+import '../../features/search_feed/presentation/rich_post_content.dart';
 import 'avatar.dart';
 import 'mini_tag.dart';
 
@@ -226,6 +227,7 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
                   tag: p.tags.isEmpty ? 'POST' : p.tags.first.toUpperCase(),
                   likes: p.likes,
                   time: _timeAgo(p.createdAt),
+                  headers: widget.dependencies.service.authHeaders(),
                 )),
         ]);
   }
@@ -259,6 +261,7 @@ class _ProfilePostCard extends StatelessWidget {
     required this.tag,
     required this.likes,
     required this.time,
+    this.headers = const {},
   });
   final String initials;
   final String handle;
@@ -266,6 +269,9 @@ class _ProfilePostCard extends StatelessWidget {
   final String tag;
   final int likes;
   final String time;
+
+  /// Sign-in headers for the post's images.
+  final Map<String, String> headers;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -294,7 +300,9 @@ class _ProfilePostCard extends StatelessWidget {
               icon: const Icon(Icons.more_horiz_rounded, size: 18))
         ]),
         const SizedBox(height: 9),
-        Text(body, style: const TextStyle(fontSize: 12, height: 1.45)),
+        DefaultTextStyle.merge(
+            style: const TextStyle(fontSize: 13, height: 1.45),
+            child: RichPostContent(body, headers: headers)),
         const SizedBox(height: 12),
         Row(children: [
           MiniTag(tag, Theme.of(context).colorScheme.primary),

@@ -5,6 +5,7 @@ import 'package:tradera/src/app.dart';
 import 'package:tradera/src/app_dependencies.dart';
 import 'package:tradera/src/data/models/bot.dart';
 import 'package:tradera/src/data/models/space.dart';
+import 'package:tradera/src/features/messenger/presentation/messenger_panel.dart';
 
 import '../../fake_tradera_service.dart';
 
@@ -42,6 +43,11 @@ class _MessengerService extends FakeTraderaService {
 }
 
 void main() {
+  /// Matches inside the messenger only: the feed under it lists the same
+  /// spaces and direct chats in its side panels.
+  Finder inMessenger(Finder finder) =>
+      find.descendant(of: find.byType(MessengerPanel), matching: finder);
+
   Future<_MessengerService> openMessenger(WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({
       'tradera.session':
@@ -79,25 +85,25 @@ void main() {
   testWidgets('lists direct chats and project rooms, filtered by tab',
       (tester) async {
     await openMessenger(tester);
-    expect(find.text('Maya Chen'), findsOneWidget);
-    expect(find.text('AlphaBot'), findsOneWidget);
-    expect(find.text('Atlas Capital'), findsOneWidget);
+    expect(inMessenger(find.text('Maya Chen')), findsOneWidget);
+    expect(inMessenger(find.text('AlphaBot')), findsOneWidget);
+    expect(inMessenger(find.text('Atlas Capital')), findsOneWidget);
 
     await tester.tap(find.text('Direct · 2'));
     await tester.pumpAndSettle();
-    expect(find.text('Maya Chen'), findsOneWidget);
-    expect(find.text('Atlas Capital'), findsNothing);
+    expect(inMessenger(find.text('Maya Chen')), findsOneWidget);
+    expect(inMessenger(find.text('Atlas Capital')), findsNothing);
 
     await tester.tap(find.text('Spaces').last);
     await tester.pumpAndSettle();
-    expect(find.text('Maya Chen'), findsNothing);
-    expect(find.text('Atlas Capital'), findsOneWidget);
+    expect(inMessenger(find.text('Maya Chen')), findsNothing);
+    expect(inMessenger(find.text('Atlas Capital')), findsOneWidget);
   });
 
   testWidgets('a chat opens inside the messenger and back returns to the list',
       (tester) async {
     await openMessenger(tester);
-    await tester.tap(find.text('Maya Chen'));
+    await tester.tap(inMessenger(find.text('Maya Chen')));
     await tester.pumpAndSettle();
     expect(find.text('Message Maya Chen…'), findsOneWidget);
     expect(find.byTooltip('Work'), findsOneWidget);
@@ -111,7 +117,7 @@ void main() {
   testWidgets('writing to an agent in its direct chat addresses the agent',
       (tester) async {
     final service = await openMessenger(tester);
-    await tester.tap(find.text('AlphaBot'));
+    await tester.tap(inMessenger(find.text('AlphaBot')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, 'Size a BTC long');
     await tester.tap(find.byTooltip('Send'));
@@ -140,7 +146,7 @@ void main() {
           editedAt: editedAt);
 
   Future<void> openMaya(WidgetTester tester) async {
-    await tester.tap(find.text('Maya Chen'));
+    await tester.tap(inMessenger(find.text('Maya Chen')));
     await tester.pumpAndSettle();
   }
 
@@ -249,7 +255,7 @@ void main() {
   testWidgets('a long-pressed chat is pinned to the top of the list',
       (tester) async {
     final service = await openMessenger(tester);
-    await tester.longPress(find.text('Atlas Capital').first);
+    await tester.longPress(inMessenger(find.text('Atlas Capital')).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Pin to top'));
     await tester.pumpAndSettle();

@@ -3776,17 +3776,20 @@ class _TraderProfileDetail extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 11,
                       color: Theme.of(context).colorScheme.onSurfaceVariant))
-              : Column(children: [
+              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   for (final p in posts.take(5))
                     Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(p.body,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 11)),
+                              DefaultTextStyle.merge(
+                                  style: const TextStyle(
+                                      fontSize: 12, height: 1.45),
+                                  child: RichPostContent(p.body,
+                                      headers:
+                                          deps?.service.authHeaders() ??
+                                              const {})),
                               Text(_timeAgo(p.createdAt),
                                   style: TextStyle(
                                       fontSize: 8,

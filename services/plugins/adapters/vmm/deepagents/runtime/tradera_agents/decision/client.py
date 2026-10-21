@@ -24,15 +24,12 @@ class DecisionClient:
         self.gateway = gateway
         self.model = model
         self.enabled = True
-        self.calls = 0
         self.failures = 0
-        self.input_tokens = 0
 
     async def evaluate(self, state: Any, questions: dict[str, Any]) -> dict[str, Any] | None:
         """The answers to typed questions about a state, or None."""
         if not self.enabled or not questions:
             return None
-        self.calls += 1
         try:
             out = await self.gateway.decide(state, questions)
         except DecisionDisabled:
@@ -44,7 +41,6 @@ class DecisionClient:
                 self.enabled = False
             log.warning("decision failed (%s): %s", self.model, exc)
             return None
-        self.input_tokens += int((out.get("usage") or {}).get("inputTokens") or 0)
         answers = out.get("answers")
         return answers if isinstance(answers, dict) else None
 

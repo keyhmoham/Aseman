@@ -40,16 +40,6 @@ def parse_json(text: str) -> Any | None:
     return None
 
 
-def _text(message: Any) -> str:
-    text = getattr(message, "text", None)
-    if isinstance(text, str):
-        return text
-    content = getattr(message, "content", "")
-    if isinstance(content, list):
-        return "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
-    return str(content)
-
-
 async def ask_json(ctx: TurnContext, system: str, prompt: str) -> Any | None:
     """Ask the agent's model one question that it answers in JSON."""
     model = ctx.llm
@@ -60,7 +50,7 @@ async def ask_json(ctx: TurnContext, system: str, prompt: str) -> Any | None:
     except Exception as exc:  # noqa: BLE001 - every question has a fallback
         log.warning("swarm model call failed: %s", exc)
         return None
-    out = parse_json(_text(answer))
+    out = parse_json(answer.text)
     if out is None:
-        log.info("swarm model answered without JSON: %s", _text(answer)[:200])
+        log.info("swarm model answered without JSON: %s", answer.text[:200])
     return out

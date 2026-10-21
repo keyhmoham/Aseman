@@ -34,7 +34,7 @@ GENERALIST_INSTRUCTIONS = (
 def _task_text(state: dict[str, Any]) -> str:
     for m in reversed(state.get("messages") or []):
         if isinstance(m, HumanMessage):
-            return m.text if hasattr(m, "text") else str(m.content)
+            return m.text
     return ""
 
 

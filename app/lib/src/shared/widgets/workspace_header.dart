@@ -7,120 +7,213 @@ import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_surfaces.dart';
 import '../../data/models/space.dart';
 
-/// Shared top app bar: brand + workspace switcher on the left, platform
-/// actions on the right. Optional callbacks hide the corresponding controls.
+/// Shared top app bar of the workspace and the feed: the TRADERA name in the
+/// middle, the account avatar (its menu) on the right edge. On phones the
+/// left edge opens the navigation drawer; on wider screens it shows where
+/// the user is (the current space, or Home on the feed). The workspace
+/// switcher opens from the [SwitcherEdgeHandle]. No background, border or shadow: the page's glow
+/// shows through. Optional callbacks hide the corresponding controls.
 class WorkspaceHeader extends StatelessWidget {
   const WorkspaceHeader({
     super.key,
     required this.workspace,
     required this.compact,
+    this.feed = false,
     this.room,
     this.onOpenNavigation,
-    required this.onOpenWorkspaces,
     this.onGoHome,
     this.onOpenAdmin,
-    this.onOpenSpaceSettings,
     required this.onOpenProfile,
-    this.onOpenSearchFeed,
     this.handle = '',
     this.avatar,
+    this.workspaceAvatar,
   });
 
   final String workspace;
   final String? room;
   final bool compact;
+
+  /// Shown on the feed: the left side reads Home instead of the space.
+  final bool feed;
   final String handle;
 
   /// The signed-in account's picture, shown over its initial.
   final ImageProvider? avatar;
+
+  /// The current space's picture, shown over its initials.
+  final ImageProvider? workspaceAvatar;
   final VoidCallback? onOpenNavigation;
-  final VoidCallback onOpenWorkspaces;
   final VoidCallback? onGoHome;
   final VoidCallback? onOpenAdmin;
-  final VoidCallback? onOpenSpaceSettings;
   final VoidCallback onOpenProfile;
-  final VoidCallback? onOpenSearchFeed;
 
   @override
   Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 24, vertical: 10),
       child: Row(children: [
-        if (compact && onOpenNavigation != null) ...[
-          IconButton(
-              tooltip: 'Rooms and workspace',
-              onPressed: onOpenNavigation,
-              icon: const Icon(Icons.menu_rounded)),
-          const SizedBox(width: 4),
-        ],
-        Flexible(
-          child: InkWell(
-              onTap: onOpenWorkspaces,
-              borderRadius: BorderRadius.circular(20),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.blur_on_rounded, size: 30),
-                const SizedBox(width: 9),
-                const Flexible(
-                  child: Text('TRADERA',
+        Expanded(
+            child: Row(children: [
+          if (compact && onOpenNavigation != null)
+            IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: 'Rooms and workspace',
+                onPressed: onOpenNavigation,
+                icon: const Icon(Icons.menu_rounded))
+          else if (!compact)
+            Flexible(
+                child: _CurrentPlace(
+                    workspace: workspace,
+                    feed: feed,
+                    avatar: workspaceAvatar)),
+          if (room != null) ...[
+            if (!compact) ...[
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+            if (onGoHome != null)
+              IconButton(
+                  visualDensity: compact ? VisualDensity.compact : null,
+                  onPressed: onGoHome,
+                  tooltip: 'Workspace home',
+                  icon: const Icon(Icons.home_outlined, size: 18)),
+            if (!compact)
+              Flexible(
+                  child: Text(room!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 2)),
-                ),
-                if (!compact) ...[
-                  const SizedBox(width: 8),
-                  Text(workspace,
-                      style: TextStyle(
-                          fontSize: 10,
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant)),
-                  const Icon(Icons.expand_more_rounded, size: 16),
-                ],
-              ])),
-        ),
-        if (room != null) ...[
-          SizedBox(width: compact ? 4 : 14),
-          if (!compact) const Icon(Icons.chevron_right_rounded),
-          if (onGoHome != null)
-            IconButton(
-                onPressed: onGoHome,
-                tooltip: 'Workspace home',
-                icon: const Icon(Icons.home_outlined, size: 18)),
-          if (!compact)
-            Text(room!, style: const TextStyle(fontWeight: FontWeight.w700))
-        ],
-        const Spacer(),
-        if (!compact) ...[
-          const _LivePill(),
-          const SizedBox(width: 8),
-        ],
-        if (!compact && onOpenAdmin != null) ...[
-          IconButton.filledTonal(
-              onPressed: onOpenAdmin,
-              icon: const Icon(Icons.space_dashboard_outlined)),
-          const SizedBox(width: 8),
-        ],
-        if (onOpenSpaceSettings != null) ...[
-          IconButton(
-              onPressed: onOpenSpaceSettings,
-              tooltip: 'Workspace settings',
-              icon: const Icon(Icons.settings_outlined)),
-        ],
-        if (onOpenSearchFeed != null) ...[
-          IconButton(
-              onPressed: onOpenSearchFeed,
-              tooltip: 'Search feed',
-              icon: const Icon(Icons.explore_outlined)),
-        ],
-        InkWell(
-            onTap: onOpenProfile,
-            customBorder: const CircleBorder(),
-            child: CircleAvatar(
-                foregroundImage: avatar,
-                onForegroundImageError: avatar == null ? null : (_, __) {},
-                child: Text(handle.isEmpty ? 'ME' : handle[0].toUpperCase())))
+                      style: const TextStyle(fontWeight: FontWeight.w700)))
+          ],
+        ])),
+        SizedBox(width: compact ? 6 : 12),
+        const Text('TRADERA',
+            maxLines: 1,
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 2)),
+        SizedBox(width: compact ? 6 : 12),
+        Expanded(
+            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          if (!compact) ...[
+            const Flexible(child: _LivePill()),
+            const SizedBox(width: 8),
+          ],
+          if (!compact && onOpenAdmin != null) ...[
+            IconButton.filledTonal(
+                onPressed: onOpenAdmin,
+                icon: const Icon(Icons.space_dashboard_outlined)),
+            const SizedBox(width: 8),
+          ],
+          InkWell(
+              onTap: onOpenProfile,
+              customBorder: const CircleBorder(),
+              child: CircleAvatar(
+                  foregroundImage: avatar,
+                  onForegroundImageError: avatar == null ? null : (_, __) {},
+                  child:
+                      Text(handle.isEmpty ? 'ME' : handle[0].toUpperCase())))
+        ])),
       ]));
+}
+
+/// Where the user is, on the app bar's left edge: the current space's
+/// avatar and name, or Home on the feed.
+class _CurrentPlace extends StatelessWidget {
+  const _CurrentPlace(
+      {required this.workspace, required this.feed, this.avatar});
+  final String workspace;
+  final bool feed;
+  final ImageProvider? avatar;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      if (feed)
+        CircleAvatar(
+            radius: 16,
+            backgroundColor: scheme.primaryContainer,
+            child: Icon(Icons.home_rounded,
+                size: 18, color: scheme.onPrimaryContainer))
+      else
+        CircleAvatar(
+            radius: 16,
+            foregroundImage: avatar,
+            onForegroundImageError: avatar == null ? null : (_, __) {},
+            child: Text(
+                workspace.substring(0, math.min(2, workspace.length)).toUpperCase(),
+                style: const TextStyle(fontSize: 11))),
+      const SizedBox(width: 10),
+      Flexible(
+          child: Text(feed ? 'Home' : workspace,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
+    ]);
+  }
+}
+
+/// The workspace switcher's handle: a bump stuck to the screen's right edge,
+/// centered vertically, with a rocket in it. Tapping it opens the switcher.
+class SwitcherEdgeHandle extends StatelessWidget {
+  const SwitcherEdgeHandle({super.key, required this.onTap});
+  final VoidCallback onTap;
+
+  static const _width = 30.0, _height = 168.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Positioned.fill(
+        child: SafeArea(
+            child: Align(
+                alignment: Alignment.centerRight,
+                child: Tooltip(
+                    message: 'Switch workspace',
+                    child: Semantics(
+                        button: true,
+                        label: 'Switch workspace',
+                        child: GestureDetector(
+                            onTap: onTap,
+                            behavior: HitTestBehavior.opaque,
+                            child: CustomPaint(
+                                painter: _BumpPainter(
+                                    fill: scheme.primaryContainer,
+                                    shadow: scheme.shadow),
+                                child: SizedBox(
+                                    width: _width,
+                                    height: _height,
+                                    child: Align(
+                                        alignment: const Alignment(.3, 0),
+                                        child: Icon(
+                                            Icons.rocket_launch_rounded,
+                                            size: 17,
+                                            color: scheme
+                                                .onPrimaryContainer)))))))))); 
+  }
+}
+
+/// A bell-shaped bump growing out of the right edge, tapering to nothing at
+/// its top and bottom.
+class _BumpPainter extends CustomPainter {
+  const _BumpPainter({required this.fill, required this.shadow});
+  final Color fill;
+  final Color shadow;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final path = Path()
+      ..moveTo(w, 0)
+      ..cubicTo(w, h * .3, 0, h * .3, 0, h / 2)
+      ..cubicTo(0, h * .7, w, h * .7, w, h)
+      ..close();
+    canvas.drawShadow(path, shadow.withValues(alpha: .5), 3, false);
+    canvas.drawPath(path, Paint()..color = fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BumpPainter old) =>
+      old.fill != fill || old.shadow != shadow;
 }
 
 class _LivePill extends StatelessWidget {
@@ -131,7 +224,7 @@ class _LivePill extends StatelessWidget {
       decoration: BoxDecoration(
           color: Colors.green.withValues(alpha: .12),
           borderRadius: BorderRadius.circular(20)),
-      child: const Row(children: [
+      child: const Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.circle, color: Colors.greenAccent, size: 8),
         SizedBox(width: 7),
         Text('Markets live',
@@ -141,15 +234,22 @@ class _LivePill extends StatelessWidget {
 
 /// Workspace switcher dialog/sheet with a searchable grid of the user's real
 /// spaces. [dependencies] lists and creates spaces through the backend.
+/// With [onOpenFeed] the grid starts with a Home tile that opens the feed.
 class WorkspacePicker extends StatefulWidget {
   const WorkspacePicker(
       {super.key,
       required this.current,
       required this.onPick,
+      this.onOpenFeed,
+      this.feedSelected = false,
       this.dependencies,
       this.onSettings});
   final String current;
   final ValueChanged<String> onPick;
+  final VoidCallback? onOpenFeed;
+
+  /// The feed is open now: its tile is the selected one.
+  final bool feedSelected;
   final AppDependencies? dependencies;
   final void Function(Workspace space)? onSettings;
   @override
@@ -233,6 +333,7 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 820;
     final names = _names;
+    final showFeed = _showFeed;
     return SafeArea(
         child: Center(
             child: Material(
@@ -307,8 +408,17 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                                             mainAxisSpacing: 12,
                                             crossAxisSpacing: 12,
                                             mainAxisExtent: 154),
-                                    itemCount: names.length + 1,
+                                    itemCount:
+                                        names.length + 1 + (showFeed ? 1 : 0),
                                     itemBuilder: (context, i) {
+                                      if (showFeed) {
+                                        if (i == 0) {
+                                          return _FeedTile(
+                                              selected: widget.feedSelected,
+                                              onTap: widget.onOpenFeed!);
+                                        }
+                                        i -= 1;
+                                      }
                                       if (i == names.length)
                                         return InkWell(
                                             onTap: _create,
@@ -338,7 +448,8 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                                                                       .w700))
                                                     ])));
                                       final name = names[i];
-                                      final selected = name == widget.current;
+                                      final selected = !widget.feedSelected &&
+                                          name == widget.current;
                                       final space = spaces.firstWhere(
                                           (s) => s.name == name,
                                           orElse: () => Workspace(
@@ -436,6 +547,51 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
   }
 
   int _roomCountFor(String name) => _roomCounts[name] ?? 0;
+
+  bool get _showFeed {
+    if (widget.onOpenFeed == null) return false;
+    final q = query.trim().toLowerCase();
+    return q.isEmpty || 'home feed'.contains(q);
+  }
+}
+
+/// The feed's shortcut in the workspace switcher, laid out like a space.
+class _FeedTile extends StatelessWidget {
+  const _FeedTile({required this.selected, required this.onTap});
+  final bool selected;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+                color: selected
+                    ? scheme.primaryContainer
+                    : scheme.surfaceContainerHighest.withValues(alpha: .6),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                    color: selected ? scheme.primary : Colors.transparent)),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                      backgroundColor: scheme.primary,
+                      child: Icon(Icons.home_rounded, color: scheme.onPrimary)),
+                  const Spacer(),
+                  const Text('Home',
+                      style: TextStyle(fontWeight: FontWeight.w900)),
+                  const Text('Your feed', style: TextStyle(fontSize: 10)),
+                  if (selected)
+                    const Align(
+                        alignment: Alignment.bottomRight,
+                        child: Icon(Icons.check_circle_rounded, size: 17))
+                ])));
+  }
 }
 
 class _CreateWorkspaceDialog extends StatefulWidget {

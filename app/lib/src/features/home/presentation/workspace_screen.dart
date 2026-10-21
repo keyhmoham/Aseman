@@ -506,6 +506,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                           allBots: bots,
                           tab: libraryTab,
                           flat: true,
+                          onOpenSettings: _spaceFor(workspace) == null
+                              ? null
+                              : () {
+                                  Navigator.pop(context);
+                                  _openSpaceSettings();
+                                },
                           dependencies: widget.dependencies,
                           spaceId: _spaceFor(workspace)?.id ?? '',
                           roomId: _currentRoomId,
@@ -540,6 +546,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                   workspace: workspace,
                   room: room,
                   compact: compact,
+                  workspaceAvatar: widget.dependencies.service
+                      .avatarImage(_spaceFor(workspace)?.avatar ?? ''),
                   handle:
                       widget.dependencies.sessionController.session?.handle ??
                           '',
@@ -547,7 +555,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                       widget.dependencies.sessionController.avatar),
                   onOpenNavigation: () =>
                       scaffoldKey.currentState?.openDrawer(),
-                  onOpenWorkspaces: () => _workspacePicker(context),
                   onGoHome: goHome,
                   onOpenAdmin: !widget.dependencies.sessionController.isAdmin
                       ? null
@@ -557,10 +564,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                   dependencies: widget.dependencies),
                             ),
                           ),
-                  onOpenSpaceSettings: () => _openSpaceSettings(),
                   onOpenProfile: () =>
-                      showProfileMenu(context, widget.dependencies),
-                  onOpenSearchFeed: widget.onBackToFeed),
+                      showProfileMenu(context, widget.dependencies)),
               ),
               Expanded(child: LayoutBuilder(builder: (context, box) {
                 if (box.maxWidth < 820) {
@@ -595,6 +600,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                       fileRevision: _fileRevision,
                                       onTab: (v) =>
                                           setState(() => libraryTab = v),
+                                      onOpenSettings:
+                                          _spaceFor(workspace) == null
+                                              ? null
+                                              : _openSpaceSettings,
                                       onOpenApp: openApp,
                                       onOpenFile: _openFile,
                           openFilePath: _openFilePath,
@@ -662,6 +671,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                         ]));
               }))
             ])),
+            SwitcherEdgeHandle(onTap: () => _workspacePicker(context)),
           ])),
     ));
   }
@@ -736,9 +746,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       showFloatingPanel(context, child, maxWidth: maxWidth);
 
   void _workspacePicker(BuildContext context) {
+    final toFeed = widget.onBackToFeed;
     final picker = WorkspacePicker(
         current: workspace,
         dependencies: widget.dependencies,
+        onOpenFeed: toFeed == null
+            ? null
+            : () {
+                Navigator.pop(context);
+                toFeed();
+              },
         onSettings: (space) {
           Navigator.pop(context);
           Future<void>.delayed(const Duration(milliseconds: 320), () {
@@ -869,6 +886,7 @@ class _LibraryPanel extends StatelessWidget {
       this.onAddApp,
       this.appConnections = const {},
       this.onConnectApp,
+      this.onOpenSettings,
       required this.openRoom});
   final String? room;
   final String workspace;
@@ -907,6 +925,9 @@ class _LibraryPanel extends StatelessWidget {
   final Map<String, ({String auth, bool connected, String name})>
       appConnections;
   final void Function(Bot bot, bool reconnect)? onConnectApp;
+
+  /// Opens the space's settings, from the button under the tabs.
+  final VoidCallback? onOpenSettings;
 
   /// The first of the space's facility tabs (Files, Computer, Memory,
   /// Previews), which follow the library tabs.
@@ -954,8 +975,11 @@ class _LibraryPanel extends StatelessWidget {
                     .withValues(alpha: .58),
                 borderRadius: BorderRadius.circular(24)),
             // The library tabs, then (past a divider) the space's
-            // facilities; the rail scrolls when the panel is short.
-            child: Center(
+            // facilities; the rail scrolls when the panel is short. The
+            // space's settings stay pinned under them.
+            child: Column(children: [
+              Expanded(
+                child: Center(
                 child: SingleChildScrollView(
                     child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -998,6 +1022,21 @@ class _LibraryPanel extends StatelessWidget {
                                                 : Theme.of(context).colorScheme.onSurfaceVariant)))))),
                   ]
                 ])))),
+              if (onOpenSettings != null) ...[
+                Container(
+                    width: 26,
+                    height: 1,
+                    margin: const EdgeInsets.symmetric(vertical: 5),
+                    color: Theme.of(context).colorScheme.outlineVariant),
+                IconButton(
+                    tooltip: 'Workspace settings',
+                    onPressed: onOpenSettings,
+                    icon: Icon(Icons.settings_outlined,
+                        size: 20,
+                        color:
+                            Theme.of(context).colorScheme.onSurfaceVariant)),
+              ],
+            ])),
         Expanded(
             child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 16, 14, 14),

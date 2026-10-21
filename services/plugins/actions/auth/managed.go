@@ -17,7 +17,7 @@ const managedEmailDomain = "managed.tradera.invalid"
 
 // CreateManagedAccount registers an ordinary user account that an
 // administrator — or the admins space's tool working for one — makes for
-// someone else (a trader the evaluator follows). No one reads its mailbox,
+// someone else (such as a trader whose posts are imported). No one reads its mailbox,
 // so it is active and verified at once; with no email given it gets a
 // placeholder one. The administrator role is never granted here.
 func (s *Service) CreateManagedAccount(ctx context.Context, handle, email, password string) (*account.Account, error) {

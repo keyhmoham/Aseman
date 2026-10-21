@@ -58,17 +58,17 @@ func TestManagedAccounts(t *testing.T) {
 	}
 	bob, _ := s.GetAccount(ctx, "bob")
 
-	// The evaluator: a tool bot and its account.
+	// The importer: a tool bot and its account.
 	now := time.Now().UTC()
 	toolAccount := mustID(t, "00000000000000010000000000000301")
-	evaluator := &bot.Bot{Entity: entity.Entity{ID: mustID(t, "00000000000000010000000000000201"), CreatedAt: now, UpdatedAt: now},
-		AccountID: toolAccount, Name: "evaluator", Kind: bot.KindTool}
-	if err := s.R.CreateID(ctx, "bots", evaluator.ID, evaluator); err != nil {
+	importer := &bot.Bot{Entity: entity.Entity{ID: mustID(t, "00000000000000010000000000000201"), CreatedAt: now, UpdatedAt: now},
+		AccountID: toolAccount, Name: "importer", Kind: bot.KindTool}
+	if err := s.R.CreateID(ctx, "bots", importer.ID, importer); err != nil {
 		t.Fatal(err)
 	}
 
 	asTool := func(space string, actor identity.ID) (context.Context, api.Caller) {
-		return vmm.WithExecution(ctx, vmm.Execution{ActorID: actor.String(), SpaceID: space, AgentID: evaluator.ID.String()}),
+		return vmm.WithExecution(ctx, vmm.Execution{ActorID: actor.String(), SpaceID: space, AgentID: importer.ID.String()}),
 			api.Caller{ID: toolAccount, Kind: "bot"}
 	}
 	create := func(ctx context.Context, caller api.Caller, handle string) (map[string]any, error) {
@@ -100,13 +100,13 @@ func TestManagedAccounts(t *testing.T) {
 		t.Fatalf("a tool working for a non-admin created an account: %v", err)
 	}
 
-	// The evaluator in the admins space, for an admin.
+	// The importer in the admins space, for an admin.
 	tctx, tool := asTool(admins, alice.ID)
 	made, err := create(tctx, tool, "Daniel_Crypto365")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if made["handle"] != "daniel_crypto365" || made["managed_by"] != evaluator.ID.String() {
+	if made["handle"] != "daniel_crypto365" || made["managed_by"] != importer.ID.String() {
 		t.Fatalf("made %v", made)
 	}
 	acc, err := s.GetAccount(ctx, "daniel_crypto365")

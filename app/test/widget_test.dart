@@ -53,9 +53,44 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(robotHead(), findsOneWidget);
-    expect(find.text('Global'), findsOneWidget);
+    expect(find.text('Global'), findsNothing);
+    expect(find.text('Traders'), findsNothing);
     expect(find.text('Following'), findsOneWidget);
     expect(find.textContaining('Search'), findsWidgets);
+
+    // The spaces the user is in on the left, their direct chats on the right.
+    expect(find.text('Spaces'), findsOneWidget);
+    expect(find.text('Atlas Capital'), findsWidgets);
+    expect(find.text('Chats'), findsOneWidget);
+    expect(find.text('Maya Chen'), findsOneWidget);
+    expect(find.text('AlphaBot'), findsOneWidget);
+
+    // Space posts are mixed into the feed, tagged with their space.
+    expect(find.text('Private update inside the Home workspace.'),
+        findsOneWidget);
+  });
+
+  testWidgets('phone feed tabs: spaces, chats, then the feed',
+      (tester) async {
+    await seedSession();
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpAndSettle();
+
+    // The feed tab is open; the panels are tabs before it.
+    expect(find.text('Private update inside the Home workspace.'),
+        findsOneWidget);
+    expect(find.text('Maya Chen'), findsNothing);
+
+    await tester.tap(find.text('Chats'));
+    await tester.pumpAndSettle();
+    expect(find.text('Maya Chen'), findsOneWidget);
+
+    await tester.tap(find.text('Spaces'));
+    await tester.pumpAndSettle();
+    expect(find.text('Atlas Capital'), findsWidgets);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('search filters the feed', (tester) async {
@@ -82,14 +117,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Switch workspace'), findsOneWidget);
 
-    await tester.tap(find.text('Atlas Capital'));
+    await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
     expect(find.text('My trading desk'), findsOneWidget);
     expect(find.text('Atlas Capital'), findsWidgets);
 
     await tester.tap(find.byTooltip('Search feed'));
     await tester.pumpAndSettle();
-    expect(find.text('Global feed'), findsOneWidget);
+    expect(find.text('People and agents you follow, and your spaces'),
+        findsOneWidget);
   });
 
   testWidgets('new workspace hall room shows its own feed and the composer',
@@ -103,7 +139,7 @@ void main() {
     // Open the desk first, then create a brand-new workspace from there.
     await tester.tap(find.text('TRADERA'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital'));
+    await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
     expect(find.text('My trading desk'), findsOneWidget);
 
@@ -166,7 +202,7 @@ void main() {
 
     await tester.tap(find.text('TRADERA'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital'));
+    await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
     expect(find.text('My trading desk'), findsOneWidget);
 
@@ -190,27 +226,6 @@ void main() {
     await tester.tap(find.byIcon(Icons.send_rounded));
     await tester.pumpAndSettle();
     expect(find.text('Please analyze BTC'), findsOneWidget);
-  });
-
-  testWidgets('traders tab shows the leaderboard', (tester) async {
-    await seedSession();
-    tester.view.physicalSize = const Size(1440, 900);
-    tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
-    await tester.pumpAndSettle();
-
-    // The feed tab bar scrolls horizontally; bring the Traders tab into view.
-    await tester.ensureVisible(find.text('Traders'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Traders'));
-    await tester.pumpAndSettle();
-    // Ranked by the admins space's evaluator: two evaluated, one queued.
-    expect(find.text('Traders leaderboard'), findsOneWidget);
-    expect(find.text('#1'), findsOneWidget);
-    expect(find.text('#2'), findsOneWidget);
-    expect(find.text('Daniel Markson'), findsOneWidget);
-    expect(find.text('Vlad Anderson'), findsOneWidget);
-    expect(find.text('Awaiting evaluation'), findsOneWidget);
   });
 
   testWidgets('profile menu opens market and my bots', (tester) async {
@@ -342,7 +357,7 @@ void main() {
 
     await tester.tap(find.text('TRADERA'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital'));
+    await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('general'));
     await tester.pumpAndSettle();
@@ -393,7 +408,7 @@ void main() {
 
     await tester.tap(find.text('TRADERA'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital'));
+    await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
 
     // Docs tab shows the text file.
@@ -422,7 +437,7 @@ void main() {
 
     await tester.tap(find.text('TRADERA'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital'));
+    await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
 
     // Open the Agents tab (Atlas has SignalBot installed).
@@ -452,7 +467,7 @@ void main() {
 
     await tester.tap(find.text('TRADERA'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital'));
+    await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
 
     // Open the search/discover panel (the left panel's search button).
@@ -510,7 +525,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('TRADERA'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital'));
+    await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('general'));
     await tester.pumpAndSettle();
@@ -549,7 +564,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('TRADERA'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital'));
+    await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('general'));
     // The indicator animates indefinitely, so pump fixed durations instead of
@@ -588,7 +603,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('TRADERA'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital'));
+    await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('general'));
     await tester.pumpAndSettle();
@@ -609,7 +624,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('TRADERA'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital'));
+    await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('general'));
     await tester.pumpAndSettle();

@@ -423,7 +423,6 @@ app renders.
 | `tools.invoke` | call a microtool as the signed-in person in a space |
 | `tools.frontend_get` / `frontend_action` | its frontend, and a generated frontend's actions |
 | `tools.components_list` | the generated frontends the registry holds |
-| `tools.traders_leaderboard` / `trader_profile` | the traders leaderboard the admins space's `evaluator` tool keeps ([`deploy/tools/evaluator`](../deploy/tools/evaluator)), read by anyone signed in |
 
 Configuration: `TRADERA_TOOL_RUNTIME_IMAGE`, `TRADERA_TOOL_RUNTIME_NETWORK`,
 `TRADERA_TOOL_NODE_URL` (the node as backends reach it) and

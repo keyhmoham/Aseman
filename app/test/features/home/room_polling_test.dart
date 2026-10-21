@@ -79,7 +79,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('TRADERA'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital'));
+    await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('general'));
     await tester.pumpAndSettle();

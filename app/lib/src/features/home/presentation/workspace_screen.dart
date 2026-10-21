@@ -2546,7 +2546,6 @@ class _SearchPanelState extends State<_SearchPanel>
   late final TabController tabs;
   int localSection = 0;
   int globalSection = 0;
-  int filter = 0;
   late String query = widget.initialQuery;
   late final searchField = TextEditingController(text: widget.initialQuery);
   static const local = [
@@ -2627,31 +2626,9 @@ class _SearchPanelState extends State<_SearchPanel>
               onChanged: (value) => setState(() => query = value),
               decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.search),
-                  suffixIcon: const Icon(Icons.tune_rounded),
                   hintText: _local
                       ? 'Search ${widget.workspace}…'
                       : 'Search all of Tradera…')),
-          const SizedBox(height: 9),
-          SizedBox(
-              height: 34,
-              child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: 4,
-                  separatorBuilder: (_, __) => const SizedBox(width: 7),
-                  itemBuilder: (context, index) {
-                    final labels = [
-                      'Relevant',
-                      'Trending',
-                      'Verified',
-                      'Recent'
-                    ];
-                    return FilterChip(
-                        selected: filter == index,
-                        onSelected: (_) => setState(() => filter = index),
-                        label: Text(labels[index],
-                            style: const TextStyle(fontSize: 10)),
-                        visualDensity: VisualDensity.compact);
-                  })),
           // Outside a space there is nothing to scope the search to.
           if (!widget.feed) ...[
             const SizedBox(height: 9),
@@ -2673,7 +2650,6 @@ class _SearchPanelState extends State<_SearchPanel>
                       workspace: widget.workspace,
                       spaceId: widget.spaceId,
                       query: query,
-                      filter: filter,
                       onOpenSpace: widget.onOpenSpace,
                       dependencies: widget.dependencies))),
           _SearchSectionNav(
@@ -2744,7 +2720,6 @@ class _SearchResults extends StatefulWidget {
       required this.workspace,
       required this.spaceId,
       required this.query,
-      required this.filter,
       this.onOpenSpace,
       this.dependencies});
   final String section;
@@ -2754,7 +2729,6 @@ class _SearchResults extends StatefulWidget {
   final String workspace;
   final String spaceId;
   final String query;
-  final int filter;
   final AppDependencies? dependencies;
   @override
   State<_SearchResults> createState() => _SearchResultsState();
@@ -3118,12 +3092,9 @@ class _SearchResultsState extends State<_SearchResults> {
                   label: Text('$count found',
                       style: const TextStyle(fontSize: 9))),
           ])),
-      Expanded(child: LayoutBuilder(builder: (context, grid) {
-        const gap = 12.0;
-        final columns = math.max(
-            1, math.min(4, ((grid.maxWidth + gap) / (250 + gap)).floor()));
+      Expanded(child: Builder(builder: (context) {
         if (_loading) return const Center(child: CircularProgressIndicator());
-        if (_items.isEmpty)
+        if (_items.isEmpty) {
           return const Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
             Icon(Icons.search_off_rounded, size: 42),
@@ -3131,20 +3102,16 @@ class _SearchResultsState extends State<_SearchResults> {
             Text('No matching results',
                 style: TextStyle(fontWeight: FontWeight.w800))
           ]));
-        return GridView.builder(
+        }
+        return ListView.builder(
             controller: _scroll,
             padding: const EdgeInsets.only(bottom: 12),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: columns,
-                crossAxisSpacing: gap,
-                mainAxisSpacing: gap,
-                mainAxisExtent: 206),
             itemCount: _items.length + (_hasMore || _loadingMore ? 1 : 0),
             itemBuilder: (context, index) {
               if (index >= _items.length) {
                 return const Center(
                     child: Padding(
-                  padding: EdgeInsets.all(18),
+                  padding: EdgeInsets.all(14),
                   child: SizedBox(
                       width: 22,
                       height: 22,
@@ -3156,11 +3123,9 @@ class _SearchResultsState extends State<_SearchResults> {
                   section: section,
                   title: hit.title,
                   subtitle: hit.subtitle,
-                  global: widget.global,
                   feed: widget.feed,
                   spaceId: widget.spaceId,
                   index: index,
-                  filter: widget.filter,
                   onOpen: widget.feed ? _opener(hit) : null,
                   dependencies: widget.dependencies);
             });
@@ -3169,15 +3134,14 @@ class _SearchResultsState extends State<_SearchResults> {
   }
 }
 
+/// One search result as a compact row: its icon, name and a line about it.
 class _SearchResultCard extends StatelessWidget {
   const _SearchResultCard(
       {required this.section,
       required this.title,
       this.subtitle,
-      required this.global,
       this.feed = false,
       required this.index,
-      required this.filter,
       this.onOpen,
       this.spaceId = '',
       this.dependencies});
@@ -3185,15 +3149,13 @@ class _SearchResultCard extends StatelessWidget {
 
   /// What the result says about itself (the generic blurb otherwise).
   final String? subtitle;
-  final bool global;
 
   /// A feed search result: [onOpen] opens it.
   final bool feed;
   final VoidCallback? onOpen;
-  final int index, filter;
+  final int index;
   final String spaceId;
   final AppDependencies? dependencies;
-  bool get visual => const ['Media', 'GIFs', 'Posts'].contains(section);
 
   VoidCallback? _open(BuildContext context) => feed
       ? onOpen
@@ -3201,111 +3163,69 @@ class _SearchResultCard extends StatelessWidget {
           ? () => _openEntityProfile(
               context, section, title, dependencies, spaceId)
           : null;
+
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final color = [
       Colors.purpleAccent,
       Colors.cyan,
       Colors.green,
       Colors.orangeAccent
     ][index % 4];
-    return Card(
-        margin: EdgeInsets.zero,
+    final open = _open(context);
+    return Material(
+        color: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-            onTap: _open(context),
+            onTap: open,
             child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (visual)
-                        Container(
-                            height: 58,
-                            margin: const EdgeInsets.only(bottom: 9),
-                            decoration: BoxDecoration(
-                                gradient: LinearGradient(colors: [
-                                  color.withValues(alpha: .55),
-                                  Theme.of(context).colorScheme.primaryContainer
-                                ]),
-                                borderRadius: BorderRadius.circular(14)),
-                            child: Center(
-                                child: Icon(
-                                    section == 'Posts'
-                                        ? Icons.article_outlined
-                                        : Icons.play_circle_outline_rounded,
-                                    color: Colors.white,
-                                    size: 28)))
-                      else
-                        Row(children: [
-                          CircleAvatar(
-                              backgroundColor: color.withValues(alpha: .18),
-                              child: Icon(_sectionIcon(section),
-                                  color: color, size: 19)),
-                          const Spacer(),
-                          IconButton(
-                              onPressed: () {},
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(Icons.more_horiz, size: 18))
-                        ]),
-                      Text(title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w900)),
-                      const SizedBox(height: 4),
-                      Text(subtitle ?? _description(),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 10,
-                              height: 1.35,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant)),
-                      const Spacer(),
-                      Row(children: [
-                        MiniTag(
-                            feed
-                                ? section.toUpperCase()
-                                : global
-                                    ? 'GLOBAL'
-                                    : 'WORKSPACE',
-                            color),
-                        const SizedBox(width: 6),
-                        MiniTag(
-                            [
-                              'RELEVANT',
-                              'TRENDING',
-                              'VERIFIED',
-                              'RECENT'
-                            ][filter],
-                            Theme.of(context).colorScheme.primary),
-                        const Spacer(),
-                        IconButton.filledTonal(
-                            onPressed: _open(context) ?? () {},
-                            tooltip: _action(),
-                            icon: Icon(_actionIcon(), size: 17))
-                      ])
-                    ]))));
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                child: Row(children: [
+                  CircleAvatar(
+                      radius: 18,
+                      backgroundColor: color.withValues(alpha: .18),
+                      child: Icon(_sectionIcon(section),
+                          color: color, size: 18)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 2),
+                        Text(subtitle ?? _description(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: scheme.onSurfaceVariant)),
+                      ])),
+                  if (open != null)
+                    Icon(Icons.chevron_right_rounded,
+                        size: 20, color: scheme.onSurfaceVariant),
+                ]))));
   }
 
   String _description() => switch (section) {
-        'Users' => 'Systematic trader · macro and digital assets',
-        'Agents' =>
-          'Autonomous market intelligence with configurable permissions',
-        'Apps' => 'Connected app · privacy reviewed',
-        'Rooms' =>
-          'Active discussion, agents, shared research and live widgets',
-        'Workspaces' =>
-          'Public trading workspace with rooms, research and shared agents',
-        'Documents' => 'Research document · updated recently',
-        'Messages' => 'Matched conversation with room context',
-        'Links' => 'Saved research resource from this workspace',
-        'Media' => 'Rich market analysis with charts and commentary',
-        'GIFs' => 'Shared reaction from workspace media',
-        'Posts' => 'Market insight with discussion and trade context',
-        _ => 'Relevant result selected for your current search'
+        'Users' => 'Person on Tradera',
+        'Agents' => 'Agent',
+        'Apps' => 'App',
+        'Rooms' => 'Room',
+        'Workspaces' || 'Spaces' => 'Space',
+        'Documents' => 'Document',
+        'Messages' => 'Message',
+        'Links' => 'Link',
+        'Media' => 'Media',
+        'GIFs' => 'GIF',
+        'Posts' => 'Post',
+        _ => 'Result'
       };
   bool get _hasProfile => const [
         'Users',
@@ -3315,11 +3235,6 @@ class _SearchResultCard extends StatelessWidget {
         'Spaces',
         'Rooms'
       ].contains(section);
-  String _action() => _hasProfile && !const ['Spaces'].contains(section)
-      ? 'View profile'
-      : 'Open';
-  IconData _actionIcon() =>
-      _hasProfile ? Icons.arrow_outward_rounded : Icons.arrow_forward_rounded;
 }
 
 /// A post found by the feed's search, rendered in full.

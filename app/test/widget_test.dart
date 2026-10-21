@@ -109,8 +109,8 @@ void main() {
     // Outside a space there is no space/explore scope to pick.
     expect(find.text('Explore Tradera'), findsNothing);
 
-    Finder inExplore(String text) => find.descendant(
-        of: find.byType(GridView), matching: find.text(text));
+    // Explore sits over the feed, whose side panels list the same names.
+    Finder inExplore(String text) => find.text(text).last;
     await tester.enterText(find.byType(TextField).last, 'a');
     await tester.pumpAndSettle();
     expect(inExplore('maya'), findsOneWidget);
@@ -144,8 +144,8 @@ void main() {
     await tester.pumpWidget(TraderaApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    Finder inExplore(String text) => find.descendant(
-        of: find.byType(GridView), matching: find.text(text));
+    // Explore sits over the feed, whose side panels list the same names.
+    Finder inExplore(String text) => find.text(text).last;
     await tester.tap(find.byTooltip('Explore'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Chats').last);
@@ -535,12 +535,11 @@ void main() {
     expect(find.text('Explore Tradera'), findsOneWidget);
 
     // In-workspace Agents section → only the space's agent (SignalBot), not the
-    // global AlphaBot. Each result card carries a WORKSPACE/GLOBAL tag.
+    // global AlphaBot.
     await tester.tap(find.widgetWithText(Tab, 'Agents'));
     await tester.pumpAndSettle();
-    expect(find.text('WORKSPACE'), findsOneWidget);
+    expect(find.text('Results from Atlas Capital workspace'), findsOneWidget);
     expect(find.text('SignalBot'), findsWidgets);
-    expect(find.text('GLOBAL'), findsNothing);
 
     // Switch to the global Explore tab, Agents section → the platform agent
     // appears.
@@ -548,7 +547,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(Tab, 'Agents'));
     await tester.pumpAndSettle();
-    expect(find.text('GLOBAL'), findsOneWidget);
+    expect(find.text('Discover across the platform'), findsOneWidget);
     expect(find.text('AlphaBot'), findsWidgets);
   });
 

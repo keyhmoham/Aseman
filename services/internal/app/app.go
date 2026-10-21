@@ -1,4 +1,4 @@
-// Package app is the composition root of the tradera daemon. It builds the
+// Package app is the composition root of the aseman daemon. It builds the
 // kernel, registers the builtin adapter and action plugins, loads configured
 // plugins, registers the default database models and starts the network
 // serving the action API.
@@ -11,18 +11,18 @@ import (
 	"os"
 	"time"
 
-	"github.com/tradera/tradera/internal/kernel"
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/internal/plugins/logs"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/adapters/network/gateway"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/config"
+	"github.com/aseman/aseman/internal/kernel"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/logs"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/adapters/network/gateway"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/config"
 )
 
-// App is a running tradera node.
+// App is a running aseman node.
 type App struct {
 	K    *kernel.Kernel
 	Ring *logs.Ring
@@ -38,7 +38,7 @@ func New(cfg *dconfig.Config, extraEnv map[string]string) (*App, error) {
 		slog.NewTextHandler(os.Stderr, opts),
 		logs.NewHandler(ring),
 	)
-	log := multi.Named("tradera")
+	log := multi.Named("aseman")
 	logger.SetGlobal(log)
 
 	prepared, err := prepareIdentity(cfg, log)

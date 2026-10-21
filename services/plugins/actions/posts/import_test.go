@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 func importItems(from, to int) []ImportItem {

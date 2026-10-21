@@ -7,14 +7,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/permission"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/proxy"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/permission"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // tunnelVM is the VMM surface the sandbox provider must expose to open a port
@@ -24,10 +24,10 @@ type tunnelVM interface {
 }
 
 // CreateProxy opens a gateway proxy to a port of the space's sandbox (as
-// tradera) and posts the webview-shortcut card message in the room so users
+// aseman) and posts the webview-shortcut card message in the room so users
 // can open the served page. Returns the gateway path for the orchestrator.
 func (s *Service) CreateProxy(ctx context.Context, spaceID, roomID identity.ID, port int, title string) (string, error) {
-	dec, err := s.TraderaAccount(ctx)
+	dec, err := s.AsemanAccount(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -194,7 +194,7 @@ func (s *Service) proxyCreateTool(ctx context.Context, spaceID identity.ID, agen
 	if err := helper.CheckContextAccess(ctx, s.R, spaceID, roomID, true, "proxy_create"); err != nil {
 		return "", err
 	}
-	dec, err := s.TraderaAccount(ctx)
+	dec, err := s.AsemanAccount(ctx)
 	if err != nil {
 		return "", err
 	}

@@ -7,20 +7,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 
 	modal "github.com/modal-labs/modal-client/go"
 )
 
 // Runs against the real Modal account in the environment (a throwaway volume,
-// deleted afterwards): MODAL_LIVE_TEST=1 TRADERA_MODAL_TOKEN_ID=... go test -run Live
+// deleted afterwards): MODAL_LIVE_TEST=1 ASEMAN_MODAL_TOKEN_ID=... go test -run Live
 func TestLiveWorkspaceFilesWithoutAComputer(t *testing.T) {
 	if os.Getenv("MODAL_LIVE_TEST") != "1" {
 		t.Skip("set MODAL_LIVE_TEST=1 to run against Modal")
 	}
 	a := New(logger.Global())
-	a.tokenID, a.tokenSecret = os.Getenv("TRADERA_MODAL_TOKEN_ID"), os.Getenv("TRADERA_MODAL_TOKEN_SECRET")
+	a.tokenID, a.tokenSecret = os.Getenv("ASEMAN_MODAL_TOKEN_ID"), os.Getenv("ASEMAN_MODAL_TOKEN_SECRET")
 	if err := a.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func TestLiveWorkspaceFilesWithoutAComputer(t *testing.T) {
 	name := fmt.Sprintf("sbx-live%d", time.Now().Unix())
 	id := "vm-live"
 	a.sandboxes[id] = &sandboxState{spec: vmm.VMSpec{Name: name, Type: vmm.TypeModal}, slept: true}
-	defer func() { _ = a.client.Volumes.Delete(context.Background(), "tradera-"+name, nil) }()
+	defer func() { _ = a.client.Volumes.Delete(context.Background(), "aseman-"+name, nil) }()
 
 	if err := a.WriteWorkspace(ctx, id, "uploads/menu.txt", []byte("flat white\n")); err != nil {
 		t.Fatalf("write: %v", err)

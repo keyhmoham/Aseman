@@ -136,13 +136,13 @@ func TestSandboxBackendConfig(t *testing.T) {
 }
 
 func TestAgentRuntimeWiredFromEnv(t *testing.T) {
-	t.Setenv(EnvAgentNodeURL, "http://tradera:8080")
-	t.Setenv(EnvAgentRuntimeImage, "tradera/deepagents:test")
-	t.Setenv(EnvSandboxDockerNetwork, "tradera_default")
+	t.Setenv(EnvAgentNodeURL, "http://aseman:8080")
+	t.Setenv(EnvAgentRuntimeImage, "aseman/deepagents:test")
+	t.Setenv(EnvSandboxDockerNetwork, "aseman_default")
 	cfg := &Config{}
 	got := names(cfg.AutoAdapters())
 	opts, ok := got["deepagents"].Config["options"].(map[string]any)
-	if !ok || opts["node_url"] != "http://tradera:8080" || opts["image"] != "tradera/deepagents:test" || opts["network"] != "tradera_default" {
+	if !ok || opts["node_url"] != "http://aseman:8080" || opts["image"] != "aseman/deepagents:test" || opts["network"] != "aseman_default" {
 		t.Fatalf("deepagents options = %v", got["deepagents"].Config)
 	}
 	for _, removed := range []string{"langchain", "grok"} {

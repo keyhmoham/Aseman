@@ -2,10 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/app_dependencies.dart';
-import 'package:tradera/src/core/theme/app_theme.dart';
-import 'package:tradera/src/features/admin/presentation/admin_screen.dart';
-import 'package:tradera/src/features/admin/presentation/admin_widgets.dart';
+import 'package:aseman/src/app_dependencies.dart';
+import 'package:aseman/src/core/theme/app_theme.dart';
+import 'package:aseman/src/features/admin/presentation/admin_screen.dart';
+import 'package:aseman/src/features/admin/presentation/admin_widgets.dart';
 
 import 'admin_fixtures.dart';
 

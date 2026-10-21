@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 const (
@@ -15,7 +15,7 @@ const (
 var handlePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*[a-z0-9]$`)
 
 // reservedHandles belong to the platform itself.
-var reservedHandles = map[string]bool{"tradera": true, "lead": true}
+var reservedHandles = map[string]bool{"aseman": true, "lead": true}
 
 // NormalizeHandle trims, drops a leading "@" and lowercases a username, then
 // checks it: HandleMin–HandleMax characters of a-z, 0-9, "." "_" "-", starting

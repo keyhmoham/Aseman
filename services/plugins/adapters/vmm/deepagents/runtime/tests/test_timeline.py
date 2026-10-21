@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from langchain_core.messages import AIMessage
 
-from tradera_agents import timeline
+from aseman_agents import timeline
 from fakes import CODER, LEAD, Platform, call, turn_request
 from test_runtime import modified_request, platform, runner, tool_results  # noqa: F401
 

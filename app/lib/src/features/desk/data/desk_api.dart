@@ -1,6 +1,6 @@
 import 'dart:ui';
 
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../../tools/data/tools_api.dart' show ActionCall;
 import '../domain/desk_models.dart';
 
@@ -9,7 +9,7 @@ import '../domain/desk_models.dart';
 class DeskApi {
   DeskApi(this._call);
 
-  factory DeskApi.of(TraderaService service) => DeskApi(
+  factory DeskApi.of(AsemanService service) => DeskApi(
       (namespace, action, body, {timeout}) async => (await service.client
               .call(namespace, action, body: body, requestTimeout: timeout))
           .body);

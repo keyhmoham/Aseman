@@ -43,9 +43,9 @@ test('fetches JSON, pinned to the checked address, within its size bound', async
 });
 
 test('a program gets no network unless the runtime gives it one', async () => {
-  await assert.rejects(hostApis({}, null)('tradera.fetch', { url: 'https://example.com' }), /no network/);
+  await assert.rejects(hostApis({}, null)('aseman.fetch', { url: 'https://example.com' }), /no network/);
   const calls = [];
-  const out = await hostApis({}, null, () => {}, async (r) => { calls.push(r); return { ok: true }; })('tradera.fetch', { url: 'https://example.com' });
+  const out = await hostApis({}, null, () => {}, async (r) => { calls.push(r); return { ok: true }; })('aseman.fetch', { url: 'https://example.com' });
   assert.deepEqual(out, { ok: true });
   assert.equal(calls[0].url, 'https://example.com');
 });

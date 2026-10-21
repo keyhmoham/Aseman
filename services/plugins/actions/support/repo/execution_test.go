@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/adapters/database/memory"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	dbmodel "github.com/tradera/tradera/plugins/testutil"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/adapters/database/memory"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	dbmodel "github.com/aseman/aseman/plugins/testutil"
 )
 
 func TestExecutionClaimIsExclusiveAndFencesPreviousOwner(t *testing.T) {

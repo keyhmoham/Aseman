@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // observation is one item in Utopia's statements contract (decision 0054):

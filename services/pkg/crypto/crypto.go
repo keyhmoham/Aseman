@@ -1,4 +1,4 @@
-// Package crypto provides the identity and integrity primitives for tradera:
+// Package crypto provides the identity and integrity primitives for aseman:
 // Ed25519 keypairs for accounts and nodes, password-encrypted private keys,
 // request signing/verification and a canonical payload format.
 package crypto

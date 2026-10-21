@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 func TestEncodeJSONStructFromDriverRepresentations(t *testing.T) {

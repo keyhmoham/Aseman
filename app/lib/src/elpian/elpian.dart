@@ -1,4 +1,4 @@
-/// Elpian inside Tradera: the engine a tool's frontend runs on.
+/// Elpian inside Aseman: the engine a tool's frontend runs on.
 ///
 ///   * the rendering engine: JSON nodes (HTML, CSS, the Flutter DSL, canvas)
 ///     rendered as Flutter widgets;
@@ -9,7 +9,7 @@
 ///     renderer agents' and generated frontends are drawn with.
 ///
 /// Copied from Elpian's Flutter host (github.com/cosmopole-org/elpian,
-/// flutter/lib/src), not depended on: see README.md here. Tradera's own code
+/// flutter/lib/src), not depended on: see README.md here. Aseman's own code
 /// reaches it only through this library.
 library;
 

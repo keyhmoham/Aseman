@@ -3,15 +3,15 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/features/computer/preview_view.dart';
-import 'package:tradera/src/features/desk/presentation/web_page_view.dart';
+import 'package:aseman/src/features/computer/preview_view.dart';
+import 'package:aseman/src/features/desk/presentation/web_page_view.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
 const _page = '/v1/proxy/0123456789abcdef0123456789abcdef/';
 
 /// A node whose computer sleeps until a preview is opened.
-class _Service extends FakeTraderaService {
+class _Service extends FakeAsemanService {
   String state = 'asleep';
   Completer<Map<String, dynamic>>? opening;
   final opened = <String>[];
@@ -48,7 +48,7 @@ void main() {
         home: Scaffold(
           body: LivePreview(
             service: service,
-            spaceId: FakeTraderaService.atlasId,
+            spaceId: FakeAsemanService.atlasId,
             page: _page,
             title: 'Shop',
           ),

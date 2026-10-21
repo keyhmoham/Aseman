@@ -14,7 +14,7 @@ export class NodeGateway {
   /** The backend's program: { engine, language, source }. */
   async program() {
     const res = await this.fetch(`${this.url}/tools/v1/runtime/program`, {
-      headers: { Authorization: `Bearer ${this.token}`, 'X-Tradera-Tool': this.toolId },
+      headers: { Authorization: `Bearer ${this.token}`, 'X-Aseman-Tool': this.toolId },
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body?.error?.message || `program fetch failed: ${res.status}`);

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	modalconfig "github.com/tradera/tradera/plugins/adapters/vmm/modal/config"
+	modalconfig "github.com/aseman/aseman/plugins/adapters/vmm/modal/config"
 )
 
 // ModalConfig holds the Modal credentials used for the shared per-space agent
@@ -17,56 +17,56 @@ type ModalConfig = modalconfig.ModalConfig
 // sets them so the config file only carries node identity, Google sign-in and
 // the Modal credentials.
 const (
-	EnvNodeName = "TRADERA_NODE_NAME"
-	EnvNodeURL  = "TRADERA_NODE_URL"
-	EnvHTTPAddr = "TRADERA_HTTP_ADDR"
+	EnvNodeName = "ASEMAN_NODE_NAME"
+	EnvNodeURL  = "ASEMAN_NODE_URL"
+	EnvHTTPAddr = "ASEMAN_HTTP_ADDR"
 	// EnvDeveloperHost is the host of the developer API (api.example.com):
 	// the node serves only the developer routes on it, and its /v1/... is that
 	// API. Empty: the developer API is not exposed on its own host.
-	EnvDeveloperHost = "TRADERA_DEVELOPER_HOST"
-	EnvDatabaseDSN   = "TRADERA_DATABASE_DSN" // postgres://...
-	EnvNomadURL      = "TRADERA_NOMAD_URL"
-	EnvDockerHost    = "TRADERA_DOCKER_HOST"
-	EnvFilesDir      = "TRADERA_FILES_DIR"
+	EnvDeveloperHost = "ASEMAN_DEVELOPER_HOST"
+	EnvDatabaseDSN   = "ASEMAN_DATABASE_DSN" // postgres://...
+	EnvNomadURL      = "ASEMAN_NOMAD_URL"
+	EnvDockerHost    = "ASEMAN_DOCKER_HOST"
+	EnvFilesDir      = "ASEMAN_FILES_DIR"
 	// The node's files (attachments, developer storage) go to an S3-compatible
 	// bucket (Cloudflare R2, AWS S3, MinIO) instead of the node's disk when a
 	// bucket is set. The endpoint is the store's S3 API address (for R2:
 	// https://<account>.r2.cloudflarestorage.com); the region is "auto" for R2.
-	EnvS3Bucket      = "TRADERA_S3_BUCKET"
-	EnvS3Endpoint    = "TRADERA_S3_ENDPOINT"
-	EnvS3Region      = "TRADERA_S3_REGION"
-	EnvS3AccessKey   = "TRADERA_S3_ACCESS_KEY_ID"
-	EnvS3SecretKey   = "TRADERA_S3_SECRET_ACCESS_KEY"
-	EnvWasmDir       = "TRADERA_WASM_DIR"
-	EnvLogDir        = "TRADERA_LOG_DIR"
-	EnvGoogleClient  = "TRADERA_GOOGLE_CLIENT_ID"
-	EnvModalTokenID  = "TRADERA_MODAL_TOKEN_ID"
-	EnvModalTokenSec = "TRADERA_MODAL_TOKEN_SECRET"
+	EnvS3Bucket      = "ASEMAN_S3_BUCKET"
+	EnvS3Endpoint    = "ASEMAN_S3_ENDPOINT"
+	EnvS3Region      = "ASEMAN_S3_REGION"
+	EnvS3AccessKey   = "ASEMAN_S3_ACCESS_KEY_ID"
+	EnvS3SecretKey   = "ASEMAN_S3_SECRET_ACCESS_KEY"
+	EnvWasmDir       = "ASEMAN_WASM_DIR"
+	EnvLogDir        = "ASEMAN_LOG_DIR"
+	EnvGoogleClient  = "ASEMAN_GOOGLE_CLIENT_ID"
+	EnvModalTokenID  = "ASEMAN_MODAL_TOKEN_ID"
+	EnvModalTokenSec = "ASEMAN_MODAL_TOKEN_SECRET"
 	// EnvModalEnvironment names the Modal environment (e.g. "dev") the sandboxes,
 	// their volumes and their costs live in; empty uses the profile default.
-	EnvModalEnvironment = "TRADERA_MODAL_ENVIRONMENT"
+	EnvModalEnvironment = "ASEMAN_MODAL_ENVIRONMENT"
 	// EnvSandboxBackend switches the shared per-space sandbox backbone
 	// ("docker" | "modal"); EnvSandboxDockerNetwork attaches docker sandbox
 	// containers to a network the node is on so proxied ports are reachable.
-	EnvSandboxBackend       = "TRADERA_SANDBOX_BACKEND"
-	EnvSandboxDockerNetwork = "TRADERA_SANDBOX_DOCKER_NETWORK"
+	EnvSandboxBackend       = "ASEMAN_SANDBOX_BACKEND"
+	EnvSandboxDockerNetwork = "ASEMAN_SANDBOX_DOCKER_NETWORK"
 	// EnvSandboxImage overrides the sandbox computer image (default: the
 	// sandbox computer image).
-	EnvSandboxImage    = "TRADERA_SANDBOX_IMAGE"
-	EnvSandboxCPU      = "TRADERA_SANDBOX_CPU"
-	EnvSandboxMemoryMB = "TRADERA_SANDBOX_MEMORY_MB"
-	EnvSandboxDiskMB   = "TRADERA_SANDBOX_DISK_MB"
+	EnvSandboxImage    = "ASEMAN_SANDBOX_IMAGE"
+	EnvSandboxCPU      = "ASEMAN_SANDBOX_CPU"
+	EnvSandboxMemoryMB = "ASEMAN_SANDBOX_MEMORY_MB"
+	EnvSandboxDiskMB   = "ASEMAN_SANDBOX_DISK_MB"
 	// The deep agents runtime: the node URL as the runtime reaches it, the
 	// runtime image Nomad runs, the docker network it joins, and an explicit
 	// runtime URL (an externally run runtime; skips the Nomad job).
-	EnvAgentNodeURL        = "TRADERA_AGENT_NODE_URL"
-	EnvAgentRuntimeImage   = "TRADERA_AGENT_RUNTIME_IMAGE"
-	EnvAgentRuntimeURL     = "TRADERA_AGENT_RUNTIME_URL"
-	EnvAgentRuntimeNetwork = "TRADERA_AGENT_RUNTIME_NETWORK"
-	EnvAgentRuntimeSecret  = "TRADERA_AGENT_RUNTIME_SECRET"
+	EnvAgentNodeURL        = "ASEMAN_AGENT_NODE_URL"
+	EnvAgentRuntimeImage   = "ASEMAN_AGENT_RUNTIME_IMAGE"
+	EnvAgentRuntimeURL     = "ASEMAN_AGENT_RUNTIME_URL"
+	EnvAgentRuntimeNetwork = "ASEMAN_AGENT_RUNTIME_NETWORK"
+	EnvAgentRuntimeSecret  = "ASEMAN_AGENT_RUNTIME_SECRET"
 	// EnvToolRuntimeImage is the image Nomad runs managed Elpian VM and QuickJS
-	// tool backends in (default tradera/tool-runtime:v1).
-	EnvToolRuntimeImage = "TRADERA_TOOL_RUNTIME_IMAGE"
+	// tool backends in (default aseman/tool-runtime:v1).
+	EnvToolRuntimeImage = "ASEMAN_TOOL_RUNTIME_IMAGE"
 )
 
 // ApplyEnv overlays the infrastructure environment variables onto the config.
@@ -74,10 +74,10 @@ const (
 // automatically (see AutoAdapters); otherwise the variables override the
 // matching settings of the listed plugins.
 func (c *Config) ApplyEnv() {
-	if value := os.Getenv("TRADERA_PLUGIN_DIRECTORY"); value != "" {
+	if value := os.Getenv("ASEMAN_PLUGIN_DIRECTORY"); value != "" {
 		c.Plugins.Directory = value
 	}
-	if value := os.Getenv("TRADERA_PLUGIN_SOURCE_ROOT"); value != "" {
+	if value := os.Getenv("ASEMAN_PLUGIN_SOURCE_ROOT"); value != "" {
 		c.Plugins.SourceRoot = value
 	}
 	overrides := []struct {

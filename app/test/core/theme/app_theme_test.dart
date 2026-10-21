@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/core/theme/app_surfaces.dart';
-import 'package:tradera/src/core/theme/app_theme.dart';
+import 'package:aseman/src/core/theme/app_surfaces.dart';
+import 'package:aseman/src/core/theme/app_theme.dart';
 
 void main() {
   for (final (name, theme) in [

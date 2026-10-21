@@ -36,7 +36,7 @@ class AuthGate extends StatelessWidget {
   }
 }
 
-/// Login / register screen against the Tradera auth namespace.
+/// Login / register screen against the Aseman auth namespace.
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key, required this.dependencies});
 
@@ -277,7 +277,7 @@ class _AuthScreenState extends State<AuthScreen>
                       const AppBrand(),
                       const SizedBox(height: 8),
                       Text(
-                        'Tradera',
+                        'Aseman',
                         style:
                             Theme.of(context).textTheme.headlineSmall?.copyWith(
                                   fontWeight: FontWeight.w700,

@@ -4,10 +4,10 @@ import "testing"
 
 func TestSplitImageRef(t *testing.T) {
 	for ref, want := range map[string][3]string{
-		"ghcr.io/acme/tradera-sandbox-computer:latest": {"ghcr.io", "acme/tradera-sandbox-computer", "latest"},
+		"ghcr.io/acme/aseman-sandbox-computer:latest": {"ghcr.io", "acme/aseman-sandbox-computer", "latest"},
 		"ghcr.io/acme/app":                {"ghcr.io", "acme/app", "latest"},
 		"node:22-bookworm":                {"registry-1.docker.io", "library/node", "22-bookworm"},
-		"tradera/sandbox-computer:latest": {"registry-1.docker.io", "tradera/sandbox-computer", "latest"},
+		"aseman/sandbox-computer:latest": {"registry-1.docker.io", "aseman/sandbox-computer", "latest"},
 		"localhost:5000/app:dev":          {"localhost:5000", "app", "dev"},
 	} {
 		host, repo, tag := splitImageRef(ref)

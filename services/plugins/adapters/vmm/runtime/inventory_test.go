@@ -3,7 +3,7 @@ package runtime
 import (
 	"testing"
 
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // Every adapter is reached through the guard: an optional capability the guard

@@ -5,16 +5,16 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // roomInfoTool implements the room_info tool: it answers who/what is in a room
 // (or the whole workspace): the people (human members), the agents (bot members)
-// and the tools available to agents. tradera uses it to know who it can talk
+// and the tools available to agents. aseman uses it to know who it can talk
 // to, who it can dispatch work to and what tools exist before planning.
 func (s *Service) roomInfoTool(ctx context.Context, spaceID identity.ID, argsJSON string) (string, error) {
 	var in struct {
@@ -79,7 +79,7 @@ func (s *Service) roomInfoTool(ctx context.Context, spaceID identity.ID, argsJSO
 	return string(out), nil
 }
 
-// askUserTool implements the ask_user tool: an agent (or tradera) asks the
+// askUserTool implements the ask_user tool: an agent (or aseman) asks the
 // user a clarifying question. The question is surfaced in the chat and the
 // orchestrator pauses until the user answers; the agent includes it in its reply
 // so the orchestrator can detect it and pause the workflow.

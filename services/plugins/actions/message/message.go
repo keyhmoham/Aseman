@@ -9,17 +9,17 @@ import (
 	"context"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // BotMessenger is the subset of the bots service the message namespace needs
@@ -31,10 +31,10 @@ type BotMessenger interface {
 	// EnsureFunds hard-blocks execution when the customer cannot cover the
 	// bot's minimum metered cost.
 	EnsureFunds(ctx context.Context, customer, botID identity.ID) error
-	// IsTradera reports whether the target is the built-in orchestrator agent.
-	IsTradera(ctx context.Context, botID identity.ID) (bool, error)
-	// RunTradera executes a task with the built-in orchestrator.
-	RunTradera(ctx context.Context, caller identity.ID, task string) (map[string]any, error)
+	// IsAseman reports whether the target is the built-in orchestrator agent.
+	IsAseman(ctx context.Context, botID identity.ID) (bool, error)
+	// RunAseman executes a task with the built-in orchestrator.
+	RunAseman(ctx context.Context, caller identity.ID, task string) (map[string]any, error)
 }
 
 // AttachmentResolver resolves and authorizes file ids attached to an ask so the

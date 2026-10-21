@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 // Gate prevents closing a provider under an operation and cancels

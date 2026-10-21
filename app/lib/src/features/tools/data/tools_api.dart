@@ -1,4 +1,4 @@
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../domain/tool_models.dart';
 
 /// Runs one node action and returns its decoded JSON body.
@@ -12,7 +12,7 @@ typedef ActionCall = Future<dynamic> Function(
 class ToolsApi {
   ToolsApi(this._call, {this.service});
 
-  factory ToolsApi.of(TraderaService service) => ToolsApi(
+  factory ToolsApi.of(AsemanService service) => ToolsApi(
       (namespace, action, body, {timeout}) async => (await service.client
               .call(namespace, action, body: body, requestTimeout: timeout))
           .body,
@@ -20,7 +20,7 @@ class ToolsApi {
 
   /// The node connection behind it, when there is one: frontends load the
   /// space's files and the node's media through it.
-  final TraderaService? service;
+  final AsemanService? service;
 
   final ActionCall _call;
 

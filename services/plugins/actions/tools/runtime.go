@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/actions/tools/models"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/tools/models"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // The tool runtime gateway is how a managed or installed backend reaches the
@@ -35,16 +35,16 @@ const runtimeGatewayPrefix = "/tools/v1/runtime"
 // whether an agent asks on someone's behalf; Scope is the credential its
 // callbacks for this call carry.
 const (
-	HeaderActor = "X-Tradera-Actor"
-	HeaderSpace = "X-Tradera-Space"
-	HeaderRoom  = "X-Tradera-Room"
-	HeaderAgent = "X-Tradera-Agent"
-	HeaderScope = "X-Tradera-Scope"
-	HeaderTool  = "X-Tradera-Tool"
+	HeaderActor = "X-Aseman-Actor"
+	HeaderSpace = "X-Aseman-Space"
+	HeaderRoom  = "X-Aseman-Room"
+	HeaderAgent = "X-Aseman-Agent"
+	HeaderScope = "X-Aseman-Scope"
+	HeaderTool  = "X-Aseman-Tool"
 	// HeaderToken carries the node's runtime credential on calls to a
 	// backend. It is not Authorization: a sandbox tunnel in between may need
 	// that header for its own credential.
-	HeaderToken = "X-Tradera-Token"
+	HeaderToken = "X-Aseman-Token"
 )
 
 // scopeTTL bounds how long a backend may keep acting for one call.
@@ -180,18 +180,18 @@ func (s *Service) scopeHeaders(ctx context.Context, tool *models.Tool, rec *bot.
 
 // nodeURL is the node as backends reach it.
 func nodeURL() string {
-	for _, name := range []string{"TRADERA_TOOL_NODE_URL", "TRADERA_AGENT_NODE_URL"} {
+	for _, name := range []string{"ASEMAN_TOOL_NODE_URL", "ASEMAN_AGENT_NODE_URL"} {
 		if v := strings.TrimSpace(os.Getenv(name)); v != "" {
 			return strings.TrimRight(v, "/")
 		}
 	}
-	return "http://tradera:8080"
+	return "http://aseman:8080"
 }
 
 // runtimeNetwork is the docker network managed backends join, where the node
 // reaches them by name.
 func runtimeNetwork() string {
-	for _, name := range []string{"TRADERA_TOOL_RUNTIME_NETWORK", "TRADERA_AGENT_RUNTIME_NETWORK"} {
+	for _, name := range []string{"ASEMAN_TOOL_RUNTIME_NETWORK", "ASEMAN_AGENT_RUNTIME_NETWORK"} {
 		if v := strings.TrimSpace(os.Getenv(name)); v != "" {
 			return v
 		}
@@ -207,9 +207,9 @@ func (s *Service) runtimeEnv(runtimeKey string, port int) (map[string]string, er
 		return nil, err
 	}
 	return map[string]string{
-		"TRADERA_TOOL_ID":    runtimeKey,
-		"TRADERA_TOOL_TOKEN": token,
-		"TRADERA_NODE_URL":   nodeURL(),
+		"ASEMAN_TOOL_ID":    runtimeKey,
+		"ASEMAN_TOOL_TOKEN": token,
+		"ASEMAN_NODE_URL":   nodeURL(),
 		"PORT":               strconv.Itoa(port),
 	}, nil
 }

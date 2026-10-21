@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/adapters/filesystem/ports"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/adapters/filesystem/ports"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // fakeVMM is a computer provider that keeps machines in memory.
@@ -201,7 +201,7 @@ func TestAComputerIsCreatedWithinLimitsRunsCommandsAndIsBilledByTheMinute(t *tes
 		t.Fatalf("sizes snap to their steps: %+v", c)
 	}
 	spec := v.specs["vm-1"]
-	if !strings.HasPrefix(spec.Name, "sbx-dev-") || spec.Type != vmm.TypeContainer || spec.Resources.CPU != 1 || spec.Resources.MemoryMB != 1024 || spec.Labels["tradera.bot_id"] == "" {
+	if !strings.HasPrefix(spec.Name, "sbx-dev-") || spec.Type != vmm.TypeContainer || spec.Resources.CPU != 1 || spec.Resources.MemoryMB != 1024 || spec.Labels["aseman.bot_id"] == "" {
 		t.Fatalf("spec: %+v", spec)
 	}
 	res, err := f.s.Exec(f.ctx, org, c.ID, "echo hi", 0)

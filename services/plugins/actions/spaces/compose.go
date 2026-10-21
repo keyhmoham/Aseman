@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/a2ui"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/a2ui"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // composeInput is an agent's ui_compose call.

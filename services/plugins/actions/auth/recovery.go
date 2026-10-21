@@ -12,17 +12,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/crypto"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/auth/mechanisms/mail"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/auth/models/challenge"
-	"github.com/tradera/tradera/plugins/actions/auth/models/session"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/crypto"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/auth/mechanisms/mail"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/auth/models/challenge"
+	"github.com/aseman/aseman/plugins/actions/auth/models/session"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -77,7 +77,7 @@ func (s *Service) ResetPassword(ctx context.Context, id identity.ID, password st
 
 // EnvAppleClientIDs lists the accepted Sign in with Apple audiences (the app
 // bundle id and/or the web Services ID), comma separated.
-const EnvAppleClientIDs = "TRADERA_APPLE_CLIENT_ID"
+const EnvAppleClientIDs = "ASEMAN_APPLE_CLIENT_ID"
 
 const (
 	resetCodeTTL      = 15 * time.Minute
@@ -287,7 +287,7 @@ func (s *Service) sendVerificationCode(ctx context.Context, acc *account.Account
 	if err = s.R.CreateID(ctx, "auth_challenges", id, c); err != nil {
 		return "", err
 	}
-	body := fmt.Sprintf("Your Tradera verification code is %s.\n\nIt expires in %d minutes. Enter it to verify your email and activate your account.", code, int(resetCodeTTL/time.Minute))
+	body := fmt.Sprintf("Your Aseman verification code is %s.\n\nIt expires in %d minutes. Enter it to verify your email and activate your account.", code, int(resetCodeTTL/time.Minute))
 	if err = s.mailer().Send(ctx, acc.Email, "Your verification code", body); err != nil {
 		s.L.Warn("verification email failed", "account", acc.ID.String(), "error", err)
 		return "", errs.Wrap(errs.CodeUnavailable, err, "could not send the verification email")

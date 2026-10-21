@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
 )
 
 // members_list keeps listing agents by default (agents read their team from
@@ -57,7 +57,7 @@ func TestMembersListKindFilter(t *testing.T) {
 		return handles
 	}
 	sid := sp.ID.String()
-	// A new space also gets the built-in tradera agent.
+	// A new space also gets the built-in aseman agent.
 	if got := list(`{"space":"` + sid + `"}`); len(got) != 3 {
 		t.Fatalf("all members = %v, want the person and both agents", got)
 	}
@@ -70,6 +70,6 @@ func TestMembersListKindFilter(t *testing.T) {
 		t.Fatalf("first page of people = %v, want alice", got)
 	}
 	if got := list(`{"space":"` + sid + `","kind":"bot"}`); len(got) != 2 || got[0] != "helper" {
-		t.Fatalf("bots = %v, want helper and tradera", got)
+		t.Fatalf("bots = %v, want helper and aseman", got)
 	}
 }

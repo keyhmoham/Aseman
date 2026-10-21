@@ -2,12 +2,12 @@ package spaces
 
 import (
 	"context"
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/permission"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/turn"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/permission"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/turn"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 	"time"
 )
 

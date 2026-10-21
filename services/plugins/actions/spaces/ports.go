@@ -3,12 +3,12 @@ package spaces
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	bots "github.com/tradera/tradera/plugins/actions/bots/dto"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	"github.com/tradera/tradera/plugins/actions/usage/models"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	bots "github.com/aseman/aseman/plugins/actions/bots/dto"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	"github.com/aseman/aseman/plugins/actions/usage/models"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // BotPort defines only the operations this namespace consumes.
@@ -23,7 +23,7 @@ type BotPort interface {
 	GetBot(ctx context.Context, id identity.ID) (*bot.Bot, error)
 	Rebuild(ctx context.Context, id identity.ID, image string) (*bot.Bot, error)
 	Resize(ctx context.Context, id identity.ID, res bot.ResourceProfile) (*bot.Bot, error)
-	InstallTradera(ctx context.Context) (*bot.Bot, error)
+	InstallAseman(ctx context.Context) (*bot.Bot, error)
 	Lifecycle(ctx context.Context, id identity.ID, op string) (*bot.Bot, error)
 	RecordDelta(ctx context.Context, actor, botID identity.ID, d usage.Delta, uc usage.UsageCtx) error
 	RecordUsage(ctx context.Context, actor, botID identity.ID, uc usage.UsageCtx) (usage.Delta, error)

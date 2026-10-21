@@ -8,12 +8,12 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
-from tradera_agents import memory
-from tradera_agents.context import AgentDef, Turn, TurnContext
+from aseman_agents import memory
+from aseman_agents.context import AgentDef, Turn, TurnContext
 from fakes import CODER, LEAD, FakeViking, Platform, call, turn_request
 from test_runtime import modified_request, platform, runner, tool_results  # noqa: F401
 
-WORKSPACE = Path(os.environ["TRADERA_WORKSPACE"])
+WORKSPACE = Path(os.environ["ASEMAN_WORKSPACE"])
 ACCOUNT = "space-space-1"
 LEAD_NOTES = "viking://user/agent-bot-lead/memories/notes.md"
 
@@ -47,7 +47,7 @@ async def test_memory_lives_in_openviking(platform: Platform, tmp_path: Path) ->
 
     # The notes go into the system prompt; what is recalled comes with the message.
     assert "<agent_memory>" in system_text(model) and "# Space notes" in system_text(model)
-    assert "# tradera notes" in system_text(model)
+    assert "# aseman notes" in system_text(model)
     assert "From your memory" in human_text(model) and "ann prefers tabs" in human_text(model)
     context = next(b for _, _, path, b in viking.requests if path == "/api/v1/search/search")
     assert context["query"] == "remember how we deploy"
@@ -84,13 +84,13 @@ async def test_memory_lives_in_openviking(platform: Platform, tmp_path: Path) ->
     # Every request was the space's account and the agent's user.
     assert {(a, u) for a, u, _, _ in viking.requests} == {(ACCOUNT, "agent-bot-lead")}
     # Nothing of memory is kept in the sandbox any more.
-    assert not (WORKSPACE / ".tradera/agents/tradera/AGENTS.md").exists()
+    assert not (WORKSPACE / ".aseman/agents/aseman/AGENTS.md").exists()
 
 
 async def test_agents_share_space_notes_but_not_their_own(platform: Platform, tmp_path: Path) -> None:
     viking = FakeViking()
     viking.files[(ACCOUNT, memory.SPACE_NOTES)] = "# Space notes\n- the repo is /workspace/app\n"
-    viking.files[(ACCOUNT, LEAD_NOTES)] = "# tradera notes\n- lead-only-secret\n"
+    viking.files[(ACCOUNT, LEAD_NOTES)] = "# aseman notes\n- lead-only-secret\n"
     r, model = runner(platform, tmp_path, [AIMessage(content="ok")], viking)
     await r.prompt(turn_request(CODER, "where is the repo?", token="tok-coder"))
     assert "the repo is /workspace/app" in system_text(model)

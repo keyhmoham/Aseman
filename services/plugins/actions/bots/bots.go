@@ -6,33 +6,33 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	settings "github.com/tradera/tradera/plugins/actions/settings/models"
+	settings "github.com/aseman/aseman/plugins/actions/settings/models"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/jsonpatch"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/bots/dto"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/finance/models/wallet"
-	dtoLLM "github.com/tradera/tradera/plugins/actions/llm/dto"
-	"github.com/tradera/tradera/plugins/actions/llm/models"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/actions/support/kvs"
-	"github.com/tradera/tradera/plugins/actions/support/metasvc"
-	"github.com/tradera/tradera/plugins/actions/support/models/kv"
-	"github.com/tradera/tradera/plugins/actions/support/models/metadata"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/actions/usage/models"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/jsonpatch"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/dto"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/finance/models/wallet"
+	dtoLLM "github.com/aseman/aseman/plugins/actions/llm/dto"
+	"github.com/aseman/aseman/plugins/actions/llm/models"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/kvs"
+	"github.com/aseman/aseman/plugins/actions/support/metasvc"
+	"github.com/aseman/aseman/plugins/actions/support/models/kv"
+	"github.com/aseman/aseman/plugins/actions/support/models/metadata"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/actions/usage/models"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // AttachmentResolver resolves and authorizes file ids attached to a message so
@@ -152,7 +152,7 @@ func (s *Service) adoptVM(rec *bot.Bot) {
 	ad.Adopt(rec.VMID, vmm.VMSpec{
 		Name: rec.Name, Type: vmm.Type(rec.VMType), ImageRef: rec.ImageRef, Args: []string{"sleep", "infinity"},
 		Resources: vmm.ResourceSpec{CPU: res.CPU, MemoryMB: res.Memory, DiskMB: res.Disk, MaxRuntimeSec: res.MaxRuntimeSec},
-		Labels:    map[string]string{"tradera.bot_id": rec.ID.String()},
+		Labels:    map[string]string{"aseman.bot_id": rec.ID.String()},
 	})
 }
 
@@ -304,7 +304,7 @@ func (s *Service) CreateBot(ctx context.Context, owner identity.ID, req CreateBo
 		Resources: vmm.ResourceSpec{CPU: req.Resources.CPU, MemoryMB: req.Resources.Memory,
 			DiskMB: req.Resources.Disk, MaxRuntimeSec: req.Resources.MaxRuntimeSec},
 		Environment: req.Env, Args: req.Args, YML: req.SpecYML,
-		Labels: map[string]string{"tradera.bot_id": botID.String()},
+		Labels: map[string]string{"aseman.bot_id": botID.String()},
 	}
 	if sv := req.Service; sv != nil {
 		// Only tool backends get a name on the node's network, and only in
@@ -583,7 +583,7 @@ func BuildActions(s *Service) []api.Action {
 		&botCreateAction{s: s}, &botListAction{s: s}, &botGetAction{s: s},
 		&botProfileAction{s: s},
 		&botSearchAction{s: s},
-		&builtinTraderaAction{s: s},
+		&builtinAsemanAction{s: s},
 		&botLifecycleAction{s: s}, &botDeleteAction{s: s}, &botUsageAction{s: s},
 		&botResizeAction{s: s},
 		&botMessageAction{s: s}, &botMetaViewAction{s: s}, &botMetaPatchAction{s: s},
@@ -793,8 +793,8 @@ func (a *botDeleteAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 	}
 	caller := req.Caller.ID
 	if rec, e := a.s.GetBot(ctx, id); e == nil {
-		if IsTradera(rec) {
-			return nil, errs.Permission("the built-in tradera agent cannot be deleted")
+		if IsAseman(rec) {
+			return nil, errs.Permission("the built-in aseman agent cannot be deleted")
 		}
 		// A node admin may remove any bot (e.g. an ownerless or orphaned one).
 		if rec.OwnerID != caller && rec.AccountID != caller &&
@@ -896,14 +896,14 @@ func (a *botMessageAction) Handle(ctx context.Context, req *api.ActionRequest) (
 	if err != nil {
 		return nil, err
 	}
-	// The built-in tradera agent is the workflow orchestrator: route its asks
+	// The built-in aseman agent is the workflow orchestrator: route its asks
 	// there instead of a wasm VM.
 	rec, err := a.s.GetBot(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	if IsTradera(rec) {
-		return a.s.routeTradera(ctx, req.Caller.ID, in.Body)
+	if IsAseman(rec) {
+		return a.s.routeAseman(ctx, req.Caller.ID, in.Body)
 	}
 	// Hard enforcement: the caller must be able to pay before the VM runs.
 	if err := a.s.EnsureFunds(ctx, req.Caller.ID, id); err != nil {

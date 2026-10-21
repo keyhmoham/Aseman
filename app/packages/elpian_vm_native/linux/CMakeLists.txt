@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-set(PROJECT_NAME "tradera_elpian_vm")
+set(PROJECT_NAME "aseman_elpian_vm")
 project(${PROJECT_NAME} LANGUAGES CXX)
 
 # Flutter consumes this plugin through an ephemeral symlink. Resolve the real
@@ -24,7 +24,7 @@ add_custom_target(${PROJECT_NAME}_target
     DEPENDS "${ELPIAN_RUST_ROOT}/target/release/libelpian_vm.so"
 )
 
-set(tradera_elpian_vm_bundled_libraries
+set(aseman_elpian_vm_bundled_libraries
     "${ELPIAN_RUST_ROOT}/target/release/libelpian_vm.so"
     PARENT_SCOPE
 )

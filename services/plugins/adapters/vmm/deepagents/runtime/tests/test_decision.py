@@ -11,11 +11,11 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from tradera_agents.agent import Runner
-from tradera_agents.store import Store
+from aseman_agents.agent import Runner
+from aseman_agents.store import Store
 from fakes import CODER, LEAD, Platform, ScriptedModel, call, turn_request
 
-WORKSPACE = Path(os.environ["TRADERA_WORKSPACE"])
+WORKSPACE = Path(os.environ["ASEMAN_WORKSPACE"])
 
 APPS = {
     "github": ["create_issue", "list_issues", "comment_issue", "create_pr", "merge_pr", "list_repos", "search_code",
@@ -213,8 +213,8 @@ async def test_a_lead_gets_a_routing_hint(platform: Platform, tmp_path: Path) ->
 async def test_completion_counts_what_was_delivered() -> None:
     from langchain_core.messages import ToolMessage
 
-    from tradera_agents.decision import completion
-    from tradera_agents.decision.middleware import delivered
+    from aseman_agents.decision import completion
+    from aseman_agents.decision.middleware import delivered
 
     messages = [
         HumanMessage(content="generate a floating banana image"),
@@ -244,7 +244,7 @@ async def test_completion_counts_what_was_delivered() -> None:
 def test_a_result_shown_on_the_desk_counts_as_delivered() -> None:
     from langchain_core.messages import ToolMessage
 
-    from tradera_agents.decision.middleware import delivered
+    from aseman_agents.decision.middleware import delivered
 
     messages = [
         HumanMessage(content="create a whiteboard, draw something random on it and show it"),

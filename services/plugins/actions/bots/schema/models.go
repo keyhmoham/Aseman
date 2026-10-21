@@ -1,8 +1,8 @@
 package schema
 
 import (
-	shared "github.com/tradera/tradera/plugins/actions/support/schema"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	shared "github.com/aseman/aseman/plugins/actions/support/schema"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 func f(name string, k database.Kind) database.Field { return database.Field{Name: name, Kind: k} }

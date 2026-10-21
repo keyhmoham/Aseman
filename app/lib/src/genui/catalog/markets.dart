@@ -40,7 +40,7 @@ String _money(Object? v, Object? currency, [Object? format]) {
 // Quote
 // ---------------------------------------------------------------------------
 
-final quoteItem = traderaItem(
+final quoteItem = asemanItem(
   'Quote',
   description: 'A market quote: symbol, name, price and its change; the price '
       'flashes green / red when it moves. Bind it to live data.',
@@ -206,7 +206,7 @@ class _QuoteState extends State<_Quote> {
 // Order book
 // ---------------------------------------------------------------------------
 
-final orderBookItem = traderaItem(
+final orderBookItem = asemanItem(
   'OrderBook',
   description: 'Bids and asks with depth bars and the spread. Rows are '
       '{price, size} (or [price, size]); best prices first.',
@@ -364,7 +364,7 @@ final orderBookItem = traderaItem(
 // Ticker tape
 // ---------------------------------------------------------------------------
 
-final tickerTapeItem = traderaItem(
+final tickerTapeItem = asemanItem(
   'TickerTape',
   description: 'A strip of quotes scrolling sideways: rows of {symbol, '
       'price, change}.',
@@ -466,7 +466,7 @@ class _TickerTapeState extends State<_TickerTape>
 // Allocation and trend
 // ---------------------------------------------------------------------------
 
-final allocationBarItem = traderaItem(
+final allocationBarItem = asemanItem(
   'AllocationBar',
   description: 'Shares of a whole as one 100% bar with a legend (portfolio '
       'allocation, order mix).',
@@ -539,7 +539,7 @@ final allocationBarItem = traderaItem(
   }),
 );
 
-final trendItem = traderaItem(
+final trendItem = asemanItem(
   'Trend',
   description: 'A signed change in green (good) or red (bad) with an arrow: '
       'inline P&L, price moves.',

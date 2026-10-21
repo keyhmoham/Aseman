@@ -1,4 +1,4 @@
-// The A2UI conformance cases that concern a renderer, run against Tradera's
+// The A2UI conformance cases that concern a renderer, run against Aseman's
 // genui stack: expressions rendered in a surface, data deletion, actions,
 // data-context paths and the data model. (Parser and validator internals
 // are genui's and a2ui_core's, conformance-tested upstream.)
@@ -7,7 +7,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genui/genui.dart';
-import 'package:tradera/src/genui/genui.dart';
+import 'package:aseman/src/genui/genui.dart';
 
 import 'support.dart';
 

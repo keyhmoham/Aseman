@@ -103,7 +103,7 @@ class _WebPageIframeState extends State<_WebPageIframe>
     final target = _iframe?.getProperty<JSObject?>('contentWindow'.toJS);
     target?.callMethod<JSAny?>(
       'postMessage'.toJS,
-      {'type': 'tradera:theme', ...theme}.jsify(),
+      {'type': 'aseman:theme', ...theme}.jsify(),
       '*'.toJS,
     );
   }

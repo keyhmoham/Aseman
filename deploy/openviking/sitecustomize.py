@@ -10,7 +10,7 @@ whose memory it serves, but OpenViking knows:
 * the queue that embeds what was written calls AccountEmbeddingProvider.embed
   with the account the text belongs to.
 
-Every request to the node carries that account in X-Tradera-Memory-Account.
+Every request to the node carries that account in X-Aseman-Memory-Account.
 A call made outside any account's work (OpenViking's own housekeeping)
 carries none, and the node pays for it.
 
@@ -26,11 +26,11 @@ import os
 import sys
 
 _NODE = os.environ.get("OPENVIKING_NODE_URL", "").rstrip("/")
-_HEADER = "X-Tradera-Memory-Account"
+_HEADER = "X-Aseman-Memory-Account"
 _EMBEDDING_MODULE = "openviking.config.embedding"
 
 # The account an embedding is being made for (set around AccountEmbeddingProvider.embed).
-_embedding_account = contextvars.ContextVar("tradera_embedding_account", default=None)
+_embedding_account = contextvars.ContextVar("aseman_embedding_account", default=None)
 
 
 def _account():

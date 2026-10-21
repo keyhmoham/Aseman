@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/logger"
-	httpadapter "github.com/tradera/tradera/plugins/adapters/network/http"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/adapters/network/tcp"
-	wsadapter "github.com/tradera/tradera/plugins/adapters/network/websocket"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/logger"
+	httpadapter "github.com/aseman/aseman/plugins/adapters/network/http"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/network/tcp"
+	wsadapter "github.com/aseman/aseman/plugins/adapters/network/websocket"
 )
 
 func TestProtocolStopDrainsActiveConnections(t *testing.T) {

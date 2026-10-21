@@ -4,9 +4,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/usage/models"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/usage/models"
 )
 
 // mentionBots skips VM rebuilds for delivery tests and records what agent

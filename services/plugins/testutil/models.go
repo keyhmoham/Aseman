@@ -2,21 +2,21 @@
 package testutil
 
 import (
-	authschema "github.com/tradera/tradera/plugins/actions/auth/schema"
-	botsschema "github.com/tradera/tradera/plugins/actions/bots/schema"
-	developer "github.com/tradera/tradera/plugins/actions/developer/models"
-	federationschema "github.com/tradera/tradera/plugins/actions/federation/schema"
-	financeschema "github.com/tradera/tradera/plugins/actions/finance/schema"
-	llm "github.com/tradera/tradera/plugins/actions/llm/models"
-	"github.com/tradera/tradera/plugins/actions/market/models"
-	messageschema "github.com/tradera/tradera/plugins/actions/message/schema"
-	posts "github.com/tradera/tradera/plugins/actions/posts/models"
-	routines "github.com/tradera/tradera/plugins/actions/routines/models"
-	spacesschema "github.com/tradera/tradera/plugins/actions/spaces/schema"
-	supportschema "github.com/tradera/tradera/plugins/actions/support/schema"
-	"github.com/tradera/tradera/plugins/actions/usage/models"
-	usersschema "github.com/tradera/tradera/plugins/actions/users/schema"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	authschema "github.com/aseman/aseman/plugins/actions/auth/schema"
+	botsschema "github.com/aseman/aseman/plugins/actions/bots/schema"
+	developer "github.com/aseman/aseman/plugins/actions/developer/models"
+	federationschema "github.com/aseman/aseman/plugins/actions/federation/schema"
+	financeschema "github.com/aseman/aseman/plugins/actions/finance/schema"
+	llm "github.com/aseman/aseman/plugins/actions/llm/models"
+	"github.com/aseman/aseman/plugins/actions/market/models"
+	messageschema "github.com/aseman/aseman/plugins/actions/message/schema"
+	posts "github.com/aseman/aseman/plugins/actions/posts/models"
+	routines "github.com/aseman/aseman/plugins/actions/routines/models"
+	spacesschema "github.com/aseman/aseman/plugins/actions/spaces/schema"
+	supportschema "github.com/aseman/aseman/plugins/actions/support/schema"
+	"github.com/aseman/aseman/plugins/actions/usage/models"
+	usersschema "github.com/aseman/aseman/plugins/actions/users/schema"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 func Models() []database.Model {

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/pkg/logger"
+	"github.com/aseman/aseman/pkg/logger"
 )
 
 func TestLiveCostReportIsModalsRealBill(t *testing.T) {
@@ -14,7 +14,7 @@ func TestLiveCostReportIsModalsRealBill(t *testing.T) {
 		t.Skip("set MODAL_LIVE_TEST=1 to run against Modal")
 	}
 	a := New(logger.Global())
-	a.tokenID, a.tokenSecret = os.Getenv("TRADERA_MODAL_TOKEN_ID"), os.Getenv("TRADERA_MODAL_TOKEN_SECRET")
+	a.tokenID, a.tokenSecret = os.Getenv("ASEMAN_MODAL_TOKEN_ID"), os.Getenv("ASEMAN_MODAL_TOKEN_SECRET")
 	if err := a.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}

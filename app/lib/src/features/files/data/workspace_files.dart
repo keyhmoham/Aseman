@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 
 /// A file or folder of a space's shared workspace.
 class WorkspaceEntry {
@@ -44,7 +44,7 @@ class WorkspaceNeedsComputer implements Exception {
 class WorkspaceFiles {
   const WorkspaceFiles(this.service, this.spaceId);
 
-  final TraderaService service;
+  final AsemanService service;
   final String spaceId;
 
   static const root = '/workspace';

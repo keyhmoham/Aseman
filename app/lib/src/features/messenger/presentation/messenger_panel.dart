@@ -7,7 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/space.dart';
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_header.dart';
@@ -114,7 +114,7 @@ class _ChatListState extends State<_ChatList> {
   Timer? _poll;
   bool _refreshing = false;
 
-  TraderaService get _service => widget.dependencies.service;
+  AsemanService get _service => widget.dependencies.service;
   String get _me =>
       widget.dependencies.sessionController.session?.accountId ?? '';
 

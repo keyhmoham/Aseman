@@ -4,7 +4,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:cryptography/cryptography.dart' as crypto;
 
-/// Client-side implementation of the Tradera request signing protocol.
+/// Client-side implementation of the Aseman request signing protocol.
 ///
 /// Every authenticated request is signed with the account's Ed25519 private
 /// key over the canonical payload:
@@ -20,9 +20,9 @@ class RequestSigner {
   /// 64-byte Ed25519 private key as 128 hex chars (seed || public).
   final String _privateKeyHex;
 
-  static const _nonceHeader = 'X-Tradera-Nonce';
-  static const _timestampHeader = 'X-Tradera-Timestamp';
-  static const _signatureHeader = 'X-Tradera-Signature';
+  static const _nonceHeader = 'X-Aseman-Nonce';
+  static const _timestampHeader = 'X-Aseman-Timestamp';
+  static const _signatureHeader = 'X-Aseman-Signature';
 
   static const headerNonce = _nonceHeader;
   static const headerTimestamp = _timestampHeader;

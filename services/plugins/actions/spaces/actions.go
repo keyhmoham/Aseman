@@ -5,23 +5,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/jsonpatch"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/filedata"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/invitation"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/permission"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/space"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/actions/support/models/kv"
-	"github.com/tradera/tradera/plugins/actions/support/models/metadata"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/jsonpatch"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/filedata"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/invitation"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/permission"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/space"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/models/kv"
+	"github.com/aseman/aseman/plugins/actions/support/models/metadata"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // BuildActions assembles all spaces namespace actions.
@@ -42,7 +42,7 @@ func BuildActions(s *Service) []api.Action {
 		&sandboxExecAction{s: s}, &sandboxStatusAction{s: s},
 		&sandboxStartAction{s: s}, &sandboxStopAction{s: s},
 		&toolsListAction{s: s},
-		&traderaEnsureAction{s: s},
+		&asemanEnsureAction{s: s},
 		&msgSendAction{s: s}, &msgListAction{s: s}, &msgDeleteAction{s: s},
 		&msgSearchAction{s: s},
 		&proxyCreateAction{s: s}, &proxyListAction{s: s}, &proxyGetAction{s: s}, &proxyOpenAction{s: s}, &proxyDeleteAction{s: s},
@@ -1241,7 +1241,7 @@ func (a *msgListAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	}
 	// Surface which agent is currently working in this room (if any) and what it
 	// is doing right now, so the client can show a live status sentence under the
-	// chat ("code-agent is running in the sandbox", "tradera is planning", …).
+	// chat ("code-agent is running in the sandbox", "aseman is planning", …).
 	working, workingDetail := "", ""
 	if agent, detail, ok := a.s.RoomActivity(roomID); ok {
 		working, workingDetail = agent, detail

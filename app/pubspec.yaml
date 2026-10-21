@@ -1,5 +1,5 @@
-name: tradera
-description: Tradera — an agentic social workspace for traders.
+name: aseman
+description: Aseman — an agentic social workspace for traders.
 publish_to: none
 version: 0.1.0+1
 
@@ -24,10 +24,10 @@ dependencies:
   sign_in_with_apple: ^8.2.0
   # The Elpian engine (lib/src/elpian) and its native VM (packages/elpian_vm_native)
   # are part of this app; these are the packages the engine itself uses.
-  tradera_elpian_vm:
+  aseman_elpian_vm:
     path: packages/elpian_vm_native
   # The embedded Godot engine behind Scene3D (packages/elpian_godot_native).
-  tradera_elpian_godot:
+  aseman_elpian_godot:
     path: packages/elpian_godot_native
   collection: ^1.17.0
   ffi: ^2.1.0

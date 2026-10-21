@@ -219,7 +219,7 @@ class _NotificationTile extends StatelessWidget {
                   Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
                   Expanded(
-                    child: Text(note.title.isEmpty ? 'Tradera' : note.title,
+                    child: Text(note.title.isEmpty ? 'Aseman' : note.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/pkg/crypto"
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/pkg/crypto"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 // LocalIdentity supplies a standalone host identity when no plugin provisions one.

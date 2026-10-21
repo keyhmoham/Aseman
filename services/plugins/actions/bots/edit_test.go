@@ -3,7 +3,7 @@ package bots
 import (
 	"testing"
 
-	"github.com/tradera/tradera/plugins/adapters/vmm/deepagents"
+	"github.com/aseman/aseman/plugins/adapters/vmm/deepagents"
 
 	"gopkg.in/yaml.v3"
 )

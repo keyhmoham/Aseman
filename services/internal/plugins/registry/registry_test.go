@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/api"
 )
 
 type testPlugin struct{ info api.Info }

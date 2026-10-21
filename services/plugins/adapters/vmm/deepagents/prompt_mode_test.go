@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 func TestFreshGatewayOnlyReadsCurrentHandoffRepliesAndAttachments(t *testing.T) {

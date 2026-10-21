@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../../data/services/tradera_service.dart';
+import '../../data/services/aseman_service.dart';
 
 /// What a project's computer is doing, as people see it.
 enum ComputerState {
@@ -110,7 +110,7 @@ class ComputerDesktop {
   /// to a server): [view] for a live preview that takes no input.
   String viewer({bool view = false}) {
     // noVNC's own page reads the same fragment under its own names.
-    final novnc = !page.contains('tradera-view');
+    final novnc = !page.contains('aseman-view');
     final fragment = Uri(
       queryParameters: {
         'password': password,
@@ -137,13 +137,13 @@ class SpaceComputer extends ChangeNotifier {
   static final _all = <String, SpaceComputer>{};
 
   /// The computer of [spaceId], shared by everything showing it.
-  static SpaceComputer of(TraderaService service, String spaceId) =>
+  static SpaceComputer of(AsemanService service, String spaceId) =>
       _all.putIfAbsent(
         '${identityHashCode(service)}/$spaceId',
         () => SpaceComputer._(service, spaceId),
       );
 
-  final TraderaService service;
+  final AsemanService service;
   final String spaceId;
 
   ComputerInfo _info = const ComputerInfo();

@@ -12,16 +12,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	rt "github.com/tradera/tradera/plugins/actions/routines/models"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	rt "github.com/aseman/aseman/plugins/actions/routines/models"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // Manager is the interface spaces and the workflow orchestrator use to manage
@@ -460,7 +460,7 @@ func (s *Service) dispatch(ctx context.Context, r *rt.Routine) (string, error) {
 		}); ok {
 			return runner.RunScheduledTask(ctx, r.SpaceID, r.RoomID, r.CreatorID, r.Task)
 		}
-		return "", errs.New(errs.CodeUnavailable, "default Tradera routine target unavailable")
+		return "", errs.New(errs.CodeUnavailable, "default Aseman routine target unavailable")
 	}
 	botID, err := identity.Parse(r.Target)
 	if err != nil {

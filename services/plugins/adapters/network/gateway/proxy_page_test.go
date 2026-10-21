@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/proxy"
-	network "github.com/tradera/tradera/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
+	network "github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
 func pageRequest(id identity.ID, rest, method string, body any) *network.Request {
@@ -41,17 +41,17 @@ func TestPreviewServesKitAndCallsToolsAsThePerson(t *testing.T) {
 	}
 
 	// The kit comes from the gateway, never the sandbox (whose URL is dead).
-	resp, err := a.proxyServe(context.Background(), pageRequest(id, "_tradera/kit/tradera-ui.js", "GET", nil))
+	resp, err := a.proxyServe(context.Background(), pageRequest(id, "_aseman/kit/aseman-ui.js", "GET", nil))
 	if err != nil || resp.Status != 200 || !strings.Contains(resp.Header["Content-Type"], "javascript") {
 		t.Fatalf("kit: %+v %v", resp, err)
 	}
 
-	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_tradera/api/tools", "GET", nil))
+	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_aseman/api/tools", "GET", nil))
 	if err != nil || resp.Status != 200 || strings.Contains(string(resp.Body), "sandbox_exec") || !strings.Contains(string(resp.Body), `"id":"w1"`) {
 		t.Fatalf("tools: %+v %v", resp, err)
 	}
 
-	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_tradera/api/call", "POST", map[string]any{"tool": "weather", "microtool": "forecast", "args": map[string]any{"city": "Oslo"}}))
+	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_aseman/api/call", "POST", map[string]any{"tool": "weather", "microtool": "forecast", "args": map[string]any{"city": "Oslo"}}))
 	if err != nil || resp.Status != 200 || !strings.Contains(string(resp.Body), `"temp":21`) {
 		t.Fatalf("call: %+v %v", resp, err)
 	}
@@ -61,13 +61,13 @@ func TestPreviewServesKitAndCallsToolsAsThePerson(t *testing.T) {
 	}
 
 	// An unknown tool is an error the page can show, as JSON.
-	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_tradera/api/call", "POST", map[string]any{"tool": "nope", "microtool": "x"}))
+	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_aseman/api/call", "POST", map[string]any{"tool": "nope", "microtool": "x"}))
 	if err != nil || resp.Status == 200 || !strings.Contains(string(resp.Body), "Weather") {
 		t.Fatalf("unknown tool: %+v %v", resp, err)
 	}
 
 	// Another site cannot call tools with the person's preview cookie.
-	req := pageRequest(id, "_tradera/api/call", "POST", map[string]any{"tool": "weather", "microtool": "forecast"})
+	req := pageRequest(id, "_aseman/api/call", "POST", map[string]any{"tool": "weather", "microtool": "forecast"})
 	delete(req.Header, "Authorization")
 	req.Header["Cookie"] = "oc_proxy_" + id.String() + "=dGVzdC1zZXNzaW9u"
 	req.Header["Sec-Fetch-Site"] = "cross-site"

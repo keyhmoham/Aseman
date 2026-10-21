@@ -3,11 +3,11 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tradera/src/app.dart';
-import 'package:tradera/src/app_dependencies.dart';
-import 'package:tradera/src/data/models/space.dart';
+import 'package:aseman/src/app.dart';
+import 'package:aseman/src/app_dependencies.dart';
+import 'package:aseman/src/data/models/space.dart';
 
-import 'fake_tradera_service.dart';
+import 'fake_aseman_service.dart';
 
 void main() {
   tearDown(() {
@@ -24,32 +24,32 @@ void main() {
   /// UI renders real-shaped backend data with no network.
   Future<void> seedSession() async {
     SharedPreferences.setMockInitialValues({
-      'tradera.session':
+      'aseman.session':
           '{"account_id":"00000000000000010000000000000001","handle":"test",'
               '"token":"x","private_key":"","public_key":"",'
               '"home_space_id":"00000000000000010000000000000002"}',
     });
   }
 
-  AppDependencies app() => AppDependencies.withService(FakeTraderaService());
+  AppDependencies app() => AppDependencies.withService(FakeAsemanService());
 
   testWidgets('shows the auth screen before login', (tester) async {
     SharedPreferences.setMockInitialValues({});
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
     expect(find.text('Log in'), findsWidgets);
     expect(find.text('Create account'), findsOneWidget);
-    expect(find.text('Tradera'), findsOneWidget);
+    expect(find.text('Aseman'), findsOneWidget);
   });
 
   testWidgets('lands on the search feed when a session exists', (tester) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
     expect(robotHead(), findsOneWidget);
@@ -75,7 +75,7 @@ void main() {
     await seedSession();
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
     // The feed tab is open; the panels are tabs before it.
@@ -98,16 +98,16 @@ void main() {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
-    final service = FakeTraderaService();
-    await tester.pumpWidget(TraderaApp(
+    final service = FakeAsemanService();
+    await tester.pumpWidget(AsemanApp(
         dependencies: AppDependencies.withService(service)));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Search Tradera — signals, traders, agents…'));
+    await tester.tap(find.text('Search Aseman — signals, traders, agents…'));
     await tester.pumpAndSettle();
     expect(find.text('Explore'), findsOneWidget);
     // Outside a space there is no space/explore scope to pick.
-    expect(find.text('Explore Tradera'), findsNothing);
+    expect(find.text('Explore Aseman'), findsNothing);
 
     // Explore sits over the feed, whose side panels list the same names.
     Finder inExplore(String text) => find.text(text).last;
@@ -141,7 +141,7 @@ void main() {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
     // Explore sits over the feed, whose side panels list the same names.
@@ -168,10 +168,10 @@ void main() {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     expect(find.text('Switch workspace'), findsOneWidget);
 
@@ -191,17 +191,17 @@ void main() {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
     // Open the desk first, then create a brand-new workspace from there.
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
     expect(find.text('My trading desk'), findsOneWidget);
 
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('New workspace'));
     await tester.pumpAndSettle();
@@ -225,10 +225,10 @@ void main() {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('New workspace'));
     await tester.pumpAndSettle();
@@ -255,10 +255,10 @@ void main() {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
@@ -290,7 +290,7 @@ void main() {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byType(CircleAvatar).first);
@@ -309,7 +309,7 @@ void main() {
     await seedSession();
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
     // Mobile: the avatar opens the bottom sheet menu.
@@ -330,7 +330,7 @@ void main() {
     await seedSession();
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byType(CircleAvatar).first);
@@ -360,9 +360,9 @@ void main() {
     await seedSession();
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(
+    await tester.pumpWidget(AsemanApp(
         dependencies:
-            AppDependencies.withService(FakeTraderaService(admin: false))));
+            AppDependencies.withService(FakeAsemanService(admin: false))));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byType(CircleAvatar).first);
@@ -376,7 +376,7 @@ void main() {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
     // The app bar has the profile avatar; tapping opens the popup menu.
@@ -393,27 +393,27 @@ void main() {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
 
-    final service = FakeTraderaService();
+    final service = FakeAsemanService();
     // Seed a document attachment in the Atlas "general" room (upload + message).
     final doc = await service.uploadFile(
-      FakeTraderaService.atlasId,
+      FakeAsemanService.atlasId,
       roomId: 'a1',
       name: 'quarterly-report.pdf',
       mime: 'application/pdf',
       bytes: Uint8List.fromList(List.generate(900, (i) => i % 256)),
     );
     await service.sendRoomMessage(
-      FakeTraderaService.atlasId,
+      FakeAsemanService.atlasId,
       'a1',
       'See attached',
       attachments: [doc.id],
     );
 
     await tester.pumpWidget(
-        TraderaApp(dependencies: AppDependencies.withService(service)));
+        AsemanApp(dependencies: AppDependencies.withService(service)));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
@@ -437,23 +437,23 @@ void main() {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
 
-    final service = FakeTraderaService();
+    final service = FakeAsemanService();
     await service.uploadFile(
-      FakeTraderaService.atlasId,
+      FakeAsemanService.atlasId,
       roomId: 'a1',
       name: 'chart.png',
       mime: 'image/png',
       bytes: Uint8List.fromList(List.generate(400, (i) => i % 256)),
     );
     await service.uploadFile(
-      FakeTraderaService.atlasId,
+      FakeAsemanService.atlasId,
       roomId: 'a1',
       name: 'voice-note.mp3',
       mime: 'audio/mpeg',
       bytes: Uint8List.fromList(List.generate(300, (i) => i % 256)),
     );
     await service.uploadFile(
-      FakeTraderaService.atlasId,
+      FakeAsemanService.atlasId,
       roomId: 'a1',
       name: 'notes.txt',
       mime: 'text/plain',
@@ -461,10 +461,10 @@ void main() {
     );
 
     await tester.pumpWidget(
-        TraderaApp(dependencies: AppDependencies.withService(service)));
+        AsemanApp(dependencies: AppDependencies.withService(service)));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
@@ -490,10 +490,10 @@ void main() {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
@@ -520,10 +520,10 @@ void main() {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(TraderaApp(dependencies: app()));
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
@@ -532,7 +532,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.search_rounded).first);
     await tester.pumpAndSettle();
     expect(find.text('In Atlas Capital'), findsOneWidget);
-    expect(find.text('Explore Tradera'), findsOneWidget);
+    expect(find.text('Explore Aseman'), findsOneWidget);
 
     // In-workspace Agents section → only the space's agent (SignalBot), not the
     // global AlphaBot.
@@ -543,7 +543,7 @@ void main() {
 
     // Switch to the global Explore tab, Agents section → the platform agent
     // appears.
-    await tester.tap(find.text('Explore Tradera'));
+    await tester.tap(find.text('Explore Aseman'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(Tab, 'Agents'));
     await tester.pumpAndSettle();
@@ -551,25 +551,25 @@ void main() {
     expect(find.text('AlphaBot'), findsWidgets);
   });
 
-  testWidgets('tradera logs render as collapsible sections in the room',
+  testWidgets('aseman logs render as collapsible sections in the room',
       (tester) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
 
-    final service = FakeTraderaService();
+    final service = FakeAsemanService();
     final now = DateTime.now();
-    service.roomMessages['${FakeTraderaService.atlasId}/a1'] = [
+    service.roomMessages['${FakeAsemanService.atlasId}/a1'] = [
       RoomMessage(
           id: 'm1',
-          spaceId: FakeTraderaService.atlasId,
+          spaceId: FakeAsemanService.atlasId,
           roomId: 'a1',
           senderId: '00000000000000015c00dfede113ae2e',
           body: 'Ready.',
           createdAt: now),
       RoomMessage(
           id: 'm2',
-          spaceId: FakeTraderaService.atlasId,
+          spaceId: FakeAsemanService.atlasId,
           roomId: 'a1',
           senderId: '00000000000000015c00dfede113ae2e',
           body: '## Execution Plan\n1. Inspect the workspace',
@@ -578,9 +578,9 @@ void main() {
     ];
 
     await tester.pumpWidget(
-        TraderaApp(dependencies: AppDependencies.withService(service)));
+        AsemanApp(dependencies: AppDependencies.withService(service)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
@@ -603,11 +603,11 @@ void main() {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
 
-    final service = FakeTraderaService();
-    service.roomMessages['${FakeTraderaService.atlasId}/a1'] = [
+    final service = FakeAsemanService();
+    service.roomMessages['${FakeAsemanService.atlasId}/a1'] = [
       RoomMessage(
           id: 'm1',
-          spaceId: FakeTraderaService.atlasId,
+          spaceId: FakeAsemanService.atlasId,
           roomId: 'a1',
           senderId: '00000000000000010000000000000099',
           body: 'hello',
@@ -617,9 +617,9 @@ void main() {
     service.workingAgent = 'dev';
 
     await tester.pumpWidget(
-        TraderaApp(dependencies: AppDependencies.withService(service)));
+        AsemanApp(dependencies: AppDependencies.withService(service)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
@@ -643,11 +643,11 @@ void main() {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
 
-    final service = FakeTraderaService();
-    service.roomMessages['${FakeTraderaService.atlasId}/a1'] = [
+    final service = FakeAsemanService();
+    service.roomMessages['${FakeAsemanService.atlasId}/a1'] = [
       RoomMessage(
           id: 'm1',
-          spaceId: FakeTraderaService.atlasId,
+          spaceId: FakeAsemanService.atlasId,
           roomId: 'a1',
           senderId: '00000000000000015c00dfede113ae2e',
           body:
@@ -656,9 +656,9 @@ void main() {
     ];
 
     await tester.pumpWidget(
-        TraderaApp(dependencies: AppDependencies.withService(service)));
+        AsemanApp(dependencies: AppDependencies.withService(service)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
@@ -675,11 +675,11 @@ void main() {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
 
-    final service = FakeTraderaService();
+    final service = FakeAsemanService();
     await tester.pumpWidget(
-        TraderaApp(dependencies: AppDependencies.withService(service)));
+        AsemanApp(dependencies: AppDependencies.withService(service)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('TRADERA'));
+    await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();

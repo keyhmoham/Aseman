@@ -5,11 +5,11 @@ package repo
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	dbbridge "github.com/tradera/tradera/plugins/adapters/database/bridge"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	dbbridge "github.com/aseman/aseman/plugins/adapters/database/bridge"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // Repo wraps a database adapter.

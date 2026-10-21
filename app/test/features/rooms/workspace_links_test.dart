@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/core/network/api_client.dart';
-import 'package:tradera/src/core/network/session_store.dart';
-import 'package:tradera/src/data/models/space.dart';
-import 'package:tradera/src/data/models/uploaded_file.dart';
-import 'package:tradera/src/data/services/tradera_service.dart';
-import 'package:tradera/src/features/rooms/presentation/widgets/workspace_links.dart';
-import 'package:tradera/src/features/search_feed/presentation/rich_post_content.dart';
+import 'package:aseman/src/core/network/api_client.dart';
+import 'package:aseman/src/core/network/session_store.dart';
+import 'package:aseman/src/data/models/space.dart';
+import 'package:aseman/src/data/models/uploaded_file.dart';
+import 'package:aseman/src/data/services/aseman_service.dart';
+import 'package:aseman/src/features/rooms/presentation/widgets/workspace_links.dart';
+import 'package:aseman/src/features/search_feed/presentation/rich_post_content.dart';
 
 const fileId = '00000000000000010000000000000001';
 
-class _Files extends TraderaService {
-  _Files() : super(TraderaApiClient(baseUrl: 'https://node.example'));
+class _Files extends AsemanService {
+  _Files() : super(AsemanApiClient(baseUrl: 'https://node.example'));
   String? requested;
   @override
   Future<UploadedFile> fetchFile(String id, {bool withData = false}) async {

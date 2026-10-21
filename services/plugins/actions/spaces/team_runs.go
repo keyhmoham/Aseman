@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // A turn's run is the whole team's work on it: the agents the turn was
@@ -155,7 +155,7 @@ func runEnv(runID string) string {
 	if runID == "" || strings.ContainsAny(runID, "'\"\\$` \n") {
 		return ""
 	}
-	return "export TRADERA_RUN='" + runID + "' && "
+	return "export ASEMAN_RUN='" + runID + "' && "
 }
 
 // killRunProcesses ends every process in the project computer marked with the
@@ -189,7 +189,7 @@ func (s *Service) killRunProcesses(spaceID identity.ID, runID string) {
 // killRunCommand ends the processes whose environment marks them as the run's.
 func killRunCommand(runID string) string {
 	return "for d in /proc/[0-9]*; do " +
-		"if { tr '\\0' '\\n' < \"$d/environ\"; } 2>/dev/null | grep -qx 'TRADERA_RUN=" + runID + "'; then " +
+		"if { tr '\\0' '\\n' < \"$d/environ\"; } 2>/dev/null | grep -qx 'ASEMAN_RUN=" + runID + "'; then " +
 		"kill -9 \"${d#/proc/}\" 2>/dev/null; fi; done; true"
 }
 

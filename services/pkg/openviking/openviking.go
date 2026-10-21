@@ -7,7 +7,7 @@
 // The server runs in trusted mode: every request carries the root key and
 // names the account and user it acts as. A space is an account, an agent a
 // user of it; the identifiers below must match the runtime's
-// (tradera_agents/memory.py).
+// (aseman_agents/memory.py).
 package openviking
 
 import (
@@ -28,8 +28,8 @@ import (
 
 // Environment the node reads OpenViking's address and root key from.
 const (
-	EnvURL = "TRADERA_OPENVIKING_URL"
-	EnvKey = "TRADERA_OPENVIKING_API_KEY"
+	EnvURL = "ASEMAN_OPENVIKING_URL"
+	EnvKey = "ASEMAN_OPENVIKING_API_KEY"
 )
 
 // SpaceNotes is the space's shared notes, in the space's account.
@@ -222,7 +222,7 @@ func (c *Client) Accounts(ctx context.Context, pattern string) ([]string, error)
 // Reindex recomputes the vectors under a uri of an account in the background
 // (after the embedding model changed, the old vectors mean nothing).
 func (c *Client) Reindex(ctx context.Context, account, uri string) error {
-	_, err := c.do(ctx, as{account: account, user: "tradera", role: "admin"}, http.MethodPost,
+	_, err := c.do(ctx, as{account: account, user: "aseman", role: "admin"}, http.MethodPost,
 		"/api/v1/content/reindex", nil,
 		map[string]any{"uri": uri, "mode": "vectors_only", "wait": false, "recursive": true, "force": true})
 	return err

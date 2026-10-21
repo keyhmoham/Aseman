@@ -3,7 +3,7 @@ package signing
 import (
 	"testing"
 
-	"github.com/tradera/tradera/pkg/crypto"
+	"github.com/aseman/aseman/pkg/crypto"
 )
 
 func TestSignVerifyReplay(t *testing.T) {

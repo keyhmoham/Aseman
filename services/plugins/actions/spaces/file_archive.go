@@ -7,7 +7,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 // ArchiveFile is a sandbox source and its relative name in a delivered archive.

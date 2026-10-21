@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/adapters/vmm/mcp"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/adapters/vmm/mcp"
 )
 
 func New() (api.Plugin, error) { return mcp.New(logger.Global()), nil }

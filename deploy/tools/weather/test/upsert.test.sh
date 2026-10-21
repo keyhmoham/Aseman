@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exercises upsert.sh's decisions against a stub `tradera` CLI that records
+# Exercises upsert.sh's decisions against a stub `aseman` CLI that records
 # every call and answers from the scenario in $STUB_SCENARIO:
 #   none      no "weather" tool yet          → tool_create
 #   managed   a managed QuickJS one exists   → tool_update in place
@@ -9,9 +9,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-cat >"$WORK/tradera" <<'STUB'
+cat >"$WORK/aseman" <<'STUB'
 #!/usr/bin/env bash
-# tradera call --server URL --json BODY ns.action
+# aseman call --server URL --json BODY ns.action
 [ "$1" = call ] || { echo "unexpected: $*" >&2; exit 1; }
 body="$5"; action="$6"
 printf '%s\t%s\n' "$action" "$body" >>"$STUB_LOG"
@@ -26,13 +26,13 @@ case "$action" in
   *) echo '{"ok":true}' ;;
 esac
 STUB
-chmod +x "$WORK/tradera"
+chmod +x "$WORK/aseman"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 run() { # scenario → prints the actions called, one per line
   export STUB_SCENARIO="$1" STUB_LOG="$WORK/$1.log"
   : >"$STUB_LOG"
-  out="$("$HERE/../upsert.sh" --cli "$WORK/tradera" --server http://node.test --space space-1 --city Lisbon 2>/dev/null)"
+  out="$("$HERE/../upsert.sh" --cli "$WORK/aseman" --server http://node.test --space space-1 --city Lisbon 2>/dev/null)"
   printf '%s\n' "$out" >"$WORK/$1.out"
   cut -f1 "$STUB_LOG" | tr '\n' ' '
 }

@@ -23,7 +23,7 @@ func ResolveVertexURL(ctx context.Context, rawURL, apiKey string) string {
 	if rawURL == "" {
 		return rawURL
 	}
-	loc := os.Getenv("TRADERA_VERTEX_LOCATION")
+	loc := os.Getenv("ASEMAN_VERTEX_LOCATION")
 	if loc == "" {
 		loc = "us-central1"
 	}
@@ -33,7 +33,7 @@ func ResolveVertexURL(ctx context.Context, rawURL, apiKey string) string {
 		return url
 	}
 
-	project := os.Getenv("TRADERA_VERTEX_PROJECT")
+	project := os.Getenv("ASEMAN_VERTEX_PROJECT")
 	if project == "" {
 		project = os.Getenv("GOOGLE_CLOUD_PROJECT")
 	}

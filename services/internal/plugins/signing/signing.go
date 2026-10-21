@@ -9,16 +9,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/pkg/crypto"
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/pkg/crypto"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 // Signing headers.
 const (
-	HdrNonce     = "X-Tradera-Nonce"
-	HdrTimestamp = "X-Tradera-Timestamp"
-	HdrSignature = "X-Tradera-Signature"
-	HdrNode      = "X-Tradera-Node"
+	HdrNonce     = "X-Aseman-Nonce"
+	HdrTimestamp = "X-Aseman-Timestamp"
+	HdrSignature = "X-Aseman-Signature"
+	HdrNode      = "X-Aseman-Node"
 )
 
 // Window is the maximum accepted request age in seconds.

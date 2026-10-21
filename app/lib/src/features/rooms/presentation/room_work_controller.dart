@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../domain/room_work.dart';
 
 /// Follows the agent work of one room: what runs now and what waits, the
@@ -16,7 +16,7 @@ class RoomWorkController extends ChangeNotifier {
       this.busyEvery = const Duration(seconds: 2),
       this.idleEvery = const Duration(seconds: 6)});
 
-  final TraderaService service;
+  final AsemanService service;
   final String spaceId, roomId;
   final Duration busyEvery, idleEvery;
 

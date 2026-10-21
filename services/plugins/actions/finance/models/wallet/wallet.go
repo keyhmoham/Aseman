@@ -5,7 +5,7 @@ package wallet
 import (
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 // Wallet is the balance record of one account.

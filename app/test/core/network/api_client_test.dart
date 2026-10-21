@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/core/network/api_client.dart';
+import 'package:aseman/src/core/network/api_client.dart';
 
 void main() {
   test(
@@ -15,7 +15,7 @@ void main() {
       requests.add(request);
       if (requests.length == 2) arrived.complete();
     });
-    final client = TraderaApiClient(
+    final client = AsemanApiClient(
         baseUrl: 'http://127.0.0.1:${server.port}',
         timeout: const Duration(milliseconds: 100));
     try {

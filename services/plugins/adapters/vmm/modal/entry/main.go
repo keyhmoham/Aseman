@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/logger"
-	adapter "github.com/tradera/tradera/plugins/adapters/vmm/modal"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/logger"
+	adapter "github.com/aseman/aseman/plugins/adapters/vmm/modal"
 )
 
 func New() (api.Plugin, error) { return adapter.New(logger.Global()), nil }

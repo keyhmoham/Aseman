@@ -981,14 +981,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.12"
-  tradera_elpian_godot:
+  aseman_elpian_godot:
     dependency: "direct main"
     description:
       path: "packages/elpian_godot_native"
       relative: true
     source: path
     version: "0.1.0"
-  tradera_elpian_vm:
+  aseman_elpian_vm:
     dependency: "direct main"
     description:
       path: "packages/elpian_vm_native"

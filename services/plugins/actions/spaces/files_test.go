@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
 )
 
 func idFromHex(t *testing.T, s string) identity.ID {

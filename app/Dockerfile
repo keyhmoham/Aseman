@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
-# Tradera web app (Flutter web build) served by nginx. nginx also proxies the
-# tradera API on the same origin, so the app is built with
+# Aseman web app (Flutter web build) served by nginx. nginx also proxies the
+# aseman API on the same origin, so the app is built with
 # API_BASE_URL=same-origin.
 ARG FLUTTER_IMAGE=ghcr.io/cirruslabs/flutter:3.44.0
 FROM ${FLUTTER_IMAGE} AS build

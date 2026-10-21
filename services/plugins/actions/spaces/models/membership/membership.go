@@ -5,8 +5,8 @@ package membership
 import (
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 // Role in a space.

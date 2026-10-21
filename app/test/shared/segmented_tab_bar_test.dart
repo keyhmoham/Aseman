@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/core/theme/app_theme.dart';
-import 'package:tradera/src/shared/widgets/segmented_tab_bar.dart';
+import 'package:aseman/src/core/theme/app_theme.dart';
+import 'package:aseman/src/shared/widgets/segmented_tab_bar.dart';
 
 void main() {
   Future<void> pump(WidgetTester tester, double screen, List<String> labels,

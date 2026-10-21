@@ -100,7 +100,7 @@ class _ProfileFormState extends State<_ProfileForm> {
   Widget build(BuildContext context) => AppFormFrame(
         icon: Icons.person_outline_rounded,
         title: 'Edit profile',
-        subtitle: 'How people see you across Tradera.',
+        subtitle: 'How people see you across Aseman.',
         submit: 'Save profile',
         onSubmit: submit,
         children: [

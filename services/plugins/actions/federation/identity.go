@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/internal/plugins/module"
-	"github.com/tradera/tradera/pkg/crypto"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/config"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/module"
+	"github.com/aseman/aseman/pkg/crypto"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/config"
 )
 
 // resolveNodeIdentity determines the node id and keypair. A node with no id on

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/app_dependencies.dart';
-import 'package:tradera/src/data/models/bot.dart';
-import 'package:tradera/src/data/models/llm_provider.dart';
-import 'package:tradera/src/features/agents/presentation/agents_screen.dart';
+import 'package:aseman/src/app_dependencies.dart';
+import 'package:aseman/src/data/models/bot.dart';
+import 'package:aseman/src/data/models/llm_provider.dart';
+import 'package:aseman/src/features/agents/presentation/agents_screen.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
 const _provider = LlmProvider(
   id: 'p-openai',
@@ -20,7 +20,7 @@ const _provider = LlmProvider(
 
 /// One agent of the signed-in person, configured as bots.bot_detail reports
 /// it; records what bots.bot_edit is asked to change.
-class _Owner extends FakeTraderaService {
+class _Owner extends FakeAsemanService {
   final edits = <Map<String, Object?>>[];
 
   @override

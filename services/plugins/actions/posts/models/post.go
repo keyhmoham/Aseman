@@ -6,8 +6,8 @@ package post
 import (
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 // Post is a user-published feed entry.

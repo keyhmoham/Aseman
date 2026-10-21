@@ -1,8 +1,8 @@
 package admin
 
 import (
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
 )
 
 // Provider management keeps its existing admin API while implementation and

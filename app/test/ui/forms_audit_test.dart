@@ -2,19 +2,19 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/app_dependencies.dart';
-import 'package:tradera/src/core/network/session_store.dart';
-import 'package:tradera/src/core/settings/app_settings.dart';
-import 'package:tradera/src/core/theme/app_theme.dart';
-import 'package:tradera/src/data/models/llm_provider.dart';
-import 'package:tradera/src/features/account/presentation/account_forms.dart';
-import 'package:tradera/src/features/account/presentation/account_panel.dart';
-import 'package:tradera/src/features/agents/presentation/agent_create_form.dart';
-import 'package:tradera/src/features/home/presentation/widgets/routines_panel.dart';
-import 'package:tradera/src/features/market/presentation/market_screen.dart';
-import 'package:tradera/src/shared/widgets/backend_action_ui.dart';
+import 'package:aseman/src/app_dependencies.dart';
+import 'package:aseman/src/core/network/session_store.dart';
+import 'package:aseman/src/core/settings/app_settings.dart';
+import 'package:aseman/src/core/theme/app_theme.dart';
+import 'package:aseman/src/data/models/llm_provider.dart';
+import 'package:aseman/src/features/account/presentation/account_forms.dart';
+import 'package:aseman/src/features/account/presentation/account_panel.dart';
+import 'package:aseman/src/features/agents/presentation/agent_create_form.dart';
+import 'package:aseman/src/features/home/presentation/widgets/routines_panel.dart';
+import 'package:aseman/src/features/market/presentation/market_screen.dart';
+import 'package:aseman/src/shared/widgets/backend_action_ui.dart';
 
-import '../fake_tradera_service.dart';
+import '../fake_aseman_service.dart';
 import '../features/admin/admin_fixtures.dart' show loadFonts;
 
 /// Opens each form outside the admin console at phone and desktop sizes,
@@ -43,14 +43,14 @@ void main() {
   });
 
   AppDependencies deps() {
-    final d = AppDependencies.withService(FakeTraderaService());
+    final d = AppDependencies.withService(FakeAsemanService());
     d.sessionController.setSession(const Session(
       accountId: 'me',
       handle: 'test',
       token: 'x',
       privateKey: '',
       publicKey: '',
-      homeSpaceId: FakeTraderaService.homeId,
+      homeSpaceId: FakeAsemanService.homeId,
     ));
     return d;
   }
@@ -68,7 +68,7 @@ void main() {
     'routine_new': (
       (d) => RoutinesPanel(
           dependencies: d,
-          spaceId: FakeTraderaService.atlasId,
+          spaceId: FakeAsemanService.atlasId,
           roomId: 'room-1',
           roomName: 'General'),
       (t) => t.tap(find.text('New routine')),

@@ -76,7 +76,7 @@ async function setup() {
   const call = async (name, args) => {
     const [, body] = await handleMcp({
       engine, tools, token: 't', fetch: live ? liveFetch : stubFetch,
-      headers: { 'x-tradera-token': 't', 'x-tradera-actor': 'alice', 'x-tradera-space': 's1' },
+      headers: { 'x-aseman-token': 't', 'x-aseman-actor': 'alice', 'x-aseman-space': 's1' },
       message: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
     });
     return body.result;

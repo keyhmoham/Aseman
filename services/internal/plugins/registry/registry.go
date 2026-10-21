@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 // Entry is the runtime record of one plugin.

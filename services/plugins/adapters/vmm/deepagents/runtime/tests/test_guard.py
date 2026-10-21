@@ -6,8 +6,8 @@ from pathlib import Path
 from langchain_core.exceptions import ContextOverflowError
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from tradera_agents import economy, guard, memory
-from tradera_agents.agent import _is_overflow
+from aseman_agents import economy, guard, memory
+from aseman_agents.agent import _is_overflow
 from fakes import LEAD, call, turn_request
 from test_runtime import platform, runner  # noqa: F401
 
@@ -106,7 +106,7 @@ def test_the_summarization_trigger_follows_the_window(monkeypatch) -> None:
         profile = {"max_input_tokens": 32_000}
 
     assert economy.summarize_above(Model()) == int(32_000 * economy.SUMMARIZE_SHARE)
-    monkeypatch.setenv("TRADERA_DEFAULT_CONTEXT_WINDOW", "16000")
+    monkeypatch.setenv("ASEMAN_DEFAULT_CONTEXT_WINDOW", "16000")
     assert economy.summarize_above(object()) == int(16_000 * economy.SUMMARIZE_SHARE)
 
 
@@ -215,5 +215,5 @@ def test_skills_and_specs_are_instructions() -> None:
     assert economy.reference({"name": "app__help", "args": {}})
     assert not economy.reference({"name": "skills__create_skill", "args": {}})
     assert not economy.reference({"name": "docs__create_doc", "args": {}})
-    assert economy.reference({"name": "read_file", "args": {"file_path": "/w/.tradera/skills/shared/a/SKILL.md"}})
+    assert economy.reference({"name": "read_file", "args": {"file_path": "/w/.aseman/skills/shared/a/SKILL.md"}})
     assert not economy.reference({"name": "read_file", "args": {"file_path": "/w/main.py"}})

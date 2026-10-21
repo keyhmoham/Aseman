@@ -1,6 +1,6 @@
 /// Value conversion and formatting the A2UI basic catalog prescribes
 /// (`en-US` number, currency, date and plural conventions, `openUrl`'s URL
-/// checks), shared by Tradera's client functions and components.
+/// checks), shared by Aseman's client functions and components.
 library;
 
 import 'dart:convert';

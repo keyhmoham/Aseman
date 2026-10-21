@@ -1,4 +1,4 @@
-// Tradera's genui catalog against the A2UI basic catalog (catalog.json and
+// Aseman's genui catalog against the A2UI basic catalog (catalog.json and
 // its 43 examples), and the basic components' behaviour: two-way binding,
 // checks, actions, Tabs, Modal, theme, and the client functions.
 import 'dart:convert';
@@ -7,7 +7,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genui/genui.dart';
-import 'package:tradera/src/genui/genui.dart';
+import 'package:aseman/src/genui/genui.dart';
 
 import 'support.dart';
 
@@ -35,9 +35,9 @@ List<({String file, Map<String, dynamic> json})> examples() {
 void main() {
   test('the catalog covers the basic catalog of catalog.json', () {
     final json = readJson('spec/catalogs/basic/catalog.json');
-    expect(traderaCatalog.catalogId, json['catalogId']);
+    expect(asemanCatalog.catalogId, json['catalogId']);
     final components = json['components'] as Map<String, dynamic>;
-    final items = {for (final i in traderaCatalog.items) i.name: i};
+    final items = {for (final i in asemanCatalog.items) i.name: i};
     components.forEach((name, schema) {
       final item = items[name];
       expect(item, isNotNull, reason: name);
@@ -64,7 +64,7 @@ void main() {
           isTrue,
           reason: '$name required');
     });
-    final functions = {for (final f in traderaCatalog.functions) f.name};
+    final functions = {for (final f in asemanCatalog.functions) f.name};
     expect(functions.containsAll((json['functions'] as Map).keys), isTrue);
     final iconEnum = components['Icon']['allOf'][2]['properties']['name']
         ['oneOf'][0]['enum'] as List;
@@ -74,12 +74,12 @@ void main() {
   });
 
   test('component names are unique and every group is non-empty', () {
-    final names = traderaComponentNames.toList();
+    final names = asemanComponentNames.toList();
     expect(names.toSet(), hasLength(names.length));
-    for (final group in traderaComponentGroups.entries) {
+    for (final group in asemanComponentGroups.entries) {
       expect(group.value, isNotEmpty, reason: group.key);
     }
-    // Every Tradera component of the previous catalog is still here.
+    // Every Aseman component of the previous catalog is still here.
     expect(
         names,
         containsAll([
@@ -346,7 +346,7 @@ void main() {
       expect(await call('nope', {}), isNull);
     });
 
-    test('Tradera functions', () async {
+    test('Aseman functions', () async {
       expect(await call('format', {'value': 0.1234, 'format': '+percent:1'}),
           '+12.3%');
       expect(await call('formatPercent', {'value': 0.05, 'signed': true}),
@@ -432,7 +432,7 @@ void main() {
     test('client-side state functions write the data model', () async {
       final model = InMemoryDataModel();
       final context =
-          DataContext(model, DataPath.root, functions: traderaCatalog.functions);
+          DataContext(model, DataPath.root, functions: asemanCatalog.functions);
       Future<void> run(String name, Map<String, Object?> args) =>
           context.resolve({'call': name, 'args': args}).first;
       await run('setValue', {'path': '/tab', 'value': 'orders'});

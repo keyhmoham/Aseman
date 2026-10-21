@@ -7,16 +7,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/jsonpatch"
-	bots "github.com/tradera/tradera/plugins/actions/bots/dto"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/space"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/jsonpatch"
+	bots "github.com/aseman/aseman/plugins/actions/bots/dto"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/space"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // sandboxIdleTTL is how long the shared space sandbox stays alive after the
@@ -31,7 +31,7 @@ const sandboxPreviewTTL = sandboxIdleTTL
 // defaultSandboxImage is the per-space sandbox computer (deploy/sandbox-computer):
 // the shared shell and filesystem every agent of the space works on, with a
 // Node.js/Python/git toolchain so agents can build and run software there.
-const defaultSandboxImage = "tradera/sandbox-computer:latest"
+const defaultSandboxImage = "aseman/sandbox-computer:latest"
 
 // sandboxImage is the configured sandbox computer image (sandbox.image).
 func (s *Service) sandboxImage() string {

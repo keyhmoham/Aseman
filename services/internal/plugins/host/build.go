@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 // Build compiles a namespace or adapter entry using the host's source tree and

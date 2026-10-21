@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/openviking"
-	"github.com/tradera/tradera/plugins/actions/finance/models/wallet"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/openviking"
+	"github.com/aseman/aseman/plugins/actions/finance/models/wallet"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // The agents' memory runs on the admin's models (Admin → Memory models), and
@@ -32,7 +32,7 @@ import (
 
 // MemoryAccountHeader names the OpenViking account (the project) a memory
 // model call is for.
-const MemoryAccountHeader = "X-Tradera-Memory-Account"
+const MemoryAccountHeader = "X-Aseman-Memory-Account"
 
 // memoryBillEvery is how often metered memory use is charged.
 const memoryBillEvery = 30 * time.Second

@@ -420,7 +420,7 @@ class _AppScreenState extends State<AdminScreen> {
   }
 
   static String _errorText(Object error) => '$error'.replaceFirst(
-      RegExp(r'^(Exception|TraderaException|ApiException):\s*'), '');
+      RegExp(r'^(Exception|AsemanException|ApiException):\s*'), '');
 
   Future<void> runAction(_Call call) async {
     final body = await showAdminActionForm(
@@ -738,7 +738,7 @@ class _Navigation extends StatelessWidget {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Tradera',
+                    Text('Aseman',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(

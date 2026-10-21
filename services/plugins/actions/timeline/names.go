@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // names turns the ids in the node's records into the names things carry on

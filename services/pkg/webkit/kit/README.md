@@ -1,18 +1,18 @@
-# Tradera web UI kit — building a tool's interactive web frontend
+# Aseman web UI kit — building a tool's interactive web frontend
 
 When people want to **interact with a tool** (operate it, fill a form, place
 an order, filter and drill into its data, configure it, a dashboard they
 use), build an **interactive web page** for it: a small web app in the
 sandbox, served through a preview gateway, that opens as a card window on
 the room's desk next to the tools' own frontends. It looks exactly like the
-app (this kit) and calls the tool's microtools through the Tradera API, as
+app (this kit) and calls the tool's microtools through the Aseman API, as
 the person using it. Do not rely on a generated (A2UI) frontend or
 `ui_compose` for interaction: they show results; a page *does things*.
 
-The kit's files are in the sandbox at `/opt/tradera/webkit/`
-(`tradera-ui.js`, `tradera-ui.css`, `gallery.html` with every component, this
+The kit's files are in the sandbox at `/opt/aseman/webkit/`
+(`aseman-ui.js`, `aseman-ui.css`, `gallery.html` with every component, this
 README). Through the gateway every preview serves them itself at
-`/_tradera/kit/…` — link them there, never copy them into the page's build.
+`/_aseman/kit/…` — link them there, never copy them into the page's build.
 
 ## 1. Build and expose
 
@@ -39,8 +39,8 @@ builds too — with `preserve_path` for frameworks that compile their base path)
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Weather console</title>
-  <link rel="stylesheet" href="/_tradera/kit/tradera-ui.css">
-  <script src="/_tradera/kit/tradera-ui.js"></script>
+  <link rel="stylesheet" href="/_aseman/kit/aseman-ui.css">
+  <script src="/_aseman/kit/aseman-ui.js"></script>
 </head>
 <body class="t-page">
   <t-column gap="16">
@@ -66,12 +66,12 @@ builds too — with `preserve_path` for frameworks that compile their base path)
       </t-form>
     </t-card>
   </t-column>
-  <script>Tradera.data.set('/form/city', 'Oslo');</script>
+  <script>Aseman.data.set('/form/city', 'Oslo');</script>
 </body>
 </html>
 ```
 
-Root-relative URLs (`/_tradera/…`, `/app.js`) stay inside the preview: the
+Root-relative URLs (`/_aseman/…`, `/app.js`) stay inside the preview: the
 gateway rewrites them. Tools are named by their name (case-insensitive) or
 bot id; `call="Tool/microtool"`.
 
@@ -93,36 +93,36 @@ when the args it reads change, and every N seconds; `/fc__loading` and
 `/fc__error` say how it is going. `<t-form call into>` submits its named
 fields (`name="qty"`) as args.
 
-In script (`Tradera` is global; everything is async):
+In script (`Aseman` is global; everything is async):
 
 ```js
-const fc = await Tradera.call('Weather', 'forecast', { city: 'Oslo' }); // the microtool's value (MCP results unwrapped)
-const wx = Tradera.tool('Weather'); await wx.forecast({ city: 'Rome' });  // same, as an object
-await Tradera.tools();                // the space's tools with their microtools (name, description, schema)
-await Tradera.microtools('Weather');  // asked live
-await Tradera.context();              // {space, room, user: {id, handle}, preview}
-await Tradera.load('/fc', 'Weather', 'forecast', { city: { path: '/form/city' } }, { every: 60 });
-Tradera.poll(async () => …, 30000);   // paused while the page is hidden
-await Tradera.show('Weather', { microtool: 'forecast', args: { city: 'Oslo' } }); // opens the tool's own frontend on the desk
-Tradera.toast('Saved', { status: 'good' }); await Tradera.confirm('Delete the alert?', { destructive: true });
-await Tradera.dialog({ title, content: node | 'markdown', actions: [{ label, variant, value }] });
-Tradera.on('remove', (context, el) => …);  // handles {"event": {"name": "remove", "context": {…}}} actions
+const fc = await Aseman.call('Weather', 'forecast', { city: 'Oslo' }); // the microtool's value (MCP results unwrapped)
+const wx = Aseman.tool('Weather'); await wx.forecast({ city: 'Rome' });  // same, as an object
+await Aseman.tools();                // the space's tools with their microtools (name, description, schema)
+await Aseman.microtools('Weather');  // asked live
+await Aseman.context();              // {space, room, user: {id, handle}, preview}
+await Aseman.load('/fc', 'Weather', 'forecast', { city: { path: '/form/city' } }, { every: 60 });
+Aseman.poll(async () => …, 30000);   // paused while the page is hidden
+await Aseman.show('Weather', { microtool: 'forecast', args: { city: 'Oslo' } }); // opens the tool's own frontend on the desk
+Aseman.toast('Saved', { status: 'good' }); await Aseman.confirm('Delete the alert?', { destructive: true });
+await Aseman.dialog({ title, content: node | 'markdown', actions: [{ label, variant, value }] });
+Aseman.on('remove', (context, el) => …);  // handles {"event": {"name": "remove", "context": {…}}} actions
 ```
 
-Errors are `Tradera.Error` (`message`, `code`, `status`). While developing
-without the gateway, `Tradera.configure({ mock: { Weather: { forecast: (args) => ({…}) } } })`.
+Errors are `Aseman.Error` (`message`, `code`, `status`). While developing
+without the gateway, `Aseman.configure({ mock: { Weather: { forecast: (args) => ({…}) } } })`.
 
 ## 4. The data model and bindings
 
-`Tradera.data` is one JSON model (`get(path)`, `set(path, v)`, `merge`,
+`Aseman.data` is one JSON model (`get(path)`, `set(path, v)`, `merge`,
 `remove`, `batch(fn)`, `subscribe(fn)`). Bind any prop to it:
 `bind-value="/form/city"` or `value='{"path": "/form/city"}'`; inputs write
 back to it; anything reading a path re-renders when it changes. Props take
 literals (attributes are parsed as JSON when they look like it), bindings,
 and A2UI function calls: `text='{"call": "formatString", "args": {"value": "High ${/fc/high}°"}}'`.
 In script, set props as properties: `el.data = rows`, `el.props = {…}`,
-`el.set('value', 3)`. Build elements with `Tradera.el('stat', {label, value})`
-and `Tradera.h('div', {class, on: {click}}, …children)`.
+`el.set('value', 3)`. Build elements with `Aseman.el('stat', {label, value})`
+and `Aseman.h('div', {class, on: {click}}, …children)`.
 
 Repeat a `<template>` per item: `<t-list each="/positions"><template>…
 <t-text bind-text="symbol"></t-text>…</template></t-list>` (relative paths
@@ -150,7 +150,7 @@ Every element is `<t-…>` with the props of the app's component of the same
 name (A2UI catalog, tool UI kit, Elpian widgets); camelCase props are
 kebab-case attributes (`min-column-width`). Events: `t-press`, `t-change`
 (`detail.value`), `t-select` (tapped row), `t-action`, `t-result`, `t-error`,
-`t-submit`. The gallery (`/_tradera/kit/gallery.html`) shows them all.
+`t-submit`. The gallery (`/_aseman/kit/gallery.html`) shows them all.
 
 **Layout** — `t-column` / `t-row` {justify, align, gap; children take
 `weight`}, `t-grid` {columns | min-column-width (+max-columns), gap},
@@ -233,11 +233,11 @@ itself — never hard-code colors or a theme.
 ## 7. Check it
 
 Locally (in the sandbox, without the gateway) the kit's URLs answer only if
-the served folder has them: `mkdir -p _tradera/kit && cp /opt/tradera/webkit/* _tradera/kit/`
-(harmless: in the preview the gateway answers `/_tradera/…` itself). There
-is no Tradera API locally: `Tradera.configure({ mock: … })` checks the
+the served folder has them: `mkdir -p _aseman/kit && cp /opt/aseman/webkit/* _aseman/kit/`
+(harmless: in the preview the gateway answers `/_aseman/…` itself). There
+is no Aseman API locally: `Aseman.configure({ mock: … })` checks the
 layout; then verify the real calls in the preview.
 
 Before reporting: `proxy_get` with `probe: true`, open the page in the
-desktop browser (`tradera-desktop open http://localhost:8080`), take a
+desktop browser (`aseman-desktop open http://localhost:8080`), take a
 screenshot, and click through every control.

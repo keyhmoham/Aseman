@@ -3,11 +3,11 @@ package routine
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/module"
-	models "github.com/tradera/tradera/plugins/actions/routines/models"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/actions/support/schema"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/module"
+	models "github.com/aseman/aseman/plugins/actions/routines/models"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/actions/support/schema"
 )
 
 // NewPlugin constructs the namespace using only the host bridge.

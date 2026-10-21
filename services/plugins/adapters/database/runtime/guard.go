@@ -3,9 +3,9 @@ package runtime
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/lifetime"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/lifetime"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 type guardedDatabase struct {

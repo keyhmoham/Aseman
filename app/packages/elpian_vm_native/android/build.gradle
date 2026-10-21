@@ -1,6 +1,6 @@
 // The Android Gradle Plugin builds the native code with the Android NDK.
 
-group 'io.tradera.elpian_vm'
+group 'io.aseman.elpian_vm'
 version '1.0'
 
 buildscript {
@@ -27,7 +27,7 @@ apply plugin: 'com.android.library'
 android {
     // Bumped from AGP default of 16.
     if (project.android.hasProperty("namespace")) {
-        namespace 'io.tradera.elpian_vm'
+        namespace 'io.aseman.elpian_vm'
     }
     compileSdkVersion 33
 

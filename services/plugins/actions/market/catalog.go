@@ -3,16 +3,16 @@ package market
 import (
 	"context"
 	"encoding/json"
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	models "github.com/tradera/tradera/plugins/actions/market/models"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/actions/support/metasvc"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	models "github.com/aseman/aseman/plugins/actions/market/models"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/metasvc"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 	"sort"
 	"strings"
 	"time"
@@ -60,7 +60,7 @@ func (s *Service) catalog(ctx context.Context, caller identity.ID, admin bool, s
 	// The reserved orchestrator is built-in, always usable without publishing a
 	// user-owned listing. It is the same bot attached by CreateSpace.
 	var lead *bot.Bot
-	if e := bridge.Invoke(ctx, s.K, "bots", "InstallTradera", []any{ctx}, &lead); e == nil && lead != nil && !seen[lead.ID.String()] {
+	if e := bridge.Invoke(ctx, s.K, "bots", "InstallAseman", []any{ctx}, &lead); e == nil && lead != nil && !seen[lead.ID.String()] {
 		row := s.catalogBot(ctx, lead)
 		row["builtin"] = true
 		// The lead's @username is configurable (admin → Agents); "lead" is the default.

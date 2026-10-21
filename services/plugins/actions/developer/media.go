@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/tradera/tradera/plugins/actions/llm/dto"
+	"github.com/aseman/aseman/plugins/actions/llm/dto"
 )
 
 // Usage is what a call used, in the units it is charged by.

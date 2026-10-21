@@ -4,9 +4,9 @@ package usages
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 type spacesPortBridge struct{ K api.Kernel }

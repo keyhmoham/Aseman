@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 func TestSourceSearchSupportsRegexAndExplicitLiteralMode(t *testing.T) {
@@ -73,7 +73,7 @@ func TestSandboxEditCommitsOnceAndRejectsStaleSource(t *testing.T) {
 	if string(actual) != string(after) {
 		t.Fatal("stale edit overwrote new work")
 	}
-	temporary, _ := filepath.Glob(path + ".tradera-edit.*")
+	temporary, _ := filepath.Glob(path + ".aseman-edit.*")
 	if len(temporary) != 0 {
 		t.Fatal("edit left temporary files")
 	}

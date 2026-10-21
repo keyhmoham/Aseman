@@ -5,7 +5,7 @@ package entity
 import (
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 // Entity is embedded into all persisted domain records.

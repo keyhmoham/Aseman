@@ -139,7 +139,7 @@ const String kDefaultAppTemplate = r'''
 function MainComponent() {
   return { type: 'Column', props: { style: { padding: '20', gap: '12' } }, children: [
     { type: 'Text', props: { text: 'Hello from elpian', style: { fontSize: '22', fontWeight: 'bold' } } },
-    { type: 'Text', props: { text: 'This app runs inside the Tradera sandbox.' } },
+    { type: 'Text', props: { text: 'This app runs inside the Aseman sandbox.' } },
     { type: 'Button', props: { text: 'Call backend', className: 'primary' }, events: { tap: 'ping' } },
     { type: 'Text', key: 'reply', props: { text: 'Press the button to ask the backend.' } }
   ] };

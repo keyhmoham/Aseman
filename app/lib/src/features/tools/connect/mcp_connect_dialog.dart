@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_shape.dart';
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import 'mcp_sign_in.dart';
 
 /// Asks the person to connect their own account to the tool [botId] in the
@@ -11,7 +11,7 @@ import 'mcp_sign_in.dart';
 /// whether it is connected.
 Future<bool> connectMcpTool(
   BuildContext context,
-  TraderaService service, {
+  AsemanService service, {
   required String botId,
   required String spaceId,
   required String name,
@@ -35,7 +35,7 @@ Future<bool> connectMcpTool(
 /// everyone shares).
 Future<bool> connectMcpToolIfNeeded(
   BuildContext context,
-  TraderaService service, {
+  AsemanService service, {
   required String botId,
   required String spaceId,
   required String name,

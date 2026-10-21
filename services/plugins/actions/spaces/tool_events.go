@@ -3,10 +3,10 @@ package spaces
 import (
 	"context"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/adapters/vmm/models/execution"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/adapters/vmm/models/execution"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // beginToolEvent checkpoints intent before a side effect. Repeated call IDs replay

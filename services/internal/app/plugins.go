@@ -7,14 +7,14 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/tradera/tradera/internal/kernel"
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/host"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/internal/plugins/logs"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/config"
+	"github.com/aseman/aseman/internal/kernel"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/host"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/logs"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/config"
 )
 
 var defaultNamespaces = []string{"auth", "users", "finance", "federation", "llm", "usage", "developer", "bots", "message", "posts", "market", "spaces", "routines", "settings", "talent", "tools", "timeline", "admin"}

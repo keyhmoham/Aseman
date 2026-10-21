@@ -3,8 +3,8 @@ package llm
 import (
 	"testing"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/llm/models"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/llm/models"
 )
 
 func TestDecisionModelsAreNeverAgentBackbones(t *testing.T) {

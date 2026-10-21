@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
-// messageTool implements the message_send tool: tradera (the orchestrator) —
+// messageTool implements the message_send tool: aseman (the orchestrator) —
 // or any agent in the workspace — posts a message into a room's chat at any
-// time. It is the channel that lets tradera send multiple messages, status
+// time. It is the channel that lets aseman send multiple messages, status
 // updates or follow-ups on its own initiative, not only in reply to a mention.
 func (s *Service) messageTool(ctx context.Context, spaceID identity.ID, argsJSON string) (string, error) {
 	var in struct {
@@ -45,9 +45,9 @@ func (s *Service) messageTool(ctx context.Context, spaceID identity.ID, argsJSON
 	if body == "" {
 		return "", errs.InvalidArgument("message_send requires a body (the message text)")
 	}
-	sender, err := s.TraderaAccount(ctx)
+	sender, err := s.AsemanAccount(ctx)
 	if err != nil {
-		return "", errs.New(errs.CodeUnavailable, "tradera orchestrator not available")
+		return "", errs.New(errs.CodeUnavailable, "aseman orchestrator not available")
 	}
 	if in.To != "" {
 		to, perr := identity.Parse(in.To)
@@ -85,7 +85,7 @@ func (s *Service) messageTool(ctx context.Context, spaceID identity.ID, argsJSON
 }
 
 // postPeerMessage delivers a fire-and-forget message packet to a specific user
-// or bot account (the message namespace's async channel), so tradera can also
+// or bot account (the message namespace's async channel), so aseman can also
 // reach individuals, not only rooms.
 func (s *Service) postPeerMessage(ctx context.Context, from, to identity.ID, body string) error {
 	if s.Msg == nil {

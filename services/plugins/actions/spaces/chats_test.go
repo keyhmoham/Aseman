@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // callErr runs an action as caller and returns its error, if any.

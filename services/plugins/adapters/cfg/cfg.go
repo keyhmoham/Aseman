@@ -5,11 +5,11 @@ package cfg
 import (
 	"time"
 
-	"github.com/tradera/tradera/plugins/adapters/cache/ports"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/filesystem/ports"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/plugins/adapters/cache/ports"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/filesystem/ports"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 func str(m map[string]any, key string) string {

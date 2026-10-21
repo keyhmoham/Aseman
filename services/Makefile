@@ -1,7 +1,7 @@
 GO       := go
 BIN_DIR  := bin
-BIN      := traderad
-CLI      := tradera
+BIN      := asemand
+CLI      := aseman
 
 .PHONY: all build daemon cli plugins test vet lint fmt tidy run clean install
 
@@ -10,10 +10,10 @@ all: build
 build: daemon cli plugins
 
 daemon:
-	CGO_ENABLED=1 $(GO) build -trimpath -o $(BIN_DIR)/$(BIN) ./cmd/traderad
+	CGO_ENABLED=1 $(GO) build -trimpath -o $(BIN_DIR)/$(BIN) ./cmd/asemand
 
 cli:
-	CGO_ENABLED=1 $(GO) build -trimpath -o $(BIN_DIR)/$(CLI) ./cmd/tradera
+	CGO_ENABLED=1 $(GO) build -trimpath -o $(BIN_DIR)/$(CLI) ./cmd/aseman
 
 # Compile namespace and adapter entry points with the daemon's build flags.
 plugins:
@@ -38,7 +38,7 @@ run:
 	$(BIN_DIR)/$(BIN) -config configs/config.yml
 
 install:
-	$(GO) install ./cmd/traderad ./cmd/tradera
+	$(GO) install ./cmd/asemand ./cmd/aseman
 
 clean:
 	rm -rf $(BIN_DIR) data

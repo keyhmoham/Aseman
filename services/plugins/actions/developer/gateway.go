@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
 // The developer API's routes live under this prefix in the node's router; the
@@ -159,7 +159,7 @@ func (s *Service) authenticated(req *network.Request, run func(p *Principal, rat
 		return fromResult(errorBody(500, "api_error", "internal_error", "Something went wrong on our side.", reqID, nil))
 	}
 	limit, remaining, retry, ok := s.Allow(p)
-	rate := map[string]string{"X-RateLimit-Limit": strconv.FormatInt(limit, 10), "X-RateLimit-Remaining": strconv.FormatInt(remaining, 10), "X-Tradera-Request-Id": reqID}
+	rate := map[string]string{"X-RateLimit-Limit": strconv.FormatInt(limit, 10), "X-RateLimit-Remaining": strconv.FormatInt(remaining, 10), "X-Aseman-Request-Id": reqID}
 	if !ok {
 		r := errorBody(429, "rate_limit_error", "rate_limited", "Rate limit reached for this key. Retry after "+strconv.Itoa(retry)+" seconds.", reqID, nil)
 		r.Header["Retry-After"] = strconv.Itoa(retry)

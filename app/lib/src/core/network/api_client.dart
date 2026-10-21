@@ -32,12 +32,12 @@ class ApiResponse {
   bool get ok => status >= 200 && status < 300;
 }
 
-/// The Tradera HTTP client. Every request is Ed25519-signed with the
+/// The Aseman HTTP client. Every request is Ed25519-signed with the
 /// account's identity key and carries the session bearer token, so each action
 /// runs with the user's identity — this is what lets an app frontend call
 /// its backend "as the user".
-class TraderaApiClient {
-  TraderaApiClient({
+class AsemanApiClient {
+  AsemanApiClient({
     required this.baseUrl,
     this.session,
     this.timeout = const Duration(seconds: 60),

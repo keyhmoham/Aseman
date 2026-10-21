@@ -2,7 +2,7 @@ package helper
 
 import (
 	"context"
-	"github.com/tradera/tradera/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/api"
 )
 
 // Action keeps small namespace-owned handlers on the same protocol-neutral

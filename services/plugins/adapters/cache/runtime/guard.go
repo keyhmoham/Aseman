@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/lifetime"
-	"github.com/tradera/tradera/plugins/adapters/cache/ports"
+	"github.com/aseman/aseman/internal/plugins/lifetime"
+	"github.com/aseman/aseman/plugins/adapters/cache/ports"
 )
 
 type guardedCache struct {

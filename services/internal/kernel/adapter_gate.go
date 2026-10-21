@@ -3,9 +3,9 @@ package kernel
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/lifetime"
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/lifetime"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 func (k *Kernel) gate(name string) *lifetime.Gate {

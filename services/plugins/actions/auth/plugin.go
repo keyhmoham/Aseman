@@ -3,10 +3,10 @@ package auth
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/module"
-	"github.com/tradera/tradera/plugins/actions/auth/schema"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/module"
+	"github.com/aseman/aseman/plugins/actions/auth/schema"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
 )
 
 // NewPlugin constructs the namespace using only the host bridge.

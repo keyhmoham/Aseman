@@ -1,12 +1,12 @@
-# Tradera
+# Aseman
 
-**Tradera** is a federated, decentralized VM platform. Users deploy VMs (known as **bots**) on a mesh of federation nodes, interact with them through spaces/rooms/messaging, and pay for their live execution from in-platform wallets backed by a distributed ledger.
+**Aseman** is a federated, decentralized VM platform. Users deploy VMs (known as **bots**) on a mesh of federation nodes, interact with them through spaces/rooms/messaging, and pay for their live execution from in-platform wallets backed by a distributed ledger.
 
 The system is built with **hexagonal architecture** and is fully **plugin-driven**: database, cache, network, filesystem and VMM providers are swappable at runtime; every feature (action) is a plugin grouped into a namespace; and an admin CLI can load/unload/reprogram all of it while the node runs.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│ DRIVING ADAPTERS                        cmd/tradera (CLI)      │
+│ DRIVING ADAPTERS                        cmd/aseman (CLI)      │
 │                                        plugins/adapters/network/gateway         │
 │              network plugins (http/tcp/ws) → action router       │
 ├──────────────────────────────────────────────────────────────────┤
@@ -94,48 +94,48 @@ verification against Google's JWKS (issuer/audience/expiry checks).
 
 ```bash
 # build
-make daemon cli            # or: go build ./cmd/traderad ./cmd/tradera
+make daemon cli            # or: go build ./cmd/asemand ./cmd/aseman
 
 # run a node (defaults: in-memory DB, local cache/fs, HTTP on :8080)
-./bin/traderad -config configs/config.yml -admin-password changeme
+./bin/asemand -config configs/config.yml -admin-password changeme
 
 # interact
-./bin/tradera login node-a changeme            # admin bootstrap account
-./bin/tradera whoami
-./bin/tradera actions                          # list namespaces/actions
-./bin/tradera plugins                          # plugin registry & states
-./bin/tradera wiring                           # active adapter per category
-./bin/tradera telemetry
+./bin/aseman login node-a changeme            # admin bootstrap account
+./bin/aseman whoami
+./bin/aseman actions                          # list namespaces/actions
+./bin/aseman plugins                          # plugin registry & states
+./bin/aseman wiring                           # active adapter per category
+./bin/aseman telemetry
 ```
 
 A quick end-to-end session:
 
 ```bash
-./bin/tradera call auth.register handle=alice email=alice@x.com password=secret1234
-./bin/tradera login alice secret1234          # stores session token + identity key
-./bin/tradera call auth.whoami                 # request is auto-signed with the key
+./bin/aseman call auth.register handle=alice email=alice@x.com password=secret1234
+./bin/aseman login alice secret1234          # stores session token + identity key
+./bin/aseman call auth.whoami                 # request is auto-signed with the key
 
 # finance (central node mints)
-./bin/tradera login node-a changeme
-./bin/tradera call finance.wallet_mint target=<alice-id> amount=1000
-./bin/tradera login alice secret1234
-./bin/tradera call finance.wallet_get
+./bin/aseman login node-a changeme
+./bin/aseman call finance.wallet_mint target=<alice-id> amount=1000
+./bin/aseman login alice secret1234
+./bin/aseman call finance.wallet_get
 
 # spaces
-./bin/tradera call spaces.space_create name="team alpha"
-./bin/tradera call spaces.metadata_patch space=<id> 'patch=[{"op":"set","path":"/owner","value":{"email":"a@x.com"}}]'
-./bin/tradera call spaces.metadata_public space=<id> paths=owner
-./bin/tradera call spaces.message_send space=<id> room=<room-id> body="hello"
+./bin/aseman call spaces.space_create name="team alpha"
+./bin/aseman call spaces.metadata_patch space=<id> 'patch=[{"op":"set","path":"/owner","value":{"email":"a@x.com"}}]'
+./bin/aseman call spaces.metadata_public space=<id> paths=owner
+./bin/aseman call spaces.message_send space=<id> room=<room-id> body="hello"
 
 # bots (VMs): load the wasm provider and rewire the VMM adapter at runtime
-./bin/tradera login node-a changeme
-./bin/tradera call admin.plugins_load name=wasm
-./bin/tradera call admin.plugins_set_active category=vmm plugin=wasm
-./bin/tradera login alice secret1234
-./bin/tradera call bots.bot_create name=helper vm_type=wasm image_ref=hello.wasm
-./bin/tradera call bots.bot_usage bot=<bot-id>        # live metering
-./bin/tradera call bots.bot_resize bot=<bot-id> cpu=1 memory_mb=256   # live resize
-./bin/tradera call bots.bot_lifecycle bot=<bot-id> op=pause
+./bin/aseman login node-a changeme
+./bin/aseman call admin.plugins_load name=wasm
+./bin/aseman call admin.plugins_set_active category=vmm plugin=wasm
+./bin/aseman login alice secret1234
+./bin/aseman call bots.bot_create name=helper vm_type=wasm image_ref=hello.wasm
+./bin/aseman call bots.bot_usage bot=<bot-id>        # live metering
+./bin/aseman call bots.bot_resize bot=<bot-id> cpu=1 memory_mb=256   # live resize
+./bin/aseman call bots.bot_lifecycle bot=<bot-id> op=pause
 ```
 
 ### Running a two-node mesh
@@ -143,12 +143,12 @@ A quick end-to-end session:
 ```bash
 # node B (peer)
 cp configs/config.yml configs/config.peer.yml   # change node.id, node.name, url, http.addr
-./bin/traderad -config configs/config.peer.yml -admin-password changeme
+./bin/asemand -config configs/config.peer.yml -admin-password changeme
 
 # each node registers the other (public keys come from federation.node_info)
-./bin/tradera login node-a changeme
-./bin/tradera call federation.node_register id=<B-id> url=http://localhost:8081 public_key=<B-pubkey>
-./bin/tradera call users.account_get account=<b-on-node-B>   # transparently proxied & verified
+./bin/aseman login node-a changeme
+./bin/aseman call federation.node_register id=<B-id> url=http://localhost:8081 public_key=<B-pubkey>
+./bin/aseman call users.account_get account=<b-on-node-B>   # transparently proxied & verified
 ```
 
 Every ledger entry on the central node is broadcast to peers and replicated in
@@ -180,7 +180,7 @@ through `internal/plugins/host`; see [runtime plugin architecture](plugins/READM
 |---|---|---|
 | database | postgres, mysql, mongodb, memory | memory |
 | cache | local-cache, redis | local-cache |
-| filesystem | local, s3 | local (s3 when `TRADERA_S3_BUCKET` is set: Cloudflare R2, AWS S3, MinIO) |
+| filesystem | local, s3 | local (s3 when `ASEMAN_S3_BUCKET` is set: Cloudflare R2, AWS S3, MinIO) |
 | network | http, tcp (JSON frames), websocket | http |
 | vmm | nomad (docker, plus elpian/quickjs tool backends), docker, wasm (wazero), modal, deepagents, mcp (external and installed tools) | nomad |
 
@@ -266,12 +266,12 @@ done is never refused, so a run can finish at most one step past the cap.
   knowledge base, one per space, created on first use. Its service serves the
   agents' reads (`MCP`, through the deepagents gateway's `/timeline/mcp`) and
   `timeline.status` shows the admin each feed's cursor. Configured by
-  `TRADERA_TIMELINE_URL` / `_EMAIL` / `_PASSWORD`; off without the URL.
+  `ASEMAN_TIMELINE_URL` / `_EMAIL` / `_PASSWORD`; off without the URL.
 - **developer** — the developer API: organizations (a person's own, or teams with
   their own wallet, members and roles), API keys (`dk_live_…`, hashed; permissions,
   per-key spend cap, rate limit, model and provider allow-lists, expiry), a unified
   model catalog built from the LLM providers (one entry per model, priced), and
-  the HTTP door on the developer host (`TRADERA_DEVELOPER_HOST`): `GET /v1/models`,
+  the HTTP door on the developer host (`ASEMAN_DEVELOPER_HOST`): `GET /v1/models`,
   `POST /v1/chat/completions` (streaming), `/v1/embeddings`, `/v1/decisions`,
   `/v1/images/generations`, `/v1/audio/speech` (answers with the audio),
   `/v1/audio/transcriptions` (multipart or base64 JSON), `/v1/rerank`, video as a
@@ -328,7 +328,7 @@ A room turn (`spaces.turn_submit`) runs as one **run** whose id is the turn's
 (`vmm.Execution.RunID`). Everything the turn's agents start joins it: agents
 they bring in by mentioning them (`spaces.message_send`) or messaging them
 (`users.dm_send`), and so on down the chain, and every command they run in the
-project computer, which carries the run's mark (`TRADERA_RUN`) into every
+project computer, which carries the run's mark (`ASEMAN_RUN`) into every
 process it starts. The turn stays `running` until every member is done, so it
 can be stopped for as long as anyone works on it. `spaces.turn_cancel` stops
 the whole run: the turn's agents, the agents they brought in (their runtime
@@ -357,8 +357,8 @@ tools, the sandbox computer image carries it for installed ones. A docker
 backend is the author's own image (an installed one runs as a sidecar in the
 sandbox's network namespace). The node calls a managed or installed backend
 with the tool's runtime credential and the call's **execution scope** —
-who asks (`X-Tradera-Actor`), on whose behalf an agent asks
-(`X-Tradera-Agent`), from which space and room — plus a signed scope token
+who asks (`X-Aseman-Actor`), on whose behalf an agent asks
+(`X-Aseman-Agent`), from which space and room — plus a signed scope token
 the backend hands back to act in that scope through the tool gateway
 (`/tools/v1/runtime/host`: `spaces.message_send`, `spaces.ask`,
 `spaces.message_list`, `bots.kv_*`, …), as the tool's account. A backend
@@ -404,13 +404,13 @@ same-origin writes):
 
 | Path | |
 |---|---|
-| `_tradera/kit/<file>` | Tradera's web UI kit (`pkg/webkit`): `tradera-ui.css`, `tradera-ui.js`, `gallery.html`, `README.md` (also public at `/v1/webkit/<file>`, and on the space's computer at `/opt/tradera/webkit`) |
-| `_tradera/api/context` | who views the page, in which space and room |
-| `_tradera/api/tools` · `microtools {tool}` | the space's tools and their microtools |
-| `_tradera/api/call {tool, microtool, args}` | calls a microtool as the person (`tools.invoke`) |
-| `_tradera/api/frontend` · `action` | a tool's own (generative) frontend and its actions |
-| `_tradera/api/show {tool, microtool, args}` | opens a tool's frontend on the desk, next to the page |
-| `_tradera/api/file/<id>` | a stored file the person may read |
+| `_aseman/kit/<file>` | Aseman's web UI kit (`pkg/webkit`): `aseman-ui.css`, `aseman-ui.js`, `gallery.html`, `README.md` (also public at `/v1/webkit/<file>`, and on the space's computer at `/opt/aseman/webkit`) |
+| `_aseman/api/context` | who views the page, in which space and room |
+| `_aseman/api/tools` · `microtools {tool}` | the space's tools and their microtools |
+| `_aseman/api/call {tool, microtool, args}` | calls a microtool as the person (`tools.invoke`) |
+| `_aseman/api/frontend` · `action` | a tool's own (generative) frontend and its actions |
+| `_aseman/api/show {tool, microtool, args}` | opens a tool's frontend on the desk, next to the page |
+| `_aseman/api/file/<id>` | a stored file the person may read |
 
 The kit is built from `pkg/webkit/src` with `node pkg/webkit/tools/build.mjs`;
 its tests check it covers every A2UI component and every Elpian widget the
@@ -424,19 +424,19 @@ app renders.
 | `tools.frontend_get` / `frontend_action` | its frontend, and a generated frontend's actions |
 | `tools.components_list` | the generated frontends the registry holds |
 
-Configuration: `TRADERA_TOOL_RUNTIME_IMAGE`, `TRADERA_TOOL_RUNTIME_NETWORK`,
-`TRADERA_TOOL_NODE_URL` (the node as backends reach it) and
-`TRADERA_TOOL_COMPILER_URL` (compose sets them all).
+Configuration: `ASEMAN_TOOL_RUNTIME_IMAGE`, `ASEMAN_TOOL_RUNTIME_NETWORK`,
+`ASEMAN_TOOL_NODE_URL` (the node as backends reach it) and
+`ASEMAN_TOOL_COMPILER_URL` (compose sets them all).
 
 ## Agents: the deep agents runtime
 
-Every agent — the built-in **tradera** lead of each space and every
+Every agent — the built-in **aseman** lead of each space and every
 specialist — runs on [LangChain Deep Agents](https://github.com/langchain-ai/deepagents)
 (on LangGraph). The engine is a modular VMM adapter,
 `plugins/adapters/vmm/deepagents`:
 
 - the **Go adapter** registers agents as VMs (`vm_type: deepagents`), runs the
-  **Python runtime** (`deepagents/runtime`, image `tradera/deepagents:v2`) as
+  **Python runtime** (`deepagents/runtime`, image `aseman/deepagents:v2`) as
   a Nomad service on the stack's network, and hands it one turn at a time;
 - each turn carries a **turn token**. The runtime reaches the platform only
   through the adapter's gateway (`/deepagents/v1/call`), which dispatches real
@@ -480,12 +480,12 @@ Every deep agents feature is on, mapped onto the platform:
   as a LangGraph flow (plan → prune → run → report): the language model writes
   the plan when the lead gives none, the decision model drops dependencies a
   task does not really need, and every task starts the moment what it waits
-  for is done, many at once (`TRADERA_SWARM_PARALLEL`, default 8), each with
+  for is done, many at once (`ASEMAN_SWARM_PARALLEL`, default 8), each with
   the results it builds on. Several tasks for the same agent run as **parallel
   instances** of it: a tagged task (`[task …]`) that reaches an agent already
   working in the room runs on a thread of its own instead of waiting;
 - **skills** — each agent's skills (and the space's shared ones) are `SKILL.md`
-  files in the sandbox (`/workspace/.tradera/...`), loaded progressively;
+  files in the sandbox (`/workspace/.aseman/...`), loaded progressively;
 - **memory** — OpenViking (see the root README): notes in the system prompt,
   recall with every message, memory tools, every turn learned from;
 - **human in the loop** — `ask_user`, and any tool listed in an agent's
@@ -511,19 +511,19 @@ Every deep agents feature is on, mapped onto the platform:
   like its memory. Requests made without memory never use or feed it.
 
 Configuration of the runtime (all optional, passed on by the node):
-`TRADERA_SWARM_PARALLEL`; `TRADERA_IMPROVE=0` turns self-improvement off,
-`TRADERA_IMPROVE_EVERY` (turns between cycles, 10), `TRADERA_IMPROVE_COOLDOWN`
+`ASEMAN_SWARM_PARALLEL`; `ASEMAN_IMPROVE=0` turns self-improvement off,
+`ASEMAN_IMPROVE_EVERY` (turns between cycles, 10), `ASEMAN_IMPROVE_COOLDOWN`
 (seconds between cycles of one agent in one space, 3 h),
-`TRADERA_IMPROVE_LOOP_COOLDOWN` (the same after a turn where the agent looped:
+`ASEMAN_IMPROVE_LOOP_COOLDOWN` (the same after a turn where the agent looped:
 repeated calls or read instructions it already had, 15 min),
-`TRADERA_IMPROVE_BUDGET` (steps a cycle replays, 60) and
-`TRADERA_IMPROVE_MAX_AGE_DAYS` (how long an adopted playbook is used, 30; 0
+`ASEMAN_IMPROVE_BUDGET` (steps a cycle replays, 60) and
+`ASEMAN_IMPROVE_MAX_AGE_DAYS` (how long an adopted playbook is used, 30; 0
 for always). Playbooks and turns learned before 2026-10-21, while the runtime
 refused calls and hid tools, are not used, and `POST /v1/playbooks/reset`
 (`{"space", "agent"}`, either empty for all; the runtime secret) forgets what
 agents learned. A turn's history is
 summarized at 60% of the model's window and old tool output trimmed at half
-that; `TRADERA_SUMMARIZE_MAX_TOKENS` caps the summarization size to bound what
+that; `ASEMAN_SUMMARIZE_MAX_TOKENS` caps the summarization size to bound what
 a call costs. Instructions an agent read (an app's instructions or help, a
 skill) are never trimmed.
 
@@ -548,7 +548,7 @@ The node admin can turn on a **decision model** (Admin → AI → Decision model
 one model of an enabled provider marked as a decision model — e.g. TypeSafe
 AI's **Jev** (`typesafe-ai/jev`) on Vercel AI Gateway, which answers typed
 questions (yes/no, choice, score) with probabilities instead of text. On, the
-runtime's `decision` module (`deepagents/runtime/tradera_agents/decision`)
+runtime's `decision` module (`deepagents/runtime/aseman_agents/decision`)
 uses it together with each agent's own model:
 
 - **routing** — the agent that fits a task best (a lead's hint; a swarm
@@ -566,7 +566,7 @@ agent's own model decides everything, as before.
 An agent with more than 24 connected-app functions gets them on demand, as
 Claude Code defers MCP tools: `load_app_tools` lists every app with its
 functions, and an app the agent loads (or any function it calls) is offered
-whole from its next step (`deepagents/runtime/tradera_agents/apps.py`). Decisions go through the
+whole from its next step (`deepagents/runtime/aseman_agents/apps.py`). Decisions go through the
 gateway (`/deepagents/v1/decision/evaluate`, the provider's `/evaluate`
 endpoint, key kept on the node) and are billed to the turn at the decision
 model's own token prices. Models carry `capabilities` (`chat`, `decision`):
@@ -580,19 +580,19 @@ or by DM (a DM runs in the space the person and the agent share).
 
 ```bash
 # give the space's lead a task (or post a message that mentions it)
-./bin/tradera lead run space=<space-id> body="Build a landing page"
+./bin/aseman lead run space=<space-id> body="Build a landing page"
 # what the space's agents are waiting on, and answering one
-./bin/tradera lead questions space=<space-id>
-./bin/tradera lead answer space=<space-id> bot=<bot-id> question_id=<id> answer="yes"
+./bin/aseman lead questions space=<space-id>
+./bin/aseman lead answer space=<space-id> bot=<bot-id> question_id=<id> answer="yes"
 ```
 
-Configuration (all optional; compose sets them): `TRADERA_AGENT_RUNTIME_IMAGE`,
-`TRADERA_AGENT_NODE_URL` (the node as the runtime reaches it),
-`TRADERA_AGENT_RUNTIME_NETWORK`, or `TRADERA_AGENT_RUNTIME_URL` to run the
+Configuration (all optional; compose sets them): `ASEMAN_AGENT_RUNTIME_IMAGE`,
+`ASEMAN_AGENT_NODE_URL` (the node as the runtime reaches it),
+`ASEMAN_AGENT_RUNTIME_NETWORK`, or `ASEMAN_AGENT_RUNTIME_URL` to run the
 runtime yourself. Provider calls default to a five-minute total limit, two
 minutes to the first streamed event and 45 seconds between events; tune them
-with `TRADERA_LLM_CALL_TIMEOUT`, `TRADERA_LLM_FIRST_EVENT_TIMEOUT` and
-`TRADERA_LLM_STREAM_IDLE_TIMEOUT` (Go duration strings). The runtime's own
+with `ASEMAN_LLM_CALL_TIMEOUT`, `ASEMAN_LLM_FIRST_EVENT_TIMEOUT` and
+`ASEMAN_LLM_STREAM_IDLE_TIMEOUT` (Go duration strings). The runtime's own
 tests:
 
 ```bash
@@ -622,11 +622,11 @@ through `spaces.ask`:
 
 ```bash
 # list the tools an agent sees in a space
-./bin/tradera call spaces.tools_list space=<space-id>
+./bin/aseman call spaces.tools_list space=<space-id>
 # run a shell command in the shared sandbox
-./bin/tradera call spaces.sandbox_exec space=<space-id> command="ls /"
+./bin/aseman call spaces.sandbox_exec space=<space-id> command="ls /"
 # ask an agent (it may call sandbox + apps)
-./bin/tradera call spaces.ask space=<space-id> bot=<agent-bot> body="..."
+./bin/aseman call spaces.ask space=<space-id> bot=<agent-bot> body="..."
 ```
 
 ## Configuration
@@ -642,8 +642,8 @@ replicas fed by signed broadcasts.
 ## Project layout
 
 ```
-cmd/traderad            node daemon
-cmd/tradera             CLI client (auto-signs requests with the identity key)
+cmd/asemand            node daemon
+cmd/aseman             CLI client (auto-signs requests with the identity key)
 plugins/adapters/network/gateway         HTTP driving adapter (protocol → actions)
 plugins/actions/federation/gateway          node-authenticated inter-node surface (/fed/*)
 internal/plugins/signing      shared Ed25519 request signing + replay guard

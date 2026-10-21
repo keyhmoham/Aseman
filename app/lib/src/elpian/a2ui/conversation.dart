@@ -1,5 +1,5 @@
 /// `A2UIConversation` — one conversation with one agent: genui surfaces
-/// ([GenUiSurfaces], over Tradera's catalog), the transcript of prose and
+/// ([GenUiSurfaces], over Aseman's catalog), the transcript of prose and
 /// the agent transport. Turns ([A2UIConversation.send],
 /// [A2UIConversation.sendAction]) run one at a time; each carries the
 /// conversation id, the `sendDataModel` surfaces' data models and the

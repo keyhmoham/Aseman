@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/context_extensions.dart';
-import '../../data/services/tradera_service.dart';
+import '../../data/services/aseman_service.dart';
 import '../desk/presentation/desk_controller.dart';
 import '../desk/presentation/web_page_view.dart';
 import 'space_computer.dart';
@@ -17,7 +17,7 @@ const double computerSheetBreakpoint = 820;
 /// on the desk on wide screens, a bottom sheet on phones.
 Future<void> openComputer(
   BuildContext context,
-  TraderaService service,
+  AsemanService service,
   String spaceId,
 ) async {
   final desk = DeskScope.maybeOf(context);
@@ -33,7 +33,7 @@ Future<void> openComputer(
 /// sheet is not dragged by it: the handle and the close button dismiss it.
 Future<void> showComputerSheet(
   BuildContext context, {
-  required TraderaService service,
+  required AsemanService service,
   required String spaceId,
 }) => showModalBottomSheet<void>(
   context: context,
@@ -503,7 +503,7 @@ class ComputerSession extends StatefulWidget {
     this.fullScreen = false,
   });
 
-  final TraderaService service;
+  final AsemanService service;
   final String spaceId;
 
   /// Closes the sheet or screen it is in; a card window has its own.

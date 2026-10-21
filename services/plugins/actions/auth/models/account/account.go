@@ -4,8 +4,8 @@ package account
 import (
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 // Kind distinguishes human users from bots (VMs operating in the network).

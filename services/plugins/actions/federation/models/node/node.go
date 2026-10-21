@@ -5,7 +5,7 @@ package node
 import (
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 // Status of a peer node.

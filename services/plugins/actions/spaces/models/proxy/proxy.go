@@ -1,5 +1,5 @@
 // Package proxy models a platform gateway tunnel to a port of a space's Modal
-// sandbox. tradera creates one when an agent built something (a landing page,
+// sandbox. aseman creates one when an agent built something (a landing page,
 // an HTTP route, a dev server) so users of the space can open it in a webview.
 package proxy
 
@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 func (p *Proxy) PreservesPath() bool {

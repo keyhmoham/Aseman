@@ -1,10 +1,10 @@
-# Tradera tool runtime: runs a tool backend written for the Elpian VM (Dart
+# Aseman tool runtime: runs a tool backend written for the Elpian VM (Dart
 # or the Elpian JS subset) or for QuickJS, and serves its microtools over MCP.
 #
-#   docker build -t tradera/tool-runtime:v1 deploy/tool-runtime
+#   docker build -t aseman/tool-runtime:v1 deploy/tool-runtime
 #
 # One image, three uses: Nomad runs it for managed tools; the sandbox computer
-# image copies its /opt/tradera-tool-runtime for installed tools; and the
+# image copies its /opt/aseman-tool-runtime for installed tools; and the
 # stack runs it with --compiler for the node (compiling Elpian frontends to
 # bytecode and describing backend programs).
 
@@ -26,7 +26,7 @@ RUN wasm-pack build --release --no-opt --target nodejs --out-dir /out/elpian -- 
 
 # --- The runtime --------------------------------------------------------------
 FROM public.ecr.aws/docker/library/node:22-bookworm-slim
-WORKDIR /opt/tradera-tool-runtime
+WORKDIR /opt/aseman-tool-runtime
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 COPY server.mjs ./

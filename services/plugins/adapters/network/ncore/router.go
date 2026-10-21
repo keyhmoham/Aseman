@@ -12,8 +12,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
 type segment struct {

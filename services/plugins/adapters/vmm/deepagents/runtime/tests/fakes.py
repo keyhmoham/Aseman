@@ -1,4 +1,4 @@
-"""A fake tradera node (the agent gateway's action API) and a scripted model."""
+"""A fake aseman node (the agent gateway's action API) and a scripted model."""
 
 from __future__ import annotations
 
@@ -17,11 +17,11 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from tradera_agents.gateway import Gateway
+from aseman_agents.gateway import Gateway
 
 SPACE = "space-1"
 ROOM = "room-1"
-LEAD = {"id": "bot-lead", "account_id": "acc-lead", "name": "tradera", "vm_id": "deepagents-tradera"}
+LEAD = {"id": "bot-lead", "account_id": "acc-lead", "name": "aseman", "vm_id": "deepagents-aseman"}
 CODER = {"id": "bot-coder", "account_id": "acc-coder", "name": "coder", "vm_id": "vm-coder"}
 PERSON = {"member_id": "acc-ann", "handle": "ann"}
 SANDBOX_BOT = "bot-sandbox"
@@ -105,11 +105,11 @@ class Platform:
     def handle(self, request: httpx.Request) -> httpx.Response:
         if "/learn/" in request.url.path:
             # The agents' learning (GEPA): the runtime's own credential, no turn.
-            if request.headers.get("X-Tradera-Runtime") != "test-secret":
+            if request.headers.get("X-Aseman-Runtime") != "test-secret":
                 return httpx.Response(401, json={"error": {"message": "bad runtime secret"}})
             req = json.loads(request.content)
-            self.learn_requests.append({**req, "space": request.headers.get("X-Tradera-Space"),
-                                        "agent": request.headers.get("X-Tradera-Agent")})
+            self.learn_requests.append({**req, "space": request.headers.get("X-Aseman-Space"),
+                                        "agent": request.headers.get("X-Aseman-Agent")})
             if request.url.path.endswith("/decision/evaluate"):
                 return self.handle_decision(req)
             return self.handle_learn(req)
@@ -209,7 +209,7 @@ class Platform:
             return {"items": []} if body["operation"] == "list" else {"ok": False, "missing": True}
         if not self.stored_files:
             return {"ok": False, "asleep": True}
-        root = Path(os.environ["TRADERA_WORKSPACE"])
+        root = Path(os.environ["ASEMAN_WORKSPACE"])
         target = root / body.get("path", ".")
         op = body["operation"]
         if op == "list":
@@ -383,7 +383,7 @@ class FakeViking:
         self.no_auto_commit = False  # a server without session config
 
     def settings(self) -> Any:
-        from tradera_agents.memory import Settings
+        from aseman_agents.memory import Settings
 
         return Settings(url="http://openviking:1933", api_key="root-key", transport=httpx.MockTransport(self.handle))
 

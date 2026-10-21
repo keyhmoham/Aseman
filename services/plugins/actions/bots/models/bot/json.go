@@ -3,7 +3,7 @@ package bot
 import (
 	"encoding/json"
 
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 func unmarshalJSON(s string, out any) error {

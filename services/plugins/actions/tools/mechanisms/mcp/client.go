@@ -131,7 +131,7 @@ func (c *Client) Session(ctx context.Context, target string, headers map[string]
 	for k, v := range headers {
 		copy[k] = v
 	}
-	out, h, e := c.FetchJSON(ctx, target, copy, http.MethodPost, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": map[string]any{"protocolVersion": "2025-06-18", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "tradera", "version": "1.0.0"}}})
+	out, h, e := c.FetchJSON(ctx, target, copy, http.MethodPost, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": map[string]any{"protocolVersion": "2025-06-18", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "aseman", "version": "1.0.0"}}})
 	if e != nil {
 		return nil, e
 	}

@@ -4,10 +4,10 @@ import 'core/network/api_client.dart';
 import 'core/network/session_controller.dart';
 import 'data/repositories/market_repository.dart';
 import 'data/repositories/room_repository.dart';
-import 'data/services/tradera_service.dart';
+import 'data/services/aseman_service.dart';
 import 'shared/widgets/avatar.dart';
 
-/// Base URL of the Tradera gateway. Override at build time with
+/// Base URL of the Aseman gateway. Override at build time with
 /// `--dart-define=API_BASE_URL=...` (web/mobile) or edit here. The special
 /// value `same-origin` makes a web build call the server it is served from
 /// (the docker compose setup serves the app and proxies the API on one origin).
@@ -38,8 +38,8 @@ class AppDependencies {
   }
 
   factory AppDependencies.create({String? baseUrl}) {
-    final client = TraderaApiClient(baseUrl: baseUrl ?? resolveApiBaseUrl());
-    final service = TraderaService(client);
+    final client = AsemanApiClient(baseUrl: baseUrl ?? resolveApiBaseUrl());
+    final service = AsemanService(client);
     final sessionController = SessionController(service);
     return AppDependencies(
       sessionController: sessionController,
@@ -50,7 +50,7 @@ class AppDependencies {
   }
 
   /// Wiring with a pre-built service (used by tests with a fake service).
-  factory AppDependencies.withService(TraderaService service) {
+  factory AppDependencies.withService(AsemanService service) {
     final sessionController = SessionController(service);
     return AppDependencies(
       sessionController: sessionController,
@@ -61,7 +61,7 @@ class AppDependencies {
   }
 
   final SessionController sessionController;
-  final TraderaService service;
+  final AsemanService service;
   final MarketRepository marketRepository;
   final RoomRepository roomRepository;
 }

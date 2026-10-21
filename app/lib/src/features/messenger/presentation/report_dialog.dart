@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 
 /// Why something is reported, as `spaces.message_report` takes it.
 const reportReasons = <(String, String)>[
@@ -15,7 +15,7 @@ const reportReasons = <(String, String)>[
 /// Asks why a message (or a whole chat, when [messageId] is empty) is being
 /// reported and sends the report to the node's admins. Returns whether a
 /// report was sent.
-Future<bool> reportToAdmins(BuildContext context, TraderaService service,
+Future<bool> reportToAdmins(BuildContext context, AsemanService service,
     {required String spaceId,
     required String roomId,
     String messageId = ''}) async {

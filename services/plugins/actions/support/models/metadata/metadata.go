@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/jsonpatch"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/jsonpatch"
 )
 
 // Tree is a JSON object tree.

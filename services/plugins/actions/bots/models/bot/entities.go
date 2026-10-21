@@ -3,8 +3,8 @@ package bot
 import (
 	"strings"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 // Entity contract keys for the per-bot entity storage.

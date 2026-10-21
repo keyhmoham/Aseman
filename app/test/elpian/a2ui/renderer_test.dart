@@ -7,8 +7,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genui/genui.dart' show basicCatalogId;
-import 'package:tradera/src/elpian/elpian.dart';
-import 'package:tradera/src/elpian/widgets/svg_path.dart';
+import 'package:aseman/src/elpian/elpian.dart';
+import 'package:aseman/src/elpian/widgets/svg_path.dart';
 
 Map<String, dynamic> readJson(String path) =>
     jsonDecode(File('test/genui/$path').readAsStringSync())

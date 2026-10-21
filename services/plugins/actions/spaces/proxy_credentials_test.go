@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/crypto"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/proxy"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/crypto"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
 )
 
 type proxyKeyKernel struct {

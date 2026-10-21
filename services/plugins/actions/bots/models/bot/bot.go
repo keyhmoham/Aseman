@@ -9,8 +9,8 @@ import (
 	"gopkg.in/yaml.v3"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 // Kind classifies what a bot is used for. Agents are LLM-driven assistants
@@ -35,7 +35,7 @@ const (
 	VMTypeWASM      VMType = "wasm"
 	VMTypeModal     VMType = "modal"
 	// VMTypeDeepAgents is an agent served by the deep agents runtime. Every
-	// agent (the built-in tradera lead and every market agent) runs on it.
+	// agent (the built-in aseman lead and every market agent) runs on it.
 	VMTypeDeepAgents VMType = "deepagents"
 	// VMTypeElpian / VMTypeQuickJS are managed tool backends: Elpian VM or
 	// QuickJS programs run by the tool runtime image as Nomad services.
@@ -207,15 +207,15 @@ func StatusFromVMM(s string) Status {
 	}
 }
 
-// IsTradera identifies the reserved platform orchestrator image.
-func IsTradera(rec *Bot) bool { return rec != nil && rec.ImageRef == "tradera.wasm" }
+// IsAseman identifies the reserved platform orchestrator image.
+func IsAseman(rec *Bot) bool { return rec != nil && rec.ImageRef == "aseman.wasm" }
 
-// BuiltinTraderaImage is the reserved image ref marking the built-in lead agent
+// BuiltinAsemanImage is the reserved image ref marking the built-in lead agent
 // (identified by this, not by its name, which an admin may change).
-const BuiltinTraderaImage = "tradera.wasm"
+const BuiltinAsemanImage = "aseman.wasm"
 
 // IsBuiltinLead reports whether the bot is the built-in lead agent.
-func (b *Bot) IsBuiltinLead() bool { return b != nil && b.ImageRef == BuiltinTraderaImage }
+func (b *Bot) IsBuiltinLead() bool { return b != nil && b.ImageRef == BuiltinAsemanImage }
 
 // AgentBackbone extracts the LLM provider and model from an agent's yml spec.
 func AgentBackbone(specYML string) (provider, model string) {

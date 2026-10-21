@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 // ProxyIfRemote forwards the action to the node owning entityRef when the ref
@@ -26,7 +26,7 @@ func ProxyIfRemote(ctx context.Context, k api.Kernel, entityRef, namespace, name
 	return resp, true, err
 }
 
-// StatusOf maps a tradera error to an HTTP status code.
+// StatusOf maps an aseman error to an HTTP status code.
 func StatusOf(err error) int {
 	switch errs.CodeOf(err) {
 	case errs.CodeNotFound:

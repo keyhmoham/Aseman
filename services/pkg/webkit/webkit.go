@@ -1,13 +1,13 @@
-// Package webkit is Tradera's web UI kit: the stylesheet and script that give
+// Package webkit is Aseman's web UI kit: the stylesheet and script that give
 // web pages agents build (served from a sandbox through a preview gateway)
 // the app's own look — its color scheme, shapes and type, and every
 // component the Flutter app renders (the A2UI catalog, the tool UI kit, the
-// Elpian widgets) — and their client for the Tradera API (a page calls the
+// Elpian widgets) — and their client for the Aseman API (a page calls the
 // space's tools' microtools as the person using it).
 //
 // The node serves it at /v1/webkit/<file> and, inside every preview, at
-// <preview>/_tradera/kit/<file>, so a page links "/_tradera/kit/tradera-ui.css"
-// and "/_tradera/kit/tradera-ui.js" whatever its base path.
+// <preview>/_aseman/kit/<file>, so a page links "/_aseman/kit/aseman-ui.css"
+// and "/_aseman/kit/aseman-ui.js" whatever its base path.
 package webkit
 
 import (

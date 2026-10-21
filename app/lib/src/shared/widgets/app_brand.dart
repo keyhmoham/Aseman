@@ -21,7 +21,7 @@ class AppBrand extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         Flexible(
-            child: Text('tradera',
+            child: Text('aseman',
                 maxLines: 1,
                 overflow: TextOverflow.fade,
                 softWrap: false,

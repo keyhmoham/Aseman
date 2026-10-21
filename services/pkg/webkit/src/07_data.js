@@ -20,15 +20,15 @@ function rowPath(el, prop, i) {
   if (isMap(raw) && typeof raw.path === 'string') return `${joinPath(scopeOf(el), raw.path)}/${i}`;
   el._rowsPath ||= `/__lists/${++listSeq}`;
   const was = Tracker.active; Tracker.active = null;
-  Tradera.data.data.__lists ||= {};
-  Tradera.data.data.__lists[el._rowsPath.split('/').pop()] = el.p(prop);
+  Aseman.data.data.__lists ||= {};
+  Aseman.data.data.__lists[el._rowsPath.split('/').pop()] = el.p(prop);
   Tracker.active = was;
   return `${el._rowsPath}/${i}`;
 }
 /** A tap on item [i] (its row [row]) of a data view: selection, action and a t-select event. */
 function select(el, prop, i, row, extra = {}) {
   const detail = { index: i, row, ...extra };
-  if (isMap(el._raw.selection) && el._raw.selection.path) Tradera.data.set(joinPath(scopeOf(el), el._raw.selection.path), row);
+  if (isMap(el._raw.selection) && el._raw.selection.path) Aseman.data.set(joinPath(scopeOf(el), el._raw.selection.path), row);
   el.emit('t-select', detail);
   const a = actionOf(el);
   if (a) busy(el, () => runAction(a, el, { ...detail, ...(isMap(row) ? row : { value: row }) }, i == null ? scopeOf(el) : rowPath(el, prop, i)));
@@ -50,7 +50,7 @@ function trend(value, opts = {}) {
   if (opts.size) span.style.fontSize = px(opts.size);
   return span;
 }
-Tradera.trend = trend;
+Aseman.trend = trend;
 /** Trend {value, format?: "+percent:2", label?, goodDirection?: up|down}: an inline signed change. */
 component('trend', (el, p) => el.replaceChildren(trend(p.value, { format: p.format, goodDown: p.goodDirection === 'down', suffix: p.label, size: p.size, arrow: p.arrow })));
 
@@ -72,7 +72,7 @@ function statTile(p) {
     series_.filter((x) => x != null).length > 1 ? h('div', { class: 't-stat__spark' }, sparkline(series_, { height: size === 'hero' ? 48 : 32, color: p.color, type: 'area' })) : null);
   return tile;
 }
-Tradera.stat = statTile;
+Aseman.stat = statTile;
 component('stat', (el, p) => el.replaceChildren(statTile(p)));
 /** StatCard {label, value, icon?, color?, …}: a Stat in an outlined card (the app's StatCard). */
 component('stat-card', (el, p) => el.replaceChildren(h('div', { class: 't-card' }, statTile(p))));
@@ -244,7 +244,7 @@ function sparkline(values, opts = {}) {
   s.appendChild(svg('path', { d, fill: 'none', stroke: col, 'stroke-width': 1.6, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke' }));
   return s;
 }
-Tradera.sparkline = sparkline;
+Aseman.sparkline = sparkline;
 /** Sparkline {values (numbers, or rows + field), type?: line|bar|area, color?, height?, width?}. */
 component('sparkline', (el, p) => el.replaceChildren(sparkline(p.values ?? p.data, { ...p, trendColor: p.color == null && p.trendColor !== false })));
 

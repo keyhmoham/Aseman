@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/core/network/api_client.dart';
-import 'package:tradera/src/data/models/llm_provider.dart';
-import 'package:tradera/src/data/services/tradera_service.dart';
-import 'package:tradera/src/features/admin/presentation/admin_widgets.dart';
-import 'package:tradera/src/features/admin/presentation/llm_providers_tab.dart';
-import 'package:tradera/src/features/agents/presentation/agent_create_form.dart';
+import 'package:aseman/src/core/network/api_client.dart';
+import 'package:aseman/src/data/models/llm_provider.dart';
+import 'package:aseman/src/data/services/aseman_service.dart';
+import 'package:aseman/src/features/admin/presentation/admin_widgets.dart';
+import 'package:aseman/src/features/admin/presentation/llm_providers_tab.dart';
+import 'package:aseman/src/features/agents/presentation/agent_create_form.dart';
 
 const _openai = LlmProvider(
   id: 'p-openai',
@@ -33,8 +33,8 @@ const _anthropic = LlmProvider(
 );
 
 /// Records the admin LLM calls instead of reaching a server.
-class _FakeLlmService extends TraderaService {
-  _FakeLlmService() : super(TraderaApiClient(baseUrl: 'http://localhost'));
+class _FakeLlmService extends AsemanService {
+  _FakeLlmService() : super(AsemanApiClient(baseUrl: 'http://localhost'));
 
   final saved = <Map<String, dynamic>>[];
   List<LlmProvider> providers = [_openai];

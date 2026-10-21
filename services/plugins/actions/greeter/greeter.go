@@ -4,10 +4,10 @@ package greeter
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/module"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/module"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 )
 
 // GreetingProvider is the consumer-owned port supplied by example-adapter.
@@ -52,7 +52,7 @@ func (a *helloAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.
 		return nil, err
 	}
 	if in.Name == "" {
-		in.Name = "tradera"
+		in.Name = "aseman"
 	}
 	result, err := a.s.Hello(ctx, in.Name)
 	if err != nil {

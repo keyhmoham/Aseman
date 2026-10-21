@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/features/desk/data/desk_api.dart';
-import 'package:tradera/src/features/desk/presentation/designed_window.dart';
-import 'package:tradera/src/features/desk/presentation/desk_controller.dart';
+import 'package:aseman/src/features/desk/data/desk_api.dart';
+import 'package:aseman/src/features/desk/presentation/designed_window.dart';
+import 'package:aseman/src/features/desk/presentation/desk_controller.dart';
 
 void main() {
   Widget host(String status, Map<String, dynamic> template,

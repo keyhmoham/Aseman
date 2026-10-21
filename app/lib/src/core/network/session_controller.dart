@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import '../../data/services/tradera_service.dart';
+import '../../data/services/aseman_service.dart';
 import '../auth/federated_sign_in.dart';
 import '../network/session_store.dart';
 import '../notifications/push_notification_service.dart';
@@ -12,7 +12,7 @@ class SessionController extends ChangeNotifier {
     _init();
   }
 
-  final TraderaService service;
+  final AsemanService service;
   final PushNotificationService notifications;
 
   Session? _session;

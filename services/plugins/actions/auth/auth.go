@@ -10,22 +10,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/crypto"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/idutil"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/auth/mechanisms/mail"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/auth/models/session"
-	"github.com/tradera/tradera/plugins/actions/finance/models/wallet"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/space"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/actions/support/models/metadata"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/crypto"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/idutil"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/auth/mechanisms/mail"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/auth/models/session"
+	"github.com/aseman/aseman/plugins/actions/finance/models/wallet"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/space"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/models/metadata"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -391,9 +391,9 @@ func (s *Service) freeHandle(ctx context.Context, base string) (string, error) {
 // oauthPassword derives a stable password from a provider subject claim.
 // Google keeps its original derivation so existing accounts still unlock.
 func oauthPassword(provider, sub string) string {
-	seed := "tradera-oauth:" + sub
+	seed := "aseman-oauth:" + sub
 	if provider != "google" {
-		seed = "tradera-oauth:" + provider + ":" + sub
+		seed = "aseman-oauth:" + provider + ":" + sub
 	}
 	h := sha256.Sum256([]byte(seed))
 	return "oauth-" + hex.EncodeToString(h[:])[:16]

@@ -16,14 +16,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/idutil"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/adapters/base"
-	"github.com/tradera/tradera/plugins/adapters/cfg"
-	"github.com/tradera/tradera/plugins/adapters/vmm/dockerexec"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/idutil"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/adapters/base"
+	"github.com/aseman/aseman/plugins/adapters/cfg"
+	"github.com/aseman/aseman/plugins/adapters/vmm/dockerexec"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // Adapter is the Docker Engine VMM plugin.
@@ -251,8 +251,8 @@ func (a *Adapter) createContainer(ctx context.Context, spec vmm.VMSpec) (vmm.VM,
 		"NanoCpus":   int64(spec.Resources.CPU * 1e9),
 		"AutoRemove": false,
 	}
-	if owner := spec.Labels["tradera.bot_id"]; owner != "" {
-		hostConfig["Mounts"] = []map[string]any{{"Type": "volume", "Source": "tradera-workspace-" + owner, "Target": "/workspace"}, {"Type": "volume", "Source": "tradera-agent-state-" + owner, "Target": "/var/lib/grok"}}
+	if owner := spec.Labels["aseman.bot_id"]; owner != "" {
+		hostConfig["Mounts"] = []map[string]any{{"Type": "volume", "Source": "aseman-workspace-" + owner, "Target": "/workspace"}, {"Type": "volume", "Source": "aseman-agent-state-" + owner, "Target": "/var/lib/grok"}}
 	}
 	if a.network != "" {
 		if err := a.ensureNetwork(ctx, a.network); err != nil {
@@ -261,10 +261,10 @@ func (a *Adapter) createContainer(ctx context.Context, spec vmm.VMSpec) (vmm.VM,
 		hostConfig["NetworkMode"] = a.network
 	}
 	labels := map[string]string{
-		"tradera.vm":    spec.Name,
-		"tradera.image": spec.ImageRef,
-		"tradera.type":  string(spec.Type),
-		"tradera.vmid":  vmID, // enables restart rehydration by label
+		"aseman.vm":    spec.Name,
+		"aseman.image": spec.ImageRef,
+		"aseman.type":  string(spec.Type),
+		"aseman.vmid":  vmID, // enables restart rehydration by label
 	}
 	create := map[string]any{
 		"Image":      spec.ImageRef,
@@ -289,7 +289,7 @@ func (a *Adapter) createContainer(ctx context.Context, spec vmm.VMSpec) (vmm.VM,
 		labels[vmm.LabelNetworkAlias] = alias
 		labels[vmm.LabelServicePort] = spec.Labels[vmm.LabelServicePort]
 	}
-	b, err := a.do(ctx, http.MethodPost, "/containers/create?name=tradera-"+spec.Name, create)
+	b, err := a.do(ctx, http.MethodPost, "/containers/create?name=aseman-"+spec.Name, create)
 	if err != nil {
 		return vmm.VM{}, errs.Wrap(errs.CodeVMM, err, "create container")
 	}
@@ -444,13 +444,13 @@ func (a *Adapter) GetVM(ctx context.Context, id string) (vmm.VM, error) {
 		return vmm.VM{}, errs.Wrap(errs.CodeVMM, err, "decode inspect")
 	}
 	status := statusFromDocker(spec.State.Status)
-	return vmm.VM{ID: id, Name: spec.Config.Labels["tradera.vm"], Type: vmm.Type(spec.Config.Labels["tradera.type"]),
+	return vmm.VM{ID: id, Name: spec.Config.Labels["aseman.vm"], Type: vmm.Type(spec.Config.Labels["aseman.type"]),
 		Status: status, ImageRef: spec.Config.Image, Address: vmm.ServiceAddress(spec.Config.Labels), CreatedAt: time.Now().UTC()}, nil
 }
 
 // ListVMs implements vmm.VMM.
 func (a *Adapter) ListVMs(ctx context.Context, f vmm.Filter) ([]vmm.VM, error) {
-	b, err := a.do(ctx, http.MethodGet, "/containers/json?all=true&filters="+jsonFilter("tradera.vm"), nil)
+	b, err := a.do(ctx, http.MethodGet, "/containers/json?all=true&filters="+jsonFilter("aseman.vm"), nil)
 	if err != nil {
 		return nil, errs.Wrap(errs.CodeVMM, err, "list containers")
 	}
@@ -465,7 +465,7 @@ func (a *Adapter) ListVMs(ctx context.Context, f vmm.Filter) ([]vmm.VM, error) {
 	}
 	var out []vmm.VM
 	for _, c := range list {
-		vm := vmm.VM{ID: c.ID, Name: c.Labels["tradera.vm"], Type: vmm.Type(c.Labels["tradera.type"]),
+		vm := vmm.VM{ID: c.ID, Name: c.Labels["aseman.vm"], Type: vmm.Type(c.Labels["aseman.type"]),
 			Status: statusFromDocker(c.State)}
 		if f.Status != "" && vm.Status != f.Status {
 			continue
@@ -535,13 +535,13 @@ func (a *Adapter) containerID(vmID string) (string, error) {
 	return found, nil
 }
 
-// findContainerByVM locates the container id of a VM via its tradera.vmid
+// findContainerByVM locates the container id of a VM via its aseman.vmid
 // label (the mapping recorded at creation, stable across restarts).
 func (a *Adapter) findContainerByVM(vmID string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	b, err := a.do(ctx, http.MethodGet,
-		"/containers/json?all=true&filters="+url.QueryEscape(`{"label":["tradera.vmid=`+vmID+`"]}`), nil)
+		"/containers/json?all=true&filters="+url.QueryEscape(`{"label":["aseman.vmid=`+vmID+`"]}`), nil)
 	if err != nil {
 		return "", errs.Wrap(errs.CodeVMM, err, "find container by vm label")
 	}

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // runtimeTuning are node environment variables passed on to the runtime: the
@@ -20,12 +20,12 @@ import (
 // unknown, the self-hosted OpenViking server that keeps the agents' memory
 // (its URL, root key and how much is recalled with each message), how many
 // swarm tasks run at once, and how agents improve their playbook (GEPA).
-var runtimeTuning = []string{"TRADERA_MAX_MODEL_CALLS", "TRADERA_DEFAULT_CONTEXT_WINDOW",
-	"TRADERA_SUMMARIZE_MAX_TOKENS",
-	"TRADERA_OPENVIKING_URL", "TRADERA_OPENVIKING_API_KEY", "TRADERA_OPENVIKING_RECALL_TOKENS",
-	"TRADERA_OPENVIKING_QUERY_EXPANSION",
-	"TRADERA_SWARM_PARALLEL", "TRADERA_IMPROVE", "TRADERA_IMPROVE_EVERY", "TRADERA_IMPROVE_COOLDOWN",
-	"TRADERA_IMPROVE_LOOP_COOLDOWN", "TRADERA_IMPROVE_BUDGET", "TRADERA_IMPROVE_MAX_AGE_DAYS"}
+var runtimeTuning = []string{"ASEMAN_MAX_MODEL_CALLS", "ASEMAN_DEFAULT_CONTEXT_WINDOW",
+	"ASEMAN_SUMMARIZE_MAX_TOKENS",
+	"ASEMAN_OPENVIKING_URL", "ASEMAN_OPENVIKING_API_KEY", "ASEMAN_OPENVIKING_RECALL_TOKENS",
+	"ASEMAN_OPENVIKING_QUERY_EXPANSION",
+	"ASEMAN_SWARM_PARALLEL", "ASEMAN_IMPROVE", "ASEMAN_IMPROVE_EVERY", "ASEMAN_IMPROVE_COOLDOWN",
+	"ASEMAN_IMPROVE_LOOP_COOLDOWN", "ASEMAN_IMPROVE_BUDGET", "ASEMAN_IMPROVE_MAX_AGE_DAYS"}
 
 // healthTTL is how long a successful health check is trusted.
 const healthTTL = 30 * time.Second
@@ -75,10 +75,10 @@ func (a *Adapter) ensureRuntime(ctx context.Context) error {
 			labels[vmm.LabelVolume] = a.volume
 		}
 		env := map[string]string{
-			"TRADERA_NODE_URL":       a.nodeURL,
-			"TRADERA_RUNTIME_SECRET": a.secret,
-			"TRADERA_RUNTIME_PORT":   a.port,
-			"TRADERA_DATA_DIR":       "/data",
+			"ASEMAN_NODE_URL":       a.nodeURL,
+			"ASEMAN_RUNTIME_SECRET": a.secret,
+			"ASEMAN_RUNTIME_PORT":   a.port,
+			"ASEMAN_DATA_DIR":       "/data",
 		}
 		// The runtime's turn limits and memory server, when the node sets them.
 		for _, key := range runtimeTuning {
@@ -159,7 +159,7 @@ func (a *Adapter) call(ctx context.Context, method, path string, body, out any) 
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Tradera-Runtime", a.secret)
+	req.Header.Set("X-Aseman-Runtime", a.secret)
 	resp, err := a.client.Do(req)
 	if err != nil {
 		return errs.Wrap(errs.CodeUnavailable, err, "agent runtime unreachable")

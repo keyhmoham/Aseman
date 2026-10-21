@@ -14,15 +14,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/finance/models/wallet"
-	"github.com/tradera/tradera/plugins/actions/llm/dto"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/adapters/filesystem/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/finance/models/wallet"
+	"github.com/aseman/aseman/plugins/actions/llm/dto"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/adapters/filesystem/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // Finance is what the namespace needs of the wallets: an organization is

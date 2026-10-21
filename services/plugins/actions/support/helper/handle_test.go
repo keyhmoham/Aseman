@@ -9,7 +9,7 @@ func TestNormalizeHandle(t *testing.T) {
 			t.Errorf("%q: got %q, %v want %q", in, got, err, want)
 		}
 	}
-	for _, in := range []string{"", "ab", "has space", "<script>", "emoji😀", "-lead", "trail.", "a/b", "tradera", "Lead", "x" + string(make([]byte, 40))} {
+	for _, in := range []string{"", "ab", "has space", "<script>", "emoji😀", "-lead", "trail.", "a/b", "aseman", "Lead", "x" + string(make([]byte, 40))} {
 		if got, err := NormalizeHandle(in); err == nil {
 			t.Errorf("%q should be refused, got %q", in, got)
 		}

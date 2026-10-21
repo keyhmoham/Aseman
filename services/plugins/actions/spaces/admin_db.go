@@ -6,13 +6,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // The agents and tools of the platform admins space read the node's database
@@ -36,14 +36,14 @@ func dbTools() []vmm.Tool {
 	return []vmm.Tool{
 		{
 			Name: "db_tables", Kind: "tool",
-			Description: "List the tables (models) of the Tradera platform database and their fields.",
+			Description: "List the tables (models) of the Aseman platform database and their fields.",
 			Usage:       "Read-only access to the node's own database, available in the platform admins space. Call this first to learn the table and field names to pass to db_read. Pass model to see one table.",
 			Example:     `{"model":"accounts"}`,
 			Parameters:  map[string]any{"type": "object", "properties": map[string]any{"model": str("Optional table name; omitted lists every table.")}},
 		},
 		{
 			Name: "db_read", Kind: "tool",
-			Description: "Read records from a table of the Tradera platform database (read only).",
+			Description: "Read records from a table of the Aseman platform database (read only).",
 			Usage:       "Pass id to read one record, or filter with equal/in/gt/lt on the table's fields, with order_by, asc, limit (1..200, default 50) and offset to page. The total count of matching records is returned with each page. Passwords, keys and tokens come back as [redacted]. Nothing can be written.",
 			Example:     `{"model":"accounts","equal":{"role":"admin"},"order_by":"created_at","limit":20}`,
 			Parameters: map[string]any{"type": "object", "properties": map[string]any{

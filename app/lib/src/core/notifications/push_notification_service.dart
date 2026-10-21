@@ -2,17 +2,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../data/services/tradera_service.dart';
+import '../../data/services/aseman_service.dart';
 
 /// Coordinates the iOS APNs token with the signed-in backend account.
 class PushNotificationService {
   PushNotificationService(this.service);
 
-  static const _channel = MethodChannel('tradera/push_notifications');
-  static const _tokenKey = 'tradera.push.token';
-  static const _enabledKey = 'tradera.push.enabled';
+  static const _channel = MethodChannel('aseman/push_notifications');
+  static const _tokenKey = 'aseman.push.token';
+  static const _enabledKey = 'aseman.push.enabled';
 
-  final TraderaService service;
+  final AsemanService service;
 
   static bool get supported =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from tradera_agents import apps
+from aseman_agents import apps
 from fakes import call
 from test_decision import APPS, platform, request, runner  # noqa: F401
 

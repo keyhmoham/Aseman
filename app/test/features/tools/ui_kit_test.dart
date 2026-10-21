@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/elpian/elpian.dart';
-import 'package:tradera/src/features/tools/ui_kit/kit.dart';
+import 'package:aseman/src/elpian/elpian.dart';
+import 'package:aseman/src/features/tools/ui_kit/kit.dart';
 
 const _catalog =
     'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json';
@@ -379,7 +379,7 @@ void main() {
   });
 
   group('generative frontends', () {
-    testWidgets('render every Tradera component, bound to data',
+    testWidgets('render every Aseman component, bound to data',
         (tester) async {
       tester.view.physicalSize = const Size(1200, 6000);
       tester.view.devicePixelRatio = 1;

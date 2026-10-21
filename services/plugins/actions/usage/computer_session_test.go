@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	financial "github.com/tradera/tradera/plugins/actions/finance/models"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/space"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	financial "github.com/aseman/aseman/plugins/actions/finance/models"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/space"
 )
 
 // The computer is charged a minute at a time; the history shows each time it

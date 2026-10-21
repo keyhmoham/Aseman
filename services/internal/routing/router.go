@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 // Namespace is a group of related actions.

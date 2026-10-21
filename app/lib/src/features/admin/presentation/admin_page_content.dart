@@ -1258,7 +1258,7 @@ class _AppPageContentState extends State<AdminPageContent> {
   }
 
   /// The OAuth client people sign in to an MCP server with, for providers
-  /// that will not register Tradera by themselves. Its secret is never shown;
+  /// that will not register Aseman by themselves. Its secret is never shown;
   /// leaving it empty keeps the saved one.
   Future<void> _mcpClient(Map<String, dynamic> server, String name) async {
     dynamic saved;
@@ -1303,7 +1303,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                      'For a provider that will not register Tradera by itself: create an OAuth client there, then save it here. People sign in with it; its secret stays on the node.'),
+                      'For a provider that will not register Aseman by itself: create an OAuth client there, then save it here. People sign in with it; its secret stays on the node.'),
                   if (widget.oauthRedirectUri.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     AdminKeyValue('Redirect address', widget.oauthRedirectUri,

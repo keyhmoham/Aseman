@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/api"
 )
 
 type act struct{ name string }

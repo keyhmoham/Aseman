@@ -13,16 +13,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/filedata"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/permission"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/filedata"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/permission"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // maxFileSize caps a single upload at 64MB (photos, gifs, audio, voice, short
@@ -155,7 +155,7 @@ func (s *Service) CanReadFile(ctx context.Context, fileID identity.ID, caller id
 }
 
 // senderHandle resolves an account id onto its handle (bot accounts use their
-// bot name) so tradera's conversation context is readable.
+// bot name) so aseman's conversation context is readable.
 func (s *Service) senderHandle(ctx context.Context, accID identity.ID) (string, bool) {
 	var acc account.Account
 	if err := s.R.Get(ctx, "accounts", accID, &acc); err == nil && acc.Handle != "" {

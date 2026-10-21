@@ -9,5 +9,5 @@ fastapi==0.142.2
 uvicorn==0.54.0
 httpx==0.28.1
 openviking-sdk==0.1.14
-# GEPA (gepa-ai/gepa): agents improving their own playbook (tradera_agents/improve).
+# GEPA (gepa-ai/gepa): agents improving their own playbook (aseman_agents/improve).
 gepa==0.1.4

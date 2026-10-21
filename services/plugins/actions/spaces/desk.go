@@ -22,10 +22,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/jsonpatch"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/jsonpatch"
 )
 
 // Desk geometry every client follows.
@@ -62,7 +62,7 @@ const DeskAppFrontend = "app"
 
 // Web page windows: a page served from the space's sandbox through a preview
 // gateway (proxy_create), typically an interactive frontend an agent built
-// for a tool with Tradera's web UI kit. Its Args hold {"page": the gateway
+// for a tool with Aseman's web UI kit. Its Args hold {"page": the gateway
 // path, "/v1/proxy/<id>/…"}; Tool is the tool it is a frontend of, or
 // DeskWebTool for a page of no tool (they share that dock entry).
 const (
@@ -817,7 +817,7 @@ func (s *Service) designWindow(ctx context.Context, spaceID, roomID identity.ID,
 	if err != nil {
 		op.Template, op.Status = nil, "failed: "+err.Error()
 	}
-	if _, _, err := s.UpdateDesk(ctx, spaceID, roomID, "tradera", []DeskOp{op}); err != nil && s.L != nil {
+	if _, _, err := s.UpdateDesk(ctx, spaceID, roomID, "aseman", []DeskOp{op}); err != nil && s.L != nil {
 		s.L.Warn("desk window design not saved", "window", w.ID, "err", err.Error())
 	}
 }

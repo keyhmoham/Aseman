@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // Attach starts an interactive process inside a running container and returns

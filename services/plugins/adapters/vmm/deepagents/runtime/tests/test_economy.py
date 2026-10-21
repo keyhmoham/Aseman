@@ -6,7 +6,7 @@ from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from tradera_agents import economy
+from aseman_agents import economy
 from fakes import LEAD, call, turn_request
 from test_runtime import platform, runner  # noqa: F401
 
@@ -66,7 +66,7 @@ def test_instructions_the_agent_read_stay_whole() -> None:
     big = "line of output\n" * 2000
     guide = "How to use the board: " + "rule. " * 2000
     messages = [HumanMessage("go", id="h"), *ran(0, "board__get_instructions", {}, guide),
-                *ran(1, "read_file", {"file_path": "/w/.tradera/skills/shared/a/SKILL.md"}, guide),
+                *ran(1, "read_file", {"file_path": "/w/.aseman/skills/shared/a/SKILL.md"}, guide),
                 *ran(2, "read_file", {"file_path": "/large_tool_results/c3", "offset": 0}, big),
                 *ran(3, "execute", {"command": "ls"}, big),
                 *[m for i in range(4, 14) for m in ran(i, "execute", {"command": f"echo {i}"}, big)]]
@@ -100,7 +100,7 @@ def test_a_large_window_keeps_more(monkeypatch) -> None:
     # Small windows keep their old, smaller sizes.
     assert economy.trim_above(19_200) == 9_600 and economy.summary_keeps(19_200) == 6_400
     # An operator can bound what a call costs.
-    monkeypatch.setenv("TRADERA_SUMMARIZE_MAX_TOKENS", "48000")
+    monkeypatch.setenv("ASEMAN_SUMMARIZE_MAX_TOKENS", "48000")
     assert economy.summarize_above(Model()) == 48_000
 
 

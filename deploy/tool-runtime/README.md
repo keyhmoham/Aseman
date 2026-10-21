@@ -1,6 +1,6 @@
 # Tool runtime
 
-Runs a Tradera tool's backend program — written for the **Elpian VM** (Dart or
+Runs an Aseman tool's backend program — written for the **Elpian VM** (Dart or
 the Elpian JavaScript subset) or for **QuickJS** (plain JavaScript) — and
 serves its microtools over MCP (`POST /mcp`, JSON-RPC: `initialize`,
 `tools/list`, `tools/call`).
@@ -8,7 +8,7 @@ serves its microtools over MCP (`POST /mcp`, JSON-RPC: `initialize`,
 | Use | How it runs |
 |---|---|
 | **Managed** tools | Nomad runs this image as a service of its own on the stack's network (`tool-<key>:8790`); the node calls it there. |
-| **Installed** tools | The sandbox computer image carries this runtime at `/opt/tradera-tool-runtime`; the node writes the program into the space's sandbox and starts it there, reaching it through the space's gateway proxy. |
+| **Installed** tools | The sandbox computer image carries this runtime at `/opt/aseman-tool-runtime`; the node writes the program into the space's sandbox and starts it there, reaching it through the space's gateway proxy. |
 | The node's **compiler** | `node server.mjs --compiler` (the `tool-runtime` compose service): compiles static Elpian frontends to bytecode and lists the microtools a backend program declares. |
 
 Docker backends are not run by this image: their own image serves MCP.
@@ -29,8 +29,8 @@ function tools() {
 }
 
 function forecast(args) {
-  var ctx = askHost('tradera.context', null);   // who asks, from which space and room
-  askHost('tradera.send', { body: ctx.actor + ' asked about ' + args.city });
+  var ctx = askHost('aseman.context', null);   // who asks, from which space and room
+  askHost('aseman.send', { body: ctx.actor + ' asked about ' + args.city });
   return { city: args.city, summary: 'sunny', high: 24 };
 }
 ```
@@ -43,19 +43,19 @@ List tools() => [
 ];
 
 Map forecast(Map args) {
-  var ctx = askHost('tradera.context', null);
+  var ctx = askHost('aseman.context', null);
   return {'city': args['city'], 'summary': 'sunny', 'asked_by': ctx['actor']};
 }
 ```
 
 | Host API | |
 |---|---|
-| `tradera.context` | `{tool, actor, space, room, agent}` of the call — the person asking, and the agent when one asks for them |
-| `tradera.call` | `{namespace, action, body}`: a platform action run as the tool, inside the call's space and room (`spaces.message_send`, `spaces.ask`, `spaces.message_list`, `spaces.tools_list`, `spaces.members_list`, `spaces.room_get`, `users.account_get`, `bots.kv_*`; in the platform admins space, when the call is made for a platform administrator, also `spaces.db_tables` and `spaces.db_read`: read-only access to the node's database, credentials redacted) |
-| `tradera.send` | `{body, room?}`: post into the room the tool was called from |
-| `tradera.ask` | `{bot, body}`: ask another tool or agent of the space |
-| `tradera.kv.get` / `.set` / `.delete` | the tool's own key-value store |
-| `tradera.fetch` | `{url, method?, headers?, body?}` → `{status, ok, contentType, json, text}`: HTTP to the public internet only (private, loopback and link-local addresses are refused, the connection is pinned to the checked address), 10 s, 2 MB |
+| `aseman.context` | `{tool, actor, space, room, agent}` of the call — the person asking, and the agent when one asks for them |
+| `aseman.call` | `{namespace, action, body}`: a platform action run as the tool, inside the call's space and room (`spaces.message_send`, `spaces.ask`, `spaces.message_list`, `spaces.tools_list`, `spaces.members_list`, `spaces.room_get`, `users.account_get`, `bots.kv_*`; in the platform admins space, when the call is made for a platform administrator, also `spaces.db_tables` and `spaces.db_read`: read-only access to the node's database, credentials redacted) |
+| `aseman.send` | `{body, room?}`: post into the room the tool was called from |
+| `aseman.ask` | `{bot, body}`: ask another tool or agent of the space |
+| `aseman.kv.get` / `.set` / `.delete` | the tool's own key-value store |
+| `aseman.fetch` | `{url, method?, headers?, body?}` → `{status, ok, contentType, json, text}`: HTTP to the public internet only (private, loopback and link-local addresses are refused, the connection is pinned to the checked address), 10 s, 2 MB |
 | `log` | a line in the runtime's log |
 
 What a microtool returns is its result (an object becomes MCP

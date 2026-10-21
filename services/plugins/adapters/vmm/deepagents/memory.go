@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // MemoryDimension is the size of every vector in the agents' memory. OpenViking
@@ -153,7 +153,7 @@ func (a *Adapter) memoryCaller(req *network.Request) *network.Response {
 
 func memoryUnset(err error) *network.Response {
 	return jsonResponse(http.StatusConflict, map[string]any{"error": map[string]any{
-		"message": err.Error() + ". Pick it under Admin → Memory models.", "type": "tradera_error", "code": "memory_model_unset",
+		"message": err.Error() + ". Pick it under Admin → Memory models.", "type": "aseman_error", "code": "memory_model_unset",
 	}})
 }
 

@@ -4,11 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // Every tool's listing tells agents to show results with frontend_show; a
@@ -42,11 +42,11 @@ func TestFrontendShowNeedsSomethingToBuildFrom(t *testing.T) {
 	if !listed {
 		t.Fatal("the tool is not listed")
 	}
-	_, err = s.showTool(ctx, spaceID, identity.ID{}, "tradera", `{"tool":"`+botID.String()+`","microtool":"search","args":{"q":"x"}}`)
+	_, err = s.showTool(ctx, spaceID, identity.ID{}, "aseman", `{"tool":"`+botID.String()+`","microtool":"search","args":{"q":"x"}}`)
 	if err == nil || !strings.Contains(err.Error(), "Markdown") {
 		t.Fatalf("a tool without microtools: %v", err)
 	}
-	_, err = s.showTool(ctx, spaceID, identity.ID{}, "tradera", `{"tool":"nope"}`)
+	_, err = s.showTool(ctx, spaceID, identity.ID{}, "aseman", `{"tool":"nope"}`)
 	if err == nil || !strings.Contains(err.Error(), "no tool of this space") {
 		t.Fatalf("an unknown tool: %v", err)
 	}

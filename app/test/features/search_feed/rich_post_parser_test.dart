@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/features/search_feed/presentation/rich_post_parser.dart';
+import 'package:aseman/src/features/search_feed/presentation/rich_post_parser.dart';
 
 void main() {
   test('parses headings, bold, links and lists', () {

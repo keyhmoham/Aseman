@@ -16,8 +16,8 @@ function sameSecret(a, b) {
 export function scopeOf(headers) {
   const h = (name) => String(headers[name] ?? '');
   return {
-    tool: h('x-tradera-tool'), actor: h('x-tradera-actor'), space: h('x-tradera-space'),
-    room: h('x-tradera-room'), agent: h('x-tradera-agent'), token: h('x-tradera-scope'),
+    tool: h('x-aseman-tool'), actor: h('x-aseman-actor'), space: h('x-aseman-space'),
+    room: h('x-aseman-room'), agent: h('x-aseman-agent'), token: h('x-aseman-scope'),
   };
 }
 
@@ -35,7 +35,7 @@ export function toolResult(value) {
  * is what the program's tools() declared when it was loaded.
  */
 export async function handleMcp({ engine, tools, token, node, fetch = null, headers, message, log = console.log }) {
-  if (token && !sameSecret(headers['x-tradera-token'], token)) {
+  if (token && !sameSecret(headers['x-aseman-token'], token)) {
     return [401, { jsonrpc: '2.0', id: message?.id ?? null, error: { code: -32001, message: 'unauthorized' } }];
   }
   const id = message?.id ?? null;
@@ -43,7 +43,7 @@ export async function handleMcp({ engine, tools, token, node, fetch = null, head
   const fail = (code, msg) => [200, { jsonrpc: '2.0', id, error: { code, message: msg } }];
   switch (message?.method) {
     case 'initialize':
-      return reply({ protocolVersion: PROTOCOL_VERSION, capabilities: { tools: {} }, serverInfo: { name: 'tradera-tool-runtime', version: '1.0.0' } });
+      return reply({ protocolVersion: PROTOCOL_VERSION, capabilities: { tools: {} }, serverInfo: { name: 'aseman-tool-runtime', version: '1.0.0' } });
     case 'notifications/initialized':
       return [202, null];
     case 'ping':

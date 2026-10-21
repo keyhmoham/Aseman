@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/permission"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/permission"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 func (s *Service) deskScope(ctx context.Context, caller identity.ID, space, room string) (identity.ID, identity.ID, error) {

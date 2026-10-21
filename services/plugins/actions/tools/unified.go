@@ -10,17 +10,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/idutil"
-	botdto "github.com/tradera/tradera/plugins/actions/bots/dto"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	market "github.com/tradera/tradera/plugins/actions/market/models"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/actions/tools/models"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/idutil"
+	botdto "github.com/aseman/aseman/plugins/actions/bots/dto"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	market "github.com/aseman/aseman/plugins/actions/market/models"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/tools/models"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // A tool is created from one form with two halves:
@@ -279,7 +279,7 @@ func (s *Service) createHosted(ctx context.Context, req *api.ActionRequest, in t
 		create.VMType = bot.VMType(b.Runtime)
 		create.ImageRef = b.Image
 		if create.ImageRef == "" {
-			create.ImageRef = "tradera/tool-runtime"
+			create.ImageRef = "aseman/tool-runtime"
 		}
 		create.Env, err = s.runtimeEnv(key, port)
 		if err != nil {
@@ -341,7 +341,7 @@ func (s *Service) prepareFrontend(ctx context.Context, f frontendInput) (models.
 				}
 				bytecode = raw
 			default:
-				return spec, nil, errs.New(errs.CodeUnavailable, "this node has no tool compiler (TRADERA_TOOL_COMPILER_URL): upload the frontend compiled to Elpian bytecode")
+				return spec, nil, errs.New(errs.CodeUnavailable, "this node has no tool compiler (ASEMAN_TOOL_COMPILER_URL): upload the frontend compiled to Elpian bytecode")
 			}
 			entities[models.EntityFrontendBytecode] = []byte(base64.StdEncoding.EncodeToString(bytecode))
 		}

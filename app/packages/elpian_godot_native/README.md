@@ -1,4 +1,4 @@
-# tradera_elpian_godot
+# aseman_elpian_godot
 
 The embedded **Godot 4** engine behind the `Scene3D` widget of the app's
 Elpian engine. The Dart side — the `Scene3D` widget, `GodotSceneController`,
@@ -14,10 +14,10 @@ an engine.
 ## Origin
 
 Copied from [Elpian](https://github.com/cosmopole-org/elpian) (BSD-3-Clause),
-`godot/`: `android/`, `ios/`, `extension/`, `godot-project/`, `web/`. Tradera
+`godot/`: `android/`, `ios/`, `extension/`, `godot-project/`, `web/`. Aseman
 does not depend on Elpian's packages; to refresh, copy those directories
 again. Only the Flutter package name changed (`elpian_godot` →
-`tradera_elpian_godot`, and the podspec with it); channel names, the Kotlin and
+`aseman_elpian_godot`, and the podspec with it); channel names, the Kotlin and
 Swift classes and the GDExtension keep their names, since the Dart side and
 the Godot project address them by those names.
 

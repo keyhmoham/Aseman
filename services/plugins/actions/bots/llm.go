@@ -1,8 +1,8 @@
 package bots
 
 import (
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
 )
 
 func providerCatalogAction(s *Service) api.Action {

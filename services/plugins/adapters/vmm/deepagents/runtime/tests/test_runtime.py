@@ -10,13 +10,13 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from tradera_agents.agent import Runner
-from tradera_agents.memory import Settings
-from tradera_agents.server import create_app
-from tradera_agents.store import Store
+from aseman_agents.agent import Runner
+from aseman_agents.memory import Settings
+from aseman_agents.server import create_app
+from aseman_agents.store import Store
 from fakes import CODER, LEAD, FakeViking, Platform, ScriptedModel, call, turn_request
 
-WORKSPACE = Path(os.environ["TRADERA_WORKSPACE"])
+WORKSPACE = Path(os.environ["ASEMAN_WORKSPACE"])
 
 
 @pytest.fixture
@@ -76,7 +76,7 @@ async def test_lead_plans_works_in_the_sandbox_and_logs(platform: Platform, tmp_
     calls = sum(isinstance(m, ToolMessage) for m in model.seen[-1])
     assert len(platform.logs) == 2 * len(model.seen) + calls
     # Memory is OpenViking's (see test_memory.py): nothing of it in the sandbox.
-    assert not (WORKSPACE / ".tradera/agents/tradera/AGENTS.md").exists()
+    assert not (WORKSPACE / ".aseman/agents/aseman/AGENTS.md").exists()
 
 
 async def test_model_failure_is_visible_in_the_work_log(platform: Platform, tmp_path: Path) -> None:
@@ -172,7 +172,7 @@ async def test_skills_are_written_to_the_sandbox(platform: Platform, tmp_path: P
     skill = {"name": "Data Viz", "description": "Charts from data", "instructions": "Use matplotlib."}
     out = await r.prompt(turn_request(CODER, "hi", token="tok-coder", skills=[skill]))
     assert out.reply == "ok"
-    text = (WORKSPACE / ".tradera/agents/coder/skills/data-viz/SKILL.md").read_text()
+    text = (WORKSPACE / ".aseman/agents/coder/skills/data-viz/SKILL.md").read_text()
     assert 'name: "data-viz"' in text and "Use matplotlib." in text
     # The skill index reached the model's system prompt.
     system = str(model.seen[0][0].content)
@@ -194,7 +194,7 @@ def test_server_contract(platform: Platform, tmp_path: Path) -> None:
                      secret="s3cret", data_dir=str(tmp_path / "data"))
     with TestClient(app) as client:
         assert client.get("/healthz").status_code == 401
-        headers = {"X-Tradera-Runtime": "s3cret"}
+        headers = {"X-Aseman-Runtime": "s3cret"}
         assert client.get("/healthz", headers=headers).json() == {"ok": True}
         res = client.post("/v1/turns", headers=headers, json=turn_request(CODER, "hello", token="tok-coder"))
         assert res.json() == {"reply": "hi there", "status": "done", "answered": False, "error": ""}
@@ -343,8 +343,8 @@ async def test_a_connected_apps_functions_are_tools_of_their_own(platform: Platf
 
 
 def test_every_agent_is_told_to_show_tool_results_in_the_tools_frontend_first() -> None:
-    from tradera_agents.context import AgentDef
-    from tradera_agents.prompts import system_prompt
+    from aseman_agents.context import AgentDef
+    from aseman_agents.prompts import system_prompt
 
     for lead in (True, False):
         agent = AgentDef(name="a", bot_id="b", account_id="c", vm_id="d", role="lead" if lead else "")
@@ -358,7 +358,7 @@ def test_every_agent_is_told_to_show_tool_results_in_the_tools_frontend_first() 
 
 
 def test_tool_descriptions_say_how_to_present_their_results() -> None:
-    from tradera_agents.tools import presentation_hint
+    from aseman_agents.tools import presentation_hint
 
     shown = presentation_hint({"bot_id": "bot-wx", "frontend": "generative"}, "weather_report")
     assert "frontend_show(tool='bot-wx', microtool='weather_report'" in shown
@@ -393,7 +393,7 @@ async def test_a_result_is_shown_in_the_tools_own_frontend(platform: Platform, t
 
 def test_frontend_show_survives_an_allow_list() -> None:
     from langchain_core.tools import StructuredTool
-    from tradera_agents.tools import filter_allowed
+    from aseman_agents.tools import filter_allowed
 
     def tool(name: str) -> StructuredTool:
         return StructuredTool.from_function(func=lambda: "", name=name, description=name)
@@ -404,8 +404,8 @@ def test_frontend_show_survives_an_allow_list() -> None:
 
 
 def test_agents_are_told_how_to_keep_the_desk() -> None:
-    from tradera_agents.context import AgentDef
-    from tradera_agents.prompts import system_prompt
+    from aseman_agents.context import AgentDef
+    from aseman_agents.prompts import system_prompt
 
     prompt = system_prompt(AgentDef(name="a", bot_id="b", account_id="c", vm_id="d"), "")
     desk = prompt[prompt.index("## The desk"):]
@@ -434,13 +434,13 @@ async def test_admins_space_agents_read_the_platform_database(platform: Platform
 
 
 def test_agents_build_interactive_pages_for_tools() -> None:
-    from tradera_agents.context import AgentDef
-    from tradera_agents.prompts import system_prompt
-    from tradera_agents.tools import presentation_hint
+    from aseman_agents.context import AgentDef
+    from aseman_agents.prompts import system_prompt
+    from aseman_agents.tools import presentation_hint
 
     prompt = system_prompt(AgentDef(name="a", bot_id="b", account_id="c", vm_id="d"), "")
     rule = prompt[prompt.index("## Interactive frontends for tools"):prompt.index("## The desk")]
-    for words in ("interact", "web page", "/opt/tradera/webkit/README.md", "proxy_create", "tool", "Tradera.call", "web_show"):
+    for words in ("interact", "web page", "/opt/aseman/webkit/README.md", "proxy_create", "tool", "Aseman.call", "web_show"):
         assert words in rule, words
     # Showing a result is still frontend_show; operating a tool is a page.
     hint = presentation_hint({"bot_id": "bot-wx", "frontend": "generative", "commands": [{"name": "forecast"}]}, "forecast")
@@ -449,14 +449,14 @@ def test_agents_build_interactive_pages_for_tools() -> None:
 
 def test_web_show_survives_an_allow_list() -> None:
     from langchain_core.tools import StructuredTool
-    from tradera_agents.tools import filter_allowed
+    from aseman_agents.tools import filter_allowed
 
     tool = StructuredTool.from_function(func=lambda: "", name="web_show", description="web_show")
     assert [t.name for t in filter_allowed([tool], ["file_send"])] == ["web_show"]
 
 
 def test_long_tool_descriptions_keep_their_usage_and_hint() -> None:
-    from tradera_agents.tools import DESCRIPTION_MAX, _app_command_tool
+    from aseman_agents.tools import DESCRIPTION_MAX, _app_command_tool
 
     usage = "Use it like this. " * 300
     spec = {"name": "Board", "bot_id": "bot-board", "commands": [{"name": "draw"}]}
@@ -467,7 +467,7 @@ def test_long_tool_descriptions_keep_their_usage_and_hint() -> None:
 
 
 def test_an_apps_json_answer_becomes_lines() -> None:
-    from tradera_agents.tools import _app_result
+    from aseman_agents.tools import _app_result
 
     def reply(text: str) -> str:
         return json.dumps({"content": [{"type": "text", "text": text}]})
@@ -482,7 +482,7 @@ def test_an_apps_json_answer_becomes_lines() -> None:
 
 
 async def test_files_are_read_and_changed_without_starting_the_computer(platform: Platform, tmp_path: Path) -> None:
-    ws = Path(os.environ["TRADERA_WORKSPACE"])
+    ws = Path(os.environ["ASEMAN_WORKSPACE"])
     (ws / "src").mkdir(parents=True, exist_ok=True)
     (ws / "src" / "app.py").write_text("one\r\ntwo\r\nthree\r\n")
     r, model = runner(platform, tmp_path, [
@@ -507,7 +507,7 @@ async def test_files_are_read_and_changed_without_starting_the_computer(platform
 
 async def test_files_go_through_the_computer_when_not_stored(platform: Platform, tmp_path: Path) -> None:
     platform.stored_files = False
-    ws = Path(os.environ["TRADERA_WORKSPACE"])
+    ws = Path(os.environ["ASEMAN_WORKSPACE"])
     (ws / "lib").mkdir(parents=True, exist_ok=True)
     (ws / "lib" / "a.txt").write_text("alpha\nbeta\n")
     r, model = runner(platform, tmp_path, [

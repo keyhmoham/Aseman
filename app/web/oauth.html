@@ -20,9 +20,9 @@
     (function () {
       var url = location.href;
       var state = new URLSearchParams(location.search).get('state') || '';
-      try { localStorage.setItem('tradera.oauth.' + state, url); } catch (e) {}
+      try { localStorage.setItem('aseman.oauth.' + state, url); } catch (e) {}
       try {
-        if (window.opener) window.opener.postMessage({ type: 'tradera:oauth', state: state, url: url }, location.origin);
+        if (window.opener) window.opener.postMessage({ type: 'aseman:oauth', state: state, url: url }, location.origin);
       } catch (e) {}
       setTimeout(function () { window.close(); }, 300);
     })();

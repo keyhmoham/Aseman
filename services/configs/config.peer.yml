@@ -20,7 +20,7 @@ plugins:
     - name: postgres          # PostgreSQL database (persistent, own node DB)
       enabled: true
       config:
-        dsn: "postgres://tradera:tradera@localhost:5432/tradera_peer?sslmode=disable"
+        dsn: "postgres://aseman:aseman@localhost:5432/aseman_peer?sslmode=disable"
     - name: local-cache
       enabled: true
     - name: local

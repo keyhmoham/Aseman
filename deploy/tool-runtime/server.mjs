@@ -1,19 +1,19 @@
 #!/usr/bin/env node
-// Tradera tool runtime.
+// Aseman tool runtime.
 //
 // Backend role (default): runs one tool's backend program — on the Elpian VM
 // or on QuickJS — and serves its microtools over MCP at /mcp. It is how a
 // managed tool runs (a Nomad service of the tool runtime image) and how an
 // installed tool runs (a process in a space's sandbox, whose image carries
-// this runtime at /opt/tradera-tool-runtime).
+// this runtime at /opt/aseman-tool-runtime).
 //
-//   TRADERA_TOOL_ENGINE        elpian | quickjs
-//   TRADERA_TOOL_ID            the tool's runtime key
-//   TRADERA_TOOL_TOKEN         the node's runtime credential for this tool
-//   TRADERA_NODE_URL           the node, as the backend reaches it
-//   TRADERA_TOOL_PROGRAM_FILE  the program, when written next to the runtime
+//   ASEMAN_TOOL_ENGINE        elpian | quickjs
+//   ASEMAN_TOOL_ID            the tool's runtime key
+//   ASEMAN_TOOL_TOKEN         the node's runtime credential for this tool
+//   ASEMAN_NODE_URL           the node, as the backend reaches it
+//   ASEMAN_TOOL_PROGRAM_FILE  the program, when written next to the runtime
 //                              (installed tools); otherwise fetched from the node
-//   TRADERA_TOOL_VERSION       reported by /health (installed tools)
+//   ASEMAN_TOOL_VERSION       reported by /health (installed tools)
 //   PORT                       default 8790
 //
 // Compiler role (--compiler): compiles Elpian VM programs to bytecode for the
@@ -121,13 +121,13 @@ async function main() {
     http.createServer(compilerHandler()).listen(port, '0.0.0.0', () => console.log(`[runtime] compiler on :${port}`));
     return;
   }
-  const gateway = new NodeGateway({ url: process.env.TRADERA_NODE_URL, toolId: process.env.TRADERA_TOOL_ID, token: process.env.TRADERA_TOOL_TOKEN });
-  const program = await loadProgram({ file: process.env.TRADERA_TOOL_PROGRAM_FILE, gateway });
-  const engine = await createEngine({ ...program, engine: program.engine || process.env.TRADERA_TOOL_ENGINE });
+  const gateway = new NodeGateway({ url: process.env.ASEMAN_NODE_URL, toolId: process.env.ASEMAN_TOOL_ID, token: process.env.ASEMAN_TOOL_TOKEN });
+  const program = await loadProgram({ file: process.env.ASEMAN_TOOL_PROGRAM_FILE, gateway });
+  const engine = await createEngine({ ...program, engine: program.engine || process.env.ASEMAN_TOOL_ENGINE });
   const tools = await engine.list();
   const handler = backendHandler({
-    engine, tools, token: process.env.TRADERA_TOOL_TOKEN, node: gateway,
-    fetch: createFetcher(), version: process.env.TRADERA_TOOL_VERSION,
+    engine, tools, token: process.env.ASEMAN_TOOL_TOKEN, node: gateway,
+    fetch: createFetcher(), version: process.env.ASEMAN_TOOL_VERSION,
   });
   http.createServer(handler).listen(port, '0.0.0.0', () => {
     console.log(`[runtime] ${engine.engine} backend serving ${tools.length} microtool(s) on :${port}`);

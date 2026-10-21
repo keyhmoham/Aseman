@@ -1,4 +1,4 @@
-// Package errs provides typed, code-carrying errors used across tradera.
+// Package errs provides typed, code-carrying errors used across aseman.
 // Every error produced by the kernel, plugins, actions and adapters should be
 // created through this package so that the CLI/API can render stable codes.
 package errs
@@ -27,7 +27,7 @@ const (
 	CodeBudgetExhausted Code = "BUDGET_EXHAUSTED"
 )
 
-// Error is a tradera error carrying a stable code and optional metadata.
+// Error is an aseman error carrying a stable code and optional metadata.
 type Error struct {
 	Code    Code
 	Message string

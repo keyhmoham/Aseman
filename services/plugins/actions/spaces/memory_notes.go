@@ -7,19 +7,19 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/openviking"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/openviking"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // The agents' notes live in OpenViking (the agents' memory server), but people
 // know them by the paths they had in the sandbox: the project's notes at
-// AGENTS.md and each agent's at .tradera/agents/<agent>/AGENTS.md. For
+// AGENTS.md and each agent's at .aseman/agents/<agent>/AGENTS.md. For
 // people, sandbox_files reads and writes those paths in OpenViking, so the
 // project's Memory screen shows and corrects what the agents really read.
 // Agents themselves keep their notes through their memory tools; their reads
@@ -27,7 +27,7 @@ import (
 // notes kept there before).
 const (
 	notesFile      = "AGENTS.md"
-	agentNotesDir  = "/workspace/.tradera/agents"
+	agentNotesDir  = "/workspace/.aseman/agents"
 	spaceNotesPath = "/workspace/" + notesFile
 	notesReader    = "people" // whom a read of the shared notes acts as
 )

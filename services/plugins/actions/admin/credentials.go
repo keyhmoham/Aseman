@@ -1,6 +1,6 @@
 package admin
 
-import "github.com/tradera/tradera/plugins/actions/support/helper"
+import "github.com/aseman/aseman/plugins/actions/support/helper"
 
 // Do not expose hashes, encrypted private keys or credentials through generic
 // table/query responses.

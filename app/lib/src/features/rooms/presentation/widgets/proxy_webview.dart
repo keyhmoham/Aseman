@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../data/services/tradera_service.dart';
+import '../../../../data/services/aseman_service.dart';
 import '../../../computer/preview_view.dart';
 
 /// A web page of the space (a sandbox preview behind the gateway) full
@@ -14,7 +14,7 @@ class ProxyWebView extends StatelessWidget {
       required this.page});
 
   final String title;
-  final TraderaService service;
+  final AsemanService service;
 
   /// The gateway path: /v1/proxy/<id>/….
   final String page;

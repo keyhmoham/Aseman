@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/pkg/logger"
+	"github.com/aseman/aseman/pkg/logger"
 )
 
 func TestInventoryListsRunningSandboxesAndProjectVolumes(t *testing.T) {
@@ -17,11 +17,11 @@ func TestInventoryListsRunningSandboxesAndProjectVolumes(t *testing.T) {
 			if r.URL.Query().Get("all") != "false" || r.URL.Query().Get("filters") == "" {
 				t.Fatalf("inventory query missing running/label filters: %s", r.URL.RawQuery)
 			}
-			_, _ = w.Write([]byte(`[{"Id":"container-1","Names":["/tradera-sbx-project"],"Created":1700000000,"Labels":{"tradera.vmid":"vm-1","tradera.vm":"sbx-project"}}]`))
+			_, _ = w.Write([]byte(`[{"Id":"container-1","Names":["/aseman-sbx-project"],"Created":1700000000,"Labels":{"aseman.vmid":"vm-1","aseman.vm":"sbx-project"}}]`))
 		case "/containers/container-1/json":
 			_, _ = w.Write([]byte(`{"State":{"StartedAt":"2026-10-13T06:30:00.123456789Z"}}`))
 		case "/volumes":
-			_, _ = w.Write([]byte(`{"Volumes":[{"Name":"tradera-workspace-bot-1","CreatedAt":"2026-10-12T01:02:03Z"},{"Name":"tradera-agent-state-bot-1","CreatedAt":"2026-10-12T01:02:03Z"},{"Name":"unrelated","CreatedAt":"2026-10-12T01:02:03Z"}]}`))
+			_, _ = w.Write([]byte(`{"Volumes":[{"Name":"aseman-workspace-bot-1","CreatedAt":"2026-10-12T01:02:03Z"},{"Name":"aseman-agent-state-bot-1","CreatedAt":"2026-10-12T01:02:03Z"},{"Name":"unrelated","CreatedAt":"2026-10-12T01:02:03Z"}]}`))
 		default:
 			t.Fatalf("unexpected Docker API path %s", r.URL.Path)
 		}
@@ -46,7 +46,7 @@ func TestInventoryListsRunningSandboxesAndProjectVolumes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(volumes) != 1 || volumes[0].Name != "tradera-workspace-bot-1" {
+	if len(volumes) != 1 || volumes[0].Name != "aseman-workspace-bot-1" {
 		t.Fatalf("unexpected volumes: %#v", volumes)
 	}
 }

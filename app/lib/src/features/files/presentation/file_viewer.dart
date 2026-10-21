@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:pdfrx/pdfrx.dart';
 
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../search_feed/presentation/rich_post_content.dart';
 import '../data/workspace_files.dart';
@@ -28,7 +28,7 @@ String formatBytes(int bytes) {
 /// Opens a workspace file in a bottom sheet (phones).
 Future<void> showWorkspaceFileSheet(
   BuildContext context, {
-  required TraderaService service,
+  required AsemanService service,
   required String spaceId,
   required String path,
 }) => showAppSheet<void>(
@@ -57,7 +57,7 @@ class WorkspaceFileViewer extends StatefulWidget {
     this.onClose,
   });
 
-  final TraderaService service;
+  final AsemanService service;
   final String spaceId;
 
   /// The file's path, `/workspace/…`.

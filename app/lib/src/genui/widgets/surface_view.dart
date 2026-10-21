@@ -1,4 +1,4 @@
-/// Rendering genui surfaces in Tradera: one surface ([GenUiSurfaceView]) —
+/// Rendering genui surfaces in Aseman: one surface ([GenUiSurfaceView]) —
 /// the app's theme with the surface's `primaryColor`, the agent's name and
 /// icon above it — and a set of static messages with a host that answers
 /// their actions ([GenUiView]).

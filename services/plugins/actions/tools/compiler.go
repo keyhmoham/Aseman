@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 // Compiler is the tool runtime in its compiler role (deploy/tool-runtime,

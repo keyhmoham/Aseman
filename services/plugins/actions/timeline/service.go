@@ -14,8 +14,8 @@
 // A timeline is the space's: every role in a space (bots included) reads every
 // room of it, so the timeline shows an agent nothing its room reads would not.
 //
-// Utopia's address and the node's account come from TRADERA_TIMELINE_*;
-// without TRADERA_TIMELINE_URL the timeline is off.
+// Utopia's address and the node's account come from ASEMAN_TIMELINE_*;
+// without ASEMAN_TIMELINE_URL the timeline is off.
 package timeline
 
 import (
@@ -25,18 +25,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/pkg/crypto"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/pkg/crypto"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // Environment the node reads Utopia's address and its account from.
 const (
-	EnvURL      = "TRADERA_TIMELINE_URL"
-	EnvEmail    = "TRADERA_TIMELINE_EMAIL"
-	EnvPassword = "TRADERA_TIMELINE_PASSWORD"
+	EnvURL      = "ASEMAN_TIMELINE_URL"
+	EnvEmail    = "ASEMAN_TIMELINE_EMAIL"
+	EnvPassword = "ASEMAN_TIMELINE_PASSWORD"
 )
 
 const (
@@ -95,7 +95,7 @@ func NewService(k apiKernel, r *repo.Repo, log *logger.Logger) *Service {
 	if url := os.Getenv(EnvURL); url != "" {
 		email := os.Getenv(EnvEmail)
 		if email == "" {
-			email = "timeline@tradera.local"
+			email = "timeline@aseman.local"
 		}
 		s.utopia = newUtopia(url, email, os.Getenv(EnvPassword))
 	}
@@ -265,7 +265,7 @@ func (s *Service) space(ctx context.Context, spaceID string) (*spaceKeys, error)
 	if keys == nil {
 		project := s.names.space(ctx, spaceID)
 		kb, source, push, err := s.utopia.createBase(ctx, "Timeline · "+project.name,
-			"The dated timeline of Tradera project "+spaceID+": requests, agents' work, messages, files, members and routines.")
+			"The dated timeline of Aseman project "+spaceID+": requests, agents' work, messages, files, members and routines.")
 		if err != nil {
 			return nil, err
 		}

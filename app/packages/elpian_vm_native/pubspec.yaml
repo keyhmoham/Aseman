@@ -1,5 +1,5 @@
-name: tradera_elpian_vm
-description: The Elpian VM native library (libelpian_vm), built from its Rust sources for every platform Tradera ships. The Dart side lives in lib/src/elpian of the app.
+name: aseman_elpian_vm
+description: The Elpian VM native library (libelpian_vm), built from its Rust sources for every platform Aseman ships. The Dart side lives in lib/src/elpian of the app.
 version: 0.1.0
 publish_to: none
 

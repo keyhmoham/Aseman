@@ -4,15 +4,15 @@ package spaces
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	bots "github.com/tradera/tradera/plugins/actions/bots/dto"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	rt "github.com/tradera/tradera/plugins/actions/routines/models"
-	"github.com/tradera/tradera/plugins/actions/usage/models"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	bots "github.com/aseman/aseman/plugins/actions/bots/dto"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	rt "github.com/aseman/aseman/plugins/actions/routines/models"
+	"github.com/aseman/aseman/plugins/actions/usage/models"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 type botPortBridge struct{ K api.Kernel }
@@ -59,9 +59,9 @@ func (p botPortBridge) Resize(ctx context.Context, id identity.ID, res bot.Resou
 	err := bridge.Invoke(ctx, p.K, "bots", "Resize", []any{ctx, id, res}, &result)
 	return result, err
 }
-func (p botPortBridge) InstallTradera(ctx context.Context) (*bot.Bot, error) {
+func (p botPortBridge) InstallAseman(ctx context.Context) (*bot.Bot, error) {
 	var result0 *bot.Bot
-	err := bridge.Invoke(ctx, p.K, "bots", "InstallTradera", []any{ctx}, &result0)
+	err := bridge.Invoke(ctx, p.K, "bots", "InstallAseman", []any{ctx}, &result0)
 	return result0, err
 }
 func (p botPortBridge) Lifecycle(ctx context.Context, id identity.ID, op string) (*bot.Bot, error) {

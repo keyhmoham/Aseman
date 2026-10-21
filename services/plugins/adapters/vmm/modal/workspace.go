@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 
 	modal "github.com/modal-labs/modal-client/go"
 	pb "github.com/modal-labs/modal-client/go/proto/modal_proto"

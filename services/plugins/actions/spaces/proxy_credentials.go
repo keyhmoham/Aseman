@@ -4,15 +4,15 @@ import (
 	"context"
 	"strings"
 
-	"github.com/tradera/tradera/pkg/crypto"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/proxy"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/pkg/crypto"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 func proxyTokenContext(p *proxy.Proxy) string { return "proxies/" + p.ID.String() + "/token" }
 func (s *Service) openProxyToken(p *proxy.Proxy) error {
-	if !strings.HasPrefix(p.Token, "tradera:secret:") {
+	if !strings.HasPrefix(p.Token, "aseman:secret:") {
 		return nil
 	}
 	token, err := crypto.OpenSecret(p.Token, s.K.Env()["node_private_key"], proxyTokenContext(p))
@@ -45,7 +45,7 @@ func (s *Service) encryptLegacyProxyTokens(ctx context.Context) error {
 		if p.Token == "" {
 			continue
 		}
-		if strings.HasPrefix(p.Token, "tradera:secret:") {
+		if strings.HasPrefix(p.Token, "aseman:secret:") {
 			if err := s.openProxyToken(&p); err != nil {
 				return err
 			}

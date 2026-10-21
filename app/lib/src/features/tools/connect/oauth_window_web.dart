@@ -34,7 +34,7 @@ class OAuthWindow {
     final popup = _window.callMethod<JSObject?>(
         'open'.toJS,
         'about:blank'.toJS,
-        'tradera-mcp-oauth'.toJS,
+        'aseman-mcp-oauth'.toJS,
         'popup=yes,width=$width,height=$height,left=${left.round()},top=${top.round()}'
             .toJS);
     if (popup == null) {
@@ -54,7 +54,7 @@ class OAuthWindow {
     if (_closed) return Future.error(StateError('Sign-in was cancelled.'));
     final done = Completer<String>();
     final storage = _window.getProperty<JSObject>('localStorage'.toJS);
-    final key = 'tradera.oauth.$state';
+    final key = 'aseman.oauth.$state';
     final origin = Uri.base.origin;
     late final JSFunction listener;
     Timer? poll, timeout;
@@ -81,7 +81,7 @@ class OAuthWindow {
       if (data == null || !data.isA<JSObject>()) return;
       final message = data as JSObject;
       if (message.getProperty<JSString?>('type'.toJS)?.toDart !=
-              'tradera:oauth' ||
+              'aseman:oauth' ||
           message.getProperty<JSString?>('state'.toJS)?.toDart != state) {
         return;
       }

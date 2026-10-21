@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	llmmodels "github.com/tradera/tradera/plugins/actions/llm/models"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	llmmodels "github.com/aseman/aseman/plugins/actions/llm/models"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // healthCheck is one line of the deploy checklist: ok = fine, warn = works but
@@ -45,15 +45,15 @@ func (s *Service) health(ctx context.Context, req *api.ActionRequest) (*api.Acti
 
 	// Core
 	if n, e := r.Count(ctx, "accounts", database.Filter{}); e != nil {
-		add(healthCheck{ID: "database", Group: "Core", Label: "Database", Status: "fail", Detail: "Cannot read accounts: " + e.Error(), Fix: "TRADERA_DATABASE_DSN, postgres container"})
+		add(healthCheck{ID: "database", Group: "Core", Label: "Database", Status: "fail", Detail: "Cannot read accounts: " + e.Error(), Fix: "ASEMAN_DATABASE_DSN, postgres container"})
 	} else {
 		add(healthCheck{ID: "database", Group: "Core", Label: "Database", Status: "ok", Detail: "Reachable, " + itoa(n) + " accounts"})
 	}
 	add(adminPasswordHealth(ctx, r, s.K.Env()["admin_handle"]))
-	publicURL := strings.TrimSpace(os.Getenv("TRADERA_PUBLIC_URL"))
+	publicURL := strings.TrimSpace(os.Getenv("ASEMAN_PUBLIC_URL"))
 	switch {
 	case publicURL == "" || strings.Contains(publicURL, "localhost") || strings.Contains(publicURL, "127.0.0.1"):
-		add(healthCheck{ID: "public_url", Group: "Core", Label: "Public URL", Status: "warn", Detail: "Points at this machine (" + orDash(publicURL) + "). Phones, webhooks and peer nodes cannot reach it.", Fix: "TRADERA_PUBLIC_URL in .env"})
+		add(healthCheck{ID: "public_url", Group: "Core", Label: "Public URL", Status: "warn", Detail: "Points at this machine (" + orDash(publicURL) + "). Phones, webhooks and peer nodes cannot reach it.", Fix: "ASEMAN_PUBLIC_URL in .env"})
 	case strings.HasPrefix(publicURL, "http://"):
 		add(healthCheck{ID: "public_url", Group: "Core", Label: "Public URL", Status: "warn", Detail: publicURL + " is not HTTPS.", Fix: "Serve it through Caddy with a domain"})
 	default:
@@ -93,21 +93,21 @@ func (s *Service) health(ctx context.Context, req *api.ActionRequest) (*api.Acti
 	}
 
 	// Compute
-	backend := strings.ToLower(strings.TrimSpace(os.Getenv("TRADERA_SANDBOX_BACKEND")))
+	backend := strings.ToLower(strings.TrimSpace(os.Getenv("ASEMAN_SANDBOX_BACKEND")))
 	if backend == "" {
 		backend = "docker"
 	}
 	if backend == "modal" {
-		if envSet("TRADERA_MODAL_TOKEN_ID") && envSet("TRADERA_MODAL_TOKEN_SECRET") {
-			add(healthCheck{ID: "sandbox", Group: "Compute", Label: "Sandbox backend", Status: "ok", Detail: "Modal, image " + orDash(os.Getenv("TRADERA_SANDBOX_IMAGE"))})
+		if envSet("ASEMAN_MODAL_TOKEN_ID") && envSet("ASEMAN_MODAL_TOKEN_SECRET") {
+			add(healthCheck{ID: "sandbox", Group: "Compute", Label: "Sandbox backend", Status: "ok", Detail: "Modal, image " + orDash(os.Getenv("ASEMAN_SANDBOX_IMAGE"))})
 		} else {
-			add(healthCheck{ID: "sandbox", Group: "Compute", Label: "Sandbox backend", Status: "fail", Detail: "Modal is selected but its token is missing.", Fix: "TRADERA_MODAL_TOKEN_ID / _SECRET in .env"})
+			add(healthCheck{ID: "sandbox", Group: "Compute", Label: "Sandbox backend", Status: "fail", Detail: "Modal is selected but its token is missing.", Fix: "ASEMAN_MODAL_TOKEN_ID / _SECRET in .env"})
 		}
 	} else {
-		add(healthCheck{ID: "sandbox", Group: "Compute", Label: "Sandbox backend", Status: "ok", Detail: "Docker, image " + orDash(os.Getenv("TRADERA_SANDBOX_IMAGE"))})
+		add(healthCheck{ID: "sandbox", Group: "Compute", Label: "Sandbox backend", Status: "ok", Detail: "Docker, image " + orDash(os.Getenv("ASEMAN_SANDBOX_IMAGE"))})
 	}
-	if nomad := strings.TrimRight(strings.TrimSpace(os.Getenv("TRADERA_NOMAD_URL")), "/"); nomad == "" {
-		add(healthCheck{ID: "nomad", Group: "Compute", Label: "Agent runtime scheduler (Nomad)", Status: "warn", Detail: "No Nomad URL configured.", Fix: "TRADERA_NOMAD_URL"})
+	if nomad := strings.TrimRight(strings.TrimSpace(os.Getenv("ASEMAN_NOMAD_URL")), "/"); nomad == "" {
+		add(healthCheck{ID: "nomad", Group: "Compute", Label: "Agent runtime scheduler (Nomad)", Status: "warn", Detail: "No Nomad URL configured.", Fix: "ASEMAN_NOMAD_URL"})
 	} else {
 		client := &http.Client{Timeout: 3 * time.Second}
 		resp, e := client.Get(nomad + "/v1/status/leader")
@@ -124,22 +124,22 @@ func (s *Service) health(ctx context.Context, req *api.ActionRequest) (*api.Acti
 
 	// Accounts & money
 	switch {
-	case envSet("TRADERA_RESEND_API_KEY"):
-		add(healthCheck{ID: "email", Group: "Accounts", Label: "Email", Status: "ok", Detail: "Resend, from " + orDash(os.Getenv("TRADERA_SMTP_FROM"))})
-	case envSet("TRADERA_SMTP_HOST"):
-		add(healthCheck{ID: "email", Group: "Accounts", Label: "Email", Status: "ok", Detail: "SMTP " + os.Getenv("TRADERA_SMTP_HOST")})
+	case envSet("ASEMAN_RESEND_API_KEY"):
+		add(healthCheck{ID: "email", Group: "Accounts", Label: "Email", Status: "ok", Detail: "Resend, from " + orDash(os.Getenv("ASEMAN_SMTP_FROM"))})
+	case envSet("ASEMAN_SMTP_HOST"):
+		add(healthCheck{ID: "email", Group: "Accounts", Label: "Email", Status: "ok", Detail: "SMTP " + os.Getenv("ASEMAN_SMTP_HOST")})
 	default:
-		add(healthCheck{ID: "email", Group: "Accounts", Label: "Email", Status: "warn", Detail: "Not configured: password-reset codes are only written to the node log.", Fix: "TRADERA_RESEND_API_KEY and TRADERA_SMTP_FROM"})
+		add(healthCheck{ID: "email", Group: "Accounts", Label: "Email", Status: "warn", Detail: "Not configured: password-reset codes are only written to the node log.", Fix: "ASEMAN_RESEND_API_KEY and ASEMAN_SMTP_FROM"})
 	}
-	if envSet("TRADERA_GOOGLE_CLIENT_ID") {
+	if envSet("ASEMAN_GOOGLE_CLIENT_ID") {
 		add(healthCheck{ID: "google", Group: "Accounts", Label: "Sign in with Google", Status: "ok", Detail: "Client ID set"})
 	} else {
-		add(healthCheck{ID: "google", Group: "Accounts", Label: "Sign in with Google", Status: "warn", Detail: "No client ID: only email sign-in works.", Fix: "node.oauth_client_id or TRADERA_GOOGLE_CLIENT_ID"})
+		add(healthCheck{ID: "google", Group: "Accounts", Label: "Sign in with Google", Status: "warn", Detail: "No client ID: only email sign-in works.", Fix: "node.oauth_client_id or ASEMAN_GOOGLE_CLIENT_ID"})
 	}
-	if envSet("TRADERA_REVENUECAT_SECRET") {
+	if envSet("ASEMAN_REVENUECAT_SECRET") {
 		add(healthCheck{ID: "payments", Group: "Accounts", Label: "Credit purchases (RevenueCat)", Status: "ok", Detail: "Secret key set"})
 	} else {
-		add(healthCheck{ID: "payments", Group: "Accounts", Label: "Credit purchases (RevenueCat)", Status: "warn", Detail: "No secret key: purchases cannot be verified, so top-ups are unavailable.", Fix: "TRADERA_REVENUECAT_SECRET in .env"})
+		add(healthCheck{ID: "payments", Group: "Accounts", Label: "Credit purchases (RevenueCat)", Status: "warn", Detail: "No secret key: purchases cannot be verified, so top-ups are unavailable.", Fix: "ASEMAN_REVENUECAT_SECRET in .env"})
 	}
 	var admins []account.Account
 	if e := r.List(ctx, "accounts", database.Filter{Equal: map[string]any{"role": "admin"}}, &admins); e == nil && len(admins) == 0 {

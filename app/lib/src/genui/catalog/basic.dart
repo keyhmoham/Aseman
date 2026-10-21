@@ -1,8 +1,8 @@
-/// The A2UI basic catalog in Tradera's design language: Text (with
+/// The A2UI basic catalog in Aseman's design language: Text (with
 /// Markdown), Image, Icon, Video, AudioPlayer, Row, Column, List, Card, Tabs,
 /// Modal, Divider, Button, TextField, CheckBox, ChoicePicker, Slider and
 /// DateTimeInput — every property of the spec, plus a few extras each
-/// (marked "Tradera:" in their schemas).
+/// (marked "Aseman:" in their schemas).
 library;
 
 import 'package:flutter/material.dart';
@@ -43,16 +43,16 @@ final _markdownSyntax = RegExp(
 /// Whether [text] uses Markdown (plain text renders as a plain [Text]).
 bool hasMarkdown(String text) => _markdownSyntax.hasMatch(text);
 
-final textItem = traderaItem(
+final textItem = asemanItem(
   'Text',
   description: 'A block of text; simple Markdown (bold, italic, code, links, '
       'lists, headings) is rendered.',
   properties: {
     'text': P.any('The text: a literal, {"path"} or a formatString call.'),
     'variant': P.str('Typography.', _variants),
-    'align': P.str('Tradera: horizontal alignment.', ['start', 'center', 'end']),
-    'maxLines': P.any('Tradera: clamp to this many lines (ellipsis).'),
-    'color': P.any('Tradera: a color token, status or #hex.'),
+    'align': P.str('Aseman: horizontal alignment.', ['start', 'center', 'end']),
+    'maxLines': P.any('Aseman: clamp to this many lines (ellipsis).'),
+    'color': P.any('Aseman: a color token, status or #hex.'),
   },
   required: ['text'],
   build: (item, p) => Builder(builder: (context) {
@@ -145,7 +145,7 @@ const Map<String, (double?, double?, double?)> _imageSizes = {
   'header': (double.infinity, 200, null),
 };
 
-final imageItem = traderaItem(
+final imageItem = asemanItem(
   'Image',
   description: 'An image: an https URL, a data: URI or inline <svg>, a '
       'project file path, or a stored file.',
@@ -155,7 +155,7 @@ final imageItem = traderaItem(
     'fit': P.str('How the image fills its box.',
         ['contain', 'cover', 'fill', 'none', 'scaleDown']),
     'variant': P.str('Size and shape.', _imageSizes.keys.toList()),
-    'height': P.any('Tradera: height in pixels (overrides the variant).'),
+    'height': P.any('Aseman: height in pixels (overrides the variant).'),
   },
   required: ['url'],
   build: (item, p) {
@@ -208,14 +208,14 @@ BoxFit _fit(String fit) => switch (fit) {
       _ => BoxFit.cover,
     };
 
-final iconItem = traderaItem(
+final iconItem = asemanItem(
   'Icon',
   description: 'An icon by name (Material / A2UI names such as search, '
       'trendingUp, accountCircle) or {"svgPath": "<24×24 path>"}.',
   properties: {
     'name': P.any('The icon name, or {"svgPath"}.'),
-    'size': P.any('Tradera: size in pixels (default 24).'),
-    'color': P.any('Tradera: a color token, status or #hex.'),
+    'size': P.any('Aseman: size in pixels (default 24).'),
+    'color': P.any('Aseman: a color token, status or #hex.'),
   },
   required: ['name'],
   build: (item, p) => Builder(builder: (context) {
@@ -239,7 +239,7 @@ Widget _media(String type, String src) {
   return type == 'video' ? HtmlVideo.build(node, const []) : HtmlAudio.build(node, const []);
 }
 
-final videoItem = traderaItem(
+final videoItem = asemanItem(
   'Video',
   description: 'A video player.',
   properties: {'url': P.any('The video source.')},
@@ -250,7 +250,7 @@ final videoItem = traderaItem(
   ),
 );
 
-final audioItem = traderaItem(
+final audioItem = asemanItem(
   'AudioPlayer',
   description: 'An audio player with an optional description.',
   properties: {
@@ -339,20 +339,20 @@ Widget _flex(GenUiItem item, Map<String, dynamic> p, Axis axis) {
   );
 }
 
-final columnItem = traderaItem(
+final columnItem = asemanItem(
   'Column',
   description: 'Children stacked vertically.',
   properties: {
     'children': P.children(),
     'justify': P.str('Main-axis distribution.', _justify),
     'align': P.str('Cross-axis alignment (default stretch).', _align),
-    'gap': P.any('Tradera: space between children (default 12).'),
+    'gap': P.any('Aseman: space between children (default 12).'),
   },
   required: ['children'],
   build: (item, p) => _flex(item, p, Axis.vertical),
 );
 
-final rowItem = traderaItem(
+final rowItem = asemanItem(
   'Row',
   description: 'Children side by side; "weight" on a child takes shares of '
       'the width.',
@@ -360,13 +360,13 @@ final rowItem = traderaItem(
     'children': P.children(),
     'justify': P.str('Main-axis distribution.', _justify),
     'align': P.str('Cross-axis alignment (default center).', _align),
-    'gap': P.any('Tradera: space between children (default 8).'),
+    'gap': P.any('Aseman: space between children (default 8).'),
   },
   required: ['children'],
   build: (item, p) => _flex(item, p, Axis.horizontal),
 );
 
-final listItem = traderaItem(
+final listItem = asemanItem(
   'List',
   description: 'A list of children — usually a template repeated for every '
       'item of a bound list: {componentId, path}; inside it paths are '
@@ -375,8 +375,8 @@ final listItem = traderaItem(
     'children': P.children(),
     'direction': P.str('Scroll direction.', ['vertical', 'horizontal']),
     'align': P.str('Cross-axis alignment.', _align),
-    'gap': P.any('Tradera: space between items.'),
-    'emptyText': P.any('Tradera: shown when the bound list is empty.'),
+    'gap': P.any('Aseman: space between items.'),
+    'emptyText': P.any('Aseman: shown when the bound list is empty.'),
   },
   required: ['children'],
   build: (item, p) {
@@ -415,13 +415,13 @@ final listItem = traderaItem(
   },
 );
 
-final cardItem = traderaItem(
+final cardItem = asemanItem(
   'Card',
   description: 'A card around one child (an outlined surface).',
   properties: {
     'child': P.child(),
-    'variant': P.str('Tradera: face.', ['outlined', 'filled', 'elevated']),
-    'padding': P.any('Tradera: inner padding (default 16).'),
+    'variant': P.str('Aseman: face.', ['outlined', 'filled', 'elevated']),
+    'padding': P.any('Aseman: inner padding (default 16).'),
   },
   required: ['child'],
   build: (item, p) => Builder(builder: (context) {
@@ -448,14 +448,14 @@ final cardItem = traderaItem(
   }),
 );
 
-final tabsItem = traderaItem(
+final tabsItem = asemanItem(
   'Tabs',
   description: 'Tabs, each showing one child.',
   properties: {
     'tabs': S.list(
         description: 'The tabs: [{title, child, icon?}].',
         items: S.object(additionalProperties: true)),
-    'selected': P.any('Tradera: a {"path"} binding holding the open tab index.'),
+    'selected': P.any('Aseman: a {"path"} binding holding the open tab index.'),
   },
   required: ['tabs'],
   raw: {'selected'},
@@ -548,14 +548,14 @@ Widget carryScope(BuildContext from, Widget child) {
   return out;
 }
 
-final modalItem = traderaItem(
+final modalItem = asemanItem(
   'Modal',
   description: 'A trigger that opens content in a dialog (or a bottom sheet).',
   properties: {
     'trigger': P.child('The component that opens it (usually a Button).'),
     'content': P.child('The component shown in the dialog.'),
-    'title': P.any('Tradera: the dialog title.'),
-    'variant': P.str('Tradera: dialog or sheet.', ['dialog', 'sheet']),
+    'title': P.any('Aseman: the dialog title.'),
+    'variant': P.str('Aseman: dialog or sheet.', ['dialog', 'sheet']),
   },
   required: ['trigger', 'content'],
   raw: {'trigger', 'content'},
@@ -643,7 +643,7 @@ class _ModalBody extends StatelessWidget {
   }
 }
 
-final dividerItem = traderaItem(
+final dividerItem = asemanItem(
   'Divider',
   description: 'A thin rule between content.',
   properties: {'axis': P.str('Direction.', ['horizontal', 'vertical'])},
@@ -694,7 +694,7 @@ String _buttonLabel(GenUiItem item) {
   return '';
 }
 
-final buttonItem = traderaItem(
+final buttonItem = asemanItem(
   'Button',
   description: 'A pill button; its action fires on tap, disabled while a '
       'check fails.',
@@ -703,11 +703,11 @@ final buttonItem = traderaItem(
     'action': P.action(),
     'variant': P.str(
         'Style: primary (filled, the main action), default (outlined), '
-        'borderless; Tradera: tonal, destructive.',
+        'borderless; Aseman: tonal, destructive.',
         ['default', 'primary', 'borderless', 'tonal', 'destructive']),
     'checks': P.checks(),
-    'icon': P.any('Tradera: a leading icon name.'),
-    'fullWidth': P.any('Tradera: span the available width.'),
+    'icon': P.any('Aseman: a leading icon name.'),
+    'fullWidth': P.any('Aseman: span the available width.'),
   },
   required: ['child', 'action'],
   build: (item, p) => _GenUiButton(item: item, props: p),
@@ -828,7 +828,7 @@ Widget _errorText(BuildContext context, String? message) => message == null
                 fontSize: 12, color: Theme.of(context).colorScheme.error)),
       );
 
-final textFieldItem = traderaItem(
+final textFieldItem = asemanItem(
   'TextField',
   description: 'A text input bound to the data model ({"path": "/form/x"}).',
   properties: {
@@ -837,10 +837,10 @@ final textFieldItem = traderaItem(
     'variant': P.str('Kind of input.', ['shortText', 'longText', 'number', 'obscured']),
     'validationRegexp': P.str('A pattern the text must match.'),
     'checks': P.checks(),
-    'placeholder': P.any('Tradera: hint text inside the field.'),
-    'helper': P.any('Tradera: help text under the field.'),
-    'icon': P.any('Tradera: a leading icon name.'),
-    'action': P.action('Tradera: fired when the text is submitted (Enter); '
+    'placeholder': P.any('Aseman: hint text inside the field.'),
+    'helper': P.any('Aseman: help text under the field.'),
+    'icon': P.any('Aseman: a leading icon name.'),
+    'action': P.action('Aseman: fired when the text is submitted (Enter); '
         'its context also gets {"value": text}.'),
   },
   required: ['label'],
@@ -940,7 +940,7 @@ class _GenUiTextFieldState extends State<_GenUiTextField>
   }
 }
 
-final checkBoxItem = traderaItem(
+final checkBoxItem = asemanItem(
   'CheckBox',
   description: 'A checkbox with a label, bound to a boolean.',
   properties: {
@@ -993,7 +993,7 @@ class _GenUiCheckBoxState extends State<_GenUiCheckBox>
       });
 }
 
-final choicePickerItem = traderaItem(
+final choicePickerItem = asemanItem(
   'ChoicePicker',
   description: 'Pick one or several options (radio / checkbox list, or chips).',
   properties: {
@@ -1124,7 +1124,7 @@ class _GenUiChoicePickerState extends State<_GenUiChoicePicker>
   }
 }
 
-final sliderItem = traderaItem(
+final sliderItem = asemanItem(
   'Slider',
   description: 'A slider for a number between min and max.',
   properties: {
@@ -1133,8 +1133,8 @@ final sliderItem = traderaItem(
     'min': P.any('The lowest value (default 0).'),
     'max': P.any('The highest value.'),
     'checks': P.checks(),
-    'step': P.any('Tradera: snap to multiples of this.'),
-    'format': P.any('Tradera: how the value is shown (e.g. percent, '
+    'step': P.any('Aseman: snap to multiples of this.'),
+    'format': P.any('Aseman: how the value is shown (e.g. percent, '
         'currency).'),
   },
   required: ['value', 'max'],
@@ -1204,7 +1204,7 @@ class _GenUiSliderState extends State<_GenUiSlider>
 
 Object _format(num v, String format) => kit.formatValue(v, format);
 
-final dateTimeInputItem = traderaItem(
+final dateTimeInputItem = asemanItem(
   'DateTimeInput',
   description: 'A date and/or time picker writing ISO 8601 text.',
   properties: {

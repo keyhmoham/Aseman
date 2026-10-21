@@ -3,7 +3,7 @@ package http
 import (
 	"context"
 	"github.com/gorilla/websocket"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
 	"net"
 	"net/http"
 	"net/url"
@@ -67,8 +67,8 @@ func (a *Adapter) serveTunnel(w http.ResponseWriter, r *http.Request, t *network
 //     passed the host without its port, the same machine on any port;
 //   - local development, where the app and the node are both on localhost or
 //     127.0.0.1 but on different ports;
-//   - the origins listed in TRADERA_ALLOWED_ORIGINS (comma separated; a bare
-//     host or a full URL) and the node's public URL (TRADERA_NODE_URL).
+//   - the origins listed in ASEMAN_ALLOWED_ORIGINS (comma separated; a bare
+//     host or a full URL) and the node's public URL (ASEMAN_NODE_URL).
 func originAllowed(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
@@ -91,7 +91,7 @@ func originAllowed(r *http.Request) bool {
 	if isLoopback(u.Hostname()) && isLoopback(hostOnly(r.Host)) {
 		return true
 	}
-	for _, allowed := range append(strings.Split(os.Getenv("TRADERA_ALLOWED_ORIGINS"), ","), os.Getenv("TRADERA_NODE_URL")) {
+	for _, allowed := range append(strings.Split(os.Getenv("ASEMAN_ALLOWED_ORIGINS"), ","), os.Getenv("ASEMAN_NODE_URL")) {
 		allowed = strings.TrimSpace(allowed)
 		if allowed == "" {
 			continue

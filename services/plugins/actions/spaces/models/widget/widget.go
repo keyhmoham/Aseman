@@ -6,7 +6,7 @@
 package widget
 
 import (
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 )
 
 // Action is an inline DSL action. When the user triggers it, the client sends

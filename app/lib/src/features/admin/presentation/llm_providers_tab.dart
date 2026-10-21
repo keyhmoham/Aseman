@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/llm_provider.dart';
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/status_tag.dart';
 import 'admin_widgets.dart';
@@ -13,7 +13,7 @@ import 'admin_widgets.dart';
 /// usage charges are paid to the admin wallet that owns the keys.
 class LlmProvidersTab extends StatefulWidget {
   const LlmProvidersTab({super.key, required this.service});
-  final TraderaService service;
+  final AsemanService service;
   @override
   State<LlmProvidersTab> createState() => _LlmProvidersTabState();
 }
@@ -300,7 +300,7 @@ class _ModelRow {
 class _ProviderDialog extends StatefulWidget {
   const _ProviderDialog(
       {required this.service, required this.kinds, this.provider});
-  final TraderaService service;
+  final AsemanService service;
   final List<LlmKind> kinds;
   final LlmProvider? provider;
   @override

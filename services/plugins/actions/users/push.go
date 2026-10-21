@@ -20,12 +20,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // Push notifications for the iOS app, sent straight to Apple (APNs) with the
@@ -35,12 +35,12 @@ import (
 //
 // The node needs an APNs auth key from the Apple developer account:
 //
-//	TRADERA_APNS_KEY      the .p8 key: its text, a path to the file, or the
+//	ASEMAN_APNS_KEY      the .p8 key: its text, a path to the file, or the
 //	                        file base64-encoded (one line, easy to put in .env)
-//	TRADERA_APNS_KEY_ID   the key's 10-character id
-//	TRADERA_APNS_TEAM_ID  the developer team id
-//	TRADERA_APNS_TOPIC    the app's bundle id (defaults to the first id in
-//	                        TRADERA_APPLE_CLIENT_ID, which is the same thing)
+//	ASEMAN_APNS_KEY_ID   the key's 10-character id
+//	ASEMAN_APNS_TEAM_ID  the developer team id
+//	ASEMAN_APNS_TOPIC    the app's bundle id (defaults to the first id in
+//	                        ASEMAN_APPLE_CLIENT_ID, which is the same thing)
 //
 // Without them nothing is sent and everything else works as before.
 
@@ -210,16 +210,16 @@ var (
 func apns() *apnsClient {
 	apnsOnce.Do(func() {
 		c := &apnsClient{
-			keyID:  strings.TrimSpace(os.Getenv("TRADERA_APNS_KEY_ID")),
-			teamID: strings.TrimSpace(os.Getenv("TRADERA_APNS_TEAM_ID")),
-			topic:  strings.TrimSpace(os.Getenv("TRADERA_APNS_TOPIC")),
+			keyID:  strings.TrimSpace(os.Getenv("ASEMAN_APNS_KEY_ID")),
+			teamID: strings.TrimSpace(os.Getenv("ASEMAN_APNS_TEAM_ID")),
+			topic:  strings.TrimSpace(os.Getenv("ASEMAN_APNS_TOPIC")),
 			// APNs speaks HTTP/2 only.
 			http: &http.Client{Timeout: 15 * time.Second, Transport: &http.Transport{ForceAttemptHTTP2: true, MaxIdleConns: 4, IdleConnTimeout: 5 * time.Minute}},
 		}
 		if c.topic == "" {
-			c.topic = strings.TrimSpace(strings.Split(os.Getenv("TRADERA_APPLE_CLIENT_ID"), ",")[0])
+			c.topic = strings.TrimSpace(strings.Split(os.Getenv("ASEMAN_APPLE_CLIENT_ID"), ",")[0])
 		}
-		c.key, _ = parseAPNsKey(os.Getenv("TRADERA_APNS_KEY"))
+		c.key, _ = parseAPNsKey(os.Getenv("ASEMAN_APNS_KEY"))
 		apnsOne = c
 	})
 	return apnsOne

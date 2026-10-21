@@ -1,4 +1,4 @@
-// The contract between a Tradera tool backend program and its runtime — the
+// The contract between an Aseman tool backend program and its runtime — the
 // same for the Elpian VM (Dart or the JS subset) and QuickJS (JavaScript):
 //
 //   tools()              returns the microtools the program offers:
@@ -8,17 +8,17 @@
 //                        arguments; what it returns is the microtool's result.
 //   askHost(api, value)  the program's only way out, answered by the runtime:
 //
-//     tradera.context    → { tool, actor, space, room, agent } of the call:
+//     aseman.context    → { tool, actor, space, room, agent } of the call:
 //                          who asks (a person; an agent acting for them is
 //                          named apart), from which space and room
-//     tradera.call       { namespace, action, body } → a platform action run
+//     aseman.call       { namespace, action, body } → a platform action run
 //                          as the tool inside the call's scope (spaces.
 //                          message_send, spaces.ask, spaces.message_list, ...)
-//     tradera.send       { body, room? } → posts a message into the room
-//     tradera.ask        { bot, body } → asks another tool or agent of the space
-//     tradera.kv.get / tradera.kv.set / tradera.kv.delete
+//     aseman.send       { body, room? } → posts a message into the room
+//     aseman.ask        { bot, body } → asks another tool or agent of the space
+//     aseman.kv.get / aseman.kv.set / aseman.kv.delete
 //                        the tool's own key-value store
-//     tradera.fetch      { url, method?, headers?, body? } → { status, ok,
+//     aseman.fetch      { url, method?, headers?, body? } → { status, ok,
 //                          contentType, json, text }: an HTTP request to the
 //                          public internet (see lib/fetch.mjs)
 //     log                a line in the runtime's log
@@ -59,24 +59,24 @@ export function hostApis(scope, node, log = console.log, fetch = null) {
   };
   return async (api, payload) => {
     switch (api) {
-      case 'tradera.context':
+      case 'aseman.context':
         return {
           tool: scope.tool ?? '', actor: scope.actor ?? '', space: scope.space ?? '',
           room: scope.room ?? '', agent: scope.agent ?? '',
         };
-      case 'tradera.call':
+      case 'aseman.call':
         return call(payload?.namespace, payload?.action, payload?.body);
-      case 'tradera.send':
+      case 'aseman.send':
         return call('spaces', 'message_send', { body: String(payload?.body ?? ''), ...(payload?.room ? { room: payload.room } : {}) });
-      case 'tradera.ask':
+      case 'aseman.ask':
         return call('spaces', 'ask', { bot: payload?.bot, body: typeof payload?.body === 'string' ? payload.body : JSON.stringify(payload?.body ?? '') });
-      case 'tradera.kv.get':
+      case 'aseman.kv.get':
         return call('bots', 'kv_get', { key: payload?.key ?? payload });
-      case 'tradera.kv.set':
+      case 'aseman.kv.set':
         return call('bots', 'kv_set', { key: payload?.key, value: payload?.value });
-      case 'tradera.kv.delete':
+      case 'aseman.kv.delete':
         return call('bots', 'kv_delete', { key: payload?.key ?? payload });
-      case 'tradera.fetch':
+      case 'aseman.fetch':
         if (!fetch) throw new Error('this runtime gives programs no network');
         return fetch(payload);
       case 'log':

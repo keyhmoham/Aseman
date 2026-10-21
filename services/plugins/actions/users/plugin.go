@@ -3,11 +3,11 @@ package users
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/module"
-	"github.com/tradera/tradera/plugins/actions/support/metasvc"
-	"github.com/tradera/tradera/plugins/actions/support/repo"
-	"github.com/tradera/tradera/plugins/actions/users/schema"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/module"
+	"github.com/aseman/aseman/plugins/actions/support/metasvc"
+	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/actions/users/schema"
 )
 
 // NewPlugin constructs the namespace using only the host bridge.

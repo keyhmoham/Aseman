@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/plugins/actions/llm/models"
+	"github.com/aseman/aseman/plugins/actions/llm/models"
 )
 
 // vercelFeed is a slice of Vercel's real model list, in its shape.

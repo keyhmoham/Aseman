@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/api"
 )
 
 func TestOAuthAccountCanSetPasswordAndStillSignInWithProvider(t *testing.T) {

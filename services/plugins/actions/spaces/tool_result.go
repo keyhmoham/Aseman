@@ -1,8 +1,8 @@
 package spaces
 
 import (
-	"github.com/tradera/tradera/pkg/errs"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/pkg/errs"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 	"strconv"
 	"strings"
 )

@@ -38,9 +38,9 @@ func TestPaidDetailsReadTheDiscountedChargeFromThePurchasesAPI(t *testing.T) {
 		}})
 	}))
 	defer srv.Close()
-	t.Setenv("TRADERA_REVENUECAT_PROJECT", "proj1")
-	t.Setenv("TRADERA_REVENUECAT_SECRET", "sk")
-	t.Setenv("TRADERA_REVENUECAT_V2_URL", srv.URL)
+	t.Setenv("ASEMAN_REVENUECAT_PROJECT", "proj1")
+	t.Setenv("ASEMAN_REVENUECAT_SECRET", "sk")
+	t.Setenv("ASEMAN_REVENUECAT_V2_URL", srv.URL)
 	s := &Service{}
 	got := s.paidDetails(context.Background(), "acc", "rc-id", map[string]any{"id": "rc-id", "store_transaction_id": "store-tx"}, 20, "USD")
 	if got["paid_amount"] != 10.0 || got["paid_currency"] != "USD" || got["paid_source"] != "store" {

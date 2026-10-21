@@ -10,14 +10,14 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from tradera_agents import improve
-from tradera_agents.agent import Runner
-from tradera_agents.improve import record, replay
-from tradera_agents.improve.store import AgentStore
-from tradera_agents.store import Store
+from aseman_agents import improve
+from aseman_agents.agent import Runner
+from aseman_agents.improve import record, replay
+from aseman_agents.improve.store import AgentStore
+from aseman_agents.store import Store
 from fakes import LEAD, SPACE, Platform, ScriptedModel, call, say, turn_request, use
 
-WORKSPACE = Path(os.environ["TRADERA_WORKSPACE"])
+WORKSPACE = Path(os.environ["ASEMAN_WORKSPACE"])
 LESSON = "- When a command fails, read its error and change the command; never run it unchanged again."
 
 

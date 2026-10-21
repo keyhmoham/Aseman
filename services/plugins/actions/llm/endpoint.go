@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // ResolveChat returns only the stable adapter-facing endpoint contract.

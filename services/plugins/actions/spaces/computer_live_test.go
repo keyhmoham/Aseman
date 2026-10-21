@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/proxy"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
 )
 
 func TestComputerStateNamesWhatPeopleSee(t *testing.T) {
@@ -79,7 +79,7 @@ func TestDeskComputerWindow(t *testing.T) {
 }
 
 func TestDesktopViewerPage(t *testing.T) {
-	for _, ok := range []string{"tradera-view.html", "v2.html"} {
+	for _, ok := range []string{"aseman-view.html", "v2.html"} {
 		if !desktopViewerPage(ok) {
 			t.Errorf("rejected %q", ok)
 		}

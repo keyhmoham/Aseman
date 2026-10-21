@@ -9,7 +9,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_shape.dart';
 import '../../../../data/models/bot.dart';
 import '../../../../data/models/space.dart';
-import '../../../../data/services/tradera_service.dart';
+import '../../../../data/services/aseman_service.dart';
 import '../../../../shared/widgets/avatar.dart';
 import '../../../../shared/widgets/mini_tag.dart';
 import '../../../home/presentation/widgets/routines_panel.dart';
@@ -233,7 +233,7 @@ class _RoomChatState extends State<RoomChat> {
       _followWork();
     }
     // New messages arrived (async agent replies / logs): follow the bottom when
-    // the user was already near it, so tradera's flow appears live.
+    // the user was already near it, so aseman's flow appears live.
     if (widget.messages.length != oldWidget.messages.length) {
       _scrollToBottom();
     }
@@ -1203,7 +1203,7 @@ class _RoomChatState extends State<RoomChat> {
 
   Widget _chatBubble(BuildContext context, RoomMessage m,
       {RoomMessage? previous}) {
-    // Agentic-flow content (tradera's plans, dispatches, tool/sandbox outputs)
+    // Agentic-flow content (aseman's plans, dispatches, tool/sandbox outputs)
     // renders as a collapsible log section rather than a chat bubble.
     if (m.kind == 'log') {
       return _LogSection(
@@ -1461,7 +1461,7 @@ class _ProxyOpenButton extends StatelessWidget {
       {required this.title, required this.service, required this.page});
 
   final String title;
-  final TraderaService service;
+  final AsemanService service;
   final String page;
 
   Future<void> _open(BuildContext context) async {

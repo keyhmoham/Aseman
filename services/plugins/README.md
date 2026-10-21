@@ -1,4 +1,4 @@
-# Tradera runtime plugins
+# Aseman runtime plugins
 
 The node has three layers:
 
@@ -22,7 +22,7 @@ From `services`:
 
 ```sh
 make build
-./bin/traderad -config configs/config.yml
+./bin/asemand -config configs/config.yml
 ```
 
 This builds the daemon, CLI and individual native `.so` files using CGO and `-trimpath`. Adapter binaries are under `bin/plugins/adapters`; namespace binaries are under `bin/plugins/actions`. Bootstrap loads enabled configured adapters and namespaces; namespace startup registers its owned schemas. With no explicit action-plugin list, the existing platform namespaces load by default. `actions.enabled` can select a subset; a nonempty `plugins.actions` list supplies the explicit action-plugin inventory.
@@ -45,35 +45,35 @@ plugins:
       enabled: true
 ```
 
-`source` is a `.so` path, relative to `source_root` or absolute. An omitted source resolves to `<directory>/<layer>/<plugin-name>.so`. `directory` is relative to the daemon's working directory; `source_root` identifies the matching Go module for runtime builds. Environment overrides are `TRADERA_PLUGIN_DIRECTORY` and `TRADERA_PLUGIN_SOURCE_ROOT`.
+`source` is a `.so` path, relative to `source_root` or absolute. An omitted source resolves to `<directory>/<layer>/<plugin-name>.so`. `directory` is relative to the daemon's working directory; `source_root` identifies the matching Go module for runtime builds. Environment overrides are `ASEMAN_PLUGIN_DIRECTORY` and `ASEMAN_PLUGIN_SOURCE_ROOT`.
 
 ## Runtime administration
 
 Log in as the configured node administrator, then:
 
 ```sh
-./bin/tradera plugins
-./bin/tradera plugins-build source=plugins/adapters/example
-./bin/tradera plugins-load path=/path/returned/by/build.so
-./bin/tradera plugins-build source=plugins/actions/greeter
-./bin/tradera plugins-load path=/path/returned/by/build.so
-./bin/tradera call greeter.hello name=Ada
-./bin/tradera plugins-stop name=greeter-ns
-./bin/tradera plugins-load name=greeter-ns
-./bin/tradera plugins-unload name=greeter-ns
+./bin/aseman plugins
+./bin/aseman plugins-build source=plugins/adapters/example
+./bin/aseman plugins-load path=/path/returned/by/build.so
+./bin/aseman plugins-build source=plugins/actions/greeter
+./bin/aseman plugins-load path=/path/returned/by/build.so
+./bin/aseman call greeter.hello name=Ada
+./bin/aseman plugins-stop name=greeter-ns
+./bin/aseman plugins-load name=greeter-ns
+./bin/aseman plugins-unload name=greeter-ns
 ```
 
 The sample adapter provides `example/greeting`; the greeter namespace consumes a small interface resolved through the bridge. Neither imports the other's implementation. Adapter configuration can set `prefix` when loading, for example:
 
 ```sh
-./bin/tradera call _node.plugins_load --json '{"path":"/path/example.so","config":{"prefix":"Welcome"}}'
+./bin/aseman call _node.plugins_load --json '{"path":"/path/example.so","config":{"prefix":"Welcome"}}'
 ```
 
 To update implementation code, edit its namespace/provider source, build a new revision, then:
 
 ```sh
-./bin/tradera plugins-replace name=greeter-ns path=/path/new-revision.so
-./bin/tradera plugins-active category=database plugin=postgres
+./bin/aseman plugins-replace name=greeter-ns path=/path/new-revision.so
+./bin/aseman plugins-active category=database plugin=postgres
 ```
 
 `plugins-build` copies the module into a unique package path under the hidden `plugins/.builds` staging directory before compiling it; updated namespace DTOs cross the bridge using compatible JSON representations. Replacement validates the binary first, drains the old instance, starts the new one, and restores the previous instance if initialization fails. Config updates use `call _node.plugins_update` with `name` and `config`. Adapter updates drain operations, reinitialize their provider configuration, restart bindings, and restore the previous configuration on failure. Namespace configuration overlays use the same section names as global configuration, for example `{"sandbox":{"backend":"docker"}}`.
@@ -98,7 +98,7 @@ The container retains the matching toolchain and source tree so administrator bu
 go test ./...
 go test -race ./internal/kernel ./internal/plugins/... ./plugins/actions/...
 make plugins
-TRADERA_NATIVE_TEST=1 go test -v ./internal/plugins/host
+ASEMAN_NATIVE_TEST=1 go test -v ./internal/plugins/host
 ```
 
 The native test runs a separate compatible host, boots platform namespaces, exercises stop/restart/unload, loads the example adapter and greeter, replaces both using independently compiled revisions, rejects an incompatible replacement, restores a provider after failed initialization, and replaces the database while preserving registered schemas. It also checks the agent tool bridge, maintenance access with auth/admin/database providers stopped, federation route unload/reload, and listener restart after configuration updates.

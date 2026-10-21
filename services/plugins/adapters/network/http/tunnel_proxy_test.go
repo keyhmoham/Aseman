@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/websocket"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
 // The desktop's socket through the app's nginx: the page is served on
@@ -30,7 +30,7 @@ func TestDesktopSocketThroughAPortDroppingProxy(t *testing.T) {
 	defer node.Close()
 	for _, h := range []http.Header{
 		{"Origin": {"http://pixelar.games:3000"}, "Host": {"pixelar.games"}},
-		{"Origin": {"http://pixelar.games:3000"}, "Host": {"tradera:8080"}, "X-Forwarded-Host": {"pixelar.games:3000"}},
+		{"Origin": {"http://pixelar.games:3000"}, "Host": {"aseman:8080"}, "X-Forwarded-Host": {"pixelar.games:3000"}},
 	} {
 		d := websocket.Dialer{}
 		// The Host header is the request's own: set it as nginx would.

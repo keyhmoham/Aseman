@@ -1,5 +1,5 @@
 /// A2UI v0.9 in Elpian mini apps, on Flutter's genui (lib/src/genui renders
-/// the surfaces with Tradera's catalog):
+/// the surfaces with Aseman's catalog):
 ///
 ///   transport              the NDJSON agent stream
 ///   conversation           genui surfaces + transport + transcript for one agent
@@ -16,7 +16,7 @@ export '../../genui/genui.dart'
         GenUiView,
         a2uiClientVersion,
         parseA2uiMessage,
-        traderaCatalog;
+        asemanCatalog;
 export 'agent_view.dart';
 export 'conversation.dart';
 export 'elpian.dart';

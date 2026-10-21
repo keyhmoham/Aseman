@@ -2,11 +2,11 @@ package spaces
 
 import (
 	"context"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/invitation"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/invitation"
 )
 
 // participants resolves account ids to the public identity a client renders

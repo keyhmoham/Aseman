@@ -1,4 +1,4 @@
-/// [GenUiSurfaces]: genui's [SurfaceController] over Tradera's catalog, fed
+/// [GenUiSurfaces]: genui's [SurfaceController] over Aseman's catalog, fed
 /// raw A2UI messages (JSON maps or text, as tools and agents send them),
 /// with the surfaces in creation order, their `sendDataModel` flags and the
 /// problems genui reports.
@@ -43,7 +43,7 @@ void deletePath(DataModel model, String path) {
 
 class GenUiSurfaces extends ChangeNotifier {
   GenUiSurfaces({List<Catalog>? catalogs})
-      : controller = SurfaceController(catalogs: catalogs ?? [traderaCatalog]) {
+      : controller = SurfaceController(catalogs: catalogs ?? [asemanCatalog]) {
     _updates = controller.surfaceUpdates.listen(_onUpdate);
     _submits = controller.onSubmit.listen(_onSubmit);
   }

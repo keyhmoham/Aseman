@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:tradera/src/elpian/elpian.dart';
+import 'package:aseman/src/elpian/elpian.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// The Dart half of the shared policy conformance corpus.

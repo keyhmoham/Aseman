@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Upserts the "weather" tool on a Tradera node:
+# Upserts the "weather" tool on an Aseman node:
 #
 #   backend   managed, QuickJS — backend.js run by the node as a Nomad service
 #             of the tool runtime image (Open-Meteo data, no API key)
@@ -13,14 +13,14 @@
 # Usage:
 #   deploy/tools/weather/upsert.sh [options]
 #
-#   --server URL     the node (default $TRADERA_SERVER or http://localhost:8080)
-#   --space ID       also add the tool to this space (default $TRADERA_SPACE)
+#   --server URL     the node (default $ASEMAN_SERVER or http://localhost:8080)
+#   --space ID       also add the tool to this space (default $ASEMAN_SPACE)
 #   --city NAME      the place the frontend opens on (default $WEATHER_CITY or London)
-#   --cli PATH       the tradera CLI (default: `tradera` on PATH, else built from services/)
+#   --cli PATH       the aseman CLI (default: `aseman` on PATH, else built from services/)
 #   --dry-run        print what would be sent; call nothing
 #
-# Signs in with $TRADERA_HANDLE / $TRADERA_PASSWORD when both are set;
-# otherwise uses the session `tradera login` stored.
+# Signs in with $ASEMAN_HANDLE / $ASEMAN_PASSWORD when both are set;
+# otherwise uses the session `aseman login` stored.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,10 +28,10 @@ ROOT="$(cd "$HERE/../../.." && pwd)"
 
 NAME="weather"
 DESCRIPTION="Weather anywhere: current conditions, the next hours and a 7-day forecast (Open-Meteo). Microtools: weather_report, current_weather, daily_forecast, hourly_forecast, search_places."
-SERVER="${TRADERA_SERVER:-http://localhost:8080}"
-SPACE="${TRADERA_SPACE:-}"
+SERVER="${ASEMAN_SERVER:-http://localhost:8080}"
+SPACE="${ASEMAN_SPACE:-}"
 CITY="${WEATHER_CITY:-London}"
-CLI="${TRADERA_CLI:-}"
+CLI="${ASEMAN_CLI:-}"
 DRY_RUN=""
 
 while [ $# -gt 0 ]; do
@@ -71,15 +71,15 @@ create_body="$(jq -nc --arg name "$NAME" --arg description "$DESCRIPTION" --arg 
 # --- the CLI ---------------------------------------------------------------------
 
 if [ -z "$DRY_RUN" ] && [ -z "$CLI" ]; then
-  if command -v tradera >/dev/null; then
-    CLI="tradera"
-  elif [ -x "$ROOT/services/bin/tradera" ]; then
-    CLI="$ROOT/services/bin/tradera"
+  if command -v aseman >/dev/null; then
+    CLI="aseman"
+  elif [ -x "$ROOT/services/bin/aseman" ]; then
+    CLI="$ROOT/services/bin/aseman"
   else
-    command -v go >/dev/null || { echo "no tradera CLI: install it, pass --cli, or install Go to build it" >&2; exit 1; }
-    say "building the tradera CLI"
-    (cd "$ROOT/services" && go build -o bin/tradera ./cmd/tradera)
-    CLI="$ROOT/services/bin/tradera"
+    command -v go >/dev/null || { echo "no aseman CLI: install it, pass --cli, or install Go to build it" >&2; exit 1; }
+    say "building the aseman CLI"
+    (cd "$ROOT/services" && go build -o bin/aseman ./cmd/aseman)
+    CLI="$ROOT/services/bin/aseman"
   fi
 fi
 
@@ -97,9 +97,9 @@ call() {
   "$CLI" call --server "$SERVER" --json "$2" "$1"
 }
 
-if [ -z "$DRY_RUN" ] && [ -n "${TRADERA_HANDLE:-}" ] && [ -n "${TRADERA_PASSWORD:-}" ]; then
-  say "signing in as $TRADERA_HANDLE"
-  "$CLI" login --server "$SERVER" "$TRADERA_HANDLE" "$TRADERA_PASSWORD" >/dev/null
+if [ -z "$DRY_RUN" ] && [ -n "${ASEMAN_HANDLE:-}" ] && [ -n "${ASEMAN_PASSWORD:-}" ]; then
+  say "signing in as $ASEMAN_HANDLE"
+  "$CLI" login --server "$SERVER" "$ASEMAN_HANDLE" "$ASEMAN_PASSWORD" >/dev/null
 fi
 
 # --- upsert ----------------------------------------------------------------------

@@ -4,7 +4,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/utils/context_extensions.dart';
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../data/workspace_files.dart';
 import '../domain/file_types.dart';
 import 'file_actions.dart';
@@ -26,7 +26,7 @@ class WorkspaceFileTree extends StatefulWidget {
     this.selected = '',
   });
 
-  final TraderaService service;
+  final AsemanService service;
   final String spaceId;
   final ValueChanged<WorkspaceEntry> onOpen;
 

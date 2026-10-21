@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/pkg/errs"
+	"github.com/aseman/aseman/pkg/errs"
 )
 
 // DefaultHost is the docker daemon unix socket used when none is configured.

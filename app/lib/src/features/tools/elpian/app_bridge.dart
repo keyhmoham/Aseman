@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:file_selector/file_selector.dart';
 
-import '../../../data/services/tradera_service.dart';
+import '../../../data/services/aseman_service.dart';
 import '../../../elpian/elpian.dart';
 import 'host_values.dart';
 
@@ -35,7 +35,7 @@ class AppHostBridge {
   AppHostBridge(this.service,
       {required this.botId, this.userId = '', this.spaceId = ''});
 
-  final TraderaService service;
+  final AsemanService service;
   final String botId;
   final String userId;
   final String spaceId;

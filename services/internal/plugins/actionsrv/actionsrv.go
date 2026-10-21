@@ -5,9 +5,9 @@ package actionsrv
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/internal/plugins/module"
-	"github.com/tradera/tradera/pkg/logger"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/module"
+	"github.com/aseman/aseman/pkg/logger"
 )
 
 type Plugin = module.Plugin

@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	llmprovider "github.com/tradera/tradera/plugins/actions/llm/models"
+	llmprovider "github.com/aseman/aseman/plugins/actions/llm/models"
 )
 
 // knownWindows are the published input windows (tokens) of common model

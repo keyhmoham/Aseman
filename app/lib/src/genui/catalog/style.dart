@@ -1,4 +1,4 @@
-/// Tradera's design language for generated UI: the app's Material 3
+/// Aseman's design language for generated UI: the app's Material 3
 /// Expressive theme (pill buttons, 28/20/16 radii, outlined surface cards,
 /// heavy headings, rounded icons) and the data palette of the UI kit.
 library;

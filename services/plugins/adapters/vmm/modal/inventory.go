@@ -6,8 +6,8 @@ import (
 
 	pb "github.com/modal-labs/modal-client/go/proto/modal_proto"
 
-	"github.com/tradera/tradera/pkg/errs"
-	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/pkg/errs"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 var _ vmm.Inventory = (*Adapter)(nil)

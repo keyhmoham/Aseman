@@ -1,4 +1,4 @@
-// Outbound HTTP for backend programs: `askHost('tradera.fetch', {url, ...})`.
+// Outbound HTTP for backend programs: `askHost('aseman.fetch', {url, ...})`.
 //
 // A backend runs on the node's own network (managed) or inside a space's
 // sandbox (installed), so its requests are held to the public internet:
@@ -41,7 +41,7 @@ export function isPrivateAddress(address) {
  * json} (json when the body is JSON).
  */
 export function createFetcher({
-  allowPrivate = process.env.TRADERA_TOOL_FETCH_ALLOW_PRIVATE === 'true',
+  allowPrivate = process.env.ASEMAN_TOOL_FETCH_ALLOW_PRIVATE === 'true',
   timeoutMs = 10_000,
   maxBytes = 2 << 20,
   lookup = (host) => dns.lookup(host, { all: true }),
@@ -70,7 +70,7 @@ export function createFetcher({
     const body = input.body === undefined || input.body === null
       ? undefined
       : typeof input.body === 'string' ? input.body : JSON.stringify(input.body);
-    const headers = { 'user-agent': 'tradera-tool-runtime/1', accept: 'application/json, text/*;q=0.9, */*;q=0.5' };
+    const headers = { 'user-agent': 'aseman-tool-runtime/1', accept: 'application/json, text/*;q=0.9, */*;q=0.5' };
     for (const [k, v] of Object.entries(input.headers ?? {})) headers[String(k).toLowerCase()] = String(v);
     if (body !== undefined && !headers['content-type']) headers['content-type'] = 'application/json';
 

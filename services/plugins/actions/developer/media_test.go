@@ -10,9 +10,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/llm/dto"
-	"github.com/tradera/tradera/plugins/adapters/network/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/llm/dto"
+	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
 // vercelOffering is a model served through Vercel AI Gateway.
@@ -101,7 +101,7 @@ func TestImagesSpeechTranscriptionAndRerankThroughVercel(t *testing.T) {
 	}
 
 	speech := apiCall(t, f, f.s.apiRun(TypeSpeech), secret, "application/json", []byte(`{"model":"fish-audio/s1","input":"Hello there","voice":"alloy"}`), nil)
-	if speech.Status != 200 || string(speech.Body) != "ID3\x04audio" || speech.Header["Content-Type"] != "audio/mpeg" || speech.Header["X-Tradera-Cost"] != "0.000198" {
+	if speech.Status != 200 || string(speech.Body) != "ID3\x04audio" || speech.Header["Content-Type"] != "audio/mpeg" || speech.Header["X-Aseman-Cost"] != "0.000198" {
 		t.Fatalf("speech is the audio itself, 11 characters at 18 units: %d %v %q", speech.Status, speech.Header, speech.Body)
 	}
 	if b := f.http.bodies[len(f.http.bodies)-1]; b["text"] != "Hello there" || b["voice"] != "alloy" {
@@ -134,7 +134,7 @@ func TestImagesSpeechTranscriptionAndRerankThroughVercel(t *testing.T) {
 		t.Fatalf("rerank goes to the Cohere-compatible endpoint: %v", b)
 	}
 	voyage := apiCall(t, f, f.s.apiRun(TypeRerank), secret, "application/json", []byte(`{"model":"voyage/rerank-2.5","query":"q","documents":["a"]}`), nil)
-	if voyage.Status != 200 || voyage.Header["X-Tradera-Cost"] == "" {
+	if voyage.Status != 200 || voyage.Header["X-Aseman-Cost"] == "" {
 		t.Fatalf("rerank priced by tokens: %d %s", voyage.Status, voyage.Body)
 	}
 

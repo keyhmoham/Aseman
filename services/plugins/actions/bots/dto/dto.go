@@ -1,7 +1,7 @@
 package dto
 
 import (
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 )
 
 // ComputerTimeDesc is the description of the one charge a project's computer

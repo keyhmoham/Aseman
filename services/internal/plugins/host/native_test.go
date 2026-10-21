@@ -7,10 +7,10 @@ import (
 	"testing"
 )
 
-// Run after make plugins: TRADERA_NATIVE_TEST=1 go test ./internal/plugins/host.
+// Run after make plugins: ASEMAN_NATIVE_TEST=1 go test ./internal/plugins/host.
 func TestNativeNamespaceLifecycle(t *testing.T) {
-	if os.Getenv("TRADERA_NATIVE_TEST") != "1" {
-		t.Skip("set TRADERA_NATIVE_TEST=1 after make plugins")
+	if os.Getenv("ASEMAN_NATIVE_TEST") != "1" {
+		t.Skip("set ASEMAN_NATIVE_TEST=1 after make plugins")
 	}
 	root, err := filepath.Abs("../../..")
 	if err != nil {

@@ -13,7 +13,7 @@ func TestKeypairSignVerify(t *testing.T) {
 	if len(kp.Public) != 32 || len(kp.Private) != 64 {
 		t.Fatal("bad key sizes")
 	}
-	msg := []byte("hello tradera")
+	msg := []byte("hello aseman")
 	sig, err := SignHex(kp.PrivateHex(), msg)
 	if err != nil {
 		t.Fatal(err)

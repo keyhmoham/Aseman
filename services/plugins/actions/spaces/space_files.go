@@ -3,10 +3,10 @@ package spaces
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/filedata"
-	database "github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/filedata"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // projectFileKey is where a project's file is stored: under the project, so

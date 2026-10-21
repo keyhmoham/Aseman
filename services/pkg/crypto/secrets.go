@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const SecretPrefix = "tradera:secret:v1:"
+const SecretPrefix = "aseman:secret:v1:"
 
 // secretCipher derives a domain-separated encryption key from a high-entropy
 // node identity key. A missing or malformed key must never allow plaintext writes.
@@ -20,7 +20,7 @@ func secretCipher(master string) (cipher.AEAD, error) {
 	if err != nil || len(raw) != 64 {
 		return nil, fmt.Errorf("node credential encryption key is unavailable")
 	}
-	key := sha256.Sum256(append([]byte("tradera/credentials/v1\x00"), raw...))
+	key := sha256.Sum256(append([]byte("aseman/credentials/v1\x00"), raw...))
 	block, err := aes.NewCipher(key[:])
 	if err != nil {
 		return nil, err

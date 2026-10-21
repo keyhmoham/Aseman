@@ -3,7 +3,7 @@ abstract class WebPageHandle {
   /// Loads the page again.
   Future<void> reload();
 
-  /// Sends the app's theme to the page (Tradera's web UI kit follows it).
+  /// Sends the app's theme to the page (Aseman's web UI kit follows it).
   void setTheme(Map<String, dynamic> theme);
 }
 

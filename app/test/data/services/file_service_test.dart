@@ -2,12 +2,12 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/core/network/api_client.dart';
-import 'package:tradera/src/data/models/space.dart';
-import 'package:tradera/src/data/models/uploaded_file.dart';
-import 'package:tradera/src/data/services/tradera_service.dart';
+import 'package:aseman/src/core/network/api_client.dart';
+import 'package:aseman/src/data/models/space.dart';
+import 'package:aseman/src/data/models/uploaded_file.dart';
+import 'package:aseman/src/data/services/aseman_service.dart';
 
-class _FileStubClient extends TraderaApiClient {
+class _FileStubClient extends AsemanApiClient {
   _FileStubClient() : super(baseUrl: 'http://localhost:8080');
 
   final Map<String, dynamic> files = {};
@@ -61,7 +61,7 @@ void main() {
   test('uploadFile stores bytes and returns metadata with content_url',
       () async {
     final client = _FileStubClient();
-    final service = TraderaService(client);
+    final service = AsemanService(client);
 
     final f = await service.uploadFile(
       'space-1',
@@ -84,7 +84,7 @@ void main() {
 
   test('downloadFile returns decoded payload', () async {
     final client = _FileStubClient();
-    final service = TraderaService(client);
+    final service = AsemanService(client);
     final f = await service.uploadFile(
       'space-1',
       name: 'notes.txt',
@@ -99,7 +99,7 @@ void main() {
   test('fetchSpaceFiles lists uploaded files and deleteFile removes them',
       () async {
     final client = _FileStubClient();
-    final service = TraderaService(client);
+    final service = AsemanService(client);
     await service.uploadFile('space-1',
         name: 'a.png', mime: 'image/png', bytes: Uint8List.fromList([1]));
     await service.uploadFile('space-1',

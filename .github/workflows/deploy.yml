@@ -34,7 +34,7 @@ jobs:
       SELF_HOSTED: ${{ contains(github.event.head_commit.message, '[self-hosted]') }}
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '/opt/tradera' }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '/opt/aseman' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -88,10 +88,10 @@ jobs:
           # Settings live on the server (never in GitHub): create .env there once.
           [ -f .env ] || { echo "Missing $DEPLOY_PATH/.env on the server. See deploy/README.md." >&2; exit 1; }
           # The agents' memory server (OpenViking) needs a root key: made once, kept in .env.
-          grep -qs '^TRADERA_OPENVIKING_ROOT_KEY=.' .env || printf '\\nTRADERA_OPENVIKING_ROOT_KEY=%s\\n' "\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')" >> .env
+          grep -qs '^ASEMAN_OPENVIKING_ROOT_KEY=.' .env || printf '\\nASEMAN_OPENVIKING_ROOT_KEY=%s\\n' "\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')" >> .env
           # The node's account in the timelines' server (Utopia): made once, kept in .env.
-          grep -qs '^TRADERA_TIMELINE_PASSWORD=.' .env || printf '\\nTRADERA_TIMELINE_PASSWORD=%s\\n' "\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')" >> .env
-          mkdir -p /tmp/tradera-nomad
+          grep -qs '^ASEMAN_TIMELINE_PASSWORD=.' .env || printf '\\nASEMAN_TIMELINE_PASSWORD=%s\\n' "\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')" >> .env
+          mkdir -p /tmp/aseman-nomad
           # Free disk before building: the parallel image builds need several GB of scratch space.
           docker image prune -af --filter "until=72h"
           docker builder prune -f --keep-storage 6GB

@@ -28,12 +28,12 @@ bool get mcpAppFrameSupported =>
 /// parent.
 const _shim = '''
 <script>(function(){
-  var parent = { postMessage: function(m){ TraderaMcpHost.postMessage(JSON.stringify(m)); } };
+  var parent = { postMessage: function(m){ AsemanMcpHost.postMessage(JSON.stringify(m)); } };
   try { window.parent = parent; } catch (e) {}
   if (window.parent !== parent) {
     try { Object.defineProperty(window, 'parent', { get: function(){ return parent; } }); } catch (e) {}
   }
-  window.__traderaMcpDeliver = function(json){
+  window.__asemanMcpDeliver = function(json){
     var e = new Event('message');
     Object.defineProperty(e, 'data', { value: JSON.parse(json) });
     Object.defineProperty(e, 'source', { value: parent });
@@ -78,7 +78,7 @@ class _McpAppWebViewState extends State<_McpAppWebView> {
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0x00000000))
-      ..addJavaScriptChannel('TraderaMcpHost', onMessageReceived: (m) {
+      ..addJavaScriptChannel('AsemanMcpHost', onMessageReceived: (m) {
         try {
           widget.onMessage(jsonDecode(m.message));
         } catch (_) {}
@@ -95,7 +95,7 @@ class _McpAppWebViewState extends State<_McpAppWebView> {
     widget.onReady((message) {
       final json = jsonEncode(jsonEncode(message));
       controller.runJavaScript(
-          'window.__traderaMcpDeliver && window.__traderaMcpDeliver($json)');
+          'window.__asemanMcpDeliver && window.__asemanMcpDeliver($json)');
     });
   }
 
@@ -107,7 +107,7 @@ class _McpAppWebViewState extends State<_McpAppWebView> {
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-              'This app shows its results in its own screen, which runs in the web, Android, iOS and macOS versions of Tradera.',
+              'This app shows its results in its own screen, which runs in the web, Android, iOS and macOS versions of Aseman.',
               textAlign: TextAlign.center),
         ),
       );

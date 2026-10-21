@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	rt "github.com/tradera/tradera/plugins/actions/routines/models"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	rt "github.com/aseman/aseman/plugins/actions/routines/models"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // RoutineManager is the subset of the routine service agents use to manage

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tradera/tradera/pkg/crypto"
-	models "github.com/tradera/tradera/plugins/actions/llm/models"
+	"github.com/aseman/aseman/pkg/crypto"
+	models "github.com/aseman/aseman/plugins/actions/llm/models"
 )
 
 const testNodeKey = "01010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101"

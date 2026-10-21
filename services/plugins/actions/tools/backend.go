@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"github.com/tradera/tradera/plugins/actions/tools/mechanisms/mcp"
-	"github.com/tradera/tradera/plugins/actions/tools/models"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/tools/mechanisms/mcp"
+	"github.com/aseman/aseman/plugins/actions/tools/models"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // Every tool backend is an MCP server, whatever its mode; what differs is
@@ -236,7 +236,7 @@ func (s *Service) rememberMicrotools(ctx context.Context, tool *models.Tool, com
 // --- installed backends ------------------------------------------------------
 
 // installDir is where a tool lives in a space's sandbox.
-func installDir(botID string) string { return "/workspace/.tradera/tools/" + botID }
+func installDir(botID string) string { return "/workspace/.aseman/tools/" + botID }
 
 // installPort is the sandbox port an Elpian VM or QuickJS backend serves on:
 // fixed per tool, so it is found again after the sandbox sleeps.
@@ -334,16 +334,16 @@ func (s *Service) installProgram(ctx context.Context, space identity.ID, tool *m
 	if err != nil {
 		return err
 	}
-	env["TRADERA_TOOL_ENGINE"] = program.Engine
-	env["TRADERA_TOOL_PROGRAM_FILE"] = dir + "/program.json"
-	env["TRADERA_TOOL_VERSION"] = version
+	env["ASEMAN_TOOL_ENGINE"] = program.Engine
+	env["ASEMAN_TOOL_PROGRAM_FILE"] = dir + "/program.json"
+	env["ASEMAN_TOOL_VERSION"] = version
 	var assign []string
 	for k, v := range env {
 		assign = append(assign, k+"="+shellQuote(v))
 	}
 	start := fmt.Sprintf("cd %[1]s && base64 -d program.b64 > program.json"+
 		" && (pkill -f %[2]s 2>/dev/null; true)"+
-		" && (env %[3]s nohup node /opt/tradera-tool-runtime/server.mjs --tool %[4]s > runtime.log 2>&1 < /dev/null &)"+
+		" && (env %[3]s nohup node /opt/aseman-tool-runtime/server.mjs --tool %[4]s > runtime.log 2>&1 < /dev/null &)"+
 		" ; for i in $(seq 1 30); do %[5]s && exit 0; sleep 1; done; tail -n 20 runtime.log; exit 1",
 		shellQuote(dir), shellQuote(stopPattern(botID)), strings.Join(assign, " "), shellQuote(botID), health)
 	if out, err := s.sandboxExec(ctx, space, start); err != nil {

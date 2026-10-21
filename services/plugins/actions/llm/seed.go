@@ -3,10 +3,10 @@ package llm
 import (
 	"context"
 
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	models "github.com/tradera/tradera/plugins/actions/llm/models"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	models "github.com/aseman/aseman/plugins/actions/llm/models"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // SeedStatic makes the legacy endpoint available through the provider registry

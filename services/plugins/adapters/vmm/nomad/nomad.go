@@ -12,24 +12,24 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/idutil"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/adapters/base"
-	"github.com/tradera/tradera/plugins/adapters/cfg"
-	"github.com/tradera/tradera/plugins/adapters/vmm/dockerexec"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/idutil"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/adapters/base"
+	"github.com/aseman/aseman/plugins/adapters/cfg"
+	"github.com/aseman/aseman/plugins/adapters/vmm/dockerexec"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 
 	nomadapi "github.com/hashicorp/nomad/api"
 )
 
-const jobPrefix = "tradera-"
+const jobPrefix = "aseman-"
 
 // DefaultToolRuntimeImage runs managed Elpian VM and QuickJS tool backends
 // (deploy/tool-runtime). The tag is pinned because Nomad always pulls
 // ":latest" images.
-const DefaultToolRuntimeImage = "tradera/tool-runtime:v1"
+const DefaultToolRuntimeImage = "aseman/tool-runtime:v1"
 
 // Adapter is the Nomad VMM plugin.
 type Adapter struct {
@@ -208,7 +208,7 @@ func (a *Adapter) buildJob(spec vmm.VMSpec) (*nomadapi.Job, error) {
 	if id := spec.Labels[vmm.LabelServiceID]; id != "" {
 		jobName = jobPrefix + id
 	}
-	job := nomadapi.NewServiceJob(jobName, "tradera", a.region, 1)
+	job := nomadapi.NewServiceJob(jobName, "aseman", a.region, 1)
 	dc := []string{"dc1"}
 	if a.dc != "" {
 		dc = []string{a.dc}
@@ -226,7 +226,7 @@ func (a *Adapter) buildJob(spec vmm.VMSpec) (*nomadapi.Job, error) {
 		for k, v := range spec.Environment {
 			env[k] = v
 		}
-		env["TRADERA_TOOL_ENGINE"] = string(spec.Type)
+		env["ASEMAN_TOOL_ENGINE"] = string(spec.Type)
 	}
 	task := &nomadapi.Task{
 		Name:   "main",

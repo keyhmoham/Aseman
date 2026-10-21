@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/entity"
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/pkg/logger"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/space"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	dbmodel "github.com/tradera/tradera/plugins/testutil"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/space"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	dbmodel "github.com/aseman/aseman/plugins/testutil"
 )
 
 type testRec struct {

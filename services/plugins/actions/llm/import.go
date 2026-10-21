@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/llm/models"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/llm/models"
 )
 
 // VercelModelsURL is Vercel AI Gateway's public model list.

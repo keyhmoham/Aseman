@@ -3,7 +3,7 @@ package users
 import (
 	"testing"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 // Every pushed notification lands in the person's inbox, newest first, even

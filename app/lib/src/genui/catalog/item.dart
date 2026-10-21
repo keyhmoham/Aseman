@@ -1,4 +1,4 @@
-/// The scaffolding every Tradera catalog item is built on: a component's
+/// The scaffolding every Aseman catalog item is built on: a component's
 /// props resolved reactively (bindings and calls at any depth), its
 /// children (ids or a `{componentId, path}` template, in every container),
 /// two-way binding, actions, and `accessibility` semantics.
@@ -110,7 +110,7 @@ typedef GenUiBuilder = Widget Function(
 
 /// A catalog item whose props (all but [raw] and [structuralKeys]) arrive
 /// at [build] resolved and current.
-CatalogItem traderaItem(
+CatalogItem asemanItem(
   String name, {
   required String description,
   Map<String, Schema> properties = const {},

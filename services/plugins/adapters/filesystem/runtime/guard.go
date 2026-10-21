@@ -5,8 +5,8 @@ import (
 	"io"
 	"sync"
 
-	"github.com/tradera/tradera/internal/plugins/lifetime"
-	"github.com/tradera/tradera/plugins/adapters/filesystem/ports"
+	"github.com/aseman/aseman/internal/plugins/lifetime"
+	"github.com/aseman/aseman/plugins/adapters/filesystem/ports"
 )
 
 type guardedFilesystem struct {

@@ -1,5 +1,5 @@
-/// Tradera's client functions: the basic catalog's (to the A2UI spec's
-/// argument names and `en-US` conventions) and Tradera's own —
+/// Aseman's client functions: the basic catalog's (to the A2UI spec's
+/// argument names and `en-US` conventions) and Aseman's own —
 ///
 /// * formatting in the kit's format language (`format`, `formatPercent`,
 ///   `formatCompact`, `formatRelative`) and a live clock (`now`);
@@ -30,8 +30,8 @@ typedef _Impl = Object? Function(JsonMap args, ExecutionContext context);
 
 /// A synchronous function from a name, a description, its arguments and an
 /// implementation.
-class TraderaFunction extends SynchronousClientFunction {
-  const TraderaFunction(
+class AsemanFunction extends SynchronousClientFunction {
+  const AsemanFunction(
     this.name,
     this.description,
     this._args,
@@ -196,47 +196,47 @@ String _pathArg(JsonMap args) {
 /// The basic catalog's functions, to the spec (they replace genui's own of
 /// the same names; `formatString` stays genui's).
 final List<ClientFunction> specFunctions = [
-  TraderaFunction('required', 'True when the value is present and not empty.',
+  AsemanFunction('required', 'True when the value is present and not empty.',
       {'value': _any}, (a, _) => specRequired(a),
       returnType: _boolean),
-  TraderaFunction(
+  AsemanFunction(
       'regex',
       'True when the value matches the regular expression "pattern".',
       {'value': _any, 'pattern': _str},
       (a, _) => specRegex(a),
       returnType: _boolean),
-  TraderaFunction(
+  AsemanFunction(
       'length',
       'True when the length of the value (text, list) is within min/max.',
       {'value': _any, 'min': _num, 'max': _num},
       (a, _) => specLength(a),
       returnType: _boolean),
-  TraderaFunction('numeric', 'True when the value is a number within min/max.',
+  AsemanFunction('numeric', 'True when the value is a number within min/max.',
       {'value': _any, 'min': _num, 'max': _num}, (a, _) => specNumeric(a),
       returnType: _boolean),
-  TraderaFunction('email', 'True when the value is an email address.',
+  AsemanFunction('email', 'True when the value is an email address.',
       {'value': _any}, (a, _) => specEmail(a),
       returnType: _boolean),
-  TraderaFunction(
+  AsemanFunction(
       'formatNumber',
       'Formats a number: "decimals" fraction digits, "grouping" separators.',
       {'value': _any, 'decimals': _num, 'grouping': _bool},
       (a, _) => specFormatNumber(a),
       returnType: _string),
-  TraderaFunction(
+  AsemanFunction(
       'formatCurrency',
       'Formats an amount of "currency" (ISO code, default USD).',
       {'value': _any, 'currency': _str, 'decimals': _num, 'grouping': _bool},
       (a, _) => specFormatCurrency(a),
       returnType: _string),
-  TraderaFunction(
+  AsemanFunction(
       'formatDate',
       'Formats a date (ISO text or epoch ms) with a Unicode pattern '
           '("format", e.g. "MMM d, yyyy HH:mm").',
       {'value': _any, 'format': _str},
       (a, _) => specFormatDate(a),
       returnType: _string),
-  TraderaFunction(
+  AsemanFunction(
       'pluralize',
       'Chooses zero/one/other text for a count ("other" is required).',
       {
@@ -250,16 +250,16 @@ final List<ClientFunction> specFunctions = [
       },
       (a, _) => specPluralize(a),
       returnType: _string),
-  TraderaFunction('and', 'True when every value is true.', {'values': _list},
+  AsemanFunction('and', 'True when every value is true.', {'values': _list},
       (a, _) => (a['values'] is List) && (a['values'] as List).every(toBool),
       returnType: _boolean),
-  TraderaFunction('or', 'True when any value is true.', {'values': _list},
+  AsemanFunction('or', 'True when any value is true.', {'values': _list},
       (a, _) => (a['values'] is List) && (a['values'] as List).any(toBool),
       returnType: _boolean),
-  TraderaFunction('not', 'Negates a boolean.', {'value': _any},
+  AsemanFunction('not', 'Negates a boolean.', {'value': _any},
       (a, _) => !toBool(a['value']),
       returnType: _boolean),
-  TraderaFunction(
+  AsemanFunction(
       'openUrl', 'Opens an http(s) URL in the browser.', {'url': _str},
       (a, _) {
     final url = validateOpenUrl(a['url'], null);
@@ -269,10 +269,10 @@ final List<ClientFunction> specFunctions = [
   }, returnType: _void),
 ];
 
-/// Tradera's own functions.
-final List<ClientFunction> traderaFunctions = [
+/// Aseman's own functions.
+final List<ClientFunction> asemanFunctions = [
   // Formatting.
-  TraderaFunction(
+  AsemanFunction(
       'format',
       'Formats a value in the components\' format language: number[:d], '
           'integer, compact, percent[:d], currency[:USD[:d]], date, time, '
@@ -280,14 +280,14 @@ final List<ClientFunction> traderaFunctions = [
       {'value': _any, 'format': _str},
       (a, _) => kit.formatValue(a['value'], a['format'] as String?),
       returnType: _string),
-  TraderaFunction(
+  AsemanFunction(
       'formatPercent',
       'Formats a fraction as a percentage (0.12 → 12%); "signed" adds +.',
       {'value': _any, 'decimals': _num, 'signed': _bool},
       (a, _) => kit.formatValue(a['value'],
           '${toBool(a['signed']) ? '+' : ''}percent:${_n(a['decimals'])?.toInt() ?? 1}'),
       returnType: _string),
-  TraderaFunction('formatCompact', 'Formats a number compactly (12.9K, 3.4M).',
+  AsemanFunction('formatCompact', 'Formats a number compactly (12.9K, 3.4M).',
       {'value': _any, 'decimals': _num}, (a, _) {
     final n = _n(a['value']);
     return n == null
@@ -313,22 +313,22 @@ final List<ClientFunction> traderaFunctions = [
         : now.toIso8601String();
   }),
   // Math.
-  TraderaFunction('add', 'The sum of "values".', {'values': _list},
+  AsemanFunction('add', 'The sum of "values".', {'values': _list},
       (a, _) => _tidy(_numbers(a['values']).fold<num>(0, (s, n) => s + n)),
       returnType: _number),
-  TraderaFunction('subtract', 'a − b.', {'a': _any, 'b': _any}, (a, _) {
+  AsemanFunction('subtract', 'a − b.', {'a': _any, 'b': _any}, (a, _) {
     final x = _n(a['a']), y = _n(a['b']);
     return x == null || y == null ? null : _tidy(x - y);
   }, returnType: _number),
-  TraderaFunction('multiply', 'The product of "values".', {'values': _list},
+  AsemanFunction('multiply', 'The product of "values".', {'values': _list},
       (a, _) => _tidy(_numbers(a['values']).fold<num>(1, (s, n) => s * n)),
       returnType: _number),
-  TraderaFunction('divide', 'a ÷ b (nothing when b is 0).',
+  AsemanFunction('divide', 'a ÷ b (nothing when b is 0).',
       {'a': _any, 'b': _any}, (a, _) {
     final x = _n(a['a']), y = _n(a['b']);
     return x == null || y == null || y == 0 ? null : _tidy(x / y);
   }, returnType: _number),
-  TraderaFunction('round', 'Rounds to "decimals" places (default 0).',
+  AsemanFunction('round', 'Rounds to "decimals" places (default 0).',
       {'value': _any, 'decimals': _num}, (a, _) {
     final x = _n(a['value']);
     if (x == null) return null;
@@ -336,10 +336,10 @@ final List<ClientFunction> traderaFunctions = [
     final f = math.pow(10, d);
     return _tidy((x * f).round() / f);
   }, returnType: _number),
-  TraderaFunction('abs', 'The absolute value.', {'value': _any},
+  AsemanFunction('abs', 'The absolute value.', {'value': _any},
       (a, _) => _n(a['value'])?.abs(),
       returnType: _number),
-  TraderaFunction('clamp', 'The value kept within min…max.',
+  AsemanFunction('clamp', 'The value kept within min…max.',
       {'value': _any, 'min': _num, 'max': _num}, (a, _) {
     var x = _n(a['value']);
     if (x == null) return null;
@@ -348,7 +348,7 @@ final List<ClientFunction> traderaFunctions = [
     if (hi != null && x > hi) x = hi;
     return x;
   }, returnType: _number),
-  TraderaFunction(
+  AsemanFunction(
       'percentChange',
       'The change from "from" to "to" as a fraction ((to − from) / |from|); '
           'format it with formatPercent.',
@@ -357,27 +357,27 @@ final List<ClientFunction> traderaFunctions = [
     return x == null || y == null || x == 0 ? null : (y - x) / x.abs();
   }, returnType: _number),
   // Aggregates over a list (of numbers, or of rows with "field").
-  TraderaFunction('sum', 'The sum of a list (or of a field of its rows).',
+  AsemanFunction('sum', 'The sum of a list (or of a field of its rows).',
       {'values': _any, 'field': _str},
       (a, _) => _tidy(
           _numbers(a['values'], a['field']).fold<num>(0, (s, n) => s + n)),
       returnType: _number),
-  TraderaFunction('average', 'The mean of a list (or of a field of its rows).',
+  AsemanFunction('average', 'The mean of a list (or of a field of its rows).',
       {'values': _any, 'field': _str}, (a, _) {
     final xs = _numbers(a['values'], a['field']);
     return xs.isEmpty ? null : xs.fold<num>(0, (s, n) => s + n) / xs.length;
   }, returnType: _number),
-  TraderaFunction('min', 'The smallest number of a list (or of a field).',
+  AsemanFunction('min', 'The smallest number of a list (or of a field).',
       {'values': _any, 'field': _str}, (a, _) {
     final xs = _numbers(a['values'], a['field']);
     return xs.isEmpty ? null : xs.reduce(math.min);
   }, returnType: _number),
-  TraderaFunction('max', 'The largest number of a list (or of a field).',
+  AsemanFunction('max', 'The largest number of a list (or of a field).',
       {'values': _any, 'field': _str}, (a, _) {
     final xs = _numbers(a['values'], a['field']);
     return xs.isEmpty ? null : xs.reduce(math.max);
   }, returnType: _number),
-  TraderaFunction('count', 'The number of items of a list, map or text.',
+  AsemanFunction('count', 'The number of items of a list, map or text.',
       {'values': _any}, (a, _) {
     final v = a['values'];
     return v is List
@@ -389,22 +389,22 @@ final List<ClientFunction> traderaFunctions = [
                 : 0;
   }, returnType: _number),
   // Comparison and logic.
-  TraderaFunction('equals', 'True when a equals b.', {'a': _any, 'b': _any},
+  AsemanFunction('equals', 'True when a equals b.', {'a': _any, 'b': _any},
       (a, _) => _equal(a['a'], a['b']),
       returnType: _boolean),
-  TraderaFunction('notEquals', 'True when a differs from b.',
+  AsemanFunction('notEquals', 'True when a differs from b.',
       {'a': _any, 'b': _any}, (a, _) => !_equal(a['a'], a['b']),
       returnType: _boolean),
-  TraderaFunction('greaterThan', 'True when a > b.', {'a': _any, 'b': _any},
+  AsemanFunction('greaterThan', 'True when a > b.', {'a': _any, 'b': _any},
       (a, _) => a['a'] != null && a['b'] != null && _compare(a['a'], a['b']) > 0,
       returnType: _boolean),
-  TraderaFunction('lessThan', 'True when a < b.', {'a': _any, 'b': _any},
+  AsemanFunction('lessThan', 'True when a < b.', {'a': _any, 'b': _any},
       (a, _) => a['a'] != null && a['b'] != null && _compare(a['a'], a['b']) < 0,
       returnType: _boolean),
-  TraderaFunction('isEmpty', 'True when the value is missing or empty.',
+  AsemanFunction('isEmpty', 'True when the value is missing or empty.',
       {'value': _any}, (a, _) => !specRequired(a),
       returnType: _boolean),
-  TraderaFunction(
+  AsemanFunction(
       'contains',
       'True when a list holds "item" (or a text contains it).',
       {'value': _any, 'item': _any}, (a, _) {
@@ -415,10 +415,10 @@ final List<ClientFunction> traderaFunctions = [
         .toLowerCase()
         .contains(stringifyValue(item).toLowerCase());
   }, returnType: _boolean),
-  TraderaFunction('if', '"then" when the condition is true, else "else".',
+  AsemanFunction('if', '"then" when the condition is true, else "else".',
       {'condition': _any, 'then': _any, 'else': _any},
       (a, _) => toBool(a['condition']) ? a['then'] : a['else']),
-  TraderaFunction('coalesce', 'The first of "values" that is present.',
+  AsemanFunction('coalesce', 'The first of "values" that is present.',
       {'values': _list}, (a, _) {
     for (final v in a['values'] is List ? a['values'] as List : const []) {
       if (v != null && v != '') return v;
@@ -426,12 +426,12 @@ final List<ClientFunction> traderaFunctions = [
     return null;
   }),
   // Text and lookup.
-  TraderaFunction('concat', 'Joins "values" as text (with "separator").',
+  AsemanFunction('concat', 'Joins "values" as text (with "separator").',
       {'values': _list, 'separator': _str}, (a, _) {
     final values = a['values'] is List ? a['values'] as List : const <Object?>[];
     return values.map(stringifyValue).join(stringifyValue(a['separator']));
   }, returnType: _string),
-  TraderaFunction(
+  AsemanFunction(
       'join',
       'Joins a list (or a field of its rows) as text, ", " by default.',
       {'values': _any, 'field': _str, 'separator': _str}, (a, _) {
@@ -441,38 +441,38 @@ final List<ClientFunction> traderaFunctions = [
         .map((v) => stringifyValue(f is String ? kit.field(v, f) : v))
         .join(a['separator'] is String ? a['separator'] as String : ', ');
   }, returnType: _string),
-  TraderaFunction('upper', 'Upper-cases text.', {'value': _any},
+  AsemanFunction('upper', 'Upper-cases text.', {'value': _any},
       (a, _) => stringifyValue(a['value']).toUpperCase(),
       returnType: _string),
-  TraderaFunction('lower', 'Lower-cases text.', {'value': _any},
+  AsemanFunction('lower', 'Lower-cases text.', {'value': _any},
       (a, _) => stringifyValue(a['value']).toLowerCase(),
       returnType: _string),
-  TraderaFunction('truncate', 'Shortens text to "max" characters with "…".',
+  AsemanFunction('truncate', 'Shortens text to "max" characters with "…".',
       {'value': _any, 'max': _num}, (a, _) {
     final s = stringifyValue(a['value']);
     final max = (_n(a['max']) ?? 80).toInt();
     return s.length <= max ? s : '${s.substring(0, math.max(0, max - 1))}…';
   }, returnType: _string),
-  TraderaFunction(
+  AsemanFunction(
       'get',
       'A field of an object by name or dotted path ("quote.price", "rows.0").',
       {'value': _any, 'path': _str},
       (a, _) => kit.field(a['value'], a['path'] as String?)),
   // Client-side state (for a Button's functionCall action).
-  TraderaFunction(
+  AsemanFunction(
       'setValue',
       'Writes "value" at the data path "path" (no round trip).',
       {'path': _str, 'value': _any}, (a, c) {
     c.update(DataPath(_pathArg(a)), a['value']);
     return true;
   }, returnType: _void),
-  TraderaFunction('toggle', 'Flips the boolean at the data path "path".',
+  AsemanFunction('toggle', 'Flips the boolean at the data path "path".',
       {'path': _str}, (a, c) {
     final path = DataPath(_pathArg(a));
     c.update(path, !toBool(c.getValue<Object?>(path)));
     return true;
   }, returnType: _void),
-  TraderaFunction(
+  AsemanFunction(
       'increment',
       'Adds "by" (default 1; negative to decrement) to the number at "path", '
           'kept within min/max.',
@@ -485,14 +485,14 @@ final List<ClientFunction> traderaFunctions = [
     c.update(path, _tidy(x));
     return true;
   }, returnType: _void),
-  TraderaFunction('append', 'Adds "value" to the end of the list at "path".',
+  AsemanFunction('append', 'Adds "value" to the end of the list at "path".',
       {'path': _str, 'value': _any}, (a, c) {
     final path = DataPath(_pathArg(a));
     final list = c.getValue<Object?>(path);
     c.update(path, [if (list is List) ...list, a['value']]);
     return true;
   }, returnType: _void),
-  TraderaFunction('removeAt', 'Removes item "index" of the list at "path".',
+  AsemanFunction('removeAt', 'Removes item "index" of the list at "path".',
       {'path': _str, 'index': _num}, (a, c) {
     final path = DataPath(_pathArg(a));
     final list = c.getValue<Object?>(path);
@@ -502,25 +502,25 @@ final List<ClientFunction> traderaFunctions = [
     }
     return true;
   }, returnType: _void),
-  TraderaFunction('copyToClipboard', 'Copies "text" to the clipboard.',
+  AsemanFunction('copyToClipboard', 'Copies "text" to the clipboard.',
       {'text': _any}, (a, _) {
     unawaited(Clipboard.setData(ClipboardData(text: stringifyValue(a['text']))));
     return true;
   }, returnType: _void),
   // Shown by the action runner (it has the surface's context); as a value
   // it does nothing.
-  TraderaFunction('showToast', 'Shows "message" briefly at the bottom.',
+  AsemanFunction('showToast', 'Shows "message" briefly at the bottom.',
       {'message': _any}, (a, _) => true,
       returnType: _void),
 ];
 
-/// Every function Tradera's catalog offers.
+/// Every function Aseman's catalog offers.
 /// (Later definitions replace earlier ones of the same name.)
-List<ClientFunction> get allTraderaFunctions => {
+List<ClientFunction> get allAsemanFunctions => {
       for (final f in [
         ...BasicFunctions.all,
         ...specFunctions,
-        ...traderaFunctions,
+        ...asemanFunctions,
       ])
         f.name: f,
     }.values.toList();

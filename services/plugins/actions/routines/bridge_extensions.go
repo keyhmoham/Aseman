@@ -3,8 +3,8 @@ package routine
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/bridge"
-	"github.com/tradera/tradera/internal/plugins/identity"
+	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
 func (p spacesPortBridge) RunScheduledTask(ctx context.Context, space, room, actor identity.ID, task string) (string, error) {

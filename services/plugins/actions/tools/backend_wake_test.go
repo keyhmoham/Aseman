@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tradera/tradera/plugins/actions/tools/mechanisms/mcp"
+	"github.com/aseman/aseman/plugins/actions/tools/mechanisms/mcp"
 )
 
 // A backend installed in a space's computer that was asleep starts answering

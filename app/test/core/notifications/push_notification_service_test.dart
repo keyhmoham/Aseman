@@ -2,12 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tradera/src/core/network/api_client.dart';
-import 'package:tradera/src/core/notifications/push_notification_service.dart';
-import 'package:tradera/src/data/services/tradera_service.dart';
+import 'package:aseman/src/core/network/api_client.dart';
+import 'package:aseman/src/core/notifications/push_notification_service.dart';
+import 'package:aseman/src/data/services/aseman_service.dart';
 
-class _RecordingService extends TraderaService {
-  _RecordingService() : super(TraderaApiClient(baseUrl: 'http://localhost'));
+class _RecordingService extends AsemanService {
+  _RecordingService() : super(AsemanApiClient(baseUrl: 'http://localhost'));
 
   final calls = <String>[];
   final bodies = <Map<String, dynamic>>[];
@@ -32,7 +32,7 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-            const MethodChannel('tradera/push_notifications'), null);
+            const MethodChannel('aseman/push_notifications'), null);
   });
 
   test('push notifications are restricted to the native iOS target', () {
@@ -46,7 +46,7 @@ void main() {
     final nativeCalls = <String>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('tradera/push_notifications'),
+      const MethodChannel('aseman/push_notifications'),
       (call) async {
         nativeCalls.add(call.method);
         if (call.method == 'requestToken' || call.method == 'currentToken') {

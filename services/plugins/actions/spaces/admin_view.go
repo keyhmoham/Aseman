@@ -2,25 +2,25 @@ package spaces
 
 import (
 	"context"
-	"github.com/tradera/tradera/pkg/errs"
-	llmprovider "github.com/tradera/tradera/plugins/actions/llm/models"
+	"github.com/aseman/aseman/pkg/errs"
+	llmprovider "github.com/aseman/aseman/plugins/actions/llm/models"
 	"strings"
 	"time"
 
-	"github.com/tradera/tradera/internal/plugins/api"
-	"github.com/tradera/tradera/plugins/actions/message/models/message"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/turn"
-	"github.com/tradera/tradera/plugins/actions/support/helper"
-	usage "github.com/tradera/tradera/plugins/actions/usage/models"
+	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/turn"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	usage "github.com/aseman/aseman/plugins/actions/usage/models"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/filedata"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
-	"github.com/tradera/tradera/plugins/actions/spaces/models/space"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
-	"github.com/tradera/tradera/plugins/adapters/vmm/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/filedata"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/space"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // The admin console's view of a space: who owns it, what state its computer is
@@ -425,7 +425,7 @@ func (s *Service) projectsByMachine(ctx context.Context) map[string]map[string]a
 				continue
 			}
 			if project := out[computers[i].Name]; project != nil {
-				out["tradera-workspace-"+computers[i].ID.String()] = project
+				out["aseman-workspace-"+computers[i].ID.String()] = project
 			}
 		}
 	}
@@ -559,7 +559,7 @@ func (s *Service) adminStorage(ctx context.Context, req *api.ActionRequest) (*ap
 		row := map[string]any{"id": r.ID, "name": r.Name, "created_at": r.CreatedAt}
 		if p := projects[r.Name]; p != nil {
 			row["project"] = p
-		} else if p := projects[strings.TrimPrefix(r.Name, "tradera-")]; p != nil {
+		} else if p := projects[strings.TrimPrefix(r.Name, "aseman-")]; p != nil {
 			row["project"] = p
 		}
 		out = append(out, row)

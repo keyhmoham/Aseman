@@ -1,15 +1,15 @@
-# Tradera AIOS
+# Aseman AIOS
 
-**Tradera AIOS** is an agentic social workspace and federated AI operating system. Users deploy LLM-backed autonomous agents and apps, collaborate in shared spaces/rooms, and manage execution costs via in-platform wallets powered by a distributed ledger.
+**Aseman AIOS** is an agentic social workspace and federated AI operating system. Users deploy LLM-backed autonomous agents and apps, collaborate in shared spaces/rooms, and manage execution costs via in-platform wallets powered by a distributed ledger.
 
 ---
 
 ## Architecture Overview
 
 ```
-TraderaAIOS/
-├── app/         # Tradera Flutter client (web, iOS, Android, desktop)
-├── services/    # Tradera core node (Go): API gateway, agent runtime, finance, federation
+AsemanAIOS/
+├── app/         # Aseman Flutter client (web, iOS, Android, desktop)
+├── services/    # Aseman core node (Go): API gateway, agent runtime, finance, federation
 └── deploy/      # Deployment configurations (Nomad agent, sandbox computer, OpenViking)
 ```
 
@@ -27,20 +27,20 @@ Run the entire platform with a single command. Docker with the Compose plugin is
 
 ```bash
 # Start all services (builds images on first run)
-./tradera.sh up
+./aseman.sh up
 
 # Or launch with a custom configuration file
-./tradera.sh up path/to/config.yml
+./aseman.sh up path/to/config.yml
 ```
 
-> **Note:** `./tradera.sh up` is equivalent to running `docker compose up -d --build`.
+> **Note:** `./aseman.sh up` is equivalent to running `docker compose up -d --build`.
 
 ### Service Map
 
 | Service | Purpose | Port |
 | :--- | :--- | :--- |
 | **`web`** | Flutter Web client (served via nginx) | [http://localhost:3000](http://localhost:3000) |
-| **`tradera`** | Core Go node (REST/WebSocket API, agent gateway, finance) | [http://localhost:8080](http://localhost:8080) |
+| **`aseman`** | Core Go node (REST/WebSocket API, agent gateway, finance) | [http://localhost:8080](http://localhost:8080) |
 | **`postgres`** | The stack's one database server (Postgres 16 with pgvector): the node's records and the timelines' database | Internal |
 | **`nomad`** | Nomad agent executing bot and agent workloads | Internal |
 | **`sandbox-computer`** | Builds the base sandbox image for spaces, then exits | — |
@@ -55,15 +55,15 @@ Run the entire platform with a single command. Docker with the Compose plugin is
 1. Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 2. Sign in with the default admin credentials:
    - **Handle:** `node-a` (or your configured `node.name`)
-   - **Password:** `changeme` (or the value of `TRADERA_ADMIN_PASSWORD` in your `.env`)
+   - **Password:** `changeme` (or the value of `ASEMAN_ADMIN_PASSWORD` in your `.env`)
 3. Open **Admin Console → LLM** to configure provider API keys (OpenAI, Anthropic, Gemini, Grok, DeepSeek, Vercel AI Gateway, or custom OpenAI-compatible endpoints) and token pricing.
 
 ### Common CLI Controls
 
 ```bash
-./tradera.sh ps             # Check status of running containers
-./tradera.sh logs [service] # Stream logs (e.g., ./tradera.sh logs tradera)
-./tradera.sh down           # Stop services (persists database and volume data)
+./aseman.sh ps             # Check status of running containers
+./aseman.sh logs [service] # Stream logs (e.g., ./aseman.sh logs aseman)
+./aseman.sh down           # Stop services (persists database and volume data)
 ```
 
 ---
@@ -95,9 +95,9 @@ The Flutter client reads the Google web/server client ID from the node at runtim
 
 Every agent runs on [LangChain Deep Agents](https://github.com/langchain-ai/deepagents) in the agent runtime (see [`services/README.md`](services/README.md#agents-the-deep-agents-runtime)):
 
-- **Hybrid teams:** the lead (tradera) staffs a goal with agents already in the space, agents **published in the marketplace** (hired into the space) and, only for roles nothing fits, **new specialists it writes**. The language model and the decision model share the work: the decision model scores every candidate for every role in one fast request, and the language model breaks the goal into roles, settles close calls and writes missing specialists.
+- **Hybrid teams:** the lead (aseman) staffs a goal with agents already in the space, agents **published in the marketplace** (hired into the space) and, only for roles nothing fits, **new specialists it writes**. The language model and the decision model share the work: the decision model scores every candidate for every role in one fast request, and the language model breaks the goal into roles, settles close calls and writes missing specialists.
 - **Parallel work:** the lead runs plans across the team in parallel; independent tasks start at once (the decision model drops dependencies that are not needed), and several tasks for the same agent run as parallel instances of it.
-- **Self-improvement:** agents improve their own playbook as they work with [GEPA](https://github.com/gepa-ai/gepa): the moments of their turns that went wrong (or right) are replayed with candidate playbooks, without running anything again, and a playbook is adopted only when it does better on them. It is billed to the project like memory; `TRADERA_IMPROVE=0` turns it off.
+- **Self-improvement:** agents improve their own playbook as they work with [GEPA](https://github.com/gepa-ai/gepa): the moments of their turns that went wrong (or right) are replayed with candidate playbooks, without running anything again, and a playbook is adopted only when it does better on them. It is billed to the project like memory; `ASEMAN_IMPROVE=0` turns it off.
 
 ## Agent Memory
 
@@ -105,7 +105,7 @@ Agents remember through a self-hosted [OpenViking](https://openviking.ai) server
 
 - **Isolation:** each space is an OpenViking account and each agent a user in it; one space never sees another's memory.
 - **Notes:** the space's shared notes (`viking://resources/space/notes.md`) and each agent's own (`viking://user/<agent>/memories/notes.md`) are in every agent's prompt; agents keep them with `remember` / `rewrite_notes`.
-- **Recall:** what memory holds about a message is recalled with it, and agents search and read more with `recall` / `read_memory`. It is recalled as the person who asked (what OpenViking knows of them comes first) and within the room's session, so a short follow-up is expanded with the conversation into what it is about (`TRADERA_OPENVIKING_QUERY_EXPANSION=off` saves that memory-model call) and memories served in the last turns are not repeated. A specialist working on the space's computer recalls for its work (resources and skills first), a lead for the people in the conversation.
+- **Recall:** what memory holds about a message is recalled with it, and agents search and read more with `recall` / `read_memory`. It is recalled as the person who asked (what OpenViking knows of them comes first) and within the room's session, so a short follow-up is expanded with the conversation into what it is about (`ASEMAN_OPENVIKING_QUERY_EXPANSION=off` saves that memory-model call) and memories served in the last turns are not repeated. A specialist working on the space's computer recalls for its work (resources and skills first), a lead for the people in the conversation.
 - **Learning:** every finished turn, with the tools the agent ran, is added to the agent's OpenViking session of the room. OpenViking commits the session once about ten turns gathered or the room has been quiet for 30 minutes, and extracts long-term memories from it (preferences, entities, events, cases, patterns, how tasks were done, and what it learned about each person). Text files people attach are kept as the space's resources, so any room can find them again. A conversation that starts fresh (a new room thread, or a new one after the last no longer fit the model) begins from the session's summary of the earlier ones.
 - **Models:** OpenViking has no model settings of its own. It calls its models through the node, which uses the ones picked in **Admin → Memory models**: a chat model that learns from conversations and an embedding model that finds memories by meaning, chosen from the providers and models under **Admin → Providers / Models** (mark embedding models as such on Models). Without them agents still keep and read their notes. Changing the embedding model re-indexes every project's memory.
 - **Billing:** a project pays for what its memory uses, like the rest of its agents' work: the memory models' tokens at their own prices (Admin → Models), paid to the owner of the provider's key, counted in the project's spend and against its budget. The payer is whoever ran the project's latest agent turn, else its owner. OpenViking names the project of every model call (`deploy/openviking/sitecustomize.py`), and the node charges each project every 30 seconds. A project that cannot pay gets no memory model calls until it can.
@@ -113,13 +113,13 @@ Agents remember through a self-hosted [OpenViking](https://openviking.ai) server
 
 ## Project Timeline
 
-Every project keeps a dated timeline of its work and events, and every agent can read it. It lives in a self-hosted [Utopia](https://github.com/deeplethe/utopia) server (service `timeline`), a bitemporal knowledge graph, which runs on the stack's own Postgres in a database of its own (`tradera_timeline`); there is no second database server.
+Every project keeps a dated timeline of its work and events, and every agent can read it. It lives in a self-hosted [Utopia](https://github.com/deeplethe/utopia) server (service `timeline`), a bitemporal knowledge graph, which runs on the stack's own Postgres in a database of its own (`aseman_timeline`); there is no second database server.
 
 - **What is on it:** people's requests and how they ended, the tools each agent ran, room messages and agents' work logs, model usage and cost, files shared, members joining, rooms opened, routines and their runs. The node reads these from its own records (the `timeline` namespace) and pushes them about every 10 seconds, history included on first start. Each entry carries when it happened and when it was recorded.
 - **Agents:** the timeline is a built-in MCP server of every agent, on by default. The runtime reaches it only through the node's agent gateway (`/deepagents/v1/timeline/mcp`), which forwards to the turn's own project; agents see it as `timeline_*` tools (find, history, changes, facts, related, paths, search, entry), whatever tools they are otherwise allowed, and are told in their prompt when to use them. Reads only: Utopia's write tool is not served. Requests marked "no memory" get no timeline.
 - **Isolation:** each project is a knowledge base of its own in Utopia; an agent never names the project or holds a Utopia key.
 - **No models needed:** events go in as structured statements, so building and reading the timeline uses no LLM.
-- **Setup:** nothing to configure: the node's Utopia password (`TRADERA_TIMELINE_PASSWORD`) is generated into `.env` on first start, and the node creates its account, each project's knowledge base and its read token itself. Set `TRADERA_TIMELINE_URL=` (empty) in `.env` to turn timelines off. Admins see each feed's progress with `timeline.status`.
+- **Setup:** nothing to configure: the node's Utopia password (`ASEMAN_TIMELINE_PASSWORD`) is generated into `.env` on first start, and the node creates its account, each project's knowledge base and its read token itself. Set `ASEMAN_TIMELINE_URL=` (empty) in `.env` to turn timelines off. Admins see each feed's progress with `timeline.status`.
 
 ## Tools
 
@@ -143,13 +143,13 @@ Users create tools in the Tools panel from one form with a **backend** and a
   it in the space's sandbox and expose it with `proxy_create`; it opens on
   the desk as the tool's card window like any frontend (in an `<iframe>` on
   the web, a native web view on Android, iOS, macOS and Windows). Pages use
-  **Tradera's web UI kit** ([`services/pkg/webkit`](services/pkg/webkit)):
+  **Aseman's web UI kit** ([`services/pkg/webkit`](services/pkg/webkit)):
   the app's theme and every component the app renders (the A2UI catalog, the
   tool UI kit, the Elpian widgets and HTML) as `<t-…>` web elements, plus a
-  client that calls the tool's microtools through the Tradera API as the
-  person viewing the page. Every preview serves the kit at `/_tradera/kit/`
-  (its gallery: `/_tradera/kit/gallery.html`) and the page API at
-  `/_tradera/api/`.
+  client that calls the tool's microtools through the Aseman API as the
+  person viewing the page. Every preview serves the kit at `/_aseman/kit/`
+  (its gallery: `/_aseman/kit/gallery.html`) and the page API at
+  `/_aseman/api/`.
 
 Ready-made tools live in [`deploy/tools`](deploy/tools), such as the
 [weather](deploy/tools/weather) tool.
@@ -163,7 +163,7 @@ dependency. See [`services/README.md`](services/README.md#tools-one-form-three-b
 - **Execution & Metering:** All model calls route through the node's metered LLM proxy, ensuring exact usage tracking based on provider responses.
 - **Billing Mechanics:** Agent work is billed to the account that initiated the task (`pay_llm` for model tokens, `pay_bot` / `pay_node` for execution runtime).
 - **Decision Model:** Optionally pick a decision model such as TypeSafe AI's Jev on Vercel AI Gateway (**Admin → Decision model**). Agents then use it for tool selection, routing and work checks together with their own model; turned off, every agent decides with its own model.
-- **First Boot Bootstrap:** To automatically seed an initial LLM provider on startup, set `TRADERA_LLM_API_KEY` (and optionally `TRADERA_LLM_MODEL`) in your `.env`.
+- **First Boot Bootstrap:** To automatically seed an initial LLM provider on startup, set `ASEMAN_LLM_API_KEY` (and optionally `ASEMAN_LLM_MODEL`) in your `.env`.
 
 ---
 

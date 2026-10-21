@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tradera/src/app_dependencies.dart';
-import 'package:tradera/src/core/network/session_store.dart';
-import 'package:tradera/src/data/models/space.dart';
-import 'package:tradera/src/features/home/presentation/space_settings_panel.dart';
+import 'package:aseman/src/app_dependencies.dart';
+import 'package:aseman/src/core/network/session_store.dart';
+import 'package:aseman/src/data/models/space.dart';
+import 'package:aseman/src/features/home/presentation/space_settings_panel.dart';
 
-import '../../fake_tradera_service.dart';
+import '../../fake_aseman_service.dart';
 
 void main() {
   tearDown(() {
@@ -15,14 +15,14 @@ void main() {
   });
 
   AppDependencies app() {
-    final deps = AppDependencies.withService(FakeTraderaService());
+    final deps = AppDependencies.withService(FakeAsemanService());
     deps.sessionController.setSession(const Session(
       accountId: 'me',
       handle: 'test',
       token: 'x',
       privateKey: '',
       publicKey: '',
-      homeSpaceId: FakeTraderaService.homeId,
+      homeSpaceId: FakeAsemanService.homeId,
     ));
     return deps;
   }
@@ -51,7 +51,7 @@ void main() {
     await pumpPanel(
       tester,
       space: const Workspace(
-          id: FakeTraderaService.homeId,
+          id: FakeAsemanService.homeId,
           ownerId: 'me',
           name: 'Home',
           home: true),
@@ -73,7 +73,7 @@ void main() {
     expect(find.text('Per room chat'), findsOneWidget);
     expect(find.text('Per agent'), findsOneWidget);
     expect(find.text('SignalBot'), findsOneWidget);
-    expect(find.text('tradera'), findsOneWidget);
+    expect(find.text('aseman'), findsOneWidget);
 
     final dangerTop = tester.getTopLeft(find.text('Danger zone')).dy;
     final overviewTop = tester.getTopLeft(find.text('Overview')).dy;
@@ -93,7 +93,7 @@ void main() {
     await pumpPanel(
       tester,
       space: const Workspace(
-          id: FakeTraderaService.homeId,
+          id: FakeAsemanService.homeId,
           ownerId: 'me',
           name: 'Home',
           home: true),
@@ -108,7 +108,7 @@ void main() {
     await pumpPanel(
       tester,
       space: const Workspace(
-          id: FakeTraderaService.sharedId, ownerId: 'u1', name: 'Shared Desk'),
+          id: FakeAsemanService.sharedId, ownerId: 'u1', name: 'Shared Desk'),
     );
 
     expect(find.text('Leave workspace'), findsOneWidget);
@@ -120,7 +120,7 @@ void main() {
     await pumpPanel(
       tester,
       space: const Workspace(
-          id: FakeTraderaService.homeId,
+          id: FakeAsemanService.homeId,
           ownerId: 'me',
           name: 'Home',
           home: true),
@@ -146,7 +146,7 @@ void main() {
     await pumpPanel(
       tester,
       space: const Workspace(
-          id: FakeTraderaService.sharedId, ownerId: 'u1', name: 'Shared Desk'),
+          id: FakeAsemanService.sharedId, ownerId: 'u1', name: 'Shared Desk'),
       onExit: () => exitCalled = true,
     );
 

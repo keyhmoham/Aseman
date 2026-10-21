@@ -3,13 +3,13 @@ package auth
 import (
 	"context"
 
-	"github.com/tradera/tradera/internal/plugins/identity"
-	"github.com/tradera/tradera/pkg/crypto"
-	"github.com/tradera/tradera/pkg/errs"
-	"github.com/tradera/tradera/plugins/actions/auth/models/account"
-	"github.com/tradera/tradera/plugins/actions/support/metasvc"
-	"github.com/tradera/tradera/plugins/actions/support/models/metadata"
-	"github.com/tradera/tradera/plugins/adapters/database/ports"
+	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/crypto"
+	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/support/metasvc"
+	"github.com/aseman/aseman/plugins/actions/support/models/metadata"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 // oauthLink tracks identity providers an account signs in with. It lives in

@@ -61,7 +61,7 @@ class Jev:
             if q["type"] == "boolean" and key.startswith("t"):
                 tool = q["instructions"].split("`")[1]
                 app, _, command = tool.partition("__")
-                hit = app in text and command.split("_")[0] in text
+                hit = app in text and (not command or command.split("_")[0] in text)
                 out[key] = {"type": "boolean", "probability": 0.9 if hit else 0.05}
             elif key == "complete":
                 out[key] = {"type": "boolean", "probability": self.complete}
@@ -127,18 +127,69 @@ async def test_tools_are_chosen_once_and_the_rest_stay_callable(platform: Platfo
     assert out.status == "done" and out.reply == "Opened the issue."
     assert {t["bot"] for t in platform.tool_runs if "bot" in t} >= {"bot-github", "bot-stripe"}
     first = set(model.offered[0])
-    assert "github__create_issue" in first
+    # An app is chosen whole: its functions work together.
+    assert {f"github__{c}" for c in APPS["github"]} <= first
     assert not {"stripe__get_balance", "gmail__send_email"} & first
     # The agent's working tools are never hidden.
     assert {"execute", "read_file", "write_todos", "send_message", "task", "ask_user"} <= first
-    assert len(first) < 30  # of 52: the 30 app commands are chosen from, not all sent
+    assert len(first) < len(model.offered[-1])  # the apps not needed are not sent
     # One decision for the tools (and the completion check), not one per call.
     tool_decisions = [d for d in platform.decisions if any(k.startswith("t") for k in d["questions"])]
     assert len(tool_decisions) == 1
-    # The list only grows: a tool once used stays visible.
-    assert "stripe__get_balance" in model.offered[-1]
+    # The list only grows: a tool once used stays visible, with its app.
+    assert {f"stripe__{c}" for c in APPS["stripe"]} <= set(model.offered[-1])
     assert model.offered[0] == model.offered[1]  # stable prefix for the prompt cache
     assert "stripe__get_balance" in notes(model, 0)  # the agent is told what is not shown
+
+
+def judging_functions_apart(state: Any, questions: dict[str, Any]) -> dict[str, Any]:
+    """A decision model that, asked function by function, keeps only the
+    board's instructions; asked about the board as a whole, keeps it."""
+    out: dict[str, Any] = {}
+    for key, q in questions.items():
+        if q["type"] == "boolean" and key.startswith("t"):
+            name = q["instructions"].split("`")[1]
+            out[key] = {"type": "boolean",
+                        "probability": 0.9 if name in ("board", "board__get_canvas_composer_skill") else 0.05}
+        else:
+            out[key] = {"type": "boolean", "probability": 0.95}
+    return out
+
+
+async def test_the_function_an_apps_instructions_name_is_offered(platform: Platform, tmp_path: Path) -> None:
+    # The loop this prevents: the instructions were kept and the function they
+    # say to call was hidden, so the agent read them again and again.
+    platform.apps = [*apps(), {"name": "board", "kind": "tool", "bot_id": "bot-board", "description": "A whiteboard.",
+                               "commands": [{"name": c, "description": f"{c} of the board.",
+                                             "schema": {"type": "object", "properties": {"body": {"type": "string"}}}}
+                                            for c in ("get_canvas_composer_skill", "create_items", "list_items")]}]
+    platform.app_reply = json.dumps({"content": [{"type": "text", "text": "To draw, call create_items."}]})
+    platform.decide = judging_functions_apart
+    r, model = runner(platform, tmp_path, [
+        call("board__get_canvas_composer_skill", {}),
+        call("board__create_items", {"body": "a flowchart"}),
+        AIMessage(content="Drawn."),
+    ])
+    out = await r.prompt(request("Draw a flowchart of our onboarding on the board"))
+    assert out.status == "done" and out.reply == "Drawn."
+    for offered in model.offered:
+        assert {"board__get_canvas_composer_skill", "board__create_items", "board__list_items"} <= set(offered)
+        assert "github__create_issue" not in offered
+
+
+async def test_a_hidden_tool_named_in_a_result_is_offered(platform: Platform, tmp_path: Path) -> None:
+    platform.decide = Jev()
+    platform.app_reply = json.dumps({"content": [{"type": "text", "text": "Created. Notify with gmail__send_email."}]})
+    r, model = runner(platform, tmp_path, [
+        call("github__create_issue", {"body": "login bug"}),
+        call("gmail__send_email", {"body": "filed"}),
+        AIMessage(content="Done."),
+    ])
+    out = await r.prompt(request("Open a github issue (create it) for the login bug"))
+    assert out.status == "done"
+    assert "gmail__send_email" not in model.offered[0]
+    assert {f"gmail__{c}" for c in APPS["gmail"]} <= set(model.offered[1])
+    assert not {"stripe__get_balance"} & set(model.offered[1])
 
 
 async def test_off_on_the_node_falls_back_after_one_try(platform: Platform, tmp_path: Path) -> None:

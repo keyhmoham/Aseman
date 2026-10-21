@@ -8,13 +8,22 @@ tools the request needs; the agent's model then sees those.
 
 Kept safe and cheap:
 
+* a connected app is chosen whole: its functions work together (one reads
+  how to use the app or lists what is there, the next acts on it), so the
+  decision is made per app, never per function. Chosen function by function,
+  an app's "get instructions" was kept and the function those instructions
+  say to call was hidden: the agent, with no such tool in its list, read the
+  instructions again or called other tools, over and over;
 * the agent's own working tools (the sandbox, files, planning, messaging,
   delegation, the project's timeline) are never hidden — only app, bot and platform tools are chosen;
 * the choice is made once and only grows during the turn (a tool the agent
   uses stays), so the tool list — part of the provider's cached prompt
   prefix — stays the same from one call to the next;
 * the agent is told the names of the tools not shown and can call any of
-  them: every tool still runs when called;
+  them: every tool still runs when called. A hidden tool that the
+  conversation names (an app's instructions, a result, the agent itself) is
+  shown from the next call on, with the rest of its app: a model rarely
+  calls a tool whose schema it was not given;
 * below a handful of choosable tools nothing is chosen.
 """
 
@@ -37,7 +46,7 @@ MIN_CANDIDATES = 8
 MAX_CANDIDATES = 250
 #: A tool is shown when the decision model gives it at least this probability.
 KEEP_ABOVE = 0.35
-#: At most this many chosen tools are shown.
+#: At most this many chosen apps and tools are shown (an app with all its functions).
 MAX_SHOWN = 24
 #: The request text the decision is made on (its end: the message itself).
 REQUEST_CHARS = 4000
@@ -49,6 +58,13 @@ def tool_name(tool: Any) -> str:
     return str(getattr(tool, "name", "") or "")
 
 
+def app_of(name: str) -> str:
+    """The connected app a tool is a function of (``board__create_items`` is
+    one of ``board``'s), or "" for a tool of its own."""
+    app, sep, function = name.partition("__")
+    return app if sep and app and function else ""
+
+
 def tool_description(tool: Any) -> str:
     if isinstance(tool, dict):
         text = tool.get("description") or (tool.get("function") or {}).get("description") or ""
@@ -57,29 +73,57 @@ def tool_description(tool: Any) -> str:
     return " ".join(str(text).split())[:300]
 
 
+def _groups(tools: list[Any]) -> list[tuple[str, list[Any]]]:
+    """The choosable tools, an app's functions together: (app or tool name, tools)."""
+    groups: dict[str, list[Any]] = {}
+    for t in tools:
+        name = tool_name(t)
+        groups.setdefault(app_of(name) or name, []).append(t)
+    return list(groups.items())
+
+
+def _question(key: str, members: list[Any]) -> str:
+    if len(members) == 1 and tool_name(members[0]) == key:
+        return f"Will the agent need the tool `{key}` ({tool_description(members[0])}) to handle `request`?"
+    functions = ", ".join(tool_name(t).partition("__")[2] for t in members)
+    if len(functions) > 600:
+        functions = functions[:600].rsplit(",", 1)[0] + ", …"
+    return (f"Will the agent need the app `{key}` ({tool_description(members[0])[:150]}; its functions: "
+            f"{functions}) to handle `request`?")
+
+
 async def shortlist(client: DecisionClient, request: str, tools: list[Any]) -> set[str] | None:
     """The names of the choosable tools the request needs, or None to show
     every tool (too few to choose from, or no decision could be made)."""
     candidates = [t for t in tools if tool_name(t) and tool_name(t) not in PINNED]
     if not MIN_CANDIDATES <= len(candidates) <= MAX_CANDIDATES or not request.strip():
         return None
+    groups = _groups(candidates)
     questions = {
         f"t{i}": {"type": "boolean",
-                  "instructions": f"Will the agent need the tool `{tool_name(t)}` ({tool_description(t)}) "
-                                  "to handle `request`?",
-                  "criteria": {"true": "the tool does part of what the request asks for",
-                               "false": "the tool is unrelated to the request"}}
-        for i, t in enumerate(candidates)
+                  "instructions": _question(key, members),
+                  "criteria": {"true": "it does part of what the request asks for",
+                               "false": "it is unrelated to the request"}}
+        for i, (key, members) in enumerate(groups)
     }
     answers = await client.evaluate({"request": request[-REQUEST_CHARS:]}, questions)
     if answers is None:
         return None
     scored = []
-    for i, t in enumerate(candidates):
+    for i, (_, members) in enumerate(groups):
         p = probability(answers, f"t{i}")
-        scored.append((1.0 if p is None else p, tool_name(t)))  # unanswered: keep it
+        scored.append((1.0 if p is None else p, i))  # unanswered: keep it
     scored.sort(key=lambda s: -s[0])
-    return {name for p, name in scored[:MAX_SHOWN] if p >= KEEP_ABOVE}
+    return {tool_name(t) for p, i in scored[:MAX_SHOWN] if p >= KEEP_ABOVE for t in groups[i][1]}
+
+
+def unlocked(hidden: list[str], named: str | set[str]) -> set[str]:
+    """The hidden tools to show: those named (a set of tool names, or text that
+    mentions them), each with the rest of its app."""
+    if isinstance(named, str):
+        named = {n for n in hidden if n in named}
+    apps = {app_of(n) for n in named if app_of(n)}
+    return {n for n in hidden if n in named or app_of(n) in apps}
 
 
 def hidden_note(hidden: list[str]) -> str:

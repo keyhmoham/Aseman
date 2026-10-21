@@ -950,7 +950,8 @@ class _LibraryPanel extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                   for (var i = 0; i < icons.length; i++) ...[
-                    if (i == facilitiesTab)
+                    // Rooms, the library, then the space's facilities.
+                    if (i == 1 || i == facilitiesTab)
                       Container(
                           width: 26,
                           height: 1,

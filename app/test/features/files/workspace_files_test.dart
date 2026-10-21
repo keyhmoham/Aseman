@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -127,6 +128,7 @@ class _Service extends FakeTraderaService {
     'docs/prices.xlsx': _xlsx,
     'docs/deck.pptx': _pptx,
     'logo.png': _png,
+    'site/index.html': utf8.encode('<html><body><h1>Hi</h1></body></html>'),
     'blob.bin': Uint8List.fromList([0, 1, 2, 65, 66, 255]),
   };
 
@@ -198,6 +200,9 @@ void main() {
     expect(FileType.of('notes.md').kind, FileKind.markdown);
     expect(FileType.of('a.png').kind, FileKind.image);
     expect(FileType.of('a.svg').kind, FileKind.svg);
+    expect(FileType.of('site/index.html').kind, FileKind.html);
+    expect(FileType.of('site/index.html').language, 'xml');
+    expect(FileType.of('site/index.html').icon, Icons.html_rounded);
     expect(FileType.of('clip.mp4').kind, FileKind.video);
     expect(FileType.of('song.mp3').kind, FileKind.audio);
     expect(FileType.of('book.pdf').kind, FileKind.pdf);
@@ -270,6 +275,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: WorkspaceFileViewer(
+            key: ValueKey(path),
             service: service,
             spaceId: 's1',
             path: '/workspace/$path',
@@ -324,6 +330,24 @@ void main() {
     await pumpViewer(tester, service, 'logo.png');
     expect(find.byType(Image), findsOneWidget);
     expect(find.byTooltip('Zoom in'), findsOneWidget);
+
+    // Where pages cannot be rendered in the app, HTML is its source.
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    await pumpViewer(tester, service, 'site/index.html');
+    expect(find.byType(CodeView), findsOneWidget);
+    expect(find.byTooltip('Preview'), findsNothing);
+    expect(
+      find.textContaining('<h1>Hi</h1>', findRichText: true),
+      findsWidgets,
+    );
+    debugDefaultTargetPlatformOverride = null;
+    // Where they can, it opens rendered, its source a toggle away.
+    await pumpViewer(tester, service, 'site/index.html');
+    expect(find.byTooltip('Preview'), findsOneWidget);
+    expect(find.byType(CodeView), findsNothing);
+    await tester.tap(find.byTooltip('Source'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CodeView), findsOneWidget);
 
     await pumpViewer(tester, service, 'blob.bin');
     expect(find.textContaining('Binary file'), findsOneWidget);

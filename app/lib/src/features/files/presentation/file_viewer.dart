@@ -13,6 +13,7 @@ import '../domain/documents.dart';
 import '../domain/file_types.dart';
 import 'code_view.dart';
 import 'document_views.dart';
+import 'html_preview/html_preview.dart';
 import 'media_players.dart';
 
 /// "1.4 MB".
@@ -115,6 +116,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> {
   FileKind _kindOf(Uint8List bytes) {
     final kind = _type.kind;
     if ((kind == FileKind.code ||
+            kind == FileKind.html ||
             kind == FileKind.text ||
             kind == FileKind.markdown) &&
         _looksBinary(bytes)) {
@@ -123,10 +125,16 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> {
     return kind;
   }
 
-  /// Kinds shown rendered, with their source a toggle away.
-  static const _renderable = {FileKind.markdown, FileKind.svg};
+  /// Kinds shown rendered, with their source a toggle away (HTML where a
+  /// page can be rendered in the app; elsewhere its source).
+  static Set<FileKind> get _renderable => {
+    FileKind.markdown,
+    FileKind.svg,
+    if (htmlPreviewSupported) FileKind.html,
+  };
   static const _textual = {
     FileKind.code,
+    FileKind.html,
     FileKind.text,
     FileKind.markdown,
     FileKind.svg,
@@ -277,6 +285,13 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> {
           language: _type.language,
         ),
         FileKind.text => CodeView(source: _text(bytes)),
+        FileKind.html =>
+          _source || !htmlPreviewSupported
+              ? CodeView(source: _text(bytes), language: 'xml')
+              : htmlPreview(
+                  key: ValueKey('html-${widget.path}-${bytes.length}'),
+                  html: _text(bytes),
+                ),
         FileKind.markdown =>
           _source
               ? CodeView(source: _text(bytes), language: 'markdown')

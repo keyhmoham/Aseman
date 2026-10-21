@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 /// How a workspace file is shown: each kind has its own viewer.
 enum FileKind {
   code,
+  html,
   markdown,
   text,
   image,
@@ -185,9 +186,24 @@ class FileType {
     'nix': _code('nix', const Color(0xFF7EBAE4)),
     'tf': _code('ini', const Color(0xFF7B42BC)),
     // Web.
-    'html': _code('xml', const Color(0xFFE34F26), Icons.html_rounded),
-    'htm': _code('xml', const Color(0xFFE34F26), Icons.html_rounded),
-    'xhtml': _code('xml', const Color(0xFFE34F26), Icons.html_rounded),
+    'html': const FileType(
+      FileKind.html,
+      Icons.html_rounded,
+      Color(0xFFE34F26),
+      language: 'xml',
+    ),
+    'htm': const FileType(
+      FileKind.html,
+      Icons.html_rounded,
+      Color(0xFFE34F26),
+      language: 'xml',
+    ),
+    'xhtml': const FileType(
+      FileKind.html,
+      Icons.html_rounded,
+      Color(0xFFE34F26),
+      language: 'xml',
+    ),
     'css': _code('css', const Color(0xFF1572B6), Icons.css_rounded),
     'scss': _code('scss', const Color(0xFFCC6699), Icons.css_rounded),
     'sass': _code('scss', const Color(0xFFCC6699), Icons.css_rounded),

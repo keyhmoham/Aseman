@@ -83,4 +83,21 @@ Some **bold** and *italic* with a [link](https://example.com) and `code`.
             .any((t) => t.kind == InlineKind.mention && t.text == '@trader'),
         isTrue);
   });
+
+  test('underscores emphasise at word edges only, and fences keep their language',
+      () {
+    final tokens = parseInline('_soft_ and __loud__ but snake_case_name');
+    expect(tokens.map((t) => (t.kind, t.text)), [
+      (InlineKind.italic, 'soft'),
+      (InlineKind.text, ' and '),
+      (InlineKind.bold, 'loud'),
+      (InlineKind.text, ' but snake_case_name'),
+    ]);
+    final blocks = parseRichMarkdown('###### Small\n```python\nprint(1)\n```');
+    expect(blocks.first.kind, BlockKind.heading);
+    expect(blocks.first.level, 6);
+    expect(blocks.last.kind, BlockKind.code);
+    expect(blocks.last.language, 'python');
+    expect(blocks.last.code, 'print(1)');
+  });
 }

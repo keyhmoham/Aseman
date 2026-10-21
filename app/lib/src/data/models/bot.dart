@@ -25,6 +25,10 @@ class Bot {
   bool get isAgent => kind == 'agent';
   bool get isTool => kind == 'tool';
 
+  /// The space's own computer (its sandbox), shown as the space's files
+  /// rather than as an app.
+  bool get isSandbox => isTool && name.startsWith('sbx-');
+
   /// A tool whose backend serves microtools over MCP — an external server, a
   /// backend this node runs (Elpian VM, QuickJS or docker) or one installed
   /// into each space's sandbox. It is used through its frontend

@@ -20,9 +20,8 @@ import 'host_values.dart';
 ///     backend bot.
 ///   * `ctx.user()`               → the signed-in user's context (id, handle).
 ///
-/// When a [spaceId] is provided the sandbox bridge is also exposed so a
-/// app (e.g. the Sandbox Explorer file manager) can drive the space's
-/// shared docker sandbox:
+/// When a [spaceId] is provided the sandbox bridge is also exposed so an
+/// app can drive the space's shared docker sandbox:
 ///
 ///   * `sandbox.exec(command)`    → runs a shell command, returns its output.
 ///   * `sandbox.status()`         → the sandbox bot status.

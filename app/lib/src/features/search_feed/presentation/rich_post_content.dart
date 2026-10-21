@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/code_highlight.dart';
 import '../../rooms/presentation/widgets/audio_bubble.dart';
 import '../../rooms/presentation/widgets/video_bubble.dart';
 import 'rich_post_parser.dart';
@@ -49,7 +50,8 @@ class _BlockView extends StatelessWidget {
                     : 13.5;
         return Padding(
           padding: const EdgeInsets.only(top: 8, bottom: 4),
-          child: Text.rich(_inline(context, block.inline.first, onLinkTap),
+          child: Text.rich(
+              _inline(context, block.inline.first, onLinkTap, size),
               style: TextStyle(
                   fontSize: size,
                   fontWeight: FontWeight.w900,
@@ -105,20 +107,40 @@ class _BlockView extends StatelessWidget {
                   color: scheme.onSurfaceVariant)),
         );
       case BlockKind.code:
+        final brightness = Theme.of(context).brightness;
+        final palette = CodeHighlight.palette(brightness);
         return Container(
           width: double.infinity,
           margin: const EdgeInsets.only(bottom: 6),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
+            color: CodeHighlight.background(brightness),
             borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: scheme.outlineVariant.withValues(alpha: .4)),
           ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Text(block.code ?? '',
-                style: const TextStyle(
-                    fontSize: 11.5, fontFamily: 'monospace', height: 1.4)),
-          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (block.language.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(block.language,
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: palette['comment'])),
+              ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Text.rich(
+                  TextSpan(
+                      children: CodeHighlight.spans(
+                          block.code ?? '', block.language, palette)),
+                  style: TextStyle(
+                      fontSize: 11.5,
+                      fontFamily: 'monospace',
+                      height: 1.4,
+                      color: palette['root'])),
+            ),
+          ]),
         );
       case BlockKind.divider:
         return Divider(
@@ -240,16 +262,20 @@ class _BlockView extends StatelessWidget {
 
 /// Builds a rich [TextSpan] from inline tokens.
 InlineSpan _inline(BuildContext context, List<InlineToken> tokens,
-    [Future<void> Function(String)? onLinkTap]) {
+    [Future<void> Function(String)? onLinkTap, double fontSize = 12.5]) {
   final scheme = Theme.of(context).colorScheme;
   return TextSpan(children: [
-    for (final t in tokens) _tokenSpan(context, t, scheme, onLinkTap),
+    for (final t in tokens)
+      _tokenSpan(context, t, scheme, onLinkTap, fontSize),
   ]);
 }
 
 InlineSpan _tokenSpan(BuildContext context, InlineToken t, ColorScheme scheme,
-    Future<void> Function(String)? onLinkTap) {
-  final base = TextStyle(fontSize: 12.5, height: 1.5, color: scheme.onSurface);
+    Future<void> Function(String)? onLinkTap,
+    [double fontSize = 12.5]) {
+  // A heading's runs keep its size.
+  final base =
+      TextStyle(fontSize: fontSize, height: 1.5, color: scheme.onSurface);
   switch (t.kind) {
     case InlineKind.bold:
       return TextSpan(
@@ -268,7 +294,7 @@ InlineSpan _tokenSpan(BuildContext context, InlineToken t, ColorScheme scheme,
           text: t.text,
           style: base.copyWith(
               fontFamily: 'monospace',
-              fontSize: 11.5,
+              fontSize: fontSize - 1,
               color: scheme.primary,
               backgroundColor: scheme.surfaceContainerHighest));
     case InlineKind.link:

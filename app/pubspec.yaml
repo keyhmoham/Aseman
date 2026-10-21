@@ -40,6 +40,11 @@ dependencies:
   a2ui_core: ^0.1.1
   json_schema_builder: ^0.1.3
   flutter_inappwebview: ^6.1.5
+  highlight: ^0.7.0
+  # 2.4 is the newest that builds on the web image's Flutter (3.44).
+  pdfrx: '>=2.4.8 <2.5.0'
+  archive: ^4.5.2
+  xml: ^7.0.1
 
 dev_dependencies:
   flutter_test:

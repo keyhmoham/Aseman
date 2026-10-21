@@ -168,6 +168,15 @@ class DeskController extends ChangeNotifier {
           title: title,
           size: size ?? const Size(720, 600));
 
+  /// Opens a file of the space's workspace (`/workspace/…`) as a card
+  /// window, shown with the app's file viewer.
+  Future<String?> openFile(String path, {String title = '', Size? size}) =>
+      open(fileTool,
+          kind: fileKind,
+          args: {'path': path},
+          title: title.isEmpty ? path.split('/').last : title,
+          size: size ?? const Size(680, 620));
+
   Future<String?> openPin(DeskPin pin) => open(pin.tool,
       kind: pin.kind,
       widget: pin.widget,

@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"path"
 	"reflect"
 	"sort"
 	"strings"
@@ -69,6 +70,40 @@ const (
 	DeskWebFrontend = "web"
 	DeskWebTool     = "pages"
 )
+
+// File windows: a file of the space's shared workspace, shown by the
+// client's own viewer (code, documents, media). Its Args hold {"path": the
+// file's path under /workspace}; every file window shares the dock entry
+// DeskFileTool.
+const (
+	DeskFile         = "file"
+	DeskFileFrontend = "file"
+	DeskFileTool     = "files"
+)
+
+// FilePath is the workspace path a file window shows ("" for any other).
+func (w *DeskWindow) FilePath() string {
+	if w.Kind != DeskFile {
+		return ""
+	}
+	p, _ := w.Args["path"].(string)
+	return p
+}
+
+// checkFilePath accepts a file inside the workspace, as /workspace/… or
+// relative to it (not the workspace itself, nor the browser's saved
+// logins), and returns it as /workspace/….
+func checkFilePath(p string) (string, error) {
+	rel := p
+	if p == "/workspace" || strings.HasPrefix(p, "/workspace/") {
+		rel = strings.TrimPrefix(p, "/workspace")
+	}
+	target, err := workspacePath(rel)
+	if err != nil || p == "" || target == "/workspace" || inBrowserProfile(target) {
+		return "", errs.InvalidArgument("a file window shows a file of the workspace: /workspace/…")
+	}
+	return target, nil
+}
 
 // Page is the gateway path a web page window shows ("" for any other).
 func (w *DeskWindow) Page() string {
@@ -353,6 +388,16 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 				op.Tool, op.Name = DeskWebTool, "Web pages"
 			}
 			op.Frontend, op.Microtool, op.Args = DeskWebFrontend, "", map[string]any{"page": page}
+		} else if op.Kind == DeskFile {
+			raw, _ := op.Args["path"].(string)
+			target, err := checkFilePath(raw)
+			if err != nil {
+				return "", err
+			}
+			if op.Title == "" {
+				op.Title = path.Base(target)
+			}
+			op.Tool, op.Name, op.Frontend, op.Microtool, op.Args = DeskFileTool, "Files", DeskFileFrontend, "", map[string]any{"path": target}
 		} else if op.Tool == "" {
 			return "", errs.InvalidArgument("open needs a tool")
 		}
@@ -610,6 +655,9 @@ func (d *Desktop) Summary() string {
 			}
 			if w.Kind == DeskWeb {
 				what = "web page " + w.Page()
+			}
+			if w.Kind == DeskFile {
+				what = "file " + w.FilePath()
 			}
 			if w.Frontend == DeskAutoFrontend {
 				what += ", designed for: " + strings.TrimSpace(w.Request)

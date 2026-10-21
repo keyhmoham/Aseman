@@ -45,6 +45,8 @@ class ToolAvatar extends StatelessWidget {
     if (n == 'widgets') return Icons.dashboard_customize_rounded;
     // Web pages agents built, of no tool.
     if (n == 'web pages') return Icons.language_rounded;
+    // Workspace files open in the app's file viewer.
+    if (n == 'files') return Icons.folder_copy_rounded;
     if (has(['weather', 'forecast', 'climate'])) return Icons.wb_sunny_rounded;
     if (has(
         ['market', 'stock', 'price', 'crypto', 'trade', 'ticker', 'quote'])) {

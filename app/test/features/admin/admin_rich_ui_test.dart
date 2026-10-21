@@ -4,7 +4,6 @@ import 'package:tradera/src/features/account/presentation/account_hub_content.da
 import 'package:tradera/src/features/account/presentation/account_panel.dart';
 import 'package:tradera/src/features/admin/presentation/admin_page_content.dart';
 import 'package:tradera/src/features/admin/presentation/admin_widgets.dart';
-import 'package:tradera/src/features/home/presentation/project_control_content.dart';
 
 void main() {
   Future<void> pumpWide(WidgetTester tester, Widget child) async {
@@ -205,26 +204,5 @@ void main() {
     expect(find.text('Credits that expire'), findsOneWidget);
     expect(find.textContaining('Welcome credits'), findsNWidgets(2));
     expect(find.text('Promo · expired 1 Feb 2026'), findsOneWidget);
-
-    await pumpWide(
-      tester,
-      ProjectControlContent(
-        area: 'Files',
-        spaceId: 'space-1',
-        results: const {
-          'spaces.sandbox_files': {
-            'files': [
-              {'name': 'README.md', 'path': '/workspace/README.md', 'size': 42}
-            ]
-          },
-          'spaces.file_list': {'files': <Map<String, dynamic>>[]},
-        },
-        onAction: (_, __, ___) async {},
-      ),
-    );
-    expect(find.text('Search workspace files'), findsOneWidget);
-    expect(find.text('README.md'), findsOneWidget);
-    expect(find.text('New folder'), findsOneWidget);
-    expect(find.text('Actions'), findsOneWidget);
   });
 }

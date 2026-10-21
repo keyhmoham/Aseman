@@ -49,6 +49,12 @@ const String composedTool = 'widgets';
 const String webKind = 'web';
 const String webTool = 'pages';
 
+/// The kind of a window that shows a file of the space's workspace with the
+/// app's own viewer; its args hold `{"path": "/workspace/…"}`. Every file
+/// window shares the dock entry [fileTool].
+const String fileKind = 'file';
+const String fileTool = 'files';
+
 /// How a window sits on the phone board (the desk as compact widgets).
 /// Empty [shape] / [size] take the frontend's hint, else a medium card.
 class DeskCompact {
@@ -160,6 +166,12 @@ class DeskWindow {
 
   /// The gateway path a web page window shows.
   String get page => isWeb ? '${args['page'] ?? ''}' : '';
+
+  /// A workspace file rather than a tool's own frontend.
+  bool get isFile => kind == fileKind;
+
+  /// The workspace path a file window shows.
+  String get filePath => isFile ? '${args['path'] ?? ''}' : '';
   final String name;
   final String title;
 
@@ -181,8 +193,8 @@ class DeskWindow {
       ? null
       : ShownResult(microtool: microtool, args: args);
 
-  /// "city: New York · units: metric" (nothing for a web page).
-  String get argsSummary => isWeb
+  /// "city: New York · units: metric" (nothing for a web page or a file).
+  String get argsSummary => isWeb || isFile
       ? ''
       : args.entries
       .where((e) => e.value is! Map && e.value is! List)
@@ -280,13 +292,17 @@ class DeskPin {
   bool get isWeb => kind == webKind;
   String get page => isWeb ? '${args['page'] ?? ''}' : '';
 
+  /// A workspace file.
+  bool get isFile => kind == fileKind;
+  String get filePath => isFile ? '${args['path'] ?? ''}' : '';
+
   String get label => title.isNotEmpty ? title : name;
 
   ShownResult? get shown => microtool.isEmpty && args.isEmpty
       ? null
       : ShownResult(microtool: microtool, args: args);
 
-  String get argsSummary => isWeb
+  String get argsSummary => isWeb || isFile
       ? ''
       : args.entries
           .where((e) => e.value is! Map && e.value is! List)

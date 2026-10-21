@@ -11,9 +11,9 @@ import 'package:tradera/src/core/theme/app_theme.dart';
 import 'package:tradera/src/data/models/space.dart';
 import 'package:tradera/src/features/account/presentation/account_panel.dart';
 import 'package:tradera/src/features/agents/presentation/agents_screen.dart';
-import 'package:tradera/src/features/home/presentation/project_control_screen.dart';
 import 'package:tradera/src/features/home/presentation/space_settings_panel.dart';
 import 'package:tradera/src/features/home/presentation/widgets/routines_panel.dart';
+import 'package:tradera/src/features/home/presentation/widgets/space_facility_tabs.dart';
 import 'package:tradera/src/features/market/presentation/market_screen.dart';
 import 'package:tradera/src/features/messenger/presentation/chat_page.dart';
 import 'package:tradera/src/features/messenger/presentation/messenger_panel.dart';
@@ -111,10 +111,21 @@ void main() {
     'my_bots': (d) => AgentsScreen(dependencies: d),
     for (final area in AccountArea.values)
       'account_${area.name}': (d) => AccountPanel(dependencies: d, area: area),
-    'project_control': (d) => ProjectControlScreen(
-        dependencies: d,
-        spaceId: FakeTraderaService.atlasId,
-        spaceName: 'Atlas Capital'),
+    // The space's facility tabs, at the left panel's width.
+    for (final tab in ['computer', 'memory', 'previews'])
+      'space_$tab': (d) => Scaffold(
+          body: Center(
+              child: SizedBox(
+                  width: 210,
+                  height: 600,
+                  child: switch (tab) {
+                    'computer' => SpaceComputerTab(
+                        dependencies: d, spaceId: FakeTraderaService.atlasId),
+                    'memory' => SpaceMemoryTab(
+                        dependencies: d, spaceId: FakeTraderaService.atlasId),
+                    _ => SpacePreviewsTab(
+                        dependencies: d, spaceId: FakeTraderaService.atlasId),
+                  }))),
     'space_settings': (d) => Scaffold(
         body: SpaceSettingsPanel(
             dependencies: d,

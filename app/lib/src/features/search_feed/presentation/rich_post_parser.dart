@@ -57,13 +57,22 @@ class PostCard {
 
 class PostBlock {
   const PostBlock(this.kind, this.inline,
-      {this.level, this.code, this.rows, this.chart, this.url, this.card});
+      {this.level,
+      this.code,
+      this.language = '',
+      this.rows,
+      this.chart,
+      this.url,
+      this.card});
   final BlockKind kind;
 
   /// Inline tokens for paragraph/heading/list/quote/table cells.
   final List<List<InlineToken>> inline;
   final int? level;
   final String? code;
+
+  /// A code block's language, from its fence (```python).
+  final String language;
   final List<List<InlineToken>>? rows;
   final Map<String, dynamic>? chart;
   final String? url;
@@ -76,6 +85,7 @@ List<PostBlock> parseRichMarkdown(String source) {
   final lines = source.split('\n');
   var inFence = false;
   final fenceBuf = <String>[];
+  var fenceLanguage = '';
   final paragraphBuf = <String>[];
 
   void flushParagraph() {
@@ -109,7 +119,8 @@ List<PostBlock> parseRichMarkdown(String source) {
 
   void flushFence() {
     if (!inFence || fenceBuf.isEmpty) return;
-    blocks.add(PostBlock(BlockKind.code, const [], code: fenceBuf.join('\n')));
+    blocks.add(PostBlock(BlockKind.code, const [],
+        code: fenceBuf.join('\n'), language: fenceLanguage));
     fenceBuf.clear();
   }
 
@@ -119,14 +130,16 @@ List<PostBlock> parseRichMarkdown(String source) {
     // Code fence.
     if (line.trimLeft().startsWith('```')) {
       if (inFence) {
-        blocks.add(
-            PostBlock(BlockKind.code, const [], code: fenceBuf.join('\n')));
+        blocks.add(PostBlock(BlockKind.code, const [],
+            code: fenceBuf.join('\n'), language: fenceLanguage));
         fenceBuf.clear();
         inFence = false;
       } else {
         flushParagraph();
         flushTable();
         inFence = true;
+        fenceLanguage =
+            line.trimLeft().substring(3).trim().split(RegExp(r'\s')).first;
       }
       continue;
     }
@@ -180,7 +193,7 @@ List<PostBlock> parseRichMarkdown(String source) {
     }
 
     // Headings.
-    final hMatch = RegExp(r'^(#{1,4})\s+(.*)$').firstMatch(trimmed);
+    final hMatch = RegExp(r'^(#{1,6})\s+(.*)$').firstMatch(trimmed);
     if (hMatch != null) {
       flushParagraph();
       blocks.add(PostBlock(BlockKind.heading, [parseInline(hMatch.group(2)!)],
@@ -295,6 +308,22 @@ List<InlineToken> parseInline(String source) {
         continue;
       }
     }
+    // Bold __text__ and italic _text_, at word edges only (snake_case
+    // stays as it is).
+    if (ch == '_' && (i == 0 || !_word(source[i - 1]))) {
+      final strong = i + 1 < source.length && source[i + 1] == '_';
+      final mark = strong ? '__' : '_';
+      final close = source.indexOf(mark, i + mark.length + 1);
+      if (close >= 0 &&
+          (close + mark.length >= source.length ||
+              !_word(source[close + mark.length]))) {
+        flushText();
+        out.add(InlineToken(strong ? InlineKind.bold : InlineKind.italic,
+            source.substring(i + mark.length, close)));
+        i = close + mark.length;
+        continue;
+      }
+    }
     // Strike ~~text~~
     if (ch == '~' && i + 1 < source.length && source[i + 1] == '~') {
       final close = source.indexOf('~~', i + 2);
@@ -321,6 +350,8 @@ List<InlineToken> parseInline(String source) {
   flushText();
   return out.isEmpty ? [InlineToken(InlineKind.text, source)] : out;
 }
+
+bool _word(String ch) => RegExp(r'[A-Za-z0-9_]').hasMatch(ch);
 
 Map<String, dynamic> _json(String raw) {
   final start = raw.indexOf('{');

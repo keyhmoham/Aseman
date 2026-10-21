@@ -30,6 +30,9 @@ import '../../desk/presentation/designed_window.dart';
 import '../../desk/presentation/desk_controller.dart';
 import '../../desk/presentation/floating_desk.dart';
 import '../../desk/presentation/web_page_view.dart';
+import '../../files/domain/file_types.dart';
+import '../../files/presentation/file_tree.dart';
+import '../../files/presentation/file_viewer.dart';
 import '../../messenger/presentation/report_dialog.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import '../../search_feed/presentation/post_editor.dart';
@@ -37,7 +40,6 @@ import '../../search_feed/presentation/rich_post_content.dart';
 import '../../tools/connect/add_app.dart';
 import '../../tools/connect/mcp_connect_dialog.dart';
 import '../../tools/data/tools_api.dart';
-import '../../tools/domain/sandbox_explorer_frontend.dart';
 import '../../tools/domain/tool_models.dart';
 import '../../tools/presentation/app_frontend_screen.dart';
 import '../../tools/presentation/mcp_app_view.dart';
@@ -45,6 +47,7 @@ import '../../tools/presentation/tool_frontend_view.dart';
 import '../../tools/presentation/tool_screen.dart';
 import '../../tools/runtime/tool_media.dart';
 import 'space_settings_panel.dart';
+import 'widgets/space_facility_tabs.dart';
 
 class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({
@@ -70,6 +73,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   String workspace = 'Home';
   String? room;
   int libraryTab = 0;
+
+  /// The workspace file opened last, highlighted in the Files tab.
+  String _openFilePath = '';
   int mobilePage = 0;
   Offset pointer = Offset.zero;
   List<Bot> bots = [];
@@ -127,6 +133,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   /// are only shown (and usable) here once added via [addBotToSpace].
   List<Bot> get spaceBots => _spaceBots[workspace] ?? const [];
 
+  /// Whether each app of a workspace needs each person's own account, and
+  /// whether the caller has connected theirs, by bot id.
+  final Map<String, Map<String, ({String auth, bool connected, String name})>>
+      _appConnections = {};
+
   Future<void> _loadSpaceBots() async {
     final requestedWorkspace = workspace;
     final sp = _spaceFor(workspace);
@@ -135,6 +146,23 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       final list = await widget.dependencies.service.fetchSpaceBots(sp.id);
       if (mounted) setState(() => _spaceBots[requestedWorkspace] = list);
     } catch (_) {}
+    try {
+      final connections =
+          await widget.dependencies.service.toolConnections(sp.id);
+      if (mounted) {
+        setState(() => _appConnections[requestedWorkspace] = connections);
+      }
+    } catch (_) {}
+  }
+
+  /// Connects (or reconnects) the caller's own account to an app of the
+  /// workspace that each person signs in to.
+  Future<void> _connectApp(Bot bot, bool reconnect) async {
+    final sp = _spaceFor(workspace);
+    if (sp == null) return;
+    final connected = await connectMcpTool(context, widget.dependencies.service,
+        botId: bot.id, spaceId: sp.id, name: bot.name, reconnect: reconnect);
+    if (connected && mounted) await _loadSpaceBots();
   }
 
   Future<void> _addBotToWorkspace(Bot bot) async {
@@ -360,34 +388,18 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                 spaceId: spaceId)));
   }
 
-  /// Opens the shared per-space sandbox as a full file-explorer app. The
-  /// explorer frontend is installed on the sandbox bot (idempotent) so the
-  /// sandbox appears in the workspace Apps library with its UI.
-  Future<void> _openSandboxExplorer() async {
-    final sp = _spaceFor(workspace);
-    if (sp == null) return;
-    try {
-      final status = await widget.dependencies.service.sandboxStatus(sp.id);
-      final botId = status['bot_id'] as String? ?? '';
-      if (botId.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Could not provision the sandbox.')));
-        }
-        return;
-      }
-      await widget.dependencies.service
-          .setBotFrontend(botId, SandboxExplorerFrontend.bundle());
-      final bot = await widget.dependencies.service.fetchBot(botId);
-      if (!mounted) return;
-      await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => AppFrontendScreen(
-              dependencies: widget.dependencies, bot: bot, spaceId: sp.id)));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Sandbox explorer failed: $e')));
+  /// Opens a workspace file: as a card window on the desk, or straight in
+  /// a bottom sheet on a phone.
+  void _openFile(String path) {
+    final spaceId = _spaceFor(workspace)?.id ?? '';
+    if (spaceId.isEmpty) return;
+    setState(() => _openFilePath = path);
+    if (MediaQuery.sizeOf(context).width < 820) {
+      showWorkspaceFileSheet(context,
+          service: widget.dependencies.service, spaceId: spaceId, path: path);
+      return;
     }
+    deskController.openFile(path);
   }
 
   bool get _canManageTasks {
@@ -495,12 +507,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                           fileRevision: _fileRevision,
                           onTab: (v) => setState(() => libraryTab = v),
                           onOpenApp: openApp,
-                          onOpenSandbox: _openSandboxExplorer,
+                          onOpenFile: _openFile,
+                          openFilePath: _openFilePath,
                           onCreateRoom: _createRoom,
                           onSearch: () => _search(context),
                           onAddBot: _addBotToWorkspace,
                           onRemoveBot: _removeBotFromWorkspace,
                           onAddApp: _addAppToWorkspace,
+                          appConnections:
+                              _appConnections[workspace] ?? const {},
+                          onConnectApp: _connectApp,
                           openRoom: (value) {
                             Navigator.pop(context);
                             openRoom(value);
@@ -569,12 +585,17 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                       onTab: (v) =>
                                           setState(() => libraryTab = v),
                                       onOpenApp: openApp,
-                                      onOpenSandbox: _openSandboxExplorer,
+                                      onOpenFile: _openFile,
+                          openFilePath: _openFilePath,
                                       onCreateRoom: _createRoom,
                                       onSearch: () => _search(context),
                                       onAddBot: _addBotToWorkspace,
                                       onRemoveBot: _removeBotFromWorkspace,
                                       onAddApp: _addAppToWorkspace,
+                                      appConnections:
+                                          _appConnections[workspace] ??
+                                              const {},
+                                      onConnectApp: _connectApp,
                                       openRoom: openRoom))),
                           const SizedBox(width: 16),
                           Expanded(
@@ -828,12 +849,15 @@ class _LibraryPanel extends StatelessWidget {
       this.fileRevision = 0,
       required this.onTab,
       this.onOpenApp,
-      this.onOpenSandbox,
+      this.onOpenFile,
+      this.openFilePath = '',
       this.onCreateRoom,
       this.onSearch,
       this.onAddBot,
       this.onRemoveBot,
       this.onAddApp,
+      this.appConnections = const {},
+      this.onConnectApp,
       required this.openRoom});
   final String? room;
   final String workspace;
@@ -853,7 +877,12 @@ class _LibraryPanel extends StatelessWidget {
   final ValueChanged<int> onTab;
   final ValueChanged<String> openRoom;
   final ValueChanged<Bot>? onOpenApp;
-  final VoidCallback? onOpenSandbox;
+
+  /// Opens a workspace file (`/workspace/…`) from the Files tab.
+  final ValueChanged<String>? onOpenFile;
+
+  /// The file open now, highlighted in the Files tab.
+  final String openFilePath;
   final VoidCallback? onCreateRoom;
   final VoidCallback? onSearch;
   final ValueChanged<Bot>? onAddBot;
@@ -861,6 +890,16 @@ class _LibraryPanel extends StatelessWidget {
 
   /// Adds an MCP app (from the catalog or by its address) to the space.
   final VoidCallback? onAddApp;
+
+  /// Each app's sign-in state here, by bot id: an app each person connects
+  /// with their own account offers Connect, or Reconnect once connected.
+  final Map<String, ({String auth, bool connected, String name})>
+      appConnections;
+  final void Function(Bot bot, bool reconnect)? onConnectApp;
+
+  /// The first of the space's facility tabs (Files, Computer, Memory,
+  /// Previews), which follow the library tabs.
+  static const facilitiesTab = 8;
   static const icons = [
     Icons.forum_outlined,
     Icons.smart_toy_outlined,
@@ -869,7 +908,11 @@ class _LibraryPanel extends StatelessWidget {
     Icons.link,
     Icons.gif_box_outlined,
     Icons.perm_media_outlined,
-    Icons.graphic_eq_rounded
+    Icons.graphic_eq_rounded,
+    Icons.folder_copy_outlined,
+    Icons.desktop_windows_outlined,
+    Icons.psychology_outlined,
+    Icons.open_in_browser_outlined,
   ];
   static const labels = [
     'Rooms',
@@ -879,7 +922,11 @@ class _LibraryPanel extends StatelessWidget {
     'Links',
     'GIFs',
     'Media',
-    'Audio'
+    'Audio',
+    'Files',
+    'Computer',
+    'Memory',
+    'Previews',
   ];
   @override
   Widget build(BuildContext context) => _Panel(
@@ -895,11 +942,21 @@ class _LibraryPanel extends StatelessWidget {
                     .surfaceContainerHighest
                     .withValues(alpha: .58),
                 borderRadius: BorderRadius.circular(24)),
-            child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                    icons.length,
-                    (i) => Padding(
+            // The library tabs, then (past a divider) the space's
+            // facilities; the rail scrolls when the panel is short.
+            child: Center(
+                child: SingleChildScrollView(
+                    child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                  for (var i = 0; i < icons.length; i++) ...[
+                    if (i == facilitiesTab)
+                      Container(
+                          width: 26,
+                          height: 1,
+                          margin: const EdgeInsets.symmetric(vertical: 5),
+                          color: Theme.of(context).colorScheme.outlineVariant),
+                    Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2),
                         child: Tooltip(
                             message: labels[i],
@@ -926,7 +983,9 @@ class _LibraryPanel extends StatelessWidget {
                                             size: 20,
                                             color: i == tab
                                                 ? Theme.of(context).colorScheme.onPrimaryContainer
-                                                : Theme.of(context).colorScheme.onSurfaceVariant))))))))),
+                                                : Theme.of(context).colorScheme.onSurfaceVariant)))))),
+                  ]
+                ])))),
         Expanded(
             child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 16, 14, 14),
@@ -952,17 +1011,21 @@ class _LibraryPanel extends StatelessWidget {
                                           .colorScheme
                                           .onSurfaceVariant))
                             ])),
-                        IconButton.filledTonal(
-                            visualDensity: VisualDensity.compact,
-                            tooltip: 'Find ${labels[tab].toLowerCase()}',
-                            onPressed: onSearch,
-                            icon: const Icon(Icons.search_rounded, size: 18)),
-                        const SizedBox(width: 3),
-                        IconButton(
-                            visualDensity: VisualDensity.compact,
-                            tooltip: tab == 0 ? 'New room' : 'Add',
-                            onPressed: tab == 0 ? onCreateRoom : null,
-                            icon: const Icon(Icons.add_rounded, size: 19))
+                        // A facility tab carries its own actions.
+                        if (tab < facilitiesTab) ...[
+                          IconButton.filledTonal(
+                              visualDensity: VisualDensity.compact,
+                              tooltip: 'Find ${labels[tab].toLowerCase()}',
+                              onPressed: onSearch,
+                              icon:
+                                  const Icon(Icons.search_rounded, size: 18)),
+                          const SizedBox(width: 3),
+                          IconButton(
+                              visualDensity: VisualDensity.compact,
+                              tooltip: tab == 0 ? 'New room' : 'Add',
+                              onPressed: tab == 0 ? onCreateRoom : null,
+                              icon: const Icon(Icons.add_rounded, size: 19))
+                        ],
                       ]),
                       const SizedBox(height: 12),
                       Expanded(
@@ -989,6 +1052,31 @@ class _LibraryPanel extends StatelessWidget {
                 spaceId: spaceId,
                 onTap: () => openRoom(name));
           });
+    }
+    if (tab >= facilitiesTab) {
+      final deps = dependencies;
+      if (deps == null || spaceId.isEmpty) {
+        return const _LibraryEmpty(
+            icon: Icons.cloud_off_outlined,
+            message: 'Open a workspace to manage its facilities.');
+      }
+      if (tab == facilitiesTab) {
+        return WorkspaceFileTree(
+            service: deps.service,
+            spaceId: spaceId,
+            selected: openFilePath,
+            onOpen: (e) => onOpenFile?.call(e.path));
+      }
+      if (tab == facilitiesTab + 1) {
+        return SpaceComputerTab(dependencies: deps, spaceId: spaceId);
+      }
+      if (tab == facilitiesTab + 2) {
+        return SpaceMemoryTab(
+            dependencies: deps,
+            spaceId: spaceId,
+            agents: spaceBots.where((b) => b.isAgent).toList());
+      }
+      return SpacePreviewsTab(dependencies: deps, spaceId: spaceId);
     }
     if (tab >= 3) {
       // Docs / Links / GIFs / Media / Audio are backed by the space's file
@@ -1028,7 +1116,8 @@ class _LibraryPanel extends StatelessWidget {
     }
     if (tab == 2) {
       // Only apps explicitly added to this workspace are shown.
-      final tools = spaceBots.where((b) => b.isTool).toList();
+      // The space's own computer is its Files tab, not an app.
+      final tools = spaceBots.where((b) => b.isTool && !b.isSandbox).toList();
       final addApp = onAddApp;
       // "Add an app" offers the person's own apps too; the plain picker is
       // only for when it is not available.
@@ -1036,12 +1125,11 @@ class _LibraryPanel extends StatelessWidget {
           ? const <Bot>[]
           : allBots
               .where((b) =>
-                  b.isTool && !spaceBots.any((s) => s.id == b.id))
+                  b.isTool &&
+                  !b.isSandbox &&
+                  !spaceBots.any((s) => s.id == b.id))
               .toList();
-      // The shared sandbox is surfaced as a first-class app: its frontend is
-      // the file explorer (Sandbox Explorer).
-      final hasSandbox = onOpenSandbox != null;
-      if (tools.isEmpty && candidates.isEmpty && !hasSandbox && addApp == null) {
+      if (tools.isEmpty && candidates.isEmpty && addApp == null) {
         return const _LibraryEmpty(
             icon: Icons.widgets_outlined,
             message:
@@ -1050,17 +1138,10 @@ class _LibraryPanel extends StatelessWidget {
       return ListView.separated(
           padding: EdgeInsets.zero,
           itemCount: tools.length +
-              (hasSandbox ? 1 : 0) +
               (candidates.isEmpty ? 0 : 1) +
               (addApp == null ? 0 : 1),
           separatorBuilder: (_, __) => const SizedBox(height: 7),
           itemBuilder: (context, index) {
-            if (hasSandbox) {
-              if (index == 0) {
-                return _SandboxExplorerTile(onTap: onOpenSandbox!);
-              }
-              index--;
-            }
             if (addApp != null && index == tools.length) {
               return _AddAppTile(onTap: addApp);
             }
@@ -1072,12 +1153,20 @@ class _LibraryPanel extends StatelessWidget {
                   onAdd: (b) => onAddBot?.call(b));
             }
             final bot = tools[index];
+            final connection = appConnections[bot.id];
+            final connect = onConnectApp;
             return _LibraryToolCard(
                 label: bot.name,
-                subtitle: '${bot.toolModeLabel} · ${bot.status}',
+                subtitle: connection?.auth == 'user' && !connection!.connected
+                    ? 'Needs your sign-in'
+                    : '${bot.toolModeLabel} · ${bot.status}',
                 icon: Icons.widgets_outlined,
                 dependencies: dependencies,
                 spaceId: spaceId,
+                connected: connection?.connected ?? true,
+                onConnect: connect == null || connection?.auth != 'user'
+                    ? null
+                    : () => connect(bot, connection!.connected),
                 onTap: () => onOpenApp?.call(bot),
                 onRemove: onRemoveBot == null ? null : () => onRemoveBot!(bot));
           });
@@ -1499,54 +1588,6 @@ class _LibraryBotCard extends StatelessWidget {
 
 /// A tile that opens a picker of candidate bots (not yet in the workspace) and
 /// adds the selected one.
-class _SandboxExplorerTile extends StatelessWidget {
-  const _SandboxExplorerTile({required this.onTap});
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => Material(
-      color: Theme.of(context).colorScheme.primary.withValues(alpha: .10),
-      borderRadius: BorderRadius.circular(17),
-      child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(17),
-          child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Row(children: [
-                Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .primary
-                            .withValues(alpha: .18),
-                        borderRadius: BorderRadius.circular(12)),
-                    child: const Icon(Icons.folder_open_rounded,
-                        size: 19, color: AppColors.primary)),
-                const SizedBox(width: 9),
-                Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const Text('Sandbox Explorer',
-                          style: TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 3),
-                      Text('Shared workspace file manager',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 9,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant))
-                    ])),
-                Icon(Icons.arrow_forward_ios_rounded,
-                    size: 13,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
-              ]))));
-}
-
 /// Opens "Add an app": an MCP server from the catalog or by its address,
 /// with each person's sign-in right after when it needs one.
 class _AddAppTile extends StatelessWidget {
@@ -1685,6 +1726,8 @@ class _LibraryToolCard extends StatelessWidget {
       this.subtitle,
       this.onTap,
       this.onRemove,
+      this.onConnect,
+      this.connected = true,
       this.dependencies,
       this.spaceId = ''});
   final String label;
@@ -1692,6 +1735,11 @@ class _LibraryToolCard extends StatelessWidget {
   final String? subtitle;
   final VoidCallback? onTap;
   final VoidCallback? onRemove;
+
+  /// Signs the caller's own account in to an app each person connects;
+  /// null for an app everyone shares.
+  final VoidCallback? onConnect;
+  final bool connected;
   final AppDependencies? dependencies;
   final String spaceId;
   @override
@@ -1731,8 +1779,10 @@ class _LibraryToolCard extends StatelessWidget {
                         Container(
                             width: 6,
                             height: 6,
-                            decoration: const BoxDecoration(
-                                color: Colors.greenAccent,
+                            decoration: BoxDecoration(
+                                color: connected
+                                    ? Colors.greenAccent
+                                    : AppColors.warning,
                                 shape: BoxShape.circle)),
                         const SizedBox(width: 5),
                         Expanded(
@@ -1746,6 +1796,17 @@ class _LibraryToolCard extends StatelessWidget {
                                         .onSurfaceVariant)))
                       ])
                     ])),
+                if (onConnect != null)
+                  IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: connected
+                          ? 'Reconnect your account'
+                          : 'Connect your account',
+                      onPressed: onConnect,
+                      icon: Icon(
+                          connected ? Icons.sync_rounded : Icons.login_rounded,
+                          size: 17,
+                          color: connected ? null : AppColors.warning)),
                 if (onRemove != null)
                   IconButton(
                       visualDensity: VisualDensity.compact,
@@ -1828,6 +1889,16 @@ class _CenterDesk extends StatelessWidget {
   /// [FrontendPresentation] says whether in full or as a compact widget.
   Widget _windowContent(BuildContext context, DeskWindow w) => w.isWeb
       ? _page(context, w.id, w.page, w.label)
+      : w.isFile
+      ? (FrontendPresentation.isCompact(context)
+          // A phone-board widget names the file; it opens in the sheet.
+          ? _FilePreview(path: w.filePath)
+          : WorkspaceFileViewer(
+              key: ValueKey('file-${w.id}-${w.filePath}'),
+              service: dependencies.service,
+              spaceId: spaceId,
+              path: w.filePath,
+              showHeader: false))
       : w.isComposed
       ? _composed(w.id, w.widget)
       : w.isApp
@@ -1861,6 +1932,8 @@ class _CenterDesk extends StatelessWidget {
 
   Widget _pinPreview(DeskPin p) => p.isWeb
       ? _WebPinPreview(title: p.label)
+      : p.isFile
+      ? _FilePreview(path: p.filePath)
       : p.isComposed
       ? _composed(p.id, p.widget)
       : p.isApp
@@ -1956,6 +2029,42 @@ class _WebPinPreview extends StatelessWidget {
         Text('An interactive page of the space',
             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
       ]),
+    );
+  }
+}
+
+/// A workspace file's icon, name and folder: a pinned file, or a file
+/// window as a phone-board widget.
+class _FilePreview extends StatelessWidget {
+  const _FilePreview({required this.path});
+  final String path;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final name = path.split('/').last;
+    final type = FileType.of(name);
+    final folder = path.substring(0, path.length - name.length);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(type.icon, color: type.color, size: 32),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: Text(name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            Text(folder,
+                style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
+          ]),
+        ),
+      ),
     );
   }
 }

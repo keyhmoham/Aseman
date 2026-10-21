@@ -12,13 +12,14 @@ import '../../../data/models/profile.dart';
 import '../../../data/models/space.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/backend_action_ui.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
-import 'project_control_screen.dart';
 
-/// Feature-rich settings panel for a workspace (space): profile & visibility,
-/// stats, rooms, members & invites, and — as the very last section — a danger
-/// zone to leave (non-owner) or delete (owner) the space.
+/// The one settings panel of a workspace (space): profile & visibility,
+/// stats, rooms, members & invites, usage & budget, and — as the very last
+/// section — a danger zone to leave (non-owner) or delete (owner) the space.
+/// The space's computer, memory and previews are tabs of its left panel.
 class SpaceSettingsPanel extends StatefulWidget {
   const SpaceSettingsPanel({
     super.key,
@@ -149,15 +150,21 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
     } catch (_) {}
   }
 
-  Future<void> _openProjectControls() => showFloatingPanel(
-        context,
-        ProjectControlScreen(
-          dependencies: widget.dependencies,
-          spaceId: _space.id,
-          spaceName: _space.name,
-        ),
-        maxWidth: 1180,
-      );
+  /// Sets the most credits the space may spend.
+  Future<void> _setBudget() async {
+    final body = await showBackendActionForm(context,
+        namespace: 'finance',
+        action: 'budget_set',
+        initialBody: {'space': _space.id, 'cap': 0});
+    if (body == null || !mounted) return;
+    try {
+      await widget.dependencies.service
+          .invokeAction('finance', 'budget_set', body: body);
+      if (mounted) context.showMessage('Budget saved.');
+    } catch (e) {
+      if (mounted) context.showMessage('Budget failed: $e');
+    }
+  }
 
   String get _myRole {
     for (final m in _members) {
@@ -419,10 +426,6 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2))),
-            IconButton(
-                tooltip: 'Files, computer, apps, routines and memory',
-                onPressed: _openProjectControls,
-                icon: const Icon(Icons.dashboard_customize_outlined)),
             IconButton.filledTonal(
                 tooltip: 'Close',
                 onPressed: () => Navigator.pop(context),
@@ -643,6 +646,12 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
     return _Section(
       title: 'LLM usage',
       icon: Icons.bolt_rounded,
+      trailing: _canManage
+          ? TextButton.icon(
+              onPressed: _busy ? null : _setBudget,
+              icon: const Icon(Icons.tune_rounded, size: 17),
+              label: const Text('Set budget'))
+          : null,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (totalIn > 0 || totalOut > 0)
           Padding(

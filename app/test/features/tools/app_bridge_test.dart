@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tradera/src/core/network/api_client.dart';
 import 'package:tradera/src/core/theme/app_colors.dart';
 import 'package:tradera/src/data/services/tradera_service.dart';
-import 'package:tradera/src/features/tools/domain/sandbox_explorer_frontend.dart';
 import 'package:tradera/src/features/tools/elpian/app_bridge.dart';
 import 'package:tradera/src/features/tools/presentation/app_frontend_theme.dart';
 
@@ -60,19 +59,6 @@ void main() {
         '#${(AppColors.primary.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}');
     expect(bySelector['.muted']?['color'],
         '#${(AppColors.muted.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}');
-  });
-
-  test('sandbox explorer bundle is a valid {manifest, source} bundle', () {
-    final bundle = SandboxExplorerFrontend.bundle();
-    final decoded = jsonDecode(bundle) as Map<String, dynamic>;
-    expect(decoded['manifest'], isA<Map<String, dynamic>>());
-    expect((decoded['manifest'] as Map<String, dynamic>)['runtime'], 'quickjs');
-    final source = decoded['source'] as String;
-    expect(source, contains('Sandbox Explorer'));
-    expect(source, contains('sandbox.exec'));
-    expect(source, contains('askHost'));
-    expect(source, contains('onNav'));
-    expect(source, contains('renderApp'));
   });
 
   test('bridge sandbox.exec returns typed output', () async {

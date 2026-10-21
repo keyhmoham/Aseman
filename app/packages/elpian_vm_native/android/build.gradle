@@ -105,8 +105,12 @@ tasks.register("buildElpianVm", Exec) {
     }
 }
 
+// Every task that reads the staged jniLibs must run after the cargo build:
+// merge*NativeLibs and merge*JniLibFolders (Gradle 9 fails the build when the
+// latter reads buildElpianVm's output without declaring the dependency).
 tasks.configureEach { task ->
-    if (task.name.startsWith("merge") && task.name.endsWith("NativeLibs")) {
+    if (task.name.startsWith("merge") &&
+            (task.name.endsWith("NativeLibs") || task.name.endsWith("JniLibFolders"))) {
         task.dependsOn("buildElpianVm")
     }
 }

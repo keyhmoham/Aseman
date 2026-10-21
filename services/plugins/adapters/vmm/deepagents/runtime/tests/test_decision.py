@@ -107,98 +107,14 @@ def notes(model: RecordingModel, call: int) -> str:
                      if isinstance(m, HumanMessage) and str(m.content).startswith("[runtime note]"))
 
 
-async def test_off_the_agent_decides_alone(platform: Platform, tmp_path: Path) -> None:
+async def test_the_decision_model_never_changes_the_tools(platform: Platform, tmp_path: Path) -> None:
     platform.decide = Jev()
-    r, model = runner(platform, tmp_path, [AIMessage(content="ok")])
-    out = await r.prompt(request("open a github issue", decision=False))
-    assert out.status == "done"
-    assert platform.decisions == []
-    assert len(model.offered[0]) > 30  # every tool, as always
-
-
-async def test_tools_are_chosen_once_and_the_rest_stay_callable(platform: Platform, tmp_path: Path) -> None:
-    platform.decide = Jev()
-    r, model = runner(platform, tmp_path, [
-        call("github__create_issue", {"body": "login bug"}),
-        call("stripe__get_balance", {}),  # not chosen: it still runs
-        AIMessage(content="Opened the issue."),
-    ])
-    out = await r.prompt(request("Open a github issue (create it) for the login bug"))
-    assert out.status == "done" and out.reply == "Opened the issue."
-    assert {t["bot"] for t in platform.tool_runs if "bot" in t} >= {"bot-github", "bot-stripe"}
-    first = set(model.offered[0])
-    # An app is chosen whole: its functions work together.
-    assert {f"github__{c}" for c in APPS["github"]} <= first
-    assert not {"stripe__get_balance", "gmail__send_email"} & first
-    # The agent's working tools are never hidden.
-    assert {"execute", "read_file", "write_todos", "send_message", "task", "ask_user"} <= first
-    assert len(first) < len(model.offered[-1])  # the apps not needed are not sent
-    # One decision for the tools (and the completion check), not one per call.
-    tool_decisions = [d for d in platform.decisions if any(k.startswith("t") for k in d["questions"])]
-    assert len(tool_decisions) == 1
-    # The list only grows: a tool once used stays visible, with its app.
-    assert {f"stripe__{c}" for c in APPS["stripe"]} <= set(model.offered[-1])
-    assert model.offered[0] == model.offered[1]  # stable prefix for the prompt cache
-    assert "stripe__get_balance" in notes(model, 0)  # the agent is told what is not shown
-
-
-def judging_functions_apart(state: Any, questions: dict[str, Any]) -> dict[str, Any]:
-    """A decision model that, asked function by function, keeps only the
-    board's instructions; asked about the board as a whole, keeps it."""
-    out: dict[str, Any] = {}
-    for key, q in questions.items():
-        if q["type"] == "boolean" and key.startswith("t"):
-            name = q["instructions"].split("`")[1]
-            out[key] = {"type": "boolean",
-                        "probability": 0.9 if name in ("board", "board__get_canvas_composer_skill") else 0.05}
-        else:
-            out[key] = {"type": "boolean", "probability": 0.95}
-    return out
-
-
-async def test_the_function_an_apps_instructions_name_is_offered(platform: Platform, tmp_path: Path) -> None:
-    # The loop this prevents: the instructions were kept and the function they
-    # say to call was hidden, so the agent read them again and again.
-    platform.apps = [*apps(), {"name": "board", "kind": "tool", "bot_id": "bot-board", "description": "A whiteboard.",
-                               "commands": [{"name": c, "description": f"{c} of the board.",
-                                             "schema": {"type": "object", "properties": {"body": {"type": "string"}}}}
-                                            for c in ("get_canvas_composer_skill", "create_items", "list_items")]}]
-    platform.app_reply = json.dumps({"content": [{"type": "text", "text": "To draw, call create_items."}]})
-    platform.decide = judging_functions_apart
-    r, model = runner(platform, tmp_path, [
-        call("board__get_canvas_composer_skill", {}),
-        call("board__create_items", {"body": "a flowchart"}),
-        AIMessage(content="Drawn."),
-    ])
-    out = await r.prompt(request("Draw a flowchart of our onboarding on the board"))
-    assert out.status == "done" and out.reply == "Drawn."
-    for offered in model.offered:
-        assert {"board__get_canvas_composer_skill", "board__create_items", "board__list_items"} <= set(offered)
-        assert "github__create_issue" not in offered
-
-
-async def test_a_hidden_tool_named_in_a_result_is_offered(platform: Platform, tmp_path: Path) -> None:
-    platform.decide = Jev()
-    platform.app_reply = json.dumps({"content": [{"type": "text", "text": "Created. Notify with gmail__send_email."}]})
-    r, model = runner(platform, tmp_path, [
-        call("github__create_issue", {"body": "login bug"}),
-        call("gmail__send_email", {"body": "filed"}),
-        AIMessage(content="Done."),
-    ])
-    out = await r.prompt(request("Open a github issue (create it) for the login bug"))
-    assert out.status == "done"
-    assert "gmail__send_email" not in model.offered[0]
-    assert {f"gmail__{c}" for c in APPS["gmail"]} <= set(model.offered[1])
-    assert not {"stripe__get_balance"} & set(model.offered[1])
-
-
-async def test_off_on_the_node_falls_back_after_one_try(platform: Platform, tmp_path: Path) -> None:
-    platform.decide = None  # 409: the admin turned it off during the turn
     r, model = runner(platform, tmp_path, [call("github__create_issue", {"body": "x"}), AIMessage(content="ok")])
     out = await r.prompt(request("open a github issue"))
     assert out.status == "done"
-    assert len(platform.decisions) == 1
-    assert len(model.offered[0]) == len(model.offered[1]) > 30
+    assert not [d for d in platform.decisions if any(k.startswith("t") for k in d["questions"])]
+    # Only the agent's own use changes them: the app it called is loaded (apps.py).
+    assert set(model.offered[1]) - set(model.offered[0]) == {f"github__{c}" for c in APPS["github"]}
 
 
 async def test_a_broken_decision_provider_never_fails_a_turn(platform: Platform, tmp_path: Path) -> None:
@@ -209,40 +125,13 @@ async def test_a_broken_decision_provider_never_fails_a_turn(platform: Platform,
     assert len(platform.decisions) <= 2  # the client stops asking for the turn
 
 
-async def test_completion_check_sends_the_agent_back_once(platform: Platform, tmp_path: Path) -> None:
+async def test_the_agent_decides_when_it_is_done(platform: Platform, tmp_path: Path) -> None:
     jev = Jev()
-    jev.complete = 0.05
+    jev.complete = jev.progress = 0.05
     platform.decide = jev
-    r, model = runner(platform, tmp_path, [
-        AIMessage(content="I will now open the issue."),
-        call("github__create_issue", {"body": "x"}),
-        AIMessage(content="Opened issue #1."),
-    ])
+    r, model = runner(platform, tmp_path, [AIMessage(content="I will now open the issue.")])
     out = await r.prompt(request("open a github issue"))
-    assert out.status == "done" and out.reply == "Opened issue #1."
-    assert any("does not yet deliver" in str(m.content) for m in model.seen[1])
-    assert any(t.get("bot") == "bot-github" for t in platform.tool_runs)
-    completion_checks = [d for d in platform.decisions if "complete" in d["questions"]]
-    assert len(completion_checks) == 1  # never loops
-
-
-async def test_complete_answers_end_the_turn(platform: Platform, tmp_path: Path) -> None:
-    platform.decide = Jev()
-    r, model = runner(platform, tmp_path, [AIMessage(content="Hello!")])
-    out = await r.prompt(request("hi"))
-    assert out.reply == "Hello!" and len(model.seen) == 1
-
-
-async def test_progress_check_tells_a_stuck_agent(platform: Platform, tmp_path: Path) -> None:
-    jev = Jev()
-    jev.progress = 0.05
-    platform.decide = jev
-    steps = [call("execute", {"command": f"false # try {i}"}, cid=f"c{i}") for i in range(9)]
-    r, model = runner(platform, tmp_path, [*steps, AIMessage(content="It keeps failing.")])
-    out = await r.prompt(request("make the build pass"))
-    assert out.status == "done"
-    assert "not moving the work forward" in notes(model, 7)
-    assert "not moving the work forward" not in notes(model, 3)
+    assert out.reply == "I will now open the issue." and len(model.seen) == 1
 
 
 async def test_low_risk_approvals_run_and_the_rest_wait(platform: Platform, tmp_path: Path) -> None:
@@ -321,7 +210,7 @@ async def test_a_lead_gets_a_routing_hint(platform: Platform, tmp_path: Path) ->
     assert "writer fits this request best" in notes(model, 0)
 
 
-async def test_completion_check_counts_what_was_delivered() -> None:
+async def test_completion_counts_what_was_delivered() -> None:
     from langchain_core.messages import ToolMessage
 
     from tradera_agents.decision import completion
@@ -348,5 +237,5 @@ async def test_completion_check_counts_what_was_delivered() -> None:
             assert "delivered" in questions["complete"]["instructions"]
             return {"complete": {"type": "boolean", "probability": 0.9}}
 
-    assert not await completion.incomplete(Client(), "generate a floating banana image", "Here is your floating banana.", sent)
+    assert await completion.complete(Client(), "generate a floating banana image", "Here is your floating banana.", sent) == 0.9
     assert "floating_banana.png" in Client.state["delivered"]

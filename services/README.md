@@ -547,22 +547,22 @@ questions (yes/no, choice, score) with probabilities instead of text. On, the
 runtime's `decision` module (`deepagents/runtime/tradera_agents/decision`)
 uses it together with each agent's own model:
 
-- **tool selection** — once per turn, the apps, bots and platform tools the
-  request needs are shortlisted, so every model call carries fewer tool schemas
-  (a connected app is chosen whole, never function by function; the sandbox,
-  file, planning, messaging and delegation tools are never hidden; a hidden tool
-  the agent uses or the conversation names is shown from then on, with its app;
-  every tool still runs when called, and the list only grows through the turn);
-- **routing** — the agent that fits a task best (a lead's hint; a hand-off
-  addressed by role);
-- **progress** and **completion** checks — a long run that goes nowhere is told
-  to change approach, and a final answer that does not deliver the request
-  sends the agent back once;
+- **routing** — the agent that fits a task best (a lead's hint; a swarm
+  task addressed by role);
+- **completion** — after a turn, how well its answer delivered the request,
+  for the agent's learning (never during the turn);
 - **approvals** (opt-in: *auto-approve*) — low-risk calls of `interrupt_on`
   tools run without waiting on a person; each is written to the work log.
 
+It never changes which tools an agent sees and never sends an agent back to
+work: the agent's own model chooses its tools and decides when it is done.
 Off — or whenever the decision model is unusable or a decision fails — the
-agent's own model decides everything, as before. Decisions go through the
+agent's own model decides everything, as before.
+
+An agent with more than 24 connected-app functions gets them on demand, as
+Claude Code defers MCP tools: `load_app_tools` lists every app with its
+functions, and an app the agent loads (or any function it calls) is offered
+whole from its next step (`deepagents/runtime/tradera_agents/apps.py`). Decisions go through the
 gateway (`/deepagents/v1/decision/evaluate`, the provider's `/evaluate`
 endpoint, key kept on the node) and are billed to the turn at the decision
 model's own token prices. Models carry `capabilities` (`chat`, `decision`):

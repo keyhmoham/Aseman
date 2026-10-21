@@ -7,7 +7,7 @@ with what came of it:
 * ``repeat`` — the same call, with the same arguments, a third time, or
   instructions the agent had already read, read again;
 * ``incomplete`` — a final answer that did not deliver what was asked (the
-  decision model's completion check, during the turn or after it);
+  decision model's completion check, after the turn);
 * ``good`` — a step of a turn that went well, kept so that a new playbook is
   also checked against what already works.
 
@@ -26,7 +26,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage, convert_to_openai_messages
 
 from ..economy import reference
-from ..guard import NOTE, signature
+from ..guard import signature
 
 #: How much of each message a decision point keeps (characters).
 HUMAN_CHARS = 3_000
@@ -106,15 +106,6 @@ def points(messages: list[BaseMessage], quality: float, complete: float | None) 
     problems: list[dict[str, Any]] = []
     good: list[dict[str, Any]] = []
     for i, m in enumerate(messages):
-        text = m.text if isinstance(m, HumanMessage) else ""
-        if text.startswith(NOTE) and "independent check" in text:
-            # The decision model's completion check sent the agent back: its answer before fell short.
-            j = max((k for k in range(i) if isinstance(messages[k], AIMessage) and not messages[k].tool_calls), default=-1)
-            if j >= 0:
-                problems.append({"kind": "incomplete", "at": j, "action": {"text": messages[j].text[:TEXT_CHARS]},
-                                 "feedback": "An independent check found this answer did not deliver the request: "
-                                             "it promised work that was not done, or left part of the request out."})
-            continue
         if not isinstance(m, AIMessage):
             continue
         for call in m.tool_calls or []:
@@ -140,8 +131,7 @@ def points(messages: list[BaseMessage], quality: float, complete: float | None) 
                 good.append({"kind": "good", "at": i, "action": action,
                              "feedback": f"This step worked: {outcome[:300]}"})
     last = max((k for k, m in enumerate(messages) if isinstance(m, AIMessage) and not m.tool_calls), default=-1)
-    if complete is not None and complete < INCOMPLETE_BELOW and last >= 0 and \
-            not any(p["kind"] == "incomplete" and p["at"] == last for p in problems):
+    if complete is not None and complete < INCOMPLETE_BELOW and last >= 0:
         problems.append({"kind": "incomplete", "at": last, "action": {"text": messages[last].text[:TEXT_CHARS]},
                          "feedback": f"An independent check rates the chance that this answer delivers the request at "
                                      f"{complete:.2f}: it promised work that was not done, or left part of it out."})

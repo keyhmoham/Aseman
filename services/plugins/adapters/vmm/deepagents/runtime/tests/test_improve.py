@@ -12,7 +12,6 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from tradera_agents import improve
 from tradera_agents.agent import Runner
-from tradera_agents.guard import NOTE
 from tradera_agents.improve import record, replay
 from tradera_agents.improve.store import AgentStore
 from tradera_agents.store import Store
@@ -40,10 +39,8 @@ def test_a_turn_gives_its_decision_points() -> None:
                 *ran("execute", {"command": "pytest"}, "Error: no module named app\nexit code 1", "c1"),
                 *ran("execute", {"command": "pytest"}, "Error: no module named app\nexit code 1", "c2"),
                 *ran("execute", {"command": "pytest"}, "Error: no module named app\nexit code 1", "c3"),
-                AIMessage(content="I will fix it later."),
-                HumanMessage(NOTE + "An independent check finds your answer does not yet deliver what was asked."),
-                AIMessage(content="The tests fail: app is missing.")]
-    points = record.points(messages, quality=0.2, complete=0.9)
+                AIMessage(content="I will fix it later.")]
+    points = record.points(messages, quality=0.2, complete=0.1)
     kinds = [p["kind"] for p in points]
     assert kinds.count("failure") == 2 and kinds.count("repeat") == 1 and kinds.count("incomplete") == 1
     repeat = next(p for p in points if p["kind"] == "repeat")

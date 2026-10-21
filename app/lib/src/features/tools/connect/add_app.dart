@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../data/models/bot.dart';
 import '../../../data/services/tradera_service.dart';
+import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar.dart';
 import 'mcp_connect_dialog.dart';
 import 'mcp_sign_in.dart';
@@ -9,12 +10,12 @@ import 'mcp_sign_in.dart';
 /// Adds an app to the space [spaceId]: one from the node's catalog, one the
 /// person made, or an MCP server the person names by its address. An app that runs with each person's own
 /// account asks them to sign in right after it is added. Returns whether
-/// something was added.
+/// something was added. Opens as a dialog on wide screens and a bottom sheet
+/// on phones, like the app's other forms.
 Future<bool> showAddApp(BuildContext context, TraderaService service,
         {required String spaceId}) async =>
-    await showDialog<bool>(
-        context: context,
-        builder: (_) => AddAppDialog(service: service, spaceId: spaceId)) ==
+    await showAppForm<bool>(
+        context, AddAppDialog(service: service, spaceId: spaceId)) ==
     true;
 
 /// Whether registering a server failed because the server wants a sign-in.
@@ -212,106 +213,126 @@ class _AddAppDialogState extends State<AddAppDialog> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final busy = _busy != null;
-    return AlertDialog(
-      icon: const Icon(Icons.extension_outlined),
-      title: const Text('Add an app'),
-      content: SizedBox(
-        width: 520,
+    final compact = MediaQuery.sizeOf(context).width < 600;
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Flexible(
         child: SingleChildScrollView(
-          child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                    'Apps give this space’s agents and people new abilities. One that runs with each person’s own account asks you to sign in once it is added.',
-                    style: TextStyle(color: scheme.onSurfaceVariant)),
-                const SizedBox(height: 16),
-                const Text('Apps you can add',
-                    style: TextStyle(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 6),
-                if (_loading)
-                  const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Center(child: CircularProgressIndicator()))
-                else if (_catalog.isEmpty)
-                  Text('Every available app is already here.',
-                      style: TextStyle(color: scheme.onSurfaceVariant))
-                else
-                  for (final t in _catalog)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: AvatarPicture(
-                          avatar: t.avatar,
-                          size: 28,
-                          radius: 8,
-                          fallback: const SizedBox(
-                              width: 28,
-                              height: 28,
-                              child: Icon(Icons.hub_outlined))),
-                      title: Text(t.name.isEmpty ? t.id : t.name),
-                      subtitle: Text(t.auth == 'user'
-                          ? 'Sign in with your own account'
-                          : 'Ready to use'),
-                      trailing: _busy == t.id
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                          : FilledButton.tonal(
-                              onPressed: busy ? null : () => _addFromCatalog(t),
-                              child: const Text('Add')),
-                    ),
-                const Divider(height: 28),
-                const Text('Or connect an MCP server',
-                    style: TextStyle(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 10),
-                TextField(
-                    controller: _name,
-                    enabled: !busy,
-                    decoration: const InputDecoration(
-                        labelText: 'Name',
-                        hintText: 'GitHub',
-                        border: OutlineInputBorder())),
-                const SizedBox(height: 10),
-                TextField(
-                    controller: _url,
-                    enabled: !busy,
-                    keyboardType: TextInputType.url,
-                    onSubmitted: (_) => busy ? null : _addServer(),
-                    decoration: const InputDecoration(
-                        labelText: 'Server address',
-                        hintText: 'https://example.com/mcp',
-                        border: OutlineInputBorder())),
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                      onPressed: busy ? null : _addServer,
-                      icon: _busy == 'custom'
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.add_link_rounded),
-                      label: const Text('Add server')),
+          padding: EdgeInsets.fromLTRB(24, compact ? 4 : 24, 24, 8),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: ShapeDecoration(
+                color: scheme.primaryContainer,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
+              ),
+              child: Icon(Icons.extension_outlined,
+                  color: scheme.onPrimaryContainer, size: 26),
+            ),
+            const SizedBox(height: 16),
+            const Text('Add an app',
+                style: TextStyle(
+                    fontSize: 24,
+                    height: 1.15,
+                    letterSpacing: -.4,
+                    fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text(
+                'Apps give this space’s agents and people new abilities. One that runs with each person’s own account asks you to sign in once it is added.',
+                style: TextStyle(
+                    fontSize: 14, height: 1.4, color: scheme.onSurfaceVariant)),
+            const SizedBox(height: 22),
+            const Text('Apps you can add',
+                style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            if (_loading)
+              const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Center(child: CircularProgressIndicator()))
+            else if (_catalog.isEmpty)
+              Text('Every available app is already here.',
+                  style: TextStyle(color: scheme.onSurfaceVariant))
+            else
+              for (final t in _catalog)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: AvatarPicture(
+                      avatar: t.avatar,
+                      size: 28,
+                      radius: 8,
+                      fallback: const SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: Icon(Icons.hub_outlined))),
+                  title: Text(t.name.isEmpty ? t.id : t.name),
+                  subtitle: Text(t.auth == 'user'
+                      ? 'Sign in with your own account'
+                      : 'Ready to use'),
+                  trailing: _busy == t.id
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : FilledButton.tonal(
+                          onPressed: busy ? null : () => _addFromCatalog(t),
+                          child: const Text('Add')),
                 ),
-                if (_step != null) ...[
-                  const SizedBox(height: 8),
-                  Text(_step!,
-                      style: TextStyle(color: scheme.onSurfaceVariant)),
-                ],
-                if (_error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(_error!, style: TextStyle(color: scheme.error)),
-                ],
-              ]),
+            const Divider(height: 28),
+            const Text('Or connect an MCP server',
+                style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            TextField(
+                controller: _name,
+                enabled: !busy,
+                decoration: const InputDecoration(
+                    labelText: 'Name',
+                    hintText: 'GitHub',
+                    border: OutlineInputBorder())),
+            const SizedBox(height: 10),
+            TextField(
+                controller: _url,
+                enabled: !busy,
+                keyboardType: TextInputType.url,
+                onSubmitted: (_) => busy ? null : _addServer(),
+                decoration: const InputDecoration(
+                    labelText: 'Server address',
+                    hintText: 'https://example.com/mcp',
+                    border: OutlineInputBorder())),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                  onPressed: busy ? null : _addServer,
+                  icon: _busy == 'custom'
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.add_link_rounded),
+                  label: const Text('Add server')),
+            ),
+            if (_step != null) ...[
+              const SizedBox(height: 8),
+              Text(_step!,
+                  style: TextStyle(color: scheme.onSurfaceVariant)),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(_error!, style: TextStyle(color: scheme.error)),
+            ],
+          ]),
         ),
       ),
-      actions: [
-        TextButton(
-            onPressed: busy ? null : () => Navigator.of(context).pop(_added),
-            child: const Text('Close')),
-      ],
-    );
+      Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+        child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          TextButton(
+              onPressed: busy ? null : () => Navigator.of(context).pop(_added),
+              child: const Text('Close')),
+        ]),
+      ),
+    ]);
   }
 }

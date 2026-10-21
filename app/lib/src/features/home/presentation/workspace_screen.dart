@@ -2999,15 +2999,13 @@ class _SearchResultsState extends State<_SearchResults> {
           ];
         }
         if (space.isEmpty) return const [];
-        final mems = await deps.service
-            .fetchSpaceMembers(space, limit: _pageSize, offset: offset);
+        final mems = await deps.service.fetchSpaceMembers(space,
+            kind: 'user', limit: _pageSize, offset: offset);
         return [
           for (final m in mems)
-            if (m['kind'] != 'bot')
-              _SearchHit(
-                  (m['handle'] as String?) ??
-                      (m['member_id'] as String? ?? ''),
-                  avatar: '${m['avatar'] ?? ''}'),
+            _SearchHit(
+                (m['handle'] as String?) ?? (m['member_id'] as String? ?? ''),
+                avatar: '${m['avatar'] ?? ''}'),
         ].where((h) => h.title.isNotEmpty && h.title.toLowerCase().contains(q))
             .toList();
       case 'Agents':

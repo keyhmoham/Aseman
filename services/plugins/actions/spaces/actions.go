@@ -10,6 +10,7 @@ import (
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/errs"
 	"github.com/tradera/tradera/pkg/jsonpatch"
+	"github.com/tradera/tradera/plugins/actions/auth/models/account"
 	"github.com/tradera/tradera/plugins/actions/message/models/message"
 	"github.com/tradera/tradera/plugins/actions/spaces/models/filedata"
 	"github.com/tradera/tradera/plugins/actions/spaces/models/invitation"
@@ -756,7 +757,11 @@ func (a *membersListAction) Meta() api.ActionMeta {
 }
 func (a *membersListAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	var in struct {
-		Space  string `json:"space"`
+		Space string `json:"space"`
+		// Kind optionally keeps only members whose account is of that kind
+		// ("user" for people, "bot" for agents and apps). Empty lists everyone,
+		// which is what agents rely on to see their team.
+		Kind   string `json:"kind,omitempty"`
 		Limit  int    `json:"limit,omitempty"`
 		Offset int    `json:"offset,omitempty"`
 	}
@@ -771,11 +776,34 @@ func (a *membersListAction) Handle(ctx context.Context, req *api.ActionRequest) 
 		return nil, err
 	}
 	limit, offset := helper.Paging(in.Limit, in.Offset, 50, 200)
-	var mems []membership.Membership
-	if err := a.s.R.List(ctx, "memberships", database.Filter{
+	filter := database.Filter{
 		Equal: map[string]any{"space_id": spID.String()}, OrderBy: "created_at", Asc: false, Limit: limit, Offset: offset,
-	}, &mems); err != nil {
+	}
+	if in.Kind != "" {
+		// The kind lives on the account, so filter the whole list and page
+		// afterwards; paging first would return short or empty pages.
+		filter.Limit, filter.Offset = 0, 0
+	}
+	var mems []membership.Membership
+	if err := a.s.R.List(ctx, "memberships", filter, &mems); err != nil {
 		return nil, err
+	}
+	if in.Kind != "" {
+		kept := mems[:0]
+		for i := range mems {
+			var acc account.Account
+			if a.s.R.Get(ctx, "accounts", mems[i].MemberID, &acc) == nil && string(acc.Kind) == in.Kind {
+				kept = append(kept, mems[i])
+			}
+		}
+		if offset > len(kept) {
+			offset = len(kept)
+		}
+		kept = kept[offset:]
+		if len(kept) > limit {
+			kept = kept[:limit]
+		}
+		mems = kept
 	}
 	return helper.JSON(map[string]any{"members": a.s.enrichMembers(ctx, mems)})
 }

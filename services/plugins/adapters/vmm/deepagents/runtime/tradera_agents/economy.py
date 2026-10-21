@@ -117,7 +117,8 @@ FILE_TOOLS = {
     ),
     "execute": (
         "Run a shell command on the space's computer; returns stdout and stderr with the exit code. Chain with "
-        "`&&` or `;`, use absolute paths, quote paths with spaces. Prefer glob/grep/read_file over find/grep/cat."
+        "`&&` or `;`, use absolute paths, quote paths with spaces. `timeout` is in seconds (at most 3600); leave it "
+        "out unless a command needs longer than the default. Prefer glob/grep/read_file over find/grep/cat."
     ),
 }
 

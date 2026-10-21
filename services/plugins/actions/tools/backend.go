@@ -324,11 +324,19 @@ func (s *Service) installProgram(ctx context.Context, space identity.ID, tool *m
 		" && (pkill -f %[2]s 2>/dev/null; true)"+
 		" && (env %[3]s nohup node /opt/tradera-tool-runtime/server.mjs --tool %[4]s > runtime.log 2>&1 < /dev/null &)"+
 		" ; for i in $(seq 1 30); do %[5]s && exit 0; sleep 1; done; tail -n 20 runtime.log; exit 1",
-		shellQuote(dir), shellQuote("--tool "+botID), strings.Join(assign, " "), shellQuote(botID), health)
+		shellQuote(dir), shellQuote(stopPattern(botID)), strings.Join(assign, " "), shellQuote(botID), health)
 	if out, err := s.sandboxExec(ctx, space, start); err != nil {
 		return errs.New(errs.CodeUnavailable, "the tool did not start in the space's sandbox: "+strings.TrimSpace(out+" "+err.Error()))
 	}
 	return nil
+}
+
+// stopPattern is the pkill -f pattern of a tool's running backend. It must
+// not start with "-" (pkill reads "--tool …" as an option and kills nothing)
+// and must not match the shell running the restart, whose command line holds
+// the pattern itself: the bracket matches "server.mjs" but not "server[.]mjs".
+func stopPattern(botID string) string {
+	return "server[.]mjs --tool " + botID
 }
 
 func (s *Service) sandboxExec(ctx context.Context, space identity.ID, command string) (string, error) {

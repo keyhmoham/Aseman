@@ -5,6 +5,7 @@ import 'core/network/session_controller.dart';
 import 'data/repositories/market_repository.dart';
 import 'data/repositories/room_repository.dart';
 import 'data/services/tradera_service.dart';
+import 'shared/widgets/avatar.dart';
 
 /// Base URL of the Tradera gateway. Override at build time with
 /// `--dart-define=API_BASE_URL=...` (web/mobile) or edit here. The special
@@ -31,7 +32,10 @@ class AppDependencies {
     required this.service,
     required this.marketRepository,
     required this.roomRepository,
-  });
+  }) {
+    // Avatars anywhere in the app show their pictures through this service.
+    Avatars.resolve = service.avatarImage;
+  }
 
   factory AppDependencies.create({String? baseUrl}) {
     final client = TraderaApiClient(baseUrl: baseUrl ?? resolveApiBaseUrl());

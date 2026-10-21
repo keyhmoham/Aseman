@@ -16,6 +16,9 @@ class SocialPost {
     this.likedByMe = false,
     this.attachments = const [],
     this.source = '',
+    this.authorName = '',
+    this.authorHandle = '',
+    this.authorAvatar = '',
   });
 
   final String id;
@@ -36,10 +39,19 @@ class SocialPost {
   /// posts made here.
   final String source;
 
+  /// Who posted it, as the node described them: their name, handle and
+  /// picture (a stored file's id); empty when it did not.
+  final String authorName;
+  final String authorHandle;
+  final String authorAvatar;
+
   bool get isComment => parentId.isNotEmpty;
 
   factory SocialPost.fromJson(Map<String, dynamic> json) {
     final likedBy = _strings(json['liked_by']);
+    final author = json['author'] is Map
+        ? (json['author'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
     return SocialPost(
       id: json['id'] as String? ?? '',
       authorId: json['author_id'] as String? ?? '',
@@ -56,6 +68,9 @@ class SocialPost {
           if (a is Map<String, dynamic>) UploadedFile.fromJson(a),
       ],
       source: json['source'] as String? ?? '',
+      authorName: '${author['display_name'] ?? ''}',
+      authorHandle: '${author['handle'] ?? ''}',
+      authorAvatar: '${author['avatar'] ?? ''}',
     );
   }
 
@@ -73,6 +88,9 @@ class SocialPost {
         likedByMe: likedByMe,
         attachments: attachments,
         source: source,
+        authorName: authorName,
+        authorHandle: authorHandle,
+        authorAvatar: authorAvatar,
       );
 
   static List<String> _strings(dynamic raw) {

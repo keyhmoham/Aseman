@@ -912,7 +912,7 @@ class _MemberTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: AppAvatar(_handle.isEmpty ? '?' : _handle[0].toUpperCase(),
-          color: colors.primary),
+          color: colors.primary, avatar: '${member['avatar'] ?? ''}'),
       title: Row(children: [
         Flexible(
             child: Text('@$_handle',
@@ -1000,7 +1000,7 @@ class _InviteDialogState extends State<_InviteDialog> {
       setState(() {
         _results = users
             .where((u) => u.kind == 'user')
-            .map((u) => {'id': u.id, 'handle': u.handle})
+            .map((u) => {'id': u.id, 'handle': u.handle, 'avatar': u.avatar})
             .toList();
         _searching = false;
       });
@@ -1046,6 +1046,13 @@ class _InviteDialogState extends State<_InviteDialog> {
                       onChanged: (v) => setState(() => _inviteeId = v),
                       title: Text('@${user['handle']}',
                           style: const TextStyle(fontSize: 13)),
+                      secondary: AppAvatar(
+                          '${user['handle'] ?? '?'}'.isEmpty
+                              ? '?'
+                              : '${user['handle']}'[0].toUpperCase(),
+                          color: Theme.of(context).colorScheme.primary,
+                          radius: 14,
+                          avatar: '${user['avatar'] ?? ''}'),
                     ),
                 ])),
           const SizedBox(height: 6),

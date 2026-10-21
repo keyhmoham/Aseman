@@ -15,6 +15,7 @@ import '../../../genui/genui.dart'
         CompactSummaryView,
         FrontendPresentation,
         GenUiView;
+import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
@@ -31,6 +32,7 @@ import '../../desk/presentation/compact_desk.dart';
 import '../../desk/presentation/designed_window.dart';
 import '../../desk/presentation/desk_controller.dart';
 import '../../desk/presentation/floating_desk.dart';
+import '../../desk/presentation/tool_avatar.dart';
 import '../../files/domain/file_types.dart';
 import '../../files/presentation/file_tree.dart';
 import '../../files/presentation/file_viewer.dart';
@@ -146,6 +148,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     if (sp == null) return;
     try {
       final list = await widget.dependencies.service.fetchSpaceBots(sp.id);
+      ToolAvatar.remember({for (final b in list) b.id: b.avatar});
       if (mounted) setState(() => _spaceBots[requestedWorkspace] = list);
     } catch (_) {}
     try {
@@ -1559,14 +1562,18 @@ class _LibraryBotCard extends StatelessWidget {
             child: Padding(
                 padding: const EdgeInsets.all(10),
                 child: Row(children: [
-                  Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                          color: color.withValues(alpha: .18),
-                          borderRadius: BorderRadius.circular(12)),
-                      child: const Icon(Icons.smart_toy_outlined,
-                          size: 19, color: AppColors.primary)),
+                  AvatarPicture(
+                      avatar: bot.avatar,
+                      size: 36,
+                      radius: 12,
+                      fallback: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                              color: color.withValues(alpha: .18),
+                              borderRadius: BorderRadius.circular(12)),
+                          child: const Icon(Icons.smart_toy_outlined,
+                              size: 19, color: AppColors.primary))),
                   const SizedBox(width: 9),
                   Expanded(
                       child: Column(
@@ -1685,7 +1692,13 @@ class _AddBotTile extends StatelessWidget {
                         itemBuilder: (context, i) {
                           final b = candidates[i];
                           return ListTile(
-                              leading: const Icon(Icons.smart_toy_outlined),
+                              leading: AvatarPicture(
+                                  avatar: b.avatar,
+                                  size: 32,
+                                  fallback: const SizedBox(
+                                      width: 32,
+                                      height: 32,
+                                      child: Icon(Icons.smart_toy_outlined))),
                               title: Text(b.name,
                                   style: const TextStyle(fontSize: 13)),
                               subtitle: Text('${b.kind} · ${b.vmType}',
@@ -2353,7 +2366,9 @@ class _SocialFeedState extends State<_SocialFeed> {
     } else {
       postWidgets.addAll(posts.map((p) => _Post(
             p,
-            author: _authorOf(p.authorId),
+            author: p.authorHandle.isNotEmpty
+                ? '@${p.authorHandle}'
+                : _authorOf(p.authorId),
             time: _timeAgo(p.createdAt),
             onLike: () => _toggleLike(p),
           )));
@@ -2471,6 +2486,9 @@ class _Post extends StatelessWidget {
           Row(children: [
             CircleAvatar(
                 radius: 17,
+                foregroundImage: Avatars.of(post.authorAvatar),
+                onForegroundImageError:
+                    post.authorAvatar.isEmpty ? null : (_, __) {},
                 child: Text(initials, style: const TextStyle(fontSize: 10))),
             const SizedBox(width: 9),
             Expanded(
@@ -2710,11 +2728,15 @@ IconData _sectionIcon(String section) => switch (section) {
 /// One search result: what its card shows, the entity's id when known, and
 /// the record it came from (a chat, a post, a space row).
 class _SearchHit {
-  const _SearchHit(this.title, {this.subtitle, this.id = '', this.payload});
+  const _SearchHit(this.title,
+      {this.subtitle, this.id = '', this.payload, this.avatar = ''});
   final String title;
   final String? subtitle;
   final String id;
   final Object? payload;
+
+  /// The picture of the person, workspace, agent or app found ("" if none).
+  final String avatar;
 }
 
 class _SearchResults extends StatefulWidget {
@@ -2842,9 +2864,7 @@ class _SearchResultsState extends State<_SearchResults> {
   /// Fetches one page of results for the active tab + scope.
   Future<List<_SearchHit>> _fetchPage(AppDependencies deps, int offset) async {
     if (widget.feed) return _fetchFeedPage(deps, offset);
-    return [
-      for (final title in await _fetchTitles(deps, offset)) _SearchHit(title)
-    ];
+    return _fetchTitles(deps, offset);
   }
 
   /// The feed's search: everything is the server's own search.
@@ -2858,7 +2878,8 @@ class _SearchResultsState extends State<_SearchResults> {
             await service.searchUsers(q, limit: _pageSize, offset: offset);
         return [
           for (final u in users)
-            _SearchHit(u.handle, id: u.id, subtitle: '@${u.handle}')
+            _SearchHit(u.handle,
+                id: u.id, subtitle: '@${u.handle}', avatar: u.avatar)
         ];
       case 'Spaces':
         final spaces =
@@ -2872,7 +2893,8 @@ class _SearchResultsState extends State<_SearchResults> {
                     '${sp['description']}',
                   sp['member'] == false ? 'Public space' : 'Your space',
                 ].join(' · '),
-                payload: sp),
+                payload: sp,
+                avatar: '${sp['avatar'] ?? ''}'),
         ];
       case 'Posts':
         final posts = await service.searchPosts(q,
@@ -2891,7 +2913,8 @@ class _SearchResultsState extends State<_SearchResults> {
             _SearchHit(c.title,
                 id: c.spaceId,
                 subtitle: c.lastBody.isEmpty ? 'Direct chat' : c.lastBody,
-                payload: c),
+                payload: c,
+                avatar: c.peer?.avatar ?? ''),
         ];
       case 'Agents':
       case 'Apps':
@@ -2907,7 +2930,8 @@ class _SearchResultsState extends State<_SearchResults> {
                 subtitle: l.description.isEmpty
                     ? 'In the market · ${l.kindLabel}'
                     : l.description,
-                payload: l),
+                payload: l,
+                avatar: l.avatar),
         ];
       default:
         return const [];
@@ -2958,25 +2982,33 @@ class _SearchResultsState extends State<_SearchResults> {
     return null;
   }
 
-  /// One page of result titles inside a space or across Tradera.
-  Future<List<String>> _fetchTitles(AppDependencies deps, int offset) async {
+  /// One page of results inside a space or across Tradera.
+  Future<List<_SearchHit>> _fetchTitles(
+      AppDependencies deps, int offset) async {
     final q = widget.query.trim().toLowerCase();
     final space = widget.spaceId;
+    List<_SearchHit> titles(Iterable<String> all) =>
+        [for (final t in all) _SearchHit(t)];
     switch (widget.section) {
       case 'Users':
         if (widget.global) {
           final users = await deps.service
               .searchUsers(q, limit: _pageSize, offset: offset);
-          return users.map((u) => u.handle).toList();
+          return [
+            for (final u in users) _SearchHit(u.handle, avatar: u.avatar)
+          ];
         }
         if (space.isEmpty) return const [];
         final mems = await deps.service
             .fetchSpaceMembers(space, limit: _pageSize, offset: offset);
-        return mems
-            .where((m) => m['kind'] != 'bot')
-            .map((m) =>
-                (m['handle'] as String?) ?? (m['member_id'] as String? ?? ''))
-            .where((n) => n.isNotEmpty && n.toLowerCase().contains(q))
+        return [
+          for (final m in mems)
+            if (m['kind'] != 'bot')
+              _SearchHit(
+                  (m['handle'] as String?) ??
+                      (m['member_id'] as String? ?? ''),
+                  avatar: '${m['avatar'] ?? ''}'),
+        ].where((h) => h.title.isNotEmpty && h.title.toLowerCase().contains(q))
             .toList();
       case 'Agents':
       case 'Apps':
@@ -2985,38 +3017,45 @@ class _SearchResultsState extends State<_SearchResults> {
           final kinds = isTool ? 'tool' : 'agent';
           final bots = await deps.service
               .searchBots(q, kind: kinds, limit: _pageSize, offset: offset);
-          return bots
-              .map((b) => b['name'] as String? ?? '')
-              .where((n) => n.isNotEmpty && n.toLowerCase().contains(q))
+          return [
+            for (final b in bots)
+              _SearchHit(b['name'] as String? ?? '',
+                  avatar: '${b['avatar'] ?? ''}'),
+          ]
+              .where((h) =>
+                  h.title.isNotEmpty && h.title.toLowerCase().contains(q))
               .toList();
         }
         if (space.isEmpty) return const [];
         final sb = await deps.service.fetchSpaceBots(space);
         return sb
             .where((b) => isTool ? b.isTool : b.isAgent)
-            .map((b) => b.name)
-            .where((n) => n.toLowerCase().contains(q))
+            .where((b) => b.name.toLowerCase().contains(q))
             .skip(offset)
             .take(_pageSize)
+            .map((b) => _SearchHit(b.name, avatar: b.avatar))
             .toList();
       case 'Workspaces':
         if (!widget.global) return const [];
         final spaces = await deps.service
             .searchSpaces(q, limit: _pageSize, offset: offset);
-        return spaces.map((s) => s['name'] as String? ?? '').toList();
+        return [
+          for (final s in spaces)
+            _SearchHit(s['name'] as String? ?? '',
+                avatar: '${s['avatar'] ?? ''}'),
+        ];
       case 'Posts':
         if (!widget.global) return const [];
         final posts =
             await deps.service.searchPosts(q, limit: _pageSize, offset: offset);
-        return posts.map((p) => p.body).toList();
+        return titles(posts.map((p) => p.body));
       case 'Messages':
         if (space.isEmpty) return const [];
         final msgs = await deps.service.searchSpaceMessages(space,
             query: q, limit: _pageSize, offset: offset);
-        return msgs
+        return titles(msgs
             .map((m) => m['body'] as String? ?? '')
-            .where((n) => n.isNotEmpty)
-            .toList();
+            .where((n) => n.isNotEmpty));
       case 'Media':
       case 'Documents':
       case 'Links':
@@ -3024,11 +3063,10 @@ class _SearchResultsState extends State<_SearchResults> {
         if (space.isEmpty) return const [];
         final files = await deps.service
             .fetchFiles(space, limit: _pageSize, offset: offset);
-        return files
+        return titles(files
             .where((f) => _fileMatchesSection(f, widget.section))
             .map((f) => f['name'] as String? ?? 'file')
-            .where((n) => n.toLowerCase().contains(q))
-            .toList();
+            .where((n) => n.toLowerCase().contains(q)));
       default:
         return const [];
     }
@@ -3128,6 +3166,7 @@ class _SearchResultsState extends State<_SearchResults> {
               return _SearchResultCard(
                   section: section,
                   title: hit.title,
+                  avatar: hit.avatar,
                   subtitle: hit.subtitle,
                   feed: widget.feed,
                   spaceId: widget.spaceId,
@@ -3150,8 +3189,12 @@ class _SearchResultCard extends StatelessWidget {
       required this.index,
       this.onOpen,
       this.spaceId = '',
+      this.avatar = '',
       this.dependencies});
   final String section, title;
+
+  /// The picture of what was found, shown over its icon ("" if none).
+  final String avatar;
 
   /// What the result says about itself (the generic blurb otherwise).
   final String? subtitle;
@@ -3193,6 +3236,9 @@ class _SearchResultCard extends StatelessWidget {
                   CircleAvatar(
                       radius: 18,
                       backgroundColor: color.withValues(alpha: .18),
+                      foregroundImage: Avatars.of(avatar),
+                      onForegroundImageError:
+                          avatar.isEmpty ? null : (_, __) {},
                       child: Icon(_sectionIcon(section),
                           color: color, size: 18)),
                   const SizedBox(width: 12),
@@ -3571,6 +3617,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
                 fileCount: s.fileCount,
                 amMember: true,
                 metadata: s.metadata,
+                avatar: s.avatar,
               ));
         }
         _snack('Joined ${s.name}');
@@ -3619,6 +3666,10 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
         'Rooms' => 'Room',
         _ => 'Profile'
       };
+  /// The picture of the person, agent, app or workspace shown.
+  String get _avatar =>
+      _user?.avatar ?? _bot?.avatar ?? _space?.avatar ?? '';
+
   IconData get icon => switch (widget.section) {
         'Users' => Icons.person_rounded,
         'Agents' => Icons.smart_toy_rounded,
@@ -3788,7 +3839,11 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
                                               .colorScheme
                                               .surface,
                                           width: 4)),
-                                  child: Icon(icon, size: 31)),
+                                  child: AvatarPicture(
+                                      avatar: _avatar,
+                                      size: 62,
+                                      fallback: Center(
+                                          child: Icon(icon, size: 31)))),
                               const Spacer(),
                               FilledButton.icon(
                                   onPressed: _busy ? null : _performAction,
@@ -4053,6 +4108,12 @@ class _TraderProfileDetail extends StatelessWidget {
                                       dense: true,
                                       leading: CircleAvatar(
                                           radius: 16,
+                                          foregroundImage:
+                                              Avatars.of(list[i].avatar),
+                                          onForegroundImageError:
+                                              list[i].avatar.isEmpty
+                                                  ? null
+                                                  : (_, __) {},
                                           child: Text(list[i].handle.isEmpty
                                               ? '?'
                                               : list[i]

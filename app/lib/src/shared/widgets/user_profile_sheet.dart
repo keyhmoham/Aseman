@@ -239,6 +239,7 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
           else
             ..._posts.map((p) => _ProfilePostCard(
                   initials: initials,
+                  avatar: widget.dependencies.sessionController.avatar,
                   handle: handle,
                   body: p.body,
                   tag: p.tags.isEmpty ? 'POST' : p.tags.first.toUpperCase(),
@@ -279,8 +280,12 @@ class _ProfilePostCard extends StatelessWidget {
     required this.likes,
     required this.time,
     this.headers = const {},
+    this.avatar = '',
   });
   final String initials;
+
+  /// The author's picture, shown over [initials].
+  final String avatar;
   final String handle;
   final String body;
   final String tag;
@@ -299,7 +304,8 @@ class _ProfilePostCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(21)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          AppAvatar(initials, color: AppColors.primary, radius: 18),
+          AppAvatar(initials,
+              color: AppColors.primary, radius: 18, avatar: avatar),
           const SizedBox(width: 9),
           Expanded(
               child: Column(

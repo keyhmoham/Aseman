@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_inputs.dart';
+import '../../../shared/widgets/avatar.dart';
 
 /// Building blocks of the admin console, drawn in the Material 3 Expressive
 /// style: tonal surfaces instead of outlines, generous corner radii, bold
@@ -382,10 +383,14 @@ class AdminStatusPill extends StatelessWidget {
 /// A round avatar with initials in a colour derived from [name], so the same
 /// person always gets the same colour.
 class AdminAvatar extends StatelessWidget {
-  const AdminAvatar(this.name, {super.key, this.size = 36, this.icon});
+  const AdminAvatar(this.name,
+      {super.key, this.size = 36, this.icon, this.avatar});
   final String name;
   final double size;
   final IconData? icon;
+
+  /// The picture shown over the initials or [icon], when there is one.
+  final String? avatar;
 
   @override
   Widget build(BuildContext context) {
@@ -396,7 +401,7 @@ class AdminAvatar extends StatelessWidget {
         ? '?'
         : words.take(2).map((w) => w[0].toUpperCase()).join();
     final color = palette[name.hashCode.abs() % palette.length];
-    return Container(
+    final fallback = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
@@ -413,6 +418,8 @@ class AdminAvatar extends StatelessWidget {
                   fontSize: size * .36,
                   fontWeight: FontWeight.w800)),
     );
+    return AvatarPicture(
+        avatar: avatar, size: size, radius: size * .36, fallback: fallback);
   }
 }
 

@@ -487,7 +487,7 @@ class TraderaService implements BackendService {
 
   /// The MCP apps the caller can add to a space: their own and those the
   /// node's admins listed for everyone (`tools.commands_list`).
-  Future<List<({String id, String name, String auth})>> mcpCatalog() async {
+  Future<List<({String id, String name, String auth, String avatar})>> mcpCatalog() async {
     final resp = await client.call('tools', 'commands_list');
     final list = (resp.body as Map?)?['tools'] as List? ?? const [];
     return [
@@ -496,7 +496,8 @@ class TraderaService implements BackendService {
           (
             id: '${t['bot_id']}',
             name: '${t['name'] ?? ''}',
-            auth: '${t['auth'] ?? ''}'
+            auth: '${t['auth'] ?? ''}',
+            avatar: '${t['avatar'] ?? ''}'
           ),
     ];
   }
@@ -836,7 +837,8 @@ class TraderaService implements BackendService {
     final id = RegExp(r'^(?:/v1/files/)?([0-9a-fA-F]{32})(?:/content)?$')
         .firstMatch(ref)
         ?.group(1);
-    if (id == null) return null;
+    // A zero id is how the node writes "none".
+    if (id == null || RegExp(r'^0+$').hasMatch(id)) return null;
     return NetworkImage(fileContentUrl(id), headers: authHeaders());
   }
 

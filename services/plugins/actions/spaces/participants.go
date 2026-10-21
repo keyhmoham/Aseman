@@ -75,7 +75,8 @@ func (s *Service) invitationViews(ctx context.Context, rows []invitation.Invitat
 		}
 		out = append(out, map[string]any{
 			"id": inv.ID.String(), "space_id": inv.SpaceID.String(), "space_name": name,
-			"room_id": inv.RoomID.String(), "role": inv.Role, "status": inv.Status,
+			"space_avatar": s.spaceAvatar(ctx, inv.SpaceID),
+			"room_id":      inv.RoomID.String(), "role": inv.Role, "status": inv.Status,
 			"inviter": people.get(ctx, inv.InviterID), "invitee": people.get(ctx, inv.InviteeID),
 			"expires_at": inv.ExpiresAt, "created_at": inv.CreatedAt,
 		})

@@ -83,6 +83,7 @@ func (s *Service) botsList(ctx context.Context, req *api.ActionRequest) (*api.Ac
 		FallbackModels []string `json:"fallback_models,omitempty"`
 		OwnerHandle    string   `json:"owner_handle,omitempty"`
 		Builtin        bool     `json:"builtin,omitempty"`
+		Avatar         string   `json:"avatar,omitempty"`
 		// What the agent is billed per minute (its own rate, else the platform's).
 		PerMinute int64 `json:"per_minute,omitempty"`
 	}
@@ -111,6 +112,7 @@ func (s *Service) botsList(ctx context.Context, req *api.ActionRequest) (*api.Ac
 			}
 		}
 		if meta, e := m.Get(ctx, b.AccountID); e == nil && meta != nil {
+			row.Avatar = helper.TreeAvatar(meta.Tree)
 			if d, ok := meta.Tree["descriptor"].(map[string]any); ok {
 				row.Handle, _ = d["username"].(string)
 				switch fb := d["fallback_models"].(type) {

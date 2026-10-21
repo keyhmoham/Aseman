@@ -102,6 +102,7 @@ class RoomMessage {
     this.attachments = const [],
     this.senderName = '',
     this.senderIsAgent = false,
+    this.senderAvatar = '',
     this.replyTo = '',
     this.editedAt,
   });
@@ -129,6 +130,9 @@ class RoomMessage {
   /// them when listing the room (empty when it did not).
   final String senderName;
   final bool senderIsAgent;
+
+  /// The sender's picture (a stored file's id), "" when it has none.
+  final String senderAvatar;
 
   /// The message of the room this one answers (empty when none).
   final String replyTo;
@@ -181,6 +185,8 @@ class RoomMessage {
         attachments: _attachments(json['attachments']),
         senderName: _senderName(json['sender']),
         senderIsAgent: json['sender'] is Map && json['sender']['kind'] == 'bot',
+        senderAvatar:
+            json['sender'] is Map ? '${json['sender']['avatar'] ?? ''}' : '',
         replyTo: json['reply_to'] as String? ?? '',
         editedAt: DateTime.tryParse(json['edited_at'] as String? ?? ''),
       );
@@ -304,6 +310,7 @@ class ChatSummary {
     required this.roomId,
     this.direct = false,
     this.spaceName = '',
+    this.spaceAvatar = '',
     this.roomName = '',
     this.peer,
     this.lastBody = '',
@@ -325,6 +332,9 @@ class ChatSummary {
   final String roomId;
   final bool direct;
   final String spaceName;
+
+  /// The project's picture (a stored file's id), "" when it has none.
+  final String spaceAvatar;
   final String roomName;
   final ChatPeer? peer;
   final String lastBody;
@@ -375,6 +385,7 @@ class ChatSummary {
         roomId: roomId,
         direct: direct,
         spaceName: spaceName,
+        spaceAvatar: spaceAvatar,
         roomName: roomName,
         peer: peer,
         lastBody: lastBody,
@@ -407,6 +418,7 @@ class ChatSummary {
       roomId: '${json['room_id'] ?? ''}',
       direct: json['kind'] == 'direct',
       spaceName: '${json['space_name'] ?? ''}',
+      spaceAvatar: '${json['space_avatar'] ?? ''}',
       roomName: '${json['room_name'] ?? ''}',
       peer: peer,
       lastBody: '${last['body'] ?? ''}',

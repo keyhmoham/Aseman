@@ -13,10 +13,10 @@ class _Service extends FakeTraderaService {
   final removed = <String>[];
 
   @override
-  Future<List<({String id, String name, String auth})>> mcpCatalog() async =>
+  Future<List<({String id, String name, String auth, String avatar})>> mcpCatalog() async =>
       const [
-        (id: 'bot-gh', name: 'GitHub', auth: 'user'),
-        (id: 'bot-wx', name: 'Weather', auth: ''),
+        (id: 'bot-gh', name: 'GitHub', auth: 'user', avatar: ''),
+        (id: 'bot-wx', name: 'Weather', auth: '', avatar: ''),
       ];
 
   @override

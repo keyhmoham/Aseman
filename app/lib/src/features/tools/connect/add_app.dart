@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../data/models/bot.dart';
 import '../../../data/services/tradera_service.dart';
+import '../../../shared/widgets/avatar.dart';
 import 'mcp_connect_dialog.dart';
 import 'mcp_sign_in.dart';
 
@@ -54,7 +55,7 @@ class AddAppDialog extends StatefulWidget {
 class _AddAppDialogState extends State<AddAppDialog> {
   final _name = TextEditingController();
   final _url = TextEditingController();
-  List<({String id, String name, String auth})> _catalog = const [];
+  List<({String id, String name, String auth, String avatar})> _catalog = const [];
   bool _loading = true;
   String? _busy; // what is being added, by id ('custom' for a new server)
   String? _step;
@@ -84,7 +85,7 @@ class _AddAppDialogState extends State<AddAppDialog> {
       ]);
       final inSpace = {for (final b in results[1] as List<Bot>) b.id};
       final catalog =
-          results[0] as List<({String id, String name, String auth})>;
+          results[0] as List<({String id, String name, String auth, String avatar})>;
       final listed = {for (final t in catalog) t.id};
       if (!mounted) return;
       setState(() {
@@ -93,7 +94,7 @@ class _AddAppDialogState extends State<AddAppDialog> {
             if (!inSpace.contains(t.id)) t,
           for (final b in results[2] as List<Bot>)
             if (b.isTool && !inSpace.contains(b.id) && !listed.contains(b.id))
-              (id: b.id, name: b.name, auth: ''),
+              (id: b.id, name: b.name, auth: '', avatar: b.avatar),
         ];
         _loading = false;
       });
@@ -140,7 +141,7 @@ class _AddAppDialogState extends State<AddAppDialog> {
   }
 
   Future<void> _addFromCatalog(
-      ({String id, String name, String auth}) t) async {
+      ({String id, String name, String auth, String avatar}) t) async {
     setState(() {
       _busy = t.id;
       _error = null;
@@ -239,7 +240,14 @@ class _AddAppDialogState extends State<AddAppDialog> {
                   for (final t in _catalog)
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.hub_outlined),
+                      leading: AvatarPicture(
+                          avatar: t.avatar,
+                          size: 28,
+                          radius: 8,
+                          fallback: const SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: Icon(Icons.hub_outlined))),
                       title: Text(t.name.isEmpty ? t.id : t.name),
                       subtitle: Text(t.auth == 'user'
                           ? 'Sign in with your own account'

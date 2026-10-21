@@ -639,7 +639,8 @@ class _FeedPostCard extends StatelessWidget {
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              AppAvatar(post.initials, color: post.color, radius: 22),
+              AppAvatar(post.initials,
+                  color: post.color, radius: 22, avatar: post.avatar),
               const SizedBox(width: 12),
               Expanded(
                   child: Column(
@@ -992,19 +993,24 @@ class _SpaceTile extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
             child: Row(children: [
-              Container(
-                width: 38,
-                height: 38,
-                alignment: Alignment.center,
-                decoration: ShapeDecoration(
-                    color: scheme.secondaryContainer,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12))),
-                child: Text(space.initials,
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: scheme.onSecondaryContainer)),
+              AvatarPicture(
+                avatar: space.avatar,
+                size: 38,
+                radius: 12,
+                fallback: Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: ShapeDecoration(
+                      color: scheme.secondaryContainer,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12))),
+                  child: Text(space.initials,
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: scheme.onSecondaryContainer)),
+                ),
               ),
               const SizedBox(width: 11),
               Expanded(

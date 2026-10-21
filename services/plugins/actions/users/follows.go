@@ -144,12 +144,12 @@ func (s *Service) publicRef(ctx context.Context, viewer, id identity.ID) map[str
 			if name != "" {
 				out["display_name"] = name
 			}
-			if avatar, _ := profile["avatar"].(string); avatar != "" {
-				out["avatar"] = avatar
-			}
 			if headline, _ := profile["headline"].(string); headline != "" {
 				out["headline"] = headline
 			}
+		}
+		if avatar := helper.TreeAvatar(rec.Tree); avatar != "" {
+			out["avatar"] = avatar
 		}
 	}
 	return out

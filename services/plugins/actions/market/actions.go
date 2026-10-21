@@ -2,6 +2,7 @@ package market
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/tradera/tradera/internal/plugins/api"
 	"github.com/tradera/tradera/internal/plugins/identity"
@@ -95,7 +96,15 @@ func (a *listAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.A
 	if err != nil {
 		return nil, err
 	}
-	return helper.JSON(map[string]any{"items": list})
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		item := map[string]any{}
+		b, _ := json.Marshal(list[i])
+		_ = json.Unmarshal(b, &item)
+		item["avatar"] = a.s.AvatarOf(ctx, list[i].BotID)
+		items = append(items, item)
+	}
+	return helper.JSON(map[string]any{"items": items})
 }
 
 // getAction implements market.get.

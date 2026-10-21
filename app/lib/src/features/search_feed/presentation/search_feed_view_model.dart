@@ -174,8 +174,12 @@ class SearchFeedViewModel extends ChangeNotifier {
   /// Map a server post onto the UI feed card model.
   FeedPost _feedFromServer(SocialPost p) => FeedPost(
         initials: _initialsOf(p.authorId),
-        name: '@${p.authorId.substring(0, 8)}',
-        handle: '@${p.authorId.substring(0, 12)}',
+        name: p.authorName.isNotEmpty
+            ? p.authorName
+            : '@${p.authorId.substring(0, 8)}',
+        handle: p.authorHandle.isNotEmpty
+            ? '@${p.authorHandle}'
+            : '@${p.authorId.substring(0, 12)}',
         time: _timeAgo(p.createdAt),
         body: p.body,
         tag: p.tags.isEmpty ? 'POST' : p.tags.first.toUpperCase(),
@@ -187,6 +191,7 @@ class SearchFeedViewModel extends ChangeNotifier {
         workspace: _spaceNames[p.spaceId],
         media: p.attachments,
         source: p.source,
+        avatar: p.authorAvatar,
       );
 
   String _initialsOf(String id) {

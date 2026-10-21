@@ -12,6 +12,7 @@ class Workspace {
     this.public = false,
     this.home = false,
     this.role = '',
+    this.avatar = '',
   });
 
   final String id;
@@ -27,6 +28,12 @@ class Workspace {
 
   bool get isOwner => role == 'owner';
 
+  /// Its owner and admins may change it (its name, its avatar, ...).
+  bool get canManage => role == 'owner' || role == 'admin';
+
+  /// The workspace's picture: a stored file's id, "" when it has none.
+  final String avatar;
+
   factory Workspace.fromJson(Map<String, dynamic> json) => Workspace(
         id: json['id'] as String? ?? '',
         ownerId: json['owner_id'] as String? ?? '',
@@ -35,6 +42,19 @@ class Workspace {
         public: json['public'] as bool? ?? false,
         home: json['home'] as bool? ?? false,
         role: json['role'] as String? ?? '',
+        avatar: '${json['avatar'] ?? (json['profile'] is Map ? json['profile']['avatar'] : null) ?? ''}',
+      );
+
+  /// The same workspace with another avatar.
+  Workspace withAvatar(String avatar) => Workspace(
+        id: id,
+        ownerId: ownerId,
+        name: name,
+        description: description,
+        public: public,
+        home: home,
+        role: role,
+        avatar: avatar,
       );
 
   String get initials {

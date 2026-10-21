@@ -14,6 +14,7 @@ import '../../features/market/presentation/market_screen.dart';
 import '../../features/messenger/presentation/messenger_panel.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/talent/presentation/talent_requests_panel.dart';
+import 'avatar_editor.dart';
 import 'overlay_panels.dart';
 import 'user_profile_sheet.dart';
 
@@ -193,13 +194,15 @@ class _ProfileBody extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppShape.inner + 2),
             ),
             child: Row(children: [
-              CircleAvatar(
+              AvatarEditor(
+                service: dependencies.service,
+                avatar: dependencies.sessionController.avatar,
+                initials: initials,
+                filled: true,
                 radius: 24,
-                backgroundColor: scheme.primary,
-                foregroundColor: scheme.onPrimary,
-                child: Text(initials,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w800)),
+                subject: 'profile picture',
+                enabled: session?.isLoggedIn ?? false,
+                onChanged: dependencies.sessionController.setAvatar,
               ),
               const SizedBox(width: 12),
               Expanded(

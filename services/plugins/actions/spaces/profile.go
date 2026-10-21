@@ -77,7 +77,7 @@ func (s *Service) SpaceProfile(ctx context.Context, spaceID identity.ID) (map[st
 		"member_count": memberCount, "agent_count": len(bots),
 		"room_count": len(rooms), "rooms": roomNames,
 		"post_count": postCount, "file_count": len(files),
-		"metadata": meta, "created_at": sp.CreatedAt,
+		"metadata": meta, "avatar": helper.TreeAvatar(meta), "created_at": sp.CreatedAt,
 	}, nil
 }
 

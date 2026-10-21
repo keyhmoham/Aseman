@@ -655,7 +655,26 @@ func (a *botListAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	}, &list); err != nil {
 		return nil, err
 	}
-	return helper.JSON(map[string]any{"bots": list})
+	out := make([]map[string]any, 0, len(list))
+	for i := range list {
+		row := map[string]any{}
+		b, _ := json.Marshal(list[i])
+		_ = json.Unmarshal(b, &row)
+		row["avatar"] = a.s.avatarOf(ctx, list[i].AccountID)
+		out = append(out, row)
+	}
+	return helper.JSON(map[string]any{"bots": out})
+}
+
+// avatarOf is the avatar a bot's account metadata records, if any.
+func (s *Service) avatarOf(ctx context.Context, accountID identity.ID) string {
+	if accountID.IsZero() {
+		return ""
+	}
+	if m, err := s.M.Get(ctx, accountID); err == nil && m != nil {
+		return helper.TreeAvatar(m.Tree)
+	}
+	return ""
 }
 
 type botGetAction struct{ s *Service }
@@ -693,7 +712,7 @@ func (a *botGetAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	return helper.JSON(map[string]any{"id": rec.ID.String(), "owner_id": rec.OwnerID.String(),
 		"name": rec.Name, "kind": rec.Kind, "vm_type": rec.VMType, "status": rec.Status, "vm_id": rec.VMID,
 		"image_ref": rec.ImageRef, "has_frontend": rec.Frontend != "" || rec.FrontendRef != "",
-		"entities": keys})
+		"avatar": a.s.avatarOf(ctx, rec.AccountID), "entities": keys})
 }
 
 type botLifecycleAction struct{ s *Service }

@@ -20,9 +20,13 @@ class SessionController extends ChangeNotifier {
   bool _busy = false;
   String? _error;
   bool _isAdmin = false;
+  String _avatar = '';
 
   Session? get session => _session;
   bool get isAdmin => _isAdmin;
+
+  /// The signed-in account's avatar: a stored picture's id, "" when none.
+  String get avatar => _avatar;
   bool get isReady => _ready;
   bool get isLoggedIn => _session?.isLoggedIn ?? false;
   bool get isBusy => _busy;
@@ -116,13 +120,25 @@ class SessionController extends ChangeNotifier {
   }
 
   /// Reads the account's role from the server so admin-only surfaces stay
-  /// hidden unless the backend says this account is an admin.
+  /// hidden unless the backend says this account is an admin, and its avatar.
   Future<void> _refreshRole() async {
     try {
       _isAdmin = await service.fetchIsAdmin();
     } catch (_) {
       _isAdmin = false;
     }
+    try {
+      _avatar = await service.fetchMyAvatar();
+    } catch (_) {
+      _avatar = '';
+    }
+  }
+
+  /// Sets (a stored picture's id) or clears ("") the account's avatar.
+  Future<void> setAvatar(String fileId) async {
+    await service.setMyAvatar(fileId);
+    _avatar = fileId;
+    notifyListeners();
   }
 
   Future<void> _enableNotificationsSafely() async {
@@ -143,6 +159,7 @@ class SessionController extends ChangeNotifier {
     await service.logout();
     _session = null;
     _isAdmin = false;
+    _avatar = '';
     notifyListeners();
   }
 

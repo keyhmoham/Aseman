@@ -131,8 +131,12 @@ func (a *spaceGetAction) Handle(ctx context.Context, req *api.ActionRequest) (*a
 	if err != nil {
 		return nil, err
 	}
+	avatar := ""
+	if rec, err := a.s.M.Get(ctx, sp.ID); err == nil && rec != nil {
+		avatar = helper.TreeAvatar(rec.Tree)
+	}
 	return helper.JSON(map[string]any{"id": sp.ID.String(), "owner_id": sp.OwnerID.String(),
-		"name": sp.Name, "description": sp.Description, "public": sp.Public})
+		"name": sp.Name, "description": sp.Description, "public": sp.Public, "avatar": avatar})
 }
 
 type spaceUpdateAction struct{ s *Service }
@@ -149,6 +153,8 @@ func (a *spaceUpdateAction) Handle(ctx context.Context, req *api.ActionRequest) 
 		Name        string `json:"name"`
 		Description string `json:"description"`
 		Public      *bool  `json:"public"`
+		// A stored image's id; "" removes the workspace's avatar.
+		Avatar *string `json:"avatar"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
@@ -169,6 +175,20 @@ func (a *spaceUpdateAction) Handle(ctx context.Context, req *api.ActionRequest) 
 	}
 	if in.Description != "" {
 		sp.Description = in.Description
+	}
+	if in.Avatar != nil {
+		avatar, err := helper.AvatarFile(ctx, a.s.R, req.Caller.ID, *in.Avatar)
+		if err != nil {
+			return nil, err
+		}
+		sp.AvatarID = identity.ID{}
+		if avatar != "" {
+			sp.AvatarID, _ = identity.Parse(avatar)
+		}
+		// Lists and profiles read the card's avatar from the metadata profile.
+		if err := a.s.M.Patch(ctx, id, jsonpatch.Patch{{Op: "set", Path: "profile/avatar", Value: avatar}}); err != nil {
+			return nil, err
+		}
 	}
 	// Every project is private; a client asking for a public one is ignored.
 	sp.Public = false
@@ -1000,6 +1020,7 @@ func (a *botsListAction) Handle(ctx context.Context, req *api.ActionRequest) (*a
 			"member_id":   mems[i].MemberID.String(),
 			"description": a.s.toolDescription(ctx, rec),
 			"owner_id":    rec.OwnerID.String(),
+			"avatar":      a.s.participants().get(ctx, rec.AccountID)["avatar"],
 			"cost":        rec.Cost,
 			"resources":   rec.Resources,
 		})

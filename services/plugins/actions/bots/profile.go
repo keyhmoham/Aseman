@@ -28,7 +28,7 @@ func (s *Service) BotProfile(ctx context.Context, botID identity.ID) (map[string
 			ownerHandle = acc.Handle
 		}
 	}
-	description := ""
+	description, avatar := "", ""
 	if rec.AccountID != (identity.ID{}) {
 		if m, merr := s.M.Get(ctx, rec.AccountID); merr == nil && m != nil {
 			if p, ok := m.Tree["profile"].(map[string]any); ok {
@@ -36,6 +36,7 @@ func (s *Service) BotProfile(ctx context.Context, botID identity.ID) (map[string
 					description = d
 				}
 			}
+			avatar = helper.TreeAvatar(m.Tree)
 		}
 	}
 	res := map[string]any{}
@@ -87,7 +88,7 @@ func (s *Service) BotProfile(ctx context.Context, botID identity.ID) (map[string
 		"name": rec.Name, "kind": string(rec.Kind), "vm_type": string(rec.VMType),
 		"status": string(rec.Status), "image_ref": rec.ImageRef,
 		"owner_id": rec.OwnerID.String(), "owner_handle": ownerHandle,
-		"description": description, "resources": res, "cost": cost,
+		"description": description, "avatar": avatar, "resources": res, "cost": cost,
 		"usage": usage, "entities": entityKeys, "llm": llmInfo,
 		"has_frontend": rec.Frontend != "" || rec.FrontendRef != "",
 		"created_at":   rec.CreatedAt, "updated_at": rec.UpdatedAt,

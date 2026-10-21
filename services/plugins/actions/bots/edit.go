@@ -85,6 +85,8 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 		MaxTokens   *int                 `json:"max_tokens"`
 		Skills      *[]SkillConfig       `json:"skills"`
 		Resources   *bot.ResourceProfile `json:"resources"`
+		// A stored image's id; "" removes the avatar.
+		Avatar *string `json:"avatar"`
 	}
 	if e := helper.Decode(req, &in); e != nil {
 		return nil, e
@@ -118,6 +120,12 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 	}
 	if in.Resources != nil && (in.Resources.CPU <= 0 || in.Resources.Memory <= 0 || in.Resources.Disk <= 0) {
 		return nil, errs.InvalidArgument("cpu, memory and disk must be positive")
+	}
+	avatar := ""
+	if in.Avatar != nil {
+		if avatar, e = helper.AvatarFile(ctx, s.R, req.Caller.ID, *in.Avatar); e != nil {
+			return nil, e
+		}
 	}
 	if in.Descriptor != nil {
 		if u, _ := in.Descriptor["username"].(string); strings.TrimSpace(u) != "" {
@@ -255,6 +263,18 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 			return nil, e
 		}
 		if e = s.M.SetPublicPaths(ctx, rec.AccountID, append(m.PublicPaths, "/descriptor")); e != nil {
+			return nil, e
+		}
+	}
+	if in.Avatar != nil {
+		patch := jsonpatch.Patch{{Op: "set", Path: "profile/avatar", Value: avatar}}
+		// A tool server shows the icon in its descriptor: keep the two the same.
+		if m, e := s.M.Get(ctx, rec.AccountID); e == nil && m != nil {
+			if _, ok := m.Tree["descriptor"].(map[string]any); ok {
+				patch = append(patch, jsonpatch.Op{Op: "set", Path: "descriptor/avatar", Value: avatar})
+			}
+		}
+		if e = s.M.Patch(ctx, rec.AccountID, patch); e != nil {
 			return nil, e
 		}
 	}

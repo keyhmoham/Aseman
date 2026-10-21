@@ -9,6 +9,7 @@ import '../../data/models/bot.dart';
 import '../../data/models/post.dart';
 import '../../features/search_feed/presentation/rich_post_content.dart';
 import 'avatar.dart';
+import 'avatar_editor.dart';
 import 'mini_tag.dart';
 
 /// User profile sheet shown from the profile menu. Server-backed: the header
@@ -143,6 +144,18 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
           _ProfileHeader(
               initials: initials,
               handle: handle,
+              avatar: AvatarEditor(
+                service: widget.dependencies.service,
+                avatar: widget.dependencies.sessionController.avatar,
+                initials: initials,
+                radius: 34,
+                subject: 'profile picture',
+                enabled: session?.isLoggedIn ?? false,
+                onChanged: (id) async {
+                  await widget.dependencies.sessionController.setAvatar(id);
+                  if (mounted) setState(() {});
+                },
+              ),
               onShare: _share,
               onEdit: _edit),
           const SizedBox(height: 12),
@@ -160,7 +173,11 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
                   borderRadius: BorderRadius.circular(22)),
               child: Column(children: [
                 Row(children: [
-                  AppAvatar(initials, color: AppColors.primary, radius: 17),
+                  AppAvatar(initials,
+                      color: AppColors.primary,
+                      radius: 17,
+                      image: widget.dependencies.service.avatarImage(
+                          widget.dependencies.sessionController.avatar)),
                   const SizedBox(width: 10),
                   Expanded(
                       child: TextField(
@@ -322,10 +339,14 @@ class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader(
       {required this.initials,
       required this.handle,
+      this.avatar,
       this.onShare,
       this.onEdit});
   final String initials;
   final String handle;
+
+  /// The account's avatar; its initials when not given.
+  final Widget? avatar;
   final VoidCallback? onShare;
   final VoidCallback? onEdit;
 
@@ -375,12 +396,14 @@ class _ProfileHeader extends StatelessWidget {
                                       color:
                                           Theme.of(context).colorScheme.surface,
                                       shape: BoxShape.circle),
-                                  child: CircleAvatar(
-                                      radius: 34,
-                                      child: Text(initials,
-                                          style: const TextStyle(
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w900)))),
+                                  child: avatar ??
+                                      CircleAvatar(
+                                          radius: 34,
+                                          child: Text(initials,
+                                              style: const TextStyle(
+                                                  fontSize: 20,
+                                                  fontWeight:
+                                                      FontWeight.w900)))),
                               const Spacer(),
                               IconButton.filledTonal(
                                   tooltip: 'Share profile',

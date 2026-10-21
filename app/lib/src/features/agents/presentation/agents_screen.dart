@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/bot.dart';
+import '../../../data/services/tradera_service.dart';
 import '../../../shared/widgets/app_form.dart';
-import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/avatar_editor.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/status_tag.dart';
@@ -237,6 +238,15 @@ class _AgentsScreenState extends State<AgentsScreen> {
     }
   }
 
+  /// Sets or clears an agent's or an app's picture.
+  Future<void> _setAvatar(Bot bot, String fileId) async {
+    await widget.dependencies.service.setBotAvatar(bot.id, fileId);
+    if (!mounted) return;
+    setState(() => _bots = [
+          for (final b in _bots) b.id == bot.id ? b.withAvatar(fileId) : b
+        ]);
+  }
+
   Future<void> _lifecycle(Bot bot, String op) async {
     try {
       await widget.dependencies.service.botLifecycle(bot.id, op);
@@ -357,6 +367,8 @@ class _AgentsScreenState extends State<AgentsScreen> {
                     ? Center(child: Text(_error!))
                     : TabBarView(children: [
                         _AgentsTab(
+                          service: widget.dependencies.service,
+                          onAvatar: _setAvatar,
                           agents: _agents,
                           onChat: _chat,
                           onEdit: _editAgent,
@@ -364,7 +376,11 @@ class _AgentsScreenState extends State<AgentsScreen> {
                               b, b.status == 'running' ? 'stop' : 'start'),
                         ),
                         _ToolsTab(
-                            tools: _tools, onOpen: _openApp, onEdit: _editTool),
+                            service: widget.dependencies.service,
+                            onAvatar: _setAvatar,
+                            tools: _tools,
+                            onOpen: _openApp,
+                            onEdit: _editTool),
                       ]),
           ),
         ]),
@@ -375,12 +391,16 @@ class _AgentsScreenState extends State<AgentsScreen> {
 
 class _AgentsTab extends StatelessWidget {
   const _AgentsTab({
+    required this.service,
+    required this.onAvatar,
     required this.agents,
     required this.onChat,
     required this.onEdit,
     required this.onToggle,
   });
 
+  final TraderaService service;
+  final Future<void> Function(Bot bot, String fileId) onAvatar;
   final List<Bot> agents;
   final ValueChanged<Bot> onChat;
   final ValueChanged<Bot> onEdit;
@@ -405,6 +425,9 @@ class _AgentsTab extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         ...agents.map((b) => _AgentCard(
+              key: ValueKey(b.id),
+              service: service,
+              onAvatar: (id) => onAvatar(b, id),
               bot: b,
               onChat: () => onChat(b),
               onEdit: () => onEdit(b),
@@ -417,8 +440,14 @@ class _AgentsTab extends StatelessWidget {
 
 class _ToolsTab extends StatelessWidget {
   const _ToolsTab(
-      {required this.tools, required this.onOpen, required this.onEdit});
+      {required this.service,
+      required this.onAvatar,
+      required this.tools,
+      required this.onOpen,
+      required this.onEdit});
 
+  final TraderaService service;
+  final Future<void> Function(Bot bot, String fileId) onAvatar;
   final List<Bot> tools;
   final ValueChanged<Bot> onOpen;
   final ValueChanged<Bot> onEdit;
@@ -456,6 +485,9 @@ class _ToolsTab extends StatelessWidget {
               SizedBox(
                   width: width,
                   child: _ToolCard(
+                      key: ValueKey(bot.id),
+                      service: service,
+                      onAvatar: (id) => onAvatar(bot, id),
                       bot: bot,
                       onOpen: () => onOpen(bot),
                       onEdit: () => onEdit(bot))),
@@ -527,12 +559,17 @@ class _PanelEmpty extends StatelessWidget {
 
 class _AgentCard extends StatelessWidget {
   const _AgentCard({
+    super.key,
+    required this.service,
+    required this.onAvatar,
     required this.bot,
     required this.onChat,
     required this.onEdit,
     required this.onToggle,
   });
 
+  final TraderaService service;
+  final Future<void> Function(String fileId) onAvatar;
   final Bot bot;
   final VoidCallback onChat;
   final VoidCallback onEdit;
@@ -554,7 +591,15 @@ class _AgentCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(children: [
-        AppAvatar('AI', color: color, radius: 21),
+        AvatarEditor(
+          service: service,
+          avatar: bot.avatar,
+          initials: _initials(bot.name, 'AI'),
+          color: color,
+          radius: 21,
+          subject: 'agent picture',
+          onChanged: onAvatar,
+        ),
         const SizedBox(width: 13),
         Expanded(
           child:
@@ -595,8 +640,15 @@ class _AgentCard extends StatelessWidget {
 
 class _ToolCard extends StatelessWidget {
   const _ToolCard(
-      {required this.bot, required this.onOpen, required this.onEdit});
+      {super.key,
+      required this.service,
+      required this.onAvatar,
+      required this.bot,
+      required this.onOpen,
+      required this.onEdit});
 
+  final TraderaService service;
+  final Future<void> Function(String fileId) onAvatar;
   final Bot bot;
   final VoidCallback onOpen;
   final VoidCallback onEdit;
@@ -620,7 +672,15 @@ class _ToolCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
-                const AppAvatar('T', color: AppColors.cyan, radius: 17),
+                AvatarEditor(
+                  service: service,
+                  avatar: bot.avatar,
+                  initials: _initials(bot.name, 'T'),
+                  color: AppColors.cyan,
+                  radius: 17,
+                  subject: 'app picture',
+                  onChanged: onAvatar,
+                ),
                 const Spacer(),
                 if (bot.hasFrontend) const StatusTag('ELPIAN', AppColors.cyan),
                 IconButton(
@@ -654,6 +714,16 @@ class _ToolCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Up to two letters of [name] for an avatar without a picture.
+String _initials(String name, String fallback) {
+  final parts =
+      name.trim().split(RegExp(r'[\s_-]+')).where((p) => p.isNotEmpty);
+  if (parts.isEmpty) return fallback;
+  if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+  return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+      .toUpperCase();
 }
 
 /// The name and description of a bot that has no form of its own (a tool

@@ -23,12 +23,16 @@ class WorkspaceHeader extends StatelessWidget {
     required this.onOpenProfile,
     this.onOpenSearchFeed,
     this.handle = '',
+    this.avatar,
   });
 
   final String workspace;
   final String? room;
   final bool compact;
   final String handle;
+
+  /// The signed-in account's picture, shown over its initial.
+  final ImageProvider? avatar;
   final VoidCallback? onOpenNavigation;
   final VoidCallback onOpenWorkspaces;
   final VoidCallback? onGoHome;
@@ -111,7 +115,10 @@ class WorkspaceHeader extends StatelessWidget {
         ],
         InkWell(
             onTap: onOpenProfile,
+            customBorder: const CircleBorder(),
             child: CircleAvatar(
+                foregroundImage: avatar,
+                onForegroundImageError: avatar == null ? null : (_, __) {},
                 child: Text(handle.isEmpty ? 'ME' : handle[0].toUpperCase())))
       ]));
 }
@@ -184,6 +191,16 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
       if (!mounted) return;
       setState(() => loading = false);
     }
+  }
+
+  /// The picture of the workspace called [name], if it has one.
+  ImageProvider? _avatarOf(String name) {
+    final deps = widget.dependencies;
+    if (deps == null) return null;
+    for (final sp in spaces) {
+      if (sp.name == name) return deps.service.avatarImage(sp.avatar);
+    }
+    return null;
   }
 
   List<String> get _names {
@@ -360,6 +377,13 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                                                             .start,
                                                     children: [
                                                       CircleAvatar(
+                                                          foregroundImage:
+                                                              _avatarOf(name),
+                                                          onForegroundImageError:
+                                                              _avatarOf(name) ==
+                                                                      null
+                                                                  ? null
+                                                                  : (_, __) {},
                                                           child: Text(name
                                                               .substring(
                                                                   0,

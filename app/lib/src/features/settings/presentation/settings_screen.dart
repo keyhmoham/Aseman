@@ -7,6 +7,7 @@ import '../../../app_dependencies.dart';
 import '../../../core/settings/app_settings.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/app_inputs.dart';
+import '../../../shared/widgets/avatar_editor.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../account/presentation/account_panel.dart';
@@ -481,13 +482,24 @@ class _AccountCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppShape.card),
         ),
         child: Row(children: [
-          CircleAvatar(
-              radius: 30,
-              backgroundColor: scheme.primary,
-              foregroundColor: scheme.onPrimary,
-              child: Text(initials,
-                  style: const TextStyle(
-                      fontSize: 22, fontWeight: FontWeight.w800))),
+          if (dependencies == null)
+            CircleAvatar(
+                radius: 30,
+                backgroundColor: scheme.primary,
+                foregroundColor: scheme.onPrimary,
+                child: Text(initials,
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.w800)))
+          else
+            AvatarEditor(
+              service: dependencies!.service,
+              avatar: dependencies!.sessionController.avatar,
+              initials: initials,
+              filled: true,
+              subject: 'profile picture',
+              enabled: accountId.isNotEmpty,
+              onChanged: dependencies!.sessionController.setAvatar,
+            ),
           const SizedBox(width: 16),
           Expanded(
               child: Column(

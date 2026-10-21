@@ -294,7 +294,29 @@ class FakeTraderaService extends TraderaService {
           String? query,
           int limit = 50,
           int offset = 0}) async =>
-      const [];
+      query == null || query.isEmpty || offset > 0
+          ? const []
+          : [
+              for (final l in const [
+                MarketListing(
+                    id: 'l1',
+                    publisherId: 'p',
+                    botId: 'bot-alpha',
+                    type: 'agent',
+                    name: 'AlphaBot',
+                    description: 'Sizes trades'),
+                MarketListing(
+                    id: 'l2',
+                    publisherId: 'p',
+                    botId: 'tool-chart',
+                    type: 'tool',
+                    name: 'Chart Studio',
+                    description: 'Draws charts'),
+              ])
+                if ((type == null || l.type == type) &&
+                    l.name.toLowerCase().contains(query.toLowerCase()))
+                  l,
+            ];
 
   @override
   Future<List<Map<String, dynamic>>> fetchLedger(
@@ -400,9 +422,42 @@ class FakeTraderaService extends TraderaService {
   final List<String> seen = [];
 
   @override
-  Future<List<ChatSummary>> fetchChats({String kind = ''}) async => chats
-      .where((c) => kind.isEmpty || (kind == 'direct') == c.direct)
-      .toList();
+  Future<List<ChatSummary>> fetchChats(
+          {String kind = '', String query = ''}) async =>
+      chats
+          .where((c) => kind.isEmpty || (kind == 'direct') == c.direct)
+          .where((c) =>
+              query.isEmpty ||
+              c.title.toLowerCase().contains(query.toLowerCase()))
+          .toList();
+
+  /// The post searches asked, with whether they searched the Following feed.
+  final List<(String, bool)> postSearches = [];
+
+  @override
+  Future<List<SocialPost>> searchPosts(String query,
+      {bool following = false, int limit = 20, int offset = 0}) async {
+    postSearches.add((query, following));
+    if (offset > 0) return const [];
+    final all = [
+      ...await fetchFeed(following: true),
+      ...await fetchSpacesFeed(),
+    ];
+    return all
+        .where((p) => p.body.toLowerCase().contains(query.toLowerCase()))
+        .toList();
+  }
+
+  @override
+  Future<List<AccountSummary>> searchUsers(String query,
+          {int limit = 20, int offset = 0}) async =>
+      offset > 0
+          ? const []
+          : [
+              for (final handle in ['maya', 'alex'])
+                if (handle.contains(query.toLowerCase()))
+                  AccountSummary(id: 'acc-$handle', handle: handle),
+            ];
 
   @override
   Future<ChatSummary> openDirect(String peer) async => chats.firstWhere(

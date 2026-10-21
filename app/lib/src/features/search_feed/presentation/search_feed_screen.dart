@@ -19,6 +19,7 @@ import '../../../shared/widgets/spark_painter.dart';
 import '../../../shared/widgets/status_tag.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../admin/presentation/admin_screen.dart';
+import '../../home/presentation/workspace_screen.dart' show showExplore;
 import '../../messenger/presentation/chat_page.dart';
 import '../../messenger/presentation/messenger_panel.dart';
 import '../domain/feed_post.dart';
@@ -53,7 +54,6 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
     with SingleTickerProviderStateMixin {
   late final SearchFeedViewModel model;
   late final TabController tabs;
-  final searchController = TextEditingController();
   final scrollController = ScrollController();
   Timer? _chatsPoll;
 
@@ -71,7 +71,6 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
       ..addListener(() {
         if (!tabs.indexIsChanging) setState(() {});
       });
-    searchController.addListener(() => model.setQuery(searchController.text));
     scrollController.addListener(_onScroll);
     model.load();
     // New messages arrive on their own time, like in the messenger.
@@ -100,7 +99,6 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   @override
   void dispose() {
     _chatsPoll?.cancel();
-    searchController.dispose();
     scrollController.dispose();
     tabs.dispose();
     model.dispose();
@@ -134,10 +132,11 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
     );
   }
 
-  void _applySuggestion(String value) {
-    searchController.text = value;
-    searchController.selection = TextSelection.collapsed(offset: value.length);
-  }
+  /// The search bar opens Explore: the server's search across people,
+  /// spaces, Following posts, direct chats and the market.
+  Future<void> _openExplore([String query = '']) => showExplore(
+      context, widget.dependencies,
+      query: query, onOpenSpace: widget.onOpenWorkspace);
 
   Future<void> _openComposer() async {
     final body = await showPostEditor(
@@ -243,9 +242,8 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
               pinned: false,
               delegate: _SearchHeroDelegate(
                   compact: compact,
-                  controller: searchController,
                   model: model,
-                  onSuggestion: _applySuggestion)),
+                  onSearch: _openExplore)),
           if (compact)
             SliverPersistentHeader(
                 pinned: true,
@@ -305,12 +303,12 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                   showProfileMenu(context, widget.dependencies)));
 
   List<Widget> _feedSlivers(double horizontalPad) {
-    final posts = model.search(model.followingPosts);
+    final posts = model.followingPosts;
     return [
       SliverPadding(
           padding: EdgeInsets.fromLTRB(horizontalPad, 16, horizontalPad, 12),
           sliver: SliverToBoxAdapter(
-              child: _FeedHeader(count: posts.length, query: model.query))),
+              child: _FeedHeader(count: posts.length))),
       if (posts.isEmpty)
         const SliverFillRemaining(
             hasScrollBody: false,
@@ -360,15 +358,13 @@ class _FixedHeaderDelegate extends SliverPersistentHeaderDelegate {
 class _SearchHeroDelegate extends SliverPersistentHeaderDelegate {
   _SearchHeroDelegate({
     required this.compact,
-    required this.controller,
     required this.model,
-    required this.onSuggestion,
+    required this.onSearch,
   });
 
   final bool compact;
-  final TextEditingController controller;
   final SearchFeedViewModel model;
-  final ValueChanged<String> onSuggestion;
+  final ValueChanged<String> onSearch;
 
   @override
   double get minExtent => 0;
@@ -376,10 +372,7 @@ class _SearchHeroDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => compact ? 318 : 360;
   @override
   bool shouldRebuild(covariant _SearchHeroDelegate old) =>
-      old.compact != compact ||
-      old.controller != controller ||
-      old.model != model ||
-      old.onSuggestion != onSuggestion;
+      old.compact != compact || old.model != model || old.onSearch != onSearch;
 
   @override
   Widget build(
@@ -388,8 +381,7 @@ class _SearchHeroDelegate extends SliverPersistentHeaderDelegate {
     return _HeroContent(
         progress: progress,
         compact: compact,
-        controller: controller,
-        onSuggestion: onSuggestion);
+        onSearch: onSearch);
   }
 }
 
@@ -397,14 +389,12 @@ class _HeroContent extends StatelessWidget {
   const _HeroContent({
     required this.progress,
     required this.compact,
-    required this.controller,
-    required this.onSuggestion,
+    required this.onSearch,
   });
 
   final double progress;
   final bool compact;
-  final TextEditingController controller;
-  final ValueChanged<String> onSuggestion;
+  final ValueChanged<String> onSearch;
 
   @override
   Widget build(BuildContext context) {
@@ -438,14 +428,14 @@ class _HeroContent extends StatelessWidget {
               child: Transform.translate(
                   offset: Offset(0, -progress * 12),
                   child: _BigSearchBar(
-                      controller: controller, compact: compact)))),
+                      onTap: () => onSearch(''), compact: compact)))),
       Positioned(
           top: chipsTop,
           left: 0,
           right: 0,
           child: Opacity(
               opacity: fade,
-              child: _TrendingChips(onSuggestion: onSuggestion))),
+              child: _TrendingChips(onSuggestion: onSearch))),
     ]);
   }
 }
@@ -476,8 +466,10 @@ class _RobotHead extends StatelessWidget {
 }
 
 class _BigSearchBar extends StatelessWidget {
-  const _BigSearchBar({required this.controller, required this.compact});
-  final TextEditingController controller;
+  const _BigSearchBar({required this.onTap, required this.compact});
+
+  /// Opens Explore, where the search is typed.
+  final VoidCallback onTap;
   final bool compact;
   @override
   Widget build(BuildContext context) {
@@ -507,10 +499,11 @@ class _BigSearchBar extends StatelessWidget {
                       const SizedBox(width: 12),
                       Expanded(
                           child: TextField(
-                              controller: controller,
+                              readOnly: true,
+                              onTap: onTap,
+                              mouseCursor: SystemMouseCursors.click,
                               style: const TextStyle(
                                   fontSize: 16, fontWeight: FontWeight.w500),
-                              textInputAction: TextInputAction.search,
                               decoration: InputDecoration(
                                   filled: false,
                                   border: InputBorder.none,
@@ -522,11 +515,12 @@ class _BigSearchBar extends StatelessWidget {
                                       fontSize: 15,
                                       color: scheme.onSurfaceVariant)))),
                       IconButton(
-                          onPressed: () {},
+                          onPressed: onTap,
                           icon: const Icon(Icons.mic_none_rounded)),
                       const SizedBox(width: 2),
                       IconButton.filled(
-                          onPressed: () {},
+                          tooltip: 'Explore',
+                          onPressed: onTap,
                           icon: const Icon(Icons.arrow_upward_rounded)),
                     ])))));
   }
@@ -582,20 +576,15 @@ class _FeedTabs extends StatelessWidget {
 }
 
 class _FeedHeader extends StatelessWidget {
-  const _FeedHeader({required this.count, required this.query});
+  const _FeedHeader({required this.count});
 
   final int count;
-  final String query;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final trimmed = query.trim();
     const title = 'Following';
     const subtitle = 'People and agents you follow, and your spaces';
-    final shownSubtitle = trimmed.isEmpty
-        ? subtitle
-        : '${count} result${count == 1 ? '' : 's'} for “$trimmed”';
     return Row(children: [
       Expanded(
           child:
@@ -604,7 +593,7 @@ class _FeedHeader extends StatelessWidget {
             style: TextStyle(
                 fontSize: 22, letterSpacing: -.3, fontWeight: FontWeight.w800)),
         const SizedBox(height: 3),
-        Text(shownSubtitle,
+        Text(subtitle,
             style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant))
       ])),
       const SizedBox(width: 12),

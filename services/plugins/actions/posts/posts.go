@@ -156,7 +156,8 @@ func (s *Service) Comments(ctx context.Context, parentID identity.ID, limit int)
 //   - Global (no space, not following) lists only public top-level posts not
 //     attached to any workspace, so private workspace posts never leak.
 //   - A space-scoped feed requires the caller to be a member of that space.
-//   - The following feed lists top-level posts by connected authors.
+//   - The following feed lists top-level posts by connected authors: the
+//     accounts the caller follows or shares a workspace with.
 func (s *Service) Feed(ctx context.Context, caller identity.ID, spaceID identity.ID, following bool, limit, offset int) ([]post.Post, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -267,9 +268,26 @@ func (s *Service) UserPosts(ctx context.Context, author identity.ID, limit, offs
 	return out, nil
 }
 
-// ConnectedAuthors returns the accounts that share a workspace membership with
-// caller (the caller's social graph).
+// ConnectedAuthors returns the caller's social graph: the accounts they follow
+// and the accounts that share a workspace membership with them.
 func (s *Service) ConnectedAuthors(ctx context.Context, caller identity.ID) ([]string, error) {
+	seen := map[string]bool{caller.String(): true}
+	var authors []string
+	add := func(id string) {
+		if id != "" && !seen[id] {
+			seen[id] = true
+			authors = append(authors, id)
+		}
+	}
+	var follows []followRow
+	if err := s.R.List(ctx, "follows", database.Filter{
+		Equal: map[string]any{"follower_id": caller.String()},
+	}, &follows); err != nil {
+		return nil, err
+	}
+	for _, f := range follows {
+		add(f.FolloweeID)
+	}
 	var myMems []membershipRow
 	if err := s.R.List(ctx, "memberships", database.Filter{
 		Equal: map[string]any{"member_id": caller.String()},
@@ -285,7 +303,7 @@ func (s *Service) ConnectedAuthors(ctx context.Context, caller identity.ID) ([]s
 		spaces = append(spaces, sp)
 	}
 	if len(spaces) == 0 {
-		return nil, nil
+		return authors, nil
 	}
 	var coMems []membershipRow
 	if err := s.R.List(ctx, "memberships", database.Filter{
@@ -293,16 +311,15 @@ func (s *Service) ConnectedAuthors(ctx context.Context, caller identity.ID) ([]s
 	}, &coMems); err != nil {
 		return nil, err
 	}
-	seen := map[string]bool{}
-	var authors []string
 	for _, m := range coMems {
-		if m.MemberID == caller.String() || seen[m.MemberID] {
-			continue
-		}
-		seen[m.MemberID] = true
-		authors = append(authors, m.MemberID)
+		add(m.MemberID)
 	}
 	return authors, nil
+}
+
+// followRow is the part of a follow the feed reads.
+type followRow struct {
+	FolloweeID string `db:"followee_id" json:"followee_id"`
 }
 
 type membershipRow struct {

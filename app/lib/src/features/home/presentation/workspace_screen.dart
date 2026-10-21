@@ -34,6 +34,7 @@ import '../../desk/presentation/floating_desk.dart';
 import '../../files/domain/file_types.dart';
 import '../../files/presentation/file_tree.dart';
 import '../../files/presentation/file_viewer.dart';
+import '../../messenger/presentation/chat_page.dart';
 import '../../messenger/presentation/report_dialog.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import '../../search_feed/presentation/post_editor.dart';
@@ -2503,12 +2504,39 @@ class _Post extends StatelessWidget {
   }
 }
 
+/// Opens Explore from the feed: a search across Tradera with no space scope,
+/// so it has no "in this space" tab. [onOpenSpace] opens a space the user is
+/// a member of by name.
+Future<void> showExplore(BuildContext context, AppDependencies dependencies,
+        {String query = '', ValueChanged<String>? onOpenSpace}) =>
+    showFloatingPanel(
+        context,
+        _SearchPanel(
+            workspace: '',
+            dependencies: dependencies,
+            feed: true,
+            initialQuery: query,
+            onOpenSpace: onOpenSpace),
+        maxWidth: 920,
+        barrierLabel: 'Close explore');
+
 class _SearchPanel extends StatefulWidget {
   const _SearchPanel(
-      {required this.workspace, this.spaceId = '', this.dependencies});
+      {required this.workspace,
+      this.spaceId = '',
+      this.dependencies,
+      this.feed = false,
+      this.initialQuery = '',
+      this.onOpenSpace});
   final String workspace;
   final String spaceId;
   final AppDependencies? dependencies;
+
+  /// Opened from the feed, outside any space: only the platform-wide
+  /// sections, without the space/explore tab bar.
+  final bool feed;
+  final String initialQuery;
+  final ValueChanged<String>? onOpenSpace;
   @override
   State<_SearchPanel> createState() => _SearchPanelState();
 }
@@ -2519,7 +2547,8 @@ class _SearchPanelState extends State<_SearchPanel>
   int localSection = 0;
   int globalSection = 0;
   int filter = 0;
-  String query = '';
+  late String query = widget.initialQuery;
+  late final searchField = TextEditingController(text: widget.initialQuery);
   static const local = [
     'Users',
     'Agents',
@@ -2531,6 +2560,18 @@ class _SearchPanelState extends State<_SearchPanel>
     'Messages'
   ];
   static const global = ['Users', 'Agents', 'Apps', 'Posts', 'Workspaces'];
+
+  /// What the feed's search covers: people, the user's and public spaces,
+  /// the posts of their Following feed, their direct chats and the market's
+  /// agents and apps.
+  static const feedSections = [
+    'Users',
+    'Spaces',
+    'Posts',
+    'Chats',
+    'Agents',
+    'Apps'
+  ];
   @override
   void initState() {
     super.initState();
@@ -2542,15 +2583,23 @@ class _SearchPanelState extends State<_SearchPanel>
 
   @override
   void dispose() {
+    searchField.dispose();
     tabs.dispose();
     super.dispose();
   }
 
+  /// Whether the results are the space's own (the first tab inside a space).
+  bool get _local => !widget.feed && tabs.index == 0;
+
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 600;
-    final sections = tabs.index == 0 ? local : global;
-    final selected = tabs.index == 0 ? localSection : globalSection;
+    final sections = widget.feed
+        ? feedSections
+        : _local
+            ? local
+            : global;
+    final selected = _local ? localSection : globalSection;
     return Padding(
         padding:
             EdgeInsets.fromLTRB(compact ? 14 : 24, 18, compact ? 14 : 24, 12),
@@ -2559,7 +2608,12 @@ class _SearchPanelState extends State<_SearchPanel>
             const Icon(Icons.travel_explore_rounded, size: 30),
             const SizedBox(width: 12),
             Expanded(
-                child: Text(compact ? 'Discover' : 'Search & discover',
+                child: Text(
+                    widget.feed
+                        ? 'Explore'
+                        : compact
+                            ? 'Discover'
+                            : 'Search & discover',
                     style: const TextStyle(
                         fontSize: 24, fontWeight: FontWeight.w900))),
             IconButton(
@@ -2568,12 +2622,13 @@ class _SearchPanelState extends State<_SearchPanel>
           ]),
           const SizedBox(height: 18),
           TextField(
+              controller: searchField,
               autofocus: true,
               onChanged: (value) => setState(() => query = value),
               decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: const Icon(Icons.tune_rounded),
-                  hintText: tabs.index == 0
+                  hintText: _local
                       ? 'Search ${widget.workspace}…'
                       : 'Search all of Tradera…')),
           const SizedBox(height: 9),
@@ -2597,30 +2652,35 @@ class _SearchPanelState extends State<_SearchPanel>
                             style: const TextStyle(fontSize: 10)),
                         visualDensity: VisualDensity.compact);
                   })),
-          const SizedBox(height: 9),
-          SegmentedTabBar(
-            controller: tabs,
-            compact: compact,
-            labels: ['In ${widget.workspace}', 'Explore Tradera'],
-            icons: const [Icons.hub_outlined, Icons.travel_explore_rounded],
-          ),
+          // Outside a space there is nothing to scope the search to.
+          if (!widget.feed) ...[
+            const SizedBox(height: 9),
+            SegmentedTabBar(
+              controller: tabs,
+              compact: compact,
+              labels: ['In ${widget.workspace}', 'Explore Tradera'],
+              icons: const [Icons.hub_outlined, Icons.travel_explore_rounded],
+            ),
+          ],
           Expanded(
               child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 240),
                   child: _SearchResults(
                       key: ValueKey('${tabs.index}-$selected-$query'),
                       section: sections[selected],
-                      global: tabs.index == 1,
+                      global: !_local,
+                      feed: widget.feed,
                       workspace: widget.workspace,
                       spaceId: widget.spaceId,
                       query: query,
                       filter: filter,
+                      onOpenSpace: widget.onOpenSpace,
                       dependencies: widget.dependencies))),
           _SearchSectionNav(
               sections: sections,
               selected: selected,
               onSelect: (value) => setState(() {
-                    if (tabs.index == 0) {
+                    if (_local) {
                       localSection = value;
                     } else {
                       globalSection = value;
@@ -2660,22 +2720,37 @@ IconData _sectionIcon(String section) => switch (section) {
       'Messages' => Icons.chat_bubble_outline_rounded,
       'Posts' => Icons.dynamic_feed_outlined,
       'Rooms' => Icons.forum_outlined,
-      'Workspaces' => Icons.hub_outlined,
+      'Workspaces' || 'Spaces' => Icons.hub_outlined,
+      'Chats' => Icons.forum_outlined,
       _ => Icons.search_rounded
     };
+
+/// One search result: what its card shows, the entity's id when known, and
+/// the record it came from (a chat, a post, a space row).
+class _SearchHit {
+  const _SearchHit(this.title, {this.subtitle, this.id = '', this.payload});
+  final String title;
+  final String? subtitle;
+  final String id;
+  final Object? payload;
+}
 
 class _SearchResults extends StatefulWidget {
   const _SearchResults(
       {super.key,
       required this.section,
       required this.global,
+      this.feed = false,
       required this.workspace,
       required this.spaceId,
       required this.query,
       required this.filter,
+      this.onOpenSpace,
       this.dependencies});
   final String section;
   final bool global;
+  final bool feed;
+  final ValueChanged<String>? onOpenSpace;
   final String workspace;
   final String spaceId;
   final String query;
@@ -2691,7 +2766,7 @@ class _SearchResults extends StatefulWidget {
 class _SearchResultsState extends State<_SearchResults> {
   static const _pageSize = 24;
   final ScrollController _scroll = ScrollController();
-  List<String> _items = const [];
+  List<_SearchHit> _items = const [];
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
@@ -2785,7 +2860,126 @@ class _SearchResultsState extends State<_SearchResults> {
   }
 
   /// Fetches one page of results for the active tab + scope.
-  Future<List<String>> _fetchPage(AppDependencies deps, int offset) async {
+  Future<List<_SearchHit>> _fetchPage(AppDependencies deps, int offset) async {
+    if (widget.feed) return _fetchFeedPage(deps, offset);
+    return [
+      for (final title in await _fetchTitles(deps, offset)) _SearchHit(title)
+    ];
+  }
+
+  /// The feed's search: everything is the server's own search.
+  Future<List<_SearchHit>> _fetchFeedPage(
+      AppDependencies deps, int offset) async {
+    final q = widget.query.trim();
+    final service = deps.service;
+    switch (widget.section) {
+      case 'Users':
+        final users =
+            await service.searchUsers(q, limit: _pageSize, offset: offset);
+        return [
+          for (final u in users)
+            _SearchHit(u.handle, id: u.id, subtitle: '@${u.handle}')
+        ];
+      case 'Spaces':
+        final spaces =
+            await service.searchSpaces(q, limit: _pageSize, offset: offset);
+        return [
+          for (final sp in spaces)
+            _SearchHit('${sp['name'] ?? ''}',
+                id: '${sp['id'] ?? ''}',
+                subtitle: [
+                  if ('${sp['description'] ?? ''}'.isNotEmpty)
+                    '${sp['description']}',
+                  sp['member'] == false ? 'Public space' : 'Your space',
+                ].join(' · '),
+                payload: sp),
+        ];
+      case 'Posts':
+        final posts = await service.searchPosts(q,
+            following: true, limit: _pageSize, offset: offset);
+        return [
+          for (final p in posts)
+            _SearchHit(_firstLine(p.body),
+                id: p.id, subtitle: _afterFirstLine(p.body), payload: p),
+        ];
+      case 'Chats':
+        // The chat list is not paged: one page holds every match.
+        if (offset > 0) return const [];
+        final chats = await service.fetchChats(kind: 'direct', query: q);
+        return [
+          for (final c in chats)
+            _SearchHit(c.title,
+                id: c.spaceId,
+                subtitle: c.lastBody.isEmpty ? 'Direct chat' : c.lastBody,
+                payload: c),
+        ];
+      case 'Agents':
+      case 'Apps':
+        final listings = await service.fetchMarket(
+            type: widget.section == 'Apps' ? 'tool' : 'agent',
+            query: q,
+            limit: _pageSize,
+            offset: offset);
+        return [
+          for (final l in listings)
+            _SearchHit(l.name,
+                id: l.botId,
+                subtitle: l.description.isEmpty
+                    ? 'In the market · ${l.kindLabel}'
+                    : l.description,
+                payload: l),
+        ];
+      default:
+        return const [];
+    }
+  }
+
+  /// A post's text after its first line, for the card's blurb.
+  static String _afterFirstLine(String body) {
+    final rest = body.trim().split('\n').skip(1).join(' ').trim();
+    return rest.isEmpty ? 'From your Following feed' : rest;
+  }
+
+  static String _firstLine(String body) {
+    final line = body
+        .split('\n')
+        .map((l) => l.replaceAll(RegExp(r'^[#>*\-\s]+'), '').trim())
+        .firstWhere((l) => l.isNotEmpty, orElse: () => 'Post');
+    return line.length > 90 ? '${line.substring(0, 90)}…' : line;
+  }
+
+  /// Opens a result: a chat, a post, a space the user is in, or a profile.
+  VoidCallback? _opener(_SearchHit hit) {
+    final deps = widget.dependencies;
+    final payload = hit.payload;
+    if (payload is ChatSummary && deps != null) {
+      return () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => ChatPage(dependencies: deps, chat: payload)));
+    }
+    if (payload is SocialPost) {
+      return () => showFloatingPanel(
+          context, _PostPreview(post: payload, dependencies: deps),
+          maxWidth: 640, maxHeight: 700, barrierLabel: 'Close post');
+    }
+    if (widget.section == 'Spaces' &&
+        payload is Map &&
+        payload['member'] != false &&
+        widget.onOpenSpace != null) {
+      return () {
+        Navigator.of(context).pop();
+        widget.onOpenSpace!(hit.title);
+      };
+    }
+    if (const ['Users', 'Agents', 'Apps', 'Workspaces', 'Spaces', 'Rooms']
+        .contains(widget.section)) {
+      return () => _openEntityProfile(context, widget.section, hit.title,
+          deps, widget.spaceId, hit.id);
+    }
+    return null;
+  }
+
+  /// One page of result titles inside a space or across Tradera.
+  Future<List<String>> _fetchTitles(AppDependencies deps, int offset) async {
     final q = widget.query.trim().toLowerCase();
     final space = widget.spaceId;
     switch (widget.section) {
@@ -2860,6 +3054,14 @@ class _SearchResultsState extends State<_SearchResults> {
     }
   }
 
+  static String _feedScope(String section) => switch (section) {
+        'Spaces' => 'Your spaces and public spaces',
+        'Posts' => 'Posts of the people you follow and your spaces',
+        'Chats' => 'Your direct chats, by who they are with',
+        'Agents' || 'Apps' => 'From the market',
+        _ => 'Discover across the platform',
+      };
+
   static bool _fileMatchesSection(Map<String, dynamic> file, String section) {
     final mime = (file['mime'] as String? ?? '').toLowerCase();
     switch (section) {
@@ -2903,9 +3105,11 @@ class _SearchResultsState extends State<_SearchResults> {
                       style: const TextStyle(
                           fontSize: 18, fontWeight: FontWeight.w900)),
                   Text(
-                      widget.global
-                          ? 'Discover across the platform'
-                          : 'Results from ${widget.workspace} workspace',
+                      widget.feed
+                          ? _feedScope(section)
+                          : widget.global
+                              ? 'Discover across the platform'
+                              : 'Results from ${widget.workspace} workspace',
                       style: const TextStyle(fontSize: 10))
                 ])),
             if (count != null)
@@ -2947,13 +3151,17 @@ class _SearchResultsState extends State<_SearchResults> {
                       child: CircularProgressIndicator(strokeWidth: 2.5)),
                 ));
               }
+              final hit = _items[index];
               return _SearchResultCard(
                   section: section,
-                  title: _items[index],
+                  title: hit.title,
+                  subtitle: hit.subtitle,
                   global: widget.global,
+                  feed: widget.feed,
                   spaceId: widget.spaceId,
                   index: index,
                   filter: widget.filter,
+                  onOpen: widget.feed ? _opener(hit) : null,
                   dependencies: widget.dependencies);
             });
       })),
@@ -2965,17 +3173,34 @@ class _SearchResultCard extends StatelessWidget {
   const _SearchResultCard(
       {required this.section,
       required this.title,
+      this.subtitle,
       required this.global,
+      this.feed = false,
       required this.index,
       required this.filter,
+      this.onOpen,
       this.spaceId = '',
       this.dependencies});
   final String section, title;
+
+  /// What the result says about itself (the generic blurb otherwise).
+  final String? subtitle;
   final bool global;
+
+  /// A feed search result: [onOpen] opens it.
+  final bool feed;
+  final VoidCallback? onOpen;
   final int index, filter;
   final String spaceId;
   final AppDependencies? dependencies;
   bool get visual => const ['Media', 'GIFs', 'Posts'].contains(section);
+
+  VoidCallback? _open(BuildContext context) => feed
+      ? onOpen
+      : _hasProfile
+          ? () => _openEntityProfile(
+              context, section, title, dependencies, spaceId)
+          : null;
   @override
   Widget build(BuildContext context) {
     final color = [
@@ -2988,10 +3213,7 @@ class _SearchResultCard extends StatelessWidget {
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-            onTap: _hasProfile
-                ? () => _openEntityProfile(
-                    context, section, title, dependencies, spaceId)
-                : null,
+            onTap: _open(context),
             child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Column(
@@ -3032,7 +3254,7 @@ class _SearchResultCard extends StatelessWidget {
                           style: const TextStyle(
                               fontSize: 14, fontWeight: FontWeight.w900)),
                       const SizedBox(height: 4),
-                      Text(_description(),
+                      Text(subtitle ?? _description(),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -3043,7 +3265,13 @@ class _SearchResultCard extends StatelessWidget {
                                   .onSurfaceVariant)),
                       const Spacer(),
                       Row(children: [
-                        MiniTag(global ? 'GLOBAL' : 'WORKSPACE', color),
+                        MiniTag(
+                            feed
+                                ? section.toUpperCase()
+                                : global
+                                    ? 'GLOBAL'
+                                    : 'WORKSPACE',
+                            color),
                         const SizedBox(width: 6),
                         MiniTag(
                             [
@@ -3055,10 +3283,7 @@ class _SearchResultCard extends StatelessWidget {
                             Theme.of(context).colorScheme.primary),
                         const Spacer(),
                         IconButton.filledTonal(
-                            onPressed: _hasProfile
-                                ? () => _openEntityProfile(
-                                    context, section, title, dependencies)
-                                : () {},
+                            onPressed: _open(context) ?? () {},
                             tooltip: _action(),
                             icon: Icon(_actionIcon(), size: 17))
                       ])
@@ -3087,20 +3312,59 @@ class _SearchResultCard extends StatelessWidget {
         'Agents',
         'Apps',
         'Workspaces',
+        'Spaces',
         'Rooms'
       ].contains(section);
-  String _action() => _hasProfile ? 'View profile' : 'Open';
+  String _action() => _hasProfile && !const ['Spaces'].contains(section)
+      ? 'View profile'
+      : 'Open';
   IconData _actionIcon() =>
       _hasProfile ? Icons.arrow_outward_rounded : Icons.arrow_forward_rounded;
 }
 
+/// A post found by the feed's search, rendered in full.
+class _PostPreview extends StatelessWidget {
+  const _PostPreview({required this.post, this.dependencies});
+  final SocialPost post;
+  final AppDependencies? dependencies;
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(
+          padding: const EdgeInsets.fromLTRB(22, 14, 8, 4),
+          child: Row(children: [
+            Icon(Icons.article_outlined, color: scheme.primary),
+            const SizedBox(width: 10),
+            const Expanded(
+                child: Text('Post',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+            IconButton(
+                tooltip: 'Close',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close)),
+          ])),
+      Flexible(
+          child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(22, 4, 22, 22),
+              child: DefaultTextStyle.merge(
+                  style: const TextStyle(fontSize: 15, height: 1.45),
+                  child: RichPostContent(post.body,
+                      headers: dependencies?.service.authHeaders() ??
+                          const {})))),
+    ]);
+  }
+}
+
 void _openEntityProfile(BuildContext context, String section, String title,
-    [AppDependencies? dependencies, String spaceId = '']) {
+    [AppDependencies? dependencies, String spaceId = '', String entityId = '']) {
   final profile = _EntityProfileScreen(
-      section: section,
+      section: section == 'Spaces' ? 'Workspaces' : section,
       title: title,
       dependencies: dependencies,
-      spaceId: spaceId);
+      spaceId: spaceId,
+      entityId: entityId);
   showFloatingPanel(context, profile,
       maxWidth: 700, maxHeight: 760, barrierLabel: 'Close profile');
 }
@@ -3110,9 +3374,14 @@ class _EntityProfileScreen extends StatefulWidget {
       {required this.section,
       required this.title,
       this.dependencies,
-      this.spaceId = ''});
+      this.spaceId = '',
+      this.entityId = ''});
   final String section, title;
   final AppDependencies? dependencies;
+
+  /// The entity's id when a search result knows it (a bot, an account or a
+  /// space): the profile loads it directly instead of matching [title].
+  final String entityId;
 
   /// The workspace the profile was opened from (used to install agents/tools).
   final String spaceId;
@@ -3155,6 +3424,16 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
       switch (widget.section) {
         case 'Agents':
         case 'Apps':
+          if (widget.entityId.isNotEmpty) {
+            final prof = await service.fetchBotProfile(widget.entityId);
+            if (mounted) {
+              setState(() {
+                _bot = prof;
+                _loading = false;
+              });
+            }
+            return;
+          }
           var bots = await service.fetchBots();
           var bot = bots
               .where((b) => widget.section == 'Agents'
@@ -3201,14 +3480,21 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
           }
           return;
         case 'Users':
-          final users = await service.searchUsers(widget.title, limit: 10);
-          final acc = users
-              .where((u) =>
-                  u.handle == widget.title || u.handle.contains(widget.title))
-              .firstOrNull;
-          if (acc != null) {
-            final prof = await service.fetchUserProfile(acc.id);
-            final posts = await service.fetchUserPosts(acc.id);
+          final String? accountId;
+          if (widget.entityId.isNotEmpty) {
+            accountId = widget.entityId;
+          } else {
+            final users = await service.searchUsers(widget.title, limit: 10);
+            accountId = users
+                .where((u) =>
+                    u.handle == widget.title ||
+                    u.handle.contains(widget.title))
+                .firstOrNull
+                ?.id;
+          }
+          if (accountId != null) {
+            final prof = await service.fetchUserProfile(accountId);
+            final posts = await service.fetchUserPosts(accountId);
             if (mounted) {
               setState(() {
                 _user = prof;
@@ -3224,13 +3510,19 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
           }
           return;
         case 'Workspaces':
-          final spaces = await service.fetchSpaces();
-          final sp = spaces
-              .where((s) =>
-                  s.name == widget.title || s.name.contains(widget.title))
-              .firstOrNull;
-          if (sp != null) {
-            final prof = await service.fetchSpaceProfile(sp.id);
+          final String? spaceId;
+          if (widget.entityId.isNotEmpty) {
+            spaceId = widget.entityId;
+          } else {
+            final spaces = await service.fetchSpaces();
+            spaceId = spaces
+                .where((s) =>
+                    s.name == widget.title || s.name.contains(widget.title))
+                .firstOrNull
+                ?.id;
+          }
+          if (spaceId != null) {
+            final prof = await service.fetchSpaceProfile(spaceId);
             if (mounted) {
               setState(() {
                 _space = prof;

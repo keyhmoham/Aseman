@@ -17,7 +17,6 @@ class SearchFeedViewModel extends ChangeNotifier {
   final AppDependencies? dependencies;
 
   String _workspace;
-  String query = '';
   bool loading = false;
   bool loadingMore = false;
   String? error;
@@ -150,12 +149,6 @@ class SearchFeedViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setQuery(String value) {
-    if (query == value) return;
-    query = value;
-    notifyListeners();
-  }
-
   /// The Following feed: posts of the people and agents the caller follows
   /// mixed with the posts of their spaces, newest first. Each source is paged
   /// on its own, so the list stops at the oldest post every source that has
@@ -230,18 +223,5 @@ class SearchFeedViewModel extends ChangeNotifier {
     if (d.inMinutes < 60) return '${d.inMinutes}m';
     if (d.inHours < 24) return '${d.inHours}h';
     return '${d.inDays}d';
-  }
-
-  List<FeedPost> search(List<FeedPost> source) {
-    final q = query.trim().toLowerCase();
-    if (q.isEmpty) return source;
-    return source
-        .where((p) =>
-            p.name.toLowerCase().contains(q) ||
-            p.handle.toLowerCase().contains(q) ||
-            p.body.toLowerCase().contains(q) ||
-            p.tag.toLowerCase().contains(q) ||
-            (p.coin ?? '').toLowerCase().contains(q))
-        .toList();
   }
 }

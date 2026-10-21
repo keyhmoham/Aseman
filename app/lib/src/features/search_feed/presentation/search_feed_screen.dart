@@ -122,6 +122,8 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
       context,
       WorkspacePicker(
         current: model.workspace,
+        feedSelected: true,
+        onOpenFeed: () => Navigator.pop(context),
         dependencies: widget.dependencies,
         onPick: (name) {
           Navigator.pop(context);
@@ -174,7 +176,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                 builder: (context, _) => Column(children: [
                       SizedBox(
                           height: 68,
-                          child: _workspaceBar(context, compact, scheme)),
+                          child: _workspaceBar(context, compact)),
                       Expanded(child: LayoutBuilder(builder: (context, box) {
                         if (compact) return _feedScroll(compact: true);
                         // Placed and sized like the workspace's side panels.
@@ -279,17 +281,18 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
         ]);
       });
 
-  Widget _workspaceBar(
-          BuildContext context, bool compact, ColorScheme scheme) =>
-      Container(
-          decoration: BoxDecoration(
-              color: scheme.surface.withValues(alpha: .96),
-              border: Border(
-                  bottom: BorderSide(
-                      color: scheme.outlineVariant.withValues(alpha: .5)))),
-          child: WorkspaceHeader(
+  Widget _workspaceBar(BuildContext context, bool compact) =>
+      // Rebuilt when the account's avatar changes.
+      ListenableBuilder(
+          listenable: widget.dependencies.sessionController,
+          builder: (context, _) => WorkspaceHeader(
               workspace: model.workspace,
               compact: compact,
+              feed: true,
+              handle:
+                  widget.dependencies.sessionController.session?.handle ?? '',
+              avatar: widget.dependencies.service
+                  .avatarImage(widget.dependencies.sessionController.avatar),
               onOpenWorkspaces: () => _openWorkspaces(context),
               onOpenAdmin: !widget.dependencies.sessionController.isAdmin
                   ? null

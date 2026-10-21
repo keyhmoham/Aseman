@@ -3,6 +3,7 @@ package docker
 import (
 	"archive/tar"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/tradera/tradera/pkg/errs"
 	"github.com/tradera/tradera/pkg/logger"
 	vmm "github.com/tradera/tradera/plugins/adapters/vmm/ports"
 )
@@ -25,6 +27,7 @@ type stoppedEngine struct {
 	helper   []string // the helper's command line
 	exit     int
 	removed  bool
+	listing  string
 }
 
 func (e *stoppedEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -72,6 +75,10 @@ func (e *stoppedEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"Id":"h"}`))
 	case r.URL.Path == "/containers/h/start":
 		w.WriteHeader(204)
+	case r.URL.Path == "/containers/h/logs":
+		// One stdout frame of Docker's multiplexed stream.
+		out := []byte(e.listing)
+		_, _ = w.Write(append([]byte{1, 0, 0, 0, byte(len(out) >> 24), byte(len(out) >> 16), byte(len(out) >> 8), byte(len(out))}, out...))
 	case r.URL.Path == "/containers/h/wait":
 		_, _ = w.Write([]byte(`{"StatusCode":` + string(rune('0'+e.exit)) + `}`))
 	case r.Method == http.MethodDelete && r.URL.Path == "/containers/h":
@@ -135,5 +142,78 @@ func TestStoppedComputerFilesAreDeletedAndMovedByAHelper(t *testing.T) {
 	}
 	if err := a.DeleteWorkspace(ctx, "vm", ""); err == nil {
 		t.Fatal("deleted the workspace root")
+	}
+}
+
+func TestAStoppedComputersFolderIsListedWithoutReadingItsContents(t *testing.T) {
+	a, e := stopped(t)
+	e.listing = "d|4096|node_modules\x00f|12|README.md\x00l|0|link\x00f|3|a b.txt\x00"
+	entries, err := a.ListWorkspace(context.Background(), "vm", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 3 || entries[0].Name != "README.md" || entries[0].Size != 12 || entries[1].Name != "a b.txt" ||
+		entries[2].Name != "node_modules" || entries[2].Type != "dir" {
+		t.Fatalf("entries = %+v", entries)
+	}
+	if e.helper[2] != "/workspace" || !strings.Contains(e.helper[0], "-maxdepth 1") {
+		t.Fatalf("listing helper = %v", e.helper)
+	}
+	e.exit = 3
+	if _, err := a.ListWorkspace(context.Background(), "vm", "gone"); errs.CodeOf(err) != errs.CodeNotFound {
+		t.Fatalf("missing folder = %v", err)
+	}
+}
+
+func TestReadingAFolderIsNotReadingAFileInIt(t *testing.T) {
+	engine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// A folder: Docker says so in the stat header, before any contents.
+		w.Header().Set("X-Docker-Container-Path-Stat", base64.StdEncoding.EncodeToString([]byte(`{"name":"src","mode":2147484141}`)))
+		w.WriteHeader(200)
+	}))
+	defer engine.Close()
+	a := New(logger.Global())
+	a.baseURL, a.client = engine.URL, engine.Client()
+	a.vms["vm"] = "c"
+	if _, err := a.ReadWorkspace(context.Background(), "vm", "src"); errs.CodeOf(err) != errs.CodeNotFound {
+		t.Fatalf("read a folder = %v", err)
+	}
+}
+
+func TestARunningComputersFolderIsListedByItself(t *testing.T) {
+	var command []string
+	engine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/containers/c/json":
+			_, _ = w.Write([]byte(`{"State":{"Running":true}}`))
+		case "/containers/c/exec":
+			var body struct {
+				Cmd []string `json:"Cmd"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			command = body.Cmd
+			_, _ = w.Write([]byte(`{"Id":"x"}`))
+		case "/exec/x/start":
+			out := []byte("d|0|src\x00f|5|go.mod\x00")
+			_, _ = w.Write(append([]byte{1, 0, 0, 0, 0, 0, 0, byte(len(out))}, out...))
+		case "/exec/x/json":
+			_, _ = w.Write([]byte(`{"ExitCode":0,"Running":false}`))
+		default:
+			http.Error(w, "unexpected "+r.URL.Path, 404)
+		}
+	}))
+	defer engine.Close()
+	a := New(logger.Global())
+	a.baseURL, a.client = engine.URL, engine.Client()
+	a.vms["vm"] = "c"
+	entries, err := a.ListWorkspace(context.Background(), "vm", "app's")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 || entries[0].Name != "go.mod" || entries[1].Type != "dir" {
+		t.Fatalf("entries = %+v", entries)
+	}
+	if !strings.Contains(strings.Join(command, " "), `cd '/workspace/app'\''s'`) {
+		t.Fatalf("command = %v", command)
 	}
 }

@@ -143,13 +143,20 @@ func (a *Adapter) putArchive(ctx context.Context, id, rel string, data []byte, d
 // volume (and nothing else: no network). It returns the script's exit code;
 // an error when the code is not 0 or the container could not run.
 func (a *Adapter) helper(ctx context.Context, id, script string, args ...string) (int, error) {
+	code, _, err := a.helperOutput(ctx, id, script, args...)
+	return code, err
+}
+
+// helperOutput is helper, with what the script printed.
+func (a *Adapter) helperOutput(ctx context.Context, id, script string, args ...string) (int, string, error) {
+	fail := func(err error) (int, string, error) { return -1, "", err }
 	cid, err := a.containerID(id)
 	if err != nil {
-		return -1, err
+		return fail(err)
 	}
 	raw, err := a.do(ctx, http.MethodGet, "/containers/"+cid+"/json", nil)
 	if err != nil {
-		return -1, err
+		return fail(err)
 	}
 	var info struct {
 		Config struct {
@@ -162,7 +169,7 @@ func (a *Adapter) helper(ctx context.Context, id, script string, args ...string)
 		} `json:"Mounts"`
 	}
 	if err := json.Unmarshal(raw, &info); err != nil {
-		return -1, err
+		return fail(err)
 	}
 	volume := ""
 	for _, m := range info.Mounts {
@@ -172,7 +179,7 @@ func (a *Adapter) helper(ctx context.Context, id, script string, args ...string)
 	}
 	if volume == "" || info.Config.Image == "" {
 		// Its files live only inside the container: change them through it.
-		return -1, vmm.ErrUnsupported
+		return fail(vmm.ErrUnsupported)
 	}
 	ctx, cancel := context.WithTimeout(ctx, helperTimeout)
 	defer cancel()
@@ -189,32 +196,36 @@ func (a *Adapter) helper(ctx context.Context, id, script string, args ...string)
 			"AutoRemove":  false,
 		},
 	}
-	out, err := a.do(ctx, http.MethodPost, "/containers/create", create)
+	made, err := a.do(ctx, http.MethodPost, "/containers/create", create)
 	if err != nil {
-		return -1, errs.Wrap(errs.CodeVMM, err, "files helper")
+		return fail(errs.Wrap(errs.CodeVMM, err, "files helper"))
 	}
 	var created struct {
 		ID string `json:"Id"`
 	}
-	if err := json.Unmarshal(out, &created); err != nil || created.ID == "" {
-		return -1, errs.New(errs.CodeVMM, "files helper was not created")
+	if err := json.Unmarshal(made, &created); err != nil || created.ID == "" {
+		return fail(errs.New(errs.CodeVMM, "files helper was not created"))
 	}
 	defer func() { _ = a.remove(context.WithoutCancel(ctx), created.ID, true) }()
 	if _, err := a.do(ctx, http.MethodPost, "/containers/"+created.ID+"/start", nil); err != nil {
-		return -1, errs.Wrap(errs.CodeVMM, err, "files helper")
+		return fail(errs.Wrap(errs.CodeVMM, err, "files helper"))
 	}
 	waited, err := a.do(ctx, http.MethodPost, "/containers/"+created.ID+"/wait", nil)
 	if err != nil {
-		return -1, errs.Wrap(errs.CodeVMM, err, "files helper")
+		return fail(errs.Wrap(errs.CodeVMM, err, "files helper"))
 	}
 	var result struct {
 		StatusCode int `json:"StatusCode"`
 	}
 	if err := json.Unmarshal(waited, &result); err != nil {
-		return -1, err
+		return fail(err)
+	}
+	out := ""
+	if logs, err := a.do(ctx, http.MethodGet, "/containers/"+created.ID+"/logs?stdout=1", nil); err == nil {
+		out = demuxStream(logs)
 	}
 	if result.StatusCode != 0 {
-		return result.StatusCode, errs.New(errs.CodeVMM, fmt.Sprintf("files helper exited %d", result.StatusCode))
+		return result.StatusCode, out, errs.New(errs.CodeVMM, fmt.Sprintf("files helper exited %d", result.StatusCode))
 	}
-	return 0, nil
+	return 0, out, nil
 }

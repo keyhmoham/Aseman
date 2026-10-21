@@ -10,8 +10,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -22,7 +24,10 @@ func workspacePath(p string) (string, error) {
 	}
 	return clean, nil
 }
-func (a *Adapter) archive(ctx context.Context, id, p string) (*http.Response, error) {
+
+// archive streams p as a tar. With folderOnly (a misnomer kept short: "files
+// only"), a folder is refused before its contents are sent.
+func (a *Adapter) archive(ctx context.Context, id, p string, folderOnly bool) (*http.Response, error) {
 	cid, e := a.containerID(id)
 	if e != nil {
 		return nil, e
@@ -51,8 +56,13 @@ func (a *Adapter) archive(ctx context.Context, id, p string) (*http.Response, er
 		}
 		var s struct {
 			LinkTarget string `json:"linkTarget"`
+			Mode       uint32 `json:"mode"`
 		}
 		_ = json.Unmarshal(raw, &s)
+		if folderOnly && s.Mode&uint32(os.ModeDir) != 0 {
+			res.Body.Close()
+			return nil, errs.NotFound("regular workspace file")
+		}
 		if s.LinkTarget != "" && (!strings.HasPrefix(path.Clean(s.LinkTarget), "/workspace/") && path.Clean(s.LinkTarget) != "/workspace") {
 			res.Body.Close()
 			return nil, errs.Permission("workspace symlink escapes its root")
@@ -61,7 +71,7 @@ func (a *Adapter) archive(ctx context.Context, id, p string) (*http.Response, er
 	return res, nil
 }
 func (a *Adapter) ReadWorkspace(ctx context.Context, id, p string) ([]byte, error) {
-	r, e := a.archive(ctx, id, p)
+	r, e := a.archive(ctx, id, p, true)
 	if e != nil {
 		return nil, e
 	}
@@ -85,49 +95,87 @@ func (a *Adapter) ReadWorkspace(ctx context.Context, id, p string) ([]byte, erro
 	}
 	return nil, errs.NotFound("regular workspace file")
 }
+
+// ListWorkspace (vmm.WorkspaceReader) lists one folder. It is never read
+// as an archive (that sends everything under it, which for a project with
+// its dependencies is far too much): a running computer lists it itself, a
+// stopped one through a helper container on its volume.
 func (a *Adapter) ListWorkspace(ctx context.Context, id, p string) ([]vmm.WorkspaceEntry, error) {
-	r, e := a.archive(ctx, id, p)
+	target, e := workspacePath(p)
 	if e != nil {
 		return nil, e
 	}
-	defer r.Body.Close()
-	reader := tar.NewReader(io.LimitReader(r.Body, 65<<20))
-	entries := map[string]vmm.WorkspaceEntry{}
-	root := ""
-	for {
-		h, e := reader.Next()
-		if e == io.EOF {
-			break
+	const script = `cd "$1" 2>/dev/null || exit 3; find . -mindepth 1 -maxdepth 1 -printf '%y|%s|%f\0' 2>/dev/null`
+	var out string
+	if a.running(ctx, id) {
+		got, err := a.Send(ctx, id, strings.Replace(script, `"$1"`, shellQuote(target), 1))
+		if err != nil {
+			return nil, err
 		}
-		if e != nil {
-			return nil, e
+		code, rest, _ := strings.Cut(got, "\n")
+		if code == "exit=3" {
+			return nil, errs.NotFound("workspace folder")
 		}
-		name := path.Clean(h.Name)
-		if root == "" {
-			root = strings.Split(name, "/")[0]
+		if code != "exit=0" {
+			return nil, errs.New(errs.CodeVMM, "list workspace: "+got)
 		}
-		rest := strings.TrimPrefix(name, root+"/")
-		if rest == root || rest == "." || rest == "" {
+		out = rest
+	} else {
+		code, got, err := a.helperOutput(ctx, id, script, target)
+		if code == 3 {
+			return nil, errs.NotFound("workspace folder")
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = got
+	}
+	return parseListing(out)
+}
+
+// parseListing reads find's "type|size|name" records (NUL-separated).
+func parseListing(out string) ([]vmm.WorkspaceEntry, error) {
+	entries := []vmm.WorkspaceEntry{}
+	for _, rec := range strings.Split(out, "\x00") {
+		kind, rest, ok := strings.Cut(strings.TrimLeft(rec, "\n"), "|")
+		if !ok {
 			continue
 		}
-		parts := strings.Split(rest, "/")
-		entry := vmm.WorkspaceEntry{Name: parts[0], Type: "file", Size: h.Size}
-		if len(parts) > 1 || h.Typeflag == tar.TypeDir {
-			entry.Type = "dir"
-			entry.Size = 0
-		}
-		if h.Typeflag == tar.TypeSymlink || h.Typeflag == tar.TypeLink {
+		size, name, ok := strings.Cut(rest, "|")
+		if !ok || name == "" {
 			continue
 		}
-		entries[entry.Name] = entry
+		switch kind {
+		case "d":
+			entries = append(entries, vmm.WorkspaceEntry{Name: name, Type: "dir"})
+		case "f":
+			n, _ := strconv.ParseInt(size, 10, 64)
+			entries = append(entries, vmm.WorkspaceEntry{Name: name, Type: "file", Size: n})
+		}
 		if len(entries) > 10000 {
 			return nil, errs.InvalidArgument("directory contains too many entries")
 		}
 	}
-	out := []vmm.WorkspaceEntry{}
-	for _, e := range entries {
-		out = append(out, e)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out, nil
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	return entries, nil
 }
+
+// running reports whether the computer's container runs now.
+func (a *Adapter) running(ctx context.Context, id string) bool {
+	cid, err := a.containerID(id)
+	if err != nil {
+		return false
+	}
+	b, err := a.do(ctx, http.MethodGet, "/containers/"+cid+"/json", nil)
+	if err != nil {
+		return false
+	}
+	var spec struct {
+		State struct {
+			Running bool `json:"Running"`
+		} `json:"State"`
+	}
+	return json.Unmarshal(b, &spec) == nil && spec.State.Running
+}
+
+func shellQuote(v string) string { return "'" + strings.ReplaceAll(v, "'", `'\''`) + "'" }

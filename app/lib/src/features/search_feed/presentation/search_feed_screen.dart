@@ -18,6 +18,7 @@ import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/spark_painter.dart';
 import '../../../shared/widgets/status_tag.dart';
 import '../../../shared/widgets/workspace_header.dart';
+import '../../../shared/widgets/workspace_panel_motion.dart';
 import '../../admin/presentation/admin_screen.dart';
 import '../../home/presentation/workspace_screen.dart' show showExplore;
 import '../../messenger/presentation/chat_page.dart';
@@ -51,9 +52,14 @@ class SearchFeedScreen extends StatefulWidget {
 }
 
 class _SearchFeedScreenState extends State<SearchFeedScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final SearchFeedViewModel model;
   late final TabController tabs;
+
+  /// The panels' motion, the same as a workspace switch: the feed arrives
+  /// like a switched-to workspace and leaves like one.
+  late final AnimationController motion =
+      workspaceMotionController(this, value: 0);
   final scrollController = ScrollController();
   Timer? _chatsPoll;
 
@@ -76,6 +82,15 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
     // New messages arrive on their own time, like in the messenger.
     _chatsPoll =
         Timer.periodic(const Duration(seconds: 10), (_) => model.loadChats());
+    motion.forward();
+  }
+
+  /// Opens the workspace called [name] once the feed's panels have left.
+  Future<void> _enterWorkspace(String name) async {
+    final open = widget.onOpenWorkspace;
+    if (open == null || motion.isAnimating) return;
+    await motion.reverse();
+    if (mounted) open(name);
   }
 
   bool get _compact => MediaQuery.sizeOf(context).width < 820;
@@ -101,6 +116,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
     _chatsPoll?.cancel();
     scrollController.dispose();
     tabs.dispose();
+    motion.dispose();
     model.dispose();
     super.dispose();
   }
@@ -125,9 +141,10 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
         feedSelected: true,
         onOpenFeed: () => Navigator.pop(context),
         dependencies: widget.dependencies,
-        onPick: (name) {
+        onPick: (name) async {
           Navigator.pop(context);
-          widget.onOpenWorkspace?.call(name);
+          await Future<void>.delayed(const Duration(milliseconds: 320));
+          if (mounted) await _enterWorkspace(name);
         },
       ),
       barrierLabel: 'Workspaces',
@@ -138,7 +155,8 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   /// spaces, Following posts, direct chats and the market.
   Future<void> _openExplore([String query = '']) => showExplore(
       context, widget.dependencies,
-      query: query, onOpenSpace: widget.onOpenWorkspace);
+      query: query,
+      onOpenSpace: widget.onOpenWorkspace == null ? null : _enterWorkspace);
 
   Future<void> _openComposer() async {
     final body = await showPostEditor(
@@ -178,12 +196,21 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                           height: 68,
                           child: _workspaceBar(context, compact)),
                       Expanded(child: LayoutBuilder(builder: (context, box) {
-                        if (compact) return _feedScroll(compact: true);
+                        if (compact) {
+                          return WorkspacePanelMotion(
+                              animation: motion,
+                              hiddenOffset: WorkspacePanelMotions.mobileOffset,
+                              scaleFrom: WorkspacePanelMotions.mobileScale,
+                              child: _feedScroll(compact: true));
+                        }
                         // Placed and sized like the workspace's side panels.
                         return Padding(
                             padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
                             child: Row(children: [
-                              SizedBox(
+                              WorkspacePanelMotion(
+                                  animation: motion,
+                                  hiddenOffset: WorkspacePanelMotions.left,
+                                  child: SizedBox(
                                   width: math.min(286, box.maxWidth * .22),
                                   height: box.maxHeight * .82,
                                   child: _SidePanel(
@@ -194,11 +221,19 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                                           current: model.workspace,
                                           loading: model.loading &&
                                               model.spaces.isEmpty,
-                                          onOpen: _openSpace))),
+                                          onOpen: _openSpace)))),
                               const SizedBox(width: 16),
-                              Expanded(child: _feedScroll(compact: false)),
+                              Expanded(
+                                  child: WorkspacePanelMotion(
+                                      animation: motion,
+                                      scaleFrom:
+                                          WorkspacePanelMotions.centerScale,
+                                      child: _feedScroll(compact: false))),
                               const SizedBox(width: 16),
-                              SizedBox(
+                              WorkspacePanelMotion(
+                                  animation: motion,
+                                  hiddenOffset: WorkspacePanelMotions.right,
+                                  child: SizedBox(
                                   width: math.min(330, box.maxWidth * .25),
                                   height: box.maxHeight * .88,
                                   child: _SidePanel(
@@ -214,7 +249,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                                           chats: model.chats,
                                           me: _me,
                                           loading: model.chatsLoading,
-                                          onOpen: _openChat))),
+                                          onOpen: _openChat)))),
                             ]));
                       })),
                     ]))),
@@ -232,7 +267,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   String get _me =>
       widget.dependencies.sessionController.session?.accountId ?? '';
 
-  void _openSpace(Workspace space) => widget.onOpenWorkspace?.call(space.name);
+  void _openSpace(Workspace space) => _enterWorkspace(space.name);
 
   /// The search hero over the feed; on phones the tabs switch the content
   /// below it between the spaces, the direct chats and the feed.

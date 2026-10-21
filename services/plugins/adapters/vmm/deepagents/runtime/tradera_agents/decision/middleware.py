@@ -108,7 +108,16 @@ class DecisionMiddleware(AgentMiddleware):
         notes: list[str] = []
         shown = tools
         if self.chosen is not None:
+            # What the agent used, and what the conversation names (an app's
+            # instructions saying which function to call), is shown from now
+            # on, with the rest of its app: a tool the model has no schema for
+            # is a tool it does not call, however often it is told to.
+            names = [choosing.tool_name(t) for t in tools]
             used = {c.get("name") for m in messages if isinstance(m, AIMessage) for c in m.tool_calls or []}
+            waiting = [n for n in names if n not in self.chosen and n not in choosing.PINNED]
+            if waiting:
+                said = "\n".join(_text(m.content) for m in messages)
+                self.chosen |= choosing.unlocked(waiting, used) | choosing.unlocked(waiting, said)
             keep = choosing.PINNED | self.chosen | used
             shown = [t for t in tools if choosing.tool_name(t) in keep]
             hidden = [choosing.tool_name(t) for t in tools if choosing.tool_name(t) not in keep]

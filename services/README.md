@@ -545,11 +545,12 @@ questions (yes/no, choice, score) with probabilities instead of text. On, the
 runtime's `decision` module (`deepagents/runtime/tradera_agents/decision`)
 uses it together with each agent's own model:
 
-- **tool selection** — once per turn, the app, bot and platform tools the
+- **tool selection** — once per turn, the apps, bots and platform tools the
   request needs are shortlisted, so every model call carries fewer tool schemas
-  (the sandbox, file, planning, messaging and delegation tools are never
-  hidden, every tool still runs when called, and the list stays stable through
-  the turn for the provider's prompt cache);
+  (a connected app is chosen whole, never function by function; the sandbox,
+  file, planning, messaging and delegation tools are never hidden; a hidden tool
+  the agent uses or the conversation names is shown from then on, with its app;
+  every tool still runs when called, and the list only grows through the turn);
 - **routing** — the agent that fits a task best (a lead's hint; a hand-off
   addressed by role);
 - **progress** and **completion** checks — a long run that goes nowhere is told

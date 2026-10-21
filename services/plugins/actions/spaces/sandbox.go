@@ -292,6 +292,7 @@ func (s *Service) SandboxStart(ctx context.Context, spaceID identity.ID) (*bot.B
 	}
 	s.markAwake(spaceID, rec.ID, !wasRunning)
 	if !wasRunning {
+		s.computerChanged()
 		// Starting a computer costs time and money: record what asked for it.
 		s.L.Info("sandbox started", "space", spaceID.String(), "for", startedFor(), "agent", vmm.ExecutionFrom(ctx).AgentID)
 		s.provideDesktopScript(ctx, rec)
@@ -416,6 +417,7 @@ func (s *Service) settleComputeTime(ctx context.Context, spaceID identity.ID, un
 
 // SandboxStop stops the space sandbox bot (idle agents) without deleting it.
 func (s *Service) SandboxStop(ctx context.Context, spaceID identity.ID) (*bot.Bot, error) {
+	defer s.computerChanged()
 	gate := s.sandboxGate(spaceID)
 	if len(gate) > 0 {
 		return nil, errs.Conflict("sandbox has active operations")
@@ -454,6 +456,12 @@ func (s *Service) SandboxStop(ctx context.Context, spaceID identity.ID) (*bot.Bo
 
 // SandboxStatus reports the shared sandbox bot for a space.
 func (s *Service) SandboxStatus(ctx context.Context, spaceID identity.ID) (map[string]any, error) {
+	return s.sandboxStatus(ctx, spaceID, true)
+}
+
+// sandboxStatus is SandboxStatus; [probe] also asks the provider whether a
+// computer recorded as running is still there.
+func (s *Service) sandboxStatus(ctx context.Context, spaceID identity.ID, probe bool) (map[string]any, error) {
 	id, ok := s.sandboxBotID(ctx, spaceID)
 	if !ok {
 		return map[string]any{"space_id": spaceID.String(), "status": "unprovisioned", "vm_type": s.sandboxVMType()}, nil
@@ -462,7 +470,9 @@ func (s *Service) SandboxStatus(ctx context.Context, spaceID identity.ID) (map[s
 	if err != nil {
 		return nil, err
 	}
-	rec = s.reconcileSandbox(ctx, spaceID, rec)
+	if probe {
+		rec = s.reconcileSandbox(ctx, spaceID, rec)
+	}
 
 	s.sandboxMu.Lock()
 	st := s.sandboxes[spaceID.String()]
@@ -498,6 +508,7 @@ func (s *Service) reconcileSandbox(ctx context.Context, spaceID identity.ID, rec
 	if err != nil {
 		return rec
 	}
+	defer s.computerChanged()
 	s.cancelTimer(spaceID)
 	s.settleComputeTime(ctx, spaceID, time.Now())
 	s.sandboxMu.Lock()
@@ -664,6 +675,7 @@ func (s *Service) idleStop(key string, botID identity.ID) {
 		return
 	}
 	st.timer = nil
+	go s.computerChanged()
 	// The awake time ends now; it is charged once the lock is released.
 	d, payer := takeComputeTime(st, time.Now())
 	st.billedUntil = time.Time{}

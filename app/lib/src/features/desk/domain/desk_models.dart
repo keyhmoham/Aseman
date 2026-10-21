@@ -55,6 +55,12 @@ const String webTool = 'pages';
 const String fileKind = 'file';
 const String fileTool = 'files';
 
+/// The kind of a window that shows the project's computer: its desktop,
+/// live and driven in the window. It has no args (the app asks for the
+/// desktop when it shows one); there is one at most, under [computerTool].
+const String computerKind = 'computer';
+const String computerTool = 'computer';
+
 /// How a window sits on the phone board (the desk as compact widgets).
 /// Empty [shape] / [size] take the frontend's hint, else a medium card.
 class DeskCompact {
@@ -172,6 +178,9 @@ class DeskWindow {
 
   /// The workspace path a file window shows.
   String get filePath => isFile ? '${args['path'] ?? ''}' : '';
+
+  /// The project's computer rather than a tool's own frontend.
+  bool get isComputer => kind == computerKind;
   final String name;
   final String title;
 
@@ -295,6 +304,9 @@ class DeskPin {
   /// A workspace file.
   bool get isFile => kind == fileKind;
   String get filePath => isFile ? '${args['path'] ?? ''}' : '';
+
+  /// The project's computer.
+  bool get isComputer => kind == computerKind;
 
   String get label => title.isNotEmpty ? title : name;
 

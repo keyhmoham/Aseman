@@ -177,6 +177,13 @@ class DeskController extends ChangeNotifier {
           title: title.isEmpty ? path.split('/').last : title,
           size: size ?? const Size(680, 620));
 
+  /// Opens the project's computer, its desktop live, as a card window (the
+  /// one already open is brought to the front).
+  Future<String?> openComputer({Size? size}) => open(computerTool,
+      kind: computerKind,
+      title: 'Computer',
+      size: size ?? const Size(960, 660));
+
   Future<String?> openPin(DeskPin pin) => open(pin.tool,
       kind: pin.kind,
       widget: pin.widget,

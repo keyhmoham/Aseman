@@ -81,6 +81,15 @@ const (
 	DeskFileTool     = "files"
 )
 
+// Computer windows: the project's computer, its desktop live and driven in
+// the window (the client asks for it, password and all, when it shows one;
+// the desk keeps none of it). There is one at most.
+const (
+	DeskComputer         = "computer"
+	DeskComputerFrontend = "computer"
+	DeskComputerTool     = "computer"
+)
+
 // FilePath is the workspace path a file window shows ("" for any other).
 func (w *DeskWindow) FilePath() string {
 	if w.Kind != DeskFile {
@@ -398,6 +407,11 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 				op.Title = path.Base(target)
 			}
 			op.Tool, op.Name, op.Frontend, op.Microtool, op.Args = DeskFileTool, "Files", DeskFileFrontend, "", map[string]any{"path": target}
+		} else if op.Kind == DeskComputer {
+			if op.Title == "" {
+				op.Title = "Computer"
+			}
+			op.Tool, op.Name, op.Frontend, op.Microtool, op.Args = DeskComputerTool, "Computer", DeskComputerFrontend, "", nil
 		} else if op.Tool == "" {
 			return "", errs.InvalidArgument("open needs a tool")
 		}
@@ -658,6 +672,9 @@ func (d *Desktop) Summary() string {
 			}
 			if w.Kind == DeskFile {
 				what = "file " + w.FilePath()
+			}
+			if w.Kind == DeskComputer {
+				what = "the project's computer: its desktop, live"
 			}
 			if w.Frontend == DeskAutoFrontend {
 				what += ", designed for: " + strings.TrimSpace(w.Request)

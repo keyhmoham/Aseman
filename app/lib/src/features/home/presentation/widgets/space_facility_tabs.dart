@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app_dependencies.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/context_extensions.dart';
 import '../../../../data/models/bot.dart';
 import '../../../../shared/widgets/backend_action_ui.dart';
 import '../../../admin/presentation/admin_widgets.dart';
+import '../../../computer/computer_view.dart';
+import '../../../computer/space_computer.dart';
 
 // The space's own facilities, shown as tabs of the workspace's left panel:
 // its computer, the agent team's memory and the published previews. Files,
@@ -47,7 +48,9 @@ mixin _SpaceActions<T extends StatefulWidget> on State<T> {
   }
 }
 
-/// The space's computer: its state, power and lifecycle.
+/// The space's computer: its screen, live, and its power. It follows the
+/// node as the computer changes (whoever changed it), so it never needs
+/// refreshing; its buttons wake or sleep it, replace it and open it.
 class SpaceComputerTab extends StatefulWidget {
   const SpaceComputerTab({
     super.key,
@@ -60,172 +63,187 @@ class SpaceComputerTab extends StatefulWidget {
   State<SpaceComputerTab> createState() => _SpaceComputerTabState();
 }
 
-class _SpaceComputerTabState extends State<SpaceComputerTab>
-    with _SpaceActions {
-  Map<String, dynamic> _machine = const {};
-  bool _loading = true;
+class _SpaceComputerTabState extends State<SpaceComputerTab> {
+  late SpaceComputer _computer = _of(widget);
 
-  @override
-  AppDependencies get dependencies => widget.dependencies;
+  static SpaceComputer _of(SpaceComputerTab w) =>
+      SpaceComputer.of(w.dependencies.service, w.spaceId);
 
   @override
   void initState() {
     super.initState();
-    reload();
+    _computer.addListener(_changed);
   }
 
   @override
-  Future<void> reload() async {
-    setState(() => _loading = true);
-    Map<String, dynamic> machine = const {};
+  void didUpdateWidget(SpaceComputerTab old) {
+    super.didUpdateWidget(old);
+    final next = _of(widget);
+    if (identical(next, _computer)) return;
+    _computer.removeListener(_changed);
+    _computer = next..addListener(_changed);
+  }
+
+  @override
+  void dispose() {
+    _computer.removeListener(_changed);
+    super.dispose();
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _do(Future<void> Function() action, String failed) async {
     try {
-      final response = _map(
-        await widget.dependencies.service.invokeAction(
-          'spaces',
-          'computer',
-          body: {'space': widget.spaceId, 'operation': 'status'},
-          timeout: const Duration(minutes: 5),
-        ),
-      );
-      machine = _map(response['machine']).isEmpty
-          ? response
-          : _map(response['machine']);
-    } catch (_) {}
-    if (!mounted) return;
-    setState(() {
-      _machine = machine;
-      _loading = false;
-    });
+      await action();
+    } catch (e) {
+      if (mounted) context.showMessage('$failed: $e');
+    }
   }
 
-  void _operate(String operation, String done) => run('spaces', 'computer', {
-    'space': widget.spaceId,
-    'operation': operation,
-  }, done: done);
-
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    final scheme = Theme.of(context).colorScheme;
-    final m = _machine;
-    final resources = _map(m['resources']);
-    final state = '${m['state'] ?? 'none'}';
-    final none = state == 'none';
-    return RefreshIndicator(
-      onRefresh: reload,
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          _Card(
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: _stateColor(state).withValues(alpha: .14),
-                  child: Icon(
-                    Icons.desktop_windows_outlined,
-                    color: _stateColor(state),
-                    size: 19,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        none
-                            ? 'No computer yet'
-                            : 'Computer ${state.toLowerCase()}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      if (!none)
-                        Text(
-                          '${m['provider'] ?? ''}${m['id'] == null ? '' : ' · ${m['id']}'}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+  Future<void> _replace() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        icon: const Icon(Icons.restart_alt_rounded),
+        title: const Text('Replace the computer?'),
+        content: const Text(
+          'It is rebuilt from the latest image. Everything in its files is '
+          'kept; programs running on it stop.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Cancel'),
           ),
-          const SizedBox(height: 10),
-          FilledButton.icon(
-            onPressed: () => none
-                ? _operate('provision', 'Computer provisioned')
-                : _operate('keepalive', 'Computer awake'),
-            icon: Icon(
-              none ? Icons.add_to_queue_rounded : Icons.power_rounded,
-              size: 17,
-            ),
-            label: Text(none ? 'Provision' : 'Wake / keep alive'),
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              _SmallAction(
-                icon: Icons.bedtime_outlined,
-                label: 'Sleep',
-                onTap: () => _operate('sleep', 'Computer asleep'),
-              ),
-              _SmallAction(
-                icon: Icons.restart_alt_rounded,
-                label: 'Replace',
-                onTap: () => _operate('replace', 'Computer replaced'),
-              ),
-              // The desktop browser keeps its sign-ins in the workspace, so they
-              // survive sleeps and replacements until they are forgotten here.
-              _SmallAction(
-                icon: Icons.no_accounts_outlined,
-                label: 'Forget logins',
-                onTap: () =>
-                    _operate('forget_logins', 'Browser logins forgotten'),
-              ),
-              _SmallAction(
-                icon: Icons.install_desktop_rounded,
-                label: 'Install desktop',
-                onTap: () => run('spaces', 'desktop_install', {
-                  'space': widget.spaceId,
-                }, done: 'Desktop installed'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _Card(
-            child: Column(
-              children: [
-                _Fact('vCPU', '${m['cpu'] ?? resources['cpu'] ?? '—'}'),
-                _Fact(
-                  'Memory',
-                  _gigabytes(m['memory_mb'] ?? resources['memory']),
-                ),
-                _Fact('Disk', _gigabytes(m['disk_mb'] ?? resources['disk'])),
-                _Fact('Last active', _date(m['last_active_at'])),
-                _Fact('Started', _date(m['started_at'] ?? m['created_at'])),
-                _Fact('Workspace', '${m['workspace'] ?? '/workspace'}'),
-                _Fact(
-                  'Desktop',
-                  '${m['desktop'] ?? m['desktop_installed'] ?? 'not installed'}',
-                ),
-              ],
-            ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Replace'),
           ),
         ],
       ),
     );
+    if (ok == true) await _do(_computer.replace, 'Replace failed');
+  }
+
+  void _open() =>
+      openComputer(context, widget.dependencies.service, widget.spaceId);
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final info = _computer.info;
+    final state = info.state;
+    final loaded = _computer.loaded;
+    final busy = !loaded || state.changing;
+    final awake = state == ComputerState.awake;
+    final specs = [
+      if (info.cpu != null) '${_trim(info.cpu!)} vCPU',
+      if (info.memoryMb != null) '${_gigabytes(info.memoryMb)} memory',
+      if (info.diskMb != null) '${_gigabytes(info.diskMb)} disk',
+    ].join(' · ');
+    return ListView(
+      padding: const EdgeInsets.only(top: 4, bottom: 8),
+      children: [
+        ComputerMonitor(computer: _computer, onOpen: _open),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            ComputerStateLight(state),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                loaded ? state.label : 'Connecting…',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          !loaded
+              ? 'Reading the computer…'
+              : awake && info.idleTimeout > Duration.zero
+              ? 'Sleeps after ${_minutes(info.idleTimeout)} with nothing using it.'
+              : state == ComputerState.none
+              ? 'Wake it to start the project’s computer.'
+              : state.off
+              ? 'Its files are kept while it sleeps.'
+              : 'This takes a few seconds.',
+          style: TextStyle(fontSize: 10.5, color: scheme.onSurfaceVariant),
+        ),
+        if (_computer.error != null && loaded) ...[
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(Icons.cloud_off_rounded, size: 13, color: scheme.error),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  'Reconnecting to the node…',
+                  style: TextStyle(fontSize: 10.5, color: scheme.error),
+                ),
+              ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 14),
+        FilledButton.icon(
+          onPressed: _open,
+          icon: const Icon(Icons.open_in_full_rounded, size: 17),
+          label: const Text('Open'),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.tonalIcon(
+                onPressed: busy
+                    ? null
+                    : () => awake
+                          ? _do(_computer.sleep, 'Sleep failed')
+                          : _do(_computer.wake, 'Wake failed'),
+                icon: Icon(
+                  awake
+                      ? Icons.bedtime_outlined
+                      : Icons.power_settings_new_rounded,
+                  size: 17,
+                ),
+                label: Text(awake ? 'Sleep' : 'Wake up'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: busy || state == ComputerState.none
+                    ? null
+                    : _replace,
+                icon: const Icon(Icons.restart_alt_rounded, size: 17),
+                label: const Text('Replace'),
+              ),
+            ),
+          ],
+        ),
+        if (specs.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(
+            specs,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
+          ),
+        ],
+      ],
+    );
   }
 }
+
+String _trim(num v) => v == v.roundToDouble() ? '${v.round()}' : '$v';
+String _minutes(Duration d) =>
+    d.inMinutes >= 1 ? '${d.inMinutes} min' : '${d.inSeconds} s';
 
 /// The agent team's memory: the shared AGENTS.md and each agent's own.
 class SpaceMemoryTab extends StatefulWidget {
@@ -573,39 +591,6 @@ class _SmallAction extends StatelessWidget {
   );
 }
 
-class _Fact extends StatelessWidget {
-  const _Fact(this.label, this.value);
-  final String label;
-  final String value;
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 3),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 74,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
 Map<String, dynamic> _map(dynamic v) =>
     v is Map ? v.map((k, x) => MapEntry('$k', x)) : {};
 List<Map<String, dynamic>> _maps(dynamic v) =>
@@ -614,20 +599,5 @@ List<Map<String, dynamic>> _maps(dynamic v) =>
         .map(_map)
         .toList();
 double _num(dynamic v) => v is num ? v.toDouble() : double.tryParse('$v') ?? 0;
-String _date(dynamic v) {
-  if (v == null || '$v'.isEmpty) return '—';
-  final d = DateTime.tryParse('$v');
-  if (d == null) return '$v';
-  final x = d.toLocal();
-  return '${x.year}-${x.month.toString().padLeft(2, '0')}-${x.day.toString().padLeft(2, '0')} ${x.hour.toString().padLeft(2, '0')}:${x.minute.toString().padLeft(2, '0')}';
-}
-
 String _gigabytes(dynamic mb) =>
     mb == null ? '—' : '${(_num(mb) / 1024).toStringAsFixed(1)} GB';
-Color _stateColor(String state) => state == 'awake' || state == 'running'
-    ? AppColors.success
-    : state == 'failed'
-    ? AppColors.danger
-    : state == 'starting'
-    ? AppColors.warning
-    : AppColors.muted;

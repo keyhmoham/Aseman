@@ -24,8 +24,9 @@ async def complete(client: DecisionClient, request: str, answer: str, delivered:
     instructions = "Does `answer` deliver what `request` asked for?"
     if delivered:
         state["delivered"] = "\n".join(delivered)[:2000]
-        instructions = ("Does `answer`, together with the files and images in `delivered` (already sent to the person "
-                        "in the chat), deliver what `request` asked for?")
+        instructions = ("Does `answer`, together with what `delivered` shows was already put in front of the person "
+                        "(a file or image in the chat, or a window on the room's desk), deliver what `request` "
+                        "asked for?")
     answers = await client.evaluate(state, {"complete": {
         "type": "boolean",
         "instructions": instructions,

@@ -160,7 +160,7 @@ def test_the_guard_counts_the_calls_it_warned_of_a_loop() -> None:
     assert g.loops == 1
 
 
-SPEC = "\n# Canvas Composer DSL Specification\n\n" + "\n".join(f"Rule {i}: shapes are SVG elements." for i in range(1500))
+SPEC = "\n# Canvas Composer DSL Specification\n\n" + "\n".join(f"Rule {i}: shapes are SVG elements." for i in range(600))
 
 
 def miro(platform) -> None:
@@ -185,7 +185,9 @@ async def test_an_apps_instructions_stay_whole_in_the_conversation(platform, tmp
 
 async def test_instructions_too_large_to_keep_go_to_a_file(platform, tmp_path: Path) -> None:
     miro(platform)
-    huge = "# Spec\n" + "\n".join(f"Rule {i}: " + "x" * 200 for i in range(3000))
+    # Past PIN_MAX_CHARS but well inside what the model's window could hold: it
+    # must still go to a file, or a real spec this size floods the context.
+    huge = "# Spec\n" + "\n".join(f"Rule {i}: " + "x" * 15 for i in range(2000))
     platform.app_reply = json.dumps({"content": [{"type": "text", "text": json.dumps({"skill": huge})}]})
     name, args = "tool_miro__canvas_get_canvas_composer_skill", {"step": "dsl"}
     r, model = runner(platform, tmp_path, [call(name, args, cid="m0"), AIMessage(content="done")])

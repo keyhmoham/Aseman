@@ -104,6 +104,17 @@ def test_a_large_window_keeps_more(monkeypatch) -> None:
     assert economy.summarize_above(Model()) == 48_000
 
 
+def test_instructions_are_capped_at_a_workable_size() -> None:
+    # Whatever the model's window, an instruction set larger than PIN_MAX_CHARS
+    # goes to a file: past that it floods the context and the agent re-reads the
+    # tool it got it from instead of working from it.
+    class Huge:
+        profile = {"max_input_tokens": 1_000_000}
+
+    assert economy.pin_max(Huge()) == economy.PIN_MAX_CHARS
+    assert economy.pin_max(object()) == economy.PIN_MAX_CHARS
+
+
 def test_long_lines_are_broken_to_fit_pages() -> None:
     assert economy.reflow("short\nlines") == "short\nlines"
     # JSON is indented first: nothing is lost.

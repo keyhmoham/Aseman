@@ -239,3 +239,23 @@ async def test_completion_counts_what_was_delivered() -> None:
 
     assert await completion.complete(Client(), "generate a floating banana image", "Here is your floating banana.", sent) == 0.9
     assert "floating_banana.png" in Client.state["delivered"]
+
+
+def test_a_result_shown_on_the_desk_counts_as_delivered() -> None:
+    from langchain_core.messages import ToolMessage
+
+    from tradera_agents.decision.middleware import delivered
+
+    messages = [
+        HumanMessage(content="create a whiteboard, draw something random on it and show it"),
+        call("tool_miro__canvas_create_from_svg", {"miro_url": "https://miro.com/x"}, cid="c1"),
+        ToolMessage(content='<svg xmlns="http://www.w3.org/2000/svg" width="900">…</svg>',
+                    name="tool_miro__canvas_create_from_svg", tool_call_id="c1"),
+        call("frontend_show", {"tool": "bot-miro", "microtool": "canvas_create_from_svg"}, cid="c2"),
+        ToolMessage(content='{"desk":"The room\'s desk… Open windows: b62c "Random Doodle" …"}',
+                    name="frontend_show", tool_call_id="c2"),
+        AIMessage(content="Done — I drew a doodle and opened it on the desk."),
+    ]
+    sent = delivered(messages)
+    assert sent and any(s.startswith("frontend_show:") for s in sent)
+    assert "Random Doodle" in sent[0]

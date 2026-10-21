@@ -50,12 +50,13 @@ def last_request(messages: list[Any]) -> str:
     return ""
 
 
-#: Tools that put a result in front of the person (a file or image in the chat).
-DELIVERY_TOOLS = {"image_generate", "file_send", "file_upload"}
+#: Tools that put a result in front of the person: a file or image in the chat,
+#: or a card window / web page opened on the room's desk (a tool's frontend).
+DELIVERY_TOOLS = {"image_generate", "file_send", "file_upload", "frontend_show", "web_show", "proxy_create"}
 
 
 def delivered(messages: list[Any]) -> list[str]:
-    """What the delivery tools sent to the chat since the request (their reports)."""
+    """What the delivery tools put in front of the person since the request."""
     out: list[str] = []
     for m in reversed(messages):
         if isinstance(m, HumanMessage) and not _text(m.content).startswith(NOTE):

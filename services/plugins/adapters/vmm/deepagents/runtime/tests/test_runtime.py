@@ -475,6 +475,9 @@ def test_an_apps_json_answer_becomes_lines() -> None:
 
     assert _app_result(reply(json.dumps({"skill": "# Spec\nline 2"}))) == "# Spec\nline 2"
     assert _app_result(reply(json.dumps({"a": "x\ny", "b": "z"}))) == "a:\nx\ny\n\nb: z"
+    # A document beside metadata (step, success, message): only the document is kept.
+    assert _app_result(reply(json.dumps({"skill": "# Spec\nline 2", "step": "dsl", "success": True,
+                                         "message": ""}))) == "# Spec\nline 2"
     long = json.dumps({"items": [{"id": i} for i in range(200)]})
     assert "\n" in _app_result(reply(long))
     assert _app_result(reply('{"id": 1}')) == '{"id": 1}'

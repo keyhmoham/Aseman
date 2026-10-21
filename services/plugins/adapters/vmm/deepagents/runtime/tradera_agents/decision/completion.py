@@ -30,11 +30,12 @@ async def complete(client: DecisionClient, request: str, answer: str, delivered:
     """The decision model's probability that the answer delivers the request
     (None when it cannot say).
 
-    ``delivered`` are the files and images the agent already sent to the chat in
-    this turn (what its delivery tools reported). They are part of the answer:
-    without them a request for an image looks unanswered when the image was
-    posted and the agent's text only describes it, and the agent was sent back
-    to make (and bill) a second one.
+    ``delivered`` are the results the agent already put in front of the person
+    in this turn (what its delivery tools reported: a file or image in the chat,
+    or a window on the room's desk). They are part of the answer: without them a
+    request for an image looks unanswered when the image was posted and the
+    agent's text only describes it, and the agent was sent back to make (and
+    bill) a second one.
     """
     if not request.strip() or not answer.strip():
         return None
@@ -42,8 +43,9 @@ async def complete(client: DecisionClient, request: str, answer: str, delivered:
     instructions = "Does `answer` deliver what `request` asked for?"
     if delivered:
         state["delivered"] = "\n".join(delivered)[:2000]
-        instructions = ("Does `answer`, together with the files and images in `delivered` (already sent to the person "
-                        "in the chat), deliver what `request` asked for?")
+        instructions = ("Does `answer`, together with what `delivered` shows was already put in front of the person "
+                        "(a file or image in the chat, or a window on the room's desk), deliver what `request` "
+                        "asked for?")
     answers = await client.evaluate(state, {"complete": {
         "type": "boolean",
         "instructions": instructions,

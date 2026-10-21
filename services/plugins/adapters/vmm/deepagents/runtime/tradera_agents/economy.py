@@ -114,9 +114,11 @@ KEEP_MEDIA = 2
 NEVER_TRIM = frozenset({"task", "wait_tasks", "check_tasks", "ask_user", "write_todos", "assemble_team", "run_swarm"})
 # Instructions the agent read stay whole up to this size (characters); a larger
 # result went to a file, and the parts of it the agent reads stay whole instead.
+# Deliberately not scaled to the model's window: an instruction set larger than
+# this (a 1,500-line spec) floods the context, and the agent can no longer work
+# from it — it re-reads the tool it got it from instead. Such a result goes to a
+# pageable file (see reflow) and the agent reads the parts it needs.
 PIN_MAX_CHARS = 24_000
-# ...or up to this share of the model's window, when that is more (see pin_max).
-PIN_SHARE = 0.25
 
 # Summarize the history at this share of the model's window (at the most
 # TRADERA_SUMMARIZE_MAX_TOKENS, when set, to bound what a call costs).
@@ -214,7 +216,7 @@ def reflow(text: str, line_max: int = LINE_MAX) -> str:
 
 def pin_max(model: Any) -> int:
     """How large instructions the agent read may be and still stay whole (characters)."""
-    return max(PIN_MAX_CHARS, int(window_of(model) * PIN_SHARE * CHARS_PER_TOKEN))
+    return PIN_MAX_CHARS
 
 
 def pinned(messages: list[Any], pin_max: int = PIN_MAX_CHARS) -> set[str]:

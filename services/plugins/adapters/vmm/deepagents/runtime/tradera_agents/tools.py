@@ -356,6 +356,8 @@ def _readable(text: str) -> str:
     Apps often answer with JSON whose strings hold whole documents
     (``{"skill": "# Spec\\n..."}``): one line, so a large answer that goes to a
     file cannot be read back past its first line, and the agent asks again.
+    A result often carries that document beside metadata (``step``, ``success``):
+    keep only the string fields that read as a document, not the metadata.
     """
     stripped = text.strip()
     if not stripped.startswith(("{", "[", '"')):
@@ -366,11 +368,18 @@ def _readable(text: str) -> str:
         return text
     if isinstance(data, str):
         return data
-    if isinstance(data, dict) and data and all(isinstance(v, str) for v in data.values()) and \
-            any("\n" in v for v in data.values()):
-        if len(data) == 1:
-            return next(iter(data.values()))
-        return "\n\n".join(f"{k}:\n{v}" if "\n" in v else f"{k}: {v}" for k, v in data.items())
+    if isinstance(data, dict) and data:
+        if all(isinstance(v, str) for v in data.values()):
+            if any("\n" in v for v in data.values()):
+                if len(data) == 1:
+                    return next(iter(data.values()))
+                return "\n\n".join(f"{k}:\n{v}" if "\n" in v else f"{k}: {v}" for k, v in data.items())
+        else:
+            docs = {k: v for k, v in data.items() if isinstance(v, str) and "\n" in v}
+            if len(docs) == 1:
+                return next(iter(docs.values()))
+            if docs:
+                return "\n\n".join(f"{k}:\n{v}" for k, v in docs.items())
     if "\n" not in stripped and len(stripped) > 1000:
         return json.dumps(data, ensure_ascii=False, indent=1)
     return text

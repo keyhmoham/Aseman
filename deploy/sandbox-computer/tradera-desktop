@@ -337,7 +337,8 @@ function later() {
   // A new password (the desktop was restarted): the app opens it afresh.
   if (refused) return show('The desktop asked for a new password. Close and open the computer again.', true);
   if (tries > 8 && !view) return show('The desktop is not answering.', true);
-  show('Reconnecting…');
+  // A preview keeps trying quietly; it says so instead of spinning forever.
+  if (tries > 8) show('Live view unavailable', true); else show('Reconnecting…');
   timer = setTimeout(connect, Math.min(8000, 600 * 2 ** Math.min(tries, 4)));
 }
 retry.onclick = () => { tries = 0; refused = false; connect(); };

@@ -3179,6 +3179,15 @@ class _SearchResultsState extends State<_SearchResults> {
                 ));
               }
               final hit = _items[index];
+              // A post shows as itself: its rich content, charts and all.
+              final post = hit.payload;
+              if (post is SocialPost) {
+                return _Post(post,
+                    author: post.authorHandle.isNotEmpty
+                        ? '@${post.authorHandle}'
+                        : 'Post',
+                    time: _timeAgo(post.createdAt));
+              }
               return _SearchResultCard(
                   section: section,
                   title: hit.title,

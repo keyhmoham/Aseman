@@ -9,8 +9,8 @@ import '../../data/models/space.dart';
 
 /// Shared top app bar of the workspace and the feed: the TRADERA name in the
 /// middle, the account avatar (its menu) on the right edge. On phones the
-/// left edge opens the navigation drawer; on wider screens it shows where
-/// the user is (the current space, or Home on the feed). The workspace
+/// left edge opens the navigation drawer; on wider screens it shows the
+/// current space. On the feed the left edge holds the notifications. The workspace
 /// switcher opens from the [SwitcherEdgeHandle]. No background, border or shadow: the page's glow
 /// shows through. Optional callbacks hide the corresponding controls.
 class WorkspaceHeader extends StatelessWidget {
@@ -21,6 +21,8 @@ class WorkspaceHeader extends StatelessWidget {
     this.feed = false,
     this.room,
     this.onOpenNavigation,
+    this.onOpenNotifications,
+    this.unreadNotifications = 0,
     this.onGoHome,
     this.onOpenAdmin,
     required this.onOpenProfile,
@@ -33,8 +35,12 @@ class WorkspaceHeader extends StatelessWidget {
   final String? room;
   final bool compact;
 
-  /// Shown on the feed: the left side reads Home instead of the space.
+  /// Shown on the feed: the left edge holds the notifications instead.
   final bool feed;
+
+  /// Opens the notifications (on the feed), badged with [unreadNotifications].
+  final VoidCallback? onOpenNotifications;
+  final int unreadNotifications;
   final String handle;
 
   /// The signed-in account's picture, shown over its initial.
@@ -53,18 +59,27 @@ class WorkspaceHeader extends StatelessWidget {
       child: Row(children: [
         Expanded(
             child: Row(children: [
-          if (compact && onOpenNavigation != null)
+          if (feed && onOpenNotifications != null)
+            IconButton(
+                visualDensity: compact ? VisualDensity.compact : null,
+                tooltip: 'Notifications',
+                onPressed: onOpenNotifications,
+                icon: Badge(
+                    isLabelVisible: unreadNotifications > 0,
+                    label: Text(unreadNotifications > 99
+                        ? '99+'
+                        : '$unreadNotifications'),
+                    child: const Icon(Icons.notifications_none_rounded)))
+          else if (compact && onOpenNavigation != null)
             IconButton(
                 visualDensity: VisualDensity.compact,
                 tooltip: 'Rooms and workspace',
                 onPressed: onOpenNavigation,
                 icon: const Icon(Icons.menu_rounded))
-          else if (!compact)
+          else if (!compact && !feed)
             Flexible(
                 child: _CurrentPlace(
-                    workspace: workspace,
-                    feed: feed,
-                    avatar: workspaceAvatar)),
+                    workspace: workspace, avatar: workspaceAvatar)),
           if (room != null) ...[
             if (!compact) ...[
               const SizedBox(width: 6),
@@ -115,25 +130,14 @@ class WorkspaceHeader extends StatelessWidget {
 }
 
 /// Where the user is, on the app bar's left edge: the current space's
-/// avatar and name, or Home on the feed.
+/// avatar and name.
 class _CurrentPlace extends StatelessWidget {
-  const _CurrentPlace(
-      {required this.workspace, required this.feed, this.avatar});
+  const _CurrentPlace({required this.workspace, this.avatar});
   final String workspace;
-  final bool feed;
   final ImageProvider? avatar;
 
   @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      if (feed)
-        CircleAvatar(
-            radius: 16,
-            backgroundColor: scheme.primaryContainer,
-            child: Icon(Icons.home_rounded,
-                size: 18, color: scheme.onPrimaryContainer))
-      else
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
         CircleAvatar(
             radius: 16,
             foregroundImage: avatar,
@@ -141,15 +145,14 @@ class _CurrentPlace extends StatelessWidget {
             child: Text(
                 workspace.substring(0, math.min(2, workspace.length)).toUpperCase(),
                 style: const TextStyle(fontSize: 11))),
-      const SizedBox(width: 10),
-      Flexible(
-          child: Text(feed ? 'Home' : workspace,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style:
-                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
-    ]);
-  }
+        const SizedBox(width: 10),
+        Flexible(
+            child: Text(workspace,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
+      ]);
 }
 
 /// The workspace switcher's handle: a bump stuck to the screen's right edge,

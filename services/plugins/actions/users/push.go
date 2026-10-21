@@ -147,10 +147,14 @@ func (s *Service) pushUnregister(ctx context.Context, req *api.ActionRequest) (*
 	return helper.JSON(map[string]any{"ok": true})
 }
 
-// Push tells each of the given people, on every device they are signed in on.
+// Push tells each of the given people, on every device they are signed in on,
+// and keeps the notification in their in-app inbox.
 // It never fails its caller: a notification is a courtesy on top of the thing
 // that happened, which has already been stored.
 func (s *Service) Push(ctx context.Context, to []identity.ID, note PushNote) {
+	for _, account := range to {
+		s.keep(ctx, account, note)
+	}
 	client := apns()
 	if !client.configured() || len(to) == 0 {
 		return

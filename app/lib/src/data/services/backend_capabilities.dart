@@ -318,6 +318,8 @@ abstract final class BackendCapabilities {
       'metadata_patch',
       'metadata_public',
       'metadata_view',
+      'notifications_list',
+      'notifications_read',
       'push_register',
       'push_unregister',
       'search',

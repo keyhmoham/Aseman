@@ -12,6 +12,7 @@ import '../../../data/services/tradera_service.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/mini_tag.dart';
+import '../../../shared/widgets/notifications_menu.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/profile_menu.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
@@ -34,7 +35,7 @@ import 'search_feed_view_model.dart';
 /// of their spaces). The robot head + search bar live in a collapsible header
 /// and the workspace switcher stays pinned on top. Beside the feed, like the
 /// workspace's panels, the user's spaces sit on the left and their direct
-/// chats on the right; on phones they are the feed's first two tabs.
+/// chats on the right; on phones they are tabs after the feed's own.
 class SearchFeedScreen extends StatefulWidget {
   const SearchFeedScreen({
     super.key,
@@ -63,8 +64,11 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   final scrollController = ScrollController();
   Timer? _chatsPoll;
 
-  /// The phone tabs: the spaces, the direct chats and the feed.
-  static const _spacesTab = 0, _chatsTab = 1, _feedTab = 2;
+  /// The phone tabs: the feed, the spaces and the direct chats.
+  static const _feedTab = 0, _spacesTab = 1, _chatsTab = 2;
+
+  /// How many notifications are unread, badging the app bar's bell.
+  int _unreadNotifications = 0;
 
   @override
   void initState() {
@@ -80,9 +84,28 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
     scrollController.addListener(_onScroll);
     model.load();
     // New messages arrive on their own time, like in the messenger.
-    _chatsPoll =
-        Timer.periodic(const Duration(seconds: 10), (_) => model.loadChats());
+    _chatsPoll = Timer.periodic(const Duration(seconds: 10), (_) {
+      model.loadChats();
+      _loadUnread();
+    });
+    _loadUnread();
     motion.forward();
+  }
+
+  Future<void> _loadUnread() async {
+    try {
+      final page = await widget.dependencies.service.fetchNotifications(limit: 1);
+      if (mounted && page.unread != _unreadNotifications) {
+        setState(() => _unreadNotifications = page.unread);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _openNotifications() async {
+    setState(() => _unreadNotifications = 0);
+    await showNotificationsMenu(context, widget.dependencies,
+        onOpenSpace: widget.onOpenWorkspace == null ? null : _enterWorkspace);
+    if (mounted) unawaited(_loadUnread());
   }
 
   /// Opens the workspace called [name] once the feed's panels have left.
@@ -325,6 +348,8 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
               workspace: model.workspace,
               compact: compact,
               feed: true,
+              onOpenNotifications: _openNotifications,
+              unreadNotifications: _unreadNotifications,
               handle:
                   widget.dependencies.sessionController.session?.handle ?? '',
               avatar: widget.dependencies.service
@@ -473,7 +498,7 @@ class _HeroContent extends StatelessWidget {
           right: 0,
           child: Opacity(
               opacity: fade,
-              child: _TrendingChips(onSuggestion: onSearch))),
+              child: _SuggestionChips(onSuggestion: onSearch))),
     ]);
   }
 }
@@ -552,10 +577,6 @@ class _BigSearchBar extends StatelessWidget {
                                   hintStyle: TextStyle(
                                       fontSize: 15,
                                       color: scheme.onSurfaceVariant)))),
-                      IconButton(
-                          onPressed: onTap,
-                          icon: const Icon(Icons.mic_none_rounded)),
-                      const SizedBox(width: 2),
                       IconButton.filled(
                           tooltip: 'Explore',
                           onPressed: onTap,
@@ -564,17 +585,10 @@ class _BigSearchBar extends StatelessWidget {
   }
 }
 
-class _TrendingChips extends StatelessWidget {
-  const _TrendingChips({required this.onSuggestion});
+class _SuggestionChips extends StatelessWidget {
+  const _SuggestionChips({required this.onSuggestion});
   final ValueChanged<String> onSuggestion;
-  static const suggestions = [
-    '\$BTC',
-    '\$ETH',
-    'AI agents',
-    'Macro',
-    'DeFi',
-    'Whale alerts'
-  ];
+  static const suggestions = ['About Tradera', 'Best agents', 'News'];
   @override
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
         return SingleChildScrollView(
@@ -586,7 +600,7 @@ class _TrendingChips extends StatelessWidget {
                     Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   for (var i = 0; i < suggestions.length; i++) ...[
                     ActionChip(
-                        avatar: const Icon(Icons.trending_up_rounded, size: 14),
+                        avatar: const Icon(Icons.help_outline_rounded, size: 14),
                         label: Text(suggestions[i]),
                         visualDensity: VisualDensity.compact,
                         onPressed: () => onSuggestion(suggestions[i])),
@@ -604,11 +618,11 @@ class _FeedTabs extends StatelessWidget {
   Widget build(BuildContext context) => SegmentedTabBar(
         controller: tabs,
         compact: compact,
-        labels: const ['Spaces', 'Chats', 'Following'],
+        labels: const ['Following', 'Spaces', 'Chats'],
         icons: const [
+          Icons.person_pin_circle_outlined,
           Icons.workspaces_outline,
           Icons.forum_outlined,
-          Icons.person_pin_circle_outlined,
         ],
       );
 }

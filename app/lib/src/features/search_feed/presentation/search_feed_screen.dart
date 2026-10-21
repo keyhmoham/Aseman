@@ -218,6 +218,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                             ]));
                       })),
                     ]))),
+        SwitcherEdgeHandle(onTap: () => _openWorkspaces(context)),
       ]),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'feed-composer',
@@ -293,7 +294,6 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                   widget.dependencies.sessionController.session?.handle ?? '',
               avatar: widget.dependencies.service
                   .avatarImage(widget.dependencies.sessionController.avatar),
-              onOpenWorkspaces: () => _openWorkspaces(context),
               onOpenAdmin: !widget.dependencies.sessionController.isAdmin
                   ? null
                   : () => Navigator.of(context).push(

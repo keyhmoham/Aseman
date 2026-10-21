@@ -506,12 +506,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                           allBots: bots,
                           tab: libraryTab,
                           flat: true,
-                          workspaceAvatar: widget.dependencies.service
-                              .avatarImage(_spaceFor(workspace)?.avatar ?? ''),
-                          onOpenWorkspaces: () {
-                            Navigator.pop(context);
-                            _workspacePicker(context);
-                          },
                           onOpenSettings: _spaceFor(workspace) == null
                               ? null
                               : () {
@@ -561,7 +555,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                       widget.dependencies.sessionController.avatar),
                   onOpenNavigation: () =>
                       scaffoldKey.currentState?.openDrawer(),
-                  onOpenWorkspaces: () => _workspacePicker(context),
                   onGoHome: goHome,
                   onOpenAdmin: !widget.dependencies.sessionController.isAdmin
                       ? null
@@ -678,6 +671,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                         ]));
               }))
             ])),
+            SwitcherEdgeHandle(onTap: () => _workspacePicker(context)),
           ])),
     ));
   }
@@ -893,8 +887,6 @@ class _LibraryPanel extends StatelessWidget {
       this.appConnections = const {},
       this.onConnectApp,
       this.onOpenSettings,
-      this.onOpenWorkspaces,
-      this.workspaceAvatar,
       required this.openRoom});
   final String? room;
   final String workspace;
@@ -937,11 +929,6 @@ class _LibraryPanel extends StatelessWidget {
   /// Opens the space's settings, from the button under the tabs.
   final VoidCallback? onOpenSettings;
 
-  /// Opens the workspace switcher; in the phone drawer the current space
-  /// heads the panel and switches it.
-  final VoidCallback? onOpenWorkspaces;
-  final ImageProvider? workspaceAvatar;
-
   /// The first of the space's facility tabs (Files, Computer, Memory,
   /// Previews), which follow the library tabs.
   static const facilitiesTab = 8;
@@ -976,16 +963,7 @@ class _LibraryPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _Panel(
       flat: flat,
-      child: Column(children: [
-        if (flat && onOpenWorkspaces != null)
-          _DrawerSpaceHeader(
-              workspace: workspace,
-              avatar: workspaceAvatar,
-              onTap: onOpenWorkspaces!),
-        Expanded(child: _panelBody(context)),
-      ]));
-
-  Widget _panelBody(BuildContext context) => Row(children: [
+      child: Row(children: [
         Container(
             width: 58,
             margin: const EdgeInsets.fromLTRB(8, 10, 6, 10),
@@ -1108,7 +1086,7 @@ class _LibraryPanel extends StatelessWidget {
                                   key: ValueKey('$workspace-$room-$tab'),
                                   child: _libraryContent(context))))
                     ]))),
-      ]);
+      ]));
   Widget _libraryContent(BuildContext context) {
     if (tab == 0) {
       return ListView.separated(
@@ -1248,34 +1226,6 @@ class _LibraryPanel extends StatelessWidget {
         icon: Icons.folder_outlined,
         message: 'Nothing here yet. Upload files to your workspace.');
   }
-}
-
-/// The phone drawer's head: the current space, opening the switcher.
-class _DrawerSpaceHeader extends StatelessWidget {
-  const _DrawerSpaceHeader(
-      {required this.workspace, required this.onTap, this.avatar});
-  final String workspace;
-  final ImageProvider? avatar;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.fromLTRB(8, 10, 8, 0),
-      child: ListTile(
-          onTap: onTap,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20)),
-          leading: CircleAvatar(
-              foregroundImage: avatar,
-              onForegroundImageError: avatar == null ? null : (_, __) {},
-              child: Text(workspace
-                  .substring(0, math.min(2, workspace.length))
-                  .toUpperCase())),
-          title: Text(workspace,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w800)),
-          subtitle: const Text('Switch workspace'),
-          trailing: const Icon(Icons.unfold_more_rounded)));
 }
 
 class _LibraryEmpty extends StatelessWidget {

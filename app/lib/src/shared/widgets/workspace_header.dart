@@ -10,8 +10,8 @@ import '../../data/models/space.dart';
 /// Shared top app bar of the workspace and the feed: the TRADERA name in the
 /// middle, the account avatar (its menu) on the right edge. On phones the
 /// left edge opens the navigation drawer; on wider screens it shows where
-/// the user is (the current space, or Home on the feed) and opens the
-/// workspace switcher. No background, border or shadow: the page's glow
+/// the user is (the current space, or Home on the feed). The workspace
+/// switcher opens from the [SwitcherEdgeHandle]. No background, border or shadow: the page's glow
 /// shows through. Optional callbacks hide the corresponding controls.
 class WorkspaceHeader extends StatelessWidget {
   const WorkspaceHeader({
@@ -21,7 +21,6 @@ class WorkspaceHeader extends StatelessWidget {
     this.feed = false,
     this.room,
     this.onOpenNavigation,
-    this.onOpenWorkspaces,
     this.onGoHome,
     this.onOpenAdmin,
     required this.onOpenProfile,
@@ -44,7 +43,6 @@ class WorkspaceHeader extends StatelessWidget {
   /// The current space's picture, shown over its initials.
   final ImageProvider? workspaceAvatar;
   final VoidCallback? onOpenNavigation;
-  final VoidCallback? onOpenWorkspaces;
   final VoidCallback? onGoHome;
   final VoidCallback? onOpenAdmin;
   final VoidCallback onOpenProfile;
@@ -61,18 +59,12 @@ class WorkspaceHeader extends StatelessWidget {
                 tooltip: 'Rooms and workspace',
                 onPressed: onOpenNavigation,
                 icon: const Icon(Icons.menu_rounded))
-          else if (compact && onOpenWorkspaces != null)
-            IconButton(
-                visualDensity: VisualDensity.compact,
-                tooltip: 'Switch workspace',
-                onPressed: onOpenWorkspaces,
-                icon: const Icon(Icons.workspaces_outline))
           else if (!compact)
-            Flexible(child: _CurrentPlace(
-                workspace: workspace,
-                feed: feed,
-                avatar: workspaceAvatar,
-                onTap: onOpenWorkspaces)),
+            Flexible(
+                child: _CurrentPlace(
+                    workspace: workspace,
+                    feed: feed,
+                    avatar: workspaceAvatar)),
           if (room != null) ...[
             if (!compact) ...[
               const SizedBox(width: 6),
@@ -123,58 +115,105 @@ class WorkspaceHeader extends StatelessWidget {
 }
 
 /// Where the user is, on the app bar's left edge: the current space's
-/// avatar and name, or Home on the feed. Opens the workspace switcher.
+/// avatar and name, or Home on the feed.
 class _CurrentPlace extends StatelessWidget {
   const _CurrentPlace(
-      {required this.workspace,
-      required this.feed,
-      this.avatar,
-      this.onTap});
+      {required this.workspace, required this.feed, this.avatar});
   final String workspace;
   final bool feed;
   final ImageProvider? avatar;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Tooltip(
-        message: 'Switch workspace',
-        child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
-                padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  if (feed)
-                    CircleAvatar(
-                        radius: 16,
-                        backgroundColor: scheme.primaryContainer,
-                        child: Icon(Icons.home_rounded,
-                            size: 18, color: scheme.onPrimaryContainer))
-                  else
-                    CircleAvatar(
-                        radius: 16,
-                        foregroundImage: avatar,
-                        onForegroundImageError:
-                            avatar == null ? null : (_, __) {},
-                        child: Text(
-                            workspace
-                                .substring(0, math.min(2, workspace.length))
-                                .toUpperCase(),
-                            style: const TextStyle(fontSize: 11))),
-                  const SizedBox(width: 10),
-                  Flexible(
-                      child: Text(feed ? 'Home' : workspace,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w800))),
-                  if (onTap != null)
-                    Icon(Icons.expand_more_rounded,
-                        size: 18, color: scheme.onSurfaceVariant),
-                ]))));
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      if (feed)
+        CircleAvatar(
+            radius: 16,
+            backgroundColor: scheme.primaryContainer,
+            child: Icon(Icons.home_rounded,
+                size: 18, color: scheme.onPrimaryContainer))
+      else
+        CircleAvatar(
+            radius: 16,
+            foregroundImage: avatar,
+            onForegroundImageError: avatar == null ? null : (_, __) {},
+            child: Text(
+                workspace.substring(0, math.min(2, workspace.length)).toUpperCase(),
+                style: const TextStyle(fontSize: 11))),
+      const SizedBox(width: 10),
+      Flexible(
+          child: Text(feed ? 'Home' : workspace,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
+    ]);
   }
+}
+
+/// The workspace switcher's handle: a bump stuck to the screen's right edge,
+/// centered vertically, with a rocket in it. Tapping it opens the switcher.
+class SwitcherEdgeHandle extends StatelessWidget {
+  const SwitcherEdgeHandle({super.key, required this.onTap});
+  final VoidCallback onTap;
+
+  static const _width = 30.0, _height = 168.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Positioned.fill(
+        child: SafeArea(
+            child: Align(
+                alignment: Alignment.centerRight,
+                child: Tooltip(
+                    message: 'Switch workspace',
+                    child: Semantics(
+                        button: true,
+                        label: 'Switch workspace',
+                        child: GestureDetector(
+                            onTap: onTap,
+                            behavior: HitTestBehavior.opaque,
+                            child: CustomPaint(
+                                painter: _BumpPainter(
+                                    fill: scheme.primaryContainer,
+                                    shadow: scheme.shadow),
+                                child: SizedBox(
+                                    width: _width,
+                                    height: _height,
+                                    child: Align(
+                                        alignment: const Alignment(.3, 0),
+                                        child: Icon(
+                                            Icons.rocket_launch_rounded,
+                                            size: 17,
+                                            color: scheme
+                                                .onPrimaryContainer)))))))))); 
+  }
+}
+
+/// A bell-shaped bump growing out of the right edge, tapering to nothing at
+/// its top and bottom.
+class _BumpPainter extends CustomPainter {
+  const _BumpPainter({required this.fill, required this.shadow});
+  final Color fill;
+  final Color shadow;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final path = Path()
+      ..moveTo(w, 0)
+      ..cubicTo(w, h * .3, 0, h * .3, 0, h / 2)
+      ..cubicTo(0, h * .7, w, h * .7, w, h)
+      ..close();
+    canvas.drawShadow(path, shadow.withValues(alpha: .5), 3, false);
+    canvas.drawPath(path, Paint()..color = fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BumpPainter old) =>
+      old.fill != fill || old.shadow != shadow;
 }
 
 class _LivePill extends StatelessWidget {

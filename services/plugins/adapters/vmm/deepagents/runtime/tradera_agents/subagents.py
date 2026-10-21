@@ -50,8 +50,7 @@ def _runnable(ctx: TurnContext, resolve: Any, *, tag: str = "", timeout: float =
         task = _task_text(state)
         try:
             member = await resolve()
-            tid = await teamlib.assign(ctx, member, task, tag=tag)
-            reply = await teamlib.wait(ctx, tid, timeout)
+            reply = await teamlib.delegate(ctx, member, task, tag=tag, timeout=timeout)
         except GatewayError as exc:
             reply = HANDOVER_FAILED + str(exc)
         return {"messages": [AIMessage(content=reply)]}

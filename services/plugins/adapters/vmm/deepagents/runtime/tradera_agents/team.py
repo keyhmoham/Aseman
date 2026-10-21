@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import re
-import time
 import uuid
 from dataclasses import dataclass
-from typing import Any
+
+import httpx
 
 from .context import TurnContext
 from .gateway import GatewayError
@@ -98,13 +98,14 @@ def subagent_name(m: Member) -> str:
 
 #: How long a delegated task may take before the delegator stops waiting.
 TASK_TIMEOUT = 45 * 60.0
-POLL_EVERY = 2.0
 
 #: Every delegated task carries a tag. An agent that is already working in the
 #: room when a tagged task reaches it takes the task as a parallel instance of
 #: itself, on a thread of its own, instead of queueing behind its current work:
 #: so several tasks for the same agent run at once.
 TASK_TAG = re.compile(r"\[task ([a-z0-9]{6,32})\]")
+#: What a delegation that got no answer in time returns.
+NO_ANSWER = "(no answer after {seconds}s: the task is still open; finish your answer and say it is still running)"
 
 
 def new_tag() -> str:
@@ -117,50 +118,23 @@ def task_tag(message: str) -> str:
     return m.group(1) if m else ""
 
 
-def task_id(message_id: str, account_id: str) -> str:
-    return f"{message_id}:{account_id}"
+async def delegate(ctx: TurnContext, member: Member, task: str, *, tag: str = "",
+                   timeout: float = TASK_TIMEOUT) -> str:
+    """Hand a task to an agent and return its answer.
 
-
-def split_task_id(tid: str) -> tuple[str, str]:
-    message_id, _, account = tid.partition(":")
-    return message_id, account
-
-
-async def assign(ctx: TurnContext, member: Member, task: str, *, tag: str = "") -> str:
-    """Post a task to an agent in the room (an @mention starts its turn) and
-    return the task id its answer will be correlated with."""
+    The task is a room message that mentions the agent, and the node runs the
+    agent's turn on it before the call returns (``wait``): its answer is stored
+    in the room as the reply to the task, so people see every hand-off, and
+    comes back here with no polling.
+    """
     body = f"@{member.name} [task {tag or new_tag()}] {task}"
-    out = await ctx.gateway.call("spaces", "message_send", {
-        "space": ctx.space, "room": ctx.room, "body": body, "mentions": [member.account_id],
-    })
-    return task_id(out["message_id"], member.account_id)
-
-
-async def answer(ctx: TurnContext, tid: str) -> dict[str, Any] | None:
-    """The answer an agent posted to a task, if it has answered."""
-    message_id, account = split_task_id(tid)
-    out = await ctx.gateway.call("spaces", "message_list", {
-        "space": ctx.space, "room": ctx.room, "reply_to": message_id, "limit": 20,
-    })
-    for m in reversed(out.get("messages") or []):  # newest first → oldest first
-        if m.get("sender_id") == account and m.get("kind", "") != "log":
-            return m
-    return None
-
-
-async def wait(ctx: TurnContext, tid: str, timeout: float = TASK_TIMEOUT) -> str:
-    """Wait for an agent's answer to a task."""
-    deadline = time.monotonic() + timeout
-    while True:
-        try:
-            m = await answer(ctx, tid)
-        except GatewayError as exc:
-            if exc.status in (401, 403):
-                raise
-            m = None
-        if m is not None:
-            return str(m.get("body", "")).strip() or "(the agent answered with no text)"
-        if time.monotonic() >= deadline:
-            return (f"(no answer yet after {int(timeout)}s; the task {tid} is still open. Do not poll for it in a "
-                    "loop: go on with other work, or finish your answer and say this task is still running)")
-        await asyncio.sleep(POLL_EVERY)
+    try:
+        out = await ctx.gateway.call("spaces", "message_send", {
+            "space": ctx.space, "room": ctx.room, "body": body, "mentions": [member.account_id], "wait": True,
+        }, timeout=timeout)
+    except httpx.TimeoutException:
+        return NO_ANSWER.format(seconds=int(timeout))
+    reply = next((r for r in out.get("replies") or [] if r.get("bot_id") == member.bot_id), None)
+    if reply is None:
+        raise GatewayError(out.get("error") or f"{member.name} did not take the task")
+    return str(reply.get("reply") or "").strip() or "(the agent answered with no text)"

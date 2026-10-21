@@ -968,6 +968,11 @@ func (a *msgSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 		Attachments []string `json:"attachments,omitempty"`
 		// ReplyTo marks the message as an answer to another message of the room.
 		ReplyTo string `json:"reply_to,omitempty"`
+		// Wait delivers the message to the agents it mentions before returning
+		// and returns their replies: how an agent hands work to another agent
+		// and gets its answer, with no polling. The replies are stored in the
+		// room as answers to the message, as always.
+		Wait bool `json:"wait,omitempty"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
@@ -1030,6 +1035,18 @@ func (a *msgSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 		if err := a.s.Bots.EnsureBalance(billingScope(ctx, spID, roomID, identity.ID{}, payer), payer, int64(len(in.Mentions))); err != nil {
 			return nil, err
 		}
+	}
+	if in.Wait && len(in.Mentions) > 0 {
+		// The sender's turn waits on the agents it asked, so they work on its
+		// run, stop with it and keep its scope (who pays, how deep the chain is).
+		deliveryCtx, done := a.s.joinRun(ctx)
+		defer done()
+		replies, derr := a.s.DeliverMentions(deliveryCtx, spID, roomID, msg)
+		out := map[string]any{"message_id": id.String(), "ok": true, "replies": replies}
+		if derr != nil {
+			out["error"] = derr.Error()
+		}
+		return helper.JSON(out)
 	}
 	// Asynchronous delivery: the room message returns immediately and every
 	// agent's reply arrives later as its own chat message (an answer to this

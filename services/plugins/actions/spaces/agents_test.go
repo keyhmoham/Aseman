@@ -2,6 +2,7 @@ package spaces
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"sync"
 	"testing"
@@ -556,5 +557,47 @@ func TestATurnDoesNotCreateTheProjectsComputer(t *testing.T) {
 	}
 	if id, ok := s.sandboxBotID(ctx, sp.ID); ok {
 		t.Fatalf("a computer was created for a message that used none: %s", id)
+	}
+}
+
+func TestAnAgentsHandOffCanWaitForTheAnswer(t *testing.T) {
+	s, ctx := fileToolHarness(t)
+	owner := idFromHex(t, "00000000000000010000000000000001")
+	sp, err := s.CreateSpace(ctx, owner, "hand-off", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addSandbox(t, s, ctx, sp.ID)
+	room, _ := s.generalRoom(ctx, sp.ID)
+	s.Bots = sandboxBots{mentionBots{BotPort: s.Bots}}
+	rt := bootRuntime(t, s, ctx)
+	a := addAgent(t, s, ctx, sp.ID, "alpha", "g-a")
+	b := addAgent(t, s, ctx, sp.ID, "beta", "g-b")
+	body := `{"space":"` + sp.ID.String() + `","room":"` + room.ID.String() + `","body":"@beta [task abc123] do it",` +
+		`"mentions":["` + b.AccountID.String() + `"],"wait":true}`
+	resp, err := (&msgSendAction{s: s}).Handle(ctx, &api.ActionRequest{Caller: api.Caller{ID: a.AccountID, Kind: "bot"}, Body: []byte(body)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		MessageID string         `json:"message_id"`
+		Replies   []MentionReply `json:"replies"`
+	}
+	if err := json.Unmarshal(resp.Body, &out); err != nil {
+		t.Fatal(err)
+	}
+	// The answer comes back with the call, and is in the room as the reply to the hand-off.
+	if len(out.Replies) != 1 || out.Replies[0].Reply != "done by beta" || out.Replies[0].MessageID == "" {
+		t.Fatalf("replies=%+v", out.Replies)
+	}
+	var stored message.Message
+	if err := s.R.Get(ctx, "messages", identity.MustParse(out.Replies[0].MessageID), &stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored.ReplyTo != out.MessageID || stored.SenderID != b.AccountID {
+		t.Fatalf("stored reply %+v", stored)
+	}
+	if len(rt.prompts) != 1 {
+		t.Fatalf("beta ran %d times", len(rt.prompts))
 	}
 }

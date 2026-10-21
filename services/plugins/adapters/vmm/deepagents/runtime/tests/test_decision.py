@@ -301,7 +301,8 @@ async def test_routing_resolves_a_hand_off_by_role(platform: Platform, tmp_path:
     platform.decide = jev
     platform.responders[CODER["account_id"]] = lambda body: "done coding"
     r, model = runner(platform, tmp_path, [
-        call("start_task", {"agent": "the developer", "task": "fix the login bug"}),
+        call("run_swarm", {"goal": "fix the login bug",
+                           "tasks": [{"id": "t1", "agent": "the developer", "task": "fix the login bug"}]}),
         AIMessage(content="Handed to the coder."),
     ])
     out = await r.prompt(request("get the login bug fixed"))

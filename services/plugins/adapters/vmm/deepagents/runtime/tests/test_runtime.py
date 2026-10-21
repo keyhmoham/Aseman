@@ -103,19 +103,14 @@ async def test_task_delegates_through_room_messages(platform: Platform, tmp_path
     assert "built it at /workspace/app" in tool_results(model)["task"]
 
 
-async def test_background_tasks_and_general_purpose_recruits(platform: Platform, tmp_path: Path) -> None:
-    def started(messages: list[Any]) -> AIMessage:
-        text = str(messages[-1].content)
-        tid = text.split("started task ")[1].split(" ")[0]
-        return call("wait_tasks", {"task_ids": [tid], "timeout_seconds": 10})
-
+async def test_tasks_in_one_step_run_together_and_general_purpose_recruits(platform: Platform, tmp_path: Path) -> None:
     platform.responders[CODER["account_id"]] = lambda body: "tests pass"
-    r, model = runner(platform, tmp_path, [
-        call("start_task", {"agent": "coder", "task": "run the tests"}),
-        started,
-        call("task", {"description": "research X", "subagent_type": "general-purpose"}, cid="gp"),
-        AIMessage(content="all good"),
+    both = AIMessage(content="", tool_calls=[
+        {"name": "task", "args": {"description": "run the tests", "subagent_type": "coder"}, "id": "t1", "type": "tool_call"},
+        {"name": "task", "args": {"description": "research X", "subagent_type": "general-purpose"}, "id": "gp",
+         "type": "tool_call"},
     ])
+    r, model = runner(platform, tmp_path, [both, AIMessage(content="all good")])
     # The generalist is recruited on first use; it answers like any agent.
     original = platform.do_spaces_agent_recruit
 
@@ -127,9 +122,8 @@ async def test_background_tasks_and_general_purpose_recruits(platform: Platform,
     platform.do_spaces_agent_recruit = recruit  # type: ignore[method-assign]
     out = await r.prompt(turn_request(LEAD, "check things", token="tok-lead", role="lead"))
     assert out.reply == "all good"
-    results = tool_results(model)
-    assert "tests pass" in results["wait_tasks"]
-    assert "X is fine" in results["task"]
+    results = [str(m.content) for m in model.seen[-1] if isinstance(m, ToolMessage) and m.name == "task"]
+    assert any("tests pass" in r for r in results) and any("X is fine" in r for r in results)
     assert any(b["name"].startswith("generalist") for b in platform.bots)
 
 

@@ -134,7 +134,7 @@ KEEP_CHARS = 400
 # Screenshots and other media the agent can still see.
 KEEP_MEDIA = 2
 # Answers the agent cannot get again by re-running a tool.
-NEVER_TRIM = frozenset({"task", "wait_tasks", "check_tasks", "ask_user", "write_todos", "assemble_team", "run_swarm"})
+NEVER_TRIM = frozenset({"task", "ask_user", "write_todos", "assemble_team", "run_swarm"})
 # Instructions the agent read stay whole up to this size (characters); a larger
 # result went to a file, and the parts of it the agent reads stay whole instead.
 PIN_MAX_CHARS = 24_000

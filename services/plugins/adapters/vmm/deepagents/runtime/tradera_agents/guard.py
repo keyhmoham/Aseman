@@ -5,8 +5,8 @@ recursion limit: every model call is several graph steps (the model, the
 tools and each middleware hook), so a step limit is a poor proxy and ends the
 turn with an error and no answer. Instead:
 
-* the agent is told when it repeats the same tool call, or keeps polling for
-  tasks, that the result will not change and it should change approach;
+* the agent is told when it repeats the same tool call, or keeps re-reading
+  the room, that the result will not change and it should change approach;
 * a few calls before its budget it is told to wrap up;
 * its last call has no tools: it writes its final answer, so the turn ends
   with the result and what is left rather than an error.
@@ -31,7 +31,7 @@ DEFAULT_MAX_CALLS = 150
 #: The same tool call (name and arguments) this many times in a turn is a loop.
 REPEATS = 3
 #: Polling tools: this many calls in a turn is enough.
-POLL_TOOLS = frozenset({"check_tasks", "read_room", "read_direct_messages"})
+POLL_TOOLS = frozenset({"read_room", "read_direct_messages"})
 POLLS = 6
 #: Calls before the budget at which the agent is told to wrap up.
 WARN_BEFORE = 5
@@ -79,7 +79,7 @@ def notes(messages: list[Any], calls_made: int, budget: int) -> list[str]:
     polled = sorted(name for name, n in polls.items() if n >= POLLS)
     if polled:
         out.append(f"You have called {', '.join(polled)} many times this turn. Do not poll in a loop: continue "
-                   "other work, use wait_tasks once, or finish and report what is still running.")
+                   "other work, or finish and report what is still open.")
     left = budget - calls_made
     if 0 < left <= WARN_BEFORE:
         out.append(f"You have {left} steps left in this turn. Wrap up now: finish the essential part and write "

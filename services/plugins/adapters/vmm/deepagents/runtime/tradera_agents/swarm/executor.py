@@ -36,7 +36,7 @@ DEP_RESULT_CHARS = 3000
 #: How long one task may take.
 TASK_TIMEOUT = teamlib.TASK_TIMEOUT
 
-_NO_ANSWER = "(no answer yet after"
+_NO_ANSWER = teamlib.NO_ANSWER.split("{", 1)[0]
 
 
 def parallel() -> int:

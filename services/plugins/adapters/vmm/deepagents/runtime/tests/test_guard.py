@@ -47,7 +47,7 @@ def test_repeats_and_polling_are_noticed() -> None:
             for i in range(3)]
     found = guard.notes([HumanMessage("go"), *same], 3, 100)
     assert any("execute" in n and "same arguments" in n for n in found)
-    polls = [AIMessage(content="", tool_calls=[{"name": "check_tasks", "args": {"task_ids": [str(i)]}, "id": f"p{i}"}])
+    polls = [AIMessage(content="", tool_calls=[{"name": "read_room", "args": {"limit": i + 1}, "id": f"p{i}"}])
              for i in range(guard.POLLS)]
     assert any("poll" in n for n in guard.notes([HumanMessage("go"), *polls], 6, 100))
     # What came before the person's latest message is another run.

@@ -231,7 +231,7 @@ class Runner:
         if backend is not None and not ctx.turn.no_memory:
             await self._prepare_sandbox(ctx, backend)
 
-        tools = toollib.communication_tools(ctx) + toollib.delegation_tools(ctx)
+        tools = toollib.communication_tools(ctx)
         if agent.lead:
             tools.append(toollib.recruit_tool(ctx))
             # The swarm: a team from the space, the marketplace and new

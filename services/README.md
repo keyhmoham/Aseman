@@ -464,10 +464,12 @@ Every deep agents feature is on, mapped onto the platform:
 - **filesystem and shell** — `ls`, `read_file`, `write_file`, `edit_file`,
   `glob`, `grep` and `execute` run on the space's shared sandbox, so the lead
   and every specialist work on the same machine and files (`/workspace`);
-- **subagents** — the `task` tool hands a task to an agent of the space over
-  room messaging and returns its answer; `general-purpose` is the space's
-  generalist, recruited on first use. `start_task` / `check_tasks` /
-  `wait_tasks` run several agents in parallel in the background;
+- **subagents** — the `task` tool hands a task to an agent of the space and
+  returns its answer: the task is a room message mentioning the agent
+  (`spaces.message_send` with `wait`), and the node runs the agent's turn on
+  it before the call returns, so the answer is in the room as the reply and
+  comes back with no polling. Several `task` calls in one step run at the same
+  time; `general-purpose` is the space's generalist, recruited on first use;
 - **the swarm** — the lead's `assemble_team` staffs every role a goal needs
   with the best fit: an agent already in the space, else one **published in the
   marketplace** (hired into the space), else a **new specialist written for the

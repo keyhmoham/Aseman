@@ -160,6 +160,10 @@ func (s *Service) List(ctx context.Context, itemType string, category, query str
 		Equal:   map[string]any{"status": string(market.StatusActive)},
 		OrderBy: "created_at", Asc: false, Limit: limit, Offset: offset,
 	}
+	// A search pages the matching listings, not the listings it filters.
+	if query != "" {
+		f.Limit, f.Offset = 0, 0
+	}
 	if itemType != "" {
 		f.Equal["type"] = itemType
 	}
@@ -178,6 +182,13 @@ func (s *Service) List(ctx context.Context, itemType string, category, query str
 			}
 		}
 		out = kept
+		if offset > len(out) {
+			offset = len(out)
+		}
+		out = out[offset:]
+		if len(out) > limit {
+			out = out[:limit]
+		}
 	}
 	return out, nil
 }

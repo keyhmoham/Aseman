@@ -256,6 +256,11 @@ void main() {
       await app('feed_chats', () async {
         await tester.tap(find.text('Chats').first);
       });
+      await app('feed_explore', () async {
+        await tester.tap(find.byTooltip('Explore'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField).last, 'a');
+      });
       SharedPreferences.setMockInitialValues({});
       final errors =
           await capture(tester, size.value, '${size.key}_auth', () async {

@@ -93,16 +93,74 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('search filters the feed', (tester) async {
+  testWidgets('the feed search bar opens Explore without the space tabs',
+      (tester) async {
+    await seedSession();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    final service = FakeTraderaService();
+    await tester.pumpWidget(TraderaApp(
+        dependencies: AppDependencies.withService(service)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Search Tradera — signals, traders, agents…'));
+    await tester.pumpAndSettle();
+    expect(find.text('Explore'), findsOneWidget);
+    // Outside a space there is no space/explore scope to pick.
+    expect(find.text('Explore Tradera'), findsNothing);
+
+    // Explore sits over the feed, whose side panels list the same names.
+    Finder inExplore(String text) => find.text(text).last;
+    await tester.enterText(find.byType(TextField).last, 'a');
+    await tester.pumpAndSettle();
+    expect(inExplore('maya'), findsOneWidget);
+
+    await tester.tap(find.text('Chats').last);
+    await tester.pumpAndSettle();
+    expect(inExplore('Maya Chen'), findsOneWidget);
+
+    await tester.tap(find.text('Spaces').last);
+    await tester.pumpAndSettle();
+    expect(inExplore('Atlas Capital'), findsOneWidget);
+
+    await tester.tap(find.text('Agents').last);
+    await tester.pumpAndSettle();
+    expect(inExplore('AlphaBot'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).last, 'home');
+    await tester.tap(find.text('Posts').last);
+    await tester.pumpAndSettle();
+    expect(inExplore('Private update inside the Home workspace.'),
+        findsOneWidget);
+    expect(service.postSearches.last, ('home', true));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a space found in Explore opens it, a chat opens the chat',
+      (tester) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
     await tester.pumpWidget(TraderaApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).first, 'ETH');
+    // Explore sits over the feed, whose side panels list the same names.
+    Finder inExplore(String text) => find.text(text).last;
+    await tester.tap(find.byTooltip('Explore'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('results for “ETH”'), findsOneWidget);
+    await tester.tap(find.text('Chats').last);
+    await tester.pumpAndSettle();
+    await tester.tap(inExplore('Maya Chen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Message Maya Chen…'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back to chats'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Spaces').last);
+    await tester.pumpAndSettle();
+    await tester.tap(inExplore('Atlas Capital'));
+    await tester.pumpAndSettle();
+    expect(find.text('My trading desk'), findsOneWidget);
   });
 
   testWidgets('switches workspace from the search feed app bar',
@@ -477,12 +535,11 @@ void main() {
     expect(find.text('Explore Tradera'), findsOneWidget);
 
     // In-workspace Agents section → only the space's agent (SignalBot), not the
-    // global AlphaBot. Each result card carries a WORKSPACE/GLOBAL tag.
+    // global AlphaBot.
     await tester.tap(find.widgetWithText(Tab, 'Agents'));
     await tester.pumpAndSettle();
-    expect(find.text('WORKSPACE'), findsOneWidget);
+    expect(find.text('Results from Atlas Capital workspace'), findsOneWidget);
     expect(find.text('SignalBot'), findsWidgets);
-    expect(find.text('GLOBAL'), findsNothing);
 
     // Switch to the global Explore tab, Agents section → the platform agent
     // appears.
@@ -490,7 +547,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(Tab, 'Agents'));
     await tester.pumpAndSettle();
-    expect(find.text('GLOBAL'), findsOneWidget);
+    expect(find.text('Discover across the platform'), findsOneWidget);
     expect(find.text('AlphaBot'), findsWidgets);
   });
 

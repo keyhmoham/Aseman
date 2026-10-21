@@ -258,8 +258,12 @@ func (s *Service) chatList(ctx context.Context, req *api.ActionRequest) (*api.Ac
 	}
 	var in struct {
 		Kind string `json:"kind,omitempty"` // "direct", "room" or empty for both
+		// Query keeps the direct chats whose other side's name or handle
+		// holds it, and the rooms whose name or project's name does.
+		Query string `json:"query,omitempty"`
 	}
 	_ = helper.Decode(req, &in)
+	q := strings.ToLower(strings.TrimSpace(in.Query))
 	var mems []membership.Membership
 	if err := s.R.List(ctx, "memberships", database.Filter{
 		Equal:   map[string]any{"member_id": req.Caller.ID.String(), "room_id": zeroRoom},
@@ -312,6 +316,9 @@ func (s *Service) chatList(ctx context.Context, req *api.ActionRequest) (*api.Ac
 					row["saved"] = true
 					row["peer"] = people.get(ctx, req.Caller.ID)
 				}
+			}
+			if q != "" && !chatMatches(row, q) {
+				continue
 			}
 			if at := pinnedIn(tree, req.Caller.ID, room.ID); !at.IsZero() {
 				row["pinned_at"] = at
@@ -371,6 +378,34 @@ func (s *Service) chatList(ctx context.Context, req *api.ActionRequest) (*api.Ac
 		return a.After(b)
 	})
 	return helper.JSON(map[string]any{"chats": chats})
+}
+
+// chatMatches reports whether a chat row's names hold the lowercase query: a
+// direct chat's other side (display name or handle), a room's own name or its
+// project's.
+func chatMatches(row map[string]any, q string) bool {
+	names := []string{}
+	if row["kind"] == "direct" {
+		if peer, ok := row["peer"].(map[string]any); ok {
+			for _, key := range []string{"display_name", "handle"} {
+				if v, _ := peer[key].(string); v != "" {
+					names = append(names, v)
+				}
+			}
+		}
+	} else {
+		for _, key := range []string{"room_name", "space_name"} {
+			if v, _ := row[key].(string); v != "" {
+				names = append(names, v)
+			}
+		}
+	}
+	for _, name := range names {
+		if strings.Contains(strings.ToLower(name), q) {
+			return true
+		}
+	}
+	return false
 }
 
 // lastRoomMessage is the latest conversation message of a room (logs and tool

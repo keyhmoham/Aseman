@@ -318,10 +318,14 @@ class TraderaService implements BackendService {
   // ── messenger ─────────────────────────────────────────────────────────────
 
   /// Every conversation of the caller, newest first: direct chats and the
-  /// rooms of their projects. [kind] narrows it to "direct" or "room".
-  Future<List<ChatSummary>> fetchChats({String kind = ''}) async {
-    final resp = await client
-        .call('spaces', 'chat_list', body: {if (kind.isNotEmpty) 'kind': kind});
+  /// rooms of their projects. [kind] narrows it to "direct" or "room";
+  /// [query] keeps the chats whose other side (or room) is named like it.
+  Future<List<ChatSummary>> fetchChats(
+      {String kind = '', String query = ''}) async {
+    final resp = await client.call('spaces', 'chat_list', body: {
+      if (kind.isNotEmpty) 'kind': kind,
+      if (query.isNotEmpty) 'query': query,
+    });
     final list = (resp.body as Map?)?['chats'] as List? ?? [];
     return list
         .whereType<Map<String, dynamic>>()
@@ -1716,9 +1720,10 @@ class TraderaService implements BackendService {
 
   /// Search top-level posts by body text.
   Future<List<SocialPost>> searchPosts(String query,
-      {int limit = 20, int offset = 0}) async {
+      {bool following = false, int limit = 20, int offset = 0}) async {
     final resp = await client.call('posts', 'post_search', body: {
       'query': query,
+      if (following) 'scope': 'following',
       'limit': limit,
       if (offset > 0) 'offset': offset,
     });

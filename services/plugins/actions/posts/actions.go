@@ -362,7 +362,10 @@ func (a *postSearchAction) Handle(ctx context.Context, req *api.ActionRequest) (
 		return nil, err
 	}
 	var in struct {
-		Query  string `json:"query"`
+		Query string `json:"query"`
+		// Scope "following" searches the caller's Following feed (the authors
+		// they follow and their spaces) instead of every post.
+		Scope  string `json:"scope,omitempty"`
 		Limit  int    `json:"limit,omitempty"`
 		Offset int    `json:"offset,omitempty"`
 	}
@@ -370,6 +373,13 @@ func (a *postSearchAction) Handle(ctx context.Context, req *api.ActionRequest) (
 		return nil, err
 	}
 	limit, offset := helper.Paging(in.Limit, in.Offset, 20, 50)
+	if in.Scope == "following" {
+		found, err := a.s.FollowingSearch(ctx, req.Caller.ID, in.Query, limit, offset)
+		if err != nil {
+			return nil, err
+		}
+		return helper.JSON(map[string]any{"posts": a.s.Views(ctx, req.Caller.ID, found)})
+	}
 	var list []post.Post
 	if err := a.s.R.List(ctx, "posts", database.Filter{
 		Equal: map[string]any{"parent_id": zeroID}, OrderBy: "created_at", Asc: false, Limit: limit + offset,

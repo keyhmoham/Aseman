@@ -2,6 +2,7 @@ package spaces
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/tradera/tradera/internal/plugins/api"
@@ -289,12 +290,72 @@ func (a *spaceListAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 type spaceSearchAction struct{ s *Service }
 
 func (a *spaceSearchAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "spaces", Name: "space_search", Summary: "Search spaces (projects are private: always empty)"}
+	return api.ActionMeta{Namespace: "spaces", Name: "space_search", Summary: "Search my spaces and public spaces by name or description"}
 }
 func (a *spaceSearchAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
-	// Every project is private, so there is nothing to discover. The action stays
-	// for app builds that still call it.
-	return helper.JSON(map[string]any{"spaces": []map[string]any{}})
+	if err := helper.RequireAuthenticated(req); err != nil {
+		return nil, err
+	}
+	var in struct {
+		Query  string `json:"query,omitempty"`
+		Limit  int    `json:"limit,omitempty"`
+		Offset int    `json:"offset,omitempty"`
+	}
+	_ = helper.Decode(req, &in)
+	limit, offset := helper.Paging(in.Limit, in.Offset, 20, 100)
+	q := strings.ToLower(strings.TrimSpace(in.Query))
+	matches := func(sp *space.Space) bool {
+		return q == "" || strings.Contains(strings.ToLower(sp.Name), q) ||
+			strings.Contains(strings.ToLower(sp.Description), q)
+	}
+	// The caller's own projects first (direct chats are not projects), then
+	// the public ones they are not in.
+	var mems []membership.Membership
+	if err := a.s.R.List(ctx, "memberships", database.Filter{
+		Equal:   map[string]any{"member_id": req.Caller.ID.String(), "room_id": zeroRoom},
+		OrderBy: "created_at", Asc: false,
+	}, &mems); err != nil {
+		return nil, err
+	}
+	out := []map[string]any{}
+	seen := map[string]bool{}
+	row := func(sp *space.Space, role string) map[string]any {
+		return map[string]any{"id": sp.ID.String(), "name": sp.Name, "description": sp.Description,
+			"owner_id": sp.OwnerID.String(), "role": role, "member": role != "",
+			"public": sp.Public, "home": sp.Home}
+	}
+	for _, m := range mems {
+		sp, err := a.s.GetSpace(ctx, m.SpaceID)
+		if err != nil || sp.Direct || seen[sp.ID.String()] {
+			continue
+		}
+		seen[sp.ID.String()] = true
+		if matches(sp) {
+			out = append(out, row(sp, string(m.Role)))
+		}
+	}
+	var public []space.Space
+	if err := a.s.R.List(ctx, "spaces", database.Filter{
+		Equal: map[string]any{"public": true}, OrderBy: "created_at", Asc: false,
+	}, &public); err != nil {
+		return nil, err
+	}
+	for i := range public {
+		sp := &public[i]
+		if sp.Direct || seen[sp.ID.String()] || !matches(sp) {
+			continue
+		}
+		seen[sp.ID.String()] = true
+		out = append(out, row(sp, ""))
+	}
+	if offset > len(out) {
+		offset = len(out)
+	}
+	out = out[offset:]
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return helper.JSON(map[string]any{"spaces": out})
 }
 
 // --- space metadata ---

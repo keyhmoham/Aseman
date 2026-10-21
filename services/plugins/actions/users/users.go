@@ -173,11 +173,11 @@ func (a *accountGetAction) Handle(ctx context.Context, req *api.ActionRequest) (
 	})
 }
 
-// searchAction implements users.search: find accounts by handle/email.
+// searchAction implements users.search: find people by handle/email.
 type searchAction struct{ s *Service }
 
 func (a *searchAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "users", Name: "search", Summary: "Search accounts by handle or email"}
+	return api.ActionMeta{Namespace: "users", Name: "search", Summary: "Search people (not agents or apps) by handle or email"}
 }
 func (a *searchAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireAuthenticated(req); err != nil {
@@ -192,8 +192,12 @@ func (a *searchAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 		return nil, err
 	}
 	limit, offset := helper.Paging(in.Limit, in.Offset, 20, 50)
+	// Only people: agents and apps have accounts too, but they are found
+	// through bots.bot_search.
 	var list []account.Account
-	if err := a.s.R.List(ctx, "accounts", database.Filter{}, &list); err != nil {
+	if err := a.s.R.List(ctx, "accounts", database.Filter{
+		Equal: map[string]any{"kind": string(account.KindUser)},
+	}, &list); err != nil {
 		return nil, err
 	}
 	q := strings.ToLower(strings.TrimSpace(in.Query))
@@ -204,15 +208,7 @@ func (a *searchAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 			out = append(out, a.s.publicRef(ctx, req.Caller.ID, acc.ID))
 		}
 	}
-	start := offset
-	if start > len(out) {
-		start = len(out)
-	}
-	end := len(out)
-	if limit > 0 && start+limit < end {
-		end = start + limit
-	}
-	return helper.JSON(map[string]any{"users": out[start:end]})
+	return helper.JSON(map[string]any{"users": page(out, limit, offset)})
 }
 
 // metadataViewAction users.metadata_view

@@ -654,6 +654,7 @@ class _NewChatPage extends StatefulWidget {
 class _NewChatPageState extends State<_NewChatPage> {
   final _query = TextEditingController();
   List<AccountSummary> _results = const [];
+  List<Bot> _foundAgents = const [];
   List<Bot> _agents = const [];
   Timer? _debounce;
   bool _searching = false;
@@ -679,19 +680,41 @@ class _NewChatPageState extends State<_NewChatPage> {
     _debounce = Timer(const Duration(milliseconds: 300), () async {
       final q = text.trim().replaceFirst(RegExp(r'^@+'), '');
       if (q.isEmpty) {
-        if (mounted) setState(() => _results = const []);
+        if (mounted) {
+          setState(() {
+            _results = const [];
+            _foundAgents = const [];
+          });
+        }
         return;
       }
       setState(() => _searching = true);
       try {
-        final found =
-            await widget.dependencies.service.searchUsers(q, limit: 12);
+        // People and agents are searched apart: users.search only ever
+        // returns people, and apps are not chat partners.
+        final service = widget.dependencies.service;
+        final found = await service.searchUsers(q, limit: 12);
+        final bots = await service
+            .searchBots(q, kind: 'agent', limit: 12)
+            .catchError((_) => <Map<String, dynamic>>[]);
         final me = widget.dependencies.sessionController.session?.accountId;
+        final mine = {for (final b in _agents) b.id};
         if (mounted) {
-          setState(() => _results = found.where((a) => a.id != me).toList());
+          setState(() {
+            _results = found.where((a) => a.id != me).toList();
+            _foundAgents = bots
+                .map(Bot.fromJson)
+                .where((b) => !mine.contains(b.id))
+                .toList();
+          });
         }
       } catch (_) {
-        if (mounted) setState(() => _results = const []);
+        if (mounted) {
+          setState(() {
+            _results = const [];
+            _foundAgents = const [];
+          });
+        }
       } finally {
         if (mounted) setState(() => _searching = false);
       }
@@ -760,13 +783,19 @@ class _NewChatPageState extends State<_NewChatPage> {
                     onTap: () => Navigator.of(context).pop(raw)),
               for (final r in _results)
                 _PickTile(
-                    icon: r.kind == 'user'
-                        ? Icons.person_outline_rounded
-                        : Icons.smart_toy_outlined,
+                    icon: Icons.person_outline_rounded,
                     title: '@${r.handle}',
                     avatar: r.avatar,
-                    subtitle: r.kind == 'user' ? 'Person' : 'Agent',
+                    subtitle: 'Person',
                     onTap: () => Navigator.of(context).pop(r.id)),
+              for (final b in _foundAgents)
+                _PickTile(
+                    icon: Icons.smart_toy_outlined,
+                    title: b.name,
+                    avatar: b.avatar,
+                    subtitle: 'Agent',
+                    onTap: () => Navigator.of(context)
+                        .pop(b.accountId.isNotEmpty ? b.accountId : b.id)),
               if (agents.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(6, 14, 6, 6),
@@ -789,6 +818,7 @@ class _NewChatPageState extends State<_NewChatPage> {
               if (raw.isNotEmpty &&
                   !_searching &&
                   _results.isEmpty &&
+                  _foundAgents.isEmpty &&
                   !pastedId)
                 Padding(
                   padding: const EdgeInsets.all(24),

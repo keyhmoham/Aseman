@@ -82,7 +82,7 @@ func (a *botSearchAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 	out := make([]map[string]any, 0, len(list))
 	for i := range list {
 		out = append(out, map[string]any{
-			"id": list[i].ID.String(), "name": list[i].Name,
+			"id": list[i].ID.String(), "account_id": list[i].AccountID.String(), "name": list[i].Name,
 			"kind": string(list[i].Kind), "vm_type": string(list[i].VMType),
 			"status": string(list[i].Status), "owner_id": list[i].OwnerID.String(),
 			"avatar": a.s.avatarOf(ctx, list[i].AccountID),

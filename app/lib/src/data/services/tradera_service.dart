@@ -1207,11 +1207,14 @@ class TraderaService implements BackendService {
     return list.whereType<Map<String, dynamic>>().toList();
   }
 
-  /// Members of a space (enriched with handle/kind/role), paged.
+  /// Members of a space (enriched with handle/kind/role), paged. [kind]
+  /// keeps only `user` (people) or `bot` (agents and apps) members; empty
+  /// lists everyone.
   Future<List<Map<String, dynamic>>> fetchSpaceMembers(String spaceId,
-      {int limit = 50, int offset = 0}) async {
+      {String kind = '', int limit = 50, int offset = 0}) async {
     final resp = await client.call('spaces', 'members_list', body: {
       'space': spaceId,
+      if (kind.isNotEmpty) 'kind': kind,
       'limit': limit,
       if (offset > 0) 'offset': offset,
     });
@@ -1602,7 +1605,7 @@ class TraderaService implements BackendService {
     return list.whereType<Map<String, dynamic>>().toList();
   }
 
-  /// Search accounts by handle/email.
+  /// Search people (never agents or apps) by handle/email.
   Future<List<AccountSummary>> searchUsers(String query,
       {int limit = 20, int offset = 0}) async {
     final resp = await client.call('users', 'search', body: {

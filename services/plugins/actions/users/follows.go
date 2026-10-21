@@ -8,6 +8,7 @@ import (
 	"github.com/tradera/tradera/internal/plugins/entity"
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/pkg/errs"
+	"github.com/tradera/tradera/plugins/actions/auth/models/account"
 	"github.com/tradera/tradera/plugins/actions/support/helper"
 	"github.com/tradera/tradera/plugins/actions/users/models/follow"
 	database "github.com/tradera/tradera/plugins/adapters/database/ports"
@@ -71,47 +72,78 @@ func (s *Service) IsFollowing(ctx context.Context, follower, followee identity.I
 	return len(list) > 0, nil
 }
 
-// FollowCounts returns followers/following counts for an account.
+// FollowCounts returns followers/following counts for an account. Only people
+// count: agents and apps that follow (or are followed) are left out, matching
+// the follow lists.
 func (s *Service) FollowCounts(ctx context.Context, acc identity.ID) (followers, following int64, err error) {
-	var fl []follow.Follow
-	if err := s.R.List(ctx, "follows", database.Filter{Equal: map[string]any{"followee_id": acc.String()}}, &fl); err != nil {
+	fl, err := s.Followers(ctx, acc, 0, 0)
+	if err != nil {
 		return 0, 0, err
 	}
-	var fg []follow.Follow
-	if err := s.R.List(ctx, "follows", database.Filter{Equal: map[string]any{"follower_id": acc.String()}}, &fg); err != nil {
+	fg, err := s.Following(ctx, acc, 0, 0)
+	if err != nil {
 		return 0, 0, err
 	}
 	return int64(len(fl)), int64(len(fg)), nil
 }
 
-// Following lists the accounts [acc] follows, newest first.
+// Following lists the people [acc] follows, newest first. Limit <= 0 means
+// no limit.
 func (s *Service) Following(ctx context.Context, acc identity.ID, limit, offset int) ([]identity.ID, error) {
 	var list []follow.Follow
 	if err := s.R.List(ctx, "follows", database.Filter{
-		Equal: map[string]any{"follower_id": acc.String()}, OrderBy: "created_at", Asc: false, Limit: limit, Offset: offset,
+		Equal: map[string]any{"follower_id": acc.String()}, OrderBy: "created_at", Asc: false,
 	}, &list); err != nil {
 		return nil, err
 	}
-	out := make([]identity.ID, 0, len(list))
+	ids := make([]identity.ID, 0, len(list))
 	for i := range list {
-		out = append(out, list[i].FolloweeID)
+		ids = append(ids, list[i].FolloweeID)
 	}
-	return out, nil
+	return page(s.people(ctx, ids), limit, offset), nil
 }
 
-// Followers lists the accounts following [acc], newest first.
+// Followers lists the people following [acc], newest first. Limit <= 0 means
+// no limit.
 func (s *Service) Followers(ctx context.Context, acc identity.ID, limit, offset int) ([]identity.ID, error) {
 	var list []follow.Follow
 	if err := s.R.List(ctx, "follows", database.Filter{
-		Equal: map[string]any{"followee_id": acc.String()}, OrderBy: "created_at", Asc: false, Limit: limit, Offset: offset,
+		Equal: map[string]any{"followee_id": acc.String()}, OrderBy: "created_at", Asc: false,
 	}, &list); err != nil {
 		return nil, err
 	}
-	out := make([]identity.ID, 0, len(list))
+	ids := make([]identity.ID, 0, len(list))
 	for i := range list {
-		out = append(out, list[i].FollowerID)
+		ids = append(ids, list[i].FollowerID)
 	}
-	return out, nil
+	return page(s.people(ctx, ids), limit, offset), nil
+}
+
+// people keeps the ids that belong to human accounts, dropping agents, apps
+// and accounts that no longer exist.
+func (s *Service) people(ctx context.Context, ids []identity.ID) []identity.ID {
+	out := ids[:0]
+	for _, id := range ids {
+		if acc, err := s.GetAccount(ctx, id.String()); err == nil && acc.Kind == account.KindUser {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// page slices one page out of an in-memory list. Limit <= 0 means no limit.
+func page[T any](list []T, limit, offset int) []T {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(list) {
+		offset = len(list)
+	}
+	list = list[offset:]
+	if limit > 0 && len(list) > limit {
+		list = list[:limit]
+	}
+	return list
 }
 
 // accountRefs resolves a list of account ids into their public summaries.

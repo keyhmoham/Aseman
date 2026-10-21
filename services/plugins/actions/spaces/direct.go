@@ -299,7 +299,7 @@ func (s *Service) chatList(ctx context.Context, req *api.ActionRequest) (*api.Ac
 			row := map[string]any{
 				"kind": "room", "space_id": sp.ID.String(), "space_name": sp.Name,
 				"room_id": room.ID.String(), "room_name": room.Name, "home": sp.Home, "role": m.Role,
-				"updated_at": room.CreatedAt,
+				"updated_at": room.CreatedAt, "space_avatar": helper.TreeAvatar(tree),
 			}
 			if sp.Direct {
 				row["kind"] = "direct"

@@ -17,6 +17,7 @@ import (
 	"github.com/tradera/tradera/plugins/actions/message/models/message"
 	"github.com/tradera/tradera/plugins/actions/spaces/models/membership"
 	"github.com/tradera/tradera/plugins/actions/support/helper"
+	"github.com/tradera/tradera/plugins/actions/support/metasvc"
 	"github.com/tradera/tradera/plugins/actions/support/repo"
 	"github.com/tradera/tradera/plugins/actions/support/schema"
 	"github.com/tradera/tradera/plugins/actions/tools/mechanisms/mcp"
@@ -763,7 +764,11 @@ func (s *Service) commandsList(ctx context.Context, req *api.ActionRequest) (*ap
 				}
 			}
 		}
-		out = append(out, map[string]any{"bot_id": r.BotID, "name": rec.Name, "auth": r.Auth, "connected": connected, "commands": commands})
+		avatar := ""
+		if m, e := (&metasvc.Service{K: s.K, R: s.R}).Get(ctx, rec.AccountID); e == nil && m != nil {
+			avatar = helper.TreeAvatar(m.Tree)
+		}
+		out = append(out, map[string]any{"bot_id": r.BotID, "name": rec.Name, "auth": r.Auth, "connected": connected, "commands": commands, "avatar": avatar})
 	}
 	if in.Bot != "" && len(out) > 0 {
 		return helper.JSON(out[0])

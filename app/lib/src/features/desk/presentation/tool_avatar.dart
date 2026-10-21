@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/avatar.dart';
 
 /// A tool's mark: an icon that fits its name, on a tonal container whose hue
 /// is the tool's own (the same everywhere: window, dock, pinned desk).
@@ -26,6 +29,24 @@ class ToolAvatar extends StatelessWidget {
   ];
 
   static final Map<(int, Brightness), ColorScheme> _schemes = {};
+
+  /// The pictures the tools were given, by tool (bot) id, as the workspace's
+  /// bots were last loaded. A tool with one shows it over its icon.
+  static final ValueNotifier<Map<String, String>> pictures =
+      ValueNotifier(const {});
+
+  /// Records the pictures of [avatars] (bot id → picture), keeping others.
+  static void remember(Map<String, String> avatars) {
+    final next = {...pictures.value};
+    avatars.forEach((id, avatar) {
+      if (avatar.isEmpty) {
+        next.remove(id);
+      } else {
+        next[id] = avatar;
+      }
+    });
+    if (!mapEquals(next, pictures.value)) pictures.value = next;
+  }
 
   /// The tool's tonal palette.
   static ColorScheme schemeFor(String tool, Brightness brightness) {
@@ -77,7 +98,7 @@ class ToolAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = schemeFor(tool, Theme.of(context).brightness);
-    return AnimatedContainer(
+    final mark = AnimatedContainer(
       duration: const Duration(milliseconds: 320),
       curve: Curves.easeOutBack,
       width: size,
@@ -89,6 +110,14 @@ class ToolAvatar extends StatelessWidget {
       child: Icon(iconFor(name),
           size: size * .54,
           color: selected ? scheme.onPrimary : scheme.onPrimaryContainer),
+    );
+    return ValueListenableBuilder<Map<String, String>>(
+      valueListenable: pictures,
+      builder: (context, avatars, _) => AvatarPicture(
+          avatar: avatars[tool],
+          size: size,
+          radius: selected ? size * .32 : size / 2,
+          fallback: mark),
     );
   }
 }

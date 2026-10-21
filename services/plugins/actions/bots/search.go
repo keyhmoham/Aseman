@@ -85,6 +85,7 @@ func (a *botSearchAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 			"id": list[i].ID.String(), "name": list[i].Name,
 			"kind": string(list[i].Kind), "vm_type": string(list[i].VMType),
 			"status": string(list[i].Status), "owner_id": list[i].OwnerID.String(),
+			"avatar": a.s.avatarOf(ctx, list[i].AccountID),
 		})
 	}
 	return helper.JSON(map[string]any{"bots": out})

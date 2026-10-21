@@ -598,3 +598,8 @@ func (s *Service) adminChatReportResolve(ctx context.Context, req *api.ActionReq
 	}
 	return helper.JSON(map[string]any{"ok": true, "status": r.Status})
 }
+
+// spaceAvatar is the picture a workspace was given, "" when it has none.
+func (s *Service) spaceAvatar(ctx context.Context, spaceID identity.ID) string {
+	return helper.TreeAvatar(s.chatTree(ctx, spaceID))
+}

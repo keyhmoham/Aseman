@@ -6,6 +6,7 @@ import '../../../app_dependencies.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/space.dart';
 import '../../../data/services/tradera_service.dart';
+import '../../../shared/widgets/avatar.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import 'report_dialog.dart';
 
@@ -361,8 +362,11 @@ class ChatAvatar extends StatelessWidget {
     if (chat.direct) {
       final agent = peer?.isAgent ?? false;
       final name = peer?.displayName.replaceFirst('@', '') ?? '';
+      final picture = Avatars.of(peer?.avatar);
       return CircleAvatar(
         radius: radius,
+        foregroundImage: picture,
+        onForegroundImageError: picture == null ? null : (_, __) {},
         backgroundColor:
             agent ? scheme.tertiaryContainer : scheme.secondaryContainer,
         foregroundColor:
@@ -375,7 +379,7 @@ class ChatAvatar extends StatelessWidget {
       );
     }
     final label = chat.roomName.isEmpty ? '#' : chat.roomName;
-    return Container(
+    final room = Container(
       width: radius * 2,
       height: radius * 2,
       alignment: Alignment.center,
@@ -389,5 +393,11 @@ class ChatAvatar extends StatelessWidget {
               fontWeight: FontWeight.w800,
               color: scheme.onPrimaryContainer)),
     );
+    // A project room shows its project's picture.
+    return AvatarPicture(
+        avatar: chat.spaceAvatar,
+        size: radius * 2,
+        radius: radius * .6,
+        fallback: room);
   }
 }

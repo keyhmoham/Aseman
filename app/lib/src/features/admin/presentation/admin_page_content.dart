@@ -554,7 +554,8 @@ class _AppPageContentState extends State<AdminPageContent> {
         rows: [
           for (final a in rows)
             [
-              _personCell(_displayName(a), '@${a['handle'] ?? 'unknown'}'),
+              _personCell(_displayName(a), '@${a['handle'] ?? 'unknown'}',
+                  avatar: _avatarOf(a)),
               Text('${a['email'] ?? '—'}'),
               isAdmin(a)
                   ? const _RoleBadge(admin: true)
@@ -764,6 +765,7 @@ class _AppPageContentState extends State<AdminPageContent> {
               Row(children: [
                 AdminAvatar('${s['name'] ?? s['id']}',
                     size: 34,
+                    avatar: _avatarOf(s),
                     icon: '${s['id']}' == adminsSpaceId
                         ? Icons.admin_panel_settings_rounded
                         : s['home'] == true
@@ -1004,7 +1006,7 @@ class _AppPageContentState extends State<AdminPageContent> {
     final name = '${b['name'] ?? b['handle'] ?? 'Agent'}';
     return [
       _personCell(name, '@${b['handle'] ?? _shortId(b['id'])}',
-          icon: Icons.smart_toy_rounded),
+          icon: Icons.smart_toy_rounded, avatar: _avatarOf(b)),
       Text('@${b['owner_handle'] ?? _shortId(b['owner_id'])}'),
       _primaryCell(
           '${b['model'] ?? 'Default'}', '${b['provider'] ?? 'platform'}'),
@@ -1181,6 +1183,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                   return _adaptiveTile(
                     leading: AdminAvatar(name,
                         size: 40,
+                        avatar: _avatarOf(b),
                         icon: server ? Icons.hub_rounded : Icons.apps_rounded),
                     title: Text(name,
                         style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -1456,7 +1459,8 @@ class _AppPageContentState extends State<AdminPageContent> {
           for (final t in rows)
             [
               _personCell('${t['name'] ?? t['display_name'] ?? 'Person'}',
-                  '@${t['handle'] ?? t['username'] ?? 'unknown'}'),
+                  '@${t['handle'] ?? t['username'] ?? 'unknown'}',
+                  avatar: _avatarOf(t)),
               Wrap(spacing: 4, runSpacing: 4, children: [
                 for (final skill in _stringList(t['skills']).take(3))
                   _Tag(skill),
@@ -3966,7 +3970,9 @@ class _AppPageContentState extends State<AdminPageContent> {
                     collapsedShape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppShape.control)),
                     leading: AdminAvatar(person(r['accused']),
-                        icon: Icons.flag_rounded, size: 40),
+                        icon: Icons.flag_rounded,
+                        size: 40,
+                        avatar: _avatarOf(r['accused'])),
                     title: Text(
                         '${_humanKey('${r['reason'] ?? 'other'}')} · ${r['kind'] == 'message' ? 'a message' : 'a chat'}',
                         style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -4370,9 +4376,10 @@ class _AppPageContentState extends State<AdminPageContent> {
                 fontSize: 18, letterSpacing: -.2, fontWeight: FontWeight.w800)),
       );
 
-  Widget _personCell(String name, String secondary, {IconData? icon}) =>
+  Widget _personCell(String name, String secondary,
+          {IconData? icon, String avatar = ''}) =>
       Row(children: [
-        AdminAvatar(name, size: 34, icon: icon),
+        AdminAvatar(name, size: 34, icon: icon, avatar: avatar),
         const SizedBox(width: 10),
         Expanded(child: _primaryCell(name, secondary)),
       ]);
@@ -5768,7 +5775,7 @@ class _UserDialogState extends State<_UserDialog> {
     return _DetailFrame(
       title: name,
       subtitle: '@${a['handle']} · ${a['email'] ?? ''}',
-      avatar: AdminAvatar(name, size: 44),
+      avatar: AdminAvatar(name, size: 44, avatar: _avatarOf(a)),
       tabs: const [
         ('Summary', Icons.space_dashboard_rounded),
         ('Purchases', Icons.shopping_bag_rounded),
@@ -6113,7 +6120,12 @@ class _ProjectDialogState extends State<_ProjectDialog> {
     return _DetailFrame(
       title: name,
       subtitle: id,
-      avatar: AdminAvatar(name, size: 44, icon: Icons.folder_rounded),
+      avatar: AdminAvatar(name,
+          size: 44,
+          icon: Icons.folder_rounded,
+          avatar: _avatarOf(detail).isNotEmpty
+              ? _avatarOf(detail)
+              : _avatarOf(widget.project)),
       tabs: const [
         ('Overview', Icons.space_dashboard_rounded),
         ('Machine', Icons.computer_rounded),
@@ -6487,7 +6499,7 @@ class _ProjectDialogState extends State<_ProjectDialog> {
         for (final p in people)
           [
             Row(children: [
-              AdminAvatar(_displayName(p), size: 34),
+              AdminAvatar(_displayName(p), size: 34, avatar: _avatarOf(p)),
               const SizedBox(width: 10),
               Expanded(
                   child: _primaryCell(
@@ -6548,6 +6560,22 @@ class _RoleBadge extends StatelessWidget {
           color: Theme.of(context).colorScheme.primary,
           icon: Icons.shield_rounded)
       : const _Tag('Member');
+}
+
+/// The picture of a person, project, agent or app row, as the node sends it
+/// (its avatar, a project's avatar id, a profile's or a descriptor's).
+String _avatarOf(dynamic row) {
+  final m = _map(row);
+  for (final v in [
+    m['avatar'],
+    m['avatar_id'],
+    _map(m['profile'])['avatar'],
+    _map(m['descriptor'])['avatar'],
+  ]) {
+    final s = v is String ? v.trim() : '';
+    if (s.isNotEmpty && !RegExp(r'^0+$').hasMatch(s)) return s;
+  }
+  return '';
 }
 
 Map<String, dynamic> _map(dynamic value) => value is Map
@@ -6839,7 +6867,9 @@ class _AdminsSpacePickerState extends State<_AdminsSpacePicker> {
                       final selected = '${s['id']}' == widget.currentId;
                       return ListTile(
                         leading: AdminAvatar('${s['name'] ?? s['id']}',
-                            size: 34, icon: Icons.folder_rounded),
+                            size: 34,
+                            icon: Icons.folder_rounded,
+                            avatar: _avatarOf(s)),
                         title: Text('${s['name'] ?? s['id']}'),
                         subtitle: Text('${_owner(s)} · ${_shortId(s['id'])}'),
                         trailing:

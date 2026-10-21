@@ -10,6 +10,7 @@ import '../../../../core/theme/app_shape.dart';
 import '../../../../data/models/bot.dart';
 import '../../../../data/models/space.dart';
 import '../../../../data/services/tradera_service.dart';
+import '../../../../shared/widgets/avatar.dart';
 import '../../../../shared/widgets/mini_tag.dart';
 import '../../../home/presentation/widgets/routines_panel.dart';
 import '../../../search_feed/presentation/post_editor.dart';
@@ -289,8 +290,14 @@ class _RoomChatState extends State<RoomChat> {
                           final b = agents[i];
                           final already = _mentions.contains(b.id);
                           return ListTile(
-                              leading: const Icon(Icons.smart_toy_outlined,
-                                  size: 20),
+                              leading: AvatarPicture(
+                                  avatar: b.avatar,
+                                  size: 28,
+                                  fallback: const SizedBox(
+                                      width: 28,
+                                      height: 28,
+                                      child: Icon(Icons.smart_toy_outlined,
+                                          size: 20))),
                               title: Text(b.name,
                                   style: const TextStyle(fontSize: 13)),
                               subtitle: Text(b.kind,
@@ -523,6 +530,16 @@ class _RoomChatState extends State<RoomChat> {
     final body = m.body.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (body.isNotEmpty) return body;
     return m.attachments.isEmpty ? 'Message' : '📎 Attachment';
+  }
+
+  /// The picture of [m]'s sender: as the node sent it with the message, else
+  /// the agent's own when it is one of the room's.
+  String _avatarOf(RoomMessage m) {
+    if (m.senderAvatar.isNotEmpty) return m.senderAvatar;
+    for (final b in widget.mentionable) {
+      if (b.id == m.senderId || b.accountId == m.senderId) return b.avatar;
+    }
+    return '';
   }
 
   ({String name, bool agent}) _senderOf(RoomMessage m) {
@@ -1283,6 +1300,9 @@ class _RoomChatState extends State<RoomChat> {
             ? null
             : CircleAvatar(
                 radius: 15,
+                foregroundImage: Avatars.of(_avatarOf(m)),
+                onForegroundImageError:
+                    Avatars.of(_avatarOf(m)) == null ? null : (_, __) {},
                 backgroundColor: sender.agent
                     ? scheme.tertiaryContainer
                     : scheme.secondaryContainer,

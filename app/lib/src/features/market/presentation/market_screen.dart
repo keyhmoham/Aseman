@@ -265,7 +265,12 @@ class _ListingCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final color = listing.isApp ? AppColors.cyan : AppColors.primary;
     final header = Row(children: [
-      AppAvatar(listing.name, color: color, radius: 22),
+      AppAvatar(listing.name,
+          color: color,
+          radius: 22,
+          avatar: listing.avatar.isNotEmpty
+              ? listing.avatar
+              : listing.bot?.avatar ?? ''),
       const SizedBox(width: 13),
       Expanded(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -477,6 +482,9 @@ class _PublishDialogState extends State<_PublishDialog> {
                   child: ListTile(
                     onTap: () => setState(() => _selected = b),
                     leading: CircleAvatar(
+                        foregroundImage: Avatars.of(b.avatar),
+                        onForegroundImageError:
+                            b.avatar.isEmpty ? null : (_, __) {},
                         child: Icon(b.kind == 'agent'
                             ? Icons.smart_toy_outlined
                             : Icons.extension_outlined)),

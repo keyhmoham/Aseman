@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/avatar.dart';
 import '../../admin/presentation/admin_widgets.dart';
 import 'account_panel.dart';
 
@@ -55,8 +56,13 @@ class _AccountHubContentState extends State<AccountHubContent> {
           margin: const EdgeInsets.only(bottom: 10),
           child: ListTile(
             contentPadding: const EdgeInsets.all(14),
-            leading:
-                const CircleAvatar(child: Icon(Icons.folder_shared_outlined)),
+            leading: CircleAvatar(
+                foregroundImage: Avatars.of(invite['space_avatar']),
+                onForegroundImageError:
+                    Avatars.of(invite['space_avatar']) == null
+                        ? null
+                        : (_, __) {},
+                child: const Icon(Icons.folder_shared_outlined)),
             title: Text(
                 '${_map(invite['space'])['name'] ?? invite['space_name'] ?? 'Project invitation'}',
                 style: const TextStyle(fontWeight: FontWeight.w900)),

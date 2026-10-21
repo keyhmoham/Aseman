@@ -7,6 +7,7 @@ import '../../../../app_dependencies.dart';
 import '../../../../core/utils/context_extensions.dart';
 import '../../../../data/models/bot.dart';
 import '../../../../data/services/tradera_service.dart';
+import '../../../../shared/widgets/avatar.dart';
 import '../../../computer/computer_view.dart';
 import '../../../computer/preview_view.dart';
 import '../../../computer/space_computer.dart';
@@ -386,6 +387,7 @@ class _SpaceMemoryTabState extends State<SpaceMemoryTab> {
                     _WhoseChip(
                       label: a.name,
                       initial: a.name.isEmpty ? '?' : a.name[0].toUpperCase(),
+                      avatar: a.avatar,
                       selected: a.id == _agent,
                       onTap: () => _choose(a.id),
                     ),
@@ -550,12 +552,16 @@ class _WhoseChip extends StatelessWidget {
     required this.onTap,
     this.icon,
     this.initial,
+    this.avatar = '',
   });
   final String label;
   final bool selected;
   final VoidCallback onTap;
   final IconData? icon;
   final String? initial;
+
+  /// The agent's picture, shown over its initial.
+  final String avatar;
 
   @override
   Widget build(BuildContext context) {
@@ -572,6 +578,8 @@ class _WhoseChip extends StatelessWidget {
             ? Icon(icon, size: 16)
             : CircleAvatar(
                 backgroundColor: scheme.tertiaryContainer,
+                foregroundImage: Avatars.of(avatar),
+                onForegroundImageError: avatar.isEmpty ? null : (_, __) {},
                 child: Text(
                   initial ?? '',
                   style: TextStyle(

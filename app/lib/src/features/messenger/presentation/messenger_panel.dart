@@ -8,6 +8,7 @@ import '../../../core/theme/app_shape.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/space.dart';
 import '../../../data/services/tradera_service.dart';
+import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
@@ -763,6 +764,7 @@ class _NewChatPageState extends State<_NewChatPage> {
                         ? Icons.person_outline_rounded
                         : Icons.smart_toy_outlined,
                     title: '@${r.handle}',
+                    avatar: r.avatar,
                     subtitle: r.kind == 'user' ? 'Person' : 'Agent',
                     onTap: () => Navigator.of(context).pop(r.id)),
               if (agents.isNotEmpty) ...[
@@ -779,6 +781,7 @@ class _NewChatPageState extends State<_NewChatPage> {
                   _PickTile(
                       icon: Icons.smart_toy_outlined,
                       title: b.name,
+                      avatar: b.avatar,
                       subtitle: 'Agent',
                       onTap: () => Navigator.of(context)
                           .pop(b.accountId.isNotEmpty ? b.accountId : b.id)),
@@ -807,8 +810,12 @@ class _PickTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.avatar = '',
   });
   final IconData icon;
+
+  /// The picture shown over [icon], when there is one.
+  final String avatar;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
@@ -817,7 +824,10 @@ class _PickTile extends StatelessWidget {
   Widget build(BuildContext context) => ListTile(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppShape.control)),
-        leading: CircleAvatar(child: Icon(icon)),
+        leading: CircleAvatar(
+            foregroundImage: Avatars.of(avatar),
+            onForegroundImageError: avatar.isEmpty ? null : (_, __) {},
+            child: Icon(icon)),
         title: Text(title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

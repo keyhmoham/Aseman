@@ -14,6 +14,8 @@ import (
 	"github.com/tradera/tradera/pkg/logger"
 	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
 	"github.com/tradera/tradera/plugins/actions/market/models"
+	"github.com/tradera/tradera/plugins/actions/support/helper"
+	"github.com/tradera/tradera/plugins/actions/support/metasvc"
 	"github.com/tradera/tradera/plugins/actions/support/repo"
 	"github.com/tradera/tradera/plugins/adapters/database/ports"
 )
@@ -260,6 +262,8 @@ func indexFold(s, sub string) int {
 type Detail struct {
 	market.Listing
 	Bot *bot.Bot `json:"bot"`
+	// The listed bot's picture, "" when it has none.
+	Avatar string `json:"avatar"`
 }
 
 // DetailFor returns a listing joined with the underlying bot record.
@@ -272,5 +276,21 @@ func (s *Service) DetailFor(ctx context.Context, id identity.ID) (*Detail, error
 	if err != nil {
 		rec = nil
 	}
-	return &Detail{Listing: *l, Bot: rec}, nil
+	return &Detail{Listing: *l, Bot: rec, Avatar: s.AvatarOf(ctx, l.BotID)}, nil
+}
+
+// AvatarOf is the picture of the listed bot, "" when it has none.
+func (s *Service) AvatarOf(ctx context.Context, botID identity.ID) string {
+	if s.B == nil {
+		return ""
+	}
+	rec, err := s.B.GetBot(ctx, botID)
+	if err != nil || rec == nil || rec.AccountID.IsZero() {
+		return ""
+	}
+	m, err := (&metasvc.Service{K: s.K, R: s.R}).Get(ctx, rec.AccountID)
+	if err != nil || m == nil {
+		return ""
+	}
+	return helper.TreeAvatar(m.Tree)
 }

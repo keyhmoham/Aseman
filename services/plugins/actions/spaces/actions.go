@@ -342,7 +342,7 @@ func (a *spaceSearchAction) Handle(ctx context.Context, req *api.ActionRequest) 
 	row := func(sp *space.Space, role string) map[string]any {
 		return map[string]any{"id": sp.ID.String(), "name": sp.Name, "description": sp.Description,
 			"owner_id": sp.OwnerID.String(), "role": role, "member": role != "",
-			"public": sp.Public, "home": sp.Home}
+			"public": sp.Public, "home": sp.Home, "avatar": a.s.spaceAvatar(ctx, sp.ID)}
 	}
 	for _, m := range mems {
 		sp, err := a.s.GetSpace(ctx, m.SpaceID)

@@ -23,6 +23,7 @@ class FeedPost {
     this.workspace,
     this.media = const [],
     this.source = '',
+    this.avatar = '',
   });
 
   final String initials;
@@ -53,4 +54,7 @@ class FeedPost {
 
   /// Where an imported post was first published ("coinmarketcap").
   final String source;
+
+  /// The author's picture (a stored file's id), "" when they have none.
+  final String avatar;
 }

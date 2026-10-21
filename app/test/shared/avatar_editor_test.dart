@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tradera/src/core/network/api_client.dart';
 import 'package:tradera/src/data/models/bot.dart';
+import 'package:tradera/src/data/models/post.dart';
 import 'package:tradera/src/data/models/profile.dart';
 import 'package:tradera/src/data/models/space.dart';
 import 'package:tradera/src/data/services/tradera_service.dart';
+import 'package:tradera/src/shared/widgets/avatar.dart';
 import 'package:tradera/src/shared/widgets/avatar_editor.dart';
 
 const fileId = '00000000000000010000000000000001';
@@ -111,5 +113,54 @@ void main() {
     await tester.tap(find.text('W'));
     await tester.pumpAndSettle();
     expect(find.text('Upload a picture'), findsNothing);
+  });
+
+  test('a zero id is no picture', () {
+    expect(_service().avatarImage('0' * 32), isNull);
+  });
+
+  test('posts, chats, messages and listings carry their pictures', () {
+    final post = SocialPost.fromJson({
+      'id': 'p',
+      'author_id': 'a',
+      'author': {'display_name': 'Ada', 'handle': 'ada', 'avatar': fileId},
+    });
+    expect([post.authorName, post.authorHandle, post.authorAvatar],
+        ['Ada', 'ada', fileId]);
+    expect(post.withLike(likes: 1, likedByMe: true).authorAvatar, fileId);
+    expect(
+        ChatSummary.fromJson({'space_id': 's', 'space_avatar': fileId})
+            .copyWith(blocked: true)
+            .spaceAvatar,
+        fileId);
+    expect(
+        RoomMessage.fromJson({
+          'id': 'm',
+          'sender': {'avatar': fileId},
+        }).senderAvatar,
+        fileId);
+    expect(MarketListing.fromJson({'id': 'l', 'avatar': fileId}).avatar,
+        fileId);
+    expect(AccountSummary.fromJson({'id': 'u', 'avatar': fileId}).avatar,
+        fileId);
+  });
+
+  testWidgets('an avatar shows its picture over its fallback', (tester) async {
+    final service = _service();
+    Avatars.resolve = service.avatarImage;
+    addTearDown(() => Avatars.resolve = (_) => null);
+    await tester.pumpWidget(const MaterialApp(
+        home: Column(children: [
+      AvatarPicture(avatar: fileId, size: 30, fallback: Text('F1')),
+      AvatarPicture(avatar: '', size: 30, fallback: Text('F2')),
+      AppAvatar('A', color: Colors.blue, avatar: fileId),
+    ])));
+    // The fallback stays under the picture (which cannot load in tests).
+    expect(find.text('F1'), findsOneWidget);
+    expect(find.text('F2'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
+    final circle = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
+    expect((circle.foregroundImage as NetworkImage).url,
+        'https://node.example/v1/files/$fileId/content');
   });
 }

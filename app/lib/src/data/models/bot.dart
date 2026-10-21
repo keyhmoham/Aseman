@@ -99,6 +99,7 @@ class MarketListing {
     this.installs = 0,
     this.status = 'active',
     this.bot,
+    this.avatar = '',
   });
 
   final String id;
@@ -112,6 +113,9 @@ class MarketListing {
   final int installs;
   final String status;
   final Bot? bot;
+
+  /// The listed bot's picture: a stored file's id, "" when it has none.
+  final String avatar;
 
   bool get isApp => type == 'tool';
 
@@ -133,6 +137,7 @@ class MarketListing {
       installs: (json['installs'] as num?)?.toInt() ?? 0,
       status: json['status'] as String? ?? 'active',
       bot: botJson is Map<String, dynamic> ? Bot.fromJson(botJson) : null,
+      avatar: '${json['avatar'] ?? ''}',
     );
   }
 }
@@ -159,6 +164,7 @@ class AccountSummary {
     required this.handle,
     this.kind = 'user',
     this.status = 'active',
+    this.avatar = '',
   });
 
   final String id;
@@ -166,10 +172,14 @@ class AccountSummary {
   final String kind;
   final String status;
 
+  /// The account's picture: a stored file's id, "" when it has none.
+  final String avatar;
+
   factory AccountSummary.fromJson(Map<String, dynamic> json) => AccountSummary(
         id: json['id'] as String? ?? '',
         handle: json['handle'] as String? ?? '',
         kind: json['kind'] as String? ?? 'user',
         status: json['status'] as String? ?? 'active',
+        avatar: '${json['avatar'] ?? ''}',
       );
 }

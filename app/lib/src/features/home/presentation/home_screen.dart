@@ -214,8 +214,12 @@ class _FeedCard extends StatelessWidget {
       required this.title,
       required this.body,
       required this.tag,
-      this.likes = '0'});
+      this.likes = '0',
+      this.avatar = ''});
   final String initials, title, body, tag, likes;
+
+  /// The author's picture, "" when they have none.
+  final String avatar;
   final Color color;
 
   factory _FeedCard.fromPost(SocialPost p) => _FeedCard(
@@ -223,11 +227,13 @@ class _FeedCard extends StatelessWidget {
             ? p.authorId.substring(0, 2).toUpperCase()
             : 'OC',
         color: AppColors.primary,
-        title:
-            '@${p.authorId.length >= 8 ? p.authorId.substring(0, 8) : p.authorId}',
+        title: p.authorName.isNotEmpty
+            ? p.authorName
+            : '@${p.authorId.length >= 8 ? p.authorId.substring(0, 8) : p.authorId}',
         body: p.body,
         tag: p.tags.isEmpty ? 'POST' : p.tags.first.toUpperCase(),
         likes: '${p.likes}',
+        avatar: p.authorAvatar,
       );
 
   @override
@@ -236,7 +242,7 @@ class _FeedCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: AppSurfaces.cardDecoration(context),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          AppAvatar(initials, color: color),
+          AppAvatar(initials, color: color, avatar: avatar),
           const SizedBox(width: 13),
           Expanded(
               child: Column(

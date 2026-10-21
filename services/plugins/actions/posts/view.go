@@ -3,7 +3,6 @@ package posts
 import (
 	"context"
 	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"strings"
 
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/plugins/actions/auth/models/account"
@@ -85,9 +84,9 @@ func (s *Service) author(ctx context.Context, id identity.ID) map[string]any {
 			if name != "" {
 				out["display_name"] = name
 			}
-			if avatar, _ := profile["avatar"].(string); strings.TrimSpace(avatar) != "" {
-				out["avatar"] = strings.TrimSpace(avatar)
-			}
+		}
+		if avatar := helper.TreeAvatar(rec.Tree); avatar != "" {
+			out["avatar"] = avatar
 		}
 	}
 	return out

@@ -53,8 +53,14 @@ class Gateway:
         """The OpenAI-compatible, metered model endpoint of the turn."""
         return self.base_url + "/llm"
 
-    async def call(self, namespace: str, action: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
-        resp = await self._client.post(self.base_url + "/call", json=_payload(namespace, action, body))
+    async def call(self, namespace: str, action: str, body: dict[str, Any] | None = None, *,
+                   timeout: float | None = None) -> dict[str, Any]:
+        """``timeout`` (seconds) replaces the read timeout, for an action that
+        waits on work (a hand-off that runs an agent's turn)."""
+        kwargs: dict[str, Any] = {}
+        if timeout is not None:
+            kwargs["timeout"] = httpx.Timeout(connect=10.0, read=timeout, write=60.0, pool=30.0)
+        resp = await self._client.post(self.base_url + "/call", json=_payload(namespace, action, body), **kwargs)
         return _decode(namespace, action, resp)
 
     def call_sync(self, namespace: str, action: str, body: dict[str, Any] | None = None) -> dict[str, Any]:

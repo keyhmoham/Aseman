@@ -27,8 +27,10 @@ scope, on the agent's durable LangGraph thread (one per agent per room):
 * self-improvement — each agent's playbook in the space, evolved with GEPA
   from its own turns (see improve/);
 * work log — every step written to the room as the agent works;
-* decisions — when the node admin turned on a decision model, tool selection
-  and the turn's checks go to it, with the agent's own model (see decision/).
+* apps — a connected app's functions are tools; when there are many, the
+  agent loads the apps it needs (see apps.py);
+* decisions — when the node admin turned on a decision model, routing and
+  low-risk approvals go to it (see decision/).
 """
 
 from __future__ import annotations
@@ -51,7 +53,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 from langgraph.types import Command
 
-from . import economy, guard as guardlib, memory as memlib, prompts, subagents, swarm as swarmlib, team as teamlib, timeline as timelinelib, tools as toollib
+from . import apps as applib, economy, guard as guardlib, memory as memlib, prompts, subagents, swarm as swarmlib, team as teamlib, timeline as timelinelib, tools as toollib
 from .context import AgentDef, DecisionConfig, Turn, TurnContext
 from .decision import DecisionClient, DecisionMiddleware
 from .decision import approval as decision_approval
@@ -219,12 +221,6 @@ class Runner:
             await ctx.memory.aclose()
         await ctx.gateway.aclose()
 
-    def _config(self, ctx: TurnContext, graph: Any, budget: int) -> dict[str, Any]:
-        # The turn is bounded by its model calls (TurnGuard); the step limit
-        # is only a backstop the budget never reaches.
-        return {"configurable": {"thread_id": ctx.thread_id},
-                "recursion_limit": guardlib.recursion_limit(graph, budget)}
-
     async def _build(self, ctx: TurnContext) -> tuple[Any, guardlib.TurnGuard]:
         agent = ctx.agent
         decision = ctx.decision_config
@@ -237,7 +233,7 @@ class Runner:
         if backend is not None and not ctx.turn.no_memory:
             await self._prepare_sandbox(ctx, backend)
 
-        tools = toollib.communication_tools(ctx) + toollib.delegation_tools(ctx)
+        tools = toollib.communication_tools(ctx)
         if agent.lead:
             tools.append(toollib.recruit_tool(ctx))
             # The swarm: a team from the space, the marketplace and new
@@ -251,6 +247,9 @@ class Runner:
         timeline = await timelinelib.timeline_tools(ctx) if ctx.timeline else []
         # Every agent reads its project's timeline, whatever tools it is allowed.
         tools += timeline
+        # Many app functions: the agent loads the apps it needs (apps.py).
+        load, app_tools = applib.deferral(tools)
+        tools += load
         for t in tools:
             # Docstring indentation is sent to the model on every call: drop it.
             if isinstance(getattr(t, "description", None), str):
@@ -287,12 +286,11 @@ class Runner:
             # Loaded once per turn: the system prompt stays the same on every call.
             memory.append(memlib.OpenVikingMemory(await ctx.memory.notes(self._legacy_notes(ctx, backend))))
         turn_guard = guardlib.TurnGuard(guardlib.max_calls(agent.max_turns))
-        middleware = [*economy.middleware(model, backend, skills=skills), *memory,
+        middleware = [*app_tools, *economy.middleware(model, backend, skills=skills), *memory,
                       WorkLogMiddleware(WorkLog(ctx)), turn_guard]
         if ctx.decision is not None:
-            # Outermost: it sees every tool, and its checks pass the turn guard.
             middleware.insert(0, DecisionMiddleware(
-                ctx.decision, guard=turn_guard, lead=agent.lead,
+                ctx.decision, lead=agent.lead,
                 agents=[m for m in members if m.kind == "agent" and m.runtime],
                 interrupt_on=set(interrupt_on), auto_approve=bool(decision and decision.auto_approve),
                 worklog=WorkLog(ctx)))
@@ -472,7 +470,9 @@ class Runner:
         before = 0
         try:
             graph, turn_guard = await self._build(ctx)
-            config = self._config(ctx, graph, turn_guard.budget)
+            # The turn is bounded by its model calls (TurnGuard); the graph's
+            # own recursion limit (the deep agents default) is only a backstop.
+            config = {"configurable": {"thread_id": ctx.thread_id}}
             before = len((await graph.aget_state(config)).values.get("messages") or [])
             await graph.ainvoke(payload, config)
             state = await graph.aget_state(config)

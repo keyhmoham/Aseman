@@ -74,8 +74,20 @@ class Platform:
         self._clock = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
     def gateway(self, base: str, token: str) -> Gateway:
-        transport = httpx.MockTransport(self.handle)
-        return Gateway(base, token, transport=transport, sync_transport=transport)
+        return Gateway(base, token, transport=httpx.MockTransport(self.ahandle),
+                       sync_transport=httpx.MockTransport(self.handle))
+
+    async def ahandle(self, request: httpx.Request) -> httpx.Response:
+        """The gateway as a turn's async client sees it: a hand-off that waits
+        (``message_send`` with ``wait``) returns once the mentioned agents answered."""
+        if request.url.path.endswith("/call"):
+            req = json.loads(request.content)
+            body = req.get("body") or {}
+            caller = self.tokens.get(request.headers.get("Authorization", "").removeprefix("Bearer "), "")
+            if caller and req.get("action") == "message_send" and body.get("wait"):
+                self.calls.append(("spaces.message_send", body))
+                return httpx.Response(200, json=await self.send_and_wait(caller, body))
+        return self.handle(request)
 
     def now(self) -> str:
         self._clock += timedelta(seconds=1)
@@ -234,6 +246,30 @@ class Platform:
 
                 asyncio.get_running_loop().call_later(delay, done)
         return {"message_id": mid, "ok": True}
+
+    async def send_and_wait(self, caller: str, body: dict[str, Any]) -> dict[str, Any]:
+        import asyncio
+
+        mid = self.post(caller, body["body"], reply_to=body.get("reply_to", ""), mentions=body.get("mentions"))
+
+        async def run(account: str) -> dict[str, Any] | None:
+            bot = next((b for b in self.bots if b["account_id"] == account), {"id": account, "name": account})
+            if account in self.responders:
+                text = self.responders[account](body["body"])
+            elif account in self.workers:
+                delay, fn = self.workers[account]
+                self.working += 1
+                self.most_working = max(self.most_working, self.working)
+                await asyncio.sleep(delay)
+                self.working -= 1
+                text = fn(body["body"])
+            else:
+                return None
+            reply_id = self.post(account, text, reply_to=mid)
+            return {"bot_id": bot["id"], "bot_handle": bot["name"], "message_id": reply_id, "reply": text}
+
+        replies = await asyncio.gather(*(run(a) for a in body.get("mentions") or []))
+        return {"message_id": mid, "ok": True, "replies": [r for r in replies if r]}
 
     def do_spaces_message_list(self, caller: str, body: dict[str, Any]) -> dict[str, Any]:
         msgs = [m for m in self.messages if not body.get("reply_to") or m["reply_to"] == body["reply_to"]]

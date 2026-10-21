@@ -464,10 +464,12 @@ Every deep agents feature is on, mapped onto the platform:
 - **filesystem and shell** — `ls`, `read_file`, `write_file`, `edit_file`,
   `glob`, `grep` and `execute` run on the space's shared sandbox, so the lead
   and every specialist work on the same machine and files (`/workspace`);
-- **subagents** — the `task` tool hands a task to an agent of the space over
-  room messaging and returns its answer; `general-purpose` is the space's
-  generalist, recruited on first use. `start_task` / `check_tasks` /
-  `wait_tasks` run several agents in parallel in the background;
+- **subagents** — the `task` tool hands a task to an agent of the space and
+  returns its answer: the task is a room message mentioning the agent
+  (`spaces.message_send` with `wait`), and the node runs the agent's turn on
+  it before the call returns, so the answer is in the room as the reply and
+  comes back with no polling. Several `task` calls in one step run at the same
+  time; `general-purpose` is the space's generalist, recruited on first use;
 - **the swarm** — the lead's `assemble_team` staffs every role a goal needs
   with the best fit: an agent already in the space, else one **published in the
   marketplace** (hired into the space), else a **new specialist written for the
@@ -514,8 +516,13 @@ Configuration of the runtime (all optional, passed on by the node):
 `TRADERA_IMPROVE_EVERY` (turns between cycles, 10), `TRADERA_IMPROVE_COOLDOWN`
 (seconds between cycles of one agent in one space, 3 h),
 `TRADERA_IMPROVE_LOOP_COOLDOWN` (the same after a turn where the agent looped:
-repeated calls or read instructions it already had, 15 min) and
-`TRADERA_IMPROVE_BUDGET` (steps a cycle replays, 60). A turn's history is
+repeated calls or read instructions it already had, 15 min),
+`TRADERA_IMPROVE_BUDGET` (steps a cycle replays, 60) and
+`TRADERA_IMPROVE_MAX_AGE_DAYS` (how long an adopted playbook is used, 30; 0
+for always). Playbooks and turns learned before 2026-10-21, while the runtime
+refused calls and hid tools, are not used, and `POST /v1/playbooks/reset`
+(`{"space", "agent"}`, either empty for all; the runtime secret) forgets what
+agents learned. A turn's history is
 summarized at 60% of the model's window and old tool output trimmed at half
 that; `TRADERA_SUMMARIZE_MAX_TOKENS` caps the summarization size to bound what
 a call costs. Instructions an agent read (an app's instructions or help, a
@@ -545,22 +552,22 @@ questions (yes/no, choice, score) with probabilities instead of text. On, the
 runtime's `decision` module (`deepagents/runtime/tradera_agents/decision`)
 uses it together with each agent's own model:
 
-- **tool selection** — once per turn, the apps, bots and platform tools the
-  request needs are shortlisted, so every model call carries fewer tool schemas
-  (a connected app is chosen whole, never function by function; the sandbox,
-  file, planning, messaging and delegation tools are never hidden; a hidden tool
-  the agent uses or the conversation names is shown from then on, with its app;
-  every tool still runs when called, and the list only grows through the turn);
-- **routing** — the agent that fits a task best (a lead's hint; a hand-off
-  addressed by role);
-- **progress** and **completion** checks — a long run that goes nowhere is told
-  to change approach, and a final answer that does not deliver the request
-  sends the agent back once;
+- **routing** — the agent that fits a task best (a lead's hint; a swarm
+  task addressed by role);
+- **completion** — after a turn, how well its answer delivered the request,
+  for the agent's learning (never during the turn);
 - **approvals** (opt-in: *auto-approve*) — low-risk calls of `interrupt_on`
   tools run without waiting on a person; each is written to the work log.
 
+It never changes which tools an agent sees and never sends an agent back to
+work: the agent's own model chooses its tools and decides when it is done.
 Off — or whenever the decision model is unusable or a decision fails — the
-agent's own model decides everything, as before. Decisions go through the
+agent's own model decides everything, as before.
+
+An agent with more than 24 connected-app functions gets them on demand, as
+Claude Code defers MCP tools: `load_app_tools` lists every app with its
+functions, and an app the agent loads (or any function it calls) is offered
+whole from its next step (`deepagents/runtime/tradera_agents/apps.py`). Decisions go through the
 gateway (`/deepagents/v1/decision/evaluate`, the provider's `/evaluate`
 endpoint, key kept on the node) and are billed to the turn at the decision
 model's own token prices. Models carry `capabilities` (`chat`, `decision`):

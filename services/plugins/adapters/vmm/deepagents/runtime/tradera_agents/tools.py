@@ -4,8 +4,8 @@ Nothing here talks to anything but the node's action API:
 
 * conversation — room messages (``spaces.message_send`` / ``message_list``)
   and direct messages (``users.dm_send`` / ``dm_list``);
-* delegation — handing tasks to the space's agents is a room message that
-  mentions them, and their answer is the message they post in reply;
+* delegation — the ``task`` tool (subagents.py) and the swarm hand tasks to
+  the space's agents as room messages that mention them;
 * tools — the space's apps and the platform's own tools (files, images,
   previews, routines) are all ``spaces.ask``;
 * the swarm — ``spaces.agent_recruit`` adds a specialist to the space.
@@ -17,7 +17,6 @@ which pauses the agent's thread until a person answers in the room.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 from typing import Any
@@ -65,15 +64,12 @@ PLATFORM_TOOLS = {
 # Tools every agent keeps whatever its allowed_tools say: without them it can
 # neither talk nor report.
 CORE_TOOLS = {"send_message", "read_room", "list_team", "ask_user", "send_direct_message", "read_direct_messages",
-              "start_task", "check_tasks", "wait_tasks", "frontend_show", "web_show", "desk_state", "desk_arrange",
-              "desk_close"}
+              "frontend_show", "web_show", "desk_state", "desk_arrange", "desk_close"}
 
 _SLUG = re.compile(r"[^a-z0-9_]+")
 # A tool's own description sent to the model, at most (characters). Apps put how
 # to use a function in its description: cut short, the agent goes looking for it.
 DESCRIPTION_MAX = 8_000
-# How long check_tasks waits for a first answer before reporting all still running.
-CHECK_WAIT = 20.0
 
 
 def _err(exc: Exception) -> str:
@@ -109,8 +105,8 @@ def communication_tools(ctx: TurnContext) -> list[BaseTool]:
         agents. It is NOT how you answer the message you are working on: your
         final answer is posted in the room as the reply to it, once.
         mention: names or ids of people/agents to address. Mentioning an agent
-        starts its turn on the message (use start_task when you need to track
-        its answer). reply_to: the id of another message this one answers.
+        starts its turn on the message (hand it work with the task tool when you
+        need its answer). reply_to: the id of another message this one answers.
         """
         if reply_to and reply_to == ctx.turn.message_id:
             # One channel for the answer: the turn's final answer is stored as
@@ -200,75 +196,6 @@ def communication_tools(ctx: TurnContext) -> list[BaseTool]:
     return tools
 
 
-def delegation_tools(ctx: TurnContext) -> list[BaseTool]:
-    """Background delegation: hand tasks to agents and collect their answers
-    later, while doing other work. The synchronous form is the task tool."""
-
-    async def resolve(agent: str, task: str = "") -> teamlib.Member | None:
-        members = await teamlib.team(ctx)
-        m = teamlib.find(members, agent)
-        if m and m.kind == "agent":
-            return m
-        if ctx.decision is not None:
-            # Not one of the space's agents by name (a role, a misspelling):
-            # the decision model picks the agent that fits, when it is sure.
-            from .decision import routing
-
-            agents = [x for x in members if x.kind == "agent" and x.runtime]
-            return await routing.best_agent(ctx.decision, f"Addressed to: {agent}\n{task}", agents)
-        return None
-
-    @tool
-    async def start_task(agent: str, task: str) -> str:
-        """Hand a task to an agent of the space without waiting for it.
-
-        The task is posted in the room addressed to the agent, which starts
-        working on it in parallel with you. Returns a task id for check_tasks /
-        wait_tasks. Write the task self-contained: goal, inputs (files under
-        /workspace), the expected result and where to put it.
-        """
-        member = await resolve(agent, task)
-        if member is None:
-            return f"error: no agent named {agent!r} in this space (see list_team, or recruit one)"
-        try:
-            return f"started task {await teamlib.assign(ctx, member, task)} with {member.name}"
-        except GatewayError as exc:
-            return _err(exc)
-
-    @tool
-    async def check_tasks(task_ids: list[str]) -> str:
-        """Check tasks started with start_task: each one's answer, or that it is still running.
-
-        When none has answered yet it waits briefly for the first answer. Do
-        not call it in a loop: keep working, or use wait_tasks once.
-        """
-        deadline = asyncio.get_running_loop().time() + CHECK_WAIT
-        while True:
-            lines, done = [], False
-            for tid in task_ids:
-                try:
-                    m = await teamlib.answer(ctx, tid)
-                except GatewayError as exc:
-                    lines.append(f"{tid}: {_err(exc)}")
-                    done = True
-                    continue
-                done = done or m is not None
-                lines.append(f"{tid}: running" if m is None else f"{tid}: done\n{_clip(str(m.get('body', '')), 6000)}")
-            if done or not task_ids or asyncio.get_running_loop().time() >= deadline:
-                break
-            await asyncio.sleep(teamlib.POLL_EVERY)
-        return "\n\n".join(lines) or "no task ids given"
-
-    @tool
-    async def wait_tasks(task_ids: list[str], timeout_seconds: int = 900) -> str:
-        """Wait until tasks started with start_task are answered (or the timeout passes) and return the answers."""
-        timeout = float(max(10, min(timeout_seconds, int(teamlib.TASK_TIMEOUT))))
-        answers = await asyncio.gather(*(teamlib.wait(ctx, tid, timeout) for tid in task_ids), return_exceptions=True)
-        return "\n\n".join(f"{tid}:\n{_clip(str(a), 6000)}" for tid, a in zip(task_ids, answers)) or "no task ids given"
-
-    return [start_task, check_tasks, wait_tasks]
-
-
 def recruit_tool(ctx: TurnContext) -> BaseTool:
     @tool
     async def recruit_agent(name: str, description: str, instructions: str,
@@ -280,7 +207,7 @@ def recruit_tool(ctx: TurnContext) -> BaseTool:
         of working and standards. skills: optional [{name, description,
         instructions}] professional skills it loads when relevant.
         The new agent works in the same sandbox and room; give it work with
-        start_task (or the task tool from your next turn).
+        run_swarm (or the task tool from your next turn).
         """
         try:
             out = await ctx.gateway.call("spaces", "agent_recruit", {
@@ -290,7 +217,8 @@ def recruit_tool(ctx: TurnContext) -> BaseTool:
         except GatewayError as exc:
             return _err(exc)
         return (f"recruited {out.get('name')} (account {out.get('account_id')}, bot {out.get('bot_id')}). "
-                f"Hand it work with start_task(agent={out.get('name')!r}, ...).")
+                f"Hand it work with run_swarm(goal=..., tasks=[{{'id': 't1', 'agent': {out.get('name')!r}, "
+                "'task': ...}]).")
 
     return recruit_agent
 
@@ -351,13 +279,9 @@ def _app_result(reply: str) -> str:
 
 
 def _readable(text: str) -> str:
-    """An app's JSON answer as lines the agent can page through.
-
-    Apps often answer with JSON whose strings hold whole documents
-    (``{"skill": "# Spec\\n..."}``): one line, so a large answer that goes to a
-    file cannot be read back past its first line, and the agent asks again.
-    A result often carries that document beside metadata (``step``, ``success``):
-    keep only the string fields that read as a document, not the metadata.
+    """An app's JSON answer whose strings hold whole documents
+    (``{"skill": "# Spec\\n..."}``) as those documents. A large result that
+    goes to a file is made pageable there (economy.reflow).
     """
     stripped = text.strip()
     if not stripped.startswith(("{", "[", '"')):
@@ -368,20 +292,11 @@ def _readable(text: str) -> str:
         return text
     if isinstance(data, str):
         return data
-    if isinstance(data, dict) and data:
-        if all(isinstance(v, str) for v in data.values()):
-            if any("\n" in v for v in data.values()):
-                if len(data) == 1:
-                    return next(iter(data.values()))
-                return "\n\n".join(f"{k}:\n{v}" if "\n" in v else f"{k}: {v}" for k, v in data.items())
-        else:
-            docs = {k: v for k, v in data.items() if isinstance(v, str) and "\n" in v}
-            if len(docs) == 1:
-                return next(iter(docs.values()))
-            if docs:
-                return "\n\n".join(f"{k}:\n{v}" for k, v in docs.items())
-    if "\n" not in stripped and len(stripped) > 1000:
-        return json.dumps(data, ensure_ascii=False, indent=1)
+    if isinstance(data, dict) and data and all(isinstance(v, str) for v in data.values()) and \
+            any("\n" in v for v in data.values()):
+        if len(data) == 1:
+            return next(iter(data.values()))
+        return "\n\n".join(f"{k}:\n{v}" if "\n" in v else f"{k}: {v}" for k, v in data.items())
     return text
 
 

@@ -7,7 +7,7 @@ with what came of it:
 * ``repeat`` — the same call, with the same arguments, a third time, or
   instructions the agent had already read, read again;
 * ``incomplete`` — a final answer that did not deliver what was asked (the
-  decision model's completion check, during the turn or after it);
+  decision model's completion check, after the turn);
 * ``good`` — a step of a turn that went well, kept so that a new playbook is
   also checked against what already works.
 
@@ -18,7 +18,6 @@ so the moment can be replayed (replay.py) without running anything.
 
 from __future__ import annotations
 
-import json
 import re
 import time
 from collections import Counter
@@ -26,7 +25,8 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage, convert_to_openai_messages
 
-from ..guard import NOTE, reference
+from ..economy import reference
+from ..guard import signature
 
 #: How much of each message a decision point keeps (characters).
 HUMAN_CHARS = 3_000
@@ -45,22 +45,10 @@ INCOMPLETE_BELOW = 0.25
 _EXIT = re.compile(r"\bexit(?:ed with)?(?: code|_code)?[:= ]+([1-9]\d*)\b", re.I)
 
 
-def _text(content: Any) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return " ".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
-    return str(content)
-
-
-def _signature(call: dict[str, Any]) -> str:
-    return call.get("name", "") + json.dumps(call.get("args") or {}, sort_keys=True, default=str)
-
-
 def failed(result: ToolMessage | None) -> bool:
     if result is None:
         return False
-    text = _text(result.content).strip()
+    text = result.text.strip()
     return getattr(result, "status", "") == "error" or text.lower().startswith(("error", "traceback")) or \
         bool(_EXIT.search(text[:300]))
 
@@ -87,13 +75,13 @@ def condensed(messages: list[BaseMessage]) -> list[dict[str, Any]]:
     calls = {c.get("id") for m in messages if isinstance(m, AIMessage) for c in m.tool_calls or []}
     for m in messages:
         if isinstance(m, HumanMessage):
-            m = HumanMessage(content=_clip(_text(m.content), HUMAN_CHARS))
+            m = HumanMessage(content=_clip(m.text, HUMAN_CHARS))
         elif isinstance(m, ToolMessage):
             if m.tool_call_id not in calls:
                 continue
-            m = m.model_copy(update={"content": _clip(_text(m.content), RESULT_CHARS)})
+            m = m.model_copy(update={"content": _clip(m.text, RESULT_CHARS)})
         elif isinstance(m, AIMessage):
-            m = m.model_copy(update={"content": _clip(_text(m.content), TEXT_CHARS),
+            m = m.model_copy(update={"content": _clip(m.text, TEXT_CHARS),
                                      "tool_calls": [dict(c, args=_clip(c.get("args") or {}, ARG_CHARS))
                                                     for c in m.tool_calls or []]})
         out.extend(convert_to_openai_messages([m]))
@@ -118,29 +106,20 @@ def points(messages: list[BaseMessage], quality: float, complete: float | None) 
     problems: list[dict[str, Any]] = []
     good: list[dict[str, Any]] = []
     for i, m in enumerate(messages):
-        text = _text(m.content) if isinstance(m, HumanMessage) else ""
-        if text.startswith(NOTE) and "independent check" in text:
-            # The decision model's completion check sent the agent back: its answer before fell short.
-            j = max((k for k in range(i) if isinstance(messages[k], AIMessage) and not messages[k].tool_calls), default=-1)
-            if j >= 0:
-                problems.append({"kind": "incomplete", "at": j, "action": {"text": _text(messages[j].content)[:TEXT_CHARS]},
-                                 "feedback": "An independent check found this answer did not deliver the request: "
-                                             "it promised work that was not done, or left part of the request out."})
-            continue
         if not isinstance(m, AIMessage):
             continue
         for call in m.tool_calls or []:
             action = {"name": call.get("name", ""), "args": _clip(call.get("args") or {}, ARG_CHARS)}
             result = results.get(call.get("id", ""))
-            outcome = _text(result.content)[:600] if result is not None else ""
-            seen[_signature(call)] += 1
+            outcome = result.text[:600] if result is not None else ""
+            seen[signature(call)] += 1
             # Instructions read once stay in context: the same read a second time is a repeat already.
-            if reference(call) and seen[_signature(call)] == 2:
+            if reference(call) and seen[signature(call)] == 2:
                 problems.append({"kind": "repeat", "at": i, "action": action,
                                  "feedback": f"`{action['name']}` had already been read in this turn, and what it "
                                              f"returned was still in the agent's context; reading these instructions "
                                              f"again added nothing."})
-            elif seen[_signature(call)] == 3 and not reference(call):
+            elif seen[signature(call)] == 3 and not reference(call):
                 problems.append({"kind": "repeat", "at": i, "action": action,
                                  "feedback": f"This exact call (`{action['name']}` with the same arguments) had already "
                                              f"been made twice, with the same result; repeating it changed nothing. "
@@ -152,9 +131,8 @@ def points(messages: list[BaseMessage], quality: float, complete: float | None) 
                 good.append({"kind": "good", "at": i, "action": action,
                              "feedback": f"This step worked: {outcome[:300]}"})
     last = max((k for k, m in enumerate(messages) if isinstance(m, AIMessage) and not m.tool_calls), default=-1)
-    if complete is not None and complete < INCOMPLETE_BELOW and last >= 0 and \
-            not any(p["kind"] == "incomplete" and p["at"] == last for p in problems):
-        problems.append({"kind": "incomplete", "at": last, "action": {"text": _text(messages[last].content)[:TEXT_CHARS]},
+    if complete is not None and complete < INCOMPLETE_BELOW and last >= 0:
+        problems.append({"kind": "incomplete", "at": last, "action": {"text": messages[last].text[:TEXT_CHARS]},
                          "feedback": f"An independent check rates the chance that this answer delivers the request at "
                                      f"{complete:.2f}: it promised work that was not done, or left part of it out."})
     chosen = problems[:MAX_POINTS]

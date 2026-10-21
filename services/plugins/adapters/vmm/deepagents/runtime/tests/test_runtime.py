@@ -72,6 +72,9 @@ async def test_lead_plans_works_in_the_sandbox_and_logs(platform: Platform, tmp_
     assert any(t.startswith("Tool · execute\n") for t in texts)
     assert any(entry.get("status") == "running a command in the sandbox" for entry in platform.logs)
     assert any(entry.get("status") == "waiting for the model" for entry in platform.logs)
+    # One write per step: two per model call (waiting, then its answer) and one per tool call.
+    calls = sum(isinstance(m, ToolMessage) for m in model.seen[-1])
+    assert len(platform.logs) == 2 * len(model.seen) + calls
     # Memory is OpenViking's (see test_memory.py): nothing of it in the sandbox.
     assert not (WORKSPACE / ".tradera/agents/tradera/AGENTS.md").exists()
 
@@ -103,19 +106,14 @@ async def test_task_delegates_through_room_messages(platform: Platform, tmp_path
     assert "built it at /workspace/app" in tool_results(model)["task"]
 
 
-async def test_background_tasks_and_general_purpose_recruits(platform: Platform, tmp_path: Path) -> None:
-    def started(messages: list[Any]) -> AIMessage:
-        text = str(messages[-1].content)
-        tid = text.split("started task ")[1].split(" ")[0]
-        return call("wait_tasks", {"task_ids": [tid], "timeout_seconds": 10})
-
+async def test_tasks_in_one_step_run_together_and_general_purpose_recruits(platform: Platform, tmp_path: Path) -> None:
     platform.responders[CODER["account_id"]] = lambda body: "tests pass"
-    r, model = runner(platform, tmp_path, [
-        call("start_task", {"agent": "coder", "task": "run the tests"}),
-        started,
-        call("task", {"description": "research X", "subagent_type": "general-purpose"}, cid="gp"),
-        AIMessage(content="all good"),
+    both = AIMessage(content="", tool_calls=[
+        {"name": "task", "args": {"description": "run the tests", "subagent_type": "coder"}, "id": "t1", "type": "tool_call"},
+        {"name": "task", "args": {"description": "research X", "subagent_type": "general-purpose"}, "id": "gp",
+         "type": "tool_call"},
     ])
+    r, model = runner(platform, tmp_path, [both, AIMessage(content="all good")])
     # The generalist is recruited on first use; it answers like any agent.
     original = platform.do_spaces_agent_recruit
 
@@ -127,9 +125,8 @@ async def test_background_tasks_and_general_purpose_recruits(platform: Platform,
     platform.do_spaces_agent_recruit = recruit  # type: ignore[method-assign]
     out = await r.prompt(turn_request(LEAD, "check things", token="tok-lead", role="lead"))
     assert out.reply == "all good"
-    results = tool_results(model)
-    assert "tests pass" in results["wait_tasks"]
-    assert "X is fine" in results["task"]
+    results = [str(m.content) for m in model.seen[-1] if isinstance(m, ToolMessage) and m.name == "task"]
+    assert any("tests pass" in r for r in results) and any("X is fine" in r for r in results)
     assert any(b["name"].startswith("generalist") for b in platform.bots)
 
 
@@ -206,6 +203,8 @@ def test_server_contract(platform: Platform, tmp_path: Path) -> None:
         assert res.json()["answered"] is False
         res = client.post("/v1/turns", headers=headers, json=turn_request(CODER, "x", token="bad"))
         assert res.json()["status"] == "failed"
+        assert client.post("/v1/playbooks/reset", json={}).status_code == 401
+        assert client.post("/v1/playbooks/reset", headers=headers, json={}).json() == {"reset": 0}  # no learning
 
 
 def modified_request(message: str, *, no_sandbox: bool = False, no_memory: bool = False, scope: str = "request-1") -> dict[str, Any]:
@@ -475,10 +474,8 @@ def test_an_apps_json_answer_becomes_lines() -> None:
 
     assert _app_result(reply(json.dumps({"skill": "# Spec\nline 2"}))) == "# Spec\nline 2"
     assert _app_result(reply(json.dumps({"a": "x\ny", "b": "z"}))) == "a:\nx\ny\n\nb: z"
-    # A document beside metadata (step, success, message): only the document is kept.
-    assert _app_result(reply(json.dumps({"skill": "# Spec\nline 2", "step": "dsl", "success": True,
-                                         "message": ""}))) == "# Spec\nline 2"
+    # Other JSON stays as it is: a large result is made pageable when it goes to a file (economy.reflow).
     long = json.dumps({"items": [{"id": i} for i in range(200)]})
-    assert "\n" in _app_result(reply(long))
+    assert _app_result(reply(long)) == long
     assert _app_result(reply('{"id": 1}')) == '{"id": 1}'
     assert _app_result(reply("plain words")) == "plain words"

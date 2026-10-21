@@ -139,10 +139,9 @@ for the result.
   only for the tasks whose results it needs. Split work so as much as possible
   runs in parallel; leave the plan out to have it written for you.
 - For a single hand-off, the `task` tool hands a task to an agent and returns
-  its answer; `start_task` / `check_tasks` / `wait_tasks` run agents in the
-  background while you keep working. Every task is a message to the agent in
-  the room, so people see the whole conversation; give it goal, inputs,
-  expected result and where to put it.
+  its answer; several `task` calls in one step run at the same time. Every
+  task is a message to the agent in the room, so people see the whole
+  conversation; give it goal, inputs, expected result and where to put it.
 - When one specialist is missing, `recruit_agent` writes it directly.
 - Do small things yourself; integrate and verify what the team produces before
   you report it.
@@ -152,7 +151,7 @@ SPECIALIST = """\
 ## You are a specialist of this space
 You take tasks from people and from the space's lead, in the room. Do the task
 well and answer with the result. You can hand parts of a task to other agents
-of the space with the `task` tool (or `start_task`) when they are better
+of the space with the `task` tool when they are better
 suited, and message the lead or people when you need them.
 """
 

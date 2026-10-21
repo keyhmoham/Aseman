@@ -14,7 +14,6 @@ import pytest
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from tradera_agents import team as teamlib
 from tradera_agents.agent import Runner
 from tradera_agents.decision import DecisionClient
 from tradera_agents.store import Store
@@ -34,11 +33,6 @@ def platform(tmp_path: Path) -> Platform:
         listing(3, "Illustrator", "Draws illustrations and visuals for books.", ["Book covers"]),
     ]
     return p
-
-
-@pytest.fixture(autouse=True)
-def fast_polling(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(teamlib, "POLL_EVERY", 0.02)
 
 
 def context(platform: Platform, tmp_path: Path, script: list[Any], *, decision: bool = True) -> tuple[Any, Store]:

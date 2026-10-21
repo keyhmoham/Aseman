@@ -27,6 +27,10 @@ class ToolsApi {
   /// A generated frontend may be produced by a model on first use.
   static const generationTimeout = Duration(minutes: 4);
 
+  /// A tool installed on the space's computer may have to wait for the
+  /// computer to wake and the tool to start before it answers.
+  static const backendTimeout = Duration(minutes: 4);
+
   Map<String, dynamic> _map(dynamic body) =>
       body is Map ? body.cast<String, dynamic>() : <String, dynamic>{};
 
@@ -56,7 +60,8 @@ class ToolsApi {
   Future<List<Microtool>> microtools(String botId,
       {String spaceId = ''}) async {
     final body = _map(await _call('tools', 'tool_microtools',
-        {'bot': botId, if (spaceId.isNotEmpty) 'space': spaceId}));
+        {'bot': botId, if (spaceId.isNotEmpty) 'space': spaceId},
+        timeout: backendTimeout));
     return [
       for (final c in (body['commands'] as List?) ?? const <dynamic>[])
         if (c is Map) Microtool.fromJson(c.cast<String, dynamic>()),
@@ -75,7 +80,7 @@ class ToolsApi {
       if (roomId.isNotEmpty) 'room': roomId,
       'function': microtool,
       'payload': args,
-    }));
+    }, timeout: backendTimeout));
     return microtoolValue(body['result']);
   }
 
@@ -123,7 +128,7 @@ class ToolsApi {
             'method': method,
             'params': params,
           },
-          timeout: const Duration(minutes: 2)));
+          timeout: backendTimeout));
 
   /// Runs an action of a generated frontend; returns the updated data model.
   Future<Map<String, dynamic>> frontendAction(String botId, String action,
@@ -142,7 +147,7 @@ class ToolsApi {
       'data': data,
       if (template != null) 'template': template,
       ...?shown?.toJson(),
-    }));
+    }, timeout: backendTimeout));
     return (body['data'] as Map?)?.cast<String, dynamic>() ?? const {};
   }
 }

@@ -54,7 +54,21 @@ class _Service extends FakeTraderaService {
     if (call == 'spaces.proxy_list') {
       return {
         'proxies': [
-          {'id': 'p1', 'port': 3000, 'url': 'https://p1.example/'},
+          {'id': 'p1', 'port': 3000, 'url': '/v1/proxy/p1/', 'kind': 'preview'},
+          // The Computer tab's desktop and an installed app are not previews.
+          {
+            'id': 'p2',
+            'port': 6080,
+            'title': 'Desktop',
+            'url': '/v1/proxy/p2/',
+            'kind': 'desktop',
+          },
+          {
+            'id': 'p3',
+            'port': 23001,
+            'title': 'Tool · Weather',
+            'url': '/v1/proxy/p3/',
+          },
         ],
       };
     }
@@ -206,12 +220,17 @@ void main() {
       ),
     );
     expect(find.text('# Team notes'), findsOneWidget);
+    expect(find.text('Saved'), findsWidgets);
     await tester.enterText(find.byType(TextField), '# Decided');
+    await tester.pump();
+    expect(find.text('Unsaved changes'), findsOneWidget);
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(service.written['AGENTS.md'], '# Decided');
 
-    await tester.tap(find.text('Shared'));
+    expect(find.text('Saved'), findsWidgets);
+    // Each agent's own notes are a chip away.
+    await tester.ensureVisible(find.text('SignalBot').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('SignalBot').last);
     await tester.pumpAndSettle();
@@ -219,17 +238,23 @@ void main() {
     expect(find.text('# Own notes'), findsOneWidget);
   });
 
-  testWidgets('the previews tab lists published ports', (tester) async {
+  testWidgets('the previews tab shows each published page as a window', (
+    tester,
+  ) async {
     await pumpTab(
       tester,
       SpacePreviewsTab(
-        dependencies: AppDependencies.withService(_Service()),
+        dependencies: AppDependencies.withService(_Service()..state = 'asleep'),
         spaceId: FakeTraderaService.atlasId,
       ),
     );
-    expect(find.text('Publish port'), findsOneWidget);
-    expect(find.text('Port 3000'), findsOneWidget);
-    expect(find.text('https://p1.example/'), findsOneWidget);
+    expect(find.text('Publish a port'), findsOneWidget);
+    expect(find.text('Port 3000'), findsWidgets);
+    expect(find.text('Asleep · wakes when opened'), findsOneWidget);
+    expect(find.text('Desktop'), findsNothing);
+    expect(find.text('Tool · Weather'), findsNothing);
+    expect(find.text('Open'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('the space\'s left panel holds its facilities and app sign-ins', (
@@ -267,7 +292,7 @@ void main() {
     expect(find.text('# Team notes'), findsOneWidget);
     await tester.tap(find.byTooltip('Previews'));
     await tester.pumpAndSettle();
-    expect(find.text('Port 3000'), findsOneWidget);
+    expect(find.text('Port 3000'), findsWidgets);
     await tester.pumpWidget(const SizedBox());
   });
 }

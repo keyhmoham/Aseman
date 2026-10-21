@@ -257,6 +257,9 @@ func (s *Service) SandboxStart(ctx context.Context, spaceID identity.ID) (*bot.B
 	}
 	wasRunning := rec.Status == bot.StatusRunning
 	if !wasRunning {
+		// Whatever woke it (a person, a preview, an app's call, an agent),
+		// everyone watching the computer sees it waking.
+		defer s.computerBusy(spaceID, "waking")()
 		rec = s.applyMachineSize(ctx, rec)
 	}
 	staleID := rec.ID

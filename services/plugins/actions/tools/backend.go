@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"strings"
+	"time"
 
 	"github.com/tradera/tradera/internal/plugins/bridge"
 	"github.com/tradera/tradera/internal/plugins/identity"
@@ -37,7 +38,15 @@ type endpoint struct {
 	URL     string
 	Headers map[string]string
 	Client  *mcp.Client
+	// Starting is how long the backend may take to start answering: one
+	// in the space's computer may have just been woken (or started) for
+	// this call, and the call waits for it rather than failing.
+	Starting time.Duration
 }
+
+// installedStart is how long a backend installed in a space's computer is
+// given to answer after the computer wakes or the backend starts.
+const installedStart = 90 * time.Second
 
 // mcpPath is where a backend serves MCP: the runtime image's fixed path, or
 // what a docker image declared.
@@ -90,7 +99,7 @@ func (s *Service) endpointFor(ctx context.Context, tool *models.Tool, rec *bot.B
 		if target.Token != "" {
 			headers["Authorization"] = "Bearer " + target.Token
 		}
-		return &endpoint{URL: strings.TrimRight(target.TargetURL, "/") + mcpPath(tool), Headers: headers, Client: s.Internal}, nil
+		return &endpoint{URL: strings.TrimRight(target.TargetURL, "/") + mcpPath(tool), Headers: headers, Client: s.Internal, Starting: installedStart}, nil
 	}
 	return nil, errs.InvalidArgument("unknown tool backend mode " + tool.Mode)
 }
@@ -98,11 +107,23 @@ func (s *Service) endpointFor(ctx context.Context, tool *models.Tool, rec *bot.B
 // rpc runs one MCP method on a tool's backend.
 func (s *Service) rpc(ctx context.Context, ep *endpoint, method string, params any) (map[string]any, error) {
 	headers, err := ep.Client.Session(ctx, ep.URL, ep.Headers)
+	// A backend still starting (its computer just woke) is waited for.
+	for wait, deadline := time.Second, time.Now().Add(ep.Starting); err != nil && !refused(err) && time.Now().Add(wait).Before(deadline); wait = min(2*wait, 5*time.Second) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(wait):
+		}
+		headers, err = ep.Client.Session(ctx, ep.URL, ep.Headers)
+	}
 	if err != nil {
 		return nil, errs.New(errs.CodeUnavailable, "the tool's backend is not answering: "+err.Error())
 	}
 	return ep.Client.RPC(ctx, ep.URL, headers, method, params)
 }
+
+// refused is a backend that answered and said no: no reason to wait for it.
+func refused(err error) bool { return strings.Contains(err.Error(), "initialization was refused") }
 
 // InvokeTool runs one microtool of a tool for the caller of the current
 // execution: body is {"function", "payload"}; the reply is the MCP result.

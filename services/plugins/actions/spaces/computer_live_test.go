@@ -7,6 +7,7 @@ import (
 
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/plugins/actions/bots/models/bot"
+	"github.com/tradera/tradera/plugins/actions/spaces/models/proxy"
 )
 
 func TestComputerStateNamesWhatPeopleSee(t *testing.T) {
@@ -90,5 +91,22 @@ func TestDesktopViewerPage(t *testing.T) {
 	}
 	if !strings.Contains(string(desktopScript), `echo "DESKTOP_VIEWER:$VIEWER_PAGE"`) {
 		t.Fatal("the desktop program does not name its viewer")
+	}
+}
+
+func TestProxyKinds(t *testing.T) {
+	cases := map[string]proxy.Proxy{
+		"desktop": {Port: desktopPort, Title: desktopTitle},
+		"tool":    {Port: 23001, Title: toolPrefix + "Weather"},
+		"preview": {Port: 3000, Title: "Last Stand"},
+	}
+	for want, p := range cases {
+		if got := proxyKind(&p); got != want {
+			t.Errorf("%+v: %s, want %s", p, got, want)
+		}
+	}
+	// A site someone serves on 6080 under another name is still a preview.
+	if got := proxyKind(&proxy.Proxy{Port: desktopPort, Title: "My app"}); got != "preview" {
+		t.Errorf("6080 app = %s", got)
 	}
 }

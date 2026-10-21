@@ -28,6 +28,27 @@ type WorkspaceWriter interface {
 	DeleteWorkspace(ctx context.Context, id, path string) error
 }
 
+// ErrUnsupported tells the caller this provider cannot change a stopped
+// machine's files this way; start the machine and change them through it.
+var ErrUnsupported = errors.New("the provider cannot do this while the machine is stopped")
+
+// ErrExists tells the caller the destination of a move is already there.
+var ErrExists = errors.New("the destination already exists")
+
+// WorkspaceOrganizer makes folders and moves (renames) files and folders of
+// a machine's persistent files without starting a stopped machine.
+type WorkspaceOrganizer interface {
+	MakeWorkspaceDir(ctx context.Context, id, path string) error
+	// MoveWorkspace moves from to to; to must not exist (ErrExists).
+	MoveWorkspace(ctx context.Context, id, from, to string) error
+}
+
+// NeedsMachine reports whether err means the change has to be made through
+// the running machine instead (too large, or not possible while stopped).
+func NeedsMachine(err error) bool {
+	return errors.Is(err, ErrTooLarge) || errors.Is(err, ErrUnsupported)
+}
+
 // ProviderCost is what a VM provider billed for one day.
 type ProviderCost struct {
 	Day        time.Time          `json:"day"`

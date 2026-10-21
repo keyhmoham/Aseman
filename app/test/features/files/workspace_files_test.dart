@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -118,6 +119,8 @@ class _DeskClient extends TraderaApiClient {
 class _Service extends FakeTraderaService {
   _Service({super.client});
   final reads = <String>[];
+  final changes = <String>[];
+  bool needsComputer = false;
   final files = <String, Uint8List>{
     'README.md': utf8.encode(
       '# Atlas\n\nThe **desk** of the fund.\n\n- one\n- two',
@@ -148,6 +151,39 @@ class _Service extends FakeTraderaService {
       );
     }
     final path = '${body['path']}';
+    final op = '${body['operation']}';
+    if (const {'write', 'mkdir', 'move', 'delete'}.contains(op)) {
+      changes.add(
+        '$op $path${body['to'] == null ? '' : ' ${body['to']}'}'
+        '${body['wake'] == true ? ' (wake)' : ''}',
+      );
+      // A provider that cannot make this change while the computer sleeps.
+      if (needsComputer && body['wake'] != true) {
+        return {
+          'ok': false,
+          'asleep': true,
+          'needs_wake': true,
+          'error': 'This change needs the computer awake.',
+        };
+      }
+      switch (op) {
+        case 'write':
+          files[path] = base64Decode('${body['data_base64']}');
+        case 'mkdir':
+          files['$path/.keep'] = Uint8List(0);
+        case 'move':
+          for (final k in files.keys.toList()) {
+            if (k == path || k.startsWith('$path/')) {
+              files['${body['to']}${k.substring(path.length)}'] = files.remove(
+                k,
+              )!;
+            }
+          }
+        case 'delete':
+          files.removeWhere((k, _) => k == path || k.startsWith('$path/'));
+      }
+      return {'ok': true};
+    }
     if (body['operation'] == 'list') {
       final prefix = path.isEmpty ? '' : '$path/';
       final names = <String, bool>{};
@@ -389,6 +425,129 @@ void main() {
     await tester.tap(find.byTooltip('Collapse folders'));
     await tester.pumpAndSettle();
     expect(find.text('main.dart'), findsNothing);
+  });
+
+  testWidgets('files and folders are made, renamed and deleted in the tree', (
+    tester,
+  ) async {
+    final service = _Service();
+    final opened = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 260,
+            child: WorkspaceFileTree(
+              service: service,
+              spaceId: 's1',
+              onOpen: (e) => opened.add(e.path),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // A new folder, from the tree's New menu; its placeholder is not shown.
+    await tester.tap(find.byTooltip('New'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('New folder'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'notes');
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle();
+    expect(service.changes, ['mkdir notes']);
+    expect(find.text('notes'), findsOneWidget);
+    expect(find.text('.keep'), findsNothing);
+
+    // A new file in it, from the folder's own menu (a right click); it opens.
+    await tester.tap(find.text('notes'), buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('New file'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'todo.md');
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle();
+    expect(service.changes.last, 'write notes/todo.md');
+    expect(opened, ['/workspace/notes/todo.md']);
+    expect(find.text('todo.md'), findsOneWidget);
+
+    // Renamed (a long press opens the menu on a touch screen) …
+    await tester.longPress(find.text('todo.md'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'plan.md');
+    await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
+    await tester.pumpAndSettle();
+    expect(service.changes.last, 'move notes/todo.md notes/plan.md');
+    expect(find.text('plan.md'), findsOneWidget);
+
+    // … and deleted, once confirmed. The computer was never woken.
+    await tester.longPress(find.text('plan.md'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(service.changes.last, 'delete notes/plan.md');
+    expect(find.text('plan.md'), findsNothing);
+    expect(service.changes.where((c) => c.contains('(wake)')), isEmpty);
+  });
+
+  testWidgets('a text file is edited and saved in the viewer', (tester) async {
+    final service = _Service();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: WorkspaceFileViewer(
+            service: service,
+            spaceId: 's1',
+            path: '/workspace/src/main.dart',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Edit'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'void main() {}\n');
+    await tester.pump();
+    expect(find.text('Unsaved'), findsOneWidget);
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(service.changes, ['write src/main.dart']);
+    expect(utf8.decode(service.files['src/main.dart']!), 'void main() {}\n');
+    expect(find.text('Saved'), findsOneWidget);
+  });
+
+  testWidgets('a change only the computer can make asks before waking it', (
+    tester,
+  ) async {
+    final service = _Service()..needsComputer = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: WorkspaceFileViewer(
+            service: service,
+            spaceId: 's1',
+            path: '/workspace/README.md',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Edit'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '# New');
+    await tester.pump();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Wake the computer?'), findsOneWidget);
+    await tester.tap(find.text('Wake and continue'));
+    await tester.pumpAndSettle();
+    expect(service.changes, ['write README.md', 'write README.md (wake)']);
+    expect(utf8.decode(service.files['README.md']!), '# New');
   });
 
   test('a file opens as a file window on the desk', () async {

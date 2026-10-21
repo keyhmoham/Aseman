@@ -479,3 +479,44 @@ def test_an_apps_json_answer_becomes_lines() -> None:
     assert _app_result(reply(long)) == long
     assert _app_result(reply('{"id": 1}')) == '{"id": 1}'
     assert _app_result(reply("plain words")) == "plain words"
+
+
+async def test_files_are_read_and_changed_without_starting_the_computer(platform: Platform, tmp_path: Path) -> None:
+    ws = Path(os.environ["TRADERA_WORKSPACE"])
+    (ws / "src").mkdir(parents=True, exist_ok=True)
+    (ws / "src" / "app.py").write_text("one\r\ntwo\r\nthree\r\n")
+    r, model = runner(platform, tmp_path, [
+        call("read_file", {"file_path": f"{ws}/src/app.py", "offset": 1, "limit": 1}),
+        call("edit_file", {"file_path": f"{ws}/src/app.py", "old_string": "two", "new_string": "TWO"}),
+        call("write_file", {"file_path": f"{ws}/notes/plan.md", "content": "# Plan"}),
+        call("edit_file", {"file_path": f"{ws}/src/app.py", "old_string": "missing", "new_string": "x"}),
+        AIMessage(content="done"),
+    ])
+    out = await r.prompt(turn_request(CODER, "tidy it", token="tok-coder"))
+    assert out.status == "done", out
+    results = tool_results(model)
+    assert "two" in results["read_file"] and "one" not in results["read_file"]
+    # The edit kept the file's line endings, as on the computer.
+    assert (ws / "src" / "app.py").read_bytes() == b"one\r\nTWO\r\nthree\r\n"
+    assert (ws / "notes" / "plan.md").read_text() == "# Plan"
+    assert "String not found" in results["edit_file"]
+    # Nothing was run on the computer: it stayed asleep.
+    assert not [body for name, body in platform.calls if name == "spaces.ask"]
+
+
+
+async def test_files_go_through_the_computer_when_not_stored(platform: Platform, tmp_path: Path) -> None:
+    platform.stored_files = False
+    ws = Path(os.environ["TRADERA_WORKSPACE"])
+    (ws / "lib").mkdir(parents=True, exist_ok=True)
+    (ws / "lib" / "a.txt").write_text("alpha\nbeta\n")
+    r, model = runner(platform, tmp_path, [
+        call("read_file", {"file_path": f"{ws}/lib/a.txt"}),
+        call("edit_file", {"file_path": f"{ws}/lib/a.txt", "old_string": "beta", "new_string": "gamma"}),
+        AIMessage(content="done"),
+    ])
+    out = await r.prompt(turn_request(CODER, "edit it", token="tok-coder"))
+    assert out.status == "done", out
+    assert "beta" in tool_results(model)["read_file"]
+    assert (ws / "lib" / "a.txt").read_text() == "alpha\ngamma\n"
+    assert [body for name, body in platform.calls if name == "spaces.ask"]

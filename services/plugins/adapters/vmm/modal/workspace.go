@@ -37,6 +37,7 @@ const (
 
 var _ vmm.WorkspaceReader = (*Adapter)(nil)
 var _ vmm.WorkspaceWriter = (*Adapter)(nil)
+var _ vmm.WorkspaceOrganizer = (*Adapter)(nil)
 
 // ListWorkspace (vmm.WorkspaceReader): list a directory of the project's files.
 func (a *Adapter) ListWorkspace(ctx context.Context, id, p string) ([]vmm.WorkspaceEntry, error) {
@@ -205,6 +206,82 @@ func (a *Adapter) reloadAwake(ctx context.Context, id string) {
 	if live := a.liveSandbox(id); live != nil {
 		_ = live.ReloadVolumes(ctx, &modal.SandboxReloadVolumesParams{Timeout: 10 * time.Second})
 	}
+}
+
+// keepFile holds a folder made while the computer is stopped: the volume
+// keeps files, and a folder exists while something is in it.
+const keepFile = ".keep"
+
+// MakeWorkspaceDir (vmm.WorkspaceOrganizer): make a folder and its parents.
+func (a *Adapter) MakeWorkspaceDir(ctx context.Context, id, p string) error {
+	dir, err := workspaceDir(p)
+	if err != nil {
+		return err
+	}
+	if dir == "/workspace" {
+		return nil
+	}
+	if live := a.liveSandbox(id); live != nil {
+		out, err := a.exec(ctx, live, "mkdir -p "+shQuote(dir))
+		if err != nil || !strings.HasPrefix(out, "exit=0") {
+			return errs.New(errs.CodeVMM, "mkdir failed: "+out)
+		}
+		return nil
+	}
+	return a.WriteWorkspace(ctx, id, dir+"/"+keepFile, nil)
+}
+
+// MoveWorkspace (vmm.WorkspaceOrganizer): move or rename a file or folder:
+// copied on the volume, then the original removed.
+func (a *Adapter) MoveWorkspace(ctx context.Context, id, from, to string) error {
+	src, err := workspaceDir(from)
+	if err != nil {
+		return err
+	}
+	dst, err := workspaceDir(to)
+	if err != nil {
+		return err
+	}
+	if src == "/workspace" || dst == "/workspace" {
+		return errs.InvalidArgument("cannot move the workspace root")
+	}
+	if live := a.liveSandbox(id); live != nil {
+		out, err := a.exec(ctx, live, `[ -e `+shQuote(src)+` ] || exit 4; [ -e `+shQuote(dst)+` ] && exit 3; mkdir -p "$(dirname `+shQuote(dst)+`)" && mv -- `+shQuote(src)+` `+shQuote(dst))
+		switch {
+		case err != nil:
+			return err
+		case strings.HasPrefix(out, "exit=3"):
+			return vmm.ErrExists
+		case strings.HasPrefix(out, "exit=4"):
+			return errs.NotFound("workspace path")
+		case !strings.HasPrefix(out, "exit=0"):
+			return errs.New(errs.CodeVMM, "move failed: "+out)
+		}
+		return nil
+	}
+	// The destination must not be there: a copy onto a folder would land
+	// inside it.
+	if _, err := a.ListWorkspace(ctx, id, dst); err == nil {
+		return vmm.ErrExists
+	}
+	if _, err := a.ReadWorkspace(ctx, id, dst); err == nil {
+		return vmm.ErrExists
+	}
+	api, vol, err := a.volume(ctx, id)
+	if err != nil {
+		return err
+	}
+	rel := func(p string) string { return strings.TrimPrefix(p, "/workspace/") }
+	if _, err := api.VolumeCopyFiles(ctx, pb.VolumeCopyFilesRequest_builder{VolumeId: vol, SrcPaths: []string{rel(src)}, DstPath: rel(dst), Recursive: true}.Build()); err != nil {
+		if status.Code(err) == codes.NotFound {
+			return errs.NotFound("workspace path")
+		}
+		return errs.Wrap(errs.CodeVMM, err, "move workspace file")
+	}
+	if _, err := api.VolumeRemoveFile(ctx, pb.VolumeRemoveFileRequest_builder{VolumeId: vol, Path: rel(src), Recursive: true}.Build()); err != nil {
+		return errs.Wrap(errs.CodeVMM, err, "move workspace file")
+	}
+	return nil
 }
 
 func workspaceDir(p string) (string, error) {

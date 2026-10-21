@@ -226,6 +226,11 @@ class Platform:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(base64.b64decode(body["data_base64"]) if body.get("data_base64") else body.get("content", "").encode())
             return {"ok": True}
+        if op == "delete":
+            import shutil
+
+            shutil.rmtree(target) if target.is_dir() else target.unlink(missing_ok=True)
+            return {"ok": True}
         return {"ok": False, "error": "unsupported"}
 
     def do_spaces_message_send(self, caller: str, body: dict[str, Any]) -> dict[str, Any]:

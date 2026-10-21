@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -27,13 +28,19 @@ Widget webPageFrame({
   required WebPageStatus onStatus,
   required void Function(WebPageHandle handle) onReady,
   Future<void> Function(Uri url)? openExternal,
-}) => _WebPageWebView(
-  key: key,
-  url: url,
-  theme: theme,
-  onStatus: onStatus,
-  onReady: onReady,
-  openExternal: openExternal,
+  bool interactive = true,
+  bool claimGestures = false,
+}) => IgnorePointer(
+  ignoring: !interactive,
+  child: _WebPageWebView(
+    key: key,
+    url: url,
+    theme: theme,
+    onStatus: onStatus,
+    onReady: onReady,
+    openExternal: openExternal,
+    claimGestures: claimGestures,
+  ),
 );
 
 class _WebPageWebView extends StatefulWidget {
@@ -44,9 +51,14 @@ class _WebPageWebView extends StatefulWidget {
     required this.onStatus,
     required this.onReady,
     this.openExternal,
+    this.claimGestures = false,
   });
 
   final String url;
+
+  /// Every touch is the page's (a remote screen), even inside a sheet or a
+  /// scrolling view that would otherwise take drags.
+  final bool claimGestures;
   final Map<String, dynamic> theme;
   final WebPageStatus onStatus;
   final void Function(WebPageHandle handle) onReady;
@@ -92,6 +104,9 @@ class _WebPageWebViewState extends State<_WebPageWebView>
   @override
   Widget build(BuildContext context) {
     return InAppWebView(
+      gestureRecognizers: widget.claimGestures
+          ? {const Factory<EagerGestureRecognizer>(EagerGestureRecognizer.new)}
+          : null,
       initialUrlRequest: URLRequest(url: WebUri(widget.url)),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,

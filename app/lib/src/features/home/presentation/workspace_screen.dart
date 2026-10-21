@@ -23,6 +23,7 @@ import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../admin/presentation/admin_screen.dart';
+import '../../computer/computer_view.dart';
 import '../../desk/data/desk_api.dart';
 import '../../desk/domain/desk_models.dart';
 import '../../desk/presentation/compact_desk.dart';
@@ -1890,6 +1891,18 @@ class _CenterDesk extends StatelessWidget {
   /// [FrontendPresentation] says whether in full or as a compact widget.
   Widget _windowContent(BuildContext context, DeskWindow w) => w.isWeb
       ? _page(context, w.id, w.page, w.label)
+      : w.isComputer
+      ? (FrontendPresentation.isCompact(context)
+          // A phone-board widget names the computer; it opens in the sheet.
+          ? const CompactSummaryView(
+              summary: CompactSummary(
+                  title: 'Computer',
+                  caption: 'Tap to open',
+                  icon: 'computer'))
+          : ComputerSession(
+              key: ValueKey('computer-${w.id}'),
+              service: dependencies.service,
+              spaceId: spaceId))
       : w.isFile
       ? (FrontendPresentation.isCompact(context)
           // A phone-board widget names the file; it opens in the sheet.
@@ -1933,6 +1946,10 @@ class _CenterDesk extends StatelessWidget {
 
   Widget _pinPreview(DeskPin p) => p.isWeb
       ? _WebPinPreview(title: p.label)
+      : p.isComputer
+      ? const CompactSummaryView(
+          summary: CompactSummary(
+              title: 'Computer', caption: 'The project’s desktop', icon: 'computer'))
       : p.isFile
       ? _FilePreview(path: p.filePath)
       : p.isComposed

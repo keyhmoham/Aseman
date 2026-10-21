@@ -48,7 +48,7 @@ func (s *Service) resolveDeskOpens(ctx context.Context, spaceID identity.ID, ops
 		if ops[i].Op != "open" {
 			continue
 		}
-		if ops[i].Kind == DeskComposed || ops[i].Kind == DeskFile {
+		if ops[i].Kind == DeskComposed || ops[i].Kind == DeskFile || ops[i].Kind == DeskComputer {
 			// People reopen a composed widget (from a pin) as it was; a file
 			// window is the workspace's file, checked when it is applied.
 			continue

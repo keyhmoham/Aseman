@@ -12,6 +12,8 @@ import '../../fake_tradera_service.dart';
 class _Service extends FakeTraderaService {
   final calls = <String>[];
   final written = <String, String>{};
+  final operations = <String>[];
+  String state = 'awake';
 
   @override
   Future<dynamic> invokeAction(
@@ -22,15 +24,23 @@ class _Service extends FakeTraderaService {
   }) async {
     final call = '$namespace.$action';
     if (call == 'spaces.computer') {
+      final op = '${body['operation']}';
+      if (op != 'watch') operations.add(op);
+      if (op == 'wake') state = 'awake';
+      if (op == 'sleep') state = 'asleep';
       return {
-        'machine': {
-          'state': 'awake',
-          'provider': 'nomad',
-          'id': 'vm-7',
-          'cpu': 2,
-          'memory_mb': 4096,
-        },
+        'state': state,
+        'rev': state,
+        'status': state == 'awake' ? 'running' : 'stopped',
+        'cpu': 2,
+        'memory_mb': 4096,
+        'disk_mb': 20480,
+        'idle_timeout_sec': 120,
       };
+    }
+    if (call == 'spaces.desktop_install') {
+      // The live view needs a real desktop: here it is unavailable.
+      throw StateError('no desktop in tests');
     }
     if (call == 'spaces.sandbox_files') {
       final path = '${body['path']}';
@@ -91,21 +101,94 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('the computer tab shows the machine and its controls', (
+  testWidgets('the computer tab shows the computer live and its power', (
     tester,
   ) async {
+    final service = _Service()..state = 'asleep';
     await pumpTab(
       tester,
       SpaceComputerTab(
-        dependencies: AppDependencies.withService(_Service()),
+        dependencies: AppDependencies.withService(service),
         spaceId: FakeTraderaService.atlasId,
       ),
     );
-    expect(find.text('Computer awake'), findsOneWidget);
-    expect(find.text('nomad · vm-7'), findsOneWidget);
-    expect(find.text('Wake / keep alive'), findsOneWidget);
-    expect(find.text('Forget logins'), findsOneWidget);
-    expect(find.text('4.0 GB'), findsOneWidget);
+    // Asleep: a dark screen, and the buttons to wake, replace and open it.
+    expect(find.text('Asleep'), findsWidgets);
+    expect(find.text('Wake up'), findsOneWidget);
+    expect(find.text('Replace'), findsOneWidget);
+    expect(find.text('Open'), findsOneWidget);
+    expect(find.text('Forget logins'), findsNothing);
+    expect(find.text('2 vCPU · 4.0 GB memory · 20.0 GB disk'), findsOneWidget);
+
+    await tester.tap(find.text('Wake up'));
+    await tester.pumpAndSettle();
+    expect(service.operations, ['wake']);
+    expect(find.text('Awake'), findsOneWidget);
+    expect(find.text('Sleep'), findsOneWidget);
+    expect(
+      find.text('Sleeps after 2 min with nothing using it.'),
+      findsOneWidget,
+    );
+    expect(find.text('Live view unavailable'), findsOneWidget);
+
+    await tester.tap(find.text('Sleep'));
+    await tester.pumpAndSettle();
+    expect(service.operations, ['wake', 'sleep']);
+    expect(find.text('Wake up'), findsOneWidget);
+
+    // Asleep, there is no live view to keep the computer awake for.
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('the computer follows changes made elsewhere', (tester) async {
+    final service = _Service()..state = 'asleep';
+    await pumpTab(
+      tester,
+      SpaceComputerTab(
+        dependencies: AppDependencies.withService(service),
+        spaceId: FakeTraderaService.atlasId,
+      ),
+    );
+    expect(find.text('Wake up'), findsOneWidget);
+    // Someone else (or an agent) wakes it: the next watch says so.
+    service.state = 'awake';
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(find.text('Sleep'), findsOneWidget);
+    expect(service.operations, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('on a phone, Open shows the computer in a bottom sheet', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    final service = _Service()..state = 'asleep';
+    await pumpTab(
+      tester,
+      SpaceComputerTab(
+        dependencies: AppDependencies.withService(service),
+        spaceId: FakeTraderaService.atlasId,
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.text('Its files are kept while it sleeps.'), findsWidgets);
+    // The sheet wakes it from its own dark screen, then closes.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Wake up'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(service.operations, ['wake', 'keepalive']);
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('the memory tab edits the shared and each agent\'s notes', (
@@ -178,7 +261,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Computer'));
     await tester.pumpAndSettle();
-    expect(find.text('Computer awake'), findsOneWidget);
+    expect(find.text('Awake'), findsWidgets);
     await tester.tap(find.byTooltip('Memory'));
     await tester.pumpAndSettle();
     expect(find.text('# Team notes'), findsOneWidget);

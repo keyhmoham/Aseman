@@ -48,21 +48,34 @@ func (s *Service) computerScope(ctx context.Context, req *api.ActionRequest, wri
 func (s *Service) computerAction(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	var in struct {
 		Operation string `json:"operation"`
+		// Since is the revision a watch already has (see computerStatus).
+		Since string `json:"since"`
 	}
 	if e := helper.Decode(req, &in); e != nil {
 		return nil, e
 	}
-	sp, e := s.computerScope(ctx, req, in.Operation != "" && in.Operation != "status")
+	read := in.Operation == "" || in.Operation == "status" || in.Operation == "watch"
+	sp, e := s.computerScope(ctx, req, !read)
 	if e != nil {
 		return nil, e
 	}
 	ctx = helper.WithActor(ctx, req.Caller.ID)
 	switch in.Operation {
 	case "", "status":
-	case "provision":
+	case "watch":
+		// A long poll: it answers as soon as the computer changes, so a
+		// screen showing it is live without asking every few seconds.
+		out, e := s.watchComputer(ctx, sp, in.Since)
+		if e != nil {
+			return nil, e
+		}
+		return helper.JSON(out)
+	case "provision", "wake":
+		done := s.computerBusy(sp, "waking")
 		if e = s.requireFundsForComputer(ctx, sp, req.Caller.ID); e == nil {
 			_, e = s.SandboxStart(ctx, sp)
 		}
+		done()
 	case "keepalive":
 		// Someone has the desktop open: that counts as activity, but never
 		// wakes a machine that is asleep.
@@ -72,10 +85,13 @@ func (s *Service) computerAction(ctx context.Context, req *api.ActionRequest) (*
 			}
 		}
 	case "sleep":
+		done := s.computerBusy(sp, "sleeping")
 		_, e = s.SandboxStop(ctx, sp)
+		done()
 	case "forget_logins":
 		e = s.forgetBrowserLogins(ctx, sp)
 	case "replace":
+		done := s.computerBusy(sp, "replacing")
 		if _, ok := s.sandboxBotID(ctx, sp); !ok {
 			_, e = s.SandboxStart(ctx, sp)
 		} else {
@@ -85,13 +101,26 @@ func (s *Service) computerAction(ctx context.Context, req *api.ActionRequest) (*
 				_, e = s.Bots.Rebuild(ctx, stopped.ID, s.sandboxImage())
 			}
 		}
+		done()
 	default:
 		return nil, errs.InvalidArgument("invalid computer operation")
 	}
 	if e != nil {
 		return nil, e
 	}
-	st, e := s.SandboxStatus(ctx, sp)
+	out, e := s.computerStatus(ctx, sp, true)
+	if e != nil {
+		return nil, e
+	}
+	return helper.JSON(out)
+}
+
+// computerStatus describes a project's computer: its state as people see it
+// (see computerState), its size and whether its desktop was started. Its
+// rev changes whenever any of what a screen shows of it does. The desktop's
+// password is not part of it: opening the desktop (desktop_install) gives it.
+func (s *Service) computerStatus(ctx context.Context, sp identity.ID, probe bool) (map[string]any, error) {
+	st, e := s.sandboxStatus(ctx, sp, probe)
 	if e != nil {
 		return nil, e
 	}
@@ -99,15 +128,18 @@ func (s *Service) computerAction(ctx context.Context, req *api.ActionRequest) (*
 	desktop := map[string]any{"installed": false}
 	if m, e := s.M.Get(ctx, sp); e == nil {
 		if g, ok := m.Tree["desktop"].(map[string]any); ok {
-			desktop = g
+			desktop = map[string]any{"installed": g["installed"] == true}
 		}
 	}
+	op := s.computerOp(sp)
+	state := computerState(st["status"], op)
 	profile := s.sandboxResourceProfile(ctx)
-	return helper.JSON(map[string]any{
+	return map[string]any{
+		"state": state, "busy": op, "rev": fmt.Sprintf("%s|%v|%v", state, st["status"], desktop["installed"]),
 		"status": st["status"], "running": running, "vm_id": st["vm_id"], "vm_type": st["vm_type"], "bot_id": st["bot_id"],
 		"image": s.sandboxImage(), "cpu": profile.CPU, "memory_mb": profile.Memory, "disk_mb": profile.Disk,
 		"idle_timeout_sec": int64(sandboxIdleTTL.Seconds()), "desktop": desktop,
-	})
+	}, nil
 }
 
 // browserProfileDir is where the desktop's browser keeps its cookies and
@@ -418,10 +450,13 @@ func (s *Service) desktopInstall(ctx context.Context, req *api.ActionRequest) (*
 	if !strings.HasPrefix(output, "exit=0") {
 		return nil, errs.New(errs.CodeUnavailable, "The desktop did not start: "+strings.TrimSpace(strings.TrimPrefix(output, "exit=1")))
 	}
-	password := ""
+	password, viewer := "", ""
 	for _, line := range strings.Split(output, "\n") {
 		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "DESKTOP_PASSWORD:"); ok {
 			password = v
+		}
+		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "DESKTOP_VIEWER:"); ok && desktopViewerPage(v) {
+			viewer = v
 		}
 	}
 	if password == "" {
@@ -435,7 +470,17 @@ func (s *Service) desktopInstall(ctx context.Context, req *api.ActionRequest) (*
 	if e = s.M.Patch(ctx, sp, jsonpatch.Patch{{Op: "set", Path: "desktop", Value: gui}}); e != nil {
 		return nil, e
 	}
-	return helper.JSON(gui)
+	s.computerChanged()
+	out := map[string]any{"page": p.GatewayPath()}
+	for k, v := range gui {
+		out[k] = v
+	}
+	if viewer != "" {
+		// The app's own viewer: the screen alone, scaled to fit, with the
+		// password in the fragment so it never reaches a server log.
+		out["viewer"] = p.GatewayPath() + viewer
+	}
+	return helper.JSON(out)
 }
 func (s *Service) desktopUninstall(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	sp, e := s.computerScope(ctx, req, true)
@@ -453,5 +498,20 @@ func (s *Service) desktopUninstall(ctx context.Context, req *api.ActionRequest) 
 	if e = s.M.Patch(ctx, sp, jsonpatch.Patch{{Op: "set", Path: "desktop", Value: map[string]any{"installed": false}}}); e != nil {
 		return nil, e
 	}
+	s.computerChanged()
 	return helper.JSON(map[string]any{"ok": true})
+}
+
+// desktopViewerPage accepts the viewer page the desktop program names: a
+// plain file name at the top of the noVNC folder.
+func desktopViewerPage(name string) bool {
+	if name == "" || len(name) > 64 || !strings.HasSuffix(name, ".html") {
+		return false
+	}
+	for _, r := range name {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.') {
+			return false
+		}
+	}
+	return !strings.Contains(name, "..")
 }

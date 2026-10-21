@@ -84,6 +84,8 @@ class WebPageView extends StatefulWidget {
     required this.page,
     this.embed = 'desk',
     this.showStrip = true,
+    this.interactive = true,
+    this.claimGestures = false,
   });
 
   final TraderaService service;
@@ -94,6 +96,13 @@ class WebPageView extends StatefulWidget {
   /// Where it is shown (desk, screen): pages may adapt their padding.
   final String embed;
   final bool showStrip;
+
+  /// False: the page is only looked at (a live preview); taps reach the
+  /// widgets around it.
+  final bool interactive;
+
+  /// Every touch on the page is its own (a remote screen inside a sheet).
+  final bool claimGestures;
 
   @override
   State<WebPageView> createState() => _WebPageViewState();
@@ -196,6 +205,8 @@ class _WebPageViewState extends State<WebPageView> {
               onStatus: _status,
               onReady: (h) => _handle = h,
               openExternal: _openExternal,
+              interactive: widget.interactive,
+              claimGestures: widget.claimGestures,
             ),
           ),
           if (_loading)

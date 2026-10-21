@@ -81,6 +81,14 @@ type Service struct {
 	liveSeq uint64
 	liveCh  chan struct{}
 
+	// computerOps is what people asked each project's computer to do, by
+	// space, while it does it; computerCh is closed (and replaced) whenever a
+	// computer changes, which wakes everyone watching one (spaces.computer
+	// watch). Both are guarded by computerMu.
+	computerMu  sync.Mutex
+	computerOps map[string]string
+	computerCh  chan struct{}
+
 	// hireFn replaces installing a marketplace listing in agent_hire (tests).
 	hireFn func(ctx context.Context, owner, listingID, spaceID identity.ID) (identity.ID, error)
 }

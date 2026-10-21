@@ -18,12 +18,15 @@ Widget webPageFrame({
   required WebPageStatus onStatus,
   required void Function(WebPageHandle handle) onReady,
   Future<void> Function(Uri url)? openExternal,
+  bool interactive = true,
+  bool claimGestures = false,
 }) => _WebPageIframe(
   key: key,
   url: url,
   theme: theme,
   onStatus: onStatus,
   onReady: onReady,
+  interactive: interactive,
 );
 
 class _WebPageIframe extends StatefulWidget {
@@ -33,9 +36,13 @@ class _WebPageIframe extends StatefulWidget {
     required this.theme,
     required this.onStatus,
     required this.onReady,
+    this.interactive = true,
   });
 
   final String url;
+
+  /// False: the page is only looked at; pointers reach the app beneath.
+  final bool interactive;
   final Map<String, dynamic> theme;
   final WebPageStatus onStatus;
   final void Function(WebPageHandle handle) onReady;
@@ -76,6 +83,9 @@ class _WebPageIframeState extends State<_WebPageIframe>
       ..setProperty('border'.toJS, 'none'.toJS)
       ..setProperty('display'.toJS, 'block'.toJS)
       ..setProperty('background'.toJS, 'transparent'.toJS);
+    if (!widget.interactive) {
+      style.setProperty('pointer-events'.toJS, 'none'.toJS);
+    }
     iframe.setProperty(
       'onload'.toJS,
       ((JSAny? _) {

@@ -255,6 +255,123 @@ set_wallpaper() {
 # moving files are unaffected.
 FILES_SHIM=/tmp/tradera-files.so
 FILES_LAUNCHER=/usr/local/bin/tradera-thunar
+# The app's viewer of the desktop (DESKTOP_VIEWER): the screen alone, scaled
+# to fit its window, reconnecting by itself. Its fragment carries the
+# password (#password=…) and, for a live preview, view=1 (no input). Written
+# next to noVNC on every start, so older images get it too; best effort.
+VIEWER_PAGE=tradera-view.html
+write_viewer() {
+  cat >"$1/$VIEWER_PAGE.tmp" <<'HTML' && mv -f "$1/$VIEWER_PAGE.tmp" "$1/$VIEWER_PAGE"
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Computer</title>
+<style>
+  :root { --bg: #0b0d10; --fg: #e8ecef; --muted: #9aa4ad; --accent: #7be0a6; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden;
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  #screen { position: absolute; inset: 0; }
+  #screen > div { background: transparent !important; }
+  #veil { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 12px;
+    align-items: center; justify-content: center; background: var(--bg); transition: opacity .25s; }
+  #veil.gone { opacity: 0; pointer-events: none; }
+  .spin { width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid #ffffff22;
+    border-top-color: var(--accent); animation: r .8s linear infinite; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  #msg { color: var(--muted); text-align: center; max-width: 80%; }
+  button { font: inherit; color: var(--bg); background: var(--accent); border: 0; border-radius: 999px;
+    padding: 7px 16px; font-weight: 600; cursor: pointer; }
+  #keys { position: absolute; right: 12px; bottom: 12px; display: none; width: 42px; height: 42px;
+    border-radius: 50%; background: #1d2228cc; color: var(--fg); padding: 0; backdrop-filter: blur(8px);
+    box-shadow: 0 4px 16px #0006; font-size: 18px; }
+  body.touch:not(.view) #keys { display: block; }
+  #kbd { position: absolute; left: -100px; top: 0; width: 1px; height: 1px; opacity: 0; }
+  body.view, body.view * { cursor: default !important; }
+</style>
+</head>
+<body>
+<div id="screen"></div>
+<div id="veil"><div class="spin" id="spin"></div><div id="msg">Connecting to the desktop…</div><button id="retry" hidden>Reconnect</button></div>
+<button id="keys" title="Keyboard" aria-label="Keyboard">⌨</button>
+<input id="kbd" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false">
+<script type="module">
+import RFB from './core/rfb.js';
+const params = new URLSearchParams(location.hash.slice(1));
+const password = params.get('password') || '';
+const view = params.get('view') === '1';
+document.body.classList.toggle('view', view);
+document.body.classList.toggle('touch', matchMedia('(pointer: coarse)').matches);
+const veil = document.getElementById('veil'), msg = document.getElementById('msg');
+const spin = document.getElementById('spin'), retry = document.getElementById('retry');
+const ws = new URL('websockify', location.href);
+ws.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const token = new URLSearchParams(location.search).get('token');
+ws.search = token ? '?token=' + encodeURIComponent(token) : '';
+ws.hash = '';
+let rfb = null, tries = 0, timer = 0, refused = false;
+function show(text, failed) {
+  msg.textContent = text; spin.hidden = !!failed; retry.hidden = !failed || view;
+  veil.classList.remove('gone');
+}
+function connect() {
+  clearTimeout(timer);
+  show(tries ? 'Reconnecting…' : 'Connecting to the desktop…');
+  try {
+    rfb = new RFB(document.getElementById('screen'), ws.href, { credentials: { password }, shared: true });
+  } catch (e) { return later(); }
+  rfb.scaleViewport = true; rfb.resizeSession = false; rfb.clipViewport = false;
+  rfb.viewOnly = view; rfb.showDotCursor = !view; rfb.focusOnClick = !view;
+  rfb.qualityLevel = view ? 4 : 7; rfb.compressionLevel = view ? 6 : 2;
+  rfb.background = getComputedStyle(document.body).backgroundColor;
+  rfb.addEventListener('connect', () => { tries = 0; veil.classList.add('gone'); if (!view) rfb.focus(); });
+  rfb.addEventListener('disconnect', () => { rfb = null; later(); });
+  rfb.addEventListener('securityfailure', () => { refused = true; });
+  rfb.addEventListener('credentialsrequired', () => rfb.sendCredentials({ password }));
+  rfb.addEventListener('clipboard', (e) => { if (!view && navigator.clipboard) navigator.clipboard.writeText(e.detail.text).catch(() => {}); });
+}
+function later() {
+  tries++;
+  // A new password (the desktop was restarted): the app opens it afresh.
+  if (refused) return show('The desktop asked for a new password. Close and open the computer again.', true);
+  if (tries > 8 && !view) return show('The desktop is not answering.', true);
+  show('Reconnecting…');
+  timer = setTimeout(connect, Math.min(8000, 600 * 2 ** Math.min(tries, 4)));
+}
+retry.onclick = () => { tries = 0; refused = false; connect(); };
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !rfb) { tries = 0; connect(); } });
+// Pasting into the page types into the desktop's clipboard.
+document.addEventListener('paste', (e) => {
+  const text = e.clipboardData && e.clipboardData.getData('text/plain');
+  if (rfb && !view && text) rfb.clipboardPasteFrom(text);
+});
+// Phones have no keyboard to press: a hidden field brings up theirs and
+// sends what is typed as key presses.
+const kbd = document.getElementById('kbd');
+document.getElementById('keys').onclick = () => kbd.focus();
+const KEYS = { Backspace: 0xff08, Enter: 0xff0d, Tab: 0xff09, Escape: 0xff1b,
+  ArrowLeft: 0xff51, ArrowUp: 0xff52, ArrowRight: 0xff53, ArrowDown: 0xff54 };
+kbd.addEventListener('keydown', (e) => {
+  if (rfb && KEYS[e.key]) { rfb.sendKey(KEYS[e.key], e.key); e.preventDefault(); }
+});
+kbd.addEventListener('input', () => {
+  if (rfb) for (const ch of kbd.value) {
+    const cp = ch.codePointAt(0);
+    rfb.sendKey(cp < 0x100 ? cp : 0x1000000 + cp);
+  }
+  kbd.value = '';
+});
+// Theme messages of the app are not needed: the screen is the screen.
+window.__traderaSetTheme = () => {};
+connect();
+</script>
+</body>
+</html>
+HTML
+}
+
 write_files_launcher() {
   have thunar || return 0
   if [ ! -s "$FILES_SHIM" ]; then
@@ -831,6 +948,7 @@ do_start() {
   if stream_ok; then
     # The dock is a nicety: give it a moment, never fail the desktop for it.
     for _ in $(seq 1 12); do dock_up && break; sleep 0.25; done
+    write_viewer "$web" 2>/dev/null && echo "DESKTOP_VIEWER:$VIEWER_PAGE"
     echo "DESKTOP_PASSWORD:$pw"
     return 0
   fi

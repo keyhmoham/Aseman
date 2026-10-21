@@ -13,6 +13,7 @@ class UserProfile {
     this.status = 'active',
     this.displayName = '',
     this.bio = '',
+    this.avatar = '',
     this.followers = 0,
     this.following = 0,
     this.amFollowing = false,
@@ -25,6 +26,7 @@ class UserProfile {
   final String status;
   final String displayName;
   final String bio;
+  final String avatar;
   final int followers;
   final int following;
   final bool amFollowing;
@@ -42,6 +44,7 @@ class UserProfile {
       status: json['status'] as String? ?? 'active',
       displayName: p['display_name'] as String? ?? '',
       bio: p['bio'] as String? ?? '',
+      avatar: '${p['avatar'] ?? ''}'.trim(),
       followers: (json['followers'] as num?)?.toInt() ?? 0,
       following: (json['following'] as num?)?.toInt() ?? 0,
       amFollowing: json['am_following'] as bool? ?? false,
@@ -60,6 +63,7 @@ class BotProfile {
     this.ownerId = '',
     this.ownerHandle = '',
     this.description = '',
+    this.avatar = '',
     this.resources = const {},
     this.cost = const {},
     this.usage = const {},
@@ -77,6 +81,7 @@ class BotProfile {
   final String ownerId;
   final String ownerHandle;
   final String description;
+  final String avatar;
   final Map<String, dynamic> resources;
   final Map<String, dynamic> cost;
   final Map<String, dynamic> usage;
@@ -99,6 +104,7 @@ class BotProfile {
         ownerId: json['owner_id'] as String? ?? '',
         ownerHandle: json['owner_handle'] as String? ?? '',
         description: json['description'] as String? ?? '',
+        avatar: json['avatar'] as String? ?? '',
         resources:
             (json['resources'] as Map?)?.cast<String, dynamic>() ?? const {},
         cost: (json['cost'] as Map?)?.cast<String, dynamic>() ?? const {},
@@ -127,6 +133,7 @@ class SpaceProfile {
     this.fileCount = 0,
     this.amMember = false,
     this.metadata = const {},
+    this.avatar = '',
   });
 
   final String id;
@@ -144,6 +151,7 @@ class SpaceProfile {
   final int fileCount;
   final bool amMember;
   final Map<String, dynamic> metadata;
+  final String avatar;
 
   factory SpaceProfile.fromJson(Map<String, dynamic> json) => SpaceProfile(
         id: json['id'] as String? ?? '',
@@ -163,6 +171,7 @@ class SpaceProfile {
         amMember: json['am_member'] as bool? ?? false,
         metadata:
             (json['metadata'] as Map?)?.cast<String, dynamic>() ?? const {},
+        avatar: json['avatar'] as String? ?? '',
       );
 }
 

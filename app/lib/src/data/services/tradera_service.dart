@@ -210,6 +210,7 @@ class TraderaService implements BackendService {
       name: m['name'] as String? ?? '',
       description: m['description'] as String? ?? '',
       public: m['public'] as bool? ?? false,
+      avatar: m['avatar'] as String? ?? '',
     );
   }
 
@@ -772,6 +773,73 @@ class TraderaService implements BackendService {
           'Authorization': 'Bearer ${session!.token}',
       };
 
+  // ── avatars ──────────────────────────────────────────────────────────────
+
+  /// Stores a picture chosen as an avatar and returns its file id. It is
+  /// stored public (`users.file_upload`): an avatar is shown to everyone who
+  /// can see the account, workspace, agent or app it stands for.
+  Future<String> uploadAvatar({
+    required String name,
+    required String mime,
+    required Uint8List bytes,
+  }) async {
+    final resp = await client.call('users', 'file_upload', body: {
+      'name': name,
+      'mime': mime,
+      'data': base64Encode(bytes),
+      'public': true,
+    });
+    final id = '${(resp.body as Map?)?['file_id'] ?? ''}';
+    if (id.isEmpty) {
+      throw const ApiException(
+          'UPLOAD_FAILED', 'The picture could not be stored');
+    }
+    return id;
+  }
+
+  /// Sets (a stored picture's id) or clears ("") the signed-in account's
+  /// avatar (`auth.profile_update`).
+  Future<void> setMyAvatar(String fileId) async {
+    await client.call('auth', 'profile_update', body: {
+      'profile': {'avatar': fileId},
+    });
+  }
+
+  /// Sets or clears a workspace's avatar; its owner and admins may
+  /// (`spaces.space_update`).
+  Future<void> setSpaceAvatar(String spaceId, String fileId) async {
+    await client.call('spaces', 'space_update',
+        body: {'space': spaceId, 'avatar': fileId});
+  }
+
+  /// Sets or clears an agent's or an app's avatar; its owner may
+  /// (`bots.bot_edit`).
+  Future<void> setBotAvatar(String botId, String fileId) async {
+    await client
+        .call('bots', 'bot_edit', body: {'bot': botId, 'avatar': fileId});
+  }
+
+  /// The signed-in account's avatar (a file id), "" when it has none.
+  Future<String> fetchMyAvatar() async {
+    final profile = (await fetchMyMetadata())['profile'];
+    return profile is Map ? '${profile['avatar'] ?? ''}'.trim() : '';
+  }
+
+  /// The picture an avatar reference points at: a stored file (its id or its
+  /// `/v1/files/{id}/content` path) or a web address. Null when there is none.
+  ImageProvider? avatarImage(String ref) {
+    ref = ref.trim();
+    if (ref.isEmpty) return null;
+    if (ref.startsWith('http://') || ref.startsWith('https://')) {
+      return NetworkImage(ref);
+    }
+    final id = RegExp(r'^(?:/v1/files/)?([0-9a-fA-F]{32})(?:/content)?$')
+        .firstMatch(ref)
+        ?.group(1);
+    if (id == null) return null;
+    return NetworkImage(fileContentUrl(id), headers: authHeaders());
+  }
+
   /// Upload a file (photos, gifs, audio, voice, video, documents) to a
   /// space/room. [bytes] are sent base64-encoded in the action body.
   Future<UploadedFile> uploadFile(
@@ -897,6 +965,7 @@ class TraderaService implements BackendService {
               'kind': j['kind'],
               'vm_type': j['vm_type'],
               'status': j['status'],
+              'avatar': j['avatar'],
             }))
         .toList();
   }

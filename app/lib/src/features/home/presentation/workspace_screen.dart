@@ -530,13 +530,18 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                     painter: GlowPainter(colors.primary, colors.tertiary))),
             SafeArea(
                 child: Column(children: [
-              WorkspaceHeader(
+              // Rebuilt when the account's avatar changes.
+              ListenableBuilder(
+                listenable: widget.dependencies.sessionController,
+                builder: (context, _) => WorkspaceHeader(
                   workspace: workspace,
                   room: room,
                   compact: compact,
                   handle:
                       widget.dependencies.sessionController.session?.handle ??
                           '',
+                  avatar: widget.dependencies.service.avatarImage(
+                      widget.dependencies.sessionController.avatar),
                   onOpenNavigation: () =>
                       scaffoldKey.currentState?.openDrawer(),
                   onOpenWorkspaces: () => _workspacePicker(context),
@@ -553,6 +558,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                   onOpenProfile: () =>
                       showProfileMenu(context, widget.dependencies),
                   onOpenSearchFeed: widget.onBackToFeed),
+              ),
               Expanded(child: LayoutBuilder(builder: (context, box) {
                 if (box.maxWidth < 820) {
                   return _WorkspacePanelMotion(

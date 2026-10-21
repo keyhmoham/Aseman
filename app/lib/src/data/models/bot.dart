@@ -10,6 +10,7 @@ class Bot {
     required this.status,
     this.imageRef = '',
     this.hasFrontend = false,
+    this.avatar = '',
   });
 
   final String id;
@@ -21,6 +22,9 @@ class Bot {
   final String status; // pending | running | stopped | paused | failed
   final String imageRef;
   final bool hasFrontend;
+
+  /// Its picture: a stored file's id, "" when it has none.
+  final String avatar;
 
   bool get isAgent => kind == 'agent';
   bool get isTool => kind == 'tool';
@@ -50,6 +54,20 @@ class Bot {
         _ => 'App',
       };
 
+  /// The same bot with another picture.
+  Bot withAvatar(String avatar) => Bot(
+        id: id,
+        ownerId: ownerId,
+        accountId: accountId,
+        name: name,
+        kind: kind,
+        vmType: vmType,
+        status: status,
+        imageRef: imageRef,
+        hasFrontend: hasFrontend,
+        avatar: avatar,
+      );
+
   /// What it is, for display: an agent or an app.
   String get kindLabel => isAgent ? 'Agent' : 'App';
 
@@ -63,6 +81,7 @@ class Bot {
         status: json['status'] as String? ?? 'pending',
         imageRef: json['image_ref'] as String? ?? '',
         hasFrontend: json['has_frontend'] as bool? ?? false,
+        avatar: '${json['avatar'] ?? ''}',
       );
 }
 

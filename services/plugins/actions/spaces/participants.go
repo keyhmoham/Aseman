@@ -3,7 +3,6 @@ package spaces
 import (
 	"context"
 	"github.com/tradera/tradera/plugins/actions/support/helper"
-	"strings"
 
 	"github.com/tradera/tradera/internal/plugins/identity"
 	"github.com/tradera/tradera/plugins/actions/auth/models/account"
@@ -50,9 +49,9 @@ func (p *participants) get(ctx context.Context, id identity.ID) map[string]any {
 				} else if out["display_name"] == acc.Handle {
 					out["display_name"] = helper.BotName(profile, acc.Handle)
 				}
-				if avatar, _ := profile["avatar"].(string); strings.TrimSpace(avatar) != "" {
-					out["avatar"] = strings.TrimSpace(avatar)
-				}
+			}
+			if avatar := helper.TreeAvatar(rec.Tree); avatar != "" {
+				out["avatar"] = avatar
 			}
 		}
 	}

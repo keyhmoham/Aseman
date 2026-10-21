@@ -160,6 +160,14 @@ func (s *Service) profileUpdate(ctx context.Context, req *api.ActionRequest) (*a
 		}
 	}
 	if in.Profile != nil {
+		if v, ok := in.Profile["avatar"]; ok {
+			ref, _ := v.(string)
+			avatar, err := helper.AvatarFile(ctx, s.R, a.ID, ref)
+			if err != nil {
+				return nil, err
+			}
+			in.Profile["avatar"] = avatar
+		}
 		m := metasvc.Service{K: s.K, R: s.R}
 		rec, err := m.Get(ctx, a.ID)
 		if err != nil {

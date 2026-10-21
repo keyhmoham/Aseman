@@ -12,6 +12,7 @@ import '../../../data/models/profile.dart';
 import '../../../data/models/space.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/avatar_editor.dart';
 import '../../../shared/widgets/backend_action_ui.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
@@ -68,7 +69,8 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
       _space.ownerId == _me || _space.role == 'owner' || _myRole == 'owner';
 
   /// Owners and admins may manage rooms, members and roles.
-  bool get _canManage => _isOwner || _space.role == 'admin';
+  bool get _canManage =>
+      _isOwner || _space.role == 'admin' || _myRole == 'admin';
 
   @override
   void initState() {
@@ -120,6 +122,7 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
         public: profile.public,
         home: profile.home,
         role: _space.role,
+        avatar: profile.avatar,
       );
       setState(() {
         _profile = profile;
@@ -197,6 +200,7 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
           public: _public,
           home: _space.home,
           role: _space.role,
+          avatar: _space.avatar,
         );
         _dirty = false;
         _busy = false;
@@ -402,7 +406,9 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
       Padding(
           padding: const EdgeInsets.fromLTRB(24, 18, 12, 12),
           child: Row(children: [
-            AppAvatar(_space.initials, color: colors.primary),
+            AppAvatar(_space.initials,
+                color: colors.primary,
+                image: widget.dependencies.service.avatarImage(_space.avatar)),
             const SizedBox(width: 12),
             Expanded(
                 child: Column(
@@ -454,6 +460,14 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
     ]));
   }
 
+  /// Sets or clears the workspace's picture (its owner and admins may).
+  Future<void> _setAvatar(String fileId) async {
+    await widget.dependencies.service.setSpaceAvatar(_space.id, fileId);
+    if (!mounted) return;
+    setState(() => _space = _space.withAvatar(fileId));
+    widget.onUpdated?.call(_space);
+  }
+
   // ── overview ─────────────────────────────────────────────────────────────
 
   Widget _overviewCard(BuildContext context) {
@@ -468,6 +482,15 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
           : null,
       child: Column(children: [
         Row(children: [
+          AvatarEditor(
+            service: widget.dependencies.service,
+            avatar: _space.avatar,
+            initials: _space.initials,
+            subject: 'workspace picture',
+            enabled: _canManage,
+            onChanged: _setAvatar,
+          ),
+          const SizedBox(width: 16),
           Expanded(
               child: TextField(
             controller: _name,

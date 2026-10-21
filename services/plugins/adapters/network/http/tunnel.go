@@ -63,7 +63,8 @@ func (a *Adapter) serveTunnel(w http.ResponseWriter, r *http.Request, t *network
 //
 //   - no Origin (not a browser);
 //   - the page served from the same host the request came to, or the host a
-//     reverse proxy says it forwarded (X-Forwarded-Host);
+//     reverse proxy says it forwarded (X-Forwarded-Host); when the proxy
+//     passed the host without its port, the same machine on any port;
 //   - local development, where the app and the node are both on localhost or
 //     127.0.0.1 but on different ports;
 //   - the origins listed in TRADERA_ALLOWED_ORIGINS (comma separated; a bare
@@ -79,6 +80,13 @@ func originAllowed(r *http.Request) bool {
 	}
 	if strings.EqualFold(u.Host, r.Host) || strings.EqualFold(u.Host, r.Header.Get("X-Forwarded-Host")) {
 		return true
+	}
+	// A reverse proxy that passes the host without its port (nginx's $host)
+	// still names the machine the page came from.
+	for _, host := range []string{r.Host, r.Header.Get("X-Forwarded-Host")} {
+		if host != "" && !strings.Contains(strings.TrimPrefix(host, "["), ":") && strings.EqualFold(u.Hostname(), strings.Trim(host, "[]")) {
+			return true
+		}
 	}
 	if isLoopback(u.Hostname()) && isLoopback(hostOnly(r.Host)) {
 		return true

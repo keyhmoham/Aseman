@@ -218,8 +218,8 @@ FeedPost feedPostFromServer(SocialPost p, {String? workspace}) => FeedPost(
       time: _timeAgo(p.createdAt),
       body: p.body,
       tag: p.tags.isEmpty ? 'POST' : p.tags.first.toUpperCase(),
-      likes: _compact(p.likes),
-      comments: _compact(p.comments),
+      likes: compactCount(p.likes),
+      comments: compactCount(p.comments),
       color: _colorFor(p.id),
       liked: p.likedByMe,
       serverId: p.id,
@@ -264,7 +264,8 @@ Color _colorFor(String id) {
   return palette[id.hashCode.abs() % palette.length];
 }
 
-String _compact(int n) {
+/// [n] as a short count: 1.2K for 1200.
+String compactCount(int n) {
   if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
   return '$n';
 }

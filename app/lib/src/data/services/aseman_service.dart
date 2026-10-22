@@ -1502,9 +1502,10 @@ class AsemanService implements BackendService {
     await client.call('posts', 'post_unlike', body: {'post': postId});
   }
 
-  Future<List<SocialPost>> fetchComments(String postId) async {
-    final resp =
-        await client.call('posts', 'post_comments', body: {'post': postId});
+  Future<List<SocialPost>> fetchComments(String postId,
+      {int limit = 200}) async {
+    final resp = await client.call('posts', 'post_comments',
+        body: {'post': postId, 'limit': limit});
     final list = (resp.body as Map?)?['comments'] as List? ?? [];
     return list
         .whereType<Map<String, dynamic>>()
@@ -1512,9 +1513,11 @@ class AsemanService implements BackendService {
         .toList();
   }
 
-  Future<void> commentPost(String postId, String body) async {
-    await client
+  /// Comments [body] on a post; returns the new comment's id.
+  Future<String> commentPost(String postId, String body) async {
+    final resp = await client
         .call('posts', 'post_comment', body: {'post': postId, 'body': body});
+    return '${(resp.body as Map?)?['comment_id'] ?? ''}';
   }
 
   Future<List<SocialPost>> fetchUserPosts(String userId,

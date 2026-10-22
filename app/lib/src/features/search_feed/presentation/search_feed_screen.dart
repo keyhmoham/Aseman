@@ -21,6 +21,7 @@ import '../../messenger/presentation/messenger_panel.dart';
 import '../domain/feed_post.dart';
 import 'feed_post_card.dart';
 import 'post_editor.dart';
+import 'rich_post_parser.dart' show markupPreview;
 import 'search_feed_view_model.dart';
 
 /// Landing page: a Google-like search engine fused with the Following feed
@@ -376,10 +377,18 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
             padding: EdgeInsets.fromLTRB(horizontalPad, 0, horizontalPad, 32),
             sliver: SliverList.builder(
                 itemCount: posts.length,
-                itemBuilder: (context, index) => FeedPostCard(
-                    post: posts[index],
-                    service: widget.dependencies.service,
-                    onToggleLike: () => _toggleLike(posts[index])))),
+                itemBuilder: (context, index) {
+                  final post = posts[index];
+                  final id = post.serverId ?? '';
+                  return FeedPostCard(
+                      key: ValueKey('feed-post-$id'),
+                      post: post,
+                      dependencies: widget.dependencies,
+                      onToggleLike: () => _toggleLike(post),
+                      onEdited: (body) => model.edited(id, body),
+                      onDeleted: () => model.deleted(id),
+                      onShared: model.load);
+                })),
       if (model.loadingMore)
         const SliverToBoxAdapter(
             child: Padding(
@@ -946,7 +955,7 @@ class _DirectChatTile extends StatelessWidget {
   String get _preview {
     if (chat.working) return 'Agent is working…';
     if (chat.typing) return 'typing…';
-    final body = chat.lastBody.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final body = markupPreview(chat.lastBody);
     final text = body.isNotEmpty
         ? body
         : chat.lastAttachments > 0

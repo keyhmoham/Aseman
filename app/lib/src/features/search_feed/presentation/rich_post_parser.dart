@@ -12,14 +12,18 @@
 /// :::card agent AgentName
 /// :::card tool ToolName
 /// :::card space WorkspaceName
+/// :::post {"id":"…","author_id":"…","name":"…","handle":"…","body":"…"}
 /// ```
+///
+/// `:::post` is a feed post shared into a chat: it shows as a card naming the
+/// post's author, who can be opened from it.
 ///
 /// Posts store this as a plain markdown string; the client renders it with
 /// [RichPostContent]. Post bodies remain portable markdown so anything that
 /// reads the raw string sees clean markup.
 library;
 
-import 'dart:convert' show JsonDecoder;
+import 'dart:convert' show JsonDecoder, jsonEncode;
 
 enum InlineKind { text, bold, italic, strike, code, link, image, mention }
 
@@ -44,6 +48,7 @@ enum BlockKind {
   video,
   audio,
   card,
+  forward,
 }
 
 /// The type of a `:::card` directive (user / agent / tool / space).
@@ -63,7 +68,8 @@ class PostBlock {
       this.rows,
       this.chart,
       this.url,
-      this.card});
+      this.card,
+      this.data});
   final BlockKind kind;
 
   /// Inline tokens for paragraph/heading/list/quote/table cells.
@@ -77,6 +83,10 @@ class PostBlock {
   final Map<String, dynamic>? chart;
   final String? url;
   final PostCard? card;
+
+  /// A `:::post` directive's post: its id, its author's account id, name,
+  /// handle and picture, and its body.
+  final Map<String, dynamic>? data;
 }
 
 /// Splits the raw markdown string into [PostBlock]s.
@@ -187,6 +197,9 @@ List<PostBlock> parseRichMarkdown(String source) {
           break;
         case 'card':
           blocks.add(PostBlock(BlockKind.card, const [], card: _card(rest)));
+          break;
+        case 'post':
+          blocks.add(PostBlock(BlockKind.forward, const [], data: _json(rest)));
           break;
       }
       continue;
@@ -392,4 +405,91 @@ bool _isTableSeparator(String line) {
     }
   }
   return hasSep;
+}
+
+/// The `:::post` directive that shares a feed post into a chat: it carries
+/// the post's id, its author ([authorId], [name], [handle], [avatar]) and its
+/// [body], so the chat shows it as a card with a "Forwarded from" tag.
+String forwardedPostMarkup({
+  required String id,
+  required String authorId,
+  required String body,
+  String name = '',
+  String handle = '',
+  String avatar = '',
+}) =>
+    ':::post ${jsonEncode({
+      'id': id,
+      'author_id': authorId,
+      if (name.isNotEmpty) 'name': name,
+      if (handle.isNotEmpty) 'handle': handle,
+      if (avatar.isNotEmpty) 'avatar': avatar,
+      'body': body,
+    })}';
+
+/// A one-line, plain-text summary of a markup [source] for chat lists and
+/// notifications: directives become words ("Forwarded post", "Chart") and
+/// markup characters are dropped.
+String markupPreview(String source) {
+  final parts = <String>[];
+  for (final b in parseRichMarkdown(source)) {
+    final text = switch (b.kind) {
+      BlockKind.forward => () {
+          final d = b.data ?? const {};
+          final who = '${d['name'] ?? ''}'.isNotEmpty
+              ? '${d['name']}'
+              : '${d['handle'] ?? ''}'.isNotEmpty
+                  ? '@${d['handle']}'
+                  : '';
+          final inner = markupPreview('${d['body'] ?? ''}');
+          return [
+            'Forwarded post${who.isEmpty ? '' : ' from $who'}',
+            if (inner.isNotEmpty) inner,
+          ].join(': ');
+        }(),
+      BlockKind.chart => 'Chart',
+      BlockKind.image => 'Photo',
+      BlockKind.video => 'Video',
+      BlockKind.audio => 'Audio',
+      BlockKind.card => b.card?.target ?? '',
+      BlockKind.divider => '',
+      BlockKind.code => b.code ?? '',
+      BlockKind.table => [
+          for (final row in b.rows ?? const <List<InlineToken>>[])
+            row.map((t) => t.text).join(' '),
+        ].join(' '),
+      _ => [
+          for (final run in b.inline) run.map((t) => t.text).join(),
+        ].join(' '),
+    };
+    if (text.trim().isNotEmpty) parts.add(text.trim());
+  }
+  return parts.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+/// The readable text of a markup [source], one block per paragraph, for
+/// sharing a post outside the app.
+String markupPlainText(String source) {
+  String run(List<InlineToken> r) => r.map((t) => t.text).join();
+  return [
+    for (final b in parseRichMarkdown(source))
+      switch (b.kind) {
+        BlockKind.bulletList => b.inline.map((r) => '• ${run(r)}').join('\n'),
+        BlockKind.orderedList => [
+            for (var i = 0; i < b.inline.length; i++)
+              '${i + 1}. ${run(b.inline[i])}'
+          ].join('\n'),
+        BlockKind.quote => '“${b.inline.map(run).join(' ')}”',
+        BlockKind.image || BlockKind.video || BlockKind.audio => b.url ?? '',
+        BlockKind.code => b.code ?? '',
+        BlockKind.table =>
+          (b.rows ?? const <List<InlineToken>>[])
+              .map((r) => r.map((t) => t.text).join(' · '))
+              .join('\n'),
+        BlockKind.card => b.card?.target ?? '',
+        BlockKind.forward => markupPlainText('${b.data?['body'] ?? ''}'),
+        BlockKind.chart || BlockKind.divider => '',
+        _ => b.inline.map(run).join('\n'),
+      },
+  ].where((l) => l.trim().isNotEmpty).join('\n\n');
 }

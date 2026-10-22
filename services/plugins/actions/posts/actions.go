@@ -31,6 +31,9 @@ func (a *postCreateAction) Handle(ctx context.Context, req *api.ActionRequest) (
 		Tags   []string `json:"tags,omitempty"`
 		Media  []string `json:"media,omitempty"`
 		Parent string   `json:"parent,omitempty"`
+		// Forward shares this post (one the caller can read) instead of
+		// publishing Body: the new post copies it and names its author.
+		Forward string `json:"forward,omitempty"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
@@ -49,6 +52,17 @@ func (a *postCreateAction) Handle(ctx context.Context, req *api.ActionRequest) (
 		if !member {
 			return nil, errs.Permission("not a member of the space")
 		}
+	}
+	if in.Forward != "" {
+		origID, err := identity.Parse(in.Forward)
+		if err != nil {
+			return nil, errs.InvalidArgument("invalid forward id")
+		}
+		p, err := a.s.Forward(ctx, req.Caller.ID, spaceID, origID)
+		if err != nil {
+			return nil, err
+		}
+		return helper.JSON(map[string]any{"post_id": p.ID.String(), "ok": true})
 	}
 	if in.Parent != "" {
 		var err error
@@ -299,6 +313,8 @@ func (a *postCommentsAction) Handle(ctx context.Context, req *api.ActionRequest)
 func BuildActions(s *Service) []api.Action {
 	return []api.Action{
 		&postCreateAction{s: s}, &postGetAction{s: s}, &postDeleteAction{s: s},
+		&postUpdateAction{s: s}, &postReportAction{s: s},
+		&postAdminReportsAction{s: s}, &postAdminReportResolveAction{s: s},
 		&postFeedAction{s: s}, &postUserPostsAction{s: s},
 		&postSpacesFeedAction{s: s},
 		&postLikeAction{s: s}, &postUnlikeAction{s: s},

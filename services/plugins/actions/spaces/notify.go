@@ -2,6 +2,7 @@ package spaces
 
 import (
 	"context"
+	"encoding/json"
 	"regexp"
 	"strings"
 	"sync"
@@ -151,6 +152,8 @@ func (s *Service) peopleOf(ctx context.Context, spaceID identity.ID) []identity.
 }
 
 var (
+	// noticeShared is a feed post shared into the chat (`:::post {json}`).
+	noticeShared = regexp.MustCompile(`(?m)^\s*:::post\s+(\{.*\})\s*$`)
 	noticeLinks  = regexp.MustCompile(`!?\[([^\]]*)\]\([^)]*\)`)
 	noticeMarks  = regexp.MustCompile("[*_`#>~]+")
 	noticeSpaces = regexp.MustCompile(`\s+`)
@@ -159,7 +162,8 @@ var (
 // noticeBody is a message as one line of a notification: who said it and the
 // start of what they said, without the markup it was written in.
 func noticeBody(sender, body string, attachments int) string {
-	text := noticeLinks.ReplaceAllString(body, "$1")
+	text := noticeShared.ReplaceAllStringFunc(body, sharedPostNotice)
+	text = noticeLinks.ReplaceAllString(text, "$1")
 	text = noticeMarks.ReplaceAllString(text, "")
 	text = strings.TrimSpace(noticeSpaces.ReplaceAllString(text, " "))
 	if text == "" {
@@ -179,4 +183,30 @@ func noticeBody(sender, body string, attachments int) string {
 		return sender + ": " + text
 	}
 	return text
+}
+
+// sharedPostNotice reads a shared post's directive as "Forwarded post from
+// <author>: <its text>".
+func sharedPostNotice(directive string) string {
+	var post struct {
+		Name   string `json:"name"`
+		Handle string `json:"handle"`
+		Body   string `json:"body"`
+	}
+	m := noticeShared.FindStringSubmatch(directive)
+	if len(m) < 2 || json.Unmarshal([]byte(m[1]), &post) != nil {
+		return "Forwarded post"
+	}
+	who := post.Name
+	if who == "" && post.Handle != "" {
+		who = "@" + post.Handle
+	}
+	out := "Forwarded post"
+	if who != "" {
+		out += " from " + who
+	}
+	if post.Body = strings.TrimSpace(post.Body); post.Body != "" {
+		out += ": " + post.Body
+	}
+	return out
 }

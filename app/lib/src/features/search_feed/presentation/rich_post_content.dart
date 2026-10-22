@@ -2,10 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/code_highlight.dart';
 import '../../rooms/presentation/widgets/audio_bubble.dart';
 import '../../rooms/presentation/widgets/video_bubble.dart';
 import 'rich_post_parser.dart';
+
+/// What a post links to inside the app. The app points [openAccount] at its
+/// profile panel once it has one, so a forwarded post's author opens from
+/// wherever the post shows (the feed, a chat).
+abstract final class PostLinks {
+  static void Function(BuildContext context, String accountId, String handle)?
+      openAccount;
+
+  /// Opens the profile of [accountId] (known as [handle]) when the app can.
+  static void open(BuildContext context, String accountId, String handle) {
+    if (accountId.isEmpty) return;
+    openAccount?.call(context, accountId, handle);
+  }
+}
 
 /// Renders an extended-markdown post body into styled, professional widgets:
 /// formatted text, headings, lists, quotes, code, tables, images, video, audio,
@@ -251,6 +266,12 @@ class _BlockView extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 8),
           child: _InfoCard(block.card ?? const PostCard(CardKind.user, '')),
         );
+      case BlockKind.forward:
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: _ForwardedPost(block.data ?? const {},
+              headers: headers, onLinkTap: onLinkTap),
+        );
     }
   }
 
@@ -445,8 +466,33 @@ class _ChartPainter extends CustomPainter {
       ..color = color
       ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round;
-    final barWidth = size.width / values.length * 0.5;
     final step = size.width / values.length;
+    if (type == 'line') {
+      final points = [
+        for (var i = 0; i < values.length; i++)
+          Offset(step * i + step / 2,
+              size.height - (values[i] / max) * (size.height - 8)),
+      ];
+      final line = Path()..moveTo(points.first.dx, points.first.dy);
+      for (final p in points.skip(1)) {
+        line.lineTo(p.dx, p.dy);
+      }
+      final area = Path.from(line)
+        ..lineTo(points.last.dx, size.height)
+        ..lineTo(points.first.dx, size.height)
+        ..close();
+      canvas.drawPath(area, Paint()..color = color.withValues(alpha: .14));
+      canvas.drawPath(
+          line,
+          paint
+            ..style = PaintingStyle.stroke
+            ..strokeJoin = StrokeJoin.round);
+      for (final p in points) {
+        canvas.drawCircle(p, 3, Paint()..color = color);
+      }
+      return;
+    }
+    final barWidth = size.width / values.length * 0.5;
     for (var i = 0; i < values.length; i++) {
       final h = (values[i] / max) * (size.height - 8);
       final x = step * i + step / 2;
@@ -459,7 +505,7 @@ class _ChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ChartPainter old) =>
-      old.values != values || old.color != color;
+      old.values != values || old.color != color || old.type != type;
 }
 
 /// Renders a `:::card` directive as a themed info card.
@@ -512,6 +558,123 @@ class _InfoCard extends StatelessWidget {
         ),
         Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
       ]),
+    );
+  }
+}
+
+/// A feed post shared into a chat (a `:::post` directive): a "Forwarded
+/// from" tag naming its author, who opens on a tap, over the post itself.
+class _ForwardedPost extends StatelessWidget {
+  const _ForwardedPost(this.data, {required this.headers, this.onLinkTap});
+  final Map<String, dynamic> data;
+  final Map<String, String> headers;
+  final Future<void> Function(String link)? onLinkTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final authorId = '${data['author_id'] ?? ''}';
+    final handle = '${data['handle'] ?? ''}';
+    final name = '${data['name'] ?? ''}'.isNotEmpty
+        ? '${data['name']}'
+        : handle.isNotEmpty
+            ? '@$handle'
+            : 'a post';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: .55),
+        borderRadius: BorderRadius.circular(14),
+        border: Border(left: BorderSide(color: scheme.primary, width: 3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        ForwardedTag(
+          name: name,
+          handle: handle,
+          avatar: '${data['avatar'] ?? ''}',
+          onTap: authorId.isEmpty
+              ? null
+              : () => PostLinks.open(context, authorId, handle),
+        ),
+        const SizedBox(height: 8),
+        RichPostContent('${data['body'] ?? ''}',
+            headers: headers, onLinkTap: onLinkTap),
+      ]),
+    );
+  }
+}
+
+/// The "Forwarded from" tag of a shared post: the original author's picture
+/// and name; tapping it opens their profile.
+class ForwardedTag extends StatelessWidget {
+  const ForwardedTag(
+      {super.key,
+      required this.name,
+      this.handle = '',
+      this.avatar = '',
+      this.onTap});
+  final String name;
+  final String handle;
+  final String avatar;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final initial = (handle.isNotEmpty ? handle : name)
+        .replaceAll('@', '')
+        .characters
+        .take(1)
+        .toString()
+        .toUpperCase();
+    return Tooltip(
+      message: onTap == null ? '' : 'Open ${handle.isEmpty ? name : '@$handle'}',
+      child: Material(
+        color: scheme.primary.withValues(alpha: .1),
+        shape: const StadiumBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(4, 3, 10, 3),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              CircleAvatar(
+                radius: 10,
+                backgroundColor: scheme.primary.withValues(alpha: .2),
+                foregroundImage: Avatars.of(avatar),
+                onForegroundImageError:
+                    avatar.isEmpty ? null : (_, __) {},
+                child: Text(initial,
+                    style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: scheme.primary)),
+              ),
+              const SizedBox(width: 6),
+              Icon(Icons.shortcut_rounded, size: 14, color: scheme.primary),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text.rich(
+                  TextSpan(children: [
+                    TextSpan(
+                        text: 'Forwarded from ',
+                        style: TextStyle(color: scheme.onSurfaceVariant)),
+                    TextSpan(
+                        text: name,
+                        style: TextStyle(
+                            color: scheme.primary,
+                            fontWeight: FontWeight.w800)),
+                  ]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11.5),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
     );
   }
 }

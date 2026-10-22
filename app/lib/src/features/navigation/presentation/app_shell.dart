@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
 import '../../home/presentation/workspace_screen.dart';
+import '../../search_feed/presentation/rich_post_content.dart';
 import '../../search_feed/presentation/search_feed_screen.dart';
 
 /// Root shell: the search feed (Pulse) is the landing page after login.
@@ -18,6 +19,16 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   String _workspace = 'Home';
   int _page = 0; // 0 = search feed, 1 = workspace desk
+
+  @override
+  void initState() {
+    super.initState();
+    // A post's author (or a shared post's original author) opens their
+    // profile wherever the post shows.
+    PostLinks.openAccount = (context, accountId, handle) => showAccountProfile(
+        context, widget.dependencies,
+        accountId: accountId, handle: handle);
+  }
 
   void _openWorkspace(String name) {
     setState(() {

@@ -67,6 +67,7 @@ class _AppPageContentState extends State<AdminPageContent> {
 
   /// Which chat reports are listed (the page starts with the open ones).
   String reportStatus = 'open';
+  String postReportStatus = 'open';
   String sort = 'created';
   bool ascending = false;
   bool live = true;
@@ -195,6 +196,7 @@ class _AppPageContentState extends State<AdminPageContent> {
         'Users' => _users(),
         'Projects' => _projects(),
         'Chat reports' => _chatReports(),
+        'Post reports' => _postReports(),
         'Agents' => _agents(),
         'Apps' => _apps(),
         'Talent' => _talent(),
@@ -4045,6 +4047,169 @@ class _AppPageContentState extends State<AdminPageContent> {
                                   icon: const Icon(Icons.do_not_disturb_rounded,
                                       size: 18),
                                   label: const Text('Dismiss')),
+                              FilledButton.icon(
+                                  onPressed: () => resolve(r, 'resolved'),
+                                  icon:
+                                      const Icon(Icons.check_rounded, size: 18),
+                                  label: const Text('Mark resolved')),
+                            ] else
+                              OutlinedButton.icon(
+                                  onPressed: () => resolve(r, 'open'),
+                                  icon:
+                                      const Icon(Icons.undo_rounded, size: 18),
+                                  label: const Text('Reopen')),
+                          ]),
+                    ],
+                  ),
+              ]),
+      ),
+    ]);
+  }
+
+  Widget _postReports() {
+    final scheme = Theme.of(context).colorScheme;
+    final response = _map(widget.results['posts.admin_post_reports']);
+    final reports = _listOfMaps(response['reports']);
+    final open = _integer(response['open']);
+    const statuses = ['open', 'resolved', 'dismissed', 'all'];
+    final status = postReportStatus;
+    String person(dynamic ref) {
+      final m = _map(ref);
+      final name = '${m['display_name'] ?? ''}'.trim();
+      final handle = '${m['handle'] ?? ''}'.trim();
+      if (name.isNotEmpty && handle.isNotEmpty && name != handle) {
+        return '$name (@$handle)';
+      }
+      return handle.isNotEmpty
+          ? '@$handle'
+          : name.isNotEmpty
+              ? name
+              : 'Unknown';
+    }
+
+    Future<void> resolve(Map<String, dynamic> r, String to,
+        {bool remove = false}) async {
+      try {
+        await widget.onDirectAction('posts', 'admin_post_report_resolve', {
+          'id': r['id'],
+          'status': to,
+          if (remove) 'remove_post': true,
+        });
+      } catch (_) {
+        // The console reports the error.
+      }
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      AdminGrid(maxColumns: 2, children: [
+        AdminStatCard(
+            label: 'Open reports',
+            value: '$open',
+            hint: open == 0
+                ? 'Nothing waits for a decision.'
+                : 'Read the reported post, then remove it, resolve or dismiss.',
+            icon: Icons.report_rounded,
+            tone: open == 0 ? AppColors.success : AppColors.warning),
+        AdminStatCard(
+            label: 'Shown',
+            value: '${reports.length}',
+            hint: status == 'all' ? 'Every report' : 'Reports $status',
+            icon: Icons.inbox_rounded),
+      ]),
+      const SizedBox(height: 16),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        for (final s in statuses)
+          ChoiceChip(
+            label: Text(s[0].toUpperCase() + s.substring(1)),
+            selected: s == status,
+            onSelected: (_) {
+              setState(() => postReportStatus = s);
+              widget.onQuery?.call('posts.admin_post_reports', {'status': s});
+            },
+          ),
+      ]),
+      const SizedBox(height: 12),
+      AdminSectionCard(
+        title: 'Reports',
+        icon: Icons.report_rounded,
+        subtitle:
+            'Each report carries a copy of the post as it was when it was filed.',
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: reports.isEmpty
+            ? const AdminEmptyState(
+                'No reports', 'Posts people report in the feed show up here.',
+                icon: Icons.report_outlined)
+            : Column(children: [
+                for (final r in reports)
+                  ExpansionTile(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppShape.control)),
+                    collapsedShape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppShape.control)),
+                    leading: AdminAvatar(person(r['accused']),
+                        icon: Icons.report_rounded,
+                        size: 40,
+                        avatar: _avatarOf(r['accused'])),
+                    title: Text(
+                        '${_humanKey('${r['reason'] ?? 'other'}')} · a post${r['deleted'] == true ? ' (removed)' : ''}',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(
+                        'By ${person(r['accused'])} · reported by ${person(r['reporter'])} · ${_date(r['created_at'])}'),
+                    trailing: AdminStatusPill('${r['status'] ?? 'open'}'),
+                    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                    children: [
+                      if ('${r['note'] ?? ''}'.isNotEmpty)
+                        AdminKeyValue('Note', '${r['note']}'),
+                      if (r['resolved_by'] != null)
+                        AdminKeyValue('Decided by',
+                            '${person(r['resolved_by'])} · ${_date(r['resolved_at'])}'),
+                      const SizedBox(height: 8),
+                      Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('REPORTED POST',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  letterSpacing: 1,
+                                  fontWeight: FontWeight.w800,
+                                  color: scheme.onSurfaceVariant))),
+                      const SizedBox(height: 6),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                            color: scheme.errorContainer,
+                            borderRadius: BorderRadius.circular(AppShape.inner)),
+                        child: KeyedSubtree(
+                          key: PageStorageKey<String>('post-report:${r['id']}'),
+                          child: SelectableText('${r['body'] ?? ''}',
+                              style: const TextStyle(fontSize: 13)),
+                        ),
+                      ),
+                      if (r['current_body'] != null &&
+                          '${r['current_body']}' != '${r['body']}') ...[
+                        const SizedBox(height: 6),
+                        AdminKeyValue('Edited since', '${r['current_body']}'),
+                      ],
+                      const SizedBox(height: 8),
+                      Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if ('${r['status']}' == 'open') ...[
+                              OutlinedButton.icon(
+                                  onPressed: () => resolve(r, 'dismissed'),
+                                  icon: const Icon(Icons.do_not_disturb_rounded,
+                                      size: 18),
+                                  label: const Text('Dismiss')),
+                              if (r['deleted'] != true)
+                                OutlinedButton.icon(
+                                    onPressed: () =>
+                                        resolve(r, 'resolved', remove: true),
+                                    icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        size: 18),
+                                    label: const Text('Remove post')),
                               FilledButton.icon(
                                   onPressed: () => resolve(r, 'resolved'),
                                   icon:

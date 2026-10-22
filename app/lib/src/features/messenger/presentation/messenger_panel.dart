@@ -12,6 +12,8 @@ import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
+import '../../search_feed/presentation/rich_post_parser.dart'
+    show markupPreview;
 import 'chat_page.dart';
 import 'requests_panel.dart';
 
@@ -381,7 +383,7 @@ class _ChatTile extends StatelessWidget {
   final VoidCallback onMenu;
 
   String get _preview {
-    final body = chat.lastBody.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final body = markupPreview(chat.lastBody);
     final text = body.isNotEmpty
         ? body
         : chat.lastAttachments > 0

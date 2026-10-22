@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -18,6 +19,12 @@ bool get htmlPreviewSupported =>
 /// open in the browser.
 Widget htmlPreview({Key? key, required String html}) => InAppWebView(
   key: key,
+  // Vertical drags scroll the page, not a scrolling view around it.
+  gestureRecognizers: {
+    const Factory<VerticalDragGestureRecognizer>(
+      VerticalDragGestureRecognizer.new,
+    ),
+  },
   initialData: InAppWebViewInitialData(
     data: html,
     baseUrl: WebUri('about:blank'),

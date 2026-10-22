@@ -219,7 +219,12 @@ class _BlockView extends StatelessWidget {
         if (url.isEmpty) return const SizedBox.shrink();
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
-          child: VideoBubble(url: url, headers: headers, radius: 12),
+          child: LayoutBuilder(
+              builder: (context, box) => VideoBubble(
+                  url: url,
+                  headers: headers,
+                  radius: 12,
+                  width: box.maxWidth.isFinite ? box.maxWidth : 320)),
         );
       case BlockKind.audio:
         final url = block.url ?? '';
@@ -230,8 +235,16 @@ class _BlockView extends StatelessWidget {
           decoration: BoxDecoration(
               color: scheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(12)),
-          child: AudioBubble(
-              url: url, headers: headers, mime: '', durationLabel: 'audio'),
+          child: LayoutBuilder(
+              builder: (context, box) => AudioBubble(
+                  url: url,
+                  headers: headers,
+                  mime: '',
+                  durationLabel: 'audio',
+                  voice: false,
+                  width: box.maxWidth.isFinite
+                      ? (box.maxWidth - 60).clamp(120.0, 420.0)
+                      : 220)),
         );
       case BlockKind.card:
         return Padding(

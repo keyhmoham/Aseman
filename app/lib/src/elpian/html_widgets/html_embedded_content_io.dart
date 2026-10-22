@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -82,7 +83,17 @@ class _HtmlEmbeddedContentState extends State<HtmlEmbeddedContent> {
     final controller = _controller;
     if (controller != null) {
       return EmbeddedContentBox(
-        child: ClipRect(child: WebViewWidget(controller: controller)),
+        // Vertical drags scroll the embedded page, not the view around it.
+        child: ClipRect(
+          child: WebViewWidget(
+            controller: controller,
+            gestureRecognizers: {
+              const Factory<VerticalDragGestureRecognizer>(
+                VerticalDragGestureRecognizer.new,
+              ),
+            },
+          ),
+        ),
       );
     }
     return EmbeddedLinkCard(

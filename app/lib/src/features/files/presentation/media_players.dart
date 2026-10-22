@@ -6,6 +6,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../elpian/core/media_file.dart';
+import '../../../shared/widgets/audio_waveform.dart';
 
 String _clock(Duration d) {
   final h = d.inHours, m = d.inMinutes % 60, s = d.inSeconds % 60;
@@ -24,6 +25,7 @@ class _Transport extends StatelessWidget {
     required this.onSeek,
     this.trailing,
     this.color,
+    this.waveSeed,
   });
   final bool playing;
   final Duration position;
@@ -32,6 +34,9 @@ class _Transport extends StatelessWidget {
   final ValueChanged<Duration> onSeek;
   final Widget? trailing;
   final Color? color;
+
+  /// Audio: the position shows as the clip's waveform drawn from this.
+  final String? waveSeed;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +56,21 @@ class _Transport extends StatelessWidget {
           icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
         ),
         Text(_clock(position), style: style),
+        if (waveSeed != null)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: AudioWaveform(
+                seed: waveSeed!,
+                height: 34,
+                progress: total <= 0 ? 0 : at / total,
+                onSeek: total <= 0
+                    ? null
+                    : (f) => onSeek(Duration(milliseconds: (total * f).round())),
+              ),
+            ),
+          )
+        else
         Expanded(
           child: Slider(
             value: total <= 0 ? 0 : at.toDouble(),
@@ -69,15 +89,48 @@ class _Transport extends StatelessWidget {
 }
 
 /// A video file, played from its bytes with its own controls.
-class FileVideoPlayer extends StatefulWidget {
+class FileVideoPlayer extends StatelessWidget {
   const FileVideoPlayer({super.key, required this.bytes, required this.mime});
   final Uint8List bytes;
   final String mime;
+
   @override
-  State<FileVideoPlayer> createState() => _FileVideoPlayerState();
+  Widget build(BuildContext context) =>
+      _VideoView(open: () => videoControllerForBytes(bytes, mime));
 }
 
-class _FileVideoPlayerState extends State<FileVideoPlayer> {
+/// A video streamed from [url] (a shared file's content URL) with its own
+/// controls; [autoplay] starts it once it is ready.
+class NetworkVideoPlayer extends StatelessWidget {
+  const NetworkVideoPlayer({
+    super.key,
+    required this.url,
+    this.headers = const {},
+    this.autoplay = true,
+  });
+  final String url;
+  final Map<String, String> headers;
+  final bool autoplay;
+
+  @override
+  Widget build(BuildContext context) => _VideoView(
+    autoplay: autoplay,
+    open: () async =>
+        VideoPlayerController.networkUrl(Uri.parse(url), httpHeaders: headers),
+  );
+}
+
+/// The player both kinds share: the picture, a big play button over it
+/// while paused, and the transport below.
+class _VideoView extends StatefulWidget {
+  const _VideoView({required this.open, this.autoplay = false});
+  final Future<VideoPlayerController> Function() open;
+  final bool autoplay;
+  @override
+  State<_VideoView> createState() => _VideoViewState();
+}
+
+class _VideoViewState extends State<_VideoView> {
   VideoPlayerController? _controller;
   String? _error;
 
@@ -89,7 +142,7 @@ class _FileVideoPlayerState extends State<FileVideoPlayer> {
 
   Future<void> _open() async {
     try {
-      final c = await videoControllerForBytes(widget.bytes, widget.mime);
+      final c = await widget.open();
       await c.initialize();
       if (!mounted) {
         await c.dispose();
@@ -99,9 +152,21 @@ class _FileVideoPlayerState extends State<FileVideoPlayer> {
         if (mounted) setState(() {});
       });
       setState(() => _controller = c);
+      if (widget.autoplay) unawaited(c.play());
     } catch (e) {
       if (mounted) setState(() => _error = 'This video cannot be played here.');
     }
+  }
+
+  Future<void> _toggle() async {
+    final c = _controller;
+    if (c == null) return;
+    final v = c.value;
+    if (v.isPlaying) return c.pause();
+    if (v.duration > Duration.zero && v.position >= v.duration) {
+      await c.seekTo(Duration.zero);
+    }
+    await c.play();
   }
 
   @override
@@ -114,7 +179,12 @@ class _FileVideoPlayerState extends State<FileVideoPlayer> {
   Widget build(BuildContext context) {
     final c = _controller;
     if (_error != null) return _Unplayable(Icons.movie_outlined, _error!);
-    if (c == null) return const Center(child: CircularProgressIndicator());
+    if (c == null) {
+      return const ColoredBox(
+        color: Colors.black,
+        child: Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
+    }
     final v = c.value;
     return ColoredBox(
       color: Colors.black,
@@ -122,12 +192,23 @@ class _FileVideoPlayerState extends State<FileVideoPlayer> {
         children: [
           Expanded(
             child: GestureDetector(
-              onTap: () => v.isPlaying ? c.pause() : c.play(),
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: v.aspectRatio <= 0 ? 16 / 9 : v.aspectRatio,
-                  child: VideoPlayer(c),
-                ),
+              behavior: HitTestBehavior.opaque,
+              onTap: _toggle,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Center(
+                    child: AspectRatio(
+                      aspectRatio: v.aspectRatio <= 0 ? 16 / 9 : v.aspectRatio,
+                      child: VideoPlayer(c),
+                    ),
+                  ),
+                  AnimatedOpacity(
+                    opacity: v.isPlaying ? 0 : 1,
+                    duration: const Duration(milliseconds: 180),
+                    child: const PlayBadge(size: 68),
+                  ),
+                ],
               ),
             ),
           ),
@@ -136,7 +217,7 @@ class _FileVideoPlayerState extends State<FileVideoPlayer> {
             position: v.position,
             duration: v.duration,
             color: Colors.white,
-            onToggle: () => v.isPlaying ? c.pause() : c.play(),
+            onToggle: _toggle,
             onSeek: c.seekTo,
             trailing: IconButton(
               tooltip: v.volume == 0 ? 'Unmute' : 'Mute',
@@ -153,6 +234,28 @@ class _FileVideoPlayerState extends State<FileVideoPlayer> {
       ),
     );
   }
+}
+
+/// The round translucent play button drawn over a video.
+class PlayBadge extends StatelessWidget {
+  const PlayBadge({super.key, this.size = 56});
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: Colors.black.withValues(alpha: .5),
+      shape: BoxShape.circle,
+      border: Border.all(color: Colors.white.withValues(alpha: .85), width: 2),
+    ),
+    child: Icon(
+      Icons.play_arrow_rounded,
+      color: Colors.white,
+      size: size * .62,
+    ),
+  );
 }
 
 /// An audio file, played from its bytes: a cover, its name and controls.
@@ -280,6 +383,7 @@ class _FileAudioPlayerState extends State<FileAudioPlayer> {
                       unawaited(_player.play());
                     },
                     onSeek: _player.seek,
+                    waveSeed: widget.name,
                   ),
                 ),
             ],

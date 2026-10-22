@@ -40,7 +40,7 @@ void main() {
     expect(service.requested, fileId);
     expect(find.text('Delivered file'), findsOneWidget);
     expect(find.text('corrected-site.zip'), findsOneWidget);
-    expect(find.textContaining('tap to download'), findsOneWidget);
+    expect(find.textContaining('tap to open'), findsOneWidget);
   });
 
   test(

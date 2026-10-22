@@ -1,23 +1,39 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
-/// An inline playable video bubble using video_player. Falls back to a
-/// poster-style card when the platform cannot play network video.
+import '../../../../data/models/uploaded_file.dart';
+import '../../../files/presentation/media_players.dart' show PlayBadge;
+import 'shared_file_viewer.dart';
+
+/// A video as a card: its first frame (where the platform can show it) under
+/// a play button, its length and name. Tapping it opens the player — a card
+/// window on the desk beside a room's chat on wide screens, else a bottom
+/// sheet (see [openSharedFile]).
 class VideoBubble extends StatefulWidget {
   const VideoBubble({
     super.key,
     required this.url,
     required this.headers,
+    this.file,
+    this.download,
     this.poster,
     this.mine = false,
     this.radius = 12,
+    this.width = 240,
   });
 
   final String url;
   final Map<String, String> headers;
+
+  /// The stored file, when the video is one (its name, size and id).
+  final UploadedFile? file;
+  final Future<Uint8List> Function(UploadedFile file)? download;
   final Widget? poster;
   final bool mine;
   final double radius;
+  final double width;
 
   @override
   State<VideoBubble> createState() => _VideoBubbleState();
@@ -25,9 +41,6 @@ class VideoBubble extends StatefulWidget {
 
 class _VideoBubbleState extends State<VideoBubble> {
   VideoPlayerController? _controller;
-  bool _failed = false;
-  bool _playing = false;
-  bool _showControls = true;
 
   @override
   void initState() {
@@ -35,6 +48,7 @@ class _VideoBubbleState extends State<VideoBubble> {
     _init();
   }
 
+  /// Loads the video far enough to show its first frame and length.
   Future<void> _init() async {
     try {
       final c = VideoPlayerController.networkUrl(
@@ -46,118 +60,129 @@ class _VideoBubbleState extends State<VideoBubble> {
         await c.dispose();
         return;
       }
-      c.addListener(_onController);
-      setState(() {
-        _controller = c;
-      });
+      setState(() => _controller = c);
     } catch (_) {
-      if (mounted) setState(() => _failed = true);
+      // The card keeps its plain poster.
     }
   }
 
-  void _onController() {
-    if (!mounted) return;
-    setState(() {
-      _playing = _controller!.value.isPlaying;
-    });
-  }
+  UploadedFile get _file =>
+      widget.file ??
+      UploadedFile(
+          id: sharedFileIdOf(widget.url),
+          name: 'Video',
+          mime: 'video/mp4',
+          size: 0);
 
-  Future<void> _toggle() async {
-    final c = _controller;
-    if (c == null) return;
-    if (c.value.isPlaying) {
-      await c.pause();
-    } else {
-      await c.play();
-      if (mounted) setState(() => _showControls = false);
-    }
-  }
-
-  String get _position {
-    final c = _controller;
-    if (c == null) return '';
-    final pos = c.value.position;
-    final total = c.value.duration;
-    if (pos.inSeconds <= 0 && total.inSeconds <= 0) return '0:00';
-    final totalSec = total.inSeconds > 0 ? total.inSeconds : pos.inSeconds;
-    final m = (totalSec ~/ 60).toString().padLeft(2, '0');
-    final s = (totalSec % 60).toString().padLeft(2, '0');
+  String get _length {
+    final total = _controller?.value.duration ?? Duration.zero;
+    if (total <= Duration.zero) return '';
+    final m = total.inMinutes.toString();
+    final s = (total.inSeconds % 60).toString().padLeft(2, '0');
     return '$m:$s';
   }
 
   @override
   void dispose() {
-    _controller?.removeListener(_onController);
     _controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    const size = Size(240, 150);
-
-    Widget content;
-    if (_failed || _controller == null) {
-      content = Container(
-        width: size.width,
-        height: size.height,
-        color: scheme.surfaceContainerHighest,
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.movie_creation_outlined,
-              color: Colors.white70, size: 34),
-          const SizedBox(height: 6),
-          Text('Video', style: TextStyle(color: scheme.onSurfaceVariant)),
-        ]),
-      );
-    } else {
-      content = GestureDetector(
-        onTap: _toggle,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            SizedBox(
-              width: size.width,
-              height: size.height,
-              child: VideoPlayer(_controller!),
-            ),
-            if (!_playing || _showControls) ...[
-              Container(
-                decoration: const BoxDecoration(
-                  color: Colors.black38,
-                  shape: BoxShape.circle,
-                ),
-                padding: const EdgeInsets.all(10),
-                child: Icon(
-                  _playing ? Icons.pause : Icons.play_arrow_rounded,
-                  color: Colors.white,
-                  size: 30,
-                ),
-              ),
-              Positioned(
-                right: 8,
-                bottom: 6,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(6),
+    final c = _controller;
+    final file = _file;
+    final caption = [
+      if (widget.file != null && file.name.isNotEmpty) file.name,
+      if (file.size > 0) file.humanSize,
+    ].join(' · ');
+    final length = _length;
+    return Semantics(
+      button: true,
+      label: 'Play video',
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(widget.radius),
+        child: SizedBox(
+          width: widget.width,
+          child: AspectRatio(
+            aspectRatio: 16 / 10,
+            child: Material(
+              color: Colors.black,
+              child: InkWell(
+                onTap: () => openSharedFile(context,
+                    file: file,
+                    url: widget.url,
+                    headers: widget.headers,
+                    download: widget.download),
+                child: Stack(fit: StackFit.expand, children: [
+                  if (c != null)
+                    FittedBox(
+                      fit: BoxFit.cover,
+                      clipBehavior: Clip.hardEdge,
+                      child: SizedBox(
+                        width: c.value.size.width <= 0 ? 16 : c.value.size.width,
+                        height:
+                            c.value.size.height <= 0 ? 10 : c.value.size.height,
+                        child: VideoPlayer(c),
+                      ),
+                    )
+                  else
+                    widget.poster ??
+                        const DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0xFF2A2340), Color(0xFF0E0C16)],
+                            ),
+                          ),
+                        ),
+                  // A shade at the foot keeps the caption readable.
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.center,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.transparent, Colors.black54],
+                      ),
+                    ),
                   ),
-                  child: Text(_position,
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 10)),
-                ),
+                  const Center(child: PlayBadge(size: 54)),
+                  Positioned(
+                    left: 10,
+                    right: 10,
+                    bottom: 8,
+                    child: Row(children: [
+                      const Icon(Icons.videocam_rounded,
+                          size: 14, color: Colors.white70),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(caption,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 11)),
+                      ),
+                      if (length.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(length,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 10)),
+                        ),
+                    ]),
+                  ),
+                ]),
               ),
-            ],
-          ],
+            ),
+          ),
         ),
-      );
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(widget.radius),
-      child: content,
+      ),
     );
   }
 }

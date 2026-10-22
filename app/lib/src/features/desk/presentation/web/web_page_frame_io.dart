@@ -104,9 +104,16 @@ class _WebPageWebViewState extends State<_WebPageWebView>
   @override
   Widget build(BuildContext context) {
     return InAppWebView(
+      // Drags scroll the page even inside a list, a sheet or a desk that
+      // scrolls itself; without a recognizer of its own the view only gets
+      // the touches nothing around it wants, and Android pages never scroll.
       gestureRecognizers: widget.claimGestures
           ? {const Factory<EagerGestureRecognizer>(EagerGestureRecognizer.new)}
-          : null,
+          : {
+              const Factory<VerticalDragGestureRecognizer>(
+                VerticalDragGestureRecognizer.new,
+              ),
+            },
       initialUrlRequest: URLRequest(url: WebUri(widget.url)),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,

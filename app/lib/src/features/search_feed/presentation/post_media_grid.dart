@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_shape.dart';
 import '../../../data/models/uploaded_file.dart';
+import '../../files/presentation/media_players.dart' show PlayBadge;
 import '../../rooms/presentation/widgets/media_preview_screen.dart';
+import '../../rooms/presentation/widgets/shared_file_viewer.dart';
 
 /// A post's images, GIFs and videos: one fills the width, more sit in a
 /// two-column grid (at most four shown, the rest counted on the last tile).
@@ -76,21 +78,28 @@ class PostMediaGrid extends StatelessWidget {
                 color: scheme.surfaceContainerHighest,
                 child: Icon(Icons.broken_image_outlined,
                     color: scheme.onSurfaceVariant)))
-        : ColoredBox(
-            color: Colors.black87,
-            child: Center(
-                child: Icon(Icons.play_circle_fill_rounded,
-                    size: 52, color: Colors.white.withValues(alpha: .9))));
+        : const DecoratedBox(
+            decoration: BoxDecoration(
+                gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF2A2340), Color(0xFF0E0C16)])),
+            child: Center(child: PlayBadge(size: 58)));
     return Semantics(
       button: true,
       label: file.isVideo ? 'Play video' : 'Open image',
       child: InkWell(
-        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-            builder: (_) => MediaPreviewScreen(
-                file: file,
-                headers: headers,
-                url: resolveUrl(file),
-                onDownload: download))),
+        // A video plays in the player (a desk window or a sheet); an
+        // image opens full screen.
+        onTap: () => file.isVideo
+            ? openSharedFile(context,
+                file: file, url: url, headers: headers, download: download)
+            : Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => MediaPreviewScreen(
+                    file: file,
+                    headers: headers,
+                    url: url,
+                    onDownload: download))),
         child: Stack(fit: StackFit.expand, children: [
           content,
           if (file.isGif)

@@ -6,6 +6,7 @@ import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/bot.dart';
 import '../../../elpian/elpian.dart';
+import '../../../shared/widgets/skeleton.dart';
 import '../elpian/app_bridge.dart';
 import 'app_frontend_theme.dart';
 
@@ -89,7 +90,7 @@ class _AppFrontendScreenState extends State<AppFrontendScreen> {
 
   Widget _buildBody(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const SkeletonPage();
     }
     if (_error != null) {
       return Center(

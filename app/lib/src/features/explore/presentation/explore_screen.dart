@@ -9,6 +9,7 @@ import '../../../data/repositories/room_repository.dart';
 import '../../../shared/widgets/app_panel.dart';
 import '../../../shared/widgets/page_scaffold.dart';
 import '../../../shared/widgets/responsive_grid.dart';
+import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/status_tag.dart';
 import 'explore_view_model.dart';
 
@@ -118,10 +119,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
                             fontSize: 17, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 12),
                     if (_loadingAgents)
-                      const Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
+                      const SkeletonGrid(
+                          itemCount: 4,
+                          maxCrossAxisExtent: 320,
+                          mainAxisExtent: 120)
                     else if (_visibleAgents.isEmpty)
                       Padding(
                         padding: const EdgeInsets.all(24),

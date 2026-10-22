@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_sign_in_web/web_only.dart' as web;
 
+import '../../../shared/widgets/skeleton.dart';
+
 Widget buildGoogleSignInButton({
   required bool ready,
   required bool busy,
@@ -9,7 +11,7 @@ Widget buildGoogleSignInButton({
   if (!ready) {
     return const SizedBox(
       height: 48,
-      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      child: SkeletonBox(width: double.infinity, radius: 24),
     );
   }
   return IgnorePointer(

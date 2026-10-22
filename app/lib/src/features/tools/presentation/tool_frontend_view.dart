@@ -8,6 +8,7 @@ import '../../../genui/genui.dart'
         CompactSummaryView,
         FrontendDisplay,
         FrontendPresentation;
+import '../../../shared/widgets/skeleton.dart';
 import '../../tools/presentation/app_frontend_theme.dart';
 import '../connect/mcp_connect_dialog.dart';
 import '../data/tools_api.dart';
@@ -199,24 +200,13 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
     final scheme = Theme.of(context).colorScheme;
     if (_loading) {
       if (compact) {
-        return const Center(
-            child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2.4)));
+        return const Padding(
+            padding: EdgeInsets.all(12),
+            child: SkeletonParagraph(lines: 2, lineHeight: 10));
       }
       // A generated interface takes a moment the first time (every time
       // when its tool does not cache it).
-      return Center(
-          child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 14),
-                Text('Opening…',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: scheme.onSurfaceVariant)),
-              ])));
+      return const SkeletonPage(stats: false, rows: 3);
     }
     final account = _needsAccount;
     if (account != null) {

@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/code_highlight.dart';
+import '../../../shared/widgets/skeleton.dart';
 import '../../rooms/presentation/widgets/audio_bubble.dart';
 import '../../rooms/presentation/widgets/video_bubble.dart';
 import 'rich_post_parser.dart';
@@ -217,14 +218,8 @@ class _BlockView extends StatelessWidget {
                     _MediaFallback(Icons.image_outlined, 'Image · $url'),
                 loadingBuilder: (_, child, progress) => progress == null
                     ? child
-                    : const SizedBox(
-                        height: 140,
-                        child: Center(
-                            child: SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2)))),
+                    : const SkeletonBox(
+                        width: double.infinity, height: 180, radius: 0),
                 width: double.infinity,
                 height: 180),
           ),

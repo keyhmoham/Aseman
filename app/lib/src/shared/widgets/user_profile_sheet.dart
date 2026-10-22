@@ -13,6 +13,7 @@ import '../../features/search_feed/presentation/search_feed_view_model.dart'
 import 'avatar.dart';
 import 'avatar_editor.dart';
 import 'mini_tag.dart';
+import 'skeleton.dart';
 
 /// User profile sheet shown from the profile menu. Server-backed: the header
 /// shows the signed-in account, the stats reflect the live wallet/bots/posts,
@@ -225,9 +226,7 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
           ]),
           const SizedBox(height: 6),
           if (_loading)
-            const Padding(
-                padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()))
+            const SkeletonList(itemCount: 2, item: SkeletonPost())
           else if (_posts.isEmpty)
             Padding(
               padding: const EdgeInsets.all(20),

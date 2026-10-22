@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../shared/widgets/skeleton.dart';
 import '../data/tools_api.dart';
 import '../mcp_app/mcp_app_frame.dart';
 import '../mcp_app/mcp_app_host.dart';
@@ -163,7 +164,7 @@ class _McpAppViewState extends State<McpAppView> {
     }
     final html = _html;
     if (html == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const SkeletonPage();
     }
     final build = widget.frame ?? mcpAppFrame;
     // Apps draw on a light page of their own unless told otherwise.

@@ -13,6 +13,7 @@ import '../../../domain/models/market_quote.dart';
 import '../../../shared/widgets/app_panel.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/page_scaffold.dart';
+import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/stat_card.dart';
 import '../../../shared/widgets/status_tag.dart';
 import 'home_view_model.dart';
@@ -90,8 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: AnimatedBuilder(
             animation: model,
             builder: (context, _) {
-              if (model.loading)
-                return const Center(child: CircularProgressIndicator());
+              if (model.loading) return const SkeletonPage();
               if (model.error != null)
                 return Center(
                     child: Text('Could not load market data: ${model.error}'));
@@ -107,10 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   model.quotes.map(_MarketTile.new).toList())),
                       const SizedBox(height: 16),
                       if (_loading)
-                        const Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
+                        const SkeletonList(itemCount: 3, item: SkeletonPost())
                       else if (_feed.isEmpty)
                         Padding(
                           padding: const EdgeInsets.all(24),

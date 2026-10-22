@@ -9,6 +9,7 @@ import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
+import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/status_tag.dart';
 
 /// Marketplace — a modal panel (dialog on desktop, bottom sheet on mobile) to
@@ -173,7 +174,8 @@ class _MarketScreenState extends State<MarketScreen> {
           const SizedBox(height: 10),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const SkeletonList(
+                    item: SkeletonCard(mediaHeight: 0), spacing: 10)
                 : _error != null
                     ? Center(child: Text(_error!))
                     : TabBarView(children: [
@@ -238,14 +240,7 @@ class _ListingList extends StatelessWidget {
           separatorBuilder: (_, __) => const SizedBox(height: 10),
           itemBuilder: (context, i) {
             if (i >= items.length) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 14),
-                child: Center(
-                    child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2.5))),
-              );
+              return const SkeletonCard(mediaHeight: 0);
             }
             return _ListingCard(
                 listing: items[i], onInstall: () => onInstall(items[i]));
@@ -443,7 +438,7 @@ class _PublishDialogState extends State<_PublishDialog> {
       onSubmit: _loading || _selected == null ? null : _submit,
       children: [
         if (_loading)
-          const LinearProgressIndicator()
+          const SkeletonField()
         else if (_bots.isEmpty)
           Text('You have no bots yet. Create an agent or app first.',
               style: TextStyle(color: scheme.onSurfaceVariant))

@@ -4,6 +4,7 @@ import '../../../core/formatting/billing_units.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/backend_action_ui.dart';
+import '../../../shared/widgets/skeleton.dart';
 
 /// Reads backend data a form needs to offer choices (providers, categories).
 typedef AdminLookup = Future<dynamic> Function(
@@ -885,7 +886,7 @@ class _AgentFormState extends State<_AgentForm> {
           ),
         if (agent)
           loading
-              ? const LinearProgressIndicator()
+              ? const SkeletonField()
               : providers.isEmpty
                   ? Text(
                       'No LLM provider is enabled yet. Add one under AI › Providers, then pick the model here.',

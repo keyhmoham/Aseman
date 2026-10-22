@@ -12,6 +12,7 @@ import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
+import '../../../shared/widgets/skeleton.dart';
 import '../../search_feed/presentation/rich_post_parser.dart'
     show markupPreview;
 import 'chat_page.dart';
@@ -331,7 +332,7 @@ class _ChatListState extends State<_ChatList> {
           const SizedBox(height: 8),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const SkeletonList()
                 : _error != null
                     ? _Empty(
                         icon: Icons.cloud_off_rounded,

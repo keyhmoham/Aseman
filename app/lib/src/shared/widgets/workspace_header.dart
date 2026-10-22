@@ -6,6 +6,7 @@ import '../../app_dependencies.dart';
 import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_surfaces.dart';
 import '../../data/models/space.dart';
+import 'skeleton.dart';
 
 /// Shared top app bar of the workspace and the feed: the ASEMAN name in the
 /// middle, the account avatar (its menu) on the right edge. On phones the
@@ -394,8 +395,9 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                         const SizedBox(height: 18),
                         Flexible(
                             child: loading
-                                ? const Center(
-                                    child: CircularProgressIndicator())
+                                ? const SkeletonGrid(
+                                    maxCrossAxisExtent: 220,
+                                    mainAxisExtent: 154)
                                 : GridView.builder(
                                     shrinkWrap: true,
                                     gridDelegate:

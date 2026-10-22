@@ -9,6 +9,7 @@ import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar_editor.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
+import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/status_tag.dart';
 import '../../tools/data/tools_api.dart';
 import '../../tools/domain/tool_models.dart';
@@ -362,7 +363,8 @@ class _AgentsScreenState extends State<AgentsScreen> {
           const SizedBox(height: 10),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const SkeletonList(
+                    item: SkeletonCard(mediaHeight: 0), spacing: 10)
                 : _error != null
                     ? Center(child: Text(_error!))
                     : TabBarView(children: [

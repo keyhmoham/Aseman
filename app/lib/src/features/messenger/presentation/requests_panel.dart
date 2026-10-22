@@ -8,6 +8,7 @@ import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_header.dart';
+import '../../../shared/widgets/skeleton.dart';
 
 /// Opens the questions people and agents asked the caller and are waiting on
 /// (the message namespace's asks), to answer them one by one.
@@ -98,7 +99,7 @@ class _RequestsPanelState extends State<RequestsPanel> {
         const SizedBox(height: 14),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const SkeletonList()
               : _error != null
                   ? Center(
                       child: Text(_error!,

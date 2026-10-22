@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/utils/context_extensions.dart';
 import '../../../data/services/aseman_service.dart';
+import '../../../shared/widgets/skeleton.dart';
 import '../data/workspace_files.dart';
 import '../domain/file_types.dart';
 import 'file_actions.dart';
@@ -378,7 +379,15 @@ class _WorkspaceFileTreeState extends State<WorkspaceFileTree> {
         const SizedBox(height: 4),
         Expanded(
           child: rootEntries == null && rootError == null
-              ? const Center(child: CircularProgressIndicator())
+              ? const SkeletonList(
+                  itemCount: 8,
+                  spacing: 0,
+                  item: SkeletonListTile(
+                    leadingSize: 18,
+                    lines: 1,
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                  ),
+                )
               : rootError != null && rootEntries == null
               ? _Note(
                   icon: Icons.cloud_off_outlined,
@@ -415,11 +424,7 @@ class _WorkspaceFileTreeState extends State<WorkspaceFileTree> {
         child: row.loading
             ? const Align(
                 alignment: Alignment.centerLeft,
-                child: SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+                child: SkeletonLine(width: 120, height: 10),
               )
             : Text(
                 row.message,

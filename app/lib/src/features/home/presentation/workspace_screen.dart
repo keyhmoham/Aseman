@@ -24,6 +24,7 @@ import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/profile_menu.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
+import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../../shared/widgets/workspace_panel_motion.dart';
@@ -1346,7 +1347,7 @@ class _LibraryFilesListState extends State<_LibraryFilesList> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const SkeletonList();
     if (_files.isEmpty) {
       return Center(
           child: Padding(
@@ -1371,14 +1372,7 @@ class _LibraryFilesListState extends State<_LibraryFilesList> {
             separatorBuilder: (_, __) => const SizedBox(height: 7),
             itemBuilder: (context, index) {
               if (index >= _files.length) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Center(
-                      child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2.5))),
-                );
+                return const SkeletonListTile();
               }
               final file = _files[index];
               final name = file['name'] as String? ?? 'file';
@@ -2370,10 +2364,7 @@ class _SocialFeedState extends State<_SocialFeed> {
       if (widget.spaceId.isNotEmpty) _composer(context),
     ];
     if (loading) {
-      postWidgets.add(const Padding(
-        padding: EdgeInsets.all(28),
-        child: Center(child: CircularProgressIndicator()),
-      ));
+      postWidgets.add(const SkeletonList(itemCount: 3, item: SkeletonPost()));
     } else if (posts.isEmpty) {
       postWidgets.add(Padding(
         padding: const EdgeInsets.all(28),
@@ -2401,14 +2392,7 @@ class _SocialFeedState extends State<_SocialFeed> {
             )));
     }
     if (loadingMore) {
-      postWidgets.add(const Padding(
-        padding: EdgeInsets.symmetric(vertical: 14),
-        child: Center(
-            child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2.5))),
-      ));
+      postWidgets.add(const SkeletonPost());
     }
     final body = NotificationListener<ScrollNotification>(
         onNotification: (n) {
@@ -3098,7 +3082,7 @@ class _SearchResultsState extends State<_SearchResults> {
                       style: const TextStyle(fontSize: 9))),
           ])),
       Expanded(child: Builder(builder: (context) {
-        if (_loading) return const Center(child: CircularProgressIndicator());
+        if (_loading) return const SkeletonList();
         if (_items.isEmpty) {
           return const Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -3114,14 +3098,7 @@ class _SearchResultsState extends State<_SearchResults> {
             itemCount: _items.length + (_hasMore || _loadingMore ? 1 : 0),
             itemBuilder: (context, index) {
               if (index >= _items.length) {
-                return const Center(
-                    child: Padding(
-                  padding: EdgeInsets.all(14),
-                  child: SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2.5)),
-                ));
+                return const SkeletonListTile();
               }
               final hit = _items[index];
               final payload = hit.payload;
@@ -4001,11 +3978,8 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
                         Align(
                             alignment: Alignment.centerLeft,
                             child: _loading
-                                ? const SizedBox(
-                                    height: 12,
-                                    width: 12,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2))
+                                ? const SkeletonParagraph(
+                                    lines: 2, lineHeight: 10)
                                 : Text(_summary(),
                                     style: TextStyle(
                                         height: 1.4,

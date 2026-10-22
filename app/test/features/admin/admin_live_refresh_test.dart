@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:aseman/src/app_dependencies.dart';
 import 'package:aseman/src/features/admin/presentation/admin_screen.dart';
+import 'package:aseman/src/shared/widgets/skeleton.dart';
 
 import '../../fake_aseman_service.dart';
 
@@ -66,7 +67,7 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(Skeleton), findsNothing);
     expect(find.text('5'), findsOneWidget);
     expect(find.text('first reading'), findsOneWidget);
 
@@ -74,7 +75,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('second reading'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(Skeleton), findsNothing);
 
     await tester.pumpWidget(const SizedBox());
   });

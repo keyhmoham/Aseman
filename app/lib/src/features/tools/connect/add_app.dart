@@ -4,6 +4,7 @@ import '../../../data/models/bot.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/skeleton.dart';
 import 'mcp_connect_dialog.dart';
 import 'mcp_sign_in.dart';
 
@@ -248,9 +249,7 @@ class _AddAppDialogState extends State<AddAppDialog> {
                 style: TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             if (_loading)
-              const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Center(child: CircularProgressIndicator()))
+              const SkeletonList(itemCount: 3, padding: EdgeInsets.zero)
             else if (_catalog.isEmpty)
               Text('Every available app is already here.',
                   style: TextStyle(color: scheme.onSurfaceVariant))

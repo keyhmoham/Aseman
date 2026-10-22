@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../../elpian/core/media_file.dart';
 import '../../../shared/widgets/audio_waveform.dart';
+import '../../../shared/widgets/skeleton.dart';
 
 String _clock(Duration d) {
   final h = d.inHours, m = d.inMinutes % 60, s = d.inSeconds % 60;
@@ -182,7 +183,11 @@ class _VideoViewState extends State<_VideoView> {
     if (c == null) {
       return const ColoredBox(
         color: Colors.black,
-        child: Center(child: CircularProgressIndicator(color: Colors.white)),
+        child: Skeleton(
+          baseColor: Color(0xFF161616),
+          highlightColor: Color(0xFF2A2A2A),
+          child: SkeletonBox.expand(),
+        ),
       );
     }
     final v = c.value;
@@ -363,7 +368,7 @@ class _FileAudioPlayerState extends State<FileAudioPlayer> {
               ),
               const SizedBox(height: 14),
               if (!_ready)
-                const LinearProgressIndicator()
+                const SkeletonField(height: 64)
               else
                 Container(
                   decoration: BoxDecoration(

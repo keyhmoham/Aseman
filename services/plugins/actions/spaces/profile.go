@@ -110,13 +110,23 @@ func (s *Service) RoomProfile(ctx context.Context, roomID identity.ID) (map[stri
 		OrderBy: "created_at", Asc: false, Limit: 500,
 	}, &msgs)
 	recent := make([]map[string]any, 0, 5)
+	handles := map[identity.ID]string{}
 	for i := range msgs {
 		if i >= 5 {
 			break
 		}
+		sender := msgs[i].SenderID
+		handle, seen := handles[sender]
+		if !seen {
+			var acc account.Account
+			if s.R.Get(ctx, "accounts", sender, &acc) == nil {
+				handle = acc.Handle
+			}
+			handles[sender] = handle
+		}
 		recent = append(recent, map[string]any{
-			"sender_id": msgs[i].SenderID.String(), "body": msgs[i].Body,
-			"created_at": msgs[i].CreatedAt,
+			"sender_id": sender.String(), "sender_handle": handle,
+			"body": msgs[i].Body, "created_at": msgs[i].CreatedAt,
 		})
 	}
 	var files []filedata.File

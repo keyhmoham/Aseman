@@ -9,11 +9,13 @@ import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/spark_painter.dart';
 import '../../../shared/widgets/status_tag.dart';
 import '../domain/feed_post.dart';
+import 'comments_sheet.dart';
 import 'post_actions.dart';
 import 'post_editor.dart';
 import 'post_media_grid.dart';
 import 'rich_post_content.dart';
 import 'rich_post_parser.dart';
+import 'search_feed_view_model.dart' show compactCount;
 import 'share_post_sheet.dart';
 
 /// A post as the feed shows it: its author (or, for a shared post, who
@@ -50,7 +52,19 @@ class FeedPostCard extends StatefulWidget {
 class _FeedPostCardState extends State<FeedPostCard> {
   bool _busy = false;
 
+  /// How many comments the post has once its comments panel counted them.
+  int? _comments;
+
   FeedPost get post => widget.post;
+
+  @override
+  void didUpdateWidget(FeedPostCard old) {
+    super.didUpdateWidget(old);
+    if (old.post.serverId != post.serverId ||
+        old.post.comments != post.comments) {
+      _comments = null;
+    }
+  }
 
   bool get _mine {
     final me = widget.dependencies.sessionController.session?.accountId ?? '';
@@ -74,6 +88,12 @@ class _FeedPostCardState extends State<FeedPostCard> {
         await showSharePostSheet(context, widget.dependencies, post);
     if ((shared ?? 0) > 0) widget.onShared?.call();
   }
+
+  Future<void> _openComments() => showCommentsSheet(
+      context, widget.dependencies, post,
+      onCount: (n) {
+        if (mounted) setState(() => _comments = n);
+      });
 
   Future<void> _edit() async {
     final id = post.serverId;
@@ -279,8 +299,11 @@ class _FeedPostCardState extends State<FeedPostCard> {
                         ),
                         _PostAction(
                             icon: Icons.chat_bubble_outline_rounded,
-                            label: post.comments,
-                            tooltip: 'Comments'),
+                            label: _comments == null
+                                ? post.comments
+                                : compactCount(_comments!),
+                            tooltip: 'Comments',
+                            onTap: server ? _openComments : null),
                         _PostAction(
                             icon: Icons.shortcut_rounded,
                             label: 'Share',

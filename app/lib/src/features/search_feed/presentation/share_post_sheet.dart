@@ -233,7 +233,7 @@ class _SharePostSheetState extends State<SharePostSheet> {
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                   sliver: SliverList.list(
                     children: [
-                      _PostPreview(post: post),
+                      SharePostPreview(post: post),
                       const SizedBox(height: 14),
                       Row(
                         children: [
@@ -465,9 +465,9 @@ class _SharePostSheetState extends State<SharePostSheet> {
   }
 }
 
-/// The post being shared, small: its author and the start of its text.
-class _PostPreview extends StatelessWidget {
-  const _PostPreview({required this.post});
+/// A post in small, as the share and comments panels show it: its author and the start of its text.
+class SharePostPreview extends StatelessWidget {
+  const SharePostPreview({super.key, required this.post});
   final FeedPost post;
 
   @override

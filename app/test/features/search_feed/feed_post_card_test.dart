@@ -17,6 +17,33 @@ const _alice = '00000000000000010000000000000077';
 class _PostsFake extends FakeAsemanService {
   final calls = <String>[];
 
+  final comments = <SocialPost>[
+    SocialPost(
+      id: 'c1',
+      authorId: _alice,
+      authorHandle: 'alice',
+      authorName: 'Alice',
+      parentId: 'p1',
+      body: 'Great call',
+      createdAt: DateTime.now(),
+    ),
+  ];
+
+  @override
+  Future<List<SocialPost>> fetchComments(
+    String postId, {
+    int limit = 200,
+  }) async => comments.where((c) => c.parentId == postId).toList();
+
+  @override
+  Future<String> commentPost(String postId, String body) async {
+    calls.add('comment $postId $body');
+    return 'c2';
+  }
+
+  @override
+  Future<void> likePost(String postId) async => calls.add('like $postId');
+
   @override
   Future<void> updatePost(String postId, String body) async =>
       calls.add('update $postId $body');
@@ -163,6 +190,47 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Edit post'), findsNothing);
     expect(find.text('Delete post'), findsOneWidget);
+  });
+
+  testWidgets('the comments modal lists, likes and adds comments', (
+    tester,
+  ) async {
+    await show(tester, post(author: _alice));
+    await tester.tap(find.byTooltip('Comments'));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.text('Great call'), findsOneWidget);
+    expect(find.text('Author'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Like').last);
+    await tester.pumpAndSettle();
+    expect(service.calls, ['like c1']);
+
+    await tester.tap(find.text('Reply'));
+    await tester.pumpAndSettle();
+    final field = find.widgetWithText(TextField, '@alice ');
+    expect(field, findsOneWidget);
+    await tester.enterText(field, '@alice agreed');
+    await tester.tap(find.byTooltip('Post comment'));
+    await tester.pumpAndSettle();
+    expect(service.calls.last, 'comment p1 @alice agreed');
+    expect(find.text('@alice agreed'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+    // The card counts the new comment.
+    expect(find.widgetWithText(Tooltip, '2'), findsOneWidget);
+  });
+
+  testWidgets('comments open in a bottom sheet on phones', (tester) async {
+    await show(tester, post(author: _alice));
+    tester.view.physicalSize = const Size(400, 800);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Comments'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.text('Great call'), findsOneWidget);
   });
 
   testWidgets('the share modal reposts to feeds and forwards to chats', (

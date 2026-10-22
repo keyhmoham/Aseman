@@ -150,6 +150,55 @@ define('tabs', class extends TElement {
 });
 layout('tab', () => {});
 
+/**
+ * Split {min-pane-width?: 320, gap?: 16}: its children are panes (title="…"
+ * names each, weight="2" widens one) side by side, each scrolling by itself,
+ * when the split is wide enough; on a phone, one pane at a time chosen with
+ * tabs. Give it weight (or make it the body of a body.t-app screen) so it
+ * fills the rest of the screen:
+ *   <t-split weight="1"><t-table title="Orders" …></t-table><t-column title="Details">…</t-column></t-split>
+ */
+define('split', class extends TElement {
+  init() {
+    if (window.ResizeObserver) { this._ro = new ResizeObserver(() => this._fit()); this._ro.observe(this); }
+  }
+  cleanup() { this._ro?.disconnect(); this._ro = null; }
+  render() {
+    const p = this.props;
+    const panes = this.kids().filter((k) => k.nodeType === 1);
+    const box = this._box || (this._box = h('div', { class: 't-split' }));
+    const bar = this._bar || (this._bar = h('div', { class: 't-tabs__bar t-split__bar', role: 'tablist' }));
+    const body = this._body || (this._body = h('div', { class: 't-split__panes' }));
+    body.style.gap = px(p.gap ?? 16);
+    panes.forEach((k, i) => {
+      if (k.parentNode !== body) body.appendChild(k);
+      k.classList.add('t-split__pane');
+      const w = k.getAttribute('weight');
+      k.style.flex = `${asDouble(w, 1)} 1 0`;
+    });
+    this._panes = panes;
+    if (bar.parentNode !== box || body.parentNode !== box) box.replaceChildren(bar, body);
+    if (box.parentNode !== this) this.replaceChildren(box);
+    this._fit();
+  }
+  _fit() {
+    const panes = this._panes || [];
+    if (!panes.length) return;
+    const min = asDouble(this.p('minPaneWidth'), 320);
+    const gap = asDouble(this.p('gap'), 16);
+    const width = this.clientWidth || window.innerWidth;
+    const narrow = width < panes.length * min + (panes.length - 1) * gap;
+    this.toggleAttribute('data-narrow', narrow);
+    let sel = asInt(this._sel, 0);
+    if (sel >= panes.length) sel = 0;
+    panes.forEach((k, i) => k.toggleAttribute('data-open', !narrow || i === sel));
+    const titles = panes.map((k, i) => asText(k.getAttribute('title') ?? k.dataset.title ?? k.getAttribute('label') ?? `Pane ${i + 1}`));
+    panes.forEach((k) => { if (k.hasAttribute('title')) { k.dataset.title = k.getAttribute('title'); k.removeAttribute('title'); } });
+    this._bar.replaceChildren(...titles.map((t, i) => h('button', { class: 't-tabs__tab', role: 'tab', type: 'button', 'aria-selected': String(i === sel),
+      on: { click: () => { this._sel = i; this._fit(); this.emit('t-tab', { index: i }); } } }, t)));
+  }
+});
+
 // ---- expandable, accordion ---------------------------------------------------------
 
 function expander(el, p, kids) {

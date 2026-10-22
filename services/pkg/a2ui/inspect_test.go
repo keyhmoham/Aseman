@@ -105,3 +105,59 @@ func TestOutlineShowsTheFilledSurface(t *testing.T) {
 		t.Errorf("events: %+v", s.Events)
 	}
 }
+
+// A screen is laid out as an app: its body takes the rest of the window and
+// scrolls inside itself, and what grows is in a scrolling region.
+func TestInspectChecksTheAppLayout(t *testing.T) {
+	page := Inspect([]map[string]any{
+		{"id": "root", "component": "Column", "children": []any{"title", "kpis", "chart", "rows", "more"}},
+		{"id": "title", "component": "Text", "text": "Orders", "variant": "h4"},
+		{"id": "kpis", "component": "Grid", "children": []any{"a", "b"}},
+		{"id": "a", "component": "Stat", "label": "Open", "value": 3},
+		{"id": "b", "component": "Stat", "label": "Done", "value": 9},
+		{"id": "chart", "component": "Chart", "type": "line", "data": []any{}, "x": "t", "y": "v", "height": 900},
+		{"id": "rows", "component": "Table", "data": []any{}, "columns": []any{}},
+		{"id": "more", "component": "Card", "weight": 1, "child": "note"},
+		{"id": "note", "component": "Text", "text": "Notes"},
+	})
+	for _, want := range []struct{ severity, where, text string }{
+		{Blocking, "rows", "in no scrolling region"},
+		{Blocking, "more", "does not scroll inside it"},
+		{Advice, "chart", "taller than a phone"},
+	} {
+		if !has(page.Issues, want.severity, want.where, want.text) {
+			t.Errorf("missing %s issue on %s (%q); got %v", want.severity, want.where, want.text, page.Issues)
+		}
+	}
+	unweighted := Inspect([]map[string]any{
+		{"id": "root", "component": "Column", "children": []any{"title", "rows"}},
+		{"id": "title", "component": "Text", "text": "Orders"},
+		{"id": "rows", "component": "Scroll", "child": "table"},
+		{"id": "table", "component": "Table", "data": []any{}, "columns": []any{}},
+	})
+	if !has(unweighted.Issues, Blocking, "root", "nothing in the root takes the rest") {
+		t.Errorf("a root with no body passed: %v", unweighted.Issues)
+	}
+	app := Inspect([]map[string]any{
+		{"id": "root", "component": "Column", "children": []any{"title", "split"}},
+		{"id": "title", "component": "Text", "text": "Traders", "variant": "h4"},
+		{"id": "split", "component": "Split", "weight": 1, "panes": []any{
+			map[string]any{"title": "Traders", "child": "table"},
+			map[string]any{"title": "Details", "child": "details"},
+		}},
+		{"id": "table", "component": "Table", "data": map[string]any{"path": "/rows"}, "columns": []any{map[string]any{"field": "name"}}},
+		{"id": "details", "component": "Markdown", "text": "Pick a trader"},
+		{"id": "compact", "component": "Stat", "label": "Traders", "value": 3},
+	})
+	for _, i := range app.Issues {
+		if i.Severity == Blocking || i.Area == "layout" {
+			t.Errorf("an app screen was faulted: %v", i)
+		}
+	}
+	small := Inspect([]map[string]any{{"id": "root", "component": "Text", "text": "Saved"}})
+	for _, i := range small.Issues {
+		if i.Area == "layout" {
+			t.Errorf("a one-line screen needs no scrolling body: %v", i)
+		}
+	}
+}

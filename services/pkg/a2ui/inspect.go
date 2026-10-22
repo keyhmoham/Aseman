@@ -129,10 +129,11 @@ func Inspect(components []map[string]any) *Surface {
 		s.issue(Blocking, "structure", "", "no component has the id \"root\"", "make the surface's top component \"root\"")
 		return s
 	}
-	s.visit("root", "", nil, false)
+	s.visit("root", "", nil, false, false)
+	s.appShell()
 	if _, ok := s.byID["compact"]; ok {
 		if !s.placed["compact"] {
-			s.visit("compact", "", nil, false)
+			s.visit("compact", "", nil, false, true) // a widget, not a screen
 		}
 	} else {
 		s.issue(Advice, "design", "compact", "there is no \"compact\" component for the phone board",
@@ -204,7 +205,7 @@ func (s *Surface) children(id string, c map[string]any, scope string) []child {
 		s.Reads = append(s.Reads, Read{id, list + "/*"}) // a list, of items
 		out = append(out, child{ref, list + "/*"})
 	}
-	for _, key := range []string{"tabs", "items"} {
+	for _, key := range []string{"tabs", "items", "panes"} {
 		if list, ok := c[key].([]any); ok {
 			for _, item := range list {
 				if m, ok := item.(map[string]any); ok {
@@ -238,8 +239,9 @@ func (s *Surface) children(id string, c map[string]any, scope string) []child {
 }
 
 // visit reads component [id] and what it shows, at [scope] (the item a List
-// template is repeated for), under [path] (its ancestors).
-func (s *Surface) visit(id, scope string, path []string, inCard bool) {
+// template is repeated for), under [path] (its ancestors), [scrolled] when
+// one of them scrolls.
+func (s *Surface) visit(id, scope string, path []string, inCard, scrolled bool) {
 	c := s.byID[id]
 	parent := ""
 	if len(path) > 0 {
@@ -261,8 +263,121 @@ func (s *Surface) visit(id, scope string, path []string, inCard bool) {
 		s.issue(Advice, "design", id, "is a Card inside a Card", "use a Section or a Column inside the outer Card")
 	}
 	s.read(id, kind, c, scope)
+	if grows(kind, c) && !scrolled {
+		s.issue(Blocking, "layout", id, "the "+kind+" grows with its data but is in no scrolling region, so it pushes the screen taller than its window",
+			"put it in the body's Scroll (\"weight\": 1), a Split pane or a Tabs tab, which scroll inside themselves")
+	}
+	if kind == "Scroll" && scrolled && c["direction"] != "horizontal" && c["maxHeight"] == nil {
+		s.issue(Advice, "layout", id, "is a Scroll inside a region that already scrolls", "drop the inner Scroll, or give it a maxHeight")
+	}
+	if h, ok := number(c["height"]); ok && h > 640 {
+		s.issue(Advice, "layout", id, fmt.Sprintf("is %v px tall, taller than a phone's screen", h), "keep heights to a chart's 220–320")
+	}
+	inner := scrolled || scrolls(kind, c) || kind == "Modal"
 	for _, ch := range s.children(id, c, scope) {
-		s.visit(ch.id, ch.scope, append(path, id), inCard || kind == "Card")
+		s.visit(ch.id, ch.scope, append(path, id), inCard || kind == "Card", inner)
+	}
+}
+
+// scrolls reports whether a component scrolls its content by itself (when
+// it is given a height, as the app's screens give their regions).
+func scrolls(kind string, c map[string]any) bool {
+	switch kind {
+	case "Scroll":
+		return c["direction"] != "horizontal"
+	case "Split", "Tabs":
+		return true
+	}
+	return false
+}
+
+// grows reports whether a component grows with its data or content without
+// bound, so it needs a region that scrolls.
+func grows(kind string, c map[string]any) bool {
+	switch kind {
+	case "Table", "Timeline", "Markdown", "JsonView", "CodeBlock", "TreeView", "Accordion":
+		return true
+	case "List", "Column", "Grid", "Wrap":
+		ch, repeated := c["children"].(map[string]any)
+		return repeated && ch["componentId"] != nil && c["direction"] != "horizontal"
+	}
+	return false
+}
+
+// region reports whether a component, given a height, fills it and scrolls
+// inside it: a scrolling component, or a Card or Box around one.
+func (s *Surface) region(id string) bool {
+	c := s.byID[id]
+	if c == nil {
+		return false
+	}
+	kind, _ := c["component"].(string)
+	if scrolls(kind, c) {
+		return true
+	}
+	if kind == "Card" || kind == "Box" {
+		if ref, ok := c["child"].(string); ok {
+			return s.region(ref)
+		}
+	}
+	return false
+}
+
+// small reports whether the screen is a few fixed components that cannot
+// outgrow a phone's window (a figure or two, a short message): it needs no
+// scrolling body.
+func (s *Surface) small() bool {
+	n := 0
+	for id := range s.placed {
+		c := s.byID[id]
+		kind, _ := c["component"].(string)
+		if grows(kind, c) || kind == "Chart" {
+			return false
+		}
+		n++
+	}
+	return n <= smallScreen
+}
+
+// smallScreen is how many components a screen may have without a scrolling
+// body.
+const smallScreen = 6
+
+// appShell checks the root is laid out as an app screen: a Column whose
+// body takes the rest of the window's height and scrolls inside itself (or
+// a Split, Tabs or Scroll that fills the window by itself).
+func (s *Surface) appShell() {
+	root := s.byID["root"]
+	kind, _ := root["component"].(string)
+	if scrolls(kind, root) || s.small() {
+		return
+	}
+	if kind != "Column" {
+		s.issue(Blocking, "layout", "root", "the root is a "+kind+"; an app screen's root is a Column: a header, then the body with \"weight\": 1 that scrolls inside itself",
+			"make root a Column of the header and a body Scroll (or Split / Tabs) with \"weight\": 1")
+		return
+	}
+	children, _ := root["children"].([]any)
+	weighted := 0
+	for _, v := range children {
+		id, _ := v.(string)
+		c := s.byID[id]
+		if c == nil {
+			continue
+		}
+		if w, ok := number(c["weight"]); !ok || w <= 0 {
+			continue
+		}
+		weighted++
+		if !s.region(id) {
+			childKind, _ := c["component"].(string)
+			s.issue(Blocking, "layout", id, "takes the rest of the window's height (weight) but, as a "+childKind+", does not scroll inside it, so what does not fit is cut off",
+				"make it a Scroll (or a Split / Tabs, or a Card around a Scroll) holding what it showed")
+		}
+	}
+	if weighted == 0 {
+		s.issue(Blocking, "layout", "root", "nothing in the root takes the rest of the window's height, so the screen scrolls like a web page (or leaves the window half empty)",
+			"give the body — a Scroll, Split or Tabs holding everything below the header — \"weight\": 1")
 	}
 }
 

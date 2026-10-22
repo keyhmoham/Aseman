@@ -42,30 +42,32 @@ builds too — with `preserve_path` for frameworks that compile their base path)
   <link rel="stylesheet" href="/_aseman/kit/aseman-ui.css">
   <script src="/_aseman/kit/aseman-ui.js"></script>
 </head>
-<body class="t-page">
-  <t-column gap="16">
-    <t-row justify="spaceBetween">
-      <t-column gap="2"><t-text variant="h4" text="Weather"></t-text>
-        <t-text variant="caption" bind-text="/fc/updated"></t-text></t-column>
-      <t-icon-button icon="refresh" tooltip="Refresh" call="Weather/forecast"
-        args='{"city":{"path":"/form/city"}}' into="/fc"></t-icon-button>
-    </t-row>
-    <t-row><t-search-field placeholder="City" bind-value="/form/city" weight="1"></t-search-field></t-row>
-    <!-- loads now, and again whenever /form/city changes -->
-    <t-data call="Weather/forecast" args='{"city":{"path":"/form/city"}}' into="/fc"></t-data>
-    <t-show when='{"path":"/fc__loading"}'><t-skeleton variant="card"></t-skeleton></t-show>
-    <t-grid min-column-width="160">
-      <t-card><t-stat label="Temperature" bind-value="/fc/temp" format="number:1" icon="thermostat"></t-stat></t-card>
-      <t-card><t-stat label="Humidity" bind-value="/fc/humidity" format="percent"></t-stat></t-card>
-    </t-grid>
-    <t-card><t-chart type="line" title="Next 24 h" bind-data="/fc/hours" x="time" x-format="time" y="temp" height="240"></t-chart></t-card>
-    <t-card>
-      <t-form call="Weather/set_alert" into="/alert" toast="Alert saved">
-        <t-text-field name="threshold" label="Alert above (°C)" variant="number"></t-text-field>
-        <t-button type="submit" variant="primary" text="Save alert"></t-button>
-      </t-form>
-    </t-card>
-  </t-column>
+<body class="t-app">
+  <!-- The header stays put; the body region below takes the rest of the window. -->
+  <t-row justify="spaceBetween">
+    <t-column gap="2" weight="1"><t-text variant="h4" text="Weather"></t-text>
+      <t-text variant="caption" bind-text="/fc/updated"></t-text></t-column>
+    <t-icon-button icon="refresh" tooltip="Refresh" call="Weather/forecast"
+      args='{"city":{"path":"/form/city"}}' into="/fc"></t-icon-button>
+  </t-row>
+  <t-search-field placeholder="City" bind-value="/form/city"></t-search-field>
+  <!-- loads now, and again whenever /form/city changes -->
+  <t-data call="Weather/forecast" args='{"city":{"path":"/form/city"}}' into="/fc"></t-data>
+  <!-- The body: panes side by side on a desktop, tabs on a phone; each scrolls by itself. -->
+  <t-split weight="1">
+    <t-column title="Forecast" gap="16">
+      <t-show when='{"path":"/fc__loading"}'><t-skeleton variant="card"></t-skeleton></t-show>
+      <t-grid min-column-width="160">
+        <t-card><t-stat label="Temperature" bind-value="/fc/temp" format="number:1" icon="thermostat"></t-stat></t-card>
+        <t-card><t-stat label="Humidity" bind-value="/fc/humidity" format="percent"></t-stat></t-card>
+      </t-grid>
+      <t-card><t-chart type="line" title="Next 24 h" bind-data="/fc/hours" x="time" x-format="time" y="temp" height="240"></t-chart></t-card>
+    </t-column>
+    <t-form title="Alert" call="Weather/set_alert" into="/alert" toast="Alert saved">
+      <t-text-field name="threshold" label="Alert above (°C)" variant="number"></t-text-field>
+      <t-button type="submit" variant="primary" text="Save alert"></t-button>
+    </t-form>
+  </t-split>
   <script>Aseman.data.set('/form/city', 'Oslo');</script>
 </body>
 </html>
@@ -220,12 +222,33 @@ like the app too.
 
 ## 6. Design
 
-The quality bar of generated surfaces applies: one root column, a header
-(title + one caption line, its main action at the end), headline numbers in a
-`t-grid` of `t-stat`s, then the main view, then details. Works at 360 px and
-at 1400 px (Grids with min-column-width, no fixed widths); every control does
-something that works; one primary button per block; format every number;
-status colors only for state. Use `body class="t-page"`. Colors are CSS
+A page is an application screen, not a web page or a document, and it works
+on a phone (~360 × 640) and a desktop window (~1400 × 900):
+
+- `<body class="t-app">` fills the window exactly and never scrolls as a
+  whole. Its children are a header (title + one caption line, the screen's
+  main actions and filters at the end) that stays put, then the body region
+  with `weight="1"` that takes the rest of the height, and optionally an
+  action bar at the bottom.
+- Every region that can grow (tables, `t-for` lists, timelines, logs,
+  details, long forms, markdown) scrolls inside itself: the body is a
+  `t-scroll weight="1"`, a `t-split` or a `t-tabs weight="1"` — never a
+  plain column of blocks that pushes the page taller.
+- Several regions side by side (a list and its details, a form and its
+  preview) are a `t-split`: its children are panes (`title="…"`), side by
+  side and each scrolling on a desktop, tabs on a phone. Views of the same
+  screen are `t-tabs` (each tab scrolls by itself), not long stacked
+  sections. Never a `t-row` of panes.
+- Responsive: one column on a phone, no horizontal overflow, no fixed
+  widths; tiles and fields in a `t-grid` with min-column-width; groups of
+  buttons and chips in a `t-wrap`.
+- No page patterns: no hero banners, landing sections, footers or long prose.
+
+Opening a page checks this, and refuses a page that would be cut off or
+scroll like a web page. Otherwise the quality bar of generated surfaces
+applies: headline numbers in a `t-grid` of `t-stat`s; every control does
+something that works; one primary button per region; format every number;
+status colors only for state. Colors are CSS
 variables (`var(--t-primary)`, `--t-surface`, `--t-series-1…8`, `--t-good`,
 `--t-critical`…); the page follows the app's light/dark theme and accent by
 itself — never hard-code colors or a theme.

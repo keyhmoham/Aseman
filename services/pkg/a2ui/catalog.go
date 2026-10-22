@@ -24,7 +24,7 @@ var aseman = []string{
 	"Stat", "KeyValue", "Timeline", "TreeView", "JsonView", "CodeBlock",
 	"Progress", "Badge", "Rating", "Callout", "Avatar",
 	"Grid", "Wrap", "Stack", "Box", "Center", "Spacer", "AspectRatio",
-	"Scroll", "Section", "Expandable", "Switch", "Elpian", "ToolFrontend",
+	"Scroll", "Split", "Section", "Expandable", "Switch", "Elpian", "ToolFrontend",
 	// Inputs, navigation, feedback and conditional UI.
 	"SegmentedControl", "Dropdown", "RangeSlider", "NumberStepper",
 	"SearchField", "Link", "IconButton", "Menu", "Steps", "Carousel",
@@ -94,27 +94,35 @@ func Check(components []map[string]any) error {
 // request, desk windows) and agents' ui_compose widgets.
 const CatalogPrompt = catalogPrompt + "\n" + DesignPrompt
 
-// DesignPrompt is the quality bar for every generated surface: a clean,
-// standard, responsive layout that works on a phone and a desktop alike,
-// with nothing on screen that does not work.
-const DesignPrompt = `Design (every surface must meet this on a phone, ~360 px wide, and on a desktop, ~1400 px):
-Structure
-- One root Column; blocks top to bottom in order of importance: a header (title h4 or h3 + one caption line, its one or two main actions at the end), then headline numbers, then the main view (chart/table), then details and secondary blocks. Group each block in one Card or Section with a short title; never nest Cards in Cards.
-- One heading level per depth (page h3/h4, block = Section title or h5); body text for content, caption for help, units and timestamps. Short, specific labels in sentence case; no lorem, emoji decoration or filler text.
-Responsive layout
-- Anything that should sit side by side on a desktop and stack on a phone goes in a Grid with minColumnWidth (Stat tiles 150–180, form fields 240–280, cards/charts 300–360) — never a fixed "columns" for more than 2. A Row only for at most 2–3 short items that fit 360 px (a title and a button, an icon and a label); give its flexible child "weight": 1. Groups of buttons, chips or filters go in a Wrap so they wrap instead of overflowing.
-- No fixed widths; no heights except a Chart's height (220–320) and a Scroll's maxHeight. Long text wraps; long lists are a Table (search, pageSize 10–25) or a List in a Scroll, not an endless column. Tables: at most ~6–8 columns, most important first (they scroll sideways on a phone); details belong in a selection detail block, not more columns.
-- Consistent spacing: gap 12–16 in Grids and Wraps; let Cards and Sections provide padding instead of Boxes and Spacers.
+// DesignPrompt is the quality bar for every generated surface: a
+// professional app screen — it fills its window, never scrolls as a whole,
+// and each region scrolls inside itself — that works on a phone and a
+// desktop alike, with nothing on screen that does not work. AppLayout is its
+// layout part, which the web kit's pages follow too.
+const DesignPrompt = `Design (every surface must meet this on a phone, ~360 × 640 px, and on a desktop window, ~1400 × 900 px):
+` + AppLayout + `
+Content
+- One heading level per depth (screen title h4, block = Section title or h5); body text for content, caption for help, units and timestamps. Short, specific labels in sentence case; no lorem, emoji decoration, marketing copy or filler text.
 Data display
 - Format every number (integer, number:1, compact, percent, currency, date/datetime) and give units in the label. State as Badge with status, trends as delta/trend, scores against a max as Progress or Gauge. One chart per measure scale, with a title, axis formats and a sensible type.
-- Show what the data model will hold, never placeholders or sample values; a block that depends on a selection or an action says so in a caption ("Tap a row to see details").
+- Show what the data model will hold, never placeholders or sample values; a block that depends on a selection or an action says so in a caption ("Tap a row to see details"); an empty list shows an EmptyState.
 Interaction
-- Every Button, input and tappable view does something that works: a Button's event is handled, an input is bound under /form and read by the action that submits it, a selection is shown by a detail block. No decorative or dead controls. One primary Button per block (the main action), the rest borderless; destructive actions labelled plainly ("Delete trader") and kept apart from the primary.
-- Forms: labelled fields, the submit Button after them at the end; optional fields say "(optional)".
+- Every Button, input and tappable view does something that works: a Button's event is handled, an input is bound under /form and read by the action that submits it, a selection is shown by a detail pane. No decorative or dead controls. One primary Button per region (the main action), the rest borderless; destructive actions labelled plainly ("Delete trader") and kept apart from the primary. Touch targets at least 40 px.
+- Forms: labelled fields, the submit Button after them (in the action bar when the form scrolls); optional fields say "(optional)".
 Phone widget
 - On phones every surface is first a compact widget on a board (tapped, the full surface opens in a bottom sheet). Add one component with id "compact", outside root's tree, for it: the one to three numbers or facts that matter most at a glance — a Stat, a Quote, a Gauge, a Trend with a Sparkline, or a Row of two Stats; no inputs, tables, long text or charts with axes. It shares the surface's data model, so bind it like the rest. Without it the app sums the surface up from its first Quote/Stat/Gauge and chart. createSurface's theme may hint its look: {"compactShape": card|squircle|pill|circle|leaf, "compactSize": small|medium|large}.
 Style
 - Calm and consistent: neutral surfaces, series colors for data, status colors only for state; no gradients, shadows or Elpian styling unless asked. Prefer the catalog components over the Elpian escape hatch.`
+
+// AppLayout is how a generated surface is laid out: as an application's
+// screen, not as a web page — it fits its window's height, its regions
+// scroll inside themselves, and it adapts from a phone to a desktop.
+const AppLayout = `App layout — design an application screen, not a web page or a document:
+- The surface fills its window exactly and never scrolls as a whole. The root is a Column of: a header (title h4 + one caption line, with the screen's one or two main actions and its toolbar/filters at the end, in a Wrap) that stays put; then the body, with "weight": 1, taking the rest of the height; optionally an action bar (the primary Button of a long form) at the bottom.
+- Every region that can grow — lists, tables, feeds, timelines, logs, details, long forms, markdown — scrolls inside itself: the body (or each pane of it) is a Scroll, a Split or a Tabs, never a plain Column of blocks that pushes the screen taller. Headline Stats and a chart may sit above the scrolling region inside the body's Scroll, or the body may be one Scroll holding the dashboard.
+- Several regions side by side (a list and the selected item's details, a form and its preview, navigation and content) are a Split {panes: [{title, child}], minPaneWidth}: panes side by side, each scrolling, on a desktop; switchable tabs on a phone. Views of the same screen are Tabs (each tab scrolls by itself) or a SegmentedControl with Show — not long stacked sections. Never a Row of panes (it squeezes on a phone).
+- Responsive: one column on a phone, no horizontal overflow, no fixed widths; tiles and fields in a Grid with minColumnWidth (Stat tiles 150–180, form fields 240–280, cards/charts 300–360) — never a fixed "columns" for more than 2; a Row only for at most 2–3 short items that fit 360 px (give its flexible child "weight": 1); groups of buttons, chips or filters in a Wrap. Heights only for a Chart (220–320) and a Scroll's maxHeight. Tables: at most ~6–8 columns, most important first; details go to a selection detail pane, not more columns.
+- No page patterns: no hero banners, landing-page sections, footers, long prose, or Cards nested in Cards. Group each block in one Card or Section with a short title; spacing gap 12–16, letting Cards and Sections provide padding.`
 
 const catalogPrompt = `Components (flat list; each has "id" and "component"; children are ids; the root has id "root"; "weight": n in a Row/Column takes n shares of the space):
 Layout
@@ -124,7 +132,8 @@ Layout
 - Box {child, padding?, margin?, width?, height?, maxWidth?, color?, gradient?: [colors], borderRadius?, borderColor?, elevation?, alignment?}
 - Card {child}   Center {child}   Spacer {size}   AspectRatio {child, ratio}   Divider {}
 - Section {title, subtitle?, icon?, trailing?, children}   Expandable {title, subtitle?, expanded?, children}
-- Tabs {tabs:[{title, child, icon?}], selected?: {"path"}}   Modal {trigger, content, title?, variant?: dialog|sheet}   Scroll {child|children, direction?, maxHeight?}
+- Tabs {tabs:[{title, child, icon?}], selected?: {"path"}} with a weight, each tab scrolls by itself   Modal {trigger, content, title?, variant?: dialog|sheet}   Scroll {child|children, direction?, maxHeight?} with "weight": 1 it fills the rest of its Column and scrolls inside it
+- Split {panes: [{title, child, weight?}], minPaneWidth?: 320} panes side by side (each scrolling, divided) when the window is wide enough, tabs on a phone — master/detail, list + details, form + preview
 - Accordion {items: [{title, subtitle?, child}], multiple?}   Carousel {children, height?} swipeable pages
 - List {children: {componentId: templateId, path: "/array"}} repeats templateId per item; inside it paths are relative to the item ("name", not "/name"; "." is the item itself). Every container (Column, Row, Grid, Wrap, Carousel…) takes the same template form.
 - Show {when: boolean|{"path"}|call, child, fallback?} renders child only while the condition holds — switch views on the data model (e.g. when {"call": "equals", "args": {"a": {"path": "/view"}, "b": "orders"}})

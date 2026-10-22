@@ -177,6 +177,7 @@ func InspectPage(src []byte) *Page {
 		}
 	}
 	walk(doc, "", nil)
+	p.appLayout(doc, usesKit)
 	p.finish(viewport, tPage, css, usesKit)
 	return p
 }
@@ -209,7 +210,7 @@ func (p *Page) element(n *html.Node, scope string, form *Call, viewport, tPage, 
 			*viewport = true
 		}
 	case "body":
-		*tPage = hasClass(n, "t-page")
+		*tPage = hasClass(n, "t-app")
 	case "link":
 		href := attr(n, "href")
 		if strings.HasSuffix(href, "_aseman/kit/aseman-ui.css") {
@@ -519,8 +520,9 @@ func (p *Page) style(where, css string) {
 	}
 }
 
-// resource registers a file the page loads: its own (relative) files are
-// fetched by the review; an absolute path leaves the preview.
+// resource registers a file the page loads from its own preview (a
+// relative path, or a root-relative one, which the gateway keeps inside the
+// preview): the review fetches them.
 func (p *Page) resource(where, ref string) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" || strings.HasPrefix(ref, "data:") || strings.HasPrefix(ref, "#") || strings.Contains(ref, "_aseman/") || strings.Contains(ref, "{") {
@@ -531,13 +533,8 @@ func (p *Page) resource(where, ref string) {
 		p.issue(a2ui.Blocking, "structure", where, "loads "+strconv.Quote(ref)+", which is no URL", "fix the address")
 		return
 	}
-	switch {
-	case u.Scheme != "" || u.Host != "":
+	if u.Scheme != "" || u.Host != "" {
 		return // another site's
-	case strings.HasPrefix(ref, "/"):
-		p.issue(a2ui.Advice, "structure", where, "loads "+ref+" from the site's root, which is outside the page's preview",
-			"use a path relative to the page (\""+strings.TrimLeft(ref, "/")+"\")")
-		return
 	}
 	p.Resources = append(p.Resources, ref)
 }
@@ -556,9 +553,6 @@ func (p *Page) finish(viewport, tPage, css, usesKit bool) {
 	if p.Kit && !css {
 		p.issue(a2ui.Blocking, "design", "<head>", "loads the kit's script without its stylesheet, so it renders unstyled",
 			`add <link rel="stylesheet" href="/_aseman/kit/aseman-ui.css"> in <head>`)
-	}
-	if p.Kit && !tPage {
-		p.issue(a2ui.Advice, "design", "<body>", "the body has no class \"t-page\", so the page misses the app's background and spacing", `<body class="t-page">`)
 	}
 	if !viewport {
 		p.issue(a2ui.Blocking, "design", "<head>", "has no viewport meta tag, so phones render it zoomed out and unreadable",
@@ -772,4 +766,136 @@ func clip(s string, max int) string {
 		return s
 	}
 	return s[:max] + "…"
+}
+
+// --- app layout ----------------------------------------------------------------
+
+// The page is an application screen, not a document (a2ui.AppLayout): its
+// body fills the window and never scrolls as a whole, a body region takes
+// the rest of the height and scrolls inside itself, and whatever grows with
+// its data is in a region that scrolls.
+
+// growingTags are kit elements that grow with their data or content.
+var growingTags = map[string]bool{
+	"t-table": true, "t-data-grid": true, "t-timeline": true, "t-markdown": true, "t-json-view": true,
+	"t-code-block": true, "t-tree-view": true, "t-accordion": true, "t-list": true, "t-list-view": true, "t-for": true,
+}
+
+var overflowScroll = regexp.MustCompile(`overflow(?:-y)?\s*:\s*(?:auto|scroll)`)
+
+// scroller reports whether an element scrolls its content by itself when it
+// is given a height.
+func scroller(n *html.Node) bool {
+	switch n.Data {
+	case "t-scroll":
+		return attr(n, "direction") != "horizontal"
+	case "t-split", "t-tabs", "t-scaffold":
+		return true
+	}
+	return overflowScroll.MatchString(attr(n, "style")) || hasClass(n, "t-scroll")
+}
+
+// region reports whether an element, given the rest of the height, scrolls
+// inside it: a scroller, or a wrapper (t-expanded, t-card, div…) around one.
+func region(n *html.Node) bool {
+	if scroller(n) {
+		return true
+	}
+	var only *html.Node
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.ElementNode {
+			if only != nil || c.Data == "script" {
+				return false
+			}
+			only = c
+		}
+	}
+	return only != nil && region(only)
+}
+
+func (p *Page) appLayout(doc *html.Node, usesKit bool) {
+	body := find(doc, "body")
+	if body == nil {
+		return
+	}
+	if !usesKit && !p.Kit {
+		return // said already: it does not use the kit
+	}
+	if !hasClass(body, "t-app") {
+		p.issue(a2ui.Blocking, "layout", "<body>", "the body is not an app screen (class \"t-app\"), so the page scrolls as a whole like a web page instead of fitting the window",
+			`<body class="t-app">: a header, then the body (weight="1": a t-split, t-tabs or t-scroll) that scrolls inside itself`)
+	}
+	// What grows must be in a region that scrolls.
+	grows, elements := false, 0
+	var walk func(n *html.Node, scrolled bool)
+	walk = func(n *html.Node, scrolled bool) {
+		if n.Type == html.ElementNode {
+			if n.Data == "script" || n.Data == "style" || n.Data == "template" && n.Parent != nil && n.Parent.Data != "t-for" {
+				return
+			}
+			if strings.HasPrefix(n.Data, "t-") {
+				elements++
+			}
+			if growingTags[n.Data] || attr(n, "each") != "" {
+				grows = true
+				if !scrolled {
+					p.issue(a2ui.Blocking, "layout", describe(n), "grows with its data but is in no region that scrolls, so it is cut off at the bottom of the screen",
+						`put it in the body region (weight="1": a t-scroll, a t-split pane or a t-tabs tab), which scrolls inside itself`)
+					scrolled = true // said once for what is inside it
+				}
+			}
+			scrolled = scrolled || scroller(n)
+			if n.Data == "t-row" {
+				panes := 0
+				for c := n.FirstChild; c != nil; c = c.NextSibling {
+					if c.Type == html.ElementNode && region(c) {
+						panes++
+					}
+				}
+				if panes >= 2 {
+					p.issue(a2ui.Advice, "layout", describe(n), "lays scrolling panes side by side in a t-row, which squeezes them on a phone",
+						`use <t-split>: panes side by side on a desktop, tabs on a phone`)
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c, scrolled)
+		}
+	}
+	walk(body, false)
+	if !hasClass(body, "t-app") || (!grows && elements <= 8) {
+		return
+	}
+	// The body: a region takes the rest of the height and scrolls.
+	weighted := 0
+	for c := body.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type != html.ElementNode || c.Data == "script" || c.Data == "t-data" {
+			continue
+		}
+		if !hasAttr(c, "weight") && c.Data != "t-expanded" && c.Data != "t-split" && c.Data != "t-scaffold" && c.Data != "t-tabs" {
+			continue
+		}
+		weighted++
+		if !region(c) {
+			p.issue(a2ui.Blocking, "layout", describe(c), "takes the rest of the screen's height but does not scroll inside it, so what does not fit is cut off",
+				`make it a t-scroll (or a t-split / t-tabs, or wrap its content in one)`)
+		}
+	}
+	if weighted == 0 {
+		p.issue(a2ui.Blocking, "layout", "<body>", "nothing in the body takes the rest of the screen's height, so content below the window is cut off",
+			`give the body region — a t-scroll, t-split or t-tabs holding everything below the header — weight="1"`)
+	}
+}
+
+// find is the first element [tag] under [n].
+func find(n *html.Node, tag string) *html.Node {
+	if n.Type == html.ElementNode && n.Data == tag {
+		return n
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if f := find(c, tag); f != nil {
+			return f
+		}
+	}
+	return nil
 }

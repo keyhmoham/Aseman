@@ -19,6 +19,7 @@ The page uses Aseman's web UI kit: <t-…> components with the app's props (keba
 You are given what the page is for, the tools it calls (with their microtools), its HTML source, what its calls really returned when it was tested, and what the automatic inspection found.
 Judge:
 - Purpose: does it serve what was asked and what the tool is for — the right data first, the actions the tool offers, nothing it cannot do, nothing important missing?
+- App layout: it must be an application screen, not a web page — <body class="t-app"> filling the window without scrolling as a whole, a header that stays put, a body region (weight="1": t-scroll, t-split or t-tabs) taking the rest of the height, and every list, table or long form scrolling inside its region; t-split for panes side by side (tabs on a phone). Judge it at ~360 × 640 and ~1400 × 900.
 - Cleanness and standards: the design rules below — structure, responsive layout (Grids with min-column-width, no fixed widths), formatted numbers with units, clear labels, one primary action per block, no placeholders, filler, duplicates or decorative controls; the kit's components and theme variables rather than hand-made widgets and hard-coded colors.
 - Interaction: can a person do each thing from it and see the outcome (a result shown, a toast, a reload)? Inputs labelled, bound and passed to the call that submits them; loading and error states (/x__loading, /x__error) shown; empty states handled.
 - Data: what is shown reads fields the results really have, formatted; no raw JSON or ids where people expect names.

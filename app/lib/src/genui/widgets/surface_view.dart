@@ -14,6 +14,7 @@ import '../../elpian/core/media.dart';
 import '../runtime/host.dart';
 import '../runtime/presentation.dart';
 import '../runtime/surfaces.dart';
+import 'app_frame.dart';
 import 'compact_surface.dart';
 
 /// A user action a surface fired: an A2UI client-to-server `action`.
@@ -297,33 +298,48 @@ class _GenUiViewState extends State<GenUiView> {
                 onAction: _runAction),
       );
     }
+    final app = isAppLayout(widget.messages);
     return GenUiHost(
       toolFrontend: widget.toolFrontend,
       elpianServices: widget.elpianServices,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_busy)
-            const LinearProgressIndicator(minHeight: 2)
-          else
-            const SizedBox(height: 2),
-          for (final id in _surfaces.surfaceIds)
-            GenUiSurfaceView(
-              key: ValueKey('surface:$id'),
-              surfaces: _surfaces,
-              surfaceId: id,
-              onAction: _runAction,
-              showAttribution: widget.showAttribution,
-            ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(_error!,
-                  style: TextStyle(fontSize: 12, color: scheme.error)),
-            ),
-        ],
-      ),
+      child: LayoutBuilder(builder: (context, constraints) {
+        // An app screen given a height fills it (see GenUiFrame).
+        final fill = app && constraints.hasBoundedHeight;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
+          children: [
+            if (_busy)
+              const LinearProgressIndicator(minHeight: 2)
+            else
+              const SizedBox(height: 2),
+            for (final id in _surfaces.surfaceIds)
+              if (fill)
+                Expanded(
+                  child: GenUiSurfaceView(
+                    key: ValueKey('surface:$id'),
+                    surfaces: _surfaces,
+                    surfaceId: id,
+                    onAction: _runAction,
+                  ),
+                )
+              else
+                GenUiSurfaceView(
+                  key: ValueKey('surface:$id'),
+                  surfaces: _surfaces,
+                  surfaceId: id,
+                  onAction: _runAction,
+                  showAttribution: widget.showAttribution,
+                ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_error!,
+                    style: TextStyle(fontSize: 12, color: scheme.error)),
+              ),
+          ],
+        );
+      }),
     );
   }
 }

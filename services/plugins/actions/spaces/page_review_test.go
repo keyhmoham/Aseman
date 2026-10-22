@@ -30,13 +30,16 @@ const brokenPage = `<!doctype html><html><head><title>Weather</title>
 const cleanPage = `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Weather</title>
 <link rel="stylesheet" href="/_aseman/kit/aseman-ui.css"><script src="/_aseman/kit/aseman-ui.js"></script>
 <script src="app.js"></script></head>
-<body class="t-page">
+<body class="t-app">
+ <t-text variant="h4" text="Weather"></t-text>
  <t-data call="Weather/forecast" args='{"city": "Oslo"}' into="/fc"></t-data>
- <t-stat label="Temperature (°C)" bind-value="/fc/temperature" format="number:1"></t-stat>
- <t-form call="Weather/save_city" into="/saved">
-  <t-text-field label="City" name="city"></t-text-field>
-  <t-button type="submit" text="Save city"></t-button>
- </t-form>
+ <t-scroll weight="1">
+  <t-stat label="Temperature (°C)" bind-value="/fc/temperature" format="number:1"></t-stat>
+  <t-form call="Weather/save_city" into="/saved">
+   <t-text-field label="City" name="city"></t-text-field>
+   <t-button type="submit" text="Save city"></t-button>
+  </t-form>
+ </t-scroll>
 </body></html>`
 
 // servePages serves [pages] by path, as a preview's service would.

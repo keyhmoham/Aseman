@@ -127,7 +127,10 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 	body, _ := json.Marshal(map[string]any{
 		"title": in.Title,
 		"messages": []map[string]any{
-			{"version": "v0.9", "createSurface": map[string]any{"surfaceId": surface, "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}},
+			// Checked as an app screen (reviewComposed): the device gives it
+			// its window's height.
+			{"version": "v0.9", "createSurface": map[string]any{"surfaceId": surface, "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+				"theme": map[string]any{"layout": "app"}}},
 			{"version": "v0.9", "updateComponents": map[string]any{"surfaceId": surface, "components": in.Components}},
 			{"version": "v0.9", "updateDataModel": map[string]any{"surfaceId": surface, "path": "/", "value": data}},
 		},

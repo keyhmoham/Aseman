@@ -20,6 +20,7 @@ import '../../features/tools/ui_kit/kit.dart';
 import '../runtime/dynamic_values.dart';
 import '../runtime/format.dart';
 import '../runtime/host.dart';
+import 'app_layout.dart';
 import 'item.dart';
 import 'style.dart';
 
@@ -828,6 +829,6 @@ final List<CatalogItem> asemanItems = [
   tableItem, statItem, keyValueItem, timelineItem, treeViewItem, jsonViewItem,
   codeBlockItem, progressItem, badgeItem, ratingItem, calloutItem, avatarItem,
   gridItem, wrapItem, stackItem, boxItem, centerItem, spacerItem,
-  aspectRatioItem, scrollItem, sectionItem, expandableItem, switchItem,
-  elpianItem, toolFrontendItem,
+  aspectRatioItem, scrollItem, splitItem, sectionItem, expandableItem,
+  switchItem, elpianItem, toolFrontendItem,
 ];

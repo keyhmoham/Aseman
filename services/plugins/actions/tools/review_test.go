@@ -92,7 +92,9 @@ func TestReviewPassesAWorkingFrontend(t *testing.T) {
 	rv := newReviewer("Weather", "Show the weather of a city.", weatherCommands, Shown{}, fakeWeather(&calls),
 		func([]map[string]any) (string, error) { return `{"issues": []}`, nil })
 	raw := `{"title": "Weather", "components": [
-		{"id": "root", "component": "Column", "children": ["temp", "cond", "city", "go", "fav"]},
+		{"id": "root", "component": "Column", "children": ["title", "body"]},
+		{"id": "title", "component": "Text", "text": "Weather", "variant": "h4"},
+		{"id": "body", "component": "Scroll", "weight": 1, "children": ["temp", "cond", "city", "go", "fav"]},
 		{"id": "compact", "component": "Stat", "label": "Now", "value": {"path": "/now/temperature"}, "format": "number:1"},
 		{"id": "temp", "component": "Stat", "label": "Temperature (°C)", "value": {"path": "/now/temperature"}, "format": "number:1"},
 		{"id": "cond", "component": "Text", "text": {"path": "/now/condition"}},
@@ -131,5 +133,19 @@ func TestReviewWorse(t *testing.T) {
 	clean := &Review{Issues: []a2ui.Issue{{Severity: a2ui.Advice}}}
 	if !broken.worse(unclean) || !unclean.worse(clean) || clean.worse(unclean) {
 		t.Fatal("candidates ranked wrongly")
+	}
+}
+
+// A template designed as an app screen tells the device so, and one made
+// before does not (it is shown as a page, as it was).
+func TestTemplatesSayTheirLayout(t *testing.T) {
+	app := Template{Layout: AppLayout, Components: []map[string]any{{"id": "root", "component": "Text", "text": "Hi"}}}
+	create := app.Messages("s", nil)[0]["createSurface"].(map[string]any)
+	if theme, _ := create["theme"].(map[string]any); theme["layout"] != "app" {
+		t.Fatalf("createSurface: %v", create)
+	}
+	old := Template{Components: app.Components}
+	if _, ok := old.Messages("s", nil)[0]["createSurface"].(map[string]any)["theme"]; ok {
+		t.Fatal("a template made before app layout was marked as one")
 	}
 }

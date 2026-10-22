@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
@@ -3603,9 +3605,24 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
           }
           return;
         case 'Rooms':
-          final spaces = await service.fetchSpaces();
-          for (final sp in spaces) {
-            final rooms = await service.fetchRoomsForSpace(sp.id);
+          if (widget.entityId.isNotEmpty) {
+            final prof = await service.fetchRoomProfile(widget.entityId);
+            if (mounted) {
+              setState(() {
+                _room = prof;
+                _loading = false;
+              });
+            }
+            return;
+          }
+          // Look in the workspace the room was opened from before the rest.
+          final spaceIds = [
+            if (widget.spaceId.isNotEmpty) widget.spaceId,
+            for (final sp in await service.fetchSpaces())
+              if (sp.id != widget.spaceId) sp.id,
+          ];
+          for (final spaceId in spaceIds) {
+            final rooms = await service.fetchRoomsForSpace(spaceId);
             final room = rooms
                 .where((r) =>
                     r.name == widget.title || r.name.contains(widget.title))
@@ -3765,9 +3782,53 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
         'Rooms' => 'Room',
         _ => 'Profile'
       };
+
   /// The picture of the person, agent, app or workspace shown.
   String get _avatar =>
       _user?.avatar ?? _bot?.avatar ?? _space?.avatar ?? '';
+
+  bool get _loaded =>
+      _user != null || _bot != null || _space != null || _room != null;
+
+  /// The loaded entity's name, or the title it was opened with until then.
+  String get _name {
+    final name =
+        _user?.name ?? _bot?.name ?? _space?.name ?? _room?.name ?? '';
+    return name.isEmpty ? widget.title : name;
+  }
+
+  /// The line under the name: who the entity is, from its loaded profile.
+  String get _subtitle {
+    final u = _user;
+    if (u != null) {
+      return [
+        '@${u.handle}',
+        if (u.kind != 'user') u.kind,
+        if (u.status != 'active') u.status,
+      ].join(' · ');
+    }
+    final b = _bot;
+    if (b != null) {
+      return [
+        if (b.vmType.isNotEmpty) b.vmType.toUpperCase(),
+        if (b.ownerHandle.isNotEmpty) 'by @${b.ownerHandle}',
+      ].join(' · ');
+    }
+    final s = _space;
+    if (s != null) {
+      return [
+        s.public ? 'Public' : 'Private',
+        if (s.ownerHandle.isNotEmpty) 'by @${s.ownerHandle}',
+      ].join(' · ');
+    }
+    final r = _room;
+    if (r != null && r.spaceName.isNotEmpty) return 'in ${r.spaceName}';
+    return '';
+  }
+
+  /// The entity's own words about itself: a bio, description or topic.
+  String get _about =>
+      _user?.bio ?? _bot?.description ?? _space?.description ?? _room?.topic ?? '';
 
   IconData get icon => switch (widget.section) {
         'Users' => Icons.person_rounded,
@@ -3777,391 +3838,222 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
         'Rooms' => Icons.forum_rounded,
         _ => Icons.category_rounded
       };
-  String get action {
+
+  /// The primary action's label and whether it is already done.
+  (String, bool)? get _action {
     final u = _user;
-    if (u != null) return u.amFollowing ? 'Following' : 'Follow';
+    if (u != null) return u.amFollowing ? ('Following', true) : ('Follow', false);
     final b = _bot;
-    if (b != null) return _inSpace ? 'Added' : 'Add to workspace';
+    if (b != null) return _inSpace ? ('Added', true) : ('Add to workspace', false);
     final s = _space;
-    if (s != null) return s.amMember ? 'Joined' : 'Join workspace';
+    if (s != null) return s.amMember ? ('Joined', true) : ('Join workspace', false);
     final r = _room;
-    if (r != null) return r.amMember ? 'Joined' : 'Join room';
-    return 'Open';
+    if (r != null) return r.amMember ? ('Joined', true) : ('Join room', false);
+    return null;
   }
 
-  List<(String, String)> get stats {
+  List<(String, String, VoidCallback?)> get stats {
     final u = _user;
+    final deps = widget.dependencies;
     if (u != null) {
       return [
-        ('${u.followers}', 'Followers'),
-        ('${u.following}', 'Following'),
-        ('${_posts.length}', 'Posts'),
+        (
+          '${u.followers}',
+          'Followers',
+          deps == null ? null : () => _showAccountList(context, deps, u.id, false)
+        ),
+        (
+          '${u.following}',
+          'Following',
+          deps == null ? null : () => _showAccountList(context, deps, u.id, true)
+        ),
+        ('${_posts.length}', 'Posts', null),
       ];
     }
     final b = _bot;
     if (b != null) {
       return [
-        (b.status, 'Status'),
-        (b.kind.toUpperCase(), 'Kind'),
-        ('${b.installs}', 'Installs'),
+        (b.status.isEmpty ? '—' : b.status, 'Status', null),
+        ('${b.installs}', 'Installs', null),
+        (_fmtDuration(b.uptimeSec), 'Uptime', null),
       ];
     }
     final s = _space;
     if (s != null) {
       return [
-        ('${s.memberCount}', 'Members'),
-        ('${s.roomCount}', 'Rooms'),
-        ('${s.postCount}', 'Posts'),
+        ('${s.memberCount}', 'Members', null),
+        ('${s.roomCount}', 'Rooms', null),
+        ('${s.postCount}', 'Posts', null),
       ];
     }
     final r = _room;
     if (r != null) {
       return [
-        ('${r.memberCount}', 'Members'),
-        ('${r.agentCount}', 'Agents'),
-        ('${r.messageCount}', 'Messages'),
+        ('${r.memberCount}', 'Members', null),
+        ('${r.agentCount}', 'Agents', null),
+        ('${r.messageCount}', 'Messages', null),
       ];
     }
-    return switch (widget.section) {
-      'Users' => [('—', 'Followers'), ('—', 'Posts')],
-      'Agents' => [('—', 'Status'), ('—', 'Installs')],
-      'Apps' => [('—', 'Status'), ('—', 'Installs')],
-      'Workspaces' => [('—', 'Members'), ('—', 'Rooms')],
-      'Rooms' => [('—', 'Members'), ('—', 'Messages')],
-      _ => [('—', 'Activity')]
-    };
+    return const [];
   }
 
-  List<String> get features {
+  /// Shares the entity through the platform's share sheet, copying the
+  /// text instead where there is none.
+  Future<void> _share(BuildContext buttonContext) async {
     final u = _user;
-    if (u != null) {
-      return [
-        '@${u.handle}',
-        u.kind,
-        u.status,
-        if (u.bio.isNotEmpty) u.bio,
-      ];
+    final text = u != null
+        ? '$_name (@${u.handle}) on Aseman'
+        : '$singular "$_name" on Aseman';
+    final box = buttonContext.findRenderObject() as RenderBox?;
+    final origin = box != null && box.hasSize
+        ? box.localToGlobal(Offset.zero) & box.size
+        : null;
+    try {
+      await SharePlus.instance.share(ShareParams(
+          text: _about.isEmpty ? text : '$text\n\n$_about',
+          subject: text,
+          sharePositionOrigin: origin));
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: text));
+      _snack('Sharing is not available here; the profile was copied');
     }
-    final b = _bot;
-    if (b != null) {
-      return [
-        b.vmType.toUpperCase(),
-        b.hasFrontend ? 'Elpian frontend' : 'No frontend yet',
-        '${b.entities.length} entities',
-        if (b.description.isNotEmpty) b.description,
-      ];
-    }
-    final s = _space;
-    if (s != null) {
-      return [
-        s.public ? 'Public' : 'Private',
-        '${s.agentCount} agents',
-        '${s.fileCount} files',
-        if (s.description.isNotEmpty) s.description,
-      ];
-    }
-    final r = _room;
-    if (r != null) {
-      return [
-        '${r.spaceName}',
-        '${r.agentCount} agents',
-        '${r.fileCount} files',
-        if (r.topic.isNotEmpty) r.topic,
-      ];
-    }
-    return switch (widget.section) {
-      'Users' => ['Public profile'],
-      'Agents' => ['Agent profile'],
-      'Apps' => ['App profile'],
-      'Workspaces' => ['Workspace profile'],
-      'Rooms' => ['Room profile'],
-      _ => ['Public profile']
-    };
   }
 
-  @override
-  Widget build(BuildContext context) =>
-      ListView(padding: const EdgeInsets.fromLTRB(18, 14, 18, 28), children: [
-        Row(children: [
-          MiniTag(
-              singular.toUpperCase(), Theme.of(context).colorScheme.primary),
-          const Spacer(),
-          IconButton(
-              tooltip: 'Share profile',
-              onPressed: () {},
-              icon: const Icon(Icons.ios_share_rounded, size: 19)),
-          IconButton(
-              tooltip: 'Close',
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.close_rounded))
-        ]),
-        const SizedBox(height: 7),
-        Container(
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(26)),
-            child: Column(children: [
-              Container(
-                  height: 104,
-                  decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: [
-                    Theme.of(context).colorScheme.primary,
-                    Theme.of(context).colorScheme.tertiary
-                  ])),
-                  child: Stack(children: [
-                    Positioned(
-                        right: -16,
-                        top: -36,
-                        child: Icon(icon,
-                            size: 160,
-                            color: Colors.white.withValues(alpha: .15)))
-                  ])),
-              Transform.translate(
-                  offset: const Offset(0, -31),
-                  child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(children: [
-                        Row(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Container(
-                                  width: 70,
-                                  height: 70,
-                                  decoration: BoxDecoration(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primaryContainer,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .surface,
-                                          width: 4)),
-                                  child: AvatarPicture(
-                                      avatar: _avatar,
-                                      size: 62,
-                                      fallback: Center(
-                                          child: Icon(icon, size: 31)))),
-                              const Spacer(),
-                              FilledButton.icon(
-                                  onPressed: _busy ? null : _performAction,
-                                  icon: _busy
-                                      ? const SizedBox(
-                                          width: 15,
-                                          height: 15,
-                                          child: CircularProgressIndicator(
-                                              strokeWidth: 2))
-                                      : Icon(
-                                          action == 'Follow' ||
-                                                  action == 'Join workspace' ||
-                                                  action == 'Join room' ||
-                                                  action == 'Add to workspace'
-                                              ? Icons.add_rounded
-                                              : Icons.check_rounded,
-                                          size: 17),
-                                  label: Text(action))
-                            ]),
-                        const SizedBox(height: 10),
-                        Row(children: [
-                          Flexible(
-                              child: Text(widget.title,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      fontSize: 23,
-                                      fontWeight: FontWeight.w900))),
-                          const SizedBox(width: 6),
-                          const Icon(Icons.verified_rounded,
-                              size: 18, color: Colors.blueAccent)
-                        ]),
-                        const SizedBox(height: 4),
-                        Align(
-                            alignment: Alignment.centerLeft,
-                            child: _loading
-                                ? const SkeletonParagraph(
-                                    lines: 2, lineHeight: 10)
-                                : Text(_summary(),
-                                    style: TextStyle(
-                                        height: 1.4,
-                                        fontSize: 11,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant)))
-                      ])))
-            ])),
-        const SizedBox(height: 12),
-        if (_error != null)
-          Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(_error!,
-                  style:
-                      const TextStyle(color: AppColors.danger, fontSize: 12))),
-        Row(
-            children: stats
-                .map((stat) => Expanded(
-                    child: Padding(
-                        padding:
-                            EdgeInsets.only(right: stat == stats.last ? 0 : 7),
-                        child: ProfileStat(stat.$1, stat.$2))))
-                .toList()),
-        const SizedBox(height: 18),
-        Text(_sectionTitle(),
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 9),
-        Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: features
-                .map((feature) =>
-                    Chip(avatar: Icon(icon, size: 14), label: Text(feature)))
-                .toList()),
-        const SizedBox(height: 18),
-        _EntityProfileDetail(section: widget.section, icon: icon),
-      ]);
-
-  String _summary() {
-    final u = _user;
-    if (u != null) {
-      return u.bio.isNotEmpty
-          ? u.bio
-          : '@${u.handle} — ${u.kind} account, following ${u.following} with ${u.followers} followers.';
-    }
-    final b = _bot;
-    if (b != null) {
-      return b.description.isNotEmpty
-          ? b.description
-          : '${b.name} — a ${b.kind} running on the ${b.vmType} VM. Status: ${b.status}.';
-    }
-    final s = _space;
-    if (s != null) {
-      return s.description.isNotEmpty
-          ? s.description
-          : '${s.name} — ${s.memberCount} members, ${s.roomCount} rooms, ${s.postCount} posts.';
-    }
-    final r = _room;
-    if (r != null) {
-      return '${r.name} in ${r.spaceName} — ${r.memberCount} members, ${r.agentCount} agents, ${r.messageCount} messages.';
-    }
-    return switch (widget.section) {
-      'Users' => 'Trader profile',
-      'Agents' => 'Agent profile',
-      'Apps' => 'App profile',
-      'Workspaces' => 'Workspace profile',
-      'Rooms' => 'Room profile',
-      _ => 'Aseman profile'
-    };
-  }
-
-  String _sectionTitle() => switch (widget.section) {
-        'Users' => 'Profile',
-        'Agents' => 'Runtime',
-        'Apps' => 'Runtime',
-        'Workspaces' => 'Overview',
-        'Rooms' => 'Activity',
-        _ => 'Highlights'
-      };
-}
-
-class _EntityProfileDetail extends StatelessWidget {
-  const _EntityProfileDetail({required this.section, required this.icon});
-  final String section;
-  final IconData icon;
-  @override
-  Widget build(BuildContext context) => switch (section) {
-        'Users' => const _TraderProfileDetail(),
-        'Agents' => const _AgentProfileDetail(),
-        'Apps' => const _ToolProfileDetail(),
-        'Workspaces' => const _WorkspaceProfileDetail(),
-        'Rooms' => const _RoomProfileDetail(),
-        _ => const SizedBox.shrink()
-      };
-}
-
-class _ProfileDetailCard extends StatelessWidget {
-  const _ProfileDetailCard(this.title, this.icon, this.child);
-  final String title;
-  final IconData icon;
-  final Widget child;
-  @override
-  Widget build(BuildContext context) => Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(21)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(icon, size: 19, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 8),
-          Text(title,
-              style:
-                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w900)),
-          const Spacer()
-        ]),
-        const SizedBox(height: 12),
-        child
-      ]));
-}
-
-class _TraderProfileDetail extends StatelessWidget {
-  const _TraderProfileDetail();
   @override
   Widget build(BuildContext context) {
-    final state = context.findAncestorStateOfType<_EntityProfileScreenState>();
-    final user = state?._user;
-    final posts = state?._posts ?? const <SocialPost>[];
-    final deps = state?.widget.dependencies;
-    return Column(children: [
-      _ProfileDetailCard(
-          'About',
-          Icons.edit_note_rounded,
-          Text(user?.bio.isNotEmpty == true ? user!.bio : 'No bio yet.',
-              style: const TextStyle(fontSize: 11, height: 1.5))),
-      const SizedBox(height: 9),
-      _ProfileDetailCard(
-          'Connections',
-          Icons.people_rounded,
-          Row(children: [
-            _ConnectorCount('Followers', user?.followers ?? 0,
-                onTap: deps == null || user == null
-                    ? null
-                    : () => _showAccountList(context, deps, user.id, false)),
-            const SizedBox(width: 16),
-            _ConnectorCount('Following', user?.following ?? 0,
-                onTap: deps == null || user == null
-                    ? null
-                    : () => _showAccountList(context, deps, user.id, true)),
-          ])),
-      const SizedBox(height: 9),
-      _ProfileDetailCard(
-          'Recent posts',
-          Icons.dynamic_feed_rounded,
-          posts.isEmpty
-              ? Text('No posts yet.',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant))
-              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  for (final p in posts.take(5))
-                    Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              DefaultTextStyle.merge(
-                                  style: const TextStyle(
-                                      fontSize: 12, height: 1.45),
-                                  child: RichPostContent(p.body,
-                                      headers:
-                                          deps?.service.authHeaders() ??
-                                              const {})),
-                              Text(_timeAgo(p.createdAt),
-                                  style: TextStyle(
-                                      fontSize: 8,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant))
-                            ]))
+    final scheme = Theme.of(context).colorScheme;
+    final action = _action;
+    final subtitle = _subtitle;
+    final about = _about;
+    final stats = this.stats;
+    return ListView(padding: const EdgeInsets.fromLTRB(18, 14, 18, 28), children: [
+      Row(children: [
+        MiniTag(singular.toUpperCase(), scheme.primary),
+        const Spacer(),
+        if (_loaded)
+          Builder(
+              builder: (buttonContext) => IconButton(
+                  tooltip: 'Share profile',
+                  onPressed: () => _share(buttonContext),
+                  icon: const Icon(Icons.ios_share_rounded, size: 19))),
+        IconButton(
+            tooltip: 'Close',
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close_rounded))
+      ]),
+      const SizedBox(height: 7),
+      Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+              color: scheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(26)),
+          child: Column(children: [
+            Container(
+                height: 104,
+                decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                        colors: [scheme.primary, scheme.tertiary])),
+                child: Stack(children: [
+                  Positioned(
+                      right: -16,
+                      top: -36,
+                      child: Icon(icon,
+                          size: 160,
+                          color: Colors.white.withValues(alpha: .15)))
                 ])),
+            Transform.translate(
+                offset: const Offset(0, -31),
+                child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Container(
+                                    width: 70,
+                                    height: 70,
+                                    decoration: BoxDecoration(
+                                        color: scheme.primaryContainer,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                            color: scheme.surface, width: 4)),
+                                    child: AvatarPicture(
+                                        avatar: _avatar,
+                                        size: 62,
+                                        fallback: Center(
+                                            child: Icon(icon, size: 31)))),
+                                const Spacer(),
+                                if (action != null)
+                                  FilledButton.icon(
+                                      onPressed:
+                                          _busy ? null : _performAction,
+                                      icon: _busy
+                                          ? const SizedBox(
+                                              width: 15,
+                                              height: 15,
+                                              child:
+                                                  CircularProgressIndicator(
+                                                      strokeWidth: 2))
+                                          : Icon(
+                                              action.$2
+                                                  ? Icons.check_rounded
+                                                  : Icons.add_rounded,
+                                              size: 17),
+                                      label: Text(action.$1))
+                              ]),
+                          const SizedBox(height: 10),
+                          Text(_name,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 23, fontWeight: FontWeight.w900)),
+                          if (_loading) ...[
+                            const SizedBox(height: 6),
+                            const SkeletonParagraph(lines: 2, lineHeight: 10),
+                          ] else ...[
+                            if (subtitle.isNotEmpty)
+                              Text(subtitle,
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: scheme.onSurfaceVariant)),
+                            if (about.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(about,
+                                  style: const TextStyle(
+                                      height: 1.4, fontSize: 12)),
+                            ],
+                          ],
+                        ])))
+          ])),
+      const SizedBox(height: 12),
+      if (_error != null)
+        Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(_error!,
+                style: const TextStyle(color: AppColors.danger, fontSize: 12))),
+      if (_loading)
+        const SkeletonBox(height: 58, radius: 15)
+      else if (stats.isNotEmpty)
+        Row(children: [
+          for (final (i, stat) in stats.indexed)
+            Expanded(
+                child: Padding(
+                    padding: EdgeInsets.only(
+                        right: i == stats.length - 1 ? 0 : 7),
+                    child: ProfileStat(stat.$1, stat.$2, onTap: stat.$3)))
+        ]),
+      const SizedBox(height: 18),
+      if (_user case final u?)
+        _TraderProfileDetail(
+            user: u, posts: _posts, dependencies: widget.dependencies)
+      else if (_bot case final b?)
+        _BotProfileDetail(bot: b, dependencies: widget.dependencies)
+      else if (_space case final s?)
+        _WorkspaceProfileDetail(space: s, dependencies: widget.dependencies)
+      else if (_room case final r?)
+        _RoomProfileDetail(room: r, dependencies: widget.dependencies),
     ]);
   }
 
@@ -4183,297 +4075,328 @@ class _TraderProfileDetail extends StatelessWidget {
                       return Column(children: [
                         Padding(
                             padding: const EdgeInsets.all(16),
-                            child: Text('$title · ${list.length}',
+                            child: Text(
+                                snap.connectionState == ConnectionState.done
+                                    ? '$title · ${list.length}'
+                                    : title,
                                 style: const TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w900))),
                         const Divider(height: 1),
                         Expanded(
-                          child: list.isEmpty
-                              ? Center(
-                                  child: Text('None yet',
-                                      style: TextStyle(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurfaceVariant)))
-                              : ListView.separated(
-                                  itemCount: list.length,
-                                  separatorBuilder: (_, __) =>
-                                      const Divider(height: 1),
-                                  itemBuilder: (_, i) => ListTile(
-                                      dense: true,
-                                      leading: CircleAvatar(
-                                          radius: 16,
-                                          foregroundImage:
-                                              Avatars.of(list[i].avatar),
-                                          onForegroundImageError:
-                                              list[i].avatar.isEmpty
-                                                  ? null
-                                                  : (_, __) {},
-                                          child: Text(list[i].handle.isEmpty
-                                              ? '?'
-                                              : list[i]
-                                                  .handle[0]
-                                                  .toUpperCase())),
-                                      title: Text('@${list[i].handle}',
-                                          style: const TextStyle(fontSize: 13)),
-                                      subtitle: Text(list[i].kind,
-                                          style:
-                                              const TextStyle(fontSize: 10)))),
+                          child: snap.connectionState != ConnectionState.done
+                              ? const Center(
+                                  child: CircularProgressIndicator())
+                              : list.isEmpty
+                                  ? Center(
+                                      child: Text('None yet',
+                                          style: TextStyle(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant)))
+                                  : ListView.separated(
+                                      itemCount: list.length,
+                                      separatorBuilder: (_, __) =>
+                                          const Divider(height: 1),
+                                      itemBuilder: (_, i) => ListTile(
+                                          dense: true,
+                                          onTap: () {
+                                            Navigator.pop(ctx);
+                                            showAccountProfile(context, deps,
+                                                accountId: list[i].id,
+                                                handle: list[i].handle);
+                                          },
+                                          leading: CircleAvatar(
+                                              radius: 16,
+                                              foregroundImage:
+                                                  Avatars.of(list[i].avatar),
+                                              onForegroundImageError:
+                                                  list[i].avatar.isEmpty
+                                                      ? null
+                                                      : (_, __) {},
+                                              child: Text(list[i]
+                                                      .handle
+                                                      .isEmpty
+                                                  ? '?'
+                                                  : list[i]
+                                                      .handle[0]
+                                                      .toUpperCase())),
+                                          title: Text('@${list[i].handle}',
+                                              style: const TextStyle(
+                                                  fontSize: 13)),
+                                          subtitle: Text(list[i].kind,
+                                              style: const TextStyle(
+                                                  fontSize: 10)))),
                         ),
                       ]);
                     }))));
   }
 }
 
-class _ConnectorCount extends StatelessWidget {
-  const _ConnectorCount(this.label, this.count, {this.onTap});
-  final String label;
-  final int count;
-  final VoidCallback? onTap;
+class _ProfileDetailCard extends StatelessWidget {
+  const _ProfileDetailCard(this.title, this.icon, this.child);
+  final String title;
+  final IconData icon;
+  final Widget child;
   @override
-  Widget build(BuildContext context) => InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+  Widget build(BuildContext context) => Padding(
+      padding: const EdgeInsets.only(bottom: 9),
       child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12)),
-          child: Column(children: [
-            Text('$count',
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-            Text(label, style: const TextStyle(fontSize: 10))
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(21)),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Icon(icon,
+                  size: 19, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 8),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w900)),
+            ]),
+            const SizedBox(height: 12),
+            child
           ])));
 }
 
-class _AgentProfileDetail extends StatelessWidget {
-  const _AgentProfileDetail();
+class _EmptyNote extends StatelessWidget {
+  const _EmptyNote(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) => Text(text,
+      style: TextStyle(
+          fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant));
+}
+
+class _TraderProfileDetail extends StatelessWidget {
+  const _TraderProfileDetail(
+      {required this.user, required this.posts, this.dependencies});
+  final UserProfile user;
+  final List<SocialPost> posts;
+  final AppDependencies? dependencies;
+  @override
+  Widget build(BuildContext context) => _ProfileDetailCard(
+      'Recent posts',
+      Icons.dynamic_feed_rounded,
+      posts.isEmpty
+          ? const _EmptyNote('No posts yet.')
+          : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              for (final p in posts.take(5))
+                Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          DefaultTextStyle.merge(
+                              style:
+                                  const TextStyle(fontSize: 12, height: 1.45),
+                              child: RichPostContent(p.body,
+                                  headers:
+                                      dependencies?.service.authHeaders() ??
+                                          const {})),
+                          Text(_timeAgo(p.createdAt),
+                              style: TextStyle(
+                                  fontSize: 8,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant))
+                        ]))
+            ]));
+}
+
+/// The detail of an agent or an app (tool): both are bots on a VM.
+class _BotProfileDetail extends StatelessWidget {
+  const _BotProfileDetail({required this.bot, this.dependencies});
+  final BotProfile bot;
+  final AppDependencies? dependencies;
   @override
   Widget build(BuildContext context) {
-    final state = context.findAncestorStateOfType<_EntityProfileScreenState>();
-    final bot = state?._bot;
-    if (bot == null) return const SizedBox.shrink();
+    final deps = dependencies;
+    final cpu = bot.resources['cpu'] as num?;
+    final ram = bot.resources['memory_mb'] as num?;
+    final disk = bot.resources['disk_mb'] as num?;
+    final costPerMinute = bot.cost['per_minute'] as num?;
+    final category = bot.listing['category'] as String? ?? '';
     return Column(children: [
       _ProfileDetailCard(
-          'Resources',
-          Icons.memory_rounded,
+          'Runtime',
+          Icons.monitor_heart_rounded,
           Row(children: [
-            _ResourceCell('CPU', '${(bot.resources['cpu'] as num?) ?? 0} vCPU'),
             _ResourceCell(
-                'RAM', '${(bot.resources['memory_mb'] as num?) ?? 0} MB'),
-            _ResourceCell(
-                'Disk', '${(bot.resources['disk_mb'] as num?) ?? 0} MB'),
+                'VM', bot.vmType.isEmpty ? '—' : bot.vmType.toUpperCase()),
+            _ResourceCell('Frontend', bot.hasFrontend ? 'Elpian' : 'None'),
+            _ResourceCell('Image', bot.imageRef.isEmpty ? '—' : bot.imageRef),
           ])),
-      const SizedBox(height: 9),
+      if (cpu != null || ram != null || disk != null)
+        _ProfileDetailCard(
+            'Resources',
+            Icons.memory_rounded,
+            Row(children: [
+              if (cpu != null) _ResourceCell('CPU', '$cpu vCPU'),
+              if (ram != null) _ResourceCell('RAM', '$ram MB'),
+              if (disk != null) _ResourceCell('Disk', '$disk MB'),
+            ])),
       _ProfileDetailCard(
           'Usage',
           Icons.analytics_rounded,
           Row(children: [
-            _ResourceCell('Uptime', _fmtDuration(bot.uptimeSec)),
             _ResourceCell('Tokens', '${bot.tokens}'),
-            _ResourceCell(
-                'Cost/min', '${(bot.cost['per_minute'] as num?) ?? 0}'),
+            if (costPerMinute != null)
+              _ResourceCell('Cost/min', '$costPerMinute'),
           ])),
-      const SizedBox(height: 9),
       if (bot.listing.isNotEmpty)
         _ProfileDetailCard(
             'Marketplace',
             Icons.storefront_rounded,
             Row(children: [
-              _ResourceCell('Installs', '${bot.installs}'),
-              _ResourceCell('Price', '${bot.price}'),
-              _ResourceCell(
-                  'Category', bot.listing['category'] as String? ?? '—'),
+              _ResourceCell('Price', bot.price == 0 ? 'Free' : '${bot.price}'),
+              if (category.isNotEmpty) _ResourceCell('Category', category),
             ])),
-      const SizedBox(height: 9),
-      _ProfileDetailCard(
-          'Entities',
-          Icons.folder_copy_rounded,
-          bot.entities.isEmpty
-              ? Text('No runtime entities yet.',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant))
-              : Wrap(spacing: 7, runSpacing: 7, children: [
-                  for (final key in bot.entities) Chip(label: Text(key)),
-                ])),
-      if (bot.ownerHandle.isNotEmpty) ...[
-        const SizedBox(height: 9),
+      if (bot.entities.isNotEmpty)
+        _ProfileDetailCard(
+            'Entities',
+            Icons.folder_copy_rounded,
+            Wrap(spacing: 7, runSpacing: 7, children: [
+              for (final key in bot.entities) Chip(label: Text(key)),
+            ])),
+      if (bot.ownerHandle.isNotEmpty)
         _ProfileDetailCard(
             'Owner',
             Icons.person_outline_rounded,
-            Text('@${bot.ownerHandle}',
-                style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w700))),
-      ],
-    ]);
-  }
-}
-
-class _ToolProfileDetail extends StatelessWidget {
-  const _ToolProfileDetail();
-  @override
-  Widget build(BuildContext context) {
-    final state = context.findAncestorStateOfType<_EntityProfileScreenState>();
-    final bot = state?._bot;
-    if (bot == null) return const SizedBox.shrink();
-    return Column(children: [
-      _ProfileDetailCard(
-          'Resources',
-          Icons.memory_rounded,
-          Row(children: [
-            _ResourceCell('CPU', '${(bot.resources['cpu'] as num?) ?? 0} vCPU'),
-            _ResourceCell(
-                'RAM', '${(bot.resources['memory_mb'] as num?) ?? 0} MB'),
-            _ResourceCell(
-                'Disk', '${(bot.resources['disk_mb'] as num?) ?? 0} MB'),
-          ])),
-      const SizedBox(height: 9),
-      _ProfileDetailCard(
-          'Status',
-          Icons.monitor_heart_rounded,
-          Row(children: [
-            _ResourceCell('Runtime', bot.vmType.toUpperCase()),
-            _ResourceCell('Status', bot.status),
-            _ResourceCell('Image', bot.imageRef),
-          ])),
-      const SizedBox(height: 9),
-      _ProfileDetailCard(
-          'Usage',
-          Icons.analytics_rounded,
-          Row(children: [
-            _ResourceCell('Uptime', _fmtDuration(bot.uptimeSec)),
-            _ResourceCell('Tokens', '${bot.tokens}'),
-            _ResourceCell(
-                'Cost/min', '${(bot.cost['per_minute'] as num?) ?? 0}'),
-          ])),
-      const SizedBox(height: 9),
-      if (bot.listing.isNotEmpty)
-        _ProfileDetailCard(
-            'Marketplace',
-            Icons.storefront_rounded,
-            Row(children: [
-              _ResourceCell('Installs', '${bot.installs}'),
-              _ResourceCell('Price', '${bot.price}'),
-            ])),
+            InkWell(
+                onTap: deps == null || bot.ownerId.isEmpty
+                    ? null
+                    : () => showAccountProfile(context, deps,
+                        accountId: bot.ownerId, handle: bot.ownerHandle),
+                child: Text('@${bot.ownerHandle}',
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w700)))),
     ]);
   }
 }
 
 class _WorkspaceProfileDetail extends StatelessWidget {
-  const _WorkspaceProfileDetail();
+  const _WorkspaceProfileDetail({required this.space, this.dependencies});
+  final SpaceProfile space;
+  final AppDependencies? dependencies;
   @override
   Widget build(BuildContext context) {
-    final state = context.findAncestorStateOfType<_EntityProfileScreenState>();
-    final space = state?._space;
-    if (space == null) return const SizedBox.shrink();
-    final rooms = space.rooms.isEmpty ? const ['Hall room'] : space.rooms;
+    final deps = dependencies;
     return Column(children: [
-      _ProfileDetailCard('Rooms', Icons.grid_view_rounded,
-          LayoutBuilder(builder: (context, box) {
-        final columns = box.maxWidth < 420 ? 2 : 3;
-        return GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: columns,
-            mainAxisSpacing: 7,
-            crossAxisSpacing: 7,
-            childAspectRatio: 1.8,
-            children: [
-              for (final r in rooms.take(6))
-                _WorkspaceRoomPreview(r, Icons.forum_outlined),
-            ]);
-      })),
-      const SizedBox(height: 9),
+      _ProfileDetailCard(
+          'Rooms',
+          Icons.grid_view_rounded,
+          space.rooms.isEmpty
+              ? const _EmptyNote('No rooms yet.')
+              : LayoutBuilder(builder: (context, box) {
+                  final columns = box.maxWidth < 420 ? 2 : 3;
+                  return GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: columns,
+                      mainAxisSpacing: 7,
+                      crossAxisSpacing: 7,
+                      childAspectRatio: 1.8,
+                      children: [
+                        for (final r in space.rooms)
+                          _WorkspaceRoomPreview(r, Icons.forum_outlined,
+                              onTap: () => _openEntityProfile(
+                                  context, 'Rooms', r, deps, space.id)),
+                      ]);
+                })),
       _ProfileDetailCard(
           'Community',
           Icons.groups_rounded,
           Row(children: [
-            _ResourceCell('Members', '${space.memberCount}'),
             _ResourceCell('Agents', '${space.agentCount}'),
             _ResourceCell('Files', '${space.fileCount}'),
-            _ResourceCell('Posts', '${space.postCount}'),
-          ])),
-      const SizedBox(height: 9),
-      _ProfileDetailCard(
-          'Visibility',
-          Icons.public_rounded,
-          Row(children: [
-            _ResourceCell('Access', space.public ? 'Public' : 'Private'),
-            _ResourceCell('Owner',
-                space.ownerHandle.isEmpty ? '—' : '@${space.ownerHandle}'),
-            _ResourceCell('Home', space.home ? 'Yes' : 'No'),
+            if (space.home) const _ResourceCell('Home', 'Yes'),
           ])),
     ]);
   }
 }
 
 class _WorkspaceRoomPreview extends StatelessWidget {
-  const _WorkspaceRoomPreview(this.label, this.icon);
+  const _WorkspaceRoomPreview(this.label, this.icon, {this.onTap});
   final String label;
   final IconData icon;
+  final VoidCallback? onTap;
   @override
-  Widget build(BuildContext context) => Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(13)),
-      child: Row(children: [
-        Icon(icon, size: 15),
-        const SizedBox(width: 6),
-        Expanded(
-            child: Text(label,
-                overflow: TextOverflow.ellipsis,
-                style:
-                    const TextStyle(fontSize: 9, fontWeight: FontWeight.w700)))
-      ]));
+  Widget build(BuildContext context) => Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(13),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+          onTap: onTap,
+          child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(children: [
+                Icon(icon, size: 15),
+                const SizedBox(width: 6),
+                Expanded(
+                    child: Text(label,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 9, fontWeight: FontWeight.w700)))
+              ]))));
 }
 
 class _RoomProfileDetail extends StatelessWidget {
-  const _RoomProfileDetail();
+  const _RoomProfileDetail({required this.room, this.dependencies});
+  final RoomProfile room;
+  final AppDependencies? dependencies;
   @override
   Widget build(BuildContext context) {
-    final state = context.findAncestorStateOfType<_EntityProfileScreenState>();
-    final room = state?._room;
-    if (room == null) return const SizedBox.shrink();
+    final deps = dependencies;
     return Column(children: [
       _ProfileDetailCard(
-          'Stats',
-          Icons.query_stats_rounded,
+          'Workspace',
+          Icons.hub_rounded,
           Row(children: [
-            _ResourceCell('Members', '${room.memberCount}'),
-            _ResourceCell('Agents', '${room.agentCount}'),
-            _ResourceCell('Messages', '${room.messageCount}'),
+            Expanded(
+                child: InkWell(
+                    onTap: room.spaceId.isEmpty
+                        ? null
+                        : () => _openEntityProfile(context, 'Workspaces',
+                            room.spaceName, deps, '', room.spaceId),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              room.spaceName.isEmpty ? '—' : room.spaceName,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 2),
+                          const Text('Workspace',
+                              style: TextStyle(fontSize: 9)),
+                        ]))),
             _ResourceCell('Files', '${room.fileCount}'),
           ])),
-      const SizedBox(height: 9),
       _ProfileDetailCard(
           'Recent room activity',
           Icons.forum_outlined,
           room.recentMessages.isEmpty
-              ? Text('No messages yet.',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant))
+              ? const _EmptyNote('No messages yet.')
               : Column(children: [
                   for (final m in room.recentMessages)
                     _RoomActivityRow(
                         Icons.chat_bubble_outline_rounded,
-                        _short(m['sender_id'] as String? ?? '?', 10) +
-                            ': ' +
-                            (m['body'] as String? ?? ''),
+                        '${_sender(m)}: ${m['body'] as String? ?? ''}',
                         _timeAgo(DateTime.tryParse(
                                 m['created_at'] as String? ?? '') ??
                             DateTime.now())),
                 ])),
-      if (room.topic.isNotEmpty) ...[
-        const SizedBox(height: 9),
-        _ProfileDetailCard('Topic', Icons.subject_rounded,
-            Text(room.topic, style: const TextStyle(fontSize: 11))),
-      ],
     ]);
+  }
+
+  static String _sender(Map<String, dynamic> m) {
+    final handle = m['sender_handle'] as String? ?? '';
+    return handle.isNotEmpty
+        ? '@$handle'
+        : _short(m['sender_id'] as String? ?? '?', 8);
   }
 }
 
@@ -4485,6 +4408,8 @@ class _ResourceCell extends StatelessWidget {
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
         const SizedBox(height: 2),
         Text(label, style: const TextStyle(fontSize: 9)),

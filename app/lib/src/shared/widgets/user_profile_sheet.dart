@@ -371,37 +371,19 @@ class _ProfileHeader extends StatelessWidget {
                                   label: const Text('Edit')),
                             ]),
                         const SizedBox(height: 9),
-                        Row(children: [
-                          Expanded(
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                Row(children: [
-                                  Flexible(
-                                      child: Text(handle,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                              fontSize: 22,
-                                              fontWeight: FontWeight.w900))),
-                                  const SizedBox(width: 5),
-                                  const Icon(Icons.verified_rounded,
-                                      size: 17, color: Colors.blueAccent)
-                                ]),
-                                Text('@$handle · Federated member',
-                                    style: const TextStyle(fontSize: 11))
-                              ])),
-                          Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 5),
-                              decoration: BoxDecoration(
-                                  color: Colors.green.withValues(alpha: .12),
-                                  borderRadius: BorderRadius.circular(10)),
-                              child: const Text('●  ACTIVE',
-                                  style: TextStyle(
-                                      color: Colors.green,
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.w900)))
-                        ]),
+                        Align(
+                            alignment: Alignment.centerLeft,
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(handle,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w900)),
+                                  Text('@$handle',
+                                      style: const TextStyle(fontSize: 11))
+                                ])),
                         const SizedBox(height: 10),
                       ])))
             ]));
@@ -410,20 +392,27 @@ class _ProfileHeader extends StatelessWidget {
 
 /// Single profile stat metric used across profile surfaces.
 class ProfileStat extends StatelessWidget {
-  const ProfileStat(this.value, this.label, {super.key});
+  const ProfileStat(this.value, this.label, {super.key, this.onTap});
   final String value, label;
+  final VoidCallback? onTap;
   @override
-  Widget build(BuildContext context) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-      decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(15)),
-      child: Column(children: [
-        Text(value,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 2),
-        Text(label, style: const TextStyle(fontSize: 9))
-      ]));
+  Widget build(BuildContext context) => Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(15),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+          onTap: onTap,
+          child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+              child: Column(children: [
+                Text(value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 2),
+                Text(label, style: const TextStyle(fontSize: 9))
+              ]))));
 }
 
 class _ProfileStats extends StatelessWidget {

@@ -8,6 +8,7 @@ import '../../../../core/utils/context_extensions.dart';
 import '../../../../data/models/bot.dart';
 import '../../../../data/services/aseman_service.dart';
 import '../../../../shared/widgets/avatar.dart';
+import '../../../../shared/widgets/skeleton.dart';
 import '../../../computer/computer_view.dart';
 import '../../../computer/preview_view.dart';
 import '../../../computer/space_computer.dart';
@@ -470,7 +471,10 @@ class _SpaceMemoryTabState extends State<SpaceMemoryTab> {
                   ),
                   Expanded(
                     child: _loading
-                        ? const Center(child: CircularProgressIndicator())
+                        ? const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: SkeletonParagraph(lines: 8),
+                          )
                         : _preview
                         ? (_text.text.trim().isEmpty
                               ? Center(
@@ -739,7 +743,10 @@ class _SpacePreviewsTabState extends State<SpacePreviewsTab> {
         const SizedBox(height: 10),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const SkeletonList(
+                  item: SkeletonCard(mediaHeight: 0),
+                  spacing: 10,
+                )
               : RefreshIndicator(
                   onRefresh: reload,
                   child: _previews.isEmpty

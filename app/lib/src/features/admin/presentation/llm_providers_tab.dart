@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../data/models/llm_provider.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_inputs.dart';
+import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/status_tag.dart';
 import 'admin_widgets.dart';
 
@@ -120,7 +121,7 @@ class _LlmProvidersTabState extends State<LlmProvidersTab> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const SkeletonList();
     if (_error != null) {
       return Center(
           child: AdminEmptyState('Could not load providers', _error!,

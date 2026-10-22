@@ -8,6 +8,7 @@ import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
+import '../../../shared/widgets/skeleton.dart';
 import 'admin_widgets.dart';
 
 typedef AdminAction = Future<void> Function(
@@ -148,7 +149,7 @@ class _AppPageContentState extends State<AdminPageContent> {
   @override
   Widget build(BuildContext context) {
     if (widget.loading && widget.results.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const SkeletonPage();
     }
     final errors = widget.results.entries
         .where((entry) => _map(entry.value).containsKey('error'))
@@ -5871,7 +5872,7 @@ class _DetailFrame extends StatelessWidget {
               ),
             ),
             body: loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const SkeletonPage()
                 : AnimatedSwitcher(
                     duration: const Duration(milliseconds: 220),
                     child: ListView(
@@ -6491,9 +6492,7 @@ class _ProjectDialogState extends State<_ProjectDialog> {
   Widget _work() {
     final log = workLog;
     if (log == null) {
-      return const Padding(
-          padding: EdgeInsets.all(24),
-          child: Center(child: CircularProgressIndicator()));
+      return const SkeletonList(itemCount: 4);
     }
     final scheme = Theme.of(context).colorScheme;
     final runs = _listOfMaps(log['runs']);

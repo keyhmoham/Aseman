@@ -4,6 +4,7 @@ import '../../../core/formatting/billing_units.dart';
 import '../../../data/models/llm_provider.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/app_inputs.dart';
+import '../../../shared/widgets/skeleton.dart';
 
 /// Result of the structured agent creation form (tools have their own form:
 /// features/tools/presentation/tool_create_form.dart). Sent to the backend which
@@ -342,7 +343,7 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
   List<Widget> _llmFields(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     if (catalogLoading) {
-      return const [LinearProgressIndicator()];
+      return const [SkeletonField(), SizedBox(height: 12), SkeletonField()];
     }
     if (catalog.isEmpty) {
       return [

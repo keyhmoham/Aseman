@@ -5,6 +5,7 @@ import '../../../app_dependencies.dart';
 import '../../../data/models/space.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import '../../../shared/widgets/skeleton.dart';
 import '../../messenger/presentation/chat_page.dart' show ChatAvatar;
 import '../domain/feed_post.dart';
 import 'post_actions.dart';
@@ -286,11 +287,29 @@ class _SharePostSheetState extends State<SharePostSheet> {
                   child: SizedBox(
                     height: 96,
                     child: _loading && _spaces.isEmpty
-                        ? const Center(
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                        ? Skeleton(
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              physics: const NeverScrollableScrollPhysics(),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              children: [
+                                for (var i = 0; i < 6; i++)
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 6,
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        SkeletonCircle(size: 52),
+                                        SizedBox(height: 8),
+                                        SkeletonLine(width: 48, height: 9),
+                                      ],
+                                    ),
+                                  ),
+                              ],
                             ),
                           )
                         : ListView(

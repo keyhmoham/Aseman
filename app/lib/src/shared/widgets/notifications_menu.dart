@@ -7,6 +7,7 @@ import '../../core/theme/app_surfaces.dart';
 import '../../data/models/app_notification.dart';
 import '../../features/account/presentation/account_panel.dart';
 import 'overlay_panels.dart';
+import 'skeleton.dart';
 
 /// Opens the latest notifications, anchored at the app bar's left edge: on
 /// desktop a floating popup like the profile menu, on phones a bottom sheet.
@@ -162,9 +163,7 @@ class _NotificationsBodyState extends State<_NotificationsBody> {
           message: 'Notifications could not be loaded.');
     }
     if (list == null) {
-      return const Padding(
-          padding: EdgeInsets.all(32),
-          child: Center(child: CircularProgressIndicator()));
+      return const SkeletonList(itemCount: 4);
     }
     if (list.isEmpty) {
       return const _Empty(

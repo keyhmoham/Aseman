@@ -5,6 +5,7 @@ import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_header.dart';
+import '../../../shared/widgets/skeleton.dart';
 
 /// Opens the person's requests for talent: a bottom sheet on phones, a
 /// floating window on wider screens.
@@ -150,7 +151,8 @@ class _TalentRequestsPanelState extends State<TalentRequestsPanel> {
           const SizedBox(height: 12),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const SkeletonList(
+                    item: SkeletonCard(mediaHeight: 0), spacing: 10)
                 : _error != null
                     ? Center(child: Text('Could not load requests: $_error'))
                     : _requests.isEmpty

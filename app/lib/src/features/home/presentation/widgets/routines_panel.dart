@@ -10,6 +10,7 @@ import '../../../../shared/widgets/app_inputs.dart';
 import '../../../../shared/widgets/overlay_panels.dart';
 import '../../../../shared/widgets/panel_header.dart';
 import '../../../../shared/widgets/segmented_tab_bar.dart';
+import '../../../../shared/widgets/skeleton.dart';
 
 /// Opens the per-room routines manager as a floating panel (a bottom sheet on
 /// compact widths), the same as the messenger and requests panels. Lists,
@@ -260,7 +261,8 @@ class _RoutinesPanelState extends State<RoutinesPanel> {
         const SizedBox(height: 8),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const SkeletonList(
+                  item: SkeletonCard(mediaHeight: 0), spacing: 10)
               : _error != null && _routines.isEmpty
                   ? _Empty(
                       icon: Icons.cloud_off_rounded,

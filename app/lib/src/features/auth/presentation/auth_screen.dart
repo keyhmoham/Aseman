@@ -8,6 +8,7 @@ import '../../../core/network/session_controller.dart';
 import '../../../shared/widgets/app_brand.dart';
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
+import '../../../shared/widgets/skeleton.dart';
 import 'google_sign_in_button.dart';
 
 /// Gates the whole app behind authentication. Shows the auth screen until a
@@ -24,8 +25,7 @@ class AuthGate extends StatelessWidget {
       listenable: dependencies.sessionController,
       builder: (context, _) {
         if (!dependencies.sessionController.isReady) {
-          return const Scaffold(
-              body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(body: SafeArea(child: SkeletonPage()));
         }
         if (!dependencies.sessionController.isLoggedIn) {
           return AuthScreen(dependencies: dependencies);
@@ -402,9 +402,11 @@ class _AuthScreenState extends State<AuthScreen>
             Expanded(child: Divider())
           ]),
           const SizedBox(height: 10),
-          if (_providersLoading)
-            const LinearProgressIndicator()
-          else ...[
+          if (_providersLoading) ...const [
+            SkeletonField(height: 48),
+            SizedBox(height: 10),
+            SkeletonField(height: 48),
+          ] else ...[
             if (_googleEnabled)
               SizedBox(
                 width: double.infinity,

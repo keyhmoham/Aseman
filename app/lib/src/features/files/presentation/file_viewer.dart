@@ -7,6 +7,7 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import '../../../shared/widgets/skeleton.dart';
 import '../../search_feed/presentation/rich_post_content.dart';
 import '../data/workspace_files.dart';
 import '../domain/documents.dart';
@@ -242,7 +243,10 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> {
                     onRetry: _load,
                   )
                 : bytes == null
-                ? const Center(child: CircularProgressIndicator())
+                ? const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: SkeletonParagraph(lines: 10),
+                  )
                 : _editor != null
                 ? CallbackShortcuts(
                     bindings: {
@@ -775,7 +779,12 @@ class _FontPreviewState extends State<_FontPreview> {
   Widget build(BuildContext context) {
     if (_failed) return _HexView(widget.bytes);
     final family = _family;
-    if (family == null) return const Center(child: CircularProgressIndicator());
+    if (family == null) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: SkeletonParagraph(lines: 4, lineHeight: 24),
+      );
+    }
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [

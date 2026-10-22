@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../../data/models/uploaded_file.dart';
 import '../../../../data/services/aseman_service.dart';
 import '../../../../shared/widgets/overlay_panels.dart';
+import '../../../../shared/widgets/skeleton.dart';
 import '../../../computer/computer_view.dart' show computerSheetBreakpoint;
 import '../../../desk/presentation/desk_controller.dart';
 import '../../../files/domain/file_types.dart';
@@ -286,7 +287,9 @@ class _SharedFileWindowState extends State<SharedFileWindow> {
           }
           final file = snap.data;
           if (file == null) {
-            return const Center(child: CircularProgressIndicator());
+            return const Padding(
+                padding: EdgeInsets.all(24),
+                child: SkeletonParagraph(lines: 8));
           }
           return SharedFileViewer(
             file: file,

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../../core/formatting/billing_units.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_inputs.dart';
+import '../../../shared/widgets/skeleton.dart';
 
 /// Where the developer API answers, set at build time
 /// (`--dart-define=DEVELOPER_API_BASE=https://api.example.com/v1`). Empty
@@ -157,7 +158,7 @@ class _DeveloperConsoleState extends State<DeveloperConsole> {
           ]),
         ),
         body: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const SkeletonPage()
             : _error != null
                 ? Center(child: Text('Could not load: $_error'))
                 : Column(children: [
@@ -330,7 +331,7 @@ abstract class _LoadedState<T extends _Loaded> extends State<T> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator());
+    if (loading) return const SkeletonList();
     if (error != null) {
       return Center(
           child: Padding(

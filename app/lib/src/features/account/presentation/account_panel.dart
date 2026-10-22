@@ -4,6 +4,7 @@ import '../../../app_dependencies.dart';
 import '../../../core/notifications/push_notification_service.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_header.dart';
+import '../../../shared/widgets/skeleton.dart';
 import 'account_forms.dart';
 import 'account_hub_content.dart';
 
@@ -169,7 +170,7 @@ class _AccountPanelState extends State<AccountPanel> {
         const SizedBox(height: 14),
         Expanded(
             child: loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const SkeletonPage(padding: EdgeInsets.zero)
                 : AccountHubContent(
                     key: ValueKey(area),
                     area: area,

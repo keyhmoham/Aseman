@@ -12,6 +12,7 @@ import '../../../shared/widgets/notifications_menu.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/profile_menu.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
+import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../../shared/widgets/workspace_panel_motion.dart';
 import '../../admin/presentation/admin_screen.dart';
@@ -390,15 +391,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                       onShared: model.load);
                 })),
       if (model.loadingMore)
-        const SliverToBoxAdapter(
-            child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 18),
-          child: Center(
-              child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.5))),
-        )),
+        const SliverToBoxAdapter(child: SkeletonPost()),
     ];
   }
 }
@@ -784,12 +777,7 @@ class _SpacesList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) {
-      return const Center(
-          child: Padding(
-              padding: EdgeInsets.all(24),
-              child: CircularProgressIndicator(strokeWidth: 2.5)));
-    }
+    if (loading) return const SkeletonList(itemCount: 4);
     if (spaces.isEmpty) {
       return const _PanelNote(
           icon: Icons.workspaces_outline,
@@ -922,12 +910,7 @@ class _ChatsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (loading && chats.isEmpty) {
-      return const Center(
-          child: Padding(
-              padding: EdgeInsets.all(24),
-              child: CircularProgressIndicator(strokeWidth: 2.5)));
-    }
+    if (loading && chats.isEmpty) return const SkeletonList(itemCount: 4);
     if (chats.isEmpty) {
       return const _PanelNote(
           icon: Icons.forum_outlined, text: 'No direct chats yet.');

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'skeleton.dart';
+
 /// A [ListView] that loads more items when the user scrolls near the end,
-/// showing a loading indicator at the bottom while the next page is fetched.
+/// showing [loadingItem] at the bottom while the next page is fetched.
 class PagedListView<T> extends StatelessWidget {
   const PagedListView({
     super.key,
@@ -14,6 +16,7 @@ class PagedListView<T> extends StatelessWidget {
     this.separatorBuilder,
     this.empty,
     this.loading = false,
+    this.loadingItem = const SkeletonListTile(),
     this.threshold = 300,
     this.physics,
   });
@@ -27,6 +30,9 @@ class PagedListView<T> extends StatelessWidget {
   final Widget Function(BuildContext context, int index)? separatorBuilder;
   final Widget? empty;
   final bool loading;
+
+  /// A skeleton of one item, shown while more load.
+  final Widget loadingItem;
   final double threshold;
   final ScrollPhysics? physics;
 
@@ -53,16 +59,7 @@ class PagedListView<T> extends StatelessWidget {
             separatorBuilder ?? (_, __) => const SizedBox.shrink(),
         itemBuilder: (context, index) {
           if (index >= items.length) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 18),
-              child: Center(
-                child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.5),
-                ),
-              ),
-            );
+            return loadingItem;
           }
           return itemBuilder(context, items[index]);
         },

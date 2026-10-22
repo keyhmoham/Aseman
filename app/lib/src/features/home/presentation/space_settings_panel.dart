@@ -16,6 +16,7 @@ import '../../../shared/widgets/avatar_editor.dart';
 import '../../../shared/widgets/backend_action_ui.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import '../../../shared/widgets/skeleton.dart';
 
 /// The one settings panel of a workspace (space): profile & visibility,
 /// stats, rooms, members & invites, usage & budget, and — as the very last
@@ -439,7 +440,8 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
           ])),
       Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const SkeletonPage(
+                  padding: EdgeInsets.fromLTRB(24, 20, 24, 28), stats: false)
               : SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
                   child: Column(
@@ -553,10 +555,13 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
       title: 'At a glance',
       icon: Icons.insights_rounded,
       child: p == null
-          ? const Center(
-              child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: CircularProgressIndicator()))
+          ? const Row(children: [
+              Expanded(child: SkeletonBox(height: 64)),
+              SizedBox(width: 10),
+              Expanded(child: SkeletonBox(height: 64)),
+              SizedBox(width: 10),
+              Expanded(child: SkeletonBox(height: 64)),
+            ])
           : Wrap(
               spacing: 10,
               runSpacing: 10,
@@ -1027,13 +1032,7 @@ class _InviteDialogState extends State<_InviteDialog> {
           ),
           const SizedBox(height: 14),
           if (_searching)
-            const Center(
-                child: Padding(
-                    padding: EdgeInsets.all(8),
-                    child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2))))
+            const SkeletonList(itemCount: 2, padding: EdgeInsets.zero)
           else if (_results.isNotEmpty)
             ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 180),

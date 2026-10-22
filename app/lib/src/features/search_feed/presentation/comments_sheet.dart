@@ -1,15 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../data/models/post.dart';
+import '../../../data/models/profile.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../domain/feed_post.dart';
 import 'post_actions.dart';
 import 'rich_post_content.dart';
 import 'rich_post_parser.dart';
-import 'search_feed_view_model.dart' show feedPostFromServer;
+import 'search_feed_view_model.dart' show feedColorFor;
 import 'share_post_sheet.dart' show SharePostPreview;
 
 /// Opens the comments of [post]: a centered modal on wide screens and a
@@ -60,7 +63,8 @@ class _CommentsSheetState extends State<CommentsSheet> {
   final _liking = <String>{};
   final _deleting = <String>{};
 
-  String? _myAvatar;
+  /// The signed-in reader's profile, for their picture and name.
+  UserProfile? _myProfile;
 
   String get _me =>
       widget.dependencies.sessionController.session?.accountId ?? '';
@@ -97,6 +101,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
         _loading = false;
       });
       widget.onCount?.call(list.length);
+      unawaited(_resolveAuthors());
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -109,12 +114,58 @@ class _CommentsSheetState extends State<CommentsSheet> {
   Future<void> _loadMe() async {
     if (_me.isEmpty) return;
     try {
-      final me = await widget.dependencies.service.fetchAccount(_me);
-      if (mounted) setState(() => _myAvatar = me.avatar);
+      final me = await widget.dependencies.service.fetchUserProfile(_me);
+      if (!mounted) return;
+      setState(() => _myProfile = me);
+      unawaited(_resolveAuthors());
     } catch (_) {
       // The composer keeps the initials.
     }
   }
+
+  /// Profiles fetched for comment authors the server sent without a name.
+  final _authors = <String, Future<UserProfile?>>{};
+
+  /// Fills in the name, handle and picture of every comment whose author
+  /// came without them, fetching each author's profile once.
+  Future<void> _resolveAuthors() async {
+    final missing = {
+      for (final c in _comments)
+        if ((c.authorName.isEmpty && c.authorHandle.isEmpty) ||
+            (c.authorAvatar.isEmpty && c.authorId == _me))
+          c.authorId,
+    }..remove('');
+    if (missing.isEmpty) return;
+    final service = widget.dependencies.service;
+    final found = <String, UserProfile>{};
+    await Future.wait([
+      for (final id in missing)
+        (_authors[id] ??= id == _me && _myProfile != null
+                ? Future.value(_myProfile)
+                : service
+                      .fetchUserProfile(id)
+                      .then<UserProfile?>((p) => p)
+                      .catchError((_) => null))
+            .then((p) {
+              // A failed fetch is tried again the next time.
+              if (p == null) _authors.remove(id);
+              if (p != null) found[id] = p;
+            }),
+    ]);
+    if (!mounted || found.isEmpty) return;
+    setState(() {
+      _comments = [
+        for (final c in _comments)
+          if (found[c.authorId] case final p?) _withAuthor(c, p) else c,
+      ];
+    });
+  }
+
+  static SocialPost _withAuthor(SocialPost c, UserProfile p) => c.copyWith(
+    authorName: c.authorName.isNotEmpty ? c.authorName : p.name,
+    authorHandle: c.authorHandle.isNotEmpty ? c.authorHandle : p.handle,
+    authorAvatar: c.authorAvatar.isNotEmpty ? c.authorAvatar : p.avatar,
+  );
 
   void _snack(String message) => ScaffoldMessenger.maybeOf(
     context,
@@ -145,8 +196,9 @@ class _CommentsSheetState extends State<CommentsSheet> {
             id: id,
             authorId: _me,
             parentId: _postId,
-            authorHandle: _myHandle,
-            authorAvatar: _myAvatar ?? '',
+            authorName: _myProfile?.name ?? _myHandle,
+            authorHandle: _myProfile?.handle ?? _myHandle,
+            authorAvatar: _myProfile?.avatar ?? '',
             body: body,
             createdAt: DateTime.now(),
           ),
@@ -154,6 +206,8 @@ class _CommentsSheetState extends State<CommentsSheet> {
       });
       widget.onCount?.call(_comments.length);
       _scrollToEnd();
+      // Signs it with the reader's profile if that had not loaded yet.
+      unawaited(_resolveAuthors());
     } catch (e) {
       if (!mounted) return;
       setState(() => _sending = false);
@@ -162,10 +216,11 @@ class _CommentsSheetState extends State<CommentsSheet> {
   }
 
   void _replyTo(SocialPost c) {
-    final handle = c.authorHandle.isNotEmpty
-        ? c.authorHandle
-        : feedPostFromServer(c).handle.replaceFirst('@', '');
-    final mention = '@$handle ';
+    if (c.authorHandle.isEmpty) {
+      _focus.requestFocus();
+      return;
+    }
+    final mention = '@${c.authorHandle} ';
     if (!_input.text.startsWith(mention)) {
       _input.value = TextEditingValue(
         text: '$mention${_input.text}',
@@ -179,9 +234,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
 
   void _replace(String id, SocialPost Function(SocialPost) change) =>
       setState(() {
-        _comments = [
-          for (final c in _comments) c.id == id ? change(c) : c,
-        ];
+        _comments = [for (final c in _comments) c.id == id ? change(c) : c];
       });
 
   Future<void> _toggleLike(SocialPost c) async {
@@ -407,14 +460,6 @@ class _CommentsSheetState extends State<CommentsSheet> {
     final inSheet = ModalRoute.of(context) is ModalBottomSheetRoute;
     final keyboard = inSheet ? MediaQuery.viewInsetsOf(context).bottom : 0.0;
     final canSend = _input.text.trim().isNotEmpty && !_sending;
-    final me = feedPostFromServer(
-      SocialPost(
-        id: _me,
-        authorId: _me.isEmpty ? '0000' : _me,
-        body: '',
-        createdAt: DateTime.now(),
-      ),
-    );
     return Container(
       padding: EdgeInsets.fromLTRB(12, 10, 12, 12 + keyboard),
       decoration: BoxDecoration(
@@ -430,12 +475,10 @@ class _CommentsSheetState extends State<CommentsSheet> {
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: AppAvatar(
-                _myHandle.isEmpty
-                    ? me.initials
-                    : _myHandle.characters.first.toUpperCase(),
-                color: me.color,
+                initialsOf(_myProfile?.name ?? _myHandle),
+                color: feedColorFor(_me),
                 radius: 18,
-                avatar: _myAvatar,
+                avatar: _myProfile?.avatar,
               ),
             ),
             const SizedBox(width: 10),
@@ -500,6 +543,35 @@ class _CommentsSheetState extends State<CommentsSheet> {
   }
 }
 
+/// The name a comment's author goes by: their display name, else their
+/// @handle — never their account id.
+String commentAuthorName(SocialPost c) => c.authorName.isNotEmpty
+    ? c.authorName
+    : c.authorHandle.isNotEmpty
+    ? '@${c.authorHandle}'
+    : 'Member';
+
+/// Up to two initials of [name] ("Ada Lovelace" → "AL", "@ada" → "A").
+String initialsOf(String name) {
+  final words = name
+      .replaceAll(RegExp(r'[@_.\-]+'), ' ')
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((w) => w.isNotEmpty)
+      .toList();
+  if (words.isEmpty) return '?';
+  return words.take(2).map((w) => w.characters.first.toUpperCase()).join();
+}
+
+String _timeAgo(DateTime t) {
+  final d = DateTime.now().difference(t);
+  if (d.inMinutes < 1) return 'now';
+  if (d.inMinutes < 60) return '${d.inMinutes}m';
+  if (d.inHours < 24) return '${d.inHours}h';
+  if (d.inDays < 7) return '${d.inDays}d';
+  return '${d.inDays ~/ 7}w';
+}
+
 /// One comment: its author's picture, a soft bubble with their name, the
 /// time and the text, and a row of actions beneath it.
 class _CommentTile extends StatelessWidget {
@@ -530,12 +602,9 @@ class _CommentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final view = feedPostFromServer(comment);
-    void openAuthor() => PostLinks.open(
-      context,
-      comment.authorId,
-      view.handle.replaceFirst('@', ''),
-    );
+    final name = commentAuthorName(comment);
+    void openAuthor() =>
+        PostLinks.open(context, comment.authorId, comment.authorHandle);
     final muted = TextStyle(fontSize: 12, color: scheme.onSurfaceVariant);
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 160),
@@ -549,10 +618,10 @@ class _CommentTile extends StatelessWidget {
               onTap: openAuthor,
               customBorder: const CircleBorder(),
               child: AppAvatar(
-                view.initials,
-                color: view.color,
+                initialsOf(name),
+                color: feedColorFor(comment.authorId),
                 radius: 17,
-                avatar: view.avatar,
+                avatar: comment.authorAvatar,
               ),
             ),
             const SizedBox(width: 10),
@@ -586,7 +655,7 @@ class _CommentTile extends StatelessWidget {
                                   onTap: openAuthor,
                                   borderRadius: BorderRadius.circular(6),
                                   child: Text(
-                                    view.name,
+                                    name,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
@@ -604,7 +673,10 @@ class _CommentTile extends StatelessWidget {
                                 _Badge('You', scheme.tertiary),
                               ],
                               const SizedBox(width: 6),
-                              Text('· ${view.time}', style: muted),
+                              Text(
+                                '· ${_timeAgo(comment.createdAt)}',
+                                style: muted,
+                              ),
                             ],
                           ),
                           const SizedBox(height: 3),

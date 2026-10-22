@@ -114,7 +114,13 @@ class SocialPost {
 
   /// This post with some of its fields changed.
   SocialPost copyWith(
-          {int? likes, bool? likedByMe, String? body, DateTime? editedAt}) =>
+          {int? likes,
+          bool? likedByMe,
+          String? body,
+          DateTime? editedAt,
+          String? authorName,
+          String? authorHandle,
+          String? authorAvatar}) =>
       SocialPost(
         id: id,
         authorId: authorId,
@@ -127,9 +133,9 @@ class SocialPost {
         likedByMe: likedByMe ?? this.likedByMe,
         attachments: attachments,
         source: source,
-        authorName: authorName,
-        authorHandle: authorHandle,
-        authorAvatar: authorAvatar,
+        authorName: authorName ?? this.authorName,
+        authorHandle: authorHandle ?? this.authorHandle,
+        authorAvatar: authorAvatar ?? this.authorAvatar,
         comments: comments,
         editedAt: editedAt ?? this.editedAt,
         forwardOf: forwardOf,

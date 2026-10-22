@@ -48,6 +48,8 @@ import '../../rooms/presentation/widgets/shared_file_viewer.dart';
 import '../../search_feed/presentation/feed_post_card.dart';
 import '../../search_feed/presentation/post_editor.dart';
 import '../../search_feed/presentation/rich_post_content.dart';
+import '../../search_feed/presentation/rich_post_parser.dart'
+    show markupPreview;
 import '../../search_feed/presentation/search_feed_view_model.dart'
     show feedPostFromServer;
 import '../../tools/connect/add_app.dart';
@@ -2212,7 +2214,6 @@ class _SocialFeed extends StatefulWidget {
 class _SocialFeedState extends State<_SocialFeed> {
   static const _pageSize = 20;
   List<SocialPost> posts = [];
-  final Map<String, String> _handles = {};
   bool loading = true;
   bool loadingMore = false;
   bool hasMore = true;
@@ -2291,25 +2292,8 @@ class _SocialFeedState extends State<_SocialFeed> {
     try {
       final spaceFilter = widget.spaceId.isEmpty ? null : widget.spaceId;
       final offset = more ? _offset : 0;
-      final results = await Future.wait([
-        deps.service
-            .fetchFeed(spaceId: spaceFilter, limit: _pageSize, offset: offset),
-        if (!more) deps.service.fetchLeaderboard(limit: 100),
-      ]);
-      final feed = results[0] as List<SocialPost>;
-      if (!more) {
-        final leaderboard = (results[1] as List).cast<Map<String, dynamic>>();
-        final me = deps.sessionController.session?.accountId ?? '';
-        final handles = <String, String>{
-          for (final entry in leaderboard)
-            if ((entry['author_id'] as String?) != null)
-              entry['author_id'] as String:
-                  (entry['handle'] as String?) ?? 'user',
-          if (me.isNotEmpty) me: deps.sessionController.session?.handle ?? 'me',
-        };
-        _handles.clear();
-        _handles.addAll(handles);
-      }
+      final feed = await deps.service
+          .fetchFeed(spaceId: spaceFilter, limit: _pageSize, offset: offset);
       if (!mounted) return;
       setState(() {
         if (more) {
@@ -2330,6 +2314,11 @@ class _SocialFeedState extends State<_SocialFeed> {
         loadingMore = false;
       });
     }
+  }
+
+  void _replace(String id, SocialPost Function(SocialPost) change) {
+    final i = posts.indexWhere((p) => p.id == id);
+    if (i >= 0) setState(() => posts[i] = change(posts[i]));
   }
 
   Future<void> _toggleLike(SocialPost post) async {
@@ -2396,14 +2385,20 @@ class _SocialFeedState extends State<_SocialFeed> {
         ),
       ));
     } else {
-      postWidgets.addAll(posts.map((p) => _Post(
-            p,
-            author: p.authorHandle.isNotEmpty
-                ? '@${p.authorHandle}'
-                : _authorOf(p.authorId),
-            time: _timeAgo(p.createdAt),
-            onLike: () => _toggleLike(p),
-          )));
+      final deps = widget.dependencies;
+      postWidgets.addAll(posts.map((p) => deps == null
+          ? const SizedBox.shrink()
+          : FeedPostCard(
+              key: ValueKey('space-post-${p.id}'),
+              post: feedPostFromServer(p),
+              dependencies: deps,
+              onToggleLike: () => _toggleLike(p),
+              onEdited: (body) => _replace(p.id,
+                  (old) => old.copyWith(body: body, editedAt: DateTime.now())),
+              onDeleted: () => setState(() => posts.removeWhere(
+                  (old) => old.id == p.id)),
+              onShared: _load,
+            )));
     }
     if (loadingMore) {
       postWidgets.add(const Padding(
@@ -2477,87 +2472,6 @@ class _SocialFeedState extends State<_SocialFeed> {
           ),
         ]),
       ));
-
-  String _authorOf(String authorId) {
-    final handle = _handles[authorId];
-    if (handle != null && handle.isNotEmpty) return '@$handle';
-    if (authorId.length < 8) return 'user';
-    return 'u_${authorId.substring(authorId.length - 6)}';
-  }
-
-  static String _timeAgo(DateTime t) {
-    final d = DateTime.now().difference(t);
-    if (d.inMinutes < 1) return 'now';
-    if (d.inMinutes < 60) return '${d.inMinutes}m';
-    if (d.inHours < 24) return '${d.inHours}h';
-    return '${d.inDays}d';
-  }
-}
-
-class _Post extends StatelessWidget {
-  const _Post(this.post,
-      {required this.author, required this.time, this.onLike});
-  final SocialPost post;
-  final String author;
-  final String time;
-  final VoidCallback? onLike;
-  @override
-  Widget build(BuildContext context) {
-    final initials =
-        author.length >= 3 ? author.substring(1, 3).toUpperCase() : 'OC';
-    return Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-            color: Theme.of(context)
-                .colorScheme
-                .surfaceContainerHighest
-                .withValues(alpha: .45),
-            borderRadius: BorderRadius.circular(20)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            CircleAvatar(
-                radius: 17,
-                foregroundImage: Avatars.of(post.authorAvatar),
-                onForegroundImageError:
-                    post.authorAvatar.isEmpty ? null : (_, __) {},
-                child: Text(initials, style: const TextStyle(fontSize: 10))),
-            const SizedBox(width: 9),
-            Expanded(
-                child: Text(author,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 12))),
-            Text(time, style: const TextStyle(fontSize: 10))
-          ]),
-          const SizedBox(height: 11),
-          RichPostContent(post.body),
-          const SizedBox(height: 12),
-          Row(children: [
-            Chip(
-                label: Text(
-                    post.tags.isEmpty ? 'POST' : post.tags.first.toUpperCase(),
-                    style: const TextStyle(fontSize: 9))),
-            const Spacer(),
-            InkWell(
-                onTap: onLike,
-                borderRadius: BorderRadius.circular(12),
-                child: Row(children: [
-                  Icon(
-                      post.likedByMe
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border,
-                      size: 15,
-                      color: post.likedByMe
-                          ? AppColors.danger
-                          : Theme.of(context).colorScheme.onSurfaceVariant),
-                  const SizedBox(width: 4),
-                  Text('${post.likes}', style: const TextStyle(fontSize: 10)),
-                ])),
-            const SizedBox(width: 14),
-            const Icon(Icons.chat_bubble_outline, size: 15),
-          ])
-        ]));
-  }
 }
 
 /// Opens Explore from the feed: a search across Aseman with no space scope,
@@ -2944,7 +2858,9 @@ class _SearchResultsState extends State<_SearchResults> {
           for (final c in chats)
             _SearchHit(c.title,
                 id: c.spaceId,
-                subtitle: c.lastBody.isEmpty ? 'Direct chat' : c.lastBody,
+                subtitle: c.lastBody.isEmpty
+                    ? 'Direct chat'
+                    : markupPreview(c.lastBody),
                 payload: c,
                 avatar: c.peer?.avatar ?? ''),
         ];
@@ -3214,7 +3130,7 @@ class _SearchResultsState extends State<_SearchResults> {
                 return _SearchPostCard(
                     key: ValueKey('post-${payload.id}'),
                     post: payload,
-                    service: deps.service);
+                    dependencies: deps);
               }
               // A file shows as its own card: a player, a picture, a link
               // or a document.
@@ -3258,45 +3174,47 @@ class _SearchResultsState extends State<_SearchResults> {
 /// A post found by search, in full as the feed shows it; liking it here
 /// likes it.
 class _SearchPostCard extends StatefulWidget {
-  const _SearchPostCard({super.key, required this.post, required this.service});
+  const _SearchPostCard(
+      {super.key, required this.post, required this.dependencies});
   final SocialPost post;
-  final AsemanService service;
+  final AppDependencies dependencies;
 
   @override
   State<_SearchPostCard> createState() => _SearchPostCardState();
 }
 
 class _SearchPostCardState extends State<_SearchPostCard> {
-  late bool _liked = widget.post.likedByMe;
-  late int _likes = widget.post.likes;
+  late SocialPost _post = widget.post;
+  bool _deleted = false;
 
   Future<void> _toggleLike() async {
-    final was = _liked;
-    setState(() {
-      _liked = !was;
-      _likes += was ? -1 : 1;
-    });
+    final was = _post;
+    final liked = !was.likedByMe;
+    setState(() => _post = was.withLike(
+        likes: liked ? was.likes + 1 : (was.likes > 0 ? was.likes - 1 : 0),
+        likedByMe: liked));
     try {
-      if (was) {
-        await widget.service.unlikePost(widget.post.id);
+      if (liked) {
+        await widget.dependencies.service.likePost(was.id);
       } else {
-        await widget.service.likePost(widget.post.id);
+        await widget.dependencies.service.unlikePost(was.id);
       }
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _liked = was;
-        _likes += was ? 1 : -1;
-      });
+      setState(() => _post = was);
     }
   }
 
   @override
-  Widget build(BuildContext context) => FeedPostCard(
-      post: feedPostFromServer(widget.post)
-          .copyWith(liked: _liked, likes: '${_likes < 0 ? 0 : _likes}'),
-      service: widget.service,
-      onToggleLike: _toggleLike);
+  Widget build(BuildContext context) => _deleted
+      ? const SizedBox.shrink()
+      : FeedPostCard(
+          post: feedPostFromServer(_post),
+          dependencies: widget.dependencies,
+          onToggleLike: _toggleLike,
+          onEdited: (body) => setState(() =>
+              _post = _post.copyWith(body: body, editedAt: DateTime.now())),
+          onDeleted: () => setState(() => _deleted = true));
 }
 
 /// A file found by search, on a card made for its kind: a video under a
@@ -3520,6 +3438,13 @@ class _PostPreview extends StatelessWidget {
     ]);
   }
 }
+
+/// Opens the profile of the account [accountId] (known as [handle]): who
+/// they are, their posts, and following them.
+void showAccountProfile(BuildContext context, AppDependencies dependencies,
+        {required String accountId, String handle = ''}) =>
+    _openEntityProfile(
+        context, 'Users', handle, dependencies, '', accountId);
 
 void _openEntityProfile(BuildContext context, String section, String title,
     [AppDependencies? dependencies, String spaceId = '', String entityId = '']) {

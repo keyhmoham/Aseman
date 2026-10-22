@@ -42,6 +42,33 @@ type Post struct {
 	// Featured (1) puts the post above the others in the global feed: an
 	// imported trader's latest posts (see Import).
 	Featured int64 `db:"featured" json:"featured,omitempty"`
+	// ForwardOf is the post this one shares (the first post of a chain of
+	// shares); zero for an original post. A shared post carries a copy of its
+	// original's body and media, so it outlives the original.
+	ForwardOf identity.ID `db:"forward_of" json:"forward_of,omitempty"`
+	// ForwardAuthorID is who wrote the original of a shared post.
+	ForwardAuthorID identity.ID `db:"forward_author_id" json:"forward_author_id,omitempty"`
+}
+
+// IsForward reports whether the post shares another one.
+func (p *Post) IsForward() bool { return !p.ForwardOf.IsZero() }
+
+// Report is a post someone reported to the node's admins.
+type Report struct {
+	entity.Entity
+	ReporterID identity.ID `db:"reporter_id" json:"reporter_id"`
+	PostID     identity.ID `db:"post_id" json:"post_id"`
+	// AccusedID is who wrote the reported post.
+	AccusedID identity.ID `db:"accused_id" json:"accused_id"`
+	// Reason is spam, harassment, abuse, scam, inappropriate or other.
+	Reason string `db:"reason" json:"reason"`
+	Note   string `db:"note" json:"note,omitempty"`
+	// Body is the post's text as it was when it was reported.
+	Body string `db:"body" json:"body"`
+	// Status is open, resolved or dismissed.
+	Status     string    `db:"status" json:"status"`
+	ResolvedBy string    `db:"resolved_by" json:"resolved_by,omitempty"`
+	ResolvedAt time.Time `db:"resolved_at" json:"resolved_at,omitempty"`
 }
 
 // ParseTags decodes the tags JSON column.

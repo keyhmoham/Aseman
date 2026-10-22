@@ -58,6 +58,20 @@ func (s *Service) Views(ctx context.Context, caller identity.ID, list []post.Pos
 		if p.Source != "" {
 			view["source"] = p.Source
 		}
+		if !p.EditedAt.IsZero() {
+			view["edited_at"] = p.EditedAt
+		}
+		if p.IsForward() {
+			// A shared post names its original and who wrote it, so the
+			// reader can open their profile.
+			fwd, ok := authors[p.ForwardAuthorID.String()]
+			if !ok {
+				fwd = s.author(ctx, p.ForwardAuthorID)
+				authors[p.ForwardAuthorID.String()] = fwd
+			}
+			view["forward_of"] = p.ForwardOf.String()
+			view["forward_author"] = fwd
+		}
 		if !p.SpaceID.IsZero() {
 			view["space_id"] = p.SpaceID.String()
 		}

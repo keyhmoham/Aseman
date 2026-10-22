@@ -254,10 +254,13 @@ done is never refused, so a run can finish at most one step past the cap.
     reply, or a wasm app backend's `ask` host function); when the
     target is a user the ask is stored and answered via `message.respond`.
   - `message.respond`, `message.get`, `message.list`, `message.requests`.
-- **posts** — the social feed: `post_create`, `post_get`, `post_delete`,
+- **posts** — the social feed: `post_create` (or, with `forward`, share a
+  post into the global or a workspace feed, naming its original author),
+  `post_get`, `post_update` (edit my post), `post_delete`, `post_report`,
   `post_feed` (global or following via shared workspace memberships),
   `post_user_posts`, `post_like`, `post_unlike`, `post_comment`,
-  `post_comments`.
+  `post_comments`; admins review reports with `admin_post_reports` and
+  `admin_post_report_resolve`.
 - **timeline** — each space's dated timeline, kept in the node's Utopia
   server (a bitemporal knowledge graph on the node's Postgres). Its worker
   reads the other namespaces' records in time order (requests, tool runs,

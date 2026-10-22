@@ -410,4 +410,34 @@ void main() {
     expect(calls.single.$1, 'spaces.admin_chat_report_resolve');
     expect(calls.single.$2, {'id': 'rep-1', 'status': 'resolved'});
   });
+
+  testWidgets('a reported post is removed from the admin console',
+      (tester) async {
+    final calls = await page(tester, 'Post reports', {
+      'posts.admin_post_reports': {
+        'open': 1,
+        'reports': [
+          {
+            'id': 'rep-9',
+            'status': 'open',
+            'reason': 'spam',
+            'kind': 'post',
+            'post_id': 'p1',
+            'body': 'buy my coin now',
+            'created_at': '2026-10-19T10:00:00Z',
+            'reporter': {'handle': 'alice'},
+            'accused': {'handle': 'bob'},
+          }
+        ],
+      }
+    });
+    await tester.tap(find.textContaining('SPAM'));
+    await tester.pumpAndSettle();
+    expect(find.text('buy my coin now'), findsOneWidget);
+    await tester.tap(find.text('Remove post'));
+    await tester.pump();
+    expect(calls.single.$1, 'posts.admin_post_report_resolve');
+    expect(calls.single.$2,
+        {'id': 'rep-9', 'status': 'resolved', 'remove_post': true});
+  });
 }

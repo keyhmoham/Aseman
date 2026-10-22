@@ -94,6 +94,14 @@ class _AppScreenState extends State<AdminScreen> {
           actions: [
             _Call('spaces', 'admin_chat_report_resolve'),
           ]),
+      _Page('Post reports', 'Feed posts people reported',
+          Icons.report_outlined, Icons.report_rounded,
+          calls: [
+            _Call('posts', 'admin_post_reports', {'status': 'open'})
+          ],
+          actions: [
+            _Call('posts', 'admin_post_report_resolve'),
+          ]),
     ]),
     _Section('Catalog', [
       _Page('Agents', 'Create, price and approve agents',

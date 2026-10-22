@@ -130,17 +130,46 @@ class SearchFeedViewModel extends ChangeNotifier {
     }
   }
 
+  /// Likes or unlikes a post right away and tells the server; a failure
+  /// puts it back.
   Future<void> toggleLike(String postId, bool liked) async {
     final deps = dependencies?.service;
     if (deps == null) return;
+    _update(postId, (p) => _liked(p, !liked));
     try {
       if (liked) {
         await deps.unlikePost(postId);
       } else {
         await deps.likePost(postId);
       }
-      await load();
-    } catch (_) {}
+    } catch (_) {
+      _update(postId, (p) => _liked(p, liked));
+    }
+  }
+
+  static SocialPost _liked(SocialPost p, bool liked) => p.likedByMe == liked
+      ? p
+      : p.withLike(
+          likes: liked ? p.likes + 1 : (p.likes > 0 ? p.likes - 1 : 0),
+          likedByMe: liked);
+
+  /// Shows the new [body] of a post its author edited.
+  void edited(String postId, String body) =>
+      _update(postId, (p) => p.copyWith(body: body, editedAt: DateTime.now()));
+
+  /// Drops a post its author deleted.
+  void deleted(String postId) {
+    _serverFollowing.removeWhere((p) => p.id == postId);
+    _serverSpaces.removeWhere((p) => p.id == postId);
+    notifyListeners();
+  }
+
+  void _update(String postId, SocialPost Function(SocialPost) change) {
+    for (final list in [_serverFollowing, _serverSpaces]) {
+      final i = list.indexWhere((p) => p.id == postId);
+      if (i >= 0) list[i] = change(list[i]);
+    }
+    notifyListeners();
   }
 
   void setWorkspace(String value) {
@@ -190,7 +219,7 @@ FeedPost feedPostFromServer(SocialPost p, {String? workspace}) => FeedPost(
       body: p.body,
       tag: p.tags.isEmpty ? 'POST' : p.tags.first.toUpperCase(),
       likes: _compact(p.likes),
-      comments: '0',
+      comments: _compact(p.comments),
       color: _colorFor(p.id),
       liked: p.likedByMe,
       serverId: p.id,
@@ -198,6 +227,18 @@ FeedPost feedPostFromServer(SocialPost p, {String? workspace}) => FeedPost(
       media: p.attachments,
       source: p.source,
       avatar: p.authorAvatar,
+      authorId: p.authorId,
+      spaceId: p.spaceId,
+      edited: p.editedAt != null,
+      forwardOf: p.forwardOf,
+      forwardAuthorId: p.forwardAuthorId,
+      forwardName: p.forwardAuthorName.isNotEmpty
+          ? p.forwardAuthorName
+          : p.forwardAuthorHandle.isNotEmpty
+              ? '@${p.forwardAuthorHandle}'
+              : 'a post',
+      forwardHandle: p.forwardAuthorHandle,
+      forwardAvatar: p.forwardAuthorAvatar,
     );
 
 String _initialsOf(String id) {

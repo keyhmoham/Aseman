@@ -1425,7 +1425,7 @@ class AsemanService implements BackendService {
     final me = session?.accountId ?? '';
     return list.whereType<Map<String, dynamic>>().map((j) {
       final p = SocialPost.fromJson(j);
-      final liked = _likedBy(j['liked_by']).contains(me);
+      final liked = p.likedByMe || _likedBy(j['liked_by']).contains(me);
       return p.withLike(likes: p.likes, likedByMe: liked);
     }).toList();
   }
@@ -1459,6 +1459,39 @@ class AsemanService implements BackendService {
       createdAt: DateTime.now(),
       tags: tags,
     );
+  }
+
+  /// Edits one of the signed-in user's posts.
+  Future<void> updatePost(String postId, String body) async {
+    await client
+        .call('posts', 'post_update', body: {'post': postId, 'body': body});
+  }
+
+  /// Deletes one of the signed-in user's posts.
+  Future<void> deletePost(String postId) async {
+    await client.call('posts', 'post_delete', body: {'post': postId});
+  }
+
+  /// Shares [postId] into the global feed or, with [spaceId], the feed of a
+  /// space the user is a member of; the shared post names its original
+  /// author. Returns the new post's id.
+  Future<String> forwardPost(String postId, {String? spaceId}) async {
+    final resp = await client.call('posts', 'post_create', body: {
+      'forward': postId,
+      if (spaceId != null && spaceId.isNotEmpty) 'space': spaceId,
+    });
+    return (resp.body as Map?)?['post_id'] as String? ?? '';
+  }
+
+  /// Reports a post to the node's admins. [reason] is spam, harassment,
+  /// abuse, scam, inappropriate or other.
+  Future<void> reportPost(String postId,
+      {required String reason, String note = ''}) async {
+    await client.call('posts', 'post_report', body: {
+      'post': postId,
+      'reason': reason,
+      if (note.trim().isNotEmpty) 'note': note.trim(),
+    });
   }
 
   Future<void> likePost(String postId) async {

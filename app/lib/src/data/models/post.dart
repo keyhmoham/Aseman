@@ -19,6 +19,13 @@ class SocialPost {
     this.authorName = '',
     this.authorHandle = '',
     this.authorAvatar = '',
+    this.comments = 0,
+    this.editedAt,
+    this.forwardOf = '',
+    this.forwardAuthorId = '',
+    this.forwardAuthorName = '',
+    this.forwardAuthorHandle = '',
+    this.forwardAuthorAvatar = '',
   });
 
   final String id;
@@ -45,12 +52,32 @@ class SocialPost {
   final String authorHandle;
   final String authorAvatar;
 
+  /// How many comments it has.
+  final int comments;
+
+  /// When its author last changed it (null when never).
+  final DateTime? editedAt;
+
+  /// The post this one shares ("" for an original post) and who wrote that
+  /// original: their account id, name, handle and picture.
+  final String forwardOf;
+  final String forwardAuthorId;
+  final String forwardAuthorName;
+  final String forwardAuthorHandle;
+  final String forwardAuthorAvatar;
+
   bool get isComment => parentId.isNotEmpty;
+
+  /// Whether it shares another post.
+  bool get isForward => forwardOf.isNotEmpty;
 
   factory SocialPost.fromJson(Map<String, dynamic> json) {
     final likedBy = _strings(json['liked_by']);
     final author = json['author'] is Map
         ? (json['author'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final forwardAuthor = json['forward_author'] is Map
+        ? (json['forward_author'] as Map).cast<String, dynamic>()
         : const <String, dynamic>{};
     return SocialPost(
       id: json['id'] as String? ?? '',
@@ -62,7 +89,7 @@ class SocialPost {
           DateTime.now(),
       tags: _strings(json['tags']),
       likes: (json['likes'] as num?)?.toInt() ?? likedBy.length,
-      likedByMe: false,
+      likedByMe: json['liked'] == true,
       attachments: [
         for (final a in json['attachments'] as List? ?? const [])
           if (a is Map<String, dynamic>) UploadedFile.fromJson(a),
@@ -71,26 +98,45 @@ class SocialPost {
       authorName: '${author['display_name'] ?? ''}',
       authorHandle: '${author['handle'] ?? ''}',
       authorAvatar: '${author['avatar'] ?? ''}',
+      comments: (json['comments'] as num?)?.toInt() ?? 0,
+      editedAt: DateTime.tryParse(json['edited_at'] as String? ?? ''),
+      forwardOf: json['forward_of'] as String? ?? '',
+      forwardAuthorId: '${forwardAuthor['id'] ?? ''}',
+      forwardAuthorName: '${forwardAuthor['display_name'] ?? ''}',
+      forwardAuthorHandle: '${forwardAuthor['handle'] ?? ''}',
+      forwardAuthorAvatar: '${forwardAuthor['avatar'] ?? ''}',
     );
   }
 
   /// This post with another like state.
   SocialPost withLike({required int likes, required bool likedByMe}) =>
+      copyWith(likes: likes, likedByMe: likedByMe);
+
+  /// This post with some of its fields changed.
+  SocialPost copyWith(
+          {int? likes, bool? likedByMe, String? body, DateTime? editedAt}) =>
       SocialPost(
         id: id,
         authorId: authorId,
-        body: body,
+        body: body ?? this.body,
         createdAt: createdAt,
         spaceId: spaceId,
         parentId: parentId,
         tags: tags,
-        likes: likes,
-        likedByMe: likedByMe,
+        likes: likes ?? this.likes,
+        likedByMe: likedByMe ?? this.likedByMe,
         attachments: attachments,
         source: source,
         authorName: authorName,
         authorHandle: authorHandle,
         authorAvatar: authorAvatar,
+        comments: comments,
+        editedAt: editedAt ?? this.editedAt,
+        forwardOf: forwardOf,
+        forwardAuthorId: forwardAuthorId,
+        forwardAuthorName: forwardAuthorName,
+        forwardAuthorHandle: forwardAuthorHandle,
+        forwardAuthorAvatar: forwardAuthorAvatar,
       );
 
   static List<String> _strings(dynamic raw) {

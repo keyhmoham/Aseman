@@ -7,7 +7,9 @@ import '../../app_dependencies.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/bot.dart';
 import '../../data/models/post.dart';
-import '../../features/search_feed/presentation/rich_post_content.dart';
+import '../../features/search_feed/presentation/feed_post_card.dart';
+import '../../features/search_feed/presentation/search_feed_view_model.dart'
+    show feedPostFromServer;
 import 'avatar.dart';
 import 'avatar_editor.dart';
 import 'mini_tag.dart';
@@ -237,25 +239,41 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
               ),
             )
           else
-            ..._posts.map((p) => _ProfilePostCard(
-                  initials: initials,
-                  avatar: widget.dependencies.sessionController.avatar,
-                  handle: handle,
-                  body: p.body,
-                  tag: p.tags.isEmpty ? 'POST' : p.tags.first.toUpperCase(),
-                  likes: p.likes,
-                  time: _timeAgo(p.createdAt),
-                  headers: widget.dependencies.service.authHeaders(),
+            ..._posts.map((p) => FeedPostCard(
+                  key: ValueKey('my-post-${p.id}'),
+                  post: feedPostFromServer(p),
+                  dependencies: widget.dependencies,
+                  onToggleLike: () => _toggleLike(p),
+                  onEdited: (body) => _replace(p.id,
+                      (old) => old.copyWith(body: body, editedAt: DateTime.now())),
+                  onDeleted: () => setState(() =>
+                      _posts = _posts.where((old) => old.id != p.id).toList()),
+                  onShared: _load,
                 )),
         ]);
   }
 
-  static String _timeAgo(DateTime t) {
-    final d = DateTime.now().difference(t);
-    if (d.inMinutes < 1) return 'now';
-    if (d.inMinutes < 60) return '${d.inMinutes}m';
-    if (d.inHours < 24) return '${d.inHours}h';
-    return '${d.inDays}d';
+  void _replace(String id, SocialPost Function(SocialPost) change) =>
+      setState(() => _posts = [
+            for (final p in _posts) p.id == id ? change(p) : p,
+          ]);
+
+  Future<void> _toggleLike(SocialPost post) async {
+    final liked = !post.likedByMe;
+    _replace(
+        post.id,
+        (p) => p.withLike(
+            likes: liked ? p.likes + 1 : (p.likes > 0 ? p.likes - 1 : 0),
+            likedByMe: liked));
+    try {
+      if (liked) {
+        await widget.dependencies.service.likePost(post.id);
+      } else {
+        await widget.dependencies.service.unlikePost(post.id);
+      }
+    } catch (_) {
+      if (mounted) _replace(post.id, (_) => post);
+    }
   }
 }
 
@@ -269,76 +287,6 @@ class _ProfileComposerAction extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       onPressed: () {},
       icon: Icon(icon, size: 18));
-}
-
-class _ProfilePostCard extends StatelessWidget {
-  const _ProfilePostCard({
-    required this.initials,
-    required this.handle,
-    required this.body,
-    required this.tag,
-    required this.likes,
-    required this.time,
-    this.headers = const {},
-    this.avatar = '',
-  });
-  final String initials;
-
-  /// The author's picture, shown over [initials].
-  final String avatar;
-  final String handle;
-  final String body;
-  final String tag;
-  final int likes;
-  final String time;
-
-  /// Sign-in headers for the post's images.
-  final Map<String, String> headers;
-
-  @override
-  Widget build(BuildContext context) => Container(
-      margin: const EdgeInsets.only(bottom: 9),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(21)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          AppAvatar(initials,
-              color: AppColors.primary, radius: 18, avatar: avatar),
-          const SizedBox(width: 9),
-          Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Text(handle,
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w800)),
-                Text('@$handle · $time', style: const TextStyle(fontSize: 9))
-              ])),
-          IconButton(
-              visualDensity: VisualDensity.compact,
-              tooltip: 'Post actions',
-              onPressed: () {},
-              icon: const Icon(Icons.more_horiz_rounded, size: 18))
-        ]),
-        const SizedBox(height: 9),
-        DefaultTextStyle.merge(
-            style: const TextStyle(fontSize: 13, height: 1.45),
-            child: RichPostContent(body, headers: headers)),
-        const SizedBox(height: 12),
-        Row(children: [
-          MiniTag(tag, Theme.of(context).colorScheme.primary),
-          const Spacer(),
-          const Icon(Icons.favorite_border_rounded, size: 16),
-          const SizedBox(width: 4),
-          Text('$likes', style: const TextStyle(fontSize: 10)),
-          const SizedBox(width: 13),
-          const Icon(Icons.chat_bubble_outline_rounded, size: 15),
-          const SizedBox(width: 13),
-          const Icon(Icons.bookmark_border_rounded, size: 16)
-        ])
-      ]));
 }
 
 class _ProfileHeader extends StatelessWidget {

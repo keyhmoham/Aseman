@@ -94,21 +94,93 @@ func (t *Template) validate(microtools map[string]bool) error {
 	return nil
 }
 
-// checkEvents verifies every event a component sends (a Button's, or a
-// tappable view's "action") has an entry in Actions, so no generated button
-// is dead. Only generation asks for it: templates already served keep
-// working as they are.
-func (t *Template) checkEvents() error {
-	var missing []string
+// eventOf is the event an action fires: {"event": {"name", "context"}}, or
+// the shorthand {"name", "context"} devices fire too (the app's fireAction).
+// A {"functionCall"} runs on the device and fires none.
+func eventOf(action map[string]any) map[string]any {
+	if event, ok := action["event"].(map[string]any); ok {
+		return event
+	}
+	if _, ok := action["name"].(string); ok && action["functionCall"] == nil {
+		return action
+	}
+	return nil
+}
+
+// eachAction calls fn with every action a component holds, at any depth: a
+// Button's or a tappable view's "action", a Menu item's, an Elpian node's.
+func eachAction(v any, fn func(action map[string]any)) {
+	switch x := v.(type) {
+	case map[string]any:
+		for k, inner := range x {
+			if a, ok := inner.(map[string]any); ok && k == "action" {
+				fn(a)
+			}
+			eachAction(inner, fn)
+		}
+	case []any:
+		for _, inner := range x {
+			eachAction(inner, fn)
+		}
+	}
+}
+
+// events are the names of the events the template's components send.
+func (t *Template) events() []string {
+	var names []string
 	seen := map[string]bool{}
 	for _, c := range t.Components {
-		action, _ := c["action"].(map[string]any)
-		event, _ := action["event"].(map[string]any)
-		name, _ := event["name"].(string)
-		if name == "" || seen[name] {
-			continue
-		}
-		seen[name] = true
+		eachAction(c, func(action map[string]any) {
+			name, _ := eventOf(action)["name"].(string)
+			if name != "" && !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		})
+	}
+	return names
+}
+
+// adoptInlineActions gives an event that has no entry in Actions the one
+// models write inline, on the component's action instead ({"name":
+// "search", "microtool": "search_hub", "args": {...}}). Templates already
+// generated or kept on a desk are repaired by it as they are read.
+func (t *Template) adoptInlineActions() {
+	for _, c := range t.Components {
+		eachAction(c, func(action map[string]any) {
+			event := eventOf(action)
+			name, _ := event["name"].(string)
+			if name == "" {
+				return
+			}
+			if _, ok := t.Actions[name]; ok {
+				return
+			}
+			for _, spec := range []map[string]any{event, action} {
+				microtool, _ := spec["microtool"].(string)
+				if microtool == "" {
+					continue
+				}
+				a := Action{Microtool: microtool, Result: asString(spec["result"])}
+				a.Args, _ = spec["args"].(map[string]any)
+				a.Reload, _ = spec["reload"].(bool)
+				if t.Actions == nil {
+					t.Actions = map[string]Action{}
+				}
+				t.Actions[name] = a
+				return
+			}
+		})
+	}
+}
+
+// checkEvents verifies every event a component sends (a Button's, a
+// tappable view's or a Menu item's "action") has an entry in Actions, so no
+// generated button is dead. Only generation asks for it: templates already
+// served keep working as they are.
+func (t *Template) checkEvents() error {
+	var missing []string
+	for _, name := range t.events() {
 		if _, ok := t.Actions[name]; !ok {
 			missing = append(missing, name)
 		}
@@ -457,14 +529,20 @@ func (s *Service) frontendAction(ctx context.Context, req *api.ActionRequest) (*
 		if err := json.Unmarshal([]byte(component.Template), t); err != nil {
 			return nil, err
 		}
-	}
-	action, ok := t.Actions[in.Action]
-	if !ok {
-		return nil, errs.NotFound("action " + in.Action)
+		t.adoptInlineActions()
 	}
 	data := in.Data
 	if data == nil {
 		data = map[string]any{}
+	}
+	action, ok := t.Actions[in.Action]
+	if !ok {
+		// An event its template maps to nothing, named after one of the
+		// tool's microtools: it runs that microtool with what the
+		// surface holds for it.
+		if action, ok = s.namedAction(ctx, c, tool, in.Action, in.Context, data); !ok {
+			return nil, errs.NotFound("this frontend has no action " + in.Action + "; design it again")
+		}
 	}
 	var result any
 	if action.Microtool != "" {
@@ -483,6 +561,39 @@ func (s *Service) frontendAction(ctx context.Context, req *api.ActionRequest) (*
 	}
 	return helper.JSON(map[string]any{"result": result, "data": data,
 		"messages": []map[string]any{{"version": A2UIVersion, "updateDataModel": map[string]any{"surfaceId": "tool-" + tool.BotID, "path": "/", "value": data}}}})
+}
+
+// namedAction is the action of an event no template entry maps, when the
+// event is named after a microtool of the tool: it calls that microtool with
+// the arguments its schema takes from the surface's form (/form) and the
+// event's context, and shows the frontend's data again.
+func (s *Service) namedAction(ctx context.Context, c caller, tool *models.Tool, name string, context, data map[string]any) (Action, bool) {
+	commands, err := s.CommandsFor(ctx, tool.BotID, c.Caller.ID.String(), c.Space)
+	if err != nil || len(commands) == 0 {
+		commands = tool.Commands
+	}
+	for _, cmd := range commands {
+		if cmd["name"] != name {
+			continue
+		}
+		args := map[string]any{}
+		form, _ := data["form"].(map[string]any)
+		for _, values := range []map[string]any{form, context} {
+			for k, v := range values {
+				args[k] = v
+			}
+		}
+		schema, _ := cmd["schema"].(map[string]any)
+		if properties, ok := schema["properties"].(map[string]any); ok {
+			for k := range args {
+				if _, takes := properties[k]; !takes {
+					delete(args, k)
+				}
+			}
+		}
+		return Action{Microtool: name, Args: args, Reload: true}, true
+	}
+	return Action{}, false
 }
 
 // componentsList implements tools.components_list: the generated frontends
@@ -569,7 +680,7 @@ Reply with ONE JSON object, no prose, of this shape:
 }
 ` + a2ui.CatalogPrompt + `
 Rules: every value shown from the tool comes from the data model, filled by "data" bindings that call the tool's microtools (only those listed, with arguments matching their schemas); buttons (and tappable views' "action") send events that "actions" map to microtools. In action args, {"$context": "key"} takes the event context's value and {"$data": "/pointer"} the data model's. Bind inputs under /form. Repeat rows (days, hours, results) with a List, a Table or a Chart over an array, never numbered paths. Pick the view that fits the data: a Chart for values over time or categories, a Table for records with several fields, Stat tiles for the few numbers that matter most. No invented data.
-Fully functional: every event a component sends has an entry in "actions", and every entry is sent by some component. An action runs ONE microtool; to also refresh what is shown, put its result where the view reads it ("result") and/or set "reload": true (re-runs every "data" binding). Inputs a microtool needs reach it through {"$data": "/form/…"} or the event context; required arguments are never left unbound. Every microtool the skill asks for is reachable from the view (a binding or an action); a binding's path is exactly where the components read it, and field names match the microtool's result. A tappable view's selection ("selection": {"path": "/selected"}) with a detail block bound to /selected/… and its buttons (context {"path": "/selected/id"}) is how per-row actions are done: a Table has no buttons inside its rows. Follow the deployer's skill for what to show and do; the layout and quality rules above still hold where the skill is silent or asks for something that would break on a phone.`
+Fully functional: every event a component sends has an entry in "actions", keyed by exactly the event's name, and every entry is sent by some component. A component's action is only {"event": {"name", "context"}}: the microtool, its args, result and reload go in the "actions" entry, never on the component. An action runs ONE microtool; to also refresh what is shown, put its result where the view reads it ("result") and/or set "reload": true (re-runs every "data" binding). Inputs a microtool needs reach it through {"$data": "/form/…"} or the event context; required arguments are never left unbound. Every microtool the skill asks for is reachable from the view (a binding or an action); a binding's path is exactly where the components read it, and field names match the microtool's result. A tappable view's selection ("selection": {"path": "/selected"}) with a detail block bound to /selected/… and its buttons (context {"path": "/selected/id"}) is how per-row actions are done: a Table has no buttons inside its rows. Follow the deployer's skill for what to show and do; the layout and quality rules above still hold where the skill is silent or asks for something that would break on a phone.`
 
 // generate asks the node's default model for a frontend, and bills the
 // tokens to the caller.
@@ -657,6 +768,7 @@ func templateOf(raw map[string]any) (Template, error) {
 		return Template{}, err
 	}
 	a2ui.Normalize(t.Components)
+	t.adoptInlineActions()
 	return t, nil
 }
 

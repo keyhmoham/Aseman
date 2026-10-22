@@ -67,7 +67,8 @@ func TestInspectPageFindsWhatIsBroken(t *testing.T) {
 		{a2ui.Blocking, "div", "placeholder text"},
 		{a2ui.Advice, "div", "hard-codes colors"},
 		{a2ui.Advice, "div", "fixed width of 900px"},
-		{a2ui.Advice, "<body>", "t-page"},
+		{a2ui.Blocking, "<body>", "is not an app screen"},
+		{a2ui.Blocking, "t-table", "in no region that scrolls"},
 	} {
 		if !hasIssue(p.Issues, want.severity, want.where, want.text) {
 			t.Errorf("missing %s issue on %s (%q); got:\n%v", want.severity, want.where, want.text, p.Issues)
@@ -112,15 +113,17 @@ func TestInspectPageFindsWhatIsBroken(t *testing.T) {
 func TestInspectPagePassesACleanPage(t *testing.T) {
 	p := InspectPage([]byte(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Orders</title>
 <link rel="stylesheet" href="/_aseman/kit/aseman-ui.css"><script src="/_aseman/kit/aseman-ui.js"></script></head>
-<body class="t-page">
+<body class="t-app">
+ <t-row><t-text variant="h4" text="Orders" weight="1"></t-text><t-button id="refresh" text="Refresh"></t-button></t-row>
  <t-data call="Orders/list" into="/orders"></t-data>
- <t-for each="/orders"><template><t-text bind-text="symbol"></t-text></template></t-for>
- <t-form call="Orders/place" into="/placed">
-  <t-text-field label="Symbol" name="symbol"></t-text-field>
-  <t-button type="submit" text="Place order"></t-button>
- </t-form>
- <t-button id="refresh" text="Refresh"></t-button>
- <t-button text="Pick" action='{"event": {"name": "pick"}}'></t-button>
+ <t-split weight="1">
+  <t-scroll title="Orders"><t-for each="/orders"><template><t-text bind-text="symbol"></t-text></template></t-for></t-scroll>
+  <t-form title="New order" call="Orders/place" into="/placed">
+   <t-text-field label="Symbol" name="symbol"></t-text-field>
+   <t-button type="submit" text="Place order"></t-button>
+   <t-button text="Pick" action='{"event": {"name": "pick"}}'></t-button>
+  </t-form>
+ </t-split>
  <script>
   document.getElementById('refresh').addEventListener('click', () => Aseman.load('/orders', 'Orders', 'list'));
   Aseman.on('pick', () => Aseman.data.set('/picked', true));
@@ -144,6 +147,40 @@ func TestInspectPagePassesACleanPage(t *testing.T) {
 	for _, i := range a2ui.CheckReads(p.Reads, p.Writes, p.Aliases, data, []a2ui.Source{{Path: "/orders", From: "Orders/list", Live: true}}, a2ui.Blocking) {
 		if i.Severity == a2ui.Blocking {
 			t.Errorf("data: %v", i)
+		}
+	}
+}
+
+// A page is an application screen: its body fills the window, a region takes
+// the rest of the height and scrolls inside itself, and what grows is in it.
+func TestInspectPageChecksTheAppLayout(t *testing.T) {
+	head := `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Orders</title>
+<link rel="stylesheet" href="/_aseman/kit/aseman-ui.css"><script src="/_aseman/kit/aseman-ui.js"></script></head>`
+	rows := strings.Repeat(`<t-stat label="Open" value="3"></t-stat>`, 6)
+	p := InspectPage([]byte(head + `<body class="t-app">
+ <t-text variant="h4" text="Orders"></t-text>` + rows + `
+ <t-column weight="1"><t-table data='[]' columns='[]'></t-table></t-column>
+ <t-row><t-scroll weight="1"></t-scroll><t-scroll weight="1"></t-scroll></t-row>
+</body></html>`))
+	for _, want := range []struct{ severity, where, text string }{
+		{a2ui.Blocking, "t-column", "does not scroll inside it"},
+		{a2ui.Blocking, "t-table", "in no region that scrolls"},
+		{a2ui.Advice, "t-row", "scrolling panes side by side"},
+	} {
+		if !hasIssue(p.Issues, want.severity, want.where, want.text) {
+			t.Errorf("missing %s issue on %s (%q); got:\n%v", want.severity, want.where, want.text, p.Issues)
+		}
+	}
+	none := InspectPage([]byte(head + `<body class="t-app"><t-text variant="h4" text="Orders"></t-text>` + rows +
+		`<t-scroll><t-table data='[]' columns='[]'></t-table></t-scroll></body></html>`))
+	if !hasIssue(none.Issues, a2ui.Blocking, "<body>", "nothing in the body takes the rest") {
+		t.Errorf("a body with no region passed: %v", none.Issues)
+	}
+	app := InspectPage([]byte(head + `<body class="t-app"><t-text variant="h4" text="Orders"></t-text>` + rows +
+		`<t-tabs weight="1"><t-table title="Open" data='[]' columns='[]'></t-table><t-text title="Done" text="None yet"></t-text></t-tabs></body></html>`))
+	for _, i := range app.Issues {
+		if i.Area == "layout" {
+			t.Errorf("an app screen was faulted: %v", i)
 		}
 	}
 }

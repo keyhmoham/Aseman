@@ -21,7 +21,7 @@ const A2UI_TAGS = {
   Table: 't-table', DataGrid: 't-data-grid', Stat: 't-stat', KeyValue: 't-key-value', Timeline: 't-timeline', TreeView: 't-tree-view',
   JsonView: 't-json-view', CodeBlock: 't-code-block', Progress: 't-progress', Badge: 't-badge', Tag: 't-tag', Rating: 't-rating',
   Callout: 't-callout', Avatar: 't-avatar', Grid: 't-grid', Wrap: 't-wrap', Stack: 't-stack', Box: 't-box', Center: 't-center',
-  Spacer: 't-spacer', AspectRatio: 't-aspect-ratio', Scroll: 't-scroll', Section: 't-section', Expandable: 't-expandable',
+  Spacer: 't-spacer', AspectRatio: 't-aspect-ratio', Scroll: 't-scroll', Split: 't-split', Section: 't-section', Expandable: 't-expandable',
   Switch: 't-switch', Elpian: 't-elpian', ToolFrontend: 't-tool-frontend', SegmentedControl: 't-segmented-control',
   Dropdown: 't-dropdown', RangeSlider: 't-range-slider', NumberStepper: 't-number-stepper', SearchField: 't-search-field',
   Link: 't-link', IconButton: 't-icon-button', Menu: 't-menu', Steps: 't-steps', Carousel: 't-carousel', Accordion: 't-accordion',
@@ -29,7 +29,7 @@ const A2UI_TAGS = {
   Markdown: 't-markdown', Show: 't-show', Countdown: 't-countdown', Quote: 't-quote', OrderBook: 't-order-book',
   TickerTape: 't-ticker-tape', AllocationBar: 't-allocation-bar', Trend: 't-trend',
 };
-const STRUCTURAL = new Set(['id', 'component', 'child', 'children', 'weight', 'accessibility', 'trigger', 'content', 'tabs', 'fallback', 'items']);
+const STRUCTURAL = new Set(['id', 'component', 'child', 'children', 'weight', 'accessibility', 'trigger', 'content', 'tabs', 'panes', 'fallback', 'items']);
 
 /** Rewrites absolute data paths of a surface's props under its root ({"path": "/x"} → /__surfaces/<id>/x). */
 function rooted(v, root) {
@@ -120,6 +120,7 @@ class Surface {
     else if (isMap(ch) && (ch.componentId || ch.template)) this.template(e, ch);
     if (typeof c.child === 'string') e.appendChild(kid(c.child));
     if (type === 'Tabs') asList(c.tabs).forEach((t) => { const tab = document.createElement('t-tab'); tab._raw = { title: rooted(normalizeProps(t.title ?? t.label), this.root), icon: t.icon }; tab._attrsRead = true; if (t.child) tab.appendChild(kid(t.child)); e.appendChild(tab); });
+    if (type === 'Split') asList(c.panes).forEach((pane, i) => { if (!pane?.child) return; const k = kid(pane.child); k.dataset.title = asText(pane.title ?? `Pane ${i + 1}`); if (pane.weight != null) k.setAttribute('weight', String(pane.weight)); e.appendChild(k); });
     if (type === 'Modal') { if (c.trigger) { const t = kid(c.trigger); t.setAttribute('slot', 'trigger'); e.appendChild(t); } if (c.content) e.appendChild(kid(c.content)); }
     if (type === 'Accordion') asList(c.items).forEach((it) => { const x = el('expandable', { title: rooted(normalizeProps(it.title), this.root), subtitle: it.subtitle, expanded: it.expanded }); x._attrsRead = true; if (it.child) x.appendChild(kid(it.child)); e.appendChild(x); });
     if (type === 'Show' && c.fallback) { const f = kid(c.fallback); f.setAttribute('slot', 'fallback'); e.appendChild(f); }

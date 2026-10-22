@@ -246,7 +246,11 @@ func (pr *pageReviewer) review(page, rest, toolName string) *pageReview {
 		if i := strings.IndexAny(file, "?#"); i >= 0 {
 			file = file[:i]
 		}
-		file = path.Join("/", dir, file)
+		if strings.HasPrefix(file, "/") {
+			file = path.Clean(file) // the gateway keeps root-relative paths in the preview
+		} else {
+			file = path.Join("/", dir, file)
+		}
 		if seen[file] || len(seen) >= maxPageResources {
 			continue
 		}

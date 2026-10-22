@@ -418,6 +418,19 @@ comes back with it. The node does not execute the page's scripts, so agents
 are also told to test pages in the sandbox's browser (screenshots at phone
 and desktop widths, every control clicked) before reporting them ready.
 
+**Every generated interface is an app screen, not a web page**, on a phone
+(~360 × 640) and a desktop window (~1400 × 900) alike (`a2ui.AppLayout`,
+taught to every generator and checked by every review). It fills its window
+and never scrolls as a whole: a header that stays put, then a body region
+(`"weight": 1`) taking the rest of the height, and every region that can
+grow (lists, tables, timelines, details, long forms) scrolls inside itself.
+Panes side by side are a `Split` (A2UI) or `<t-split>` (web kit): panes
+on a desktop, tabs on a phone; views of one screen are `Tabs` whose tabs
+scroll by themselves. A2UI surfaces designed this way are created with
+`createSurface.theme.layout = "app"`, and the app gives them their window's
+height (`GenUiFrame`); templates made before keep scrolling as pages. Web
+pages use `<body class="t-app">`, the kit's app shell.
+
 Agents get every tool's microtools as tools (`spaces.tools_list`, through
 `spaces.ask`). Tools' interfaces never go into the chat: they open as card
 windows on the room's **desk** (`spaces/desk.go`, kept in the space's

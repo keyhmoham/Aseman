@@ -54,7 +54,14 @@ type Template struct {
 	Actions map[string]Action `json:"actions,omitempty"`
 	// Review is what its review found before it was first served.
 	Review *Review `json:"review,omitempty"`
+	// Layout is "app" for a template designed as an app screen (it fills
+	// its window and its regions scroll inside it, see a2ui.AppLayout);
+	// templates made before are shown as pages that scroll as a whole.
+	Layout string `json:"layout,omitempty"`
 }
+
+// AppLayout marks a template designed as an app screen.
+const AppLayout = "app"
 
 // Binding fills one place of the data model with a microtool's result.
 type Binding struct {
@@ -200,10 +207,20 @@ func (t *Template) checkEvents() error {
 func (t *Template) Messages(surfaceID string, data map[string]any) []map[string]any {
 	a2ui.Normalize(t.Components) // templates cached before generation normalized
 	return []map[string]any{
-		{"version": A2UIVersion, "createSurface": map[string]any{"surfaceId": surfaceID, "catalogId": BasicCatalog}},
+		{"version": A2UIVersion, "createSurface": createSurface(surfaceID, t.Layout)},
 		{"version": A2UIVersion, "updateComponents": map[string]any{"surfaceId": surfaceID, "components": t.Components}},
 		{"version": A2UIVersion, "updateDataModel": map[string]any{"surfaceId": surfaceID, "path": "/", "value": data}},
 	}
+}
+
+// createSurface is the createSurface message of a surface laid out as
+// [layout] ("app" tells the device to give it its window's height).
+func createSurface(surfaceID, layout string) map[string]any {
+	out := map[string]any{"surfaceId": surfaceID, "catalogId": BasicCatalog}
+	if layout != "" {
+		out["theme"] = map[string]any{"layout": layout}
+	}
+	return out
 }
 
 // --- calling microtools for a frontend --------------------------------------
@@ -754,7 +771,7 @@ func (s *Service) generate(ctx context.Context, c caller, tool *models.Tool, ski
 			review := rv.review(&t)
 			review.Rounds = round
 			if best == nil || best.Review.worse(review) {
-				t.Review = review
+				t.Review, t.Layout = review, AppLayout
 				best = &t
 			}
 			if review.Passed {

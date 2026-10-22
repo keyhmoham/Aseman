@@ -19,6 +19,7 @@ import '../../../genui/genui.dart'
         CompactSummary,
         CompactSummaryView,
         FrontendPresentation,
+        GenUiFrame,
         GenUiView;
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/glow_painter.dart';
@@ -1905,16 +1906,16 @@ class _CenterDesk extends StatelessWidget {
       Builder(
           key: ValueKey('composed-$id'),
           builder: (context) {
+            final messages = ComposedSurfaces.of(widget);
             final view = GenUiView(
-              messages: ComposedSurfaces.of(widget),
+              messages: messages,
               toolFrontend: (context, botId, height, props) => SizedBox(
                   height: height,
                   child: _frontend(botId, ShownResult.fromProps(props))),
             );
             // A phone-board widget shows the compact form as it is.
             if (FrontendPresentation.isCompact(context)) return view;
-            return SingleChildScrollView(
-                padding: const EdgeInsets.all(16), child: view);
+            return GenUiFrame(messages: messages, child: view);
           });
 
   /// A web page window: the page itself, or, as a phone-board widget, a

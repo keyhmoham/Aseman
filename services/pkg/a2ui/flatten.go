@@ -209,12 +209,14 @@ func (f *flattener) add(c map[string]any) string {
 			}
 		}
 	}
-	if tabs, ok := c["tabs"].([]any); ok {
-		for _, t := range tabs {
-			if tab, ok := t.(map[string]any); ok {
-				if inner, ok := tab["child"].(map[string]any); ok {
-					if cid := f.add(inner); cid != "" {
-						tab["child"] = cid
+	for _, key := range []string{"tabs", "panes"} {
+		if tabs, ok := c[key].([]any); ok {
+			for _, t := range tabs {
+				if tab, ok := t.(map[string]any); ok {
+					if inner, ok := tab["child"].(map[string]any); ok {
+						if cid := f.add(inner); cid != "" {
+							tab["child"] = cid
+						}
 					}
 				}
 			}
@@ -253,11 +255,13 @@ func (f *flattener) referenced() map[string]bool {
 				out[s] = true
 			}
 		}
-		if tabs, ok := c["tabs"].([]any); ok {
-			for _, t := range tabs {
-				if tab, ok := t.(map[string]any); ok {
-					if s, ok := tab["child"].(string); ok {
-						out[s] = true
+		for _, key := range []string{"tabs", "panes"} {
+			if tabs, ok := c[key].([]any); ok {
+				for _, t := range tabs {
+					if tab, ok := t.(map[string]any); ok {
+						if s, ok := tab["child"].(string); ok {
+							out[s] = true
+						}
 					}
 				}
 			}

@@ -42,6 +42,7 @@ func TestComponentsMatchTheApp(t *testing.T) {
 		"../../../app/lib/src/genui/catalog/aseman.dart",
 		"../../../app/lib/src/genui/catalog/extended.dart",
 		"../../../app/lib/src/genui/catalog/markets.dart",
+		"../../../app/lib/src/genui/catalog/app_layout.dart",
 	} {
 		src, err := os.ReadFile(f)
 		if err != nil {

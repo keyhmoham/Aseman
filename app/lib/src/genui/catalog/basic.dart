@@ -22,6 +22,7 @@ import '../../shared/widgets/segmented_tab_bar.dart';
 import '../runtime/dynamic_values.dart';
 import '../runtime/format.dart';
 import '../runtime/host.dart';
+import 'app_layout.dart';
 import 'item.dart';
 import 'style.dart';
 
@@ -490,27 +491,34 @@ class _GenUiTabsState extends State<_GenUiTabs> {
                 _local)
             .clamp(0, tabs.length - 1);
         final icons = [for (final t in tabs) genUiIcon(t['icon'])];
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          spacing: genUiGap,
-          children: [
-            SegmentedTabBar(
-              labels: [for (final t in tabs) stringifyValue(t['title'])],
-              icons: icons.every((i) => i != null) ? icons.cast<IconData>() : null,
-              alignment: Alignment.centerLeft,
-              selectedIndex: index,
-              onTap: (i) {
-                setState(() => _local = i);
-                widget.item.write(binding, i);
-              },
-            ),
-            KeyedSubtree(
-              key: ValueKey('tab$index'),
-              child: widget.item.child(tabs[index]['child']),
-            ),
-          ],
-        );
+        // Given a height (a screen's body), the open tab fills it and
+        // scrolls inside it.
+        return LayoutBuilder(builder: (context, constraints) {
+          final bounded = constraints.hasBoundedHeight;
+          final pane = KeyedSubtree(
+            key: ValueKey('tab$index'),
+            child: regionScroll(
+                constraints, widget.item.child(tabs[index]['child'])),
+          );
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: bounded ? MainAxisSize.max : MainAxisSize.min,
+            spacing: genUiGap,
+            children: [
+              SegmentedTabBar(
+                labels: [for (final t in tabs) stringifyValue(t['title'])],
+                icons: icons.every((i) => i != null) ? icons.cast<IconData>() : null,
+                alignment: Alignment.centerLeft,
+                selectedIndex: index,
+                onTap: (i) {
+                  setState(() => _local = i);
+                  widget.item.write(binding, i);
+                },
+              ),
+              if (bounded) Expanded(child: pane) else pane,
+            ],
+          );
+        });
       },
     );
   }

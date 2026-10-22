@@ -880,9 +880,36 @@ t-dropdown, t-search-field, t-slider, t-range-slider, t-choice-picker, t-date-ti
 t-linear-progress-indicator, t-segmented-tab-bar, t-panel-header, t-stat-card, t-form-field { display: block; min-width: 0; }
 t-checkbox, t-switch, t-radio, t-segmented-control, t-number-stepper, t-menu, t-circular-progress-indicator { display: inline-flex; }
 
+/* App shell: a page is an application screen, not a document. body.t-app
+   fills the window exactly and never scrolls as a whole: a header stays put,
+   the body (weight="1", a t-split, t-tabs or t-scaffold) takes the rest of
+   the height, and every region scrolls inside itself. */
+html:has(> body.t-app) { height: 100%; overflow: hidden; }
+body.t-app { height: 100vh; height: 100dvh; margin: 0; padding: 16px; box-sizing: border-box; overflow: hidden;
+  display: flex; flex-direction: column; gap: var(--t-gap); }
+body.t-app > * { flex: 0 0 auto; min-height: 0; }
+body.t-app > [weight], body.t-app > t-expanded, body.t-app > t-scaffold, body.t-app > t-split { flex: 1 1 0; }
+[weight], t-expanded, t-flexible { min-height: 0; }
+t-scroll[weight], t-expanded > t-scroll:only-child { overflow: auto; }
+body.t-app t-scaffold { min-height: 0; }
+body.t-app t-scaffold > .t-scaffold__body { flex: 1 1 0; min-height: 0; overflow: auto; }
+/* A Tabs given a height: the open tab fills it and scrolls inside it. */
+t-tabs[weight], body.t-app > t-tabs { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; }
+t-tabs[weight] > .t-tabs, body.t-app > t-tabs > .t-tabs { flex: 1 1 0; min-height: 0; }
+t-tabs[weight] .t-tabs__panel, body.t-app > t-tabs .t-tabs__panel { flex: 1 1 0; min-height: 0; overflow: auto; }
+/* Split: panes side by side, each scrolling, when wide; tabs on a phone. */
+t-split { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+t-split > .t-split { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 12px; }
+t-split .t-split__panes { display: flex; flex: 1 1 auto; min-height: 0; }
+t-split .t-split__pane { min-width: 0; min-height: 0; overflow: auto; }
+t-split .t-split__bar { flex: 0 0 auto; }
+t-split:not([data-narrow]) .t-split__bar { display: none; }
+t-split:not([data-narrow]) .t-split__pane + .t-split__pane { border-left: 1px solid var(--t-outline-variant); padding-left: 16px; }
+t-split[data-narrow] .t-split__pane:not([data-open]) { display: none; }
+
 /* Responsive: phones stack rows that would not fit. */
 @media (max-width: 480px) {
-  body.t-page, .t-page { padding: 12px; }
+  body.t-page, .t-page, body.t-app { padding: 12px; }
   t-row[responsive], .t-row[data-responsive] { flex-direction: column; align-items: stretch; }
   .t-dialog { padding: 20px; }
   t-text[variant=h1] { font-size: 28px; } t-text[variant=h2] { font-size: 24px; }

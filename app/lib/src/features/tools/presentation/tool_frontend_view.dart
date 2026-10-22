@@ -7,7 +7,8 @@ import '../../../genui/genui.dart'
         CompactSummary,
         CompactSummaryView,
         FrontendDisplay,
-        FrontendPresentation;
+        FrontendPresentation,
+        GenUiFrame;
 import '../../../shared/widgets/skeleton.dart';
 import '../../tools/presentation/app_frontend_theme.dart';
 import '../connect/mcp_connect_dialog.dart';
@@ -294,8 +295,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
           ),
         );
         if (compact) return view;
-        return SingleChildScrollView(
-            padding: const EdgeInsets.all(16), child: view);
+        return GenUiFrame(messages: payload.messages, child: view);
       case FrontendMode.none:
         if (compact) return const SizedBox.shrink();
         return const Center(child: Text('This app has no screen.'));

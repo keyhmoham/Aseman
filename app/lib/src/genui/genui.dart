@@ -19,6 +19,7 @@ export 'runtime/host.dart';
 export 'runtime/messages.dart';
 export 'runtime/presentation.dart';
 export 'runtime/surfaces.dart';
+export 'widgets/app_frame.dart';
 export 'widgets/compact_summary.dart';
 export 'widgets/compact_surface.dart';
 export 'widgets/surface_view.dart';

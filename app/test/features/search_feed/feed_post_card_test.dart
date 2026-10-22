@@ -1,6 +1,7 @@
 import 'package:aseman/src/app_dependencies.dart';
 import 'package:aseman/src/core/network/session_store.dart';
 import 'package:aseman/src/data/models/post.dart';
+import 'package:aseman/src/data/models/profile.dart';
 import 'package:aseman/src/data/models/space.dart';
 import 'package:aseman/src/features/search_feed/presentation/feed_post_card.dart';
 import 'package:aseman/src/features/search_feed/presentation/rich_post_content.dart';
@@ -12,6 +13,7 @@ import '../../fake_aseman_service.dart';
 
 const _me = '00000000000000010000000000000001';
 const _alice = '00000000000000010000000000000077';
+const _bob = '00000000000000010000000000000088';
 
 /// Records what the card asks of the server.
 class _PostsFake extends FakeAsemanService {
@@ -27,7 +29,33 @@ class _PostsFake extends FakeAsemanService {
       body: 'Great call',
       createdAt: DateTime.now(),
     ),
+    // The node sent this one without its author's name or picture.
+    SocialPost(
+      id: 'c0',
+      authorId: _bob,
+      parentId: 'p2',
+      body: 'Who wrote me?',
+      createdAt: DateTime.now(),
+    ),
   ];
+
+  @override
+  Future<UserProfile> fetchUserProfile(String accountId) async {
+    calls.add('profile $accountId');
+    return switch (accountId) {
+      _me => const UserProfile(
+        id: _me,
+        handle: 'test',
+        displayName: 'Test User',
+      ),
+      _bob => const UserProfile(
+        id: _bob,
+        handle: 'bob',
+        displayName: 'Bob Stone',
+      ),
+      _ => UserProfile(id: accountId, handle: 'someone'),
+    };
+  }
 
   @override
   Future<List<SocialPost>> fetchComments(
@@ -130,8 +158,12 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  SocialPost post({String author = _me, String forwardOf = ''}) => SocialPost(
-    id: 'p1',
+  SocialPost post({
+    String id = 'p1',
+    String author = _me,
+    String forwardOf = '',
+  }) => SocialPost(
+    id: id,
     authorId: author,
     authorHandle: author == _me ? 'test' : 'alice',
     body: 'Long **BTC**',
@@ -204,7 +236,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Like').last);
     await tester.pumpAndSettle();
-    expect(service.calls, ['like c1']);
+    expect(service.calls, contains('like c1'));
 
     await tester.tap(find.text('Reply'));
     await tester.pumpAndSettle();
@@ -215,12 +247,40 @@ void main() {
     await tester.pumpAndSettle();
     expect(service.calls.last, 'comment p1 @alice agreed');
     expect(find.text('@alice agreed'), findsOneWidget);
+    // The new comment is signed with the reader's name, not their id.
+    expect(find.text('Test User'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(Dialog),
+        matching: find.textContaining(_me.substring(0, 8)),
+      ),
+      findsNothing,
+    );
 
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
     // The card counts the new comment.
     expect(find.widgetWithText(Tooltip, '2'), findsOneWidget);
+  });
+
+  testWidgets('a comment without its author is named from their profile', (
+    tester,
+  ) async {
+    await show(tester, post(id: 'p2', author: _alice));
+    await tester.tap(find.byTooltip('Comments'));
+    await tester.pumpAndSettle();
+    expect(find.text('Who wrote me?'), findsOneWidget);
+    expect(find.text('Bob Stone'), findsOneWidget);
+    expect(find.text('BS'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(Dialog),
+        matching: find.textContaining(_bob.substring(0, 8)),
+      ),
+      findsNothing,
+    );
+    expect(service.calls.where((c) => c == 'profile $_bob'), hasLength(1));
   });
 
   testWidgets('comments open in a bottom sheet on phones', (tester) async {

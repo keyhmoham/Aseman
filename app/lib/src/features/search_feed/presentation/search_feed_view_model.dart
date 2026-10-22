@@ -211,7 +211,9 @@ FeedPost feedPostFromServer(SocialPost p, {String? workspace}) => FeedPost(
       initials: _initialsOf(p.authorId),
       name: p.authorName.isNotEmpty
           ? p.authorName
-          : '@${p.authorId.substring(0, 8)}',
+          : p.authorHandle.isNotEmpty
+              ? '@${p.authorHandle}'
+              : '@${p.authorId.substring(0, 8)}',
       handle: p.authorHandle.isNotEmpty
           ? '@${p.authorHandle}'
           : '@${p.authorId.substring(0, 12)}',
@@ -220,7 +222,7 @@ FeedPost feedPostFromServer(SocialPost p, {String? workspace}) => FeedPost(
       tag: p.tags.isEmpty ? 'POST' : p.tags.first.toUpperCase(),
       likes: compactCount(p.likes),
       comments: compactCount(p.comments),
-      color: _colorFor(p.id),
+      color: feedColorFor(p.id),
       liked: p.likedByMe,
       serverId: p.id,
       workspace: workspace,
@@ -249,7 +251,8 @@ String _initialsOf(String id) {
 
 String _upper(String s) => s.toUpperCase();
 
-Color _colorFor(String id) {
+/// The accent colour the feed gives [id] (a post or an account).
+Color feedColorFor(String id) {
   const palette = [
     AppColors.primary,
     AppColors.cyan,

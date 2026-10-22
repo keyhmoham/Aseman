@@ -4,10 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_shape.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/post.dart';
 import '../../../data/models/profile.dart';
 import '../../../data/models/space.dart';
+import '../../../data/models/uploaded_file.dart';
+import '../../../data/services/aseman_service.dart';
 import '../../../elpian/core/media.dart' show ElpianMediaScope;
 import '../../../genui/genui.dart'
     show
@@ -39,9 +42,14 @@ import '../../files/presentation/file_tree.dart';
 import '../../files/presentation/file_viewer.dart';
 import '../../messenger/presentation/chat_page.dart';
 import '../../messenger/presentation/report_dialog.dart';
+import '../../rooms/presentation/widgets/attachment_bubble.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
+import '../../rooms/presentation/widgets/shared_file_viewer.dart';
+import '../../search_feed/presentation/feed_post_card.dart';
 import '../../search_feed/presentation/post_editor.dart';
 import '../../search_feed/presentation/rich_post_content.dart';
+import '../../search_feed/presentation/search_feed_view_model.dart'
+    show feedPostFromServer;
 import '../../tools/connect/add_app.dart';
 import '../../tools/connect/mcp_connect_dialog.dart';
 import '../../tools/data/tools_api.dart';
@@ -1947,7 +1955,13 @@ class _CenterDesk extends StatelessWidget {
       : w.isFile
       ? (FrontendPresentation.isCompact(context)
           // A phone-board widget names the file; it opens in the sheet.
-          ? _FilePreview(path: w.filePath)
+          ? _FilePreview(path: w.fileId.isEmpty ? w.filePath : w.label)
+          : w.fileId.isNotEmpty
+          // A file shared in a chat or a post: a video plays here.
+          ? SharedFileWindow(
+              key: ValueKey('shared-${w.id}-${w.fileId}'),
+              service: dependencies.service,
+              fileId: w.fileId)
           : WorkspaceFileViewer(
               key: ValueKey('file-${w.id}-${w.filePath}'),
               service: dependencies.service,
@@ -1992,7 +2006,7 @@ class _CenterDesk extends StatelessWidget {
           summary: CompactSummary(
               title: 'Computer', caption: 'The project’s desktop', icon: 'computer'))
       : p.isFile
-      ? _FilePreview(path: p.filePath)
+      ? _FilePreview(path: p.fileId.isEmpty ? p.filePath : p.label)
       : p.isComposed
       ? _composed(p.id, p.widget)
       : p.isApp
@@ -3064,7 +3078,10 @@ class _SearchResultsState extends State<_SearchResults> {
         if (!widget.global) return const [];
         final posts =
             await deps.service.searchPosts(q, limit: _pageSize, offset: offset);
-        return titles(posts.map((p) => p.body));
+        return [
+          for (final p in posts)
+            _SearchHit(_firstLine(p.body), id: p.id, payload: p),
+        ];
       case 'Messages':
         if (space.isEmpty) return const [];
         final msgs = await deps.service.searchSpaceMessages(space,
@@ -3079,10 +3096,15 @@ class _SearchResultsState extends State<_SearchResults> {
         if (space.isEmpty) return const [];
         final files = await deps.service
             .fetchFiles(space, limit: _pageSize, offset: offset);
-        return titles(files
-            .where((f) => _fileMatchesSection(f, widget.section))
-            .map((f) => f['name'] as String? ?? 'file')
-            .where((n) => n.toLowerCase().contains(q)));
+        // Each file shows as its own card: a player, a picture, a link or
+        // a document.
+        return [
+          for (final f in files)
+            if (_fileMatchesSection(f, widget.section))
+              _SearchHit(f['name'] as String? ?? 'file',
+                  id: '${f['file_id'] ?? f['id'] ?? ''}',
+                  payload: UploadedFile.fromJson(f)),
+        ].where((h) => h.title.toLowerCase().contains(q)).toList();
       default:
         return const [];
     }
@@ -3100,7 +3122,9 @@ class _SearchResultsState extends State<_SearchResults> {
     final mime = (file['mime'] as String? ?? '').toLowerCase();
     switch (section) {
       case 'Media':
-        return mime.startsWith('image/') || mime.startsWith('video/');
+        return (mime.startsWith('image/') && mime != 'image/gif') ||
+            mime.startsWith('video/') ||
+            mime.startsWith('audio/');
       case 'Documents':
         return mime.contains('pdf') ||
             mime.contains('text') ||
@@ -3119,6 +3143,11 @@ class _SearchResultsState extends State<_SearchResults> {
   Widget build(BuildContext context) {
     final section = widget.section;
     final count = _loading ? null : _items.length;
+    final deps = widget.dependencies;
+    // The results that are rows (not posts or files) share one card.
+    final rows = _items
+        .where((h) => h.payload is! SocialPost && h.payload is! UploadedFile)
+        .toList();
     return Column(children: [
       Padding(
           padding: const EdgeInsets.fromLTRB(2, 14, 2, 10),
@@ -3179,16 +3208,38 @@ class _SearchResultsState extends State<_SearchResults> {
                 ));
               }
               final hit = _items[index];
-              // A post shows as itself: its rich content, charts and all.
-              final post = hit.payload;
-              if (post is SocialPost) {
-                return _Post(post,
-                    author: post.authorHandle.isNotEmpty
-                        ? '@${post.authorHandle}'
-                        : 'Post',
-                    time: _timeAgo(post.createdAt));
+              final payload = hit.payload;
+              // A post shows in full, as the feed shows it.
+              if (payload is SocialPost && deps != null) {
+                return _SearchPostCard(
+                    key: ValueKey('post-${payload.id}'),
+                    post: payload,
+                    service: deps.service);
               }
-              return _SearchResultCard(
+              // A file shows as its own card: a player, a picture, a link
+              // or a document.
+              if (payload is UploadedFile && deps != null) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _SearchMediaCard(
+                      file: payload, service: deps.service),
+                );
+              }
+              // People, agents, apps, spaces and messages sit together on
+              // one card, a row each.
+              final first = identical(rows.first, hit);
+              final last = identical(rows.last, hit);
+              const r = Radius.circular(AppShape.card - 2);
+              return Container(
+                  margin: EdgeInsets.only(bottom: last ? 10 : 0),
+                  padding: EdgeInsets.fromLTRB(
+                      8, first ? 8 : 0, 8, last ? 8 : 0),
+                  decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.vertical(
+                          top: first ? r : Radius.zero,
+                          bottom: last ? r : Radius.zero)),
+                  child: _SearchResultCard(
                   section: section,
                   title: hit.title,
                   avatar: hit.avatar,
@@ -3197,10 +3248,131 @@ class _SearchResultsState extends State<_SearchResults> {
                   spaceId: widget.spaceId,
                   index: index,
                   onOpen: widget.feed ? _opener(hit) : null,
-                  dependencies: widget.dependencies);
+                  dependencies: widget.dependencies));
             });
       })),
     ]);
+  }
+}
+
+/// A post found by search, in full as the feed shows it; liking it here
+/// likes it.
+class _SearchPostCard extends StatefulWidget {
+  const _SearchPostCard({super.key, required this.post, required this.service});
+  final SocialPost post;
+  final AsemanService service;
+
+  @override
+  State<_SearchPostCard> createState() => _SearchPostCardState();
+}
+
+class _SearchPostCardState extends State<_SearchPostCard> {
+  late bool _liked = widget.post.likedByMe;
+  late int _likes = widget.post.likes;
+
+  Future<void> _toggleLike() async {
+    final was = _liked;
+    setState(() {
+      _liked = !was;
+      _likes += was ? -1 : 1;
+    });
+    try {
+      if (was) {
+        await widget.service.unlikePost(widget.post.id);
+      } else {
+        await widget.service.likePost(widget.post.id);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _liked = was;
+        _likes += was ? 1 : -1;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => FeedPostCard(
+      post: feedPostFromServer(widget.post)
+          .copyWith(liked: _liked, likes: '${_likes < 0 ? 0 : _likes}'),
+      service: widget.service,
+      onToggleLike: _toggleLike);
+}
+
+/// A file found by search, on a card made for its kind: a video under a
+/// play button, audio with its waveform, a picture or GIF, a link or a
+/// document; with its name and when it was shared.
+class _SearchMediaCard extends StatelessWidget {
+  const _SearchMediaCard({required this.file, required this.service});
+  final UploadedFile file;
+  final AsemanService service;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final type = FileType.of(file.name);
+    final kind = file.isGif
+        ? 'GIF'
+        : file.isImage
+            ? 'Image'
+            : file.isVideo
+                ? 'Video'
+                : file.isPlayableAudio
+                    ? 'Audio'
+                    : type.kind.name[0].toUpperCase() +
+                        type.kind.name.substring(1);
+    final when = file.createdAt == null ? '' : _timeAgo(file.createdAt!);
+    return Material(
+      color: scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppShape.card - 2)),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        child: LayoutBuilder(
+          builder: (context, box) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Icon(
+                    file.isVideo
+                        ? Icons.movie_rounded
+                        : file.isPlayableAudio
+                            ? Icons.graphic_eq_rounded
+                            : file.isGif
+                                ? Icons.gif_box_rounded
+                                : file.isImage
+                                    ? Icons.image_rounded
+                                    : type.icon,
+                    size: 16,
+                    color: type.color),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(file.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w700)),
+                ),
+                Text(
+                    [kind, file.humanSize, if (when.isNotEmpty) when]
+                        .join(' · '),
+                    style: TextStyle(
+                        fontSize: 11, color: scheme.onSurfaceVariant)),
+              ]),
+              const SizedBox(height: 10),
+              AttachmentBubble(
+                file: file,
+                headers: service.authHeaders(),
+                resolveUrl: (f) => service.fileContentUrl(f.id),
+                fetchBytes: (f) => service.downloadFile(f.id),
+                maxWidth: math.min(box.maxWidth, 520),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -172,61 +172,66 @@ class SearchFeedViewModel extends ChangeNotifier {
   }
 
   /// Map a server post onto the UI feed card model.
-  FeedPost _feedFromServer(SocialPost p) => FeedPost(
-        initials: _initialsOf(p.authorId),
-        name: p.authorName.isNotEmpty
-            ? p.authorName
-            : '@${p.authorId.substring(0, 8)}',
-        handle: p.authorHandle.isNotEmpty
-            ? '@${p.authorHandle}'
-            : '@${p.authorId.substring(0, 12)}',
-        time: _timeAgo(p.createdAt),
-        body: p.body,
-        tag: p.tags.isEmpty ? 'POST' : p.tags.first.toUpperCase(),
-        likes: _compact(p.likes),
-        comments: '0',
-        color: _colorFor(p.id),
-        liked: p.likedByMe,
-        serverId: p.id,
-        workspace: _spaceNames[p.spaceId],
-        media: p.attachments,
-        source: p.source,
-        avatar: p.authorAvatar,
-      );
+  FeedPost _feedFromServer(SocialPost p) =>
+      feedPostFromServer(p, workspace: _spaceNames[p.spaceId]);
+}
 
-  String _initialsOf(String id) {
-    if (id.length < 4) return 'OC';
-    final h = id.hashCode;
-    return '${_upper((h & 0xff).toRadixString(16))}${_upper(((h >> 8) & 0xff).toRadixString(16))}';
-  }
+/// A server post as the feed's card shows it; [workspace] names the space
+/// it was posted in.
+FeedPost feedPostFromServer(SocialPost p, {String? workspace}) => FeedPost(
+      initials: _initialsOf(p.authorId),
+      name: p.authorName.isNotEmpty
+          ? p.authorName
+          : '@${p.authorId.substring(0, 8)}',
+      handle: p.authorHandle.isNotEmpty
+          ? '@${p.authorHandle}'
+          : '@${p.authorId.substring(0, 12)}',
+      time: _timeAgo(p.createdAt),
+      body: p.body,
+      tag: p.tags.isEmpty ? 'POST' : p.tags.first.toUpperCase(),
+      likes: _compact(p.likes),
+      comments: '0',
+      color: _colorFor(p.id),
+      liked: p.likedByMe,
+      serverId: p.id,
+      workspace: workspace,
+      media: p.attachments,
+      source: p.source,
+      avatar: p.authorAvatar,
+    );
 
-  String _upper(String s) => s.toUpperCase();
+String _initialsOf(String id) {
+  if (id.length < 4) return 'OC';
+  final h = id.hashCode;
+  return '${_upper((h & 0xff).toRadixString(16))}${_upper(((h >> 8) & 0xff).toRadixString(16))}';
+}
 
-  Color _colorFor(String id) {
-    const palette = [
-      AppColors.primary,
-      AppColors.cyan,
-      AppColors.success,
-      AppColors.warning,
-      Color(0xFF14B8A6),
-      Color(0xFFF97316),
-      Color(0xFFEC4899),
-      Color(0xFF3B82F6),
-      Color(0xFF6366F1),
-    ];
-    return palette[id.hashCode.abs() % palette.length];
-  }
+String _upper(String s) => s.toUpperCase();
 
-  static String _compact(int n) {
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return '$n';
-  }
+Color _colorFor(String id) {
+  const palette = [
+    AppColors.primary,
+    AppColors.cyan,
+    AppColors.success,
+    AppColors.warning,
+    Color(0xFF14B8A6),
+    Color(0xFFF97316),
+    Color(0xFFEC4899),
+    Color(0xFF3B82F6),
+    Color(0xFF6366F1),
+  ];
+  return palette[id.hashCode.abs() % palette.length];
+}
 
-  static String _timeAgo(DateTime t) {
-    final d = DateTime.now().difference(t);
-    if (d.inMinutes < 1) return 'now';
-    if (d.inMinutes < 60) return '${d.inMinutes}m';
-    if (d.inHours < 24) return '${d.inHours}h';
-    return '${d.inDays}d';
-  }
+String _compact(int n) {
+  if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
+  return '$n';
+}
+
+String _timeAgo(DateTime t) {
+  final d = DateTime.now().difference(t);
+  if (d.inMinutes < 1) return 'now';
+  if (d.inMinutes < 60) return '${d.inMinutes}m';
+  if (d.inHours < 24) return '${d.inHours}h';
+  return '${d.inDays}d';
 }

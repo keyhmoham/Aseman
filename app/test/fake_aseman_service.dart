@@ -895,7 +895,7 @@ class FakeAsemanService extends AsemanService {
 
   @override
   Future<List<Map<String, dynamic>>> fetchSpaceMembers(String spaceId,
-      {int limit = 50, int offset = 0}) async {
+      {String kind = '', int limit = 50, int offset = 0}) async {
     final list = switch (spaceId) {
       homeId => <Map<String, dynamic>>[
           {

@@ -65,7 +65,10 @@ class AttachmentBubble extends StatelessWidget {
         return VideoBubble(
           url: _url,
           headers: headers,
+          file: file,
+          download: fetchBytes,
           mine: mine,
+          width: maxWidth,
         );
       }
       return _fallbackMediaCard(
@@ -73,19 +76,129 @@ class AttachmentBubble extends StatelessWidget {
     }
     if (file.isPlayableAudio) {
       if (_audioSupported) {
-        return AudioBubble(
+        final player = AudioBubble(
           url: _url,
           headers: headers,
           mime: file.mime,
           durationLabel: file.humanSize,
           mine: mine,
+          voice: _voiceNote,
+          seed: file.id.isEmpty ? _url : file.id,
+          width: (maxWidth - 60).clamp(120.0, 260.0),
         );
+        // A voice note is just its player; a track also names itself.
+        if (_voiceNote) return player;
+        return _audioCard(context, player);
       }
       return _fallbackMediaCard(
           context, Icons.graphic_eq_rounded, 'Audio · ${file.humanSize}');
     }
+    if (_isLink) return _link(context, scheme);
     // Documents and everything else.
     return _document(context, scheme);
+  }
+
+  /// A recording (voice_….webm, an ogg/opus note) rather than a track.
+  bool get _voiceNote =>
+      file.name.toLowerCase().contains('voice') ||
+      const ['ogg', 'opus', 'amr', 'webm'].contains(file.extension);
+
+  /// A saved web page or shortcut (.html, .url, .webloc).
+  bool get _isLink =>
+      file.mime.contains('html') ||
+      file.mime.contains('url') ||
+      const ['url', 'webloc', 'htm', 'html'].contains(file.extension);
+
+  /// An audio track: its name over the player, on a card.
+  Widget _audioCard(BuildContext context, Widget player) {
+    final scheme = Theme.of(context).colorScheme;
+    final fg = mine ? scheme.onPrimaryContainer : scheme.onSurface;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: mine
+            ? scheme.onPrimaryContainer.withValues(alpha: .08)
+            : scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.music_note_rounded, size: 14, color: fg),
+            const SizedBox(width: 5),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth - 40),
+              child: Text(file.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w700, color: fg)),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          player,
+        ],
+      ),
+    );
+  }
+
+  /// A link: a page's globe, its name and where it opens.
+  Widget _link(BuildContext context, ColorScheme scheme) {
+    return Material(
+      color: scheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _downloadAndOpen(context),
+        child: SizedBox(
+          width: maxWidth.isFinite ? maxWidth : null,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                height: 64,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [
+                    scheme.primary.withValues(alpha: .35),
+                    scheme.tertiary.withValues(alpha: .25),
+                  ]),
+                ),
+                child: Icon(Icons.public_rounded,
+                    size: 30, color: scheme.onPrimaryContainer),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(file.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 12)),
+                        const SizedBox(height: 2),
+                        Text('Link · ${file.humanSize}',
+                            style: TextStyle(
+                                fontSize: 10, color: scheme.onSurfaceVariant)),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.open_in_new_rounded,
+                      size: 18, color: scheme.onSurfaceVariant),
+                ]),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _image(BuildContext context) {
@@ -97,7 +210,8 @@ class AttachmentBubble extends StatelessWidget {
           width: maxWidth,
           child: AspectRatio(
             aspectRatio: 4 / 3,
-            child: file.bytes != null
+            child: Stack(fit: StackFit.expand, children: [
+              file.bytes != null
                 ? Image.memory(file.bytes!, fit: BoxFit.cover)
                 : Image.network(
                     _url,
@@ -112,6 +226,25 @@ class AttachmentBubble extends StatelessWidget {
                     loadingBuilder: (_, child, progress) =>
                         progress == null ? child : const SizedBox(),
                   ),
+              if (file.isGif)
+                Positioned(
+                  left: 8,
+                  top: 8,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text('GIF',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800)),
+                  ),
+                ),
+            ]),
           ),
         ),
       ),

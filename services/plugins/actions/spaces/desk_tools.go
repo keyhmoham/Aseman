@@ -41,7 +41,11 @@ func windowJSON(d Desktop, id string) map[string]any {
 				out["page"], out["tool"] = w.Page(), w.Name
 			}
 			if w.Kind == DeskFile {
-				out["path"] = w.FilePath()
+				if id := w.FileID(); id != "" {
+					out["file_id"] = id
+				} else {
+					out["path"] = w.FilePath()
+				}
 			}
 			return out
 		}

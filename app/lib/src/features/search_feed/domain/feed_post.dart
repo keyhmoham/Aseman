@@ -57,4 +57,27 @@ class FeedPost {
 
   /// The author's picture (a stored file's id), "" when they have none.
   final String avatar;
+
+  /// The same post, liked or not, with [likes].
+  FeedPost copyWith({bool? liked, String? likes}) => FeedPost(
+        initials: initials,
+        name: name,
+        handle: handle,
+        time: time,
+        body: body,
+        tag: tag,
+        likes: likes ?? this.likes,
+        comments: comments,
+        color: color,
+        coin: coin,
+        verified: verified,
+        chart: chart,
+        pinned: pinned,
+        liked: liked ?? this.liked,
+        serverId: serverId,
+        workspace: workspace,
+        media: media,
+        source: source,
+        avatar: avatar,
+      );
 }

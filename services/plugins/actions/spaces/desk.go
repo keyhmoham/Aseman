@@ -73,8 +73,9 @@ const (
 
 // File windows: a file of the space's shared workspace, shown by the
 // client's own viewer (code, documents, media). Its Args hold {"path": the
-// file's path under /workspace}; every file window shares the dock entry
-// DeskFileTool.
+// file's path under /workspace}, or, for a file shared in a chat or a post
+// (a video played in a window), {"file_id": the stored file's id}; every
+// file window shares the dock entry DeskFileTool.
 const (
 	DeskFile         = "file"
 	DeskFileFrontend = "file"
@@ -97,6 +98,29 @@ func (w *DeskWindow) FilePath() string {
 	}
 	p, _ := w.Args["path"].(string)
 	return p
+}
+
+// FileID is the stored file a file window shows ("" for any other, or one
+// of the workspace).
+func (w *DeskWindow) FileID() string {
+	if w.Kind != DeskFile {
+		return ""
+	}
+	id, _ := w.Args["file_id"].(string)
+	return id
+}
+
+// isFileID reports whether id is a stored file's id: 32 hex digits.
+func isFileID(id string) bool {
+	if len(id) != 32 {
+		return false
+	}
+	for _, c := range id {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", c) {
+			return false
+		}
+	}
+	return true
 }
 
 // checkFilePath accepts a file inside the workspace, as /workspace/… or
@@ -397,6 +421,15 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 				op.Tool, op.Name = DeskWebTool, "Web pages"
 			}
 			op.Frontend, op.Microtool, op.Args = DeskWebFrontend, "", map[string]any{"page": page}
+		} else if op.Kind == DeskFile && op.Args["file_id"] != nil {
+			id, _ := op.Args["file_id"].(string)
+			if !isFileID(id) {
+				return "", errs.InvalidArgument("a file window shows a stored file: its 32-digit id")
+			}
+			if op.Title == "" {
+				op.Title = "File"
+			}
+			op.Tool, op.Name, op.Frontend, op.Microtool, op.Args = DeskFileTool, "Files", DeskFileFrontend, "", map[string]any{"file_id": strings.ToLower(id)}
 		} else if op.Kind == DeskFile {
 			raw, _ := op.Args["path"].(string)
 			target, err := checkFilePath(raw)
@@ -672,6 +705,9 @@ func (d *Desktop) Summary() string {
 			}
 			if w.Kind == DeskFile {
 				what = "file " + w.FilePath()
+				if id := w.FileID(); id != "" {
+					what = "shared file " + id
+				}
 			}
 			if w.Kind == DeskComputer {
 				what = "the project's computer: its desktop, live"

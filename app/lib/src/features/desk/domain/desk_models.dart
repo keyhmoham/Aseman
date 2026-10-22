@@ -179,6 +179,10 @@ class DeskWindow {
   /// The workspace path a file window shows.
   String get filePath => isFile ? '${args['path'] ?? ''}' : '';
 
+  /// The stored file a file window shows (one shared in a chat or a post),
+  /// or '' for a workspace file.
+  String get fileId => isFile ? '${args['file_id'] ?? ''}' : '';
+
   /// The project's computer rather than a tool's own frontend.
   bool get isComputer => kind == computerKind;
   final String name;
@@ -304,6 +308,7 @@ class DeskPin {
   /// A workspace file.
   bool get isFile => kind == fileKind;
   String get filePath => isFile ? '${args['path'] ?? ''}' : '';
+  String get fileId => isFile ? '${args['file_id'] ?? ''}' : '';
 
   /// The project's computer.
   bool get isComputer => kind == computerKind;

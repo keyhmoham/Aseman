@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:aseman/src/data/models/post.dart';
 import 'package:aseman/src/data/models/uploaded_file.dart';
+import 'package:aseman/src/features/files/presentation/media_players.dart'
+    show PlayBadge;
 import 'package:aseman/src/features/search_feed/presentation/post_media_grid.dart';
 
 void main() {
@@ -42,7 +44,7 @@ void main() {
       headers: const {},
       download: (_) async => throw UnimplementedError(),
     )))));
-    expect(find.byIcon(Icons.play_circle_fill_rounded), findsNWidgets(4));
+    expect(find.byType(PlayBadge), findsNWidgets(4));
     expect(find.text('+2'), findsOneWidget);
   });
 }

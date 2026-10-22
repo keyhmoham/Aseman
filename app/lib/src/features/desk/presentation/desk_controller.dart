@@ -177,6 +177,16 @@ class DeskController extends ChangeNotifier {
           title: title.isEmpty ? path.split('/').last : title,
           size: size ?? const Size(680, 620));
 
+  /// Opens a file shared in a chat or a post (a video to play) as a card
+  /// window, shown with the app's media viewer.
+  Future<String?> openSharedFile(String fileId,
+          {String title = '', Size? size}) =>
+      open(fileTool,
+          kind: fileKind,
+          args: {'file_id': fileId},
+          title: title.isEmpty ? 'File' : title,
+          size: size ?? const Size(720, 480));
+
   /// Opens the project's computer, its desktop live, as a card window (the
   /// one already open is brought to the front).
   Future<String?> openComputer({Size? size}) => open(computerTool,

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -112,6 +113,13 @@ class _McpAppWebViewState extends State<_McpAppWebView> {
         ),
       );
     }
-    return WebViewWidget(controller: controller);
+    // Vertical drags scroll the app's page, not the chat around it.
+    return WebViewWidget(
+      controller: controller,
+      gestureRecognizers: {
+        const Factory<VerticalDragGestureRecognizer>(
+            VerticalDragGestureRecognizer.new),
+      },
+    );
   }
 }

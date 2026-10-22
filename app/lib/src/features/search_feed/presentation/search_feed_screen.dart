@@ -1001,15 +1001,18 @@ class _SpacesList extends StatelessWidget {
           icon: Icons.workspaces_outline,
           text: 'You are not a member of any space yet.');
     }
-    return ListView.builder(
+    final list = ListView.builder(
         shrinkWrap: shrinkWrap,
         physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+        padding: shrinkWrap
+            ? const EdgeInsets.fromLTRB(8, 8, 8, 4)
+            : const EdgeInsets.fromLTRB(8, 0, 8, 12),
         itemCount: spaces.length,
         itemBuilder: (context, i) => _SpaceTile(
             space: spaces[i],
             selected: spaces[i].name == current,
             onTap: () => onOpen(spaces[i])));
+    return shrinkWrap ? _ListCard(child: list) : list;
   }
 }
 
@@ -1092,6 +1095,20 @@ class _SpaceTile extends StatelessWidget {
   }
 }
 
+/// The phone feed's spaces or chats, together on one card like its posts.
+class _ListCard extends StatelessWidget {
+  const _ListCard({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppShape.card - 2)),
+      clipBehavior: Clip.antiAlias,
+      child: child);
+}
+
 /// The user's direct chats; tapping one opens the chat.
 class _ChatsList extends StatelessWidget {
   const _ChatsList({
@@ -1121,13 +1138,16 @@ class _ChatsList extends StatelessWidget {
       return const _PanelNote(
           icon: Icons.forum_outlined, text: 'No direct chats yet.');
     }
-    return ListView.builder(
+    final list = ListView.builder(
         shrinkWrap: shrinkWrap,
         physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+        padding: shrinkWrap
+            ? const EdgeInsets.fromLTRB(8, 8, 8, 4)
+            : const EdgeInsets.fromLTRB(8, 0, 8, 12),
         itemCount: chats.length,
         itemBuilder: (context, i) => _DirectChatTile(
             chat: chats[i], me: me, onTap: () => onOpen(chats[i])));
+    return shrinkWrap ? _ListCard(child: list) : list;
   }
 }
 

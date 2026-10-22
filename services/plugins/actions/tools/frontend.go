@@ -52,6 +52,8 @@ type Template struct {
 	Data []Binding `json:"data,omitempty"`
 	// Actions are what the surface's buttons run, by event name.
 	Actions map[string]Action `json:"actions,omitempty"`
+	// Review is what its review found before it was first served.
+	Review *Review `json:"review,omitempty"`
 }
 
 // Binding fills one place of the data model with a microtool's result.
@@ -413,7 +415,7 @@ func (s *Service) frontendGet(ctx context.Context, req *api.ActionRequest) (*api
 		}
 		data := s.fill(ctx, c, tool.BotID, t, in.Shown)
 		return helper.JSON(map[string]any{"bot_id": tool.BotID, "mode": models.FrontendGenerative, "request": true,
-			"title": t.Title, "messages": t.Messages("tool-"+tool.BotID, data), "actions": actionNames(t)})
+			"title": t.Title, "messages": t.Messages("tool-"+tool.BotID, data), "actions": actionNames(t), "review": t.Review})
 	}
 	var spec models.FrontendSpec
 	_ = json.Unmarshal([]byte(tool.Frontend), &spec)
@@ -450,6 +452,7 @@ func (s *Service) frontendGet(ctx context.Context, req *api.ActionRequest) (*api
 			out["cached"], out["title"], out["template"] = false, t.Title, template
 			out["messages"] = t.Messages("tool-"+tool.BotID, data)
 			out["actions"] = actionNames(t)
+			out["review"] = t.Review
 			return helper.JSON(out)
 		}
 		if in.Regenerate && tool.Owner != req.Caller.ID.String() {
@@ -467,6 +470,7 @@ func (s *Service) frontendGet(ctx context.Context, req *api.ActionRequest) (*api
 		out["component_id"], out["cached"], out["title"] = component.ID, cached, t.Title
 		out["messages"] = t.Messages("tool-"+tool.BotID, data)
 		out["actions"] = actionNames(&t)
+		out["review"] = t.Review
 	}
 	// No frontend: the mode says so (people get one designed for their
 	// request on the desk).
@@ -651,7 +655,7 @@ func (s *Service) component(ctx context.Context, c caller, tool *models.Tool, sp
 	if err != nil {
 		return nil, false, err
 	}
-	t, model, err := s.generate(ctx, c, tool, skill, commands)
+	t, model, err := s.generate(ctx, c, tool, skill, commands, Shown{})
 	if err != nil {
 		return nil, false, err
 	}
@@ -680,11 +684,15 @@ Reply with ONE JSON object, no prose, of this shape:
 }
 ` + a2ui.CatalogPrompt + `
 Rules: every value shown from the tool comes from the data model, filled by "data" bindings that call the tool's microtools (only those listed, with arguments matching their schemas); buttons (and tappable views' "action") send events that "actions" map to microtools. In action args, {"$context": "key"} takes the event context's value and {"$data": "/pointer"} the data model's. Bind inputs under /form. Repeat rows (days, hours, results) with a List, a Table or a Chart over an array, never numbered paths. Pick the view that fits the data: a Chart for values over time or categories, a Table for records with several fields, Stat tiles for the few numbers that matter most. No invented data.
-Fully functional: every event a component sends has an entry in "actions", keyed by exactly the event's name, and every entry is sent by some component. A component's action is only {"event": {"name", "context"}}: the microtool, its args, result and reload go in the "actions" entry, never on the component. An action runs ONE microtool; to also refresh what is shown, put its result where the view reads it ("result") and/or set "reload": true (re-runs every "data" binding). Inputs a microtool needs reach it through {"$data": "/form/…"} or the event context; required arguments are never left unbound. Every microtool the skill asks for is reachable from the view (a binding or an action); a binding's path is exactly where the components read it, and field names match the microtool's result. A tappable view's selection ("selection": {"path": "/selected"}) with a detail block bound to /selected/… and its buttons (context {"path": "/selected/id"}) is how per-row actions are done: a Table has no buttons inside its rows. Follow the deployer's skill for what to show and do; the layout and quality rules above still hold where the skill is silent or asks for something that would break on a phone.`
+Fully functional: every event a component sends has an entry in "actions", keyed by exactly the event's name, and every entry is sent by some component. A component's action is only {"event": {"name", "context"}}: the microtool, its args, result and reload go in the "actions" entry, never on the component. An action runs ONE microtool; to also refresh what is shown, put its result where the view reads it ("result") and/or set "reload": true (re-runs every "data" binding). Inputs a microtool needs reach it through {"$data": "/form/…"} or the event context; required arguments are never left unbound. Every microtool the skill asks for is reachable from the view (a binding or an action); a binding's path is exactly where the components read it, and field names match the microtool's result. A tappable view's selection ("selection": {"path": "/selected"}) with a detail block bound to /selected/… and its buttons (context {"path": "/selected/id"}) is how per-row actions are done: a Table has no buttons inside its rows. Follow the deployer's skill for what to show and do; the layout and quality rules above still hold where the skill is silent or asks for something that would break on a phone.
+Before anyone sees it, the frontend is rendered, filled by really running its bindings, its actions are tested and its look is reviewed; what fails comes back to you to fix. Read only fields the microtools' results really have.`
 
-// generate asks the node's default model for a frontend, and bills the
-// tokens to the caller.
-func (s *Service) generate(ctx context.Context, c caller, tool *models.Tool, skill string, commands []map[string]any) (*Template, string, error) {
+// generate asks the node's default model for a frontend, reviews it (filled
+// as [shown] when it shows one result) and has the model repair what the
+// review finds, round after round, until nothing blocking is left; the
+// tokens are billed to the caller. A frontend that still does not work is
+// not returned.
+func (s *Service) generate(ctx context.Context, c caller, tool *models.Tool, skill string, commands []map[string]any, shown Shown) (*Template, string, error) {
 	var provider vmm.ProviderConfig
 	if err := bridge.Invoke(ctx, s.K, "llm", "ResolveChat", []any{ctx, "", ""}, &provider); err != nil {
 		return nil, "", errs.New(errs.CodeUnavailable, "no model is configured to generate frontends: "+err.Error())
@@ -709,37 +717,63 @@ func (s *Service) generate(ctx context.Context, c caller, tool *models.Tool, ski
 		list.WriteString("- " + name + ": " + strings.TrimSpace(asString(cmd["description"])) + "\n  arguments: " + string(schema) + "\n")
 	}
 	user := "Tool: " + rec.Name + "\n\nWhat the deployer wants (skill):\n" + skill + "\n\nMicrotools:\n" + list.String()
-	var t Template
 	var tokensIn, tokensOut int64
+	look := func(messages []map[string]any) (string, error) {
+		content, in, out, err := s.complete(ctx, provider, messages)
+		tokensIn, tokensOut = tokensIn+in, tokensOut+out
+		return content, err
+	}
+	rv := s.reviewerFor(ctx, c, tool.BotID, rec.Name, skill, commands, shown, look)
+	var best *Template
 	var lastErr error
 	messages := []map[string]any{{"role": "system", "content": generationPrompt}, {"role": "user", "content": user}}
-	for attempt := 0; attempt < 3; attempt++ {
+	for round := 1; round <= reviewRounds; round++ {
 		content, in, out, err := s.complete(ctx, provider, messages)
 		tokensIn, tokensOut = tokensIn+in, tokensOut+out
 		if err != nil {
 			lastErr = err
 			break
 		}
-		t, lastErr = parseTemplate(content)
-		if lastErr == nil {
-			lastErr = t.validate(microtools)
+		t, err := parseTemplate(content)
+		if err == nil {
+			err = t.validate(microtools)
 		}
-		if lastErr == nil {
-			lastErr = t.checkEvents()
+		if err == nil {
+			err = t.checkEvents()
 		}
-		if lastErr == nil {
-			break
+		var feedback string
+		if err != nil {
+			// Not even a template the device can render: the model is told
+			// what was wrong.
+			lastErr = err
+			feedback = "That is not valid: " + err.Error() +
+				". Reply with the corrected JSON object only: {\"title\", \"components\": [flat list, each {\"id\", \"component\", ...props}, children as ids, one with id \"root\"], \"data\", \"actions\"}."
+		} else {
+			// A template: rendered, tested and looked at before anyone sees
+			// it (see review.go); the best one so far is kept.
+			review := rv.review(&t)
+			review.Rounds = round
+			if best == nil || best.Review.worse(review) {
+				t.Review = review
+				best = &t
+			}
+			if review.Passed {
+				break
+			}
+			feedback = review.feedback()
 		}
-		// Repair rounds: the model is told what was wrong.
 		messages = append(messages, map[string]any{"role": "assistant", "content": content},
-			map[string]any{"role": "user", "content": "That is not valid: " + lastErr.Error() +
-				". Reply with the corrected JSON object only: {\"title\", \"components\": [flat list, each {\"id\", \"component\", ...props}, children as ids, one with id \"root\"], \"data\", \"actions\"}."})
+			map[string]any{"role": "user", "content": feedback})
 	}
 	s.billGeneration(ctx, c, rec.ID, tokensIn, tokensOut)
-	if lastErr != nil {
+	if best == nil {
 		return nil, "", errs.New(errs.CodeUnavailable, "could not generate the frontend: "+lastErr.Error())
 	}
-	return &t, provider.Model, nil
+	if best.Review.broken > 0 {
+		// It does not work: nobody is shown it.
+		return nil, "", errs.New(errs.CodeUnavailable, "could not generate a working frontend: "+best.Review.summary(5))
+	}
+	return best, provider.Model, nil
 }
 
 // parseTemplate reads a template from a model's reply, repairing the shapes

@@ -837,7 +837,8 @@ func equalFoldName(a, b string) bool { return strings.EqualFold(a, b) }
 // window (never cached for the tool). It runs after the window is on the
 // desk, which shows it designing meanwhile; [payer] is billed for the model.
 func (s *Service) designWindow(ctx context.Context, spaceID, roomID identity.ID, w DeskWindow, payer string) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
+	// Designing takes rounds of generating, testing and repairing.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Minute)
 	defer cancel()
 	room := ""
 	if !roomID.IsZero() {

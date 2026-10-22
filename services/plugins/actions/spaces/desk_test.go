@@ -292,3 +292,30 @@ func TestThePhoneBoardKeepsItsArrangement(t *testing.T) {
 		}
 	}
 }
+
+// A composed widget is checked before it opens: one that does not work
+// comes back to the agent with what to fix, and nothing opens.
+func TestComposedWidgetsAreCheckedBeforeOpening(t *testing.T) {
+	s, ctx := messageToolHarness(t)
+	sp, err := s.CreateSpace(ctx, idFromHex(t, "00000000000000010000000000000001"), "compose space", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	room := identity.ID{Node: 1, Entity: 9}
+	_, err = s.composeUI(ctx, sp.ID, room, "aseman", `{"title":"Broken","components":[
+		{"id":"root","component":"Column","children":["total","buy"]},
+		{"id":"total","component":"Stat","label":"Total","value":{"path":"/summary/total"}},
+		{"id":"buy","component":"Button","child":"buy_t","action":{"event":{"name":"buy"}}},
+		{"id":"buy_t","component":"Text","text":"Buy"}]}`)
+	if err == nil {
+		t.Fatal("a broken widget opened")
+	}
+	for _, want := range []string{"nothing was opened", "/summary/total, which nothing fills", "sends the event buy"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("report lacks %q: %v", want, err)
+		}
+	}
+	if d, _ := s.Desk(ctx, sp.ID, room); len(d.Windows) != 0 {
+		t.Fatalf("windows: %+v", d.Windows)
+	}
+}

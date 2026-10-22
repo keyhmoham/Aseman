@@ -105,6 +105,6 @@ func (s *Service) designFor(ctx context.Context, c caller, tool *models.Tool, re
 			request = "Show the result of " + microtool + " for " + string(raw) + "."
 		}
 	}
-	t, _, err := s.generate(ctx, c, tool, requestSkill(request, microtool, args, sample, skill), commands)
+	t, _, err := s.generate(ctx, c, tool, requestSkill(request, microtool, args, sample, skill), commands, Shown{Microtool: microtool, Args: args})
 	return t, err
 }

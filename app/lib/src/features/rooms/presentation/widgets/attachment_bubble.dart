@@ -7,6 +7,7 @@ import '../../../../data/models/uploaded_file.dart';
 import 'audio_bubble.dart';
 import 'download_helper.dart';
 import 'media_preview_screen.dart';
+import 'shared_file_viewer.dart';
 import 'video_bubble.dart';
 
 /// Renders a single attached file inside a chat bubble, adapting to its type:
@@ -263,14 +264,20 @@ class AttachmentBubble extends StatelessWidget {
       ]),
     ]);
     return GestureDetector(
-      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => MediaPreviewScreen(
-          file: file,
-          headers: headers,
-          bytes: file.bytes,
-          url: _url,
-        ),
-      )),
+      // A stored photo opens like the workspace's own: a card window on the
+      // desk on wide screens, else a bottom sheet. One only in memory (not
+      // sent yet) opens full screen.
+      onTap: () => file.id.isEmpty && file.bytes != null
+          ? Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => MediaPreviewScreen(
+                file: file,
+                headers: headers,
+                bytes: file.bytes,
+                url: _url,
+              ),
+            ))
+          : openSharedFile(context,
+              file: file, url: _url, headers: headers, download: fetchBytes),
       child: child,
     );
   }

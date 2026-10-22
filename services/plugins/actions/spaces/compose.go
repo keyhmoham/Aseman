@@ -43,6 +43,7 @@ const maxComposedComponents = 200
 // their own data for whoever opens them.
 func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, agentName, argsJSON string) (string, error) {
 	var in composeInput
+	var review []a2ui.Issue
 	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
 		return "", errs.InvalidArgument("ui_compose arguments must be a JSON object")
 	}
@@ -86,6 +87,7 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 	}
 	data := map[string]any{}
 	var failed []string
+	var sources []a2ui.Source
 	for _, b := range in.Data {
 		if !strings.HasPrefix(b.Path, "/") || b.Microtool == "" {
 			return "", errs.InvalidArgument("each data binding needs a path (/...) and a microtool")
@@ -104,11 +106,22 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 		if err == nil {
 			value, err = vmm.ToolResultValue(reply)
 		}
+		src := a2ui.Source{Path: b.Path, From: b.Microtool, Live: true}
 		if err != nil {
 			failed = append(failed, b.Path+": "+err.Error())
 			value = map[string]any{"error": err.Error()}
+			src.Err = err.Error()
 		}
+		sources = append(sources, src)
 		setDataPointer(data, b.Path, value)
+	}
+	// The widget is reviewed as it was filled before anyone is shown it: what
+	// is broken comes back to the agent to fix, and only a widget that works
+	// opens.
+	if issues := reviewComposed(in.Components, data, sources, failed); blocking(issues) > 0 {
+		return "", errs.InvalidArgument(composeReport(issues))
+	} else if len(issues) > 0 {
+		review = issues
 	}
 	surface := "ui-" + strings.ReplaceAll(strings.ToLower(agentName), " ", "-")
 	body, _ := json.Marshal(map[string]any{
@@ -137,8 +150,8 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 		return "", err
 	}
 	out := map[string]any{"ok": true, "window": windowJSON(d, ids[0]), "data_paths": len(in.Data), "desk": d.Summary()}
-	if len(failed) > 0 {
-		out["failed"] = failed
+	if len(review) > 0 {
+		out["review"] = review
 	}
 	raw, _ := json.Marshal(out)
 	return string(raw), nil
@@ -160,4 +173,44 @@ func setDataPointer(model map[string]any, path string, value any) {
 		}
 		node = next
 	}
+}
+
+// reviewComposed inspects a composed widget filled with [data]: its tree,
+// what every component shows against what the bindings really returned, and
+// its controls (a composed widget sends no events: interaction is
+// client-side or an embedded ToolFrontend's).
+func reviewComposed(components []map[string]any, data map[string]any, sources []a2ui.Source, failed []string) []a2ui.Issue {
+	surface := a2ui.Inspect(components)
+	issues := append([]a2ui.Issue{}, surface.Issues...)
+	for _, f := range failed {
+		issues = append(issues, a2ui.Issue{Severity: a2ui.Blocking, Area: "data", Where: "data " + strings.SplitN(f, ": ", 2)[0],
+			Problem: "the microtool failed when the widget was filled: " + f, Fix: "call it with arguments its schema accepts, or leave it out"})
+	}
+	for _, e := range surface.Events {
+		issues = append(issues, a2ui.Issue{Severity: a2ui.Blocking, Area: "interaction", Where: e.Component,
+			Problem: "sends the event " + e.Name + ", but a composed widget sends no events, so it does nothing",
+			Fix:     "use a client-side functionCall (setValue, toggle…), a selection, or embed the tool's frontend (ToolFrontend)"})
+	}
+	return append(issues, surface.CheckData(data, sources)...)
+}
+
+func blocking(issues []a2ui.Issue) int {
+	n := 0
+	for _, i := range issues {
+		if i.Severity == a2ui.Blocking {
+			n++
+		}
+	}
+	return n
+}
+
+// composeReport is the review the agent gets back, to fix the widget and
+// compose it again.
+func composeReport(issues []a2ui.Issue) string {
+	var b strings.Builder
+	b.WriteString("the widget was filled and checked before opening, and it does not work yet; nothing was opened. Fix these and call ui_compose again:")
+	for _, i := range issues {
+		b.WriteString("\n- " + i.Severity + " " + i.String())
+	}
+	return b.String()
 }

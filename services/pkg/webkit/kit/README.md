@@ -238,6 +238,15 @@ the served folder has them: `mkdir -p _aseman/kit && cp /opt/aseman/webkit/* _as
 is no Aseman API locally: `Aseman.configure({ mock: … })` checks the
 layout; then verify the real calls in the preview.
 
-Before reporting: `proxy_get` with `probe: true`, open the page in the
-desktop browser (`aseman-desktop open http://localhost:8080`), take a
-screenshot, and click through every control.
+Before reporting it ready, test it, and repeat until nothing is left:
+
+1. `proxy_get` with `probe: true`: the page and the kit load.
+2. Open the page in the desktop browser (`aseman-desktop open http://localhost:8080`)
+   and take screenshots at ~360 px and ~1400 px wide; read the console for
+   errors.
+3. Click through every control: each call returns real data (no `/x__error`,
+   no empty or missing values), each button does what its label says and
+   the page shows the outcome; nothing is dead or decorative.
+4. Review it as its user would: clean and standard (section 6), every
+   number formatted and labelled, and right for the tool and what was asked.
+5. Fix everything found, then go back to 1.

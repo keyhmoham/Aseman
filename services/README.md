@@ -385,6 +385,25 @@ a window's own template. Opening a tool itself runs its static frontend or
 serves its generative one (from the component registry, generated the
 first time).
 
+**Every generated frontend is reviewed before anyone is told it is ready**
+(`tools/review.go`, `pkg/a2ui/inspect.go`). Each round, the template the
+model wrote is inspected (the component tree as a device renders it:
+references, placement, bound inputs, labelled and wired buttons, phone
+layout; bindings and actions against the microtools' schemas), tested
+(its data bindings are run for the person asking and every value a
+component shows is looked up in what really came back; actions are
+resolved against that data, and run when their microtool is
+`readOnlyHint`) and looked at (the filled surface, rendered as an outline,
+is reviewed by the model for fitness to the tool and its skill, cleanness
+and the design standard). Everything found goes back to the generator as
+one report for the next round, up to four rounds; the best candidate is
+kept, and one that still does not work is not served. The review travels
+with the template (`review` in `frontend_get`). Agents' `ui_compose`
+widgets get the same inspection and data test: a widget that does not work
+is refused with the report and nothing opens. Agents building web pages
+are told to test them the same way (screenshots at phone and desktop
+widths, every control clicked) before reporting them ready.
+
 Agents get every tool's microtools as tools (`spaces.tools_list`, through
 `spaces.ask`). Tools' interfaces never go into the chat: they open as card
 windows on the room's **desk** (`spaces/desk.go`, kept in the space's

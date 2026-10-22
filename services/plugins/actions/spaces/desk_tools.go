@@ -227,11 +227,17 @@ func (in webShowInput) page() string {
 }
 
 // showPage opens a web page (a preview of the space) as a card window on a
-// room's desk, as the frontend of [in.Tool] when it names one.
-func (s *Service) showPage(ctx context.Context, spaceID, roomID identity.ID, agentName string, in webShowInput) (Desktop, string, error) {
+// room's desk, as the frontend of [in.Tool] when it names one. The page is
+// reviewed first (page_review.go): one that does not work is not opened, and
+// the agent gets the report; the review of one that opens comes back too.
+func (s *Service) showPage(ctx context.Context, spaceID, roomID identity.ID, agentName string, in webShowInput) (Desktop, string, *pageReview, error) {
 	target, err := deskRoom(roomID, in.Room)
 	if err != nil {
-		return Desktop{}, "", err
+		return Desktop{}, "", nil, err
+	}
+	review := s.reviewPage(ctx, spaceID, in.page(), in.Tool)
+	if review != nil && review.broken > 0 {
+		return Desktop{}, "", review, errs.InvalidArgument(review.report(false))
 	}
 	w, h := in.W, in.H
 	if w == nil && h == nil {
@@ -242,13 +248,13 @@ func (s *Service) showPage(ctx context.Context, spaceID, roomID identity.ID, age
 	ops := []DeskOp{{Op: "open", Kind: DeskWeb, Tool: in.Tool, Title: in.Title, Args: map[string]any{"page": in.page()},
 		X: in.X, Y: in.Y, W: w, H: h, Compact: in.Compact}}
 	if err := s.resolveDeskOpens(ctx, spaceID, ops); err != nil {
-		return Desktop{}, "", err
+		return Desktop{}, "", review, err
 	}
 	d, ids, err := s.UpdateDesk(ctx, spaceID, target, agentName, ops)
 	if err != nil {
-		return Desktop{}, "", err
+		return Desktop{}, "", review, err
 	}
-	return d, ids[0], nil
+	return d, ids[0], review, nil
 }
 
 // webShowTool implements web_show: a web page served from the sandbox
@@ -259,10 +265,17 @@ func (s *Service) webShowTool(ctx context.Context, spaceID, roomID identity.ID, 
 	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
 		return "", errs.InvalidArgument("web_show arguments must be a JSON object")
 	}
-	d, id, err := s.showPage(ctx, spaceID, roomID, agentName, in)
+	d, id, review, err := s.showPage(ctx, spaceID, roomID, agentName, in)
 	if err != nil {
 		return "", err
 	}
-	out, _ := json.Marshal(map[string]any{"ok": true, "window": windowJSON(d, id), "desk": d.Summary()})
-	return string(out), nil
+	out := map[string]any{"ok": true, "window": windowJSON(d, id), "desk": d.Summary()}
+	if review != nil {
+		out["review"] = review
+		if !review.Passed || len(review.Issues) > 0 {
+			out["next"] = review.report(true)
+		}
+	}
+	raw, _ := json.Marshal(out)
+	return string(raw), nil
 }

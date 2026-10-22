@@ -238,7 +238,18 @@ the served folder has them: `mkdir -p _aseman/kit && cp /opt/aseman/webkit/* _as
 is no Aseman API locally: `Aseman.configure({ mock: … })` checks the
 layout; then verify the real calls in the preview.
 
-Before reporting it ready, test it, and repeat until nothing is left:
+Opening the page (`proxy_create`, `web_show`) reviews it first. The node
+fetches it and its own files, reads it the way the kit runs it (the kit
+loaded, components that exist, valid JSON props, controls wired, inputs
+bound, the viewport, theme variables, layout), checks every `call` against
+the space's tools, microtools and argument schemas, runs what it loads (and
+buttons whose microtool only reads) and looks every value shown up in what
+came back, then has the page reviewed for fitness to the tool, cleanness
+and the design standard. A page that does not work is not opened: you get
+the report, fix it, and `web_show` it again until the review passes.
+
+The node does not run the page's scripts in a browser, so before reporting
+it ready, test it yourself too, and repeat until nothing is left:
 
 1. `proxy_get` with `probe: true`: the page and the kit load.
 2. Open the page in the desktop browser (`aseman-desktop open http://localhost:8080`)

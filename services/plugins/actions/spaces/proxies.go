@@ -233,11 +233,16 @@ func (s *Service) proxyCreateTool(ctx context.Context, spaceID identity.ID, agen
 		} else {
 			show.Room = "home"
 		}
-		if d, id, err := s.showPage(ctx, spaceID, roomID, agentName, show); err != nil {
-			status += "\nThe page could not be opened on the desk: " + err.Error() + ". Fix it and open it with web_show."
+		if d, id, review, err := s.showPage(ctx, spaceID, roomID, agentName, show); err != nil {
+			status += "\nThe page could not be opened on the desk: " + err.Error() + "\nFix it and open it with web_show."
 		} else if w := windowJSON(d, id); w != nil {
 			raw, _ := json.Marshal(w)
 			status += "\nOpened on the room's desk as a card window: " + string(raw) + ". Arrange it with desk_arrange; open other pages of the service with web_show."
+			if review != nil && len(review.Issues) > 0 {
+				status += "\n" + review.report(true)
+			} else if review != nil {
+				status += "\nIts review passed: " + strings.Join(review.Tested, "; ") + "."
+			}
 		}
 	}
 	return p.GatewayPath() + status, nil

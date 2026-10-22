@@ -400,9 +400,23 @@ one report for the next round, up to four rounds; the best candidate is
 kept, and one that still does not work is not served. The review travels
 with the template (`review` in `frontend_get`). Agents' `ui_compose`
 widgets get the same inspection and data test: a widget that does not work
-is refused with the report and nothing opens. Agents building web pages
-are told to test them the same way (screenshots at phone and desktop
-widths, every control clicked) before reporting them ready.
+is refused with the report and nothing opens.
+
+Interactive web pages agents build get the same review before they open on
+the desk (`spaces/page_review.go`, `pkg/webkit/inspect.go`): `proxy_create`
+and `web_show` fetch the page and its own files through the preview's
+tunnel, inspect it as the kit runs it (the kit and viewport, components the
+kit has, valid JSON props, wired controls, bound inputs, theme variables,
+layout), check every `call` (declared or in a script) against the space's
+tools, their microtools and argument schemas, run what it loads when it
+opens (and buttons whose microtool is `readOnlyHint`) as the agent, look
+every value it shows up in what came back, and have the model review the
+page (`tools.ReviewPage`) for fitness, cleanness and the design standard. A
+page that does not work is not opened: the agent gets the report, fixes it
+and opens it again, which reviews it again; the review of a page that opens
+comes back with it. The node does not execute the page's scripts, so agents
+are also told to test pages in the sandbox's browser (screenshots at phone
+and desktop widths, every control clicked) before reporting them ready.
 
 Agents get every tool's microtools as tools (`spaces.tools_list`, through
 `spaces.ask`). Tools' interfaces never go into the chat: they open as card

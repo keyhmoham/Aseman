@@ -160,15 +160,7 @@ func (rv *reviewer) run(microtool string, args map[string]any) (any, error) {
 // arguments (nil when the microtool says nothing of them).
 func (rv *reviewer) schema(microtool string) (properties map[string]any, required []string) {
 	schema, _ := rv.commands[microtool]["schema"].(map[string]any)
-	properties, _ = schema["properties"].(map[string]any)
-	if list, ok := schema["required"].([]any); ok {
-		for _, r := range list {
-			if s, ok := r.(string); ok {
-				required = append(required, s)
-			}
-		}
-	}
-	return properties, required
+	return a2ui.SchemaArgs(schema)
 }
 
 // readOnly reports whether a microtool says it only reads, so the review may
@@ -182,35 +174,8 @@ func (rv *reviewer) readOnly(microtool string) bool {
 // checkArgs checks the arguments a binding or an action passes a microtool
 // against its schema.
 func (rv *reviewer) checkArgs(where, microtool string, args map[string]any) []a2ui.Issue {
-	var out []a2ui.Issue
-	properties, required := rv.schema(microtool)
-	if properties != nil {
-		var unknown []string
-		for k := range args {
-			if _, ok := properties[k]; !ok {
-				unknown = append(unknown, k)
-			}
-		}
-		if len(unknown) > 0 {
-			sort.Strings(unknown)
-			names := make([]string, 0, len(properties))
-			for k := range properties {
-				names = append(names, k)
-			}
-			sort.Strings(names)
-			out = append(out, a2ui.Issue{Severity: a2ui.Blocking, Area: "data", Where: where,
-				Problem: microtool + " takes no argument " + strings.Join(unknown, ", "),
-				Fix:     "use only its arguments: " + strings.Join(names, ", ")})
-		}
-	}
-	for _, r := range required {
-		if v, ok := args[r]; !ok || v == nil || v == "" {
-			out = append(out, a2ui.Issue{Severity: a2ui.Blocking, Area: "data", Where: where,
-				Problem: microtool + " requires \"" + r + "\", which is not passed",
-				Fix:     "pass it (a literal, {\"$data\": \"/form/…\"} or {\"$context\": \"…\"} in an action)"})
-		}
-	}
-	return out
+	schema, _ := rv.commands[microtool]["schema"].(map[string]any)
+	return a2ui.CheckArgs(where, microtool, schema, args, "a literal, {\"$data\": \"/form/…\"} or {\"$context\": \"…\"} in an action")
 }
 
 // review inspects, tests and looks at a template, filling it as the person
@@ -412,6 +377,11 @@ func (rv *reviewer) lookAt(t *Template, surface *a2ui.Surface, data map[string]a
 	if err != nil {
 		return nil, err
 	}
+	return lookedAt(content)
+}
+
+// lookedAt reads the issues a model's review reports.
+func lookedAt(content string) ([]a2ui.Issue, error) {
 	var out struct {
 		Issues []a2ui.Issue `json:"issues"`
 	}

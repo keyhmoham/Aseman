@@ -8,6 +8,7 @@ import '../../../../shared/widgets/overlay_panels.dart';
 import '../../../computer/computer_view.dart' show computerSheetBreakpoint;
 import '../../../desk/presentation/desk_controller.dart';
 import '../../../files/domain/file_types.dart';
+import '../../../files/presentation/file_viewer.dart';
 import '../../../files/presentation/media_players.dart';
 import 'audio_bubble.dart';
 import 'download_helper.dart';
@@ -17,9 +18,9 @@ String sharedFileIdOf(String url) =>
     RegExp(r'/v1/files/([0-9a-fA-F]{32})/content').firstMatch(url)?.group(1) ??
     '';
 
-/// Opens a shared file (a video, mostly) to play: as a card window on the
-/// desk when a desk is on screen beside it (wide screens), as the workspace's
-/// own files open; else in a bottom sheet.
+/// Opens a shared file (a video, a photo, a document) to play or read: as a
+/// card window on the desk when a desk is on screen beside it (wide
+/// screens), as the workspace's own files open; else in a bottom sheet.
 Future<void> openSharedFile(
   BuildContext context, {
   required UploadedFile file,
@@ -32,7 +33,11 @@ Future<void> openSharedFile(
   if (desk != null &&
       RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(id) &&
       MediaQuery.sizeOf(context).width >= computerSheetBreakpoint) {
-    await desk.openSharedFile(id, title: file.name);
+    await desk.openSharedFile(id,
+        title: file.name,
+        // A video is wide; a page of a document is tall, as workspace
+        // files open.
+        size: file.isVideo ? null : const Size(680, 620));
     return;
   }
   await showAppSheet<void>(
@@ -89,6 +94,29 @@ class SharedFileViewer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final get = download;
+    // Documents, books, PDFs, sheets, slides, code: the workspace's own
+    // viewer, reading the shared file's bytes.
+    if (!file.isVideo && !file.isImage && !file.isPlayableAudio && get != null) {
+      return Material(
+        color: Theme.of(context).colorScheme.surface,
+        child: WorkspaceFileViewer(
+          key: ValueKey('shared-${file.id}-$url'),
+          path: file.name.isEmpty ? 'file' : file.name,
+          read: () => get(file),
+          showHeader: showHeader,
+          onClose: onClose,
+          actions: [
+            IconButton(
+              tooltip: 'Download',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => _save(context),
+              icon: const Icon(Icons.download_rounded, size: 19),
+            ),
+          ],
+        ),
+      );
+    }
     final scheme = Theme.of(context).colorScheme;
     final type = FileType.of(file.name);
     final name = file.name.isEmpty

@@ -50,18 +50,28 @@ Future<void> showWorkspaceFileSheet(
 class WorkspaceFileViewer extends StatefulWidget {
   const WorkspaceFileViewer({
     super.key,
-    required this.service,
-    required this.spaceId,
+    this.service,
+    this.spaceId = '',
     required this.path,
     this.showHeader = true,
     this.onClose,
+    this.read,
+    this.actions = const [],
   });
 
-  final AsemanService service;
+  /// Where a workspace file is read from and saved to (unused with [read]).
+  final AsemanService? service;
   final String spaceId;
 
-  /// The file's path, `/workspace/…`.
+  /// The file's path, `/workspace/…`; with [read], its name.
   final String path;
+
+  /// Reads a file that is not the workspace's (one shared in a chat): it is
+  /// shown the same way, but not edited.
+  final Future<Uint8List> Function()? read;
+
+  /// More buttons for the header (Download, for a shared file).
+  final List<Widget> actions;
 
   /// A card window has its own title bar; the header then only carries the
   /// file's actions.
@@ -128,7 +138,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> {
     if (editor == null || !_dirty || _saving) return;
     setState(() => _saving = true);
     final bytes = Uint8List.fromList(utf8.encode(editor.text));
-    final files = WorkspaceFiles(widget.service, widget.spaceId);
+    final files = WorkspaceFiles(widget.service!, widget.spaceId);
     final saved = await runWorkspaceChange(
       context,
       ({required wake}) => files.write(widget.path, bytes, wake: wake),
@@ -164,10 +174,13 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> {
       _editor = null;
     });
     try {
-      final bytes = await WorkspaceFiles(
-        widget.service,
-        widget.spaceId,
-      ).read(widget.path);
+      final read = widget.read;
+      final bytes = read != null
+          ? await read()
+          : await WorkspaceFiles(
+              widget.service!,
+              widget.spaceId,
+            ).read(widget.path);
       if (mounted) setState(() => _bytes = bytes);
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -309,7 +322,8 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> {
                   ),
                 Text(
                   [
-                    widget.path,
+                    // A shared file's name is its title already.
+                    if (widget.read == null || !widget.showHeader) widget.path,
                     if (bytes != null) formatBytes(bytes.length),
                   ].join(' · '),
                   maxLines: 1,
@@ -350,6 +364,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> {
             ),
           ] else ...[
             if (bytes != null &&
+                widget.read == null &&
                 _textual.contains(kind) &&
                 kind != FileKind.svg)
               IconButton(
@@ -398,6 +413,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> {
               icon: const Icon(Icons.refresh_rounded, size: 19),
             ),
           ],
+          ...widget.actions,
           if (widget.onClose != null)
             IconButton(
               tooltip: 'Close',

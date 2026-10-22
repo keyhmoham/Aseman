@@ -152,7 +152,7 @@ class AttachmentBubble extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => _downloadAndOpen(context),
+        onTap: () => _open(context),
         child: SizedBox(
           width: maxWidth.isFinite ? maxWidth : null,
           child: Column(
@@ -312,7 +312,7 @@ class AttachmentBubble extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => _downloadAndOpen(context),
+        onTap: () => _open(context),
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -343,7 +343,7 @@ class AttachmentBubble extends StatelessWidget {
                       style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 12)),
                   const SizedBox(height: 2),
-                  Text('${file.humanSize} · tap to download',
+                  Text('${file.humanSize} · tap to open',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -351,13 +351,31 @@ class AttachmentBubble extends StatelessWidget {
                 ],
               ),
             )),
-            const SizedBox(width: 8),
-            Icon(Icons.download_rounded,
-                color: scheme.onSurfaceVariant, size: 20),
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: 'Download',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => _downloadAndOpen(context),
+              icon: Icon(Icons.download_rounded,
+                  color: scheme.onSurfaceVariant, size: 20),
+            ),
           ]),
         ),
       ),
     );
+  }
+
+  /// Opens a stored document or page the way the workspace's files open
+  /// (a desk card window on wide screens, else a bottom sheet), shown by
+  /// the same viewer: PDFs, books, documents, sheets, slides, code. One not
+  /// stored yet is downloaded instead.
+  void _open(BuildContext context) {
+    if (file.id.isEmpty) {
+      _downloadAndOpen(context);
+      return;
+    }
+    openSharedFile(context,
+        file: file, url: _url, headers: headers, download: fetchBytes);
   }
 
   Color _docColor(UploadedFile file) {

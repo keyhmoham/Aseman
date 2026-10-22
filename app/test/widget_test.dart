@@ -423,7 +423,7 @@ void main() {
     // The message body and the attached document preview render.
     expect(find.text('See attached'), findsOneWidget);
     expect(find.text('quarterly-report.pdf'), findsOneWidget);
-    expect(find.textContaining('tap to download'), findsOneWidget);
+    expect(find.textContaining('tap to open'), findsOneWidget);
 
     // The composer exposes an attach button (and the mention picker still
     // works alongside it).

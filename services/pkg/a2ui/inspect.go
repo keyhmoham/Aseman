@@ -317,7 +317,7 @@ func (s *Surface) read(id, kind string, c map[string]any, scope string) {
 	}
 	// Fields of the rows a data view shows.
 	if rows != "" {
-		for _, f := range fields(kind, c) {
+		for _, f := range Fields(kind, c) {
 			s.Reads = append(s.Reads, Read{id, join(rows, f)})
 		}
 	}
@@ -347,8 +347,9 @@ func (s *Surface) read(id, kind string, c map[string]any, scope string) {
 	}
 }
 
-// fields are the row fields a data view reads.
-func fields(kind string, c map[string]any) []string {
+// Fields are the row fields a data view of type [kind] (Table, Chart,
+// Treemap, AllocationBar) reads, given its props.
+func Fields(kind string, c map[string]any) []string {
 	var out []string
 	str := func(keys ...string) {
 		for _, k := range keys {
@@ -533,16 +534,6 @@ func under(path, prefix string) bool {
 // related reports whether one path is the other or below it.
 func related(a, b string) bool { return under(a, b) || under(b, a) }
 
-// unalias rewrites a path under a selection into the rows it selects.
-func (s *Surface) unalias(path string) string {
-	for sel, rows := range s.aliases {
-		if under(path, sel) {
-			return rows + strings.TrimPrefix(path, sel)
-		}
-	}
-	return path
-}
-
 // Lookup resolves a pointer in [data]; "*" takes an array's first item. It
 // reports why it cannot: ok is false with a reason when the data has no such
 // place, and true with a nil value when an array on the way is empty (the
@@ -610,10 +601,27 @@ func keysOf(m map[string]any) string {
 // every value shown must be filled by something, and where it was filled
 // for real, be there.
 func (s *Surface) CheckData(data map[string]any, sources []Source) []Issue {
+	return CheckReads(s.Reads, s.Writes, s.aliases, data, sources, Blocking)
+}
+
+// CheckReads is CheckData for any surface: [reads] are what it shows,
+// [writes] where its inputs, selections and client actions write, [aliases]
+// selection paths and the rows they select (a pointer of rows + "/*" by
+// selection path). A value nothing fills is reported as [unfilled] (Advice
+// where a page's own scripts may fill it).
+func CheckReads(reads []Read, writes []string, aliases map[string]string, data map[string]any, sources []Source, unfilled string) []Issue {
+	unalias := func(path string) string {
+		for sel, rows := range aliases {
+			if under(path, sel) {
+				return rows + strings.TrimPrefix(path, sel)
+			}
+		}
+		return path
+	}
 	var out []Issue
 	seen := map[string]bool{}
-	for _, r := range s.Reads {
-		path := s.unalias(r.Path)
+	for _, r := range reads {
+		path := unalias(r.Path)
 		key := r.Component + " " + path
 		if seen[key] {
 			continue
@@ -628,14 +636,14 @@ func (s *Surface) CheckData(data map[string]any, sources []Source) []Issue {
 		}
 		if src == nil {
 			written := false
-			for _, w := range s.Writes {
+			for _, w := range writes {
 				if related(path, w) {
 					written = true
 					break
 				}
 			}
 			if !written {
-				out = append(out, Issue{Severity: Blocking, Area: "data", Where: r.Component,
+				out = append(out, Issue{Severity: unfilled, Area: "data", Where: r.Component,
 					Problem: "shows " + r.Path + ", which nothing fills (no data binding, input, selection or action result writes there)",
 					Fix:     "bind a microtool's result there, or read the path a binding fills"})
 			}
@@ -655,8 +663,8 @@ func (s *Surface) CheckData(data map[string]any, sources []Source) []Issue {
 			continue
 		}
 		shown := false
-		for _, r := range s.Reads {
-			if related(s.unalias(r.Path), src.Path) {
+		for _, r := range reads {
+			if related(unalias(r.Path), src.Path) {
 				shown = true
 				break
 			}
@@ -810,4 +818,63 @@ func number(v any) (float64, bool) {
 		return f, err == nil
 	}
 	return 0, false
+}
+
+// JoinPath resolves a path written at [scope] (a List's item, a page
+// element's scope): absolute paths stand alone, relative ones are of the
+// scope.
+func JoinPath(scope, path string) string { return join(scope, path) }
+
+// --- arguments ------------------------------------------------------------------
+
+// SchemaArgs are the properties and required arguments of a microtool's
+// argument schema (nil when it says nothing of them).
+func SchemaArgs(schema map[string]any) (properties map[string]any, required []string) {
+	properties, _ = schema["properties"].(map[string]any)
+	switch list := schema["required"].(type) {
+	case []any:
+		for _, r := range list {
+			if s, ok := r.(string); ok {
+				required = append(required, s)
+			}
+		}
+	case []string:
+		required = list
+	}
+	return properties, required
+}
+
+// CheckArgs checks the arguments [where] passes [microtool] against its
+// [schema]: none it does not take, every one it requires. [howToPass] says
+// how a missing one is passed there.
+func CheckArgs(where, microtool string, schema map[string]any, args map[string]any, howToPass string) []Issue {
+	var out []Issue
+	properties, required := SchemaArgs(schema)
+	if properties != nil {
+		var unknown []string
+		for k := range args {
+			if _, ok := properties[k]; !ok {
+				unknown = append(unknown, k)
+			}
+		}
+		if len(unknown) > 0 {
+			sort.Strings(unknown)
+			names := make([]string, 0, len(properties))
+			for k := range properties {
+				names = append(names, k)
+			}
+			sort.Strings(names)
+			out = append(out, Issue{Severity: Blocking, Area: "data", Where: where,
+				Problem: microtool + " takes no argument " + strings.Join(unknown, ", "),
+				Fix:     "use only its arguments: " + strings.Join(names, ", ")})
+		}
+	}
+	for _, r := range required {
+		if v, ok := args[r]; !ok || v == nil || v == "" {
+			out = append(out, Issue{Severity: Blocking, Area: "data", Where: where,
+				Problem: microtool + " requires \"" + r + "\", which is not passed",
+				Fix:     "pass it (" + howToPass + ")"})
+		}
+	}
+	return out
 }

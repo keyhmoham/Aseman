@@ -53,7 +53,7 @@ enum FrontendMode {
   /// An Elpian app: a program on the Elpian VM or QuickJS.
   static('static', 'Static'),
 
-  /// A2UI generated from a skill on first use, then served from the
+  /// AG-UI Surface generated from a skill on first use, then served from the
   /// component registry and filled with fresh data.
   generative('generative', 'Generative');
 
@@ -367,7 +367,7 @@ class ToolFrontendPayload {
   /// A static Elpian frontend, compiled.
   final Uint8List? bytecode;
 
-  /// A generated frontend: the A2UI messages that create its surface, filled
+  /// A generated frontend: the AG-UI Surface messages that create its surface, filled
   /// with the caller's data.
   final List<Map<String, dynamic>> messages;
   final String title;

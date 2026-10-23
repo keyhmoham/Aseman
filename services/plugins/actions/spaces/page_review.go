@@ -9,12 +9,13 @@ import (
 	"net/url"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/aseman/aseman/internal/plugins/bridge"
 	"github.com/aseman/aseman/internal/plugins/identity"
-	"github.com/aseman/aseman/pkg/a2ui"
+	"github.com/aseman/aseman/pkg/surface"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/pkg/webkit"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
@@ -48,25 +49,27 @@ type pageReview struct {
 	Page   string       `json:"page"`
 	Passed bool         `json:"passed"`
 	Tested []string     `json:"tested,omitempty"`
-	Issues []a2ui.Issue `json:"issues,omitempty"`
+	Issues []surface.Issue `json:"issues,omitempty"`
 	// broken counts the blocking issues the inspection and the tests found
 	// (as opposed to the design review's judgement).
 	broken int
 }
 
 func (r *pageReview) add(severity, area, where, problem, fix string) {
-	r.Issues = append(r.Issues, a2ui.Issue{Severity: severity, Area: area, Where: where, Problem: problem, Fix: fix})
+	r.Issues = append(r.Issues, surface.Issue{Severity: severity, Area: area, Where: where, Problem: problem, Fix: fix})
 }
 
 // report is the review as the agent is told it.
 func (r *pageReview) report(opened bool) string {
 	var b strings.Builder
 	if opened {
-		b.WriteString("The page was opened, but its review found problems: fix them and open it again with web_show (it is reviewed again) before telling anyone it is ready.")
+		b.WriteString("The page was opened, but the deterministic gate still found blocking problems: fix those and open it again with web_show (max " +
+			strconv.Itoa(surface.MaxWebShowAttempts) + " attempts). Advice is optional polish.")
 	} else {
-		b.WriteString("The page was fetched, inspected and tested before opening, and it does not work yet; it was not opened. Fix these, then open it again with web_show (it is reviewed again):")
+		b.WriteString("The page was fetched, inspected and tested before opening, and it does not work yet; it was not opened. Fix Blocking items, then open it again with web_show (max " +
+			strconv.Itoa(surface.MaxWebShowAttempts) + " attempts):")
 	}
-	for _, severity := range []string{a2ui.Blocking, a2ui.Advice} {
+	for _, severity := range []string{surface.Blocking, surface.Advice} {
 		for _, i := range r.Issues {
 			if i.Severity == severity {
 				b.WriteString("\n- " + i.Severity + " " + i.String())
@@ -162,7 +165,7 @@ type pageReviewer struct {
 	call     func(t *pageTool, microtool string, args map[string]any) (any, error)
 	// look is the design review; nil skips it.
 	look func(page string, inspected *webkit.Page, source []byte, data map[string]any, looked *pageTool,
-		tools map[string]*pageTool, found []a2ui.Issue) ([]a2ui.Issue, error)
+		tools map[string]*pageTool, found []surface.Issue) ([]surface.Issue, error)
 }
 
 // reviewPage reviews the page at [page] (a preview gateway path) before it
@@ -183,10 +186,8 @@ func (s *Service) reviewPage(ctx context.Context, spaceID identity.ID, page, too
 		call: func(t *pageTool, microtool string, args map[string]any) (any, error) {
 			return s.callPageTool(ctx, spaceID, t, microtool, args)
 		},
-		look: func(page string, inspected *webkit.Page, source []byte, data map[string]any, looked *pageTool,
-			tools map[string]*pageTool, found []a2ui.Issue) ([]a2ui.Issue, error) {
-			return s.lookAtPage(ctx, spaceID, page, inspected, source, data, looked, tools, found)
-		},
+		// Deterministic inspect + live calls only — no LLM design judge (cost + non-convergence).
+		look: nil,
 	}
 	return pr.review(page, rest, toolName)
 }
@@ -203,7 +204,7 @@ func (pr *pageReviewer) review(page, rest, toolName string) *pageReview {
 		}
 		r.Passed = true
 		for k, i := range r.Issues {
-			if i.Severity == a2ui.Blocking {
+			if i.Severity == surface.Blocking {
 				r.Passed = false
 				if k < tested {
 					r.broken++
@@ -214,19 +215,19 @@ func (pr *pageReviewer) review(page, rest, toolName string) *pageReview {
 	status, contentType, body, complete, err := pr.fetch(rest, 2<<20)
 	switch {
 	case err != nil:
-		r.add(a2ui.Blocking, "structure", page, err.Error(), "start the service (proxy_create with start) and check it answers")
+		r.add(surface.Blocking, "structure", page, err.Error(), "start the service (proxy_create with start) and check it answers")
 		return r
 	case status >= 300 && status < 400:
 		r.Tested = append(r.Tested, fmt.Sprintf("the page answers a redirect (%d); not followed", status))
 		return r
 	case status >= 400:
-		r.add(a2ui.Blocking, "structure", page, fmt.Sprintf("the page answers %d", status), "serve the page at this path")
+		r.add(surface.Blocking, "structure", page, fmt.Sprintf("the page answers %d", status), "serve the page at this path")
 		return r
 	case contentType != "" && !strings.Contains(contentType, "html"):
-		r.add(a2ui.Blocking, "structure", page, "the page is served as "+contentType+", not HTML", "serve an HTML page (Content-Type: text/html)")
+		r.add(surface.Blocking, "structure", page, "the page is served as "+contentType+", not HTML", "serve an HTML page (Content-Type: text/html)")
 		return r
 	case !complete:
-		r.add(a2ui.Advice, "structure", page, "the page is larger than 2 MiB; only its start was inspected", "split it into files")
+		r.add(surface.Advice, "structure", page, "the page is larger than 2 MiB; only its start was inspected", "split it into files")
 	}
 	r.Tested = append(r.Tested, fmt.Sprintf("fetched %s (%d bytes)", page, len(body)))
 	inspected := webkit.InspectPage(body)
@@ -260,7 +261,7 @@ func (pr *pageReviewer) review(page, rest, toolName string) *pageReview {
 			if err == nil {
 				why = fmt.Sprintf("answers %d", status)
 			}
-			r.add(a2ui.Blocking, "structure", ref, "the page loads "+ref+", which "+why, "serve the file next to the page, or fix the path")
+			r.add(surface.Blocking, "structure", ref, "the page loads "+ref+", which "+why, "serve the file next to the page, or fix the path")
 		}
 	}
 	if len(seen) > 0 {
@@ -292,14 +293,14 @@ func (pr *pageReviewer) review(page, rest, toolName string) *pageReview {
 	}
 	sort.Strings(toolNames)
 	data := map[string]any{}
-	var sources []a2ui.Source
+	var sources []surface.Source
 	ran := map[string]bool{}
 	var looked *pageTool
 	for _, c := range inspected.Calls {
 		name := c.Tool + "/" + c.Microtool
 		t := resolve(c.Tool)
 		if t == nil {
-			r.add(a2ui.Blocking, "interaction", c.Element, "calls "+name+", but "+c.Tool+" is no tool of this space (its tools: "+strings.Join(toolNames, ", ")+")",
+			r.add(surface.Blocking, "interaction", c.Element, "calls "+name+", but "+c.Tool+" is no tool of this space (its tools: "+strings.Join(toolNames, ", ")+")",
 				"call one of the space's tools by its name")
 			continue
 		}
@@ -313,7 +314,7 @@ func (pr *pageReviewer) review(page, rest, toolName string) *pageReview {
 				names = append(names, n)
 			}
 			sort.Strings(names)
-			r.add(a2ui.Blocking, "interaction", c.Element, "calls "+name+", but "+t.tool.Name+" has no microtool "+c.Microtool+" (it has: "+strings.Join(names, ", ")+")",
+			r.add(surface.Blocking, "interaction", c.Element, "calls "+name+", but "+t.tool.Name+" has no microtool "+c.Microtool+" (it has: "+strings.Join(names, ", ")+")",
 				"call one of its microtools")
 			continue
 		}
@@ -326,7 +327,7 @@ func (pr *pageReviewer) review(page, rest, toolName string) *pageReview {
 			for _, f := range c.Fields {
 				given[f] = "(entered)"
 			}
-			r.Issues = append(r.Issues, a2ui.CheckArgs(c.Element, name, schema, given,
+			r.Issues = append(r.Issues, surface.CheckArgs(c.Element, name, schema, given,
 				`in args='{…}', as a binding {"path": "/form/…"}, or as a named field of the form`)...)
 		}
 
@@ -343,7 +344,7 @@ func (pr *pageReviewer) review(page, rest, toolName string) *pageReview {
 			note = "checked " + name + " (" + c.Element + "), not run: it needs " + firstOf(missing, "the form's fields") + " entered"
 			run = false
 		}
-		src := a2ui.Source{Path: c.Into, From: name, Optional: !c.Load}
+		src := surface.Source{Path: c.Into, From: name, Optional: !c.Load}
 		if run {
 			key := name + compactJSON(args)
 			if ran[key] {
@@ -352,7 +353,7 @@ func (pr *pageReviewer) review(page, rest, toolName string) *pageReview {
 			ran[key] = true
 			value, err := pr.call(t, c.Microtool, args)
 			if err != nil {
-				r.add(a2ui.Blocking, "data", c.Element, name+" failed when the review ran it with "+compactJSON(args)+": "+err.Error(),
+				r.add(surface.Blocking, "data", c.Element, name+" failed when the review ran it with "+compactJSON(args)+": "+err.Error(),
 					"call it with arguments its schema accepts")
 				src.Err = err.Error()
 				note = "ran " + name + ": failed"
@@ -373,11 +374,11 @@ func (pr *pageReviewer) review(page, rest, toolName string) *pageReview {
 	}
 
 	// Every value shown is filled, and is there in what came back.
-	unfilled := a2ui.Blocking
+	unfilled := surface.Blocking
 	if inspected.ScriptsWrite {
-		unfilled = a2ui.Advice // its scripts may write it
+		unfilled = surface.Advice // its scripts may write it
 	}
-	r.Issues = append(r.Issues, a2ui.CheckReads(inspected.Reads, inspected.Writes, inspected.Aliases, data, sources, unfilled)...)
+	r.Issues = append(r.Issues, surface.CheckReads(inspected.Reads, inspected.Writes, inspected.Aliases, data, sources, unfilled)...)
 
 	// The page as a whole, looked at.
 	if looked == nil && toolName != "" {
@@ -423,7 +424,7 @@ func pageArgs(args map[string]any, data map[string]any, schema map[string]any) (
 	for k, v := range args {
 		if b, ok := v.(map[string]any); ok {
 			if p, ok := b["path"].(string); ok && len(b) <= 2 {
-				if value, ok, _ := a2ui.Lookup(data, a2ui.JoinPath("", p)); ok && value != nil {
+				if value, ok, _ := surface.Lookup(data, surface.JoinPath("", p)); ok && value != nil {
 					out[k] = value
 				}
 				continue
@@ -431,7 +432,7 @@ func pageArgs(args map[string]any, data map[string]any, schema map[string]any) (
 		}
 		out[k] = v
 	}
-	_, required := a2ui.SchemaArgs(schema)
+	_, required := surface.SchemaArgs(schema)
 	for _, r := range required {
 		if v, ok := out[r]; !ok || v == nil || v == "" {
 			return out, "\"" + r + "\""
@@ -461,7 +462,7 @@ func (s *Service) callPageTool(ctx context.Context, spaceID identity.ID, t *page
 // whoever the agent's turn is for. It returns nil, nil when there is no one
 // to bill or no tool to bill it as.
 func (s *Service) lookAtPage(ctx context.Context, spaceID identity.ID, page string, inspected *webkit.Page, source []byte,
-	data map[string]any, looked *pageTool, tools map[string]*pageTool, found []a2ui.Issue) ([]a2ui.Issue, error) {
+	data map[string]any, looked *pageTool, tools map[string]*pageTool, found []surface.Issue) ([]surface.Issue, error) {
 	payer := s.turnPayer(ctx)
 	if payer == "" || looked == nil || s.K == nil {
 		return nil, nil
@@ -513,7 +514,7 @@ func (s *Service) lookAtPage(ctx context.Context, spaceID identity.ID, page stri
 	if err := bridge.Invoke(ctx, s.K, "tools", "ReviewPage", []any{ctx, payer, spaceID.String(), room, looked.tool.BotID, b.String()}, &raw); err != nil {
 		return nil, err
 	}
-	var issues []a2ui.Issue
+	var issues []surface.Issue
 	if err := json.Unmarshal([]byte(raw), &issues); err != nil {
 		return nil, err
 	}

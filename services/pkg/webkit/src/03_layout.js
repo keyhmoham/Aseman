@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Layout: A2UI Row/Column/List/Grid/Wrap/Stack/Box/Center/Spacer/AspectRatio/
+// Layout: Surface Spec Row/Column/List/Grid/Wrap/Stack/Box/Center/Spacer/AspectRatio/
 // Scroll and every Elpian layout, gesture and animation widget (Container,
 // Padding, SizedBox, Expanded, Transform, GestureDetector, Dismissible,
 // Draggable, AnimatedContainer, Shimmer, Pulse…). Their children are the
@@ -136,7 +136,7 @@ layout('wrap', (el, P) => {
   boxStyle(el);
 });
 /**
- * For {each}: its <template> once per item. (A2UI surfaces give it a
+ * For {each}: its <template> once per item. (AG-UI surfaces give it a
  * builder instead, which makes each item's component.)
  */
 define('for', class extends LayoutElement {
@@ -194,7 +194,7 @@ layout('indexed-stack', (el, P) => {
   boxStyle(el);
 });
 
-// Boxes: A2UI Box, Elpian Container / DecoratedBox / Padding / SizedBox / ConstrainedBox / LimitedBox / OverflowBox.
+// Boxes: Surface Spec Box, Elpian Container / DecoratedBox / Padding / SizedBox / ConstrainedBox / LimitedBox / OverflowBox.
 for (const n of ['box', 'container', 'decorated-box', 'padding', 'sized-box', 'constrained-box', 'limited-box', 'overflow-box', 'baseline', 'scope', 'hero']) {
   layout(n, (el, P) => {
     boxStyle(el);

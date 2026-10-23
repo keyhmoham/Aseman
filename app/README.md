@@ -51,7 +51,7 @@ the backend always sees the signed-in user's identity.
 
 The Elpian engine is part of the app, not a dependency: its Flutter host is
 copied into `lib/src/elpian` (rendering engine, Elpian VM and QuickJS
-runtimes, app host, A2UI renderer, the Godot `Scene3D` widget — see its
+runtimes, app host, AG-UI surface renderer, the Godot `Scene3D` widget — see its
 README), its native VM library into `packages/elpian_vm_native`, the
 embedded Godot engine into `packages/elpian_godot_native`, and its web
 runtimes into `assets/elpian`. An app's static frontend is a
@@ -78,9 +78,9 @@ managed (an Elpian VM, QuickJS or docker backend the node runs) or installed
   `tool.microtools()`, `tool.context()` (with `display`: `full`, `compact`
   or `sheet`), `tool.compact(summary)` (its phone widget) and
   `tool.expand()`;
-* **generative** — A2UI the node generated from the deployer's skill (cached
-  in its component registry) rendered with Flutter's genui by `GenUiView`
-  (`lib/src/genui`: Aseman's catalog in the app's design language), its
+* **generative** — AG-UI Surface Spec the node generated from the deployer's skill (cached
+  in its component registry) rendered by `AgUiSurfaceView`
+  (`lib/src/agui`: Aseman's catalog in the app's design language), its
   buttons running microtools through `tools.frontend_action`.
 
 Tools open as card windows on the room's desk (`features/desk`): a
@@ -92,12 +92,12 @@ frontends; nothing of a tool's interface goes into the chat.
 
 On phones (narrower than 600 px) the desk is a board of **compact
 widgets** instead (`CompactDesk`): each window shows the minimal information
-about its data — an A2UI surface's own `compact` component, or a summary
+about its data — an AG-UI surface's own `compact` component, or a summary
 derived from its components; a static program's `tool.compact` summary, or
 a live miniature — in one of five shapes (card, squircle, pill, circle,
 leaf) and three sizes. Long-press drags a widget to a new place; tapping
 opens the full frontend, phone-wide, in a bottom sheet. Every frontend reads
-how it is shown from `FrontendPresentation` (`lib/src/genui`), and the board
+how it is shown from `FrontendPresentation` (`lib/src/agui`), and the board
 arrangement is kept on the node with each window (`compact`, the desk's
 `arrange` op).
 

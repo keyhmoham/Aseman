@@ -43,7 +43,7 @@ const (
 
 // Window kinds: a tool's own frontend (the default), or a widget an agent
 // composed (ui_compose) from the space's tools' data and frontends, whose
-// A2UI surface the window holds. Composed windows share the dock entry
+// AG-UI surface the window holds. Composed windows share the dock entry
 // DeskComposedTool.
 const (
 	DeskComposed     = "composed"

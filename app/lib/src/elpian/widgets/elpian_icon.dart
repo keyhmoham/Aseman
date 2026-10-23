@@ -9,7 +9,7 @@ class ElpianIcon {
     final size = node.style?.fontSize ?? node.props['size'] as double? ?? 24.0;
     final color = node.style?.color;
 
-    // `svgPath`: an SVG path in a 24x24 viewBox (A2UI's custom icons), painted
+    // `svgPath`: an SVG path in a 24x24 viewBox (Surface Spec custom icons), painted
     // directly — there is no SVG decoder to hand it to.
     final svgPath = node.props['svgPath'];
     if (svgPath is String && svgPath.isNotEmpty) {
@@ -101,7 +101,7 @@ class ElpianIcon {
     'upload': Icons.upload,
     'refresh': Icons.refresh,
     'sync': Icons.sync,
-    // A2UI basic-catalog icons
+    // Surface Spec basic-catalog icons
     'account_circle': Icons.account_circle,
     'call': Icons.call,
     'event': Icons.event,

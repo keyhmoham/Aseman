@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // Core: values and formats (ui_kit/values.dart), colors (ui_kit/palette.dart),
-// icons, DOM helpers, the data model with {"path"} bindings, the A2UI client
+// icons, DOM helpers, the data model with {"path"} bindings, the AG-UI surface client
 // functions and actions, and the base class of every <t-*> element.
 // ---------------------------------------------------------------------------
 
@@ -263,7 +263,7 @@ const ICON_EXTRA = { copy: 'content_copy', info_outline: 'info', bookmark_outlin
   arrowUp: 'arrow_upward', arrowDown: 'arrow_downward', arrowLeft: 'arrow_back', arrowRight: 'arrow_forward',
   caretUp: 'arrow_drop_up', caretDown: 'arrow_drop_down', moon: 'dark_mode', light: 'light_mode', dark: 'dark_mode' };
 const snake = (n) => n.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
-/** The material icon a name names (A2UI camelCase, Elpian snake_case, kit names), or null. */
+/** The material icon a name names (Surface Spec camelCase, Elpian snake_case, kit names), or null. */
 function iconName(name) {
   if (!name || typeof name !== 'string') return null;
   const tries = [name, ICON_EXTRA[name], ICON_ALIASES[name], name.toLowerCase(), snake(name), ICON_ALIASES[snake(name)],
@@ -385,7 +385,7 @@ const ALIGN = { start: 'flex-start', center: 'center', end: 'flex-end', stretch:
 // ---- data model and bindings --------------------------------------------
 
 /**
- * A JSON data model with paths ("/a/b/0"), as A2UI surfaces have: elements
+ * A JSON data model with paths ("/a/b/0"), as AG-UI surfaces have: elements
  * bind props to it with {"path": "/x"} (or bind-<prop>="/x") and re-render
  * when what they read changes; inputs write to it.
  */
@@ -459,7 +459,7 @@ function joinPath(scope, path) {
 
 /**
  * Resolves a prop value against the store: {"path"} bindings, {"call", args}
- * functions, A2UI literal wrappers, and nested maps and lists.
+ * functions, Surface Spec literal wrappers, and nested maps and lists.
  */
 function resolve(v, scope, store = Aseman.data) {
   if (v == null || typeof v !== 'object') return v;
@@ -484,7 +484,7 @@ function resolve(v, scope, store = Aseman.data) {
   return out;
 }
 
-// ---- functions (A2UI client functions) -----------------------------------
+// ---- functions (Surface Spec client functions) -------------------------
 
 function interpolate(text, scope, store) {
   return String(text ?? '').replace(/\$\{([^}]+)\}/g, (_, p) => {
@@ -580,7 +580,7 @@ const CLIENT_ACTIONS = {
 };
 Aseman.actions = CLIENT_ACTIONS;
 const eventHandlers = {};
-/** Aseman.on('submit_order', (context, element) => …): handles A2UI-style event actions on the page. */
+/** Aseman.on('submit_order', (context, element) => …): handles Surface Spec event actions on the page. */
 Aseman.on = (name, fn) => { (eventHandlers[name] ||= []).push(fn); return () => { eventHandlers[name] = eventHandlers[name].filter((f) => f !== fn); }; };
 
 /** "weather/forecast", "weather.forecast" or "weather:forecast" → [tool, microtool]. */
@@ -591,7 +591,7 @@ function splitCall(spec) {
 }
 
 /**
- * Runs an action from an element: a client functionCall, an A2UI event
+ * Runs an action from an element: a client functionCall, a Surface Spec event
  * (dispatched as a t-action DOM event and to Aseman.on handlers), a
  * Aseman API call {tool, microtool, args, into}, or a list of them in order.
  * [extra] (a tapped row, an input's value) joins the event's context.

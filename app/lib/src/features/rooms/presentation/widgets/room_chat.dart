@@ -20,6 +20,7 @@ import '../../../search_feed/presentation/rich_post_content.dart';
 import '../../domain/room_work.dart';
 import '../room_chat_scroll.dart';
 import '../room_work_controller.dart';
+import 'agui_message.dart';
 import 'attachment_bubble.dart';
 import 'forward_message_sheet.dart';
 import 'message_edit_history.dart';
@@ -1510,8 +1511,30 @@ class _RoomChatState extends State<RoomChat> {
     // one shows the sender, and the group sits tighter together.
     final continued = previous != null &&
         previous.kind != 'log' &&
+        previous.kind != 'agui' &&
         previous.senderId == m.senderId &&
         m.createdAt.difference(previous.createdAt).inMinutes.abs() < 5;
+    if (m.kind == 'agui') {
+      return Padding(
+        padding: EdgeInsets.only(top: continued ? 2 : 10, bottom: 4),
+        child: Align(
+          alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width * 0.92,
+            ),
+            child: Material(
+              color: scheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: AgUiChatMessage(body: m.body),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     final time = _msgTime(m.createdAt);
     final deps = widget.dependencies;
     final sender = _senderOf(m);

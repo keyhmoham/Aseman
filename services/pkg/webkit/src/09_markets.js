@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Markets (genui/catalog/markets.dart): Quote, OrderBook, TickerTape,
+// Markets (agui/catalog/markets.dart): Quote, OrderBook, TickerTape,
 // AllocationBar, Countdown.
 // ---------------------------------------------------------------------------
 

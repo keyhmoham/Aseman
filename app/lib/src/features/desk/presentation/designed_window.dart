@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../genui/genui.dart' show FrontendPresentation;
+import '../../../agui/agui.dart' show FrontendPresentation;
 import 'desk_controller.dart';
 
 /// The content of a window whose interface the node designs for one request

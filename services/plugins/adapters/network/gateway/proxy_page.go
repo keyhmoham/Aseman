@@ -206,7 +206,7 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		return map[string]any{"tool": t.Name, "microtool": in.Microtool, "result": res.Result}, nil
 	case "frontend", "action":
 		// The tool's own frontend for the page to render (a generative one
-		// is A2UI, the same surface the app shows), and its actions.
+		// is AG-UI Surface Spec, the same surface the app shows), and its actions.
 		t, err := a.pageResolve(ctx, caller, space, in.Tool)
 		if err != nil {
 			return nil, err

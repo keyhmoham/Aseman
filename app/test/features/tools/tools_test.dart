@@ -9,7 +9,7 @@ import 'package:aseman/src/features/tools/domain/tool_models.dart';
 import 'package:aseman/src/features/tools/presentation/tool_create_form.dart';
 import 'package:aseman/src/features/tools/presentation/tool_frontend_view.dart';
 import 'package:aseman/src/features/tools/runtime/tool_frontend_host.dart';
-import 'package:aseman/src/genui/genui.dart';
+import 'package:aseman/src/agui/agui.dart';
 import 'package:aseman/src/shared/widgets/app_inputs.dart';
 
 /// Records node actions and answers them from [replies].
@@ -183,7 +183,7 @@ void main() {
                   'createSurface': {
                     'surfaceId': 'g',
                     'catalogId':
-                        'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'
+                        'https://aseman.app/agui/catalogs/aseman/v1'
                   }
                 },
                 {
@@ -251,7 +251,7 @@ void main() {
                 'createSurface': {
                   'surfaceId': 'g',
                   'catalogId':
-                      'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'
+                      'https://aseman.app/agui/catalogs/aseman/v1'
                 }
               },
               {
@@ -351,7 +351,7 @@ void main() {
     });
   });
 
-  group('A2UI view', () {
+  group('AG-UI surface view', () {
     List<Map<String, dynamic>> surface(Map<String, dynamic> data,
             {bool embed = false}) =>
         [
@@ -360,7 +360,7 @@ void main() {
             'createSurface': {
               'surfaceId': 's',
               'catalogId':
-                  'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'
+                  'https://aseman.app/agui/catalogs/aseman/v1'
             }
           },
           {
@@ -412,7 +412,7 @@ void main() {
       Map<String, dynamic>? context;
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
-          body: GenUiView(
+          body: AgUiView(
             messages: surface({'greeting': 'Press the button'}),
             onAction: (a, data) async {
               action = a.name;
@@ -436,7 +436,7 @@ void main() {
       final embedded = <String>[];
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
-          body: GenUiView(
+          body: AgUiView(
             messages: surface({'greeting': 'Dashboard'}, embed: true),
             toolFrontend: (context, botId, height, props) {
               embedded.add(botId);
@@ -457,13 +457,13 @@ void main() {
         (tester) async {
       await tester.pumpWidget(const MaterialApp(
         home: Scaffold(
-          body: GenUiView(messages: [
+          body: AgUiView(messages: [
             {
               'version': 'v0.9',
               'createSurface': {
                 'surfaceId': 'w',
                 'catalogId':
-                    'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'
+                    'https://aseman.app/agui/catalogs/aseman/v1'
               }
             },
             {
@@ -532,14 +532,14 @@ void main() {
       ShownResult? got;
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
-          body: GenUiView(
+          body: AgUiView(
             messages: [
               {
                 'version': 'v0.9',
                 'createSurface': {
                   'surfaceId': 'w',
                   'catalogId':
-                      'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'
+                      'https://aseman.app/agui/catalogs/aseman/v1'
                 }
               },
               {

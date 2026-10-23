@@ -7,30 +7,19 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aseman/aseman/pkg/a2ui"
+	"github.com/aseman/aseman/pkg/surface"
 )
 
-// A generated frontend is reviewed before anyone is told it is ready. Each
-// round, what the model wrote is
+// A frontend is reviewed with a deterministic gate only (A2UI / OpenUI
+// production pattern): inspect + composition rules + live microtool fill +
+// action checks. An optional LLM lookAt may append Advice, never Blocking —
+// subjective design judges are not in the accept or repair loop.
 //
-//   - inspected: its component tree as a device renders it (references,
-//     what is placed, inputs bound, buttons labelled and wired, layout that
-//     holds on a phone), and every data binding and action against the
-//     microtools' schemas;
-//   - tested: its data bindings are run for the person asking, exactly as
-//     opening it would, and every value a component shows is looked up in
-//     what really came back; actions are resolved against that data, and
-//     the ones whose microtool only reads (readOnlyHint) are run too;
-//   - looked at: the surface, filled with that data, is rendered as an
-//     outline and reviewed by the model for fitness to the tool and its
-//     skill, cleanness and the design standard.
-//
-// Everything found goes back to the generator as one report, and the next
-// round is reviewed again, until nothing blocking is left. A frontend that
-// still does not work after the last round is not served.
+// Author-time repair (LLM fallback only) is capped at surface.MaxRepairAttempts
+// and stops when the blocking issue fingerprint does not shrink.
 
-// reviewRounds bounds the rounds of generating, reviewing and repairing.
-const reviewRounds = 4
+// reviewRounds bounds author-time generate→validate→repair (LLM fallback).
+const reviewRounds = surface.MaxRepairAttempts
 
 // Review is what the review of a generated frontend found.
 type Review struct {
@@ -40,9 +29,9 @@ type Review struct {
 	Rounds int `json:"rounds"`
 	// Tested is what was run and checked live.
 	Tested []string     `json:"tested,omitempty"`
-	Issues []a2ui.Issue `json:"issues,omitempty"`
-	// broken counts the blocking issues the inspection and the tests found
-	// (as opposed to the design review's judgement).
+	Issues []surface.Issue `json:"issues,omitempty"`
+	// broken counts blocking issues from the deterministic gate (inspect,
+	// composition, live fill, actions). LLM design notes never increment it.
 	broken int
 }
 
@@ -50,7 +39,7 @@ type Review struct {
 func (r *Review) blocking() int {
 	n := 0
 	for _, i := range r.Issues {
-		if i.Severity == a2ui.Blocking {
+		if i.Severity == surface.Blocking {
 			n++
 		}
 	}
@@ -73,14 +62,14 @@ func (r *Review) worse(o *Review) bool {
 func (r *Review) feedback() string {
 	var b strings.Builder
 	b.WriteString("Your frontend was rendered and tested before being shown, and it is not ready yet.\n")
-	for _, severity := range []string{a2ui.Blocking, a2ui.Advice} {
+	for _, severity := range []string{surface.Blocking, surface.Advice} {
 		first := true
 		for _, i := range r.Issues {
 			if i.Severity != severity {
 				continue
 			}
 			if first {
-				if severity == a2ui.Blocking {
+				if severity == surface.Blocking {
 					b.WriteString("\nBlocking (fix every one):\n")
 				} else {
 					b.WriteString("\nAdvice (apply where it does not conflict with the skill):\n")
@@ -96,7 +85,7 @@ func (r *Review) feedback() string {
 			b.WriteString("- " + t + "\n")
 		}
 	}
-	b.WriteString("\nReply with the whole corrected JSON object only: {\"title\", \"components\", \"data\", \"actions\"}. Keep what works; change what the report names.")
+	b.WriteString("\nReply with the whole corrected JSON object only: {\"title\", \"components\": [flat list, each {\"id\", \"type\", ...props}], \"data\", \"actions\"}. Fix only what the Blocking lines name; keep everything else exactly as it was.")
 	return b.String()
 }
 
@@ -104,7 +93,7 @@ func (r *Review) feedback() string {
 func (r *Review) summary(max int) string {
 	var lines []string
 	for _, i := range r.Issues {
-		if i.Severity == a2ui.Blocking {
+		if i.Severity == surface.Blocking {
 			lines = append(lines, i.String())
 		}
 	}
@@ -160,7 +149,7 @@ func (rv *reviewer) run(microtool string, args map[string]any) (any, error) {
 // arguments (nil when the microtool says nothing of them).
 func (rv *reviewer) schema(microtool string) (properties map[string]any, required []string) {
 	schema, _ := rv.commands[microtool]["schema"].(map[string]any)
-	return a2ui.SchemaArgs(schema)
+	return surface.SchemaArgs(schema)
 }
 
 // readOnly reports whether a microtool says it only reads, so the review may
@@ -173,36 +162,38 @@ func (rv *reviewer) readOnly(microtool string) bool {
 
 // checkArgs checks the arguments a binding or an action passes a microtool
 // against its schema.
-func (rv *reviewer) checkArgs(where, microtool string, args map[string]any) []a2ui.Issue {
+func (rv *reviewer) checkArgs(where, microtool string, args map[string]any) []surface.Issue {
 	schema, _ := rv.commands[microtool]["schema"].(map[string]any)
-	return a2ui.CheckArgs(where, microtool, schema, args, "a literal, {\"$data\": \"/form/…\"} or {\"$context\": \"…\"} in an action")
+	return surface.CheckArgs(where, microtool, schema, args, "a literal, {\"$data\": \"/form/…\"} or {\"$context\": \"…\"} in an action")
 }
 
-// review inspects, tests and looks at a template, filling it as the person
-// asking would see it.
+// review inspects, tests and optionally notes design advice for a template,
+// filling it as the person asking would see it. Accept/reject is deterministic.
 func (rv *reviewer) review(t *Template) *Review {
 	r := &Review{}
-	surface := a2ui.Inspect(t.Components)
-	r.Issues = append(r.Issues, surface.Issues...)
+	inspected := surface.Inspect(t.Components)
+	surface.GateComposition(inspected, rv.skill)
+	r.Issues = append(r.Issues, inspected.Issues...)
+	r.Issues = append(r.Issues, surface.ValidateProps(t.Components)...)
 
 	// The data bindings, run as opening the frontend runs them.
 	data := map[string]any{}
-	var sources []a2ui.Source
+	var sources []surface.Source
 	for _, b := range t.bindings(rv.shown) {
 		where := "data " + b.Path
 		r.Issues = append(r.Issues, rv.checkArgs(where, b.Microtool, b.Args)...)
 		for k, v := range b.Args {
 			if ref, ok := v.(map[string]any); ok && (ref["$data"] != nil || ref["$context"] != nil) {
-				r.Issues = append(r.Issues, a2ui.Issue{Severity: a2ui.Blocking, Area: "data", Where: where,
+				r.Issues = append(r.Issues, surface.Issue{Severity: surface.Blocking, Area: "data", Where: where,
 					Problem: "argument " + k + " of a data binding is a reference; bindings run before anything is entered",
 					Fix:     "give bindings literal arguments; run what depends on input from an action"})
 			}
 		}
-		src := a2ui.Source{Path: b.Path, From: b.Microtool, Live: true}
+		src := surface.Source{Path: b.Path, From: b.Microtool, Live: true}
 		v, err := rv.run(b.Microtool, b.Args)
 		if err != nil {
 			src.Err = err.Error()
-			r.Issues = append(r.Issues, a2ui.Issue{Severity: a2ui.Blocking, Area: "data", Where: where,
+			r.Issues = append(r.Issues, surface.Issue{Severity: surface.Blocking, Area: "data", Where: where,
 				Problem: b.Microtool + " failed when the frontend was filled: " + err.Error(),
 				Fix:     "call it with arguments its schema accepts"})
 			setPointer(data, b.Path, map[string]any{"error": err.Error()})
@@ -215,8 +206,8 @@ func (rv *reviewer) review(t *Template) *Review {
 
 	// The actions: wired to an event, their arguments resolvable, run when
 	// they only read.
-	sent := map[string][]a2ui.Event{}
-	for _, e := range surface.Events {
+	sent := map[string][]surface.Event{}
+	for _, e := range inspected.Events {
 		sent[e.Name] = append(sent[e.Name], e)
 	}
 	names := make([]string, 0, len(t.Actions))
@@ -228,15 +219,15 @@ func (rv *reviewer) review(t *Template) *Review {
 		a := t.Actions[name]
 		where := "action " + name
 		if a.Microtool == "" {
-			r.Issues = append(r.Issues, a2ui.Issue{Severity: a2ui.Blocking, Area: "interaction", Where: where,
+			r.Issues = append(r.Issues, surface.Issue{Severity: surface.Blocking, Area: "interaction", Where: where,
 				Problem: "runs no microtool, so its button does nothing", Fix: "map it to a microtool or remove its button"})
 			continue
 		}
 		if a.Result != "" {
-			sources = append(sources, a2ui.Source{Path: a.Result, From: "the action " + name, Optional: true})
+			sources = append(sources, surface.Source{Path: a.Result, From: "the action " + name, Optional: true})
 		}
 		if len(sent[name]) == 0 {
-			r.Issues = append(r.Issues, a2ui.Issue{Severity: a2ui.Advice, Area: "interaction", Where: where,
+			r.Issues = append(r.Issues, surface.Issue{Severity: surface.Advice, Area: "interaction", Where: where,
 				Problem: "no component sends it", Fix: "give it a button or remove it"})
 		}
 		r.Issues = append(r.Issues, rv.checkArgs(where, a.Microtool, a.Args)...)
@@ -248,20 +239,20 @@ func (rv *reviewer) review(t *Template) *Review {
 			if key, ok := ref["$context"].(string); ok {
 				for _, e := range sent[name] {
 					if !contains(e.Context, key) {
-						r.Issues = append(r.Issues, a2ui.Issue{Severity: a2ui.Blocking, Area: "interaction", Where: e.Component,
+						r.Issues = append(r.Issues, surface.Issue{Severity: surface.Blocking, Area: "interaction", Where: e.Component,
 							Problem: "sends " + name + " without \"" + key + "\" in its context, which argument " + k + " of " + a.Microtool + " takes",
 							Fix:     "add \"" + key + "\" to the event's context, or take the argument from {\"$data\"}"})
 					}
 				}
 			}
-			if path, ok := ref["$data"].(string); ok && !surface.Written(path, sources) {
-				r.Issues = append(r.Issues, a2ui.Issue{Severity: a2ui.Blocking, Area: "interaction", Where: where,
+			if path, ok := ref["$data"].(string); ok && !inspected.Written(path, sources) {
+				r.Issues = append(r.Issues, surface.Issue{Severity: surface.Blocking, Area: "interaction", Where: where,
 					Problem: "argument " + k + " reads " + path + ", which no input, selection or binding fills",
 					Fix:     "bind an input's value to " + path + " or read the path one fills"})
 			}
 		}
 		if a.Result == "" && !a.Reload {
-			r.Issues = append(r.Issues, a2ui.Issue{Severity: a2ui.Advice, Area: "interaction", Where: where,
+			r.Issues = append(r.Issues, surface.Issue{Severity: surface.Advice, Area: "interaction", Where: where,
 				Problem: "neither shows its result nor reloads, so the person sees nothing happen",
 				Fix:     "put its result where the view reads it (\"result\") or set \"reload\": true"})
 		}
@@ -269,13 +260,13 @@ func (rv *reviewer) review(t *Template) *Review {
 	}
 	for name, events := range sent {
 		if _, ok := t.Actions[name]; !ok {
-			r.Issues = append(r.Issues, a2ui.Issue{Severity: a2ui.Blocking, Area: "interaction", Where: events[0].Component,
+			r.Issues = append(r.Issues, surface.Issue{Severity: surface.Blocking, Area: "interaction", Where: events[0].Component,
 				Problem: "sends the event " + name + ", which \"actions\" maps to nothing", Fix: "map it to a microtool"})
 		}
 	}
 
 	// Every value shown is filled, and is there in what came back.
-	r.Issues = append(r.Issues, surface.CheckData(data, sources)...)
+	r.Issues = append(r.Issues, inspected.CheckData(data, sources)...)
 
 	// Every microtool the tool offers is reachable.
 	reached := map[string]bool{}
@@ -293,29 +284,35 @@ func (rv *reviewer) review(t *Template) *Review {
 	}
 	if len(unreached) > 0 {
 		sort.Strings(unreached)
-		r.Issues = append(r.Issues, a2ui.Issue{Severity: a2ui.Advice, Area: "purpose",
+		r.Issues = append(r.Issues, surface.Issue{Severity: surface.Advice, Area: "purpose",
 			Problem: "the frontend never uses " + strings.Join(unreached, ", "),
 			Fix:     "offer what the skill asks for of them (a binding or an action); leave out only what the skill does not need"})
 	}
 	r.broken = r.blocking()
+	r.Passed = r.broken == 0
 
-	// The surface as it looks, reviewed.
+	// Optional LLM polish: Advice only (never affects Passed / broken / repair).
 	if rv.look != nil {
-		issues, err := rv.lookAt(t, surface, data, r.Issues)
+		issues, err := rv.lookAt(t, inspected, data, r.Issues)
 		if err != nil {
-			r.Tested = append(r.Tested, "design review unavailable: "+err.Error())
+			r.Tested = append(r.Tested, "design notes unavailable: "+err.Error())
 		} else {
+			for i := range issues {
+				issues[i].Severity = surface.Advice
+				if issues[i].Code == "" {
+					issues[i].Code = "design_note"
+				}
+			}
 			r.Issues = append(r.Issues, issues...)
-			r.Tested = append(r.Tested, "design review of the rendered surface")
+			r.Tested = append(r.Tested, "design notes (advice only)")
 		}
 	}
-	r.Passed = r.blocking() == 0
 	return r
 }
 
 // tryAction checks an action against the filled data, and runs it when its
 // microtool only reads; it says what it did.
-func (rv *reviewer) tryAction(name string, a Action, data map[string]any, events []a2ui.Event, issues *[]a2ui.Issue) string {
+func (rv *reviewer) tryAction(name string, a Action, data map[string]any, events []surface.Event, issues *[]surface.Issue) string {
 	if !rv.readOnly(a.Microtool) {
 		return "action " + name + " (" + a.Microtool + ") checked, not run: it may change data"
 	}
@@ -333,7 +330,7 @@ func (rv *reviewer) tryAction(name string, a Action, data map[string]any, events
 		}
 	}
 	if _, err := rv.run(a.Microtool, args); err != nil {
-		*issues = append(*issues, a2ui.Issue{Severity: a2ui.Blocking, Area: "interaction", Where: "action " + name,
+		*issues = append(*issues, surface.Issue{Severity: surface.Blocking, Area: "interaction", Where: "action " + name,
 			Problem: a.Microtool + " failed when the action was run with " + compact(args) + ": " + err.Error(),
 			Fix:     "pass arguments its schema accepts"})
 		return "action " + name + " run: failed"
@@ -341,20 +338,14 @@ func (rv *reviewer) tryAction(name string, a Action, data map[string]any, events
 	return "action " + name + " run with " + compact(args)
 }
 
-var reviewPrompt = `You review a generated tool frontend before it is shown, as a senior product designer and QA lead who ships real application UIs.
-You are given the tool, what its deployer wants (the skill), its microtools, the surface as it renders (an outline: each component with the data it shows, filled by really running the tool, and what each control does) and what the automatic tests found.
-Judge:
-- Purpose: does it serve the skill and the tool — right data first, actions offered, nothing it cannot do, nothing important missing? Does it read as this domain's real product screen?
-- Visualization-first: for numeric, temporal, categorical or tabular data, are Stats / Charts / Gauges / Tables used instead of walls of Text or Markdown? Is the hierarchy KPI strip → hero viz → evidence? Flag text-heavy or document-like screens as blocking when the data is visualizable.
-- App layout & standards: the design rules below — fills the window, regions scroll inside, responsive at phone and desktop, formatted numbers with units, short labels, one primary action per region, no placeholders, filler, heroes, footers, duplicates or decorative controls, a compact phone widget.
-- Interaction: can a person do each thing and see the outcome? Inputs labelled, bound and read by the action that submits them; selections shown by a detail block.
-- Data: meaningful as filled (no MISSING values, no raw JSON or ids where people expect names, empty/loading states handled).
-Reply with ONE JSON object: {"issues": [{"severity": "blocking" | "advice", "area": "purpose" | "design" | "interaction" | "data", "where": "<component id, data path or action>", "problem": "…", "fix": "…"}]}.
-"blocking" is what makes it broken, misleading, unclean, text-heavy where it should be visual, or unfit for the tool; "advice" is polish. Name concrete component ids and concrete fixes. Do not repeat the automatic findings. An empty list means it is ready to show.
-` + a2ui.DesignPrompt
+var reviewPrompt = `You add optional polish notes for a tool frontend that already passed a deterministic gate (structure, composition, live data, actions).
+Do NOT restate automatic findings. Reply with ONE JSON object:
+{"issues": [{"severity": "advice", "area": "purpose" | "design" | "interaction" | "data", "where": "<id>", "problem": "…", "fix": "…"}]}.
+Every issue MUST be severity "advice". Empty list is fine.
+` + surface.DesignPrompt
 
 // lookAt has the model review the rendered surface.
-func (rv *reviewer) lookAt(t *Template, surface *a2ui.Surface, data map[string]any, found []a2ui.Issue) ([]a2ui.Issue, error) {
+func (rv *reviewer) lookAt(t *Template, surface *surface.Surface, data map[string]any, found []surface.Issue) ([]surface.Issue, error) {
 	var b strings.Builder
 	b.WriteString("Tool: " + rv.tool + "\n\nWhat the deployer wants (skill):\n" + rv.skill + "\n\nMicrotools:\n")
 	names := make([]string, 0, len(rv.commands))
@@ -382,9 +373,9 @@ func (rv *reviewer) lookAt(t *Template, surface *a2ui.Surface, data map[string]a
 }
 
 // lookedAt reads the issues a model's review reports.
-func lookedAt(content string) ([]a2ui.Issue, error) {
+func lookedAt(content string) ([]surface.Issue, error) {
 	var out struct {
-		Issues []a2ui.Issue `json:"issues"`
+		Issues []surface.Issue `json:"issues"`
 	}
 	if err := json.Unmarshal([]byte(jsonObject(content)), &out); err != nil {
 		return nil, err
@@ -394,8 +385,10 @@ func lookedAt(content string) ([]a2ui.Issue, error) {
 		if strings.TrimSpace(i.Problem) == "" {
 			continue
 		}
-		if i.Severity != a2ui.Blocking {
-			i.Severity = a2ui.Advice
+			// Design notes are never Blocking — the deterministic gate owns accept/reject.
+		i.Severity = surface.Advice
+		if i.Code == "" {
+			i.Code = "design_note"
 		}
 		if i.Area == "" {
 			i.Area = "design"

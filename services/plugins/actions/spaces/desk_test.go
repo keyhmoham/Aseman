@@ -139,7 +139,7 @@ func TestComposedWidgetsOpenOnTheDeskNotInTheChat(t *testing.T) {
 		t.Fatalf("window: %+v", w)
 	}
 	raw, _ := json.Marshal(w.Widget)
-	if !strings.Contains(string(raw), "v2") || strings.Contains(string(raw), "v1") {
+	if !strings.Contains(string(raw), `"text":"v2"`) || strings.Contains(string(raw), `"text":"v1"`) {
 		t.Fatalf("widget not refreshed: %s", raw)
 	}
 	// Pinned and reopened as it was.

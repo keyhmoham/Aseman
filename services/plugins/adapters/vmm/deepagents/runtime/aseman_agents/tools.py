@@ -44,8 +44,9 @@ PLATFORM_TOOLS = {
     "routine_get": "routine_get",
     "routine_update": "routine_update",
     "routine_delete": "routine_delete",
-    # Widgets: A2UI composed from the space's tools' data and frontends.
-    "ui_compose": "compose_ui",
+    # AG-UI Surface Spec: multi-tool dashboards on the desk, and chat/desk presentation.
+    "ui_compose": "ui_compose",
+    "ui_present": "ui_present",
     # The room's desk: a tool's own generative frontend, filled with a result
     # the agent got, opens as a card window; agents arrange and close them.
     "frontend_show": "frontend_show",

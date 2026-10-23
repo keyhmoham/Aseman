@@ -23,7 +23,7 @@ Map<String, dynamic> _map(Object? v) =>
     v is Map ? v.cast<String, dynamic>() : <String, dynamic>{};
 double _num(Object? v, double fallback) => v is num ? v.toDouble() : fallback;
 
-/// A2UI messages a composed window holds (`{title, messages}`), or none.
+/// AG-UI messages a composed window holds (`{title, messages}`), or none.
 List<Map<String, dynamic>> surfaceOf(Map<String, dynamic> widget) => [
       for (final m in (widget['messages'] as List?) ?? const <dynamic>[])
         if (m is Map) m.cast<String, dynamic>(),

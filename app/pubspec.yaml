@@ -35,7 +35,8 @@ dependencies:
   webview_flutter: ^4.14.1
   webview_flutter_web: ^0.2.3+4
   flutter_svg: ^2.3.0
-  # Generative UI (A2UI v0.9): surfaces, data model and catalog runtime.
+  # AG-UI protocol client; genui/a2ui_core power the private Surface Spec widget tree.
+  ag_ui: ^0.3.0
   genui: ^0.10.4
   a2ui_core: ^0.1.1
   json_schema_builder: ^0.1.3

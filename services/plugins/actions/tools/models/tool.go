@@ -29,7 +29,7 @@ const (
 const (
 	FrontendNone       = ""
 	FrontendStatic     = "static"     // an Elpian app: a program on the Elpian VM or QuickJS
-	FrontendGenerative = "generative" // A2UI generated from a skill, cached in the component registry
+	FrontendGenerative = "generative" // Fixed Schema / archetype Surface Bundle from a skill, cached in tool_components
 )
 
 // Tool is the registry record of a tool: how its backend is reached and what
@@ -101,7 +101,7 @@ const (
 	EntityFrontendSkill    = "frontend_skill"    // generative frontend skill / prompt
 )
 
-// Component is a generated frontend kept in the component registry: the A2UI
+// Component is a generated frontend kept in the component registry: the AG-UI Surface Spec
 // surface generated once for a tool (and frontend version), served again for
 // every later request and filled with fresh data each time.
 type Component struct {
@@ -110,7 +110,7 @@ type Component struct {
 	// Key identifies what it was generated from (frontend version, skill and
 	// the microtools it may call); a change of any of them makes a new one.
 	Key string `db:"key" json:"key"`
-	// Template is the generated frontend: A2UI components, the data bindings
+	// Template is the generated frontend: Surface Spec components, the data bindings
 	// that fill it and the actions it runs (Template as JSON).
 	Template  string    `db:"template" json:"template"`
 	Model     string    `db:"model" json:"model,omitempty"`

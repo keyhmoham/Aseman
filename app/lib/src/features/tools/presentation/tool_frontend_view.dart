@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../../elpian/elpian.dart';
-import '../../../genui/genui.dart'
+import '../../../agui/agui.dart'
     show
         CompactHint,
         CompactSummary,
         CompactSummaryView,
         FrontendDisplay,
         FrontendPresentation,
-        GenUiFrame;
+        AgUiFrame;
 import '../../../shared/widgets/skeleton.dart';
 import '../../tools/presentation/app_frontend_theme.dart';
 import '../connect/mcp_connect_dialog.dart';
@@ -160,7 +160,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
   }
 
   Future<Map<String, dynamic>?> _action(
-          GenUiAction action, Map<String, dynamic> data) =>
+          AgUiAction action, Map<String, dynamic> data) =>
       widget.api.frontendAction(widget.botId, action.name,
           spaceId: widget.spaceId,
           roomId: widget.roomId,
@@ -280,7 +280,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
         if (!compact) return program;
         return _StaticCompact(summary: _summary, program: program);
       case FrontendMode.generative:
-        final view = GenUiView(
+        final view = AgUiView(
           messages: payload.messages,
           onAction: _action,
           toolFrontend: (context, botId, height, props) => SizedBox(
@@ -295,7 +295,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
           ),
         );
         if (compact) return view;
-        return GenUiFrame(messages: payload.messages, child: view);
+        return AgUiFrame(messages: payload.messages, child: view);
       case FrontendMode.none:
         if (compact) return const SizedBox.shrink();
         return const Center(child: Text('This app has no screen.'));

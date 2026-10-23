@@ -88,7 +88,7 @@ const SET_ORDER: &[(&str, &str)] = &[
     ),
     (
         "agentApiNames",
-        "A mini app talking to its own agents, and reading the A2UI surfaces\n  /// they produced.",
+        "A mini app talking to its own agents, and reading the AG-UI surfaces\n  /// they produced.",
     ),
     (
         "vmApiNames",

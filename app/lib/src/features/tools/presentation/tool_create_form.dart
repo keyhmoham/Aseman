@@ -333,7 +333,7 @@ class _ToolFormState extends State<_ToolForm> {
               AppChoice(FrontendMode.generative, 'Generative',
                   icon: Icons.auto_awesome_rounded,
                   hint:
-                      'Generated as A2UI from your skill the first time it is opened, then kept in the component registry and filled with fresh data.'),
+                      'Generated as AG-UI Surface Spec from your skill the first time it is opened, then kept in the component registry and filled with fresh data.'),
             ],
           ),
           ..._frontendFields(context),

@@ -5,7 +5,7 @@
 ///   * the runtimes a miniapp's program runs on: the Elpian VM (bytecode, on
 ///     the native library in packages/elpian_vm_native, or WebAssembly on the
 ///     web) and QuickJS;
-///   * the miniapp host (manifest, grant, governed runtime) and the A2UI
+///   * the miniapp host (manifest, grant, governed runtime) and the AG-UI
 ///     renderer agents' and generated frontends are drawn with.
 ///
 /// Copied from Elpian's Flutter host (github.com/cosmopole-org/elpian,
@@ -46,5 +46,5 @@ export 'godot/scene3d_widget.dart';
 export 'godot/scene_dsl.dart';
 export 'godot/scene_taps.dart';
 
-// ── Agent-generated UI (A2UI v0.9.1) ───────────────────────────────
-export 'a2ui/a2ui.dart';
+// ── Agent-generated UI (AG-UI Surface Spec) ───────────────────────────────
+export 'agui/agui.dart';

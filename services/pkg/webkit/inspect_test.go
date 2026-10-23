@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aseman/aseman/pkg/a2ui"
+	"github.com/aseman/aseman/pkg/surface"
 )
 
-func hasIssue(issues []a2ui.Issue, severity, where, text string) bool {
+func hasIssue(issues []surface.Issue, severity, where, text string) bool {
 	for _, i := range issues {
 		if i.Severity == severity && strings.Contains(i.Where, where) && strings.Contains(i.Problem, text) {
 			return true
@@ -33,7 +33,7 @@ func TestKnownTagsCoverTheGallery(t *testing.T) {
 		t.Errorf("only %d kit tags were found", len(knownTags))
 	}
 	for _, issue := range InspectPage(gallery).Issues {
-		if issue.Severity == a2ui.Blocking && strings.Contains(issue.Problem, "no component of the kit") {
+		if issue.Severity == surface.Blocking && strings.Contains(issue.Problem, "no component of the kit") {
 			t.Error(issue)
 		}
 	}
@@ -57,18 +57,18 @@ func TestInspectPageFindsWhatIsBroken(t *testing.T) {
  <div style="width: 900px; color: #ff0000">Lorem ipsum dolor</div>
 </body></html>`))
 	for _, want := range []struct{ severity, where, text string }{
-		{a2ui.Blocking, "t-tabel", "no component of the kit"},
-		{a2ui.Blocking, "t-text-field", "reaches nothing"},
-		{a2ui.Blocking, `t-button[text="Save"]`, "does nothing"},
-		{a2ui.Blocking, `t-button[text="Alert"]`, "no Aseman.on(\"alert\""},
-		{a2ui.Blocking, `t-button[text="Go"]`, "not valid JSON"},
-		{a2ui.Blocking, "<head>", "without its stylesheet"},
-		{a2ui.Blocking, "<head>", "no viewport"},
-		{a2ui.Blocking, "div", "placeholder text"},
-		{a2ui.Advice, "div", "hard-codes colors"},
-		{a2ui.Advice, "div", "fixed width of 900px"},
-		{a2ui.Blocking, "<body>", "is not an app screen"},
-		{a2ui.Blocking, "t-table", "in no region that scrolls"},
+		{surface.Blocking, "t-tabel", "no component of the kit"},
+		{surface.Blocking, "t-text-field", "reaches nothing"},
+		{surface.Blocking, `t-button[text="Save"]`, "does nothing"},
+		{surface.Blocking, `t-button[text="Alert"]`, "no Aseman.on(\"alert\""},
+		{surface.Blocking, `t-button[text="Go"]`, "not valid JSON"},
+		{surface.Blocking, "<head>", "without its stylesheet"},
+		{surface.Blocking, "<head>", "no viewport"},
+		{surface.Blocking, "div", "placeholder text"},
+		{surface.Advice, "div", "hard-codes colors"},
+		{surface.Advice, "div", "fixed width of 900px"},
+		{surface.Blocking, "<body>", "is not an app screen"},
+		{surface.Blocking, "t-table", "in no region that scrolls"},
 	} {
 		if !hasIssue(p.Issues, want.severity, want.where, want.text) {
 			t.Errorf("missing %s issue on %s (%q); got:\n%v", want.severity, want.where, want.text, p.Issues)
@@ -96,13 +96,13 @@ func TestInspectPageFindsWhatIsBroken(t *testing.T) {
 	}
 	// What the page shows, tested against what the load really returned.
 	data := map[string]any{"fc": map[string]any{"temperature": 3, "days": []any{map[string]any{"day": "Mon", "max": 4}}}}
-	issues := a2ui.CheckReads(p.Reads, p.Writes, p.Aliases, data, []a2ui.Source{{Path: "/fc", From: "Weather/forecast", Live: true}}, a2ui.Blocking)
+	issues := surface.CheckReads(p.Reads, p.Writes, p.Aliases, data, []surface.Source{{Path: "/fc", From: "Weather/forecast", Live: true}}, surface.Blocking)
 	for _, want := range []struct{ where, text string }{
 		{"t-stat[label=\"Now\"]", `has no "temp"`},
 		{"t-stat[label=\"Wind\"]", "nothing fills"},
 		{"t-table", `has no "high"`},
 	} {
-		if !hasIssue(issues, a2ui.Blocking, want.where, want.text) {
+		if !hasIssue(issues, surface.Blocking, want.where, want.text) {
 			t.Errorf("missing data issue on %s (%q); got:\n%v", want.where, want.text, issues)
 		}
 	}
@@ -130,7 +130,7 @@ func TestInspectPagePassesACleanPage(t *testing.T) {
  </script>
 </body></html>`))
 	for _, i := range p.Issues {
-		if i.Severity == a2ui.Blocking {
+		if i.Severity == surface.Blocking {
 			t.Errorf("blocking: %v", i)
 		}
 	}
@@ -144,8 +144,8 @@ func TestInspectPagePassesACleanPage(t *testing.T) {
 		t.Fatalf("form call: %+v", form)
 	}
 	data := map[string]any{"orders": []any{map[string]any{"symbol": "AAPL"}}}
-	for _, i := range a2ui.CheckReads(p.Reads, p.Writes, p.Aliases, data, []a2ui.Source{{Path: "/orders", From: "Orders/list", Live: true}}, a2ui.Blocking) {
-		if i.Severity == a2ui.Blocking {
+	for _, i := range surface.CheckReads(p.Reads, p.Writes, p.Aliases, data, []surface.Source{{Path: "/orders", From: "Orders/list", Live: true}}, surface.Blocking) {
+		if i.Severity == surface.Blocking {
 			t.Errorf("data: %v", i)
 		}
 	}
@@ -163,9 +163,9 @@ func TestInspectPageChecksTheAppLayout(t *testing.T) {
  <t-row><t-scroll weight="1"></t-scroll><t-scroll weight="1"></t-scroll></t-row>
 </body></html>`))
 	for _, want := range []struct{ severity, where, text string }{
-		{a2ui.Blocking, "t-column", "does not scroll inside it"},
-		{a2ui.Blocking, "t-table", "in no region that scrolls"},
-		{a2ui.Advice, "t-row", "scrolling panes side by side"},
+		{surface.Blocking, "t-column", "does not scroll inside it"},
+		{surface.Blocking, "t-table", "in no region that scrolls"},
+		{surface.Advice, "t-row", "scrolling panes side by side"},
 	} {
 		if !hasIssue(p.Issues, want.severity, want.where, want.text) {
 			t.Errorf("missing %s issue on %s (%q); got:\n%v", want.severity, want.where, want.text, p.Issues)
@@ -173,7 +173,7 @@ func TestInspectPageChecksTheAppLayout(t *testing.T) {
 	}
 	none := InspectPage([]byte(head + `<body class="t-app"><t-text variant="h4" text="Orders"></t-text>` + rows +
 		`<t-scroll><t-table data='[]' columns='[]'></t-table></t-scroll></body></html>`))
-	if !hasIssue(none.Issues, a2ui.Blocking, "<body>", "nothing in the body takes the rest") {
+	if !hasIssue(none.Issues, surface.Blocking, "<body>", "nothing in the body takes the rest") {
 		t.Errorf("a body with no region passed: %v", none.Issues)
 	}
 	app := InspectPage([]byte(head + `<body class="t-app"><t-text variant="h4" text="Orders"></t-text>` + rows +

@@ -10,7 +10,7 @@ import (
 
 	"github.com/aseman/aseman/internal/plugins/entity"
 	"github.com/aseman/aseman/internal/plugins/identity"
-	"github.com/aseman/aseman/pkg/a2ui"
+	"github.com/aseman/aseman/pkg/surface"
 	"github.com/aseman/aseman/pkg/webkit"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
 	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
@@ -88,8 +88,8 @@ func testReviewer(server *httptest.Server, calls *[]string, look bool) *pageRevi
 		},
 	}
 	if look {
-		pr.look = func(string, *webkit.Page, []byte, map[string]any, *pageTool, map[string]*pageTool, []a2ui.Issue) ([]a2ui.Issue, error) {
-			return []a2ui.Issue{{Severity: a2ui.Blocking, Area: "purpose", Where: "body", Problem: "There is no way to pick a city."}}, nil
+		pr.look = func(string, *webkit.Page, []byte, map[string]any, *pageTool, map[string]*pageTool, []surface.Issue) ([]surface.Issue, error) {
+			return []surface.Issue{{Severity: surface.Blocking, Area: "purpose", Where: "body", Problem: "There is no way to pick a city."}}, nil
 		}
 	}
 	return pr

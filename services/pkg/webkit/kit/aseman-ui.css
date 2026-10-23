@@ -5,7 +5,7 @@
  * sandbox through a preview gateway) look like the Flutter app: the same
  * Material 3 Expressive theme (app/lib/src/core/theme), the same 28/20/16
  * radii, pill buttons and outlined surface cards, the same data palette
- * (ui_kit/palette.dart) and type (genui/catalog/style.dart).
+ * (ui_kit/palette.dart) and type (agui/catalog/style.dart).
  *
  * Load with aseman-ui.js (which adds this sheet itself when missing):
  *   <link rel="stylesheet" href="/_aseman/kit/aseman-ui.css">
@@ -300,7 +300,7 @@ button:disabled, .t-btn[disabled], .t-btn.t-disabled, input[type=submit]:disable
 t-data, t-for > template, t-tabs > template { display: none !important; }
 t-data { display: none; }
 
-/* Layout containers (A2UI Row/Column/Grid/Wrap/Stack/Box/Center/Spacer/AspectRatio/Scroll; Elpian Row/Column/Container/…) */
+/* Layout containers (Surface Spec Row/Column/Grid/Wrap/Stack/Box/Center/Spacer/AspectRatio/Scroll; Elpian Row/Column/Container/…) */
 t-column, t-col, t-list, t-list-view, t-staggered-animation { display: flex; flex-direction: column; gap: var(--t-gap); }
 t-row { display: flex; flex-direction: row; gap: var(--t-gap); align-items: center; }
 t-list[direction=horizontal], t-list-view[scroll-direction=horizontal] { flex-direction: row; overflow-x: auto; }
@@ -360,7 +360,7 @@ t-text[max-lines] { display: -webkit-box; -webkit-box-orient: vertical; overflow
 .t-icon, t-icon { display: inline-flex; align-items: center; justify-content: center; width: var(--t-icon, 24px); height: var(--t-icon, 24px); flex: 0 0 auto; color: inherit; line-height: 1; }
 .t-icon svg, t-icon svg { width: 100%; height: 100%; fill: currentColor; display: block; }
 
-/* Card (A2UI Card, Elpian Card, the app's outlined cards) */
+/* Card (Surface Spec Card, Elpian Card, the app's outlined cards) */
 t-card { display: flex; flex-direction: column; gap: var(--t-gap); background: var(--t-card-bg); border: 1px solid var(--t-card-border); border-radius: var(--t-radius-inner); padding: 16px; min-width: 0; }
 t-card[variant=filled] { background: var(--t-surface-container-high); border-color: transparent; }
 t-card[variant=elevated] { box-shadow: var(--t-shadow-3); }
@@ -407,7 +407,7 @@ t-expandable, t-accordion { display: block; }
 .t-exp__inner { overflow: hidden; }
 .t-exp__content { padding: 4px 14px 14px; display: flex; flex-direction: column; gap: var(--t-gap); }
 
-/* Buttons (A2UI Button variants: primary, default/outlined, borderless/text, tonal, destructive; Elpian ElevatedButton) */
+/* Buttons (Surface Spec Button variants: primary, default/outlined, borderless/text, tonal, destructive; Elpian ElevatedButton) */
 .t-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 14px 20px; border-radius: var(--t-radius-pill); font-size: 14px; font-weight: 700; line-height: 1; border: 1px solid var(--t-outline-variant); background: transparent; color: var(--t-primary); cursor: pointer; position: relative; overflow: hidden; white-space: nowrap; text-decoration: none; transition: background .15s, box-shadow .15s, transform .1s; font-family: inherit; }
 .t-btn .t-icon { --t-icon: 18px; }
 .t-btn[data-variant=primary] { background: var(--t-primary); color: var(--t-on-primary); border-color: transparent; }
@@ -478,7 +478,7 @@ t-badge[count], t-badge[label] { position: relative; display: inline-flex; }
 .t-callout__title { font-weight: 700; font-size: 14px; }
 .t-callout__text { font-size: 13.5px; color: var(--t-on-surface); }
 
-/* Images (A2UI Image variants), video, audio player */
+/* Images (Surface Spec Image variants), video, audio player */
 t-image { display: block; }
 t-image img { display: block; width: 100%; height: 100%; object-fit: var(--t-fit, cover); }
 t-image[variant=icon] { width: 24px; height: 24px; } t-image[variant=icon] img { border-radius: 4px; }
@@ -496,7 +496,7 @@ t-video video { width: 100%; display: block; background: #000; }
 .t-audio__bar > div { height: 100%; width: 0; background: var(--t-primary); }
 .t-audio__time { font-size: 11.5px; color: var(--t-on-surface-variant); font-variant-numeric: tabular-nums; }
 
-/* Inputs (A2UI TextField, CheckBox, Switch, Slider, ChoicePicker, DateTimeInput, Dropdown, SearchField, NumberStepper, RangeSlider, SegmentedControl) */
+/* Inputs (Surface Spec TextField, CheckBox, Switch, Slider, ChoicePicker, DateTimeInput, Dropdown, SearchField, NumberStepper, RangeSlider, SegmentedControl) */
 .t-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .t-field__label { font-size: 13px; font-weight: 600; color: var(--t-on-surface); }
 .t-field__helper { font-size: 12px; color: var(--t-on-surface-variant); padding-left: 12px; }

@@ -5,7 +5,7 @@
 //   npm pack @material-design-icons/svg@0.14.15 && tar xzf *.tgz
 //   node tools/gen_icons.mjs <extracted package dir> <map.txt> <used.txt>
 //
-// map.txt: "<app name> <material name>" lines (Elpian, A2UI and kit names);
+// map.txt: "<app name> <material name>" lines (Elpian, Surface Spec and kit names);
 // used.txt: material names the Flutter app uses.
 import fs from 'node:fs';
 import path from 'node:path';

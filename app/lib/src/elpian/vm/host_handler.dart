@@ -7,7 +7,7 @@ import '../canvas/canvas_context_store.dart';
 import '../core/dom_api.dart';
 import '../core/elpian_services.dart';
 import 'host_api_catalog.dart';
-import '../a2ui/elpian.dart';
+import '../agui/elpian.dart';
 
 typedef RenderHostCallback = void Function(
   Map<String, dynamic> viewJson,
@@ -136,17 +136,17 @@ class HostHandler {
   }
 
   /// The synchronous form of the agent APIs, for callers that cannot await
-  /// ([dispatch] is preferred): `a2ui.dataModel` answers as usual; a turn is
+  /// ([dispatch] is preferred): `agui.dataModel` answers as usual; a turn is
   /// started and the reply carries the conversation id known so far.
   String _handleAgentApiSync(String apiName, String payload) {
-    if (apiName == 'a2ui.dataModel') {
+    if (apiName == 'agui.dataModel') {
       final args = agentCallArgs(payload);
       final key = args['conversation'] is String &&
               (args['conversation'] as String).isNotEmpty
           ? args['conversation'] as String
           : 'agent:${args['agent'] ?? ''}';
       final surfaceId = args['surfaceId'];
-      final conversation = a2uiRegistry(services)[key];
+      final conversation = agUiRegistry(services)[key];
       if (conversation == null || surfaceId is! String) return _nullResponse();
       return valueResponse(conversation.dataModel(surfaceId));
     }
@@ -157,7 +157,7 @@ class HostHandler {
         ? args['conversation'] as String
         : 'agent:${args['agent'] ?? ''}';
     return _makeResponse('object', {
-      'conversationId': a2uiRegistry(services)[key]?.conversationId,
+      'conversationId': agUiRegistry(services)[key]?.conversationId,
       'conversation': key,
     });
   }

@@ -16,7 +16,7 @@ const ICON_ALIASES = {"arrow_back":"arrow_back","arrow_forward":"arrow_forward",
 // ==== 01_core.js ====
 // ---------------------------------------------------------------------------
 // Core: values and formats (ui_kit/values.dart), colors (ui_kit/palette.dart),
-// icons, DOM helpers, the data model with {"path"} bindings, the A2UI client
+// icons, DOM helpers, the data model with {"path"} bindings, the AG-UI surface client
 // functions and actions, and the base class of every <t-*> element.
 // ---------------------------------------------------------------------------
 
@@ -279,7 +279,7 @@ const ICON_EXTRA = { copy: 'content_copy', info_outline: 'info', bookmark_outlin
   arrowUp: 'arrow_upward', arrowDown: 'arrow_downward', arrowLeft: 'arrow_back', arrowRight: 'arrow_forward',
   caretUp: 'arrow_drop_up', caretDown: 'arrow_drop_down', moon: 'dark_mode', light: 'light_mode', dark: 'dark_mode' };
 const snake = (n) => n.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
-/** The material icon a name names (A2UI camelCase, Elpian snake_case, kit names), or null. */
+/** The material icon a name names (Surface Spec camelCase, Elpian snake_case, kit names), or null. */
 function iconName(name) {
   if (!name || typeof name !== 'string') return null;
   const tries = [name, ICON_EXTRA[name], ICON_ALIASES[name], name.toLowerCase(), snake(name), ICON_ALIASES[snake(name)],
@@ -401,7 +401,7 @@ const ALIGN = { start: 'flex-start', center: 'center', end: 'flex-end', stretch:
 // ---- data model and bindings --------------------------------------------
 
 /**
- * A JSON data model with paths ("/a/b/0"), as A2UI surfaces have: elements
+ * A JSON data model with paths ("/a/b/0"), as AG-UI surfaces have: elements
  * bind props to it with {"path": "/x"} (or bind-<prop>="/x") and re-render
  * when what they read changes; inputs write to it.
  */
@@ -475,7 +475,7 @@ function joinPath(scope, path) {
 
 /**
  * Resolves a prop value against the store: {"path"} bindings, {"call", args}
- * functions, A2UI literal wrappers, and nested maps and lists.
+ * functions, Surface Spec literal wrappers, and nested maps and lists.
  */
 function resolve(v, scope, store = Aseman.data) {
   if (v == null || typeof v !== 'object') return v;
@@ -500,7 +500,7 @@ function resolve(v, scope, store = Aseman.data) {
   return out;
 }
 
-// ---- functions (A2UI client functions) -----------------------------------
+// ---- functions (Surface Spec client functions) -------------------------
 
 function interpolate(text, scope, store) {
   return String(text ?? '').replace(/\$\{([^}]+)\}/g, (_, p) => {
@@ -596,7 +596,7 @@ const CLIENT_ACTIONS = {
 };
 Aseman.actions = CLIENT_ACTIONS;
 const eventHandlers = {};
-/** Aseman.on('submit_order', (context, element) => …): handles A2UI-style event actions on the page. */
+/** Aseman.on('submit_order', (context, element) => …): handles Surface Spec event actions on the page. */
 Aseman.on = (name, fn) => { (eventHandlers[name] ||= []).push(fn); return () => { eventHandlers[name] = eventHandlers[name].filter((f) => f !== fn); }; };
 
 /** "weather/forecast", "weather.forecast" or "weather:forecast" → [tool, microtool]. */
@@ -607,7 +607,7 @@ function splitCall(spec) {
 }
 
 /**
- * Runs an action from an element: a client functionCall, an A2UI event
+ * Runs an action from an element: a client functionCall, a Surface Spec event
  * (dispatched as a t-action DOM event and to Aseman.on handlers), a
  * Aseman API call {tool, microtool, args, into}, or a list of them in order.
  * [extra] (a tapped row, an input's value) joins the event's context.
@@ -995,7 +995,7 @@ Aseman.tool = (name) => new Proxy({
   show: (opts) => Aseman.show(name, opts),
 }, { get: (t, k) => (k in t || typeof k === 'symbol' ? t[k] : (args) => Aseman.call(name, k, args)) });
 
-/** A tool's own frontend: {mode, messages (A2UI, for generative), template, …}. */
+/** A tool's own frontend: {mode, messages (AG-UI events, for generative), template, …}. */
 Aseman.frontend = (tool, opts = {}) => api('frontend', { tool, ...opts });
 /** Runs an action of a tool's generative frontend; returns {data}. */
 Aseman.frontendAction = (tool, action, opts = {}) => api('action', { tool, action, ...opts });
@@ -1097,7 +1097,7 @@ function initTheme() {
 
 // ==== 03_layout.js ====
 // ---------------------------------------------------------------------------
-// Layout: A2UI Row/Column/List/Grid/Wrap/Stack/Box/Center/Spacer/AspectRatio/
+// Layout: Surface Spec Row/Column/List/Grid/Wrap/Stack/Box/Center/Spacer/AspectRatio/
 // Scroll and every Elpian layout, gesture and animation widget (Container,
 // Padding, SizedBox, Expanded, Transform, GestureDetector, Dismissible,
 // Draggable, AnimatedContainer, Shimmer, Pulse…). Their children are the
@@ -1234,7 +1234,7 @@ layout('wrap', (el, P) => {
   boxStyle(el);
 });
 /**
- * For {each}: its <template> once per item. (A2UI surfaces give it a
+ * For {each}: its <template> once per item. (AG-UI surfaces give it a
  * builder instead, which makes each item's component.)
  */
 define('for', class extends LayoutElement {
@@ -1292,7 +1292,7 @@ layout('indexed-stack', (el, P) => {
   boxStyle(el);
 });
 
-// Boxes: A2UI Box, Elpian Container / DecoratedBox / Padding / SizedBox / ConstrainedBox / LimitedBox / OverflowBox.
+// Boxes: Surface Spec Box, Elpian Container / DecoratedBox / Padding / SizedBox / ConstrainedBox / LimitedBox / OverflowBox.
 for (const n of ['box', 'container', 'decorated-box', 'padding', 'sized-box', 'constrained-box', 'limited-box', 'overflow-box', 'baseline', 'scope', 'hero']) {
   layout(n, (el, P) => {
     boxStyle(el);
@@ -3813,7 +3813,7 @@ component('graph', (el, p) => {
 
 // ==== 09_markets.js ====
 // ---------------------------------------------------------------------------
-// Markets (genui/catalog/markets.dart): Quote, OrderBook, TickerTape,
+// Markets (agui/catalog/markets.dart): Quote, OrderBook, TickerTape,
 // AllocationBar, Countdown.
 // ---------------------------------------------------------------------------
 
@@ -3923,11 +3923,10 @@ component('countdown', (el, p) => {
   el._timer = setInterval(tick, 1000);
 }, { cleanup() { clearInterval(this._timer); } });
 
-// ==== 10_a2ui.js ====
+// ==== 10_agui.js ====
 // ---------------------------------------------------------------------------
-// A2UI surfaces and Elpian nodes on the web, the same JSON the app renders:
-//   <t-surface>: A2UI v0.9 messages (createSurface / updateComponents /
-//     updateDataModel), or {components, data}; event actions reach
+// AG-UI surfaces and Elpian nodes on the web, the same JSON the app renders:
+//   <t-surface>: AG-UI surface events (aseman.surface.*) or {components, data}; event actions reach
 //     Aseman.on handlers.
 //   <t-tool-frontend tool microtool args>: a tool's own frontend: its
 //     generative surface with its actions run by the tool (frontend_action),
@@ -3938,8 +3937,8 @@ component('countdown', (el, p) => {
 //     into the data model, again when its bound args change.
 // ---------------------------------------------------------------------------
 
-/** Component types → elements (A2UI basic + Aseman catalog). */
-const A2UI_TAGS = {
+/** Component types → elements (Aseman Surface Spec catalog). */
+const AGUI_TAGS = {
   Text: 't-text', Image: 't-image', Icon: 't-icon', Video: 't-video', AudioPlayer: 't-audio-player', Row: 't-row', Column: 't-column',
   List: 't-list', Card: 't-card', Tabs: 't-tabs', Modal: 't-modal', Divider: 't-divider', Button: 't-button', TextField: 't-text-field',
   CheckBox: 't-checkbox', ChoicePicker: 't-choice-picker', Slider: 't-slider', DateTimeInput: 't-date-time-input',
@@ -3954,8 +3953,17 @@ const A2UI_TAGS = {
   EmptyState: 't-empty-state', Skeleton: 't-skeleton', Loading: 't-loading', Tooltip: 't-tooltip', AvatarGroup: 't-avatar-group',
   Markdown: 't-markdown', Show: 't-show', Countdown: 't-countdown', Quote: 't-quote', OrderBook: 't-order-book',
   TickerTape: 't-ticker-tape', AllocationBar: 't-allocation-bar', Trend: 't-trend',
+  AppBar: 't-app-bar', NavigationRail: 't-navigation-rail', Drawer: 't-drawer', BottomNav: 't-bottom-nav',
+  Breadcrumb: 't-breadcrumb', CommandPalette: 't-command-palette', FAB: 't-fab', Sidebar: 't-sidebar',
+  Form: 't-form', FormField: 't-form-field', Autocomplete: 't-autocomplete', ChipInput: 't-chip-input',
+  ColorPicker: 't-color-picker', FilePicker: 't-file-picker', CodeEditor: 't-code-editor',
+  RichTextEditor: 't-rich-text-editor', TagInput: 't-tag-input',
+  Canvas: 't-canvas', DrawingPad: 't-drawing-pad', Map2D: 't-map2-d', AnnotationLayer: 't-annotation-layer',
+  PDFViewer: 't-pdfviewer', Scene3D: 't-scene3-d', Model3D: 't-model3-d', OrbitView: 't-orbit-view',
+  ChatCard: 't-chat-card', InlinePanel: 't-inline-panel', ConfirmBar: 't-confirm-bar', SuggestionChips: 't-suggestion-chips',
+  AnimatedVisibility: 't-animated-visibility', SharedAxis: 't-shared-axis', Hero: 't-hero',
 };
-const STRUCTURAL = new Set(['id', 'component', 'child', 'children', 'weight', 'accessibility', 'trigger', 'content', 'tabs', 'panes', 'fallback', 'items']);
+const STRUCTURAL = new Set(['id', 'component', 'type', 'child', 'children', 'weight', 'accessibility', 'trigger', 'content', 'tabs', 'panes', 'fallback', 'items']);
 
 /** Rewrites absolute data paths of a surface's props under its root ({"path": "/x"} → /__surfaces/<id>/x). */
 function rooted(v, root) {
@@ -3970,8 +3978,8 @@ function rooted(v, root) {
   }
   return out;
 }
-/** Models write "${/x}" and "{{x}}" in plain strings: bindings, as the app reads them (genui/runtime/messages.dart). */
-function a2uiValue(s) {
+/** Models write "${/x}" and "{{x}}" in plain strings: bindings, as the app reads them (agui/runtime/messages.dart). */
+function surfaceValue(s) {
   if (typeof s !== 'string' || (!s.includes('${') && !s.includes('{{'))) return s;
   const t = s.replace(/\{\{\s*([A-Za-z0-9_./~\-[\]]+)\s*\}\}/g, (_, p) => '${' + (p.includes('/') ? p : p.replace(/\./g, '/')).replace(/\[/g, '/').replace(/\]/g, '') + '}');
   const whole = /^\$\{\s*([A-Za-z0-9_./~-]+)\s*\}$/.exec(t);
@@ -3979,7 +3987,7 @@ function a2uiValue(s) {
   return { call: 'formatString', args: { value: t }, returnType: 'string' };
 }
 function normalizeProps(v) {
-  if (typeof v === 'string') return a2uiValue(v);
+  if (typeof v === 'string') return surfaceValue(v);
   if (Array.isArray(v)) return v.map(normalizeProps);
   if (isMap(v)) { const o = {}; for (const [k, x] of Object.entries(v)) o[k] = k === 'path' || k === 'call' ? x : normalizeProps(x); return o; }
   return v;
@@ -3998,6 +4006,32 @@ class Surface {
   }
   apply(message) {
     const m = isMap(message) ? message : {};
+    // AG-UI CUSTOM aseman.surface.* events
+    if (m.type === 'CUSTOM' && typeof m.name === 'string' && m.name.startsWith('aseman.surface.') && isMap(m.value)) {
+      const v = m.value;
+      if (m.name.endsWith('.create')) {
+        this.theme = asMap(v.theme); this.sid = v.surfaceId || this.sid;
+        if (v.layout && !this.theme.layout) this.theme.layout = v.layout;
+        return;
+      }
+      if (m.name.endsWith('.update')) { for (const c of asList(v.components)) this.addComponent(c); return; }
+      if (m.name.endsWith('.patchData')) {
+        const path = v.path && v.path !== '/' ? this.root + (v.path.startsWith('/') ? v.path : '/' + v.path) : this.root;
+        if (path === this.root) Aseman.data.set(this.root, v.value ?? {}); else Aseman.data.set(path, v.value);
+        return;
+      }
+      if (m.name.endsWith('.delete')) { this.host.replaceChildren(); return; }
+    }
+    if (m.type === 'STATE_SNAPSHOT' && isMap(m.snapshot) && isMap(m.snapshot['aseman.surfaces'])) {
+      const surfaces = m.snapshot['aseman.surfaces'];
+      const first = surfaces[this.sid] || surfaces[Object.keys(surfaces)[0]];
+      if (isMap(first)) {
+        this.theme = asMap(first.theme);
+        for (const c of asList(first.components)) this.addComponent(c);
+        if (first.data !== undefined) this.setData(first.data);
+      }
+      return;
+    }
     if (m.createSurface) { this.theme = asMap(m.createSurface.theme); if (m.createSurface.surfaceId) this.sid = m.createSurface.surfaceId; }
     const upd = m.updateComponents || m.surfaceUpdate;
     if (upd) for (const c of asList(upd.components)) this.addComponent(c);
@@ -4012,8 +4046,10 @@ class Surface {
   }
   addComponent(c) {
     if (!isMap(c) || !c.id) return;
-    // v0.8: {id, component: {Type: {props}}} → flat v0.9.
     if (isMap(c.component)) { const [type, props] = Object.entries(c.component)[0] || []; c = { id: c.id, component: type, ...asMap(props), weight: c.weight }; }
+    // Surface Spec prefers "type"; keep "component" for the renderer.
+    if (c.type && !c.component) c.component = c.type;
+    if (c.component && !c.type) c.type = c.component;
     this.components[c.id] = c;
   }
   setData(value) { Aseman.data.set(this.root, value ?? {}); }
@@ -4026,8 +4062,8 @@ class Surface {
   build(id, depth = 0) {
     const c = this.components[id];
     if (!c || depth > 60) return h('span', { class: 't-caption' }, c ? '' : `missing component ${id}`);
-    const type = c.component;
-    const tag = A2UI_TAGS[type] || (customElements.get('t-' + kebab(type || '')) ? 't-' + kebab(type) : null);
+    const type = c.component || c.type;
+    const tag = AGUI_TAGS[type] || (customElements.get('t-' + kebab(type || '')) ? 't-' + kebab(type) : null);
     if (!tag) return problem(`Unknown component ${type}`);
     const e = document.createElement(tag);
     const props = {};
@@ -4065,7 +4101,7 @@ class Surface {
   }
 }
 /**
- * <t-surface>: renders A2UI. Its messages come from the messages prop, a
+ * <t-surface>: renders AG-UI surfaces. Its messages come from the messages prop, a
  * <script type="application/json"> child (messages, or {components, data}),
  * or src (a URL returning them).
  *   surface.apply({updateDataModel: {path: '/price', value: 12}})
@@ -4094,7 +4130,7 @@ define('surface', class extends TElement {
     this.replaceChildren(out);
     this._scope = s.root;
   }
-  /** Applies more A2UI messages (components, data) to the surface. */
+  /** Applies more AG-UI / surface messages (components, data) to the surface. */
   apply(...messages) { this._surface ||= new Surface(this); for (const m of messages.flat()) this._surface.apply(m); if (messages.flat().some((m) => m.updateComponents || m.surfaceUpdate)) { this._dirty = true; this.update(); } }
   get surface() { return this._surface; }
   get data() { return this._surface?.data; }
@@ -4227,7 +4263,7 @@ function elpian(node, surface) {
   if (isMap(style) && !(e instanceof TElement)) applyStyle(e, style);
   if (typeof style === 'string') e.style.cssText = style;
   if (node.key) e.dataset.key = node.key;
-  // Events: an action (A2UI or Aseman call), or a name reported as a t-elpian event.
+  // Events: an action (surface or Aseman call), or a name reported as a t-elpian event.
   for (const [ev, handler] of Object.entries(asMap(node.events))) {
     const domEv = { tap: 'click', onTap: 'click', onClick: 'click', onPressed: 'click', onChanged: 'change', onChange: 'change', onSubmit: 'submit', onInput: 'input' }[ev] || ev.replace(/^on/, '').toLowerCase();
     e.addEventListener(domEv, (x) => {
@@ -4294,6 +4330,163 @@ define('data', class extends TElement {
   }
   cleanup() { clearInterval(this._timer); this._key = null; }
 });
+
+// ==== 11_spatial.js ====
+// ---------------------------------------------------------------------------
+// Extra Surface Spec elements: chrome, chat, 2D/3D — rich enough for agent
+// web consoles; professional pages still prefer charts/tables from the kit.
+// ---------------------------------------------------------------------------
+
+component('app-bar', (e, p) => {
+  e.className = 't-app-bar';
+  e.replaceChildren(
+    el('row', { justify: 'spaceBetween', align: 'center' },
+      el('column', { gap: 2 },
+        el('text', { text: p.title ?? '', variant: 'h4' }),
+        p.subtitle ? el('text', { text: p.subtitle, variant: 'caption' }) : null),
+    ),
+  );
+});
+component('navigation-rail', (e, p) => {
+  const dests = asList(p.destinations);
+  e.replaceChildren(...dests.map((d) => el('button', { text: asText(d.label), icon: d.icon, variant: 'borderless', fullWidth: true })));
+});
+component('drawer', (e) => { e.className = 't-drawer'; });
+component('bottom-nav', (e, p) => {
+  e.className = 't-bottom-nav';
+  e.replaceChildren(...asList(p.destinations).map((d) => el('button', { text: asText(d.label), icon: d.icon, variant: 'borderless' })));
+});
+component('breadcrumb', (e, p) => {
+  e.replaceChildren(...asList(p.items).flatMap((it, i) => i ? [document.createTextNode(' / '), el('link', { text: asText(it.label) })] : [el('link', { text: asText(it.label) })]));
+});
+component('command-palette', (e, p) => {
+  e.replaceChildren(el('search-field', { placeholder: p.placeholder ?? 'Search…' }),
+    ...asList(p.items).map((it) => el('button', { text: asText(it.label), icon: it.icon, variant: 'borderless', fullWidth: true })));
+});
+component('fab', (e, p) => el('icon-button', { icon: p.icon ?? 'add', variant: 'filled' }));
+component('sidebar', (e) => { e.className = 't-sidebar'; e.style.minWidth = '200px'; });
+component('form-field', (e, p) => {
+  e.replaceChildren(p.label ? el('text', { text: asText(p.label), variant: 'caption' }) : null);
+});
+component('autocomplete', (e, p) => el('text-field', { label: p.label, value: p.value }));
+component('chip-input', (e, p) => {
+  e.replaceChildren(...asList(p.value).map((v) => el('chip', { text: asText(v) })));
+});
+component('tag-input', (e, p) => {
+  e.replaceChildren(...asList(p.value).map((v) => el('chip', { text: asText(v) })));
+});
+component('color-picker', (e, p) => {
+  const sw = asList(p.swatches).length ? asList(p.swatches) : ['#2563EB', '#F59E0B', '#10B981', '#EF4444'];
+  e.replaceChildren(...sw.map((c) => h('span', { style: { display: 'inline-block', width: '24px', height: '24px', borderRadius: '50%', background: asText(c), marginRight: '6px' } })));
+});
+component('file-picker', (e, p) => el('button', { text: p.label ?? 'Choose file', icon: 'attach_file', variant: 'tonal' }));
+component('code-editor', (e, p) => {
+  const ta = h('textarea', { class: 't-code-editor', style: { width: '100%', minHeight: '120px', fontFamily: 'monospace' } });
+  ta.value = asText(p.value);
+  e.replaceChildren(ta);
+});
+component('rich-text-editor', (e, p) => el('text-field', { label: p.label, value: p.value, variant: 'longText' }));
+component('canvas', (e, p) => {
+  e.style.height = px(p.height ?? 200);
+  e.style.background = 'var(--t-surface-variant, #eee)';
+  e.style.borderRadius = '8px';
+});
+component('drawing-pad', (e, p) => { e.style.height = px(p.height ?? 220); e.style.border = '1px dashed var(--t-outline, #ccc)'; });
+component('map2-d', (e, p) => {
+  e.style.height = px(p.height ?? 220);
+  e.style.background = 'var(--t-surface-variant, #e8eef5)';
+  e.style.borderRadius = '8px';
+  e.replaceChildren(...asList(p.markers).map((m) => el('badge', { text: asText(m.label ?? '•') })));
+});
+component('annotation-layer', (e) => { e.style.position = 'relative'; });
+component('pdfviewer', (e, p) => {
+  e.style.height = px(p.height ?? 320);
+  e.replaceChildren(el('callout', { title: 'PDF', text: asText(p.url), severity: 'info' }));
+});
+/** 3D scene (Three.js when available; otherwise a rich placeholder). */
+define('scene3-d', class extends TElement {
+  render() {
+    const p = this.props;
+    this.style.height = px(p.height ?? 280);
+    this.style.position = 'relative';
+    this.style.borderRadius = '12px';
+    this.style.overflow = 'hidden';
+    this.style.background = 'linear-gradient(135deg, var(--t-surface-variant, #1e293b), var(--t-surface, #0f172a))';
+    if (window.THREE && p.src) {
+      this._bootThree(p);
+      return;
+    }
+    this.replaceChildren(
+      h('div', { style: { display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: 'var(--t-on-surface, #fff)', gap: '8px' } },
+        el('icon', { name: 'view_in_ar' }),
+        el('text', { text: 'Scene3D', variant: 'h5' }),
+        p.src ? el('text', { text: asText(p.src), variant: 'caption' }) : null,
+      ),
+    );
+  }
+  _bootThree(p) {
+    if (this._three) return;
+    const canvas = h('canvas', { style: { width: '100%', height: '100%' } });
+    this.replaceChildren(canvas);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+    camera.position.z = 3;
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(2, 2, 3);
+    scene.add(light, new THREE.AmbientLight(0xffffff, 0.4));
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x2563eb }));
+    scene.add(mesh);
+    const resize = () => {
+      const w = this.clientWidth || 300, h = this.clientHeight || 280;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h; camera.updateProjectionMatrix();
+    };
+    resize();
+    const tick = () => {
+      if (!this.isConnected) return;
+      mesh.rotation.y += 0.01; mesh.rotation.x += 0.005;
+      renderer.render(scene, camera);
+      requestAnimationFrame(tick);
+    };
+    tick();
+    this._three = { renderer, scene, camera, mesh };
+    this._ro = new ResizeObserver(resize); this._ro.observe(this);
+  }
+  cleanup() { this._ro?.disconnect(); this._three = null; }
+});
+component('model3-d', (e, p) => {
+  const s = document.createElement('t-scene3-d');
+  s._raw = { src: p.src, height: p.height, autoRotate: p.autoRotate };
+  s._attrsRead = true;
+  e.replaceChildren(s);
+});
+component('orbit-view', (e, p) => {
+  const s = document.createElement('t-scene3-d');
+  s._raw = { src: p.src, height: p.height, camera: { yaw: p.yaw, pitch: p.pitch, distance: p.distance } };
+  s._attrsRead = true;
+  e.replaceChildren(s);
+});
+component('chat-card', (e, p) => {
+  e.className = 't-card';
+  if (p.title) e.prepend(el('text', { text: p.title, variant: 'h5' }));
+});
+component('inline-panel', (e) => { e.style.padding = '8px'; });
+component('confirm-bar', (e, p) => {
+  e.replaceChildren(
+    p.message ? el('text', { text: p.message }) : null,
+    el('row', { gap: 8 },
+      el('button', { text: p.cancelLabel ?? 'Cancel', variant: 'borderless' }),
+      el('button', { text: p.confirmLabel ?? 'Confirm', variant: 'primary' }),
+    ),
+  );
+});
+component('suggestion-chips', (e, p) => {
+  e.replaceChildren(...asList(p.items).map((it) => el('chip', { text: asText(it.label) })));
+});
+component('animated-visibility', (e) => { e.style.transition = 'opacity .2s'; });
+component('shared-axis', (e) => {});
+component('hero', (e) => {});
 
 // ==== 99_boot.js ====
 // ---------------------------------------------------------------------------

@@ -10,12 +10,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aseman/aseman/pkg/a2ui"
+	"github.com/aseman/aseman/pkg/surface"
 	"golang.org/x/net/html"
 )
 
 // A page an agent builds is inspected before anyone is shown it, as a
-// generated frontend is (pkg/a2ui/inspect.go): InspectPage reads its HTML the
+// generated frontend is (pkg/surface/inspect.go): InspectPage reads its HTML the
 // way the kit runs it — the kit loaded, every <t-…> a component the kit has,
 // every attribute a prop the kit can read, every call naming a tool and a
 // microtool, every control wired to something, every value shown filled by
@@ -46,10 +46,10 @@ type Call struct {
 // Page is a page read for inspection.
 type Page struct {
 	Title  string
-	Issues []a2ui.Issue
+	Issues []surface.Issue
 	Calls  []Call
-	// Reads, Writes and Aliases are as a2ui.CheckReads takes them.
-	Reads   []a2ui.Read
+	// Reads, Writes and Aliases are as surface.CheckReads takes them.
+	Reads   []surface.Read
 	Writes  []string
 	Aliases map[string]string
 	// Resources are the page's own files it loads (relative URLs).
@@ -109,14 +109,14 @@ var knownTags = func() map[string]bool {
 // KnownTag reports whether the kit defines the element [tag].
 func KnownTag(tag string) bool { return knownTags[tag] }
 
-// Kit elements that take input, and what their "value" is in A2UI.
+// Kit elements that take input, and what their "value" is in AG-UI Surface.
 var inputTags = map[string]bool{
 	"t-text-field": true, "t-check-box": true, "t-checkbox": true, "t-switch": true, "t-slider": true,
 	"t-choice-picker": true, "t-date-time-input": true, "t-segmented-control": true, "t-dropdown": true,
 	"t-range-slider": true, "t-number-stepper": true, "t-search-field": true, "t-radio": true,
 }
 
-// Kit elements whose rows can be tapped, with their A2UI type.
+// Kit elements whose rows can be tapped, with their AG-UI Surface type.
 var dataViews = map[string]string{
 	"t-table": "Table", "t-chart": "Chart", "t-treemap": "Treemap", "t-allocation-bar": "AllocationBar",
 	"t-data-grid": "Table", "t-heatmap": "Heatmap", "t-timeline": "Timeline", "t-graph": "Graph", "t-tree-view": "TreeView",
@@ -141,7 +141,7 @@ func InspectPage(src []byte) *Page {
 	p := &Page{Aliases: map[string]string{}, events: map[string]string{}, handlers: map[string]bool{}, ids: map[string]int{}}
 	doc, err := html.Parse(bytes.NewReader(src))
 	if err != nil {
-		p.issue(a2ui.Blocking, "structure", "", "the page is not HTML: "+err.Error(), "serve an HTML page")
+		p.issue(surface.Blocking, "structure", "", "the page is not HTML: "+err.Error(), "serve an HTML page")
 		return p
 	}
 	var viewport, tPage, css, usesKit bool
@@ -149,7 +149,7 @@ func InspectPage(src []byte) *Page {
 	walk = func(n *html.Node, scope string, form *Call) {
 		if n.Type == html.TextNode {
 			if t := strings.TrimSpace(n.Data); t != "" && n.Parent != nil && n.Parent.Data != "script" && n.Parent.Data != "style" && placeholderText.MatchString(t) {
-				p.issue(a2ui.Blocking, "design", describe(n.Parent), "shows placeholder text: "+strconv.Quote(clip(t, 60)), "show real content or remove it")
+				p.issue(surface.Blocking, "design", describe(n.Parent), "shows placeholder text: "+strconv.Quote(clip(t, 60)), "show real content or remove it")
 			}
 			return
 		}
@@ -164,7 +164,7 @@ func InspectPage(src []byte) *Page {
 			if each := attr(n, "each"); each != "" {
 				list := eachPath(scope, each)
 				if list != "" {
-					p.Reads = append(p.Reads, a2ui.Read{Component: describe(n), Path: list + "/*"})
+					p.Reads = append(p.Reads, surface.Read{Component: describe(n), Path: list + "/*"})
 					scope = list + "/*"
 				}
 			}
@@ -184,7 +184,7 @@ func InspectPage(src []byte) *Page {
 }
 
 func (p *Page) issue(severity, area, where, problem, fix string) {
-	p.Issues = append(p.Issues, a2ui.Issue{Severity: severity, Area: area, Where: where, Problem: problem, Fix: fix})
+	p.Issues = append(p.Issues, surface.Issue{Severity: severity, Area: area, Where: where, Problem: problem, Fix: fix})
 }
 
 // element reads one element; it returns the scope and the form its
@@ -193,12 +193,12 @@ func (p *Page) element(n *html.Node, scope string, form *Call, viewport, tPage, 
 	tag := n.Data
 	where := describe(n)
 	if s := attr(n, "scope"); s != "" {
-		scope = a2ui.JoinPath(scope, s)
+		scope = surface.JoinPath(scope, s)
 	}
 	if id := attr(n, "id"); id != "" {
 		p.ids[id]++
 		if p.ids[id] == 2 {
-			p.issue(a2ui.Advice, "structure", "#"+id, "two elements have the id \""+id+"\"", "give every element its own id")
+			p.issue(surface.Advice, "structure", "#"+id, "two elements have the id \""+id+"\"", "give every element its own id")
 		}
 	}
 	switch tag {
@@ -238,7 +238,7 @@ func (p *Page) element(n *html.Node, scope string, form *Call, viewport, tPage, 
 	if strings.HasPrefix(tag, "t-") {
 		*usesKit = true
 		if !knownTags[tag] {
-			p.issue(a2ui.Blocking, "structure", where, "<"+tag+"> is no component of the kit, so it renders nothing",
+			p.issue(surface.Blocking, "structure", where, "<"+tag+"> is no component of the kit, so it renders nothing",
 				"use a kit component (gallery: /_aseman/kit/gallery.html)")
 		}
 	}
@@ -254,14 +254,14 @@ func (p *Page) element(n *html.Node, scope string, form *Call, viewport, tPage, 
 			continue
 		case strings.HasPrefix(key, "bind-"):
 			prop := key[5:]
-			path := a2ui.JoinPath(scope, value)
+			path := surface.JoinPath(scope, value)
 			switch {
 			case prop == "value" && (inputTags[tag] || isNativeInput(n)):
 				p.Writes = append(p.Writes, path)
 			case prop == "selection":
 				p.Writes = append(p.Writes, path)
 			default:
-				p.Reads = append(p.Reads, a2ui.Read{Component: where, Path: path})
+				p.Reads = append(p.Reads, surface.Read{Component: where, Path: path})
 			}
 			props[camel(prop)] = map[string]any{"path": value}
 			continue
@@ -272,7 +272,7 @@ func (p *Page) element(n *html.Node, scope string, form *Call, viewport, tPage, 
 		v := parse(value)
 		if s := strings.TrimSpace(value); (strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}")) || (strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]")) {
 			if _, ok := v.(string); ok {
-				p.issue(a2ui.Blocking, "structure", where, "its "+key+" attribute is not valid JSON, so the kit reads it as plain text",
+				p.issue(surface.Blocking, "structure", where, "its "+key+" attribute is not valid JSON, so the kit reads it as plain text",
 					"write it as JSON (double quotes, no trailing commas)")
 			}
 		}
@@ -283,12 +283,12 @@ func (p *Page) element(n *html.Node, scope string, form *Call, viewport, tPage, 
 	rows := ""
 	if b, ok := props["data"].(map[string]any); ok {
 		if path, ok := b["path"].(string); ok {
-			rows = a2ui.JoinPath(scope, path) + "/*"
+			rows = surface.JoinPath(scope, path) + "/*"
 		}
 	}
 	if kind, ok := dataViews[tag]; ok && rows != "" {
-		for _, f := range a2ui.Fields(kind, props) {
-			p.Reads = append(p.Reads, a2ui.Read{Component: where, Path: a2ui.JoinPath(rows, f)})
+		for _, f := range surface.Fields(kind, props) {
+			p.Reads = append(p.Reads, surface.Read{Component: where, Path: surface.JoinPath(rows, f)})
 		}
 	}
 	for key, v := range props {
@@ -302,7 +302,7 @@ func (p *Page) element(n *html.Node, scope string, form *Call, viewport, tPage, 
 		case key == "selection":
 			if b, ok := v.(map[string]any); ok {
 				if path, ok := b["path"].(string); ok {
-					sel := a2ui.JoinPath(scope, path)
+					sel := surface.JoinPath(scope, path)
 					p.Writes = append(p.Writes, sel)
 					if rows != "" {
 						p.Aliases[sel] = rows
@@ -312,7 +312,7 @@ func (p *Page) element(n *html.Node, scope string, form *Call, viewport, tPage, 
 		case key == "value" && (inputTags[tag] || isNativeInput(n)):
 			if b, ok := v.(map[string]any); ok && b["path"] != nil {
 				if path, ok := b["path"].(string); ok {
-					p.Writes = append(p.Writes, a2ui.JoinPath(scope, path))
+					p.Writes = append(p.Writes, surface.JoinPath(scope, path))
 				}
 			}
 		default:
@@ -329,14 +329,14 @@ func (p *Page) element(n *html.Node, scope string, form *Call, viewport, tPage, 
 			p.values(where, c.Args, scope)
 		}
 		if into := attr(n, "into"); into != "" {
-			c.Into = a2ui.JoinPath(scope, into)
+			c.Into = surface.JoinPath(scope, into)
 			p.Writes = append(p.Writes, c.Into+"__loading", c.Into+"__error")
 		}
 		if microtool == "" {
-			p.issue(a2ui.Blocking, "interaction", where, "call=\""+call+"\" names no microtool", "write call=\"Tool/microtool\"")
+			p.issue(surface.Blocking, "interaction", where, "call=\""+call+"\" names no microtool", "write call=\"Tool/microtool\"")
 		}
 		if tag == "t-data" && c.Into == "" {
-			p.issue(a2ui.Blocking, "data", where, "the t-data has no into, so what it loads goes nowhere", "add into=\"/path\" and show that path")
+			p.issue(surface.Blocking, "data", where, "the t-data has no into, so what it loads goes nowhere", "add into=\"/path\" and show that path")
 		}
 		if tag == "t-form" {
 			form = &c
@@ -345,7 +345,7 @@ func (p *Page) element(n *html.Node, scope string, form *Call, viewport, tPage, 
 		}
 	}
 	if tag == "t-data" && attr(n, "call") == "" && props["call"] == nil {
-		p.issue(a2ui.Blocking, "data", where, "the t-data has no call, so it loads nothing", "add call=\"Tool/microtool\" and into=\"/path\"")
+		p.issue(surface.Blocking, "data", where, "the t-data has no call, so it loads nothing", "add call=\"Tool/microtool\" and into=\"/path\"")
 	}
 
 	// Controls: wired to something, inputs bound and labelled.
@@ -395,7 +395,7 @@ func (p *Page) action(where string, v any, scope, ctx string, form *Call) {
 		if fc, ok := a["functionCall"].(map[string]any); ok {
 			args, _ := fc["args"].(map[string]any)
 			if path, ok := args["path"].(string); ok {
-				p.Writes = append(p.Writes, a2ui.JoinPath(scope, path))
+				p.Writes = append(p.Writes, surface.JoinPath(scope, path))
 			}
 			p.values(where, args, scope)
 			return
@@ -408,7 +408,7 @@ func (p *Page) action(where string, v any, scope, ctx string, form *Call) {
 				for _, cv := range context {
 					if b, ok := cv.(map[string]any); ok {
 						if path, ok := b["path"].(string); ok {
-							p.Reads = append(p.Reads, a2ui.Read{Component: where, Path: a2ui.JoinPath(ctx, path)})
+							p.Reads = append(p.Reads, surface.Read{Component: where, Path: surface.JoinPath(ctx, path)})
 						}
 					}
 				}
@@ -417,7 +417,7 @@ func (p *Page) action(where string, v any, scope, ctx string, form *Call) {
 		}
 		if set, ok := a["set"].(map[string]any); ok {
 			for path, sv := range set {
-				p.Writes = append(p.Writes, a2ui.JoinPath(scope, path))
+				p.Writes = append(p.Writes, surface.JoinPath(scope, path))
 				p.values(where, sv, scope)
 			}
 		}
@@ -431,7 +431,7 @@ func (p *Page) action(where string, v any, scope, ctx string, form *Call) {
 			c.Args, _ = a["args"].(map[string]any)
 			p.values(where, c.Args, scope)
 			if into, ok := a["into"].(string); ok && into != "" {
-				c.Into = a2ui.JoinPath(scope, into)
+				c.Into = surface.JoinPath(scope, into)
 			}
 			p.Calls = append(p.Calls, c)
 		}
@@ -447,11 +447,11 @@ func (p *Page) values(where string, v any, scope string) {
 	switch x := v.(type) {
 	case string:
 		for _, m := range interpolation.FindAllStringSubmatch(x, -1) {
-			p.Reads = append(p.Reads, a2ui.Read{Component: where, Path: a2ui.JoinPath(scope, m[1])})
+			p.Reads = append(p.Reads, surface.Read{Component: where, Path: surface.JoinPath(scope, m[1])})
 		}
 	case map[string]any:
 		if path, ok := x["path"].(string); ok && len(x) <= 2 {
-			p.Reads = append(p.Reads, a2ui.Read{Component: where, Path: a2ui.JoinPath(scope, path)})
+			p.Reads = append(p.Reads, surface.Read{Component: where, Path: surface.JoinPath(scope, path)})
 			return
 		}
 		for k, inner := range x {
@@ -509,12 +509,12 @@ func (p *Page) script(code string) {
 func (p *Page) style(where, css string) {
 	if hardColor.MatchString(strings.ReplaceAll(css, "var(", "")) {
 		colors := hardColor.FindAllString(css, 3)
-		p.issue(a2ui.Advice, "design", where, "hard-codes colors ("+strings.Join(colors, ", ")+"), which break the app's light/dark theme",
+		p.issue(surface.Advice, "design", where, "hard-codes colors ("+strings.Join(colors, ", ")+"), which break the app's light/dark theme",
 			"use the kit's variables (var(--t-primary), --t-surface, --t-series-1…)")
 	}
 	for _, m := range fixedWidth.FindAllStringSubmatch(css, -1) {
 		if w, _ := strconv.Atoi(m[1]); w > 360 {
-			p.issue(a2ui.Advice, "design", where, fmt.Sprintf("has a fixed width of %dpx, wider than a phone", w),
+			p.issue(surface.Advice, "design", where, fmt.Sprintf("has a fixed width of %dpx, wider than a phone", w),
 				"use max-width or a Grid with min-column-width")
 			break
 		}
@@ -531,7 +531,7 @@ func (p *Page) resource(where, ref string) {
 	}
 	u, err := url.Parse(ref)
 	if err != nil {
-		p.issue(a2ui.Blocking, "structure", where, "loads "+strconv.Quote(ref)+", which is no URL", "fix the address")
+		p.issue(surface.Blocking, "structure", where, "loads "+strconv.Quote(ref)+", which is no URL", "fix the address")
 		return
 	}
 	if u.Scheme != "" || u.Host != "" {
@@ -545,22 +545,22 @@ func (p *Page) resource(where, ref string) {
 func (p *Page) finish(viewport, tPage, css, usesKit bool) {
 	switch {
 	case usesKit && !p.Kit:
-		p.issue(a2ui.Blocking, "structure", "<head>", "uses <t-…> components without the kit's script, so none of them render",
+		p.issue(surface.Blocking, "structure", "<head>", "uses <t-…> components without the kit's script, so none of them render",
 			`add <script src="/_aseman/kit/aseman-ui.js"></script> in <head>`)
 	case !usesKit && !p.Kit:
-		p.issue(a2ui.Advice, "design", "<head>", "does not use the Aseman web UI kit, so it will not look like the app",
+		p.issue(surface.Advice, "design", "<head>", "does not use the Aseman web UI kit, so it will not look like the app",
 			`link /_aseman/kit/aseman-ui.css and /_aseman/kit/aseman-ui.js and build it from <t-…> components`)
 	}
 	if p.Kit && !css {
-		p.issue(a2ui.Blocking, "design", "<head>", "loads the kit's script without its stylesheet, so it renders unstyled",
+		p.issue(surface.Blocking, "design", "<head>", "loads the kit's script without its stylesheet, so it renders unstyled",
 			`add <link rel="stylesheet" href="/_aseman/kit/aseman-ui.css"> in <head>`)
 	}
 	if !viewport {
-		p.issue(a2ui.Blocking, "design", "<head>", "has no viewport meta tag, so phones render it zoomed out and unreadable",
+		p.issue(surface.Blocking, "design", "<head>", "has no viewport meta tag, so phones render it zoomed out and unreadable",
 			`add <meta name="viewport" content="width=device-width, initial-scale=1">`)
 	}
 	if strings.TrimSpace(p.Title) == "" {
-		p.issue(a2ui.Advice, "design", "<head>", "has no <title>", "give it a short title")
+		p.issue(surface.Advice, "design", "<head>", "has no <title>", "give it a short title")
 	}
 	scripts := p.scripts.String()
 	referenced := func(c control) bool {
@@ -580,15 +580,15 @@ func (p *Page) finish(viewport, tPage, css, usesKit bool) {
 	for _, c := range p.controls {
 		if !c.wired && !referenced(c) && !generic {
 			if c.input {
-				p.issue(a2ui.Blocking, "interaction", c.where, "what is entered reaches nothing (no bind-value, name in a form, or script reading it)",
+				p.issue(surface.Blocking, "interaction", c.where, "what is entered reaches nothing (no bind-value, name in a form, or script reading it)",
 					`bind it (bind-value="/form/<field>") and pass it to the call that submits it`)
 			} else {
-				p.issue(a2ui.Blocking, "interaction", c.where, "the button does nothing (no call, action, form submit or script handling it)",
+				p.issue(surface.Blocking, "interaction", c.where, "the button does nothing (no call, action, form submit or script handling it)",
 					`give it call="Tool/microtool" (args, into) or remove it`)
 			}
 		}
 		if !c.labelled {
-			p.issue(a2ui.Advice, "design", c.where, c.unlabelled, "label it")
+			p.issue(surface.Advice, "design", c.where, c.unlabelled, "label it")
 		}
 	}
 	names := make([]string, 0, len(p.events))
@@ -598,7 +598,7 @@ func (p *Page) finish(viewport, tPage, css, usesKit bool) {
 	sort.Strings(names)
 	for _, name := range names {
 		if !p.handlers[name] {
-			p.issue(a2ui.Blocking, "interaction", p.events[name], "sends the event "+name+", which no Aseman.on(\""+name+"\", …) handles, so it does nothing",
+			p.issue(surface.Blocking, "interaction", p.events[name], "sends the event "+name+", which no Aseman.on(\""+name+"\", …) handles, so it does nothing",
 				`handle it in a script, or give the control call="Tool/microtool" instead`)
 		}
 	}
@@ -731,7 +731,7 @@ func eachPath(scope, each string) string {
 	}
 	if b, ok := parse(each).(map[string]any); ok {
 		if path, ok := b["path"].(string); ok {
-			return a2ui.JoinPath(scope, path)
+			return surface.JoinPath(scope, path)
 		}
 	}
 	return ""
@@ -771,7 +771,7 @@ func clip(s string, max int) string {
 
 // --- app layout ----------------------------------------------------------------
 
-// The page is an application screen, not a document (a2ui.AppLayout): its
+// The page is an application screen, not a document (surface.AppLayout): its
 // body fills the window and never scrolls as a whole, a body region takes
 // the rest of the height and scrolls inside itself, and whatever grows with
 // its data is in a region that scrolls.
@@ -823,7 +823,7 @@ func (p *Page) appLayout(doc *html.Node, usesKit bool) {
 		return // said already: it does not use the kit
 	}
 	if !hasClass(body, "t-app") {
-		p.issue(a2ui.Blocking, "layout", "<body>", "the body is not an app screen (class \"t-app\"), so the page scrolls as a whole like a web page instead of fitting the window",
+		p.issue(surface.Blocking, "layout", "<body>", "the body is not an app screen (class \"t-app\"), so the page scrolls as a whole like a web page instead of fitting the window",
 			`<body class="t-app">: a header, then the body (weight="1": a t-split, t-tabs or t-scroll) that scrolls inside itself`)
 	}
 	// What grows must be in a region that scrolls.
@@ -840,7 +840,7 @@ func (p *Page) appLayout(doc *html.Node, usesKit bool) {
 			if growingTags[n.Data] || attr(n, "each") != "" {
 				grows = true
 				if !scrolled {
-					p.issue(a2ui.Blocking, "layout", describe(n), "grows with its data but is in no region that scrolls, so it is cut off at the bottom of the screen",
+					p.issue(surface.Blocking, "layout", describe(n), "grows with its data but is in no region that scrolls, so it is cut off at the bottom of the screen",
 						`put it in the body region (weight="1": a t-scroll, a t-split pane or a t-tabs tab), which scrolls inside itself`)
 					scrolled = true // said once for what is inside it
 				}
@@ -854,7 +854,7 @@ func (p *Page) appLayout(doc *html.Node, usesKit bool) {
 					}
 				}
 				if panes >= 2 {
-					p.issue(a2ui.Advice, "layout", describe(n), "lays scrolling panes side by side in a t-row, which squeezes them on a phone",
+					p.issue(surface.Advice, "layout", describe(n), "lays scrolling panes side by side in a t-row, which squeezes them on a phone",
 						`use <t-split>: panes side by side on a desktop, tabs on a phone`)
 				}
 			}
@@ -878,17 +878,17 @@ func (p *Page) appLayout(doc *html.Node, usesKit bool) {
 		}
 		weighted++
 		if !region(c) {
-			p.issue(a2ui.Blocking, "layout", describe(c), "takes the rest of the screen's height but does not scroll inside it, so what does not fit is cut off",
+			p.issue(surface.Blocking, "layout", describe(c), "takes the rest of the screen's height but does not scroll inside it, so what does not fit is cut off",
 				`make it a t-scroll (or a t-split / t-tabs, or wrap its content in one)`)
 		}
 	}
 	if weighted == 0 {
-		p.issue(a2ui.Blocking, "layout", "<body>", "nothing in the body takes the rest of the screen's height, so content below the window is cut off",
+		p.issue(surface.Blocking, "layout", "<body>", "nothing in the body takes the rest of the screen's height, so content below the window is cut off",
 			`give the body region — a t-scroll, t-split or t-tabs holding everything below the header — weight="1"`)
 	}
 }
 
-// visualTags / proseTags mirror a2ui's visualization-first density check for
+// visualTags / proseTags mirror surface's visualization-first density check for
 // kit pages: dashboards of t-text/t-markdown without stats or charts are
 // flagged so the model review has automatic evidence.
 var visualTags = map[string]bool{
@@ -950,12 +950,12 @@ func (p *Page) vizDensity(doc *html.Node, usesKit bool) {
 		return
 	}
 	if visual == 0 && prose >= 3 {
-		p.issue(a2ui.Advice, "design", "<body>", "the page is mostly text with no Stats, Charts, Tables or other visual components",
+		p.issue(surface.Advice, "design", "<body>", "the page is mostly text with no Stats, Charts, Tables or other visual components",
 			"lead with a t-grid of t-stat and a t-chart or t-table; keep t-text/t-markdown for short labels only")
 		return
 	}
 	if visual > 0 && prose > visual*2 && prose >= 4 {
-		p.issue(a2ui.Advice, "design", "<body>", "prose components outnumber visual ones — the page reads like a document",
+		p.issue(surface.Advice, "design", "<body>", "prose components outnumber visual ones — the page reads like a document",
 			"replace walls of t-text/t-markdown with t-stat, t-chart and t-table")
 	}
 	hasStat, hasChartish := false, false
@@ -975,7 +975,7 @@ func (p *Page) vizDensity(doc *html.Node, usesKit bool) {
 	}
 	findKinds(body)
 	if hasChartish && !hasStat && visual >= 2 {
-		p.issue(a2ui.Advice, "design", "<body>", "has charts but no KPI Stat strip",
+		p.issue(surface.Advice, "design", "<body>", "has charts but no KPI Stat strip",
 			"put 3–5 t-stat tiles above the hero chart so headline numbers are readable at a glance")
 	}
 }

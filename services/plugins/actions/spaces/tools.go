@@ -50,6 +50,8 @@ func toolDetail(toolName string) string {
 		return "opening a gateway proxy…"
 	case "ui_compose":
 		return "composing a widget…"
+	case "ui_present":
+		return "presenting a UI…"
 	case "frontend_show":
 		return "opening the result on the desk…"
 	case "web_show":
@@ -379,6 +381,8 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 		result, terr = s.proxyCreateTool(ctx, id, agentName, argsJSON)
 	case toolName == "ui_compose":
 		result, terr = s.composeUI(ctx, id, roomID, agentName, argsJSON)
+	case toolName == "ui_present":
+		result, terr = s.presentUI(ctx, id, roomID, agentName, argsJSON)
 	case toolName == "frontend_show":
 		result, terr = s.showTool(ctx, id, roomID, agentName, argsJSON)
 	case toolName == "web_show":

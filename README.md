@@ -133,7 +133,7 @@ Users create tools in the Tools panel from one form with a **backend** and a
   the sandbox proxy). Every backend's microtools are agents' tools and the
   frontend's API alike.
 - **Frontend:** *static* (an Elpian program on the Elpian VM or QuickJS) or
-  *generative* (A2UI generated from a skill on first use, cached in the
+  *generative* (AG-UI Surface Spec generated from a skill on first use, cached in the
   component registry and filled with fresh data). Results open as floating
   card windows on the room's desk, placed and arranged by agents and people;
   agents combine tools' frontends and data into bigger widgets
@@ -144,7 +144,7 @@ Users create tools in the Tools panel from one form with a **backend** and a
   the desk as the tool's card window like any frontend (in an `<iframe>` on
   the web, a native web view on Android, iOS, macOS and Windows). Pages use
   **Aseman's web UI kit** ([`services/pkg/webkit`](services/pkg/webkit)):
-  the app's theme and every component the app renders (the A2UI catalog, the
+  the app's theme and every component the app renders (the AG-UI Surface Spec catalog, the
   tool UI kit, the Elpian widgets and HTML) as `<t-…>` web elements, plus a
   client that calls the tool's microtools through the Aseman API as the
   person viewing the page. Every preview serves the kit at `/_aseman/kit/`

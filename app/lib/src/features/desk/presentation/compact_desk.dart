@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../elpian/core/media.dart';
-import '../../../genui/genui.dart'
+import '../../../agui/agui.dart'
     show CompactHint, FrontendDisplay, FrontendPresentation;
 import '../domain/desk_models.dart';
 import 'desk_controller.dart';

@@ -13,8 +13,9 @@ import (
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/internal/plugins/bridge"
 	"github.com/aseman/aseman/internal/plugins/identity"
-	"github.com/aseman/aseman/pkg/a2ui"
+	"github.com/aseman/aseman/pkg/agui"
 	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/surface"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/actions/tools/models"
 	"github.com/aseman/aseman/plugins/actions/usage/models/usage"
@@ -28,23 +29,19 @@ import (
 // Elpian VM (bytecode) or QuickJS (source), calling the tool's microtools
 // through tools.invoke.
 //
-// A generative frontend is A2UI generated from the deployer's skill the first
-// time anyone asks for it. The generated Template — A2UI components, the data
-// bindings that fill them and the actions their buttons run, all expressed as
-// calls of the tool's microtools — is kept in the component registry
-// (tool_components). Every later request is served from the registry and
-// filled with fresh data by running the bindings for the person asking.
+// A generative frontend is a Fixed Schema Surface Bundle: compiled once from the
+// deployer's skill (embedded surface JSON, named archetype, or a bounded LLM
+// fallback with a deterministic gate — never an LLM design judge). The Template
+// is kept in tool_components and every later request is bind-only: served from
+// the registry and filled with fresh data by running the bindings.
 
-// A2UIVersion and BasicCatalog are what generated surfaces are written in.
-const (
-	A2UIVersion  = "v0.9"
-	BasicCatalog = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
-)
+// SurfaceSpec is the generative frontend schema version.
+const SurfaceSpec = "aseman.surface/v1"
 
 // Template is a generated frontend.
 type Template struct {
 	Title string `json:"title,omitempty"`
-	// Components are A2UI basic-catalog components; the one with id "root"
+	// Components are AG-UI Surface basic-catalog components; the one with id "root"
 	// is the surface's root. Values bound to data use {"path": "/..."}.
 	Components []map[string]any `json:"components"`
 	// Data fills the data model: each binding calls a microtool and puts its
@@ -55,7 +52,7 @@ type Template struct {
 	// Review is what its review found before it was first served.
 	Review *Review `json:"review,omitempty"`
 	// Layout is "app" for a template designed as an app screen (it fills
-	// its window and its regions scroll inside it, see a2ui.AppLayout);
+	// its window and its regions scroll inside it, see surface.AppLayout);
 	// templates made before are shown as pages that scroll as a whole.
 	Layout string `json:"layout,omitempty"`
 }
@@ -84,7 +81,7 @@ type Action struct {
 // validate checks a template is something the device can render and the node
 // can run: a root, ids on every component, and microtools the tool has.
 func (t *Template) validate(microtools map[string]bool) error {
-	if err := a2ui.Check(t.Components); err != nil {
+	if err := surface.Check(t.Components); err != nil {
 		return errs.InvalidArgument("the generated frontend: " + err.Error())
 	}
 	for _, b := range t.Data {
@@ -202,25 +199,15 @@ func (t *Template) checkEvents() error {
 	return nil
 }
 
-// Messages renders the template, filled with [data], as the A2UI messages
-// that create its surface.
+// Messages renders the template, filled with [data], as AG-UI events that
+// create its surface (CUSTOM aseman.surface.* + STATE_SNAPSHOT).
 func (t *Template) Messages(surfaceID string, data map[string]any) []map[string]any {
-	a2ui.Normalize(t.Components) // templates cached before generation normalized
-	return []map[string]any{
-		{"version": A2UIVersion, "createSurface": createSurface(surfaceID, t.Layout)},
-		{"version": A2UIVersion, "updateComponents": map[string]any{"surfaceId": surfaceID, "components": t.Components}},
-		{"version": A2UIVersion, "updateDataModel": map[string]any{"surfaceId": surfaceID, "path": "/", "value": data}},
+	surface.Normalize(t.Components)
+	theme := map[string]any{}
+	if t.Layout != "" {
+		theme["layout"] = t.Layout
 	}
-}
-
-// createSurface is the createSurface message of a surface laid out as
-// [layout] ("app" tells the device to give it its window's height).
-func createSurface(surfaceID, layout string) map[string]any {
-	out := map[string]any{"surfaceId": surfaceID, "catalogId": BasicCatalog}
-	if layout != "" {
-		out["theme"] = map[string]any{"layout": layout}
-	}
-	return out
+	return agui.EventsToMaps(agui.SurfaceEvents(surfaceID, t.Components, data, theme))
 }
 
 // --- calling microtools for a frontend --------------------------------------
@@ -475,7 +462,7 @@ func (s *Service) frontendGet(ctx context.Context, req *api.ActionRequest) (*api
 		if in.Regenerate && tool.Owner != req.Caller.ID.String() {
 			return nil, errs.Permission("only the tool's owner can regenerate its frontend")
 		}
-		component, cached, err := s.component(ctx, c, tool, spec, in.Regenerate)
+		component, cached, err := s.component(ctx, c, tool, spec, in.Regenerate, in.Shown)
 		if err != nil {
 			return nil, err
 		}
@@ -542,7 +529,7 @@ func (s *Service) frontendAction(ctx context.Context, req *api.ActionRequest) (*
 		if !spec.Cached() {
 			return nil, errs.InvalidArgument("this tool's frontend is generated for each request: pass the template frontend_get returned")
 		}
-		component, _, err := s.component(ctx, c, tool, spec, false)
+		component, _, err := s.component(ctx, c, tool, spec, false, Shown{})
 		if err != nil {
 			return nil, err
 		}
@@ -580,8 +567,13 @@ func (s *Service) frontendAction(ctx context.Context, req *api.ActionRequest) (*
 			data[k] = v
 		}
 	}
+	sid := "tool-" + tool.BotID
 	return helper.JSON(map[string]any{"result": result, "data": data,
-		"messages": []map[string]any{{"version": A2UIVersion, "updateDataModel": map[string]any{"surfaceId": "tool-" + tool.BotID, "path": "/", "value": data}}}})
+		"messages": agui.EventsToMaps([]agui.Event{
+			agui.NewCustom(agui.SurfacePatchData, map[string]any{
+				"surfaceId": sid, "path": "/", "value": data,
+			}),
+		})})
 }
 
 // namedAction is the action of an event no template entry maps, when the
@@ -649,10 +641,27 @@ func componentKey(spec models.FrontendSpec, commands []map[string]any) string {
 	return fingerprint(spec.Version, string(raw))
 }
 
+// cachedFixedSchema returns the newest Fixed Schema registry row for the tool
+// when the exact component key missed (eager compile vs serve command shape).
+func (s *Service) cachedFixedSchema(ctx context.Context, botID, _ string) *models.Component {
+	var rows []models.Component
+	if err := s.R.List(ctx, "tool_components", database.Filter{
+		Equal: map[string]any{"bot_id": botID}, OrderBy: "updated_at", Asc: false,
+	}, &rows); err != nil {
+		return nil
+	}
+	for i := range rows {
+		if rows[i].Model == "fixed-schema" {
+			return &rows[i]
+		}
+	}
+	return nil
+}
+
 // component returns the tool's generated frontend from the registry, or
 // generates it (as the caller, who pays for the model) when the registry has
 // none for the current skill and microtools.
-func (s *Service) component(ctx context.Context, c caller, tool *models.Tool, spec models.FrontendSpec, regenerate bool) (*models.Component, bool, error) {
+func (s *Service) component(ctx context.Context, c caller, tool *models.Tool, spec models.FrontendSpec, regenerate bool, shown Shown) (*models.Component, bool, error) {
 	commands, err := s.CommandsFor(ctx, tool.BotID, c.Caller.ID.String(), c.Space)
 	if err != nil || len(commands) == 0 {
 		commands = tool.Commands
@@ -667,12 +676,20 @@ func (s *Service) component(ctx context.Context, c caller, tool *models.Tool, sp
 			_ = s.R.UpdateString(ctx, "tool_components", id, &row)
 			return &row, true, nil
 		}
+		// Eager compile fingerprints tool.Commands; serve may see CommandsFor
+		// shape differ. Reuse the latest Fixed Schema row for this bot+version.
+		if cached := s.cachedFixedSchema(ctx, tool.BotID, key); cached != nil {
+			cached.Uses++
+			cached.UpdatedAt = time.Now().UTC()
+			_ = s.R.UpdateString(ctx, "tool_components", cached.ID, cached)
+			return cached, true, nil
+		}
 	}
 	skill, err := s.entity(ctx, tool.BotID, models.EntityFrontendSkill)
 	if err != nil {
 		return nil, false, err
 	}
-	t, model, err := s.generate(ctx, c, tool, skill, commands, Shown{})
+	t, model, err := s.generate(ctx, c, tool, skill, commands, shown)
 	if err != nil {
 		return nil, false, err
 	}
@@ -684,35 +701,61 @@ func (s *Service) component(ctx context.Context, c caller, tool *models.Tool, sp
 	} else if err != nil {
 		return nil, false, err
 	}
+	s.pruneStaleComponents(ctx, tool.BotID, id)
 	return &row, false, nil
 }
 
 // --- generation -------------------------------------------------------------------
 
 // generationPrompt teaches the model the Template format and the components
-// devices render (a2ui.CatalogPrompt). It frames generation as professional
+// devices render (surface.CatalogPrompt). It frames generation as professional
 // product design: visualization-first application screens, not documents.
-var generationPrompt = `You are a senior product designer. Build this tool's interface as a realistic professional web/app screen in A2UI v0.9 — visualization-first (KPIs, charts, gauges, tables), sparse text, standard app chrome, responsive at ~360×640 and ~1400×900.
+var generationPrompt = `You are a senior product designer. Build this tool's interface as a realistic professional app screen using the Aseman Surface Spec over AG-UI — visualization-first (KPIs, charts, gauges, tables), sparse text, standard app chrome, responsive at ~360×640 and ~1400×900. Each component is a flat list entry with "id" and "type" (not "component").
 Reply with ONE JSON object, no prose, of this shape:
 {
   "title": "short title",
-  "components": [ A2UI components, flat list; the root has "id": "root" ],
+  "spec": "aseman.surface/v1",
+  "layout": "app",
+  "components": [ Surface Spec components, flat list; the root has "id": "root" and "type" ],
   "data": [ {"path": "/pointer", "microtool": "<name>", "args": {...}} ],
   "actions": { "<event name>": {"microtool": "<name>", "args": {...}, "result": "/pointer", "reload": true} }
 }
-` + a2ui.CatalogPrompt + `
+` + surface.CatalogPrompt + `
 Data & wiring: every value shown comes from the data model, filled by "data" bindings that call the tool's microtools (only those listed, arguments matching their schemas); buttons and tappable views' "action" send events that "actions" map to microtools. In action args, {"$context": "key"} takes the event context and {"$data": "/pointer"} the data model. Bind inputs under /form. Repeat rows with a List, Table or Chart over an array — never numbered paths. No invented data.
 Composition: header → 3–5 Stat KPIs in a Grid → hero Chart (or domain viz) → supporting views → evidence Table/List. Prefer graphical components over Text/Markdown whenever the data is numeric, temporal, categorical or tabular.
 Fully functional: every event a component sends has an entry in "actions", keyed by exactly the event's name, and every entry is sent by some component. A component's action is only {"event": {"name", "context"}}: microtool, args, result and reload go in the "actions" entry, never on the component. An action runs ONE microtool; to refresh what is shown, put its result where the view reads it ("result") and/or set "reload": true. Inputs a microtool needs reach it through {"$data": "/form/…"} or the event context; required arguments are never left unbound. Every microtool the skill asks for is reachable (binding or action); binding paths match where components read, field names match microtool results. Per-row actions: tappable selection {"selection": {"path": "/selected"}} + detail bound to /selected/… + buttons with context {"path": "/selected/id"} — a Table has no buttons inside rows.
 Follow the deployer's skill for what to show and do; the design and layout rules above still hold where the skill is silent or asks for something that would break on a phone or turn the screen into a document.
-Before anyone sees it, the frontend is rendered, filled by really running its bindings, its actions are tested and its look is reviewed; what fails comes back to you to fix. Read only fields the microtools' results really have.`
+A deterministic gate (structure, composition, live bindings, actions) reviews what you emit; Blocking findings come back as coded fixes. Prefer archetypes / Fixed Schema in the skill when possible.`
 
-// generate asks the node's default model for a frontend, reviews it (filled
-// as [shown] when it shows one result) and has the model repair what the
-// review finds, round after round, until nothing blocking is left; the
-// tokens are billed to the caller. A frontend that still does not work is
-// not returned.
+// generate compiles a Surface Bundle for the tool: Fixed Schema or archetype
+// from the skill when present; otherwise a bounded LLM fallback with a
+// deterministic gate (no design judge). Tokens are billed to the caller.
 func (s *Service) generate(ctx context.Context, c caller, tool *models.Tool, skill string, commands []map[string]any, shown Shown) (*Template, string, error) {
+	microtools := map[string]bool{}
+	for _, cmd := range commands {
+		if name, _ := cmd["name"].(string); name != "" {
+			microtools[name] = true
+		}
+	}
+
+	// Fixed Schema / archetype path — no LLM for layout.
+	if fixed, err := compileFromSkill(skill, commands); err != nil {
+		return nil, "", err
+	} else if fixed != nil {
+		rec, err := s.bot(ctx, tool.BotID)
+		if err != nil {
+			return nil, "", err
+		}
+		rv := s.reviewerFor(ctx, c, tool.BotID, rec.Name, skill, commands, shown, nil)
+		review := rv.review(fixed)
+		review.Rounds = 1
+		fixed.Review, fixed.Layout = review, AppLayout
+		if review.broken > 0 {
+			return nil, "", errs.New(errs.CodeUnavailable, "skill Fixed Schema failed the gate: "+review.summary(5))
+		}
+		return fixed, "fixed-schema", nil
+	}
+
 	var provider vmm.ProviderConfig
 	if err := bridge.Invoke(ctx, s.K, "llm", "ResolveChat", []any{ctx, "", ""}, &provider); err != nil {
 		return nil, "", errs.New(errs.CodeUnavailable, "no model is configured to generate frontends: "+err.Error())
@@ -725,30 +768,29 @@ func (s *Service) generate(ctx context.Context, c caller, tool *models.Tool, ski
 	if err := bridge.Invoke(ctx, s.K, "bots", "EnsureFunds", []any{ctx, payer, rec.ID}); err != nil {
 		return nil, "", err
 	}
-	microtools := map[string]bool{}
 	var list strings.Builder
 	for _, cmd := range commands {
 		name, _ := cmd["name"].(string)
 		if name == "" {
 			continue
 		}
-		microtools[name] = true
 		schema, _ := json.Marshal(cmd["schema"])
 		list.WriteString("- " + name + ": " + strings.TrimSpace(asString(cmd["description"])) + "\n  arguments: " + string(schema) + "\n")
 	}
 	user := "Tool: " + rec.Name + "\n\nWhat the deployer wants (skill):\n" + skill + "\n\nMicrotools:\n" + list.String()
 	var tokensIn, tokensOut int64
-	look := func(messages []map[string]any) (string, error) {
-		content, in, out, err := s.complete(ctx, provider, messages)
-		tokensIn, tokensOut = tokensIn+in, tokensOut+out
-		return content, err
-	}
-	rv := s.reviewerFor(ctx, c, tool.BotID, rec.Name, skill, commands, shown, look)
+	// No LLM design judge in the repair loop — deterministic gate only.
+	rv := s.reviewerFor(ctx, c, tool.BotID, rec.Name, skill, commands, shown, nil)
 	var best *Template
 	var lastErr error
+	var prevFingerprint string
 	messages := []map[string]any{{"role": "system", "content": generationPrompt}, {"role": "user", "content": user}}
 	for round := 1; round <= reviewRounds; round++ {
-		content, in, out, err := s.complete(ctx, provider, messages)
+		temp := 0.2
+		if round > 1 {
+			temp = 0 // repair passes are deterministic
+		}
+		content, in, out, err := s.completeTemp(ctx, provider, messages, temp)
 		tokensIn, tokensOut = tokensIn+in, tokensOut+out
 		if err != nil {
 			lastErr = err
@@ -763,14 +805,10 @@ func (s *Service) generate(ctx context.Context, c caller, tool *models.Tool, ski
 		}
 		var feedback string
 		if err != nil {
-			// Not even a template the device can render: the model is told
-			// what was wrong.
 			lastErr = err
 			feedback = "That is not valid: " + err.Error() +
-				". Reply with the corrected JSON object only: {\"title\", \"components\": [flat list, each {\"id\", \"component\", ...props}, children as ids, one with id \"root\"], \"data\", \"actions\"}."
+				". Reply with the corrected JSON object only: {\"title\", \"components\": [flat list, each {\"id\", \"type\", ...props}, children as ids, one with id \"root\"], \"data\", \"actions\"}."
 		} else {
-			// A template: rendered, tested and looked at before anyone sees
-			// it (see review.go); the best one so far is kept.
 			review := rv.review(&t)
 			review.Rounds = round
 			if best == nil || best.Review.worse(review) {
@@ -780,6 +818,12 @@ func (s *Service) generate(ctx context.Context, c caller, tool *models.Tool, ski
 			if review.Passed {
 				break
 			}
+			fp := surface.FingerprintIssues(review.Issues)
+			if fp != "" && fp == prevFingerprint {
+				lastErr = errs.New(errs.CodeUnavailable, "frontend repair is not converging: "+review.summary(5))
+				break
+			}
+			prevFingerprint = fp
 			feedback = review.feedback()
 		}
 		messages = append(messages, map[string]any{"role": "assistant", "content": content},
@@ -787,10 +831,13 @@ func (s *Service) generate(ctx context.Context, c caller, tool *models.Tool, ski
 	}
 	s.billGeneration(ctx, c, rec.ID, tokensIn, tokensOut)
 	if best == nil {
-		return nil, "", errs.New(errs.CodeUnavailable, "could not generate the frontend: "+lastErr.Error())
+		msg := "could not generate the frontend"
+		if lastErr != nil {
+			msg += ": " + lastErr.Error()
+		}
+		return nil, "", errs.New(errs.CodeUnavailable, msg)
 	}
 	if best.Review.broken > 0 {
-		// It does not work: nobody is shown it.
 		return nil, "", errs.New(errs.CodeUnavailable, "could not generate a working frontend: "+best.Review.summary(5))
 	}
 	return best, provider.Model, nil
@@ -814,14 +861,14 @@ func templateOf(raw map[string]any) (Template, error) {
 		return Template{}, errs.InvalidArgument("the template is empty")
 	}
 	if c, ok := raw["components"]; ok {
-		raw["components"] = a2ui.Flatten(c)
+		raw["components"] = surface.Flatten(c)
 	}
 	b, _ := json.Marshal(raw)
 	var t Template
 	if err := json.Unmarshal(b, &t); err != nil {
 		return Template{}, err
 	}
-	a2ui.Normalize(t.Components)
+	surface.Normalize(t.Components)
 	t.adoptInlineActions()
 	return t, nil
 }
@@ -840,7 +887,12 @@ func jsonObject(text string) string {
 
 // complete runs one chat completion on an OpenAI-compatible provider.
 func (s *Service) complete(ctx context.Context, provider vmm.ProviderConfig, messages []map[string]any) (string, int64, int64, error) {
-	body, _ := json.Marshal(map[string]any{"model": provider.Model, "messages": messages, "temperature": 0.2,
+	return s.completeTemp(ctx, provider, messages, 0.2)
+}
+
+// completeTemp is complete with an explicit sampling temperature.
+func (s *Service) completeTemp(ctx context.Context, provider vmm.ProviderConfig, messages []map[string]any, temperature float64) (string, int64, int64, error) {
+	body, _ := json.Marshal(map[string]any{"model": provider.Model, "messages": messages, "temperature": temperature,
 		"max_tokens": 6000, "response_format": map[string]any{"type": "json_object"}})
 	callCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()

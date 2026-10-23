@@ -260,7 +260,7 @@ enum ElpianCapability {
   state('state'),
 
   /// Talking to this mini app's own agents (`agent.send`, `agent.action`) and
-  /// reading the A2UI surfaces they produced (`a2ui.dataModel`).
+  /// reading the AG-UI surfaces they produced (`agui.dataModel`).
   ///
   /// Its own gate because an agent request spends the app's model budget and
   /// may run its server functions as tools.

@@ -78,7 +78,7 @@ pub enum Capability {
     /// given a filesystem.
     State,
     /// Talking to this mini app's *own* agents from the client (`agent.*`)
-    /// and reading the A2UI surfaces they produced (`a2ui.*`).
+    /// and reading the AG-UI surfaces they produced (`agui.*`).
     ///
     /// Its own gate because an agent request spends the app's model budget
     /// and may run its server functions as tools: a host can let a mini app
@@ -125,7 +125,7 @@ impl Capability {
                 Some("host") => Capability::HostMessaging,
                 Some("server") | Some("stream") => Capability::ServerCall,
                 Some("kv") | Some("secret") | Some("cache") | Some("ctx") => Capability::State,
-                Some("agent") | Some("a2ui") => Capability::Agents,
+                Some("agent") | Some("agui") => Capability::Agents,
                 // `stringify` and anything the host adds without a family.
                 _ => Capability::Other,
             },

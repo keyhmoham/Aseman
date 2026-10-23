@@ -12,7 +12,7 @@ import '../scope/scope_patch.dart';
 import 'vm_runtime_client.dart';
 import 'host_api_catalog.dart';
 import 'host_handler.dart';
-import '../a2ui/elpian.dart';
+import '../agui/elpian.dart';
 import 'timer_host_api.dart';
 
 /// A Flutter widget that runs an Elpian Rust VM sandbox and renders
@@ -101,7 +101,7 @@ class ElpianVmWidget extends StatefulWidget {
   /// JSON input to pass to the entry function.
   final String? entryInput;
 
-  /// The mini app's id, for reaching its agents: `A2UISurface` widgets and the
+  /// The mini app's id, for reaching its agents: `AgUiSurface` widgets and the
   /// `agent.*` host APIs post to `<agentBaseUrl>/apps/<agentAppId>/agent/<agent>`
   /// unless they name another app. Without it (or [agentBaseUrl]) agent
   /// surfaces only render static messages.
@@ -229,11 +229,11 @@ class _ElpianVmWidgetState extends State<ElpianVmWidget>
     _initVm();
   }
 
-  /// Point this app's A2UI registry at its agents (see [ElpianVmWidget.agentAppId]).
+  /// Point this app's AG-UI registry at its agents (see [ElpianVmWidget.agentAppId]).
   void _configureAgents() {
     if (widget.agentAppId == null && widget.agentBaseUrl == null) return;
-    final registry = a2uiRegistry(_engine.services);
-    registry.defaults = A2UIDefaults(
+    final registry = agUiRegistry(_engine.services);
+    registry.defaults = AgUiDefaults(
       baseUrl: widget.agentBaseUrl ?? registry.defaults.baseUrl,
       appId: widget.agentAppId ?? registry.defaults.appId,
       headers: widget.agentHeaders ?? registry.defaults.headers,

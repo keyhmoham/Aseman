@@ -353,7 +353,7 @@ def test_every_agent_is_told_to_show_tool_results_in_the_tools_frontend_first() 
         # Generative frontend first, Markdown second, for every kind of tool.
         assert rule.index("frontend_show") < rule.index("Markdown")
         assert "external MCP" in rule and "managed" in rule and "installed" in rule
-        assert "never go into the chat" in rule and "`compose_ui`" in rule
+        assert "never go into the chat" in rule and "`ui_compose`" in rule and "`ui_present`" in rule
         assert "designed for this very" in rule and "`request`" in rule and "nothing is reused" in rule
 
 
@@ -399,7 +399,7 @@ def test_frontend_show_survives_an_allow_list() -> None:
         return StructuredTool.from_function(func=lambda: "", name=name, description=name)
 
     desk = ["frontend_show", "desk_state", "desk_arrange", "desk_close"]
-    kept = filter_allowed([tool(n) for n in [*desk, "compose_ui"]], ["file_send"])
+    kept = filter_allowed([tool(n) for n in [*desk, "ui_compose"]], ["file_send"])
     assert [t.name for t in kept] == desk
 
 

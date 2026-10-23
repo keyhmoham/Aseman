@@ -6,7 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:aseman/src/elpian/core/media.dart';
 import 'package:aseman/src/features/tools/runtime/tool_media.dart';
-import 'package:aseman/src/genui/genui.dart';
+import 'package:aseman/src/agui/agui.dart';
 
 /// A 1x1 transparent PNG.
 final _png = base64.decode(
@@ -37,7 +37,7 @@ List<Map<String, dynamic>> _surface(String url) => [
         'createSurface': {
           'surfaceId': 'w',
           'catalogId':
-              'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'
+              'https://aseman.app/agui/catalogs/aseman/v1'
         }
       },
       {
@@ -140,7 +140,7 @@ void main() {
           body: ElpianMediaScope(
             resolver: media.call,
             child:
-                SingleChildScrollView(child: GenUiView(messages: _surface(url))),
+                SingleChildScrollView(child: AgUiView(messages: _surface(url))),
           ),
         ),
       ));

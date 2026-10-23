@@ -119,12 +119,12 @@ func TestTemplateValidationAndMessages(t *testing.T) {
 		t.Fatal("a template without a root passed")
 	}
 	msgs := tpl.Messages("s1", map[string]any{"weather": map[string]any{"summary": "sun"}})
-	if len(msgs) != 3 || msgs[0]["createSurface"] == nil || msgs[2]["updateDataModel"] == nil {
+	if len(msgs) < 3 || msgs[0]["type"] != "CUSTOM" || msgs[0]["name"] != "aseman.surface.create" {
 		t.Fatalf("messages %v", msgs)
 	}
 	raw, _ := json.Marshal(msgs)
-	if !strings.Contains(string(raw), `"catalogId":"`+BasicCatalog+`"`) {
-		t.Fatal("surface is not in the basic catalog")
+	if !strings.Contains(string(raw), `"catalog":"https://aseman.app/agui/catalogs/aseman/v1"`) {
+		t.Fatal("surface is not in the Aseman AG-UI catalog")
 	}
 }
 

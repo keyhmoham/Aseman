@@ -30,7 +30,7 @@ import (
 //	          inside the sandbox of each space that adds it, on the same three
 //	          runtimes)
 //	frontend  static (an Elpian app program on the Elpian VM or QuickJS)
-//	          or generative (a skill A2UI is generated from on first use, then
+//	          or generative (a skill AG-UI Surface Spec is generated from on first use, then
 //	          served from the component registry)
 //
 // Whatever the backend, it is reached as an MCP server, so its microtools are
@@ -219,6 +219,12 @@ func (s *Service) toolCreate(ctx context.Context, req *api.ActionRequest) (*api.
 	if err := s.R.UpdateString(ctx, "tool_registry", tool.ID, tool); err != nil {
 		return nil, err
 	}
+	if frontend.Mode == models.FrontendGenerative {
+		skill := string(entities[models.EntityFrontendSkill])
+		if err := s.eagerCompileAndStore(ctx, tool, frontend, skill, tool.Commands); err != nil {
+			return nil, err
+		}
+	}
 	if err := s.describe(ctx, req.Caller, tool.BotID, in); err != nil {
 		return nil, err
 	}
@@ -348,6 +354,8 @@ func (s *Service) prepareFrontend(ctx context.Context, f frontendInput) (models.
 		spec.Version = fingerprint(f.Runtime, f.Language, f.Source, f.Bytecode)
 	case models.FrontendGenerative:
 		entities[models.EntityFrontendSkill] = []byte(f.Skill)
+		// Version fingerprints the skill so a Fixed Schema / archetype change
+		// invalidates the cached Surface Bundle in tool_components.
 		spec.Version = fingerprint("generative", f.Skill)
 		if f.Cache != nil && !*f.Cache {
 			off := false
@@ -549,6 +557,16 @@ func (s *Service) toolUpdate(ctx context.Context, req *api.ActionRequest) (*api.
 		}
 		raw, _ := json.Marshal(spec)
 		tool.Frontend = string(raw)
+		if spec.Mode == models.FrontendGenerative {
+			skill := string(entities[models.EntityFrontendSkill])
+			cmds := tool.Commands
+			if len(cmds) == 0 {
+				cmds, _ = s.CommandsFor(ctx, tool.BotID, req.Caller.ID.String(), "")
+			}
+			if err := s.eagerCompileAndStore(ctx, tool, spec, skill, cmds); err != nil {
+				return nil, err
+			}
+		}
 	}
 	tool.UpdatedAt = time.Now().UTC()
 	if err := s.R.UpdateString(ctx, "tool_registry", tool.ID, tool); err != nil {

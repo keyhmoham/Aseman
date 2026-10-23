@@ -3,8 +3,9 @@
 #
 #   backend   managed, QuickJS — backend.js run by the node as a Nomad service
 #             of the tool runtime image (Open-Meteo data, no API key)
-#   frontend  generative — A2UI generated from frontend-skill.md the first time
-#             the tool is opened, then served from the component registry
+#   frontend  generative — Fixed Schema Surface Bundle compiled from
+#             frontend-skill.md (archetype analytics_console) once, then
+#             bind-only from the component registry on every open
 #
 # A tool named "weather" that you own is updated in place (new program, new
 # skill: the frontend is generated again on next use); one deployed some other

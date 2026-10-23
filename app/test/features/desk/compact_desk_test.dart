@@ -7,7 +7,7 @@ import 'package:aseman/src/features/desk/data/desk_api.dart';
 import 'package:aseman/src/features/desk/domain/desk_models.dart';
 import 'package:aseman/src/features/desk/presentation/compact_desk.dart';
 import 'package:aseman/src/features/desk/presentation/desk_controller.dart';
-import 'package:aseman/src/genui/genui.dart';
+import 'package:aseman/src/agui/agui.dart';
 
 Map<String, dynamic> window(String id, String tool, int order,
         {String shape = '', String size = ''}) =>
@@ -144,7 +144,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Window a: sheet'), findsOneWidget,
         reason: 'the full frontend, in the sheet');
-    await tester.tap(find.byTooltip('Close window'));
+    await tester.tap(find.byTooltip('Minimize'));
     await tester.pumpAndSettle();
     expect(find.text('Window a: sheet'), findsNothing);
     await tester.pumpWidget(const SizedBox());

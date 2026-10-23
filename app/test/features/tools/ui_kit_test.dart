@@ -3,8 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aseman/src/elpian/elpian.dart';
 import 'package:aseman/src/features/tools/ui_kit/kit.dart';
 
-const _catalog =
-    'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json';
+const _catalog = 'https://aseman.app/agui/catalogs/aseman/v1';
 
 List<Map<String, dynamic>> surface(
         List<Map<String, dynamic>> components, Map<String, dynamic> data) =>
@@ -388,7 +387,7 @@ void main() {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
-            child: GenUiView(
+            child: AgUiView(
               messages: _dashboard,
               onAction: (a, data) async {
                 actions.add((a.name, a.context));
@@ -410,7 +409,7 @@ void main() {
       expect(find.text('AAPL'), findsWidgets);
       expect(find.text('+4.12%'), findsOneWidget);
       expect(find.text('300.4M'), findsOneWidget);
-      // Raw Elpian node with an A2UI slot inside.
+      // Raw Elpian node with an AG-UI surface slot inside.
       expect(find.text('15234.5'), findsOneWidget);
       // Tapping a row writes the selection and fires the action in its scope.
       await tester.tap(find.text('MSFT').first);
@@ -432,7 +431,7 @@ void main() {
     testWidgets('sorting a table by a column', (tester) async {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
-          body: GenUiView(
+          body: AgUiView(
               messages: surface([
             {
               'id': 'root',

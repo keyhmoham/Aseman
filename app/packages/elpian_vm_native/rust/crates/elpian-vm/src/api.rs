@@ -417,12 +417,12 @@ pub fn all_host_apis() -> Vec<String> {
         // identity from a credential it checked, and a guest can only read it.
         "ctx.user",
         // A client talking to its own app's agents (serviced by the client
-        // host, which owns the agent transport): send a message or an A2UI
+        // host, which owns the agent transport): send a message or an AG-UI
         // action into a conversation, and read a surface's current data
         // model. Resolved within the calling app, like `server.*`.
         "agent.send",
         "agent.action",
-        "a2ui.dataModel",
+        "agui.dataModel",
         "net.fetch",
         "net.open",
         "net.send",

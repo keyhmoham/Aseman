@@ -372,7 +372,7 @@ acts only in the space it was called from.
 | Mode | What it is |
 |---|---|
 | `static` | an Elpian program on the Elpian VM (compiled to bytecode by the node's tool compiler, or uploaded compiled) or QuickJS, run by the app; it calls microtools with `tool.call`, and on phones may publish its compact widget's summary with `tool.compact` (`tool.context().display` says how it is shown) |
-| `generative` | A2UI generated from the deployer's skill the first time anyone opens it, kept in the **component registry** (`tool_components`, keyed by the skill's version and the backend's microtools) and served from there afterwards, filled with fresh microtool data per request; its buttons map to microtools |
+| `generative` | **Fixed Schema Surface Bundle** compiled once from the deployer's skill (embedded ` ```surface ` JSON, named `archetype:`, or a bounded LLM fallback), kept in the **component registry** (`tool_components`) and **bind-only** on every later open — filled with fresh microtool data; buttons map to microtools |
 
 A tool without a generative frontend still gets an interface where one is
 needed, designed for the request at hand rather than for the tool: when an
@@ -382,67 +382,49 @@ request around the actual result (`tools.GenerateWindowFrontend`) and keeps
 it with that one desk window; nothing is cached for the tool, and another
 request gets its own. `tools.frontend_get` / `frontend_action` fill and run
 a window's own template. Opening a tool itself runs its static frontend or
-serves its generative one (from the component registry, generated the
+serves its generative one (from the component registry, compiled the
 first time).
 
-**Every generated frontend is reviewed before anyone is told it is ready**
-(`tools/review.go`, `pkg/a2ui/inspect.go`). Each round, the template the
-model wrote is inspected (the component tree as a device renders it:
-references, placement, bound inputs, labelled and wired buttons, phone
-layout; bindings and actions against the microtools' schemas), tested
-(its data bindings are run for the person asking and every value a
-component shows is looked up in what really came back; actions are
-resolved against that data, and run when their microtool is
-`readOnlyHint`) and looked at (the filled surface, rendered as an outline,
-is reviewed by the model for fitness to the tool and its skill, cleanness
-and the design standard). Everything found goes back to the generator as
-one report for the next round, up to four rounds; the best candidate is
-kept, and one that still does not work is not served. The review travels
-with the template (`review` in `frontend_get`). Agents' `ui_compose`
-widgets get the same inspection and data test: a widget that does not work
-is refused with the report and nothing opens.
+**Author-time gate (no LLM design judge)** (`tools/review.go`,
+`pkg/surface/inspect.go`, `gate.go`, `archetypes.go`): the bundle is
+inspected (tree, app shell, composition codes such as `missing_compact` /
+`missing_kpi_strip`), props-validated, live-filled against microtools, and
+action-checked. Optional model notes are **advice only** and never block
+accept or repair. LLM fallback (when the skill has no Fixed Schema) is
+capped at `surface.MaxRepairAttempts` (3) and stops when the blocking
+issue fingerprint does not shrink. The review travels with the template
+(`review` in `frontend_get`). Agents' `ui_compose` widgets get the same
+deterministic inspection and data test.
 
-Interactive web pages agents build get the same review before they open on
-the desk (`spaces/page_review.go`, `pkg/webkit/inspect.go`): `proxy_create`
-and `web_show` fetch the page and its own files through the preview's
-tunnel, inspect it as the kit runs it (the kit and viewport, components the
-kit has, valid JSON props, wired controls, bound inputs, theme variables,
-layout), check every `call` (declared or in a script) against the space's
-tools, their microtools and argument schemas, run what it loads when it
-opens (and buttons whose microtool is `readOnlyHint`) as the agent, look
-every value it shows up in what came back, and have the model review the
-page (`tools.ReviewPage`) for fitness, cleanness and the design standard. A
-page that does not work is not opened: the agent gets the report, fixes it
-and opens it again, which reviews it again; the review of a page that opens
-comes back with it. The node does not paint the page, so agents must
-**see** it before reporting ready: open it in the sandbox browser, take
-screenshots at phone (~360) and desktop (~1400) widths
-(`aseman-desktop screenshot file.png width`), `read_file` each PNG so they
-see the frontend window, click every control, and reform from what the
-pictures show — not from HTML alone.
+Interactive web pages agents build are gated the same way before they open
+(`spaces/page_review.go`, `pkg/webkit/inspect.go`): inspect + live calls;
+model polish is advice only. `web_show` / `proxy_create` open retries are
+capped at `surface.MaxWebShowAttempts` (3). The node does not paint the
+page, so agents must still **see** it before reporting ready: screenshots
+at phone (~360) and desktop (~1400) widths and click every control.
 
 **Every generated interface is a professional application screen**, designed
-by the shared product-designer skill (`a2ui.DesignPrompt` /
-`a2ui.AppLayout`): visualization-first (KPI Stats → hero Chart → evidence
+by the shared product-designer skill (`surface.DesignPrompt` /
+`surface.AppLayout`): visualization-first (KPI Stats → hero Chart → evidence
 Table), sparse text, responsive on a phone (~360 × 640) and a desktop
 window (~1400 × 900). Taught to every generator and checked by every review
 (and by automatic density inspection). It fills its window and never scrolls
 as a whole: a header that stays put, then a body region (`"weight": 1`)
 taking the rest of the height, and every region that can grow (lists,
 tables, timelines, details, long forms) scrolls inside itself. Panes side by
-side are a `Split` (A2UI) or `<t-split>` (web kit): panes on a desktop, tabs
+side are a `Split` (AG-UI Surface Spec) or `<t-split>` (web kit): panes on a desktop, tabs
 on a phone; views of one screen are `Tabs` whose tabs scroll by themselves.
-A2UI surfaces designed this way are created with
-`createSurface.theme.layout = "app"`, and the app gives them their window's
-height (`GenUiFrame`); templates made before keep scrolling as pages. Web
-pages use `<body class="t-app">`, the kit's app shell.
+AG-UI surfaces designed this way set `theme.layout = "app"` (via
+`aseman.surface.create`), and the app gives them their window's height
+(`AgUiFrame`); templates made before keep scrolling as pages. Web pages use
+`<body class="t-app">`, the kit's app shell.
 
 Agents get every tool's microtools as tools (`spaces.tools_list`, through
 `spaces.ask`). Tools' interfaces never go into the chat: they open as card
 windows on the room's **desk** (`spaces/desk.go`, kept in the space's
 metadata under `desktop/<room>`; `spaces.desktop_get` / `desktop_update`).
 `frontend_show` opens a tool's generative frontend on a result,
-`ui_compose` a widget built from A2UI, microtool data and tools' own
+`ui_compose` a widget built from AG-UI Surface Spec, microtool data and tools' own
 frontends (`ToolFrontend` components), and `desk_state`, `desk_arrange`
 and `desk_close` let agents lay the desk out; each turn's note describes it
 (size, usable area, open windows).
@@ -468,7 +450,7 @@ same-origin writes):
 | `_aseman/api/file/<id>` | a stored file the person may read |
 
 The kit is built from `pkg/webkit/src` with `node pkg/webkit/tools/build.mjs`;
-its tests check it covers every A2UI component and every Elpian widget the
+its tests check it covers every Surface Spec component and every Elpian widget the
 app renders.
 
 | Action | |

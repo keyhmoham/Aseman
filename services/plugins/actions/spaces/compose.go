@@ -6,8 +6,10 @@ import (
 	"strings"
 
 	"github.com/aseman/aseman/internal/plugins/identity"
-	"github.com/aseman/aseman/pkg/a2ui"
+	"github.com/aseman/aseman/pkg/agui"
 	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/surface"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
 	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
@@ -34,7 +36,7 @@ type composeInput struct {
 const maxComposedComponents = 200
 
 // composeUI implements the ui_compose agent tool: an agent puts together a
-// widget from A2UI components, data its microtool calls return, and the
+// widget from AG-UI Surface components, data its microtool calls return, and the
 // frontends of the space's tools (ToolFrontend components), and opens it as
 // a card window on the room's desk (the same title again refreshes that
 // window). Every call and every embedded tool is checked to
@@ -43,7 +45,7 @@ const maxComposedComponents = 200
 // their own data for whoever opens them.
 func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, agentName, argsJSON string) (string, error) {
 	var in composeInput
-	var review []a2ui.Issue
+	var review []surface.Issue
 	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
 		return "", errs.InvalidArgument("ui_compose arguments must be a JSON object")
 	}
@@ -54,8 +56,8 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 	for i, c := range in.Components {
 		list[i] = c
 	}
-	in.Components = a2ui.Flatten(list)
-	a2ui.Normalize(in.Components)
+	in.Components = surface.Flatten(list)
+	surface.Normalize(in.Components)
 	tools, err := s.SpaceTools(ctx, spaceID, identity.ID{})
 	if err != nil {
 		return "", err
@@ -66,7 +68,7 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 			inSpace[t.BotID] = t
 		}
 	}
-	if err := a2ui.Check(in.Components); err != nil {
+	if err := surface.Check(in.Components); err != nil {
 		return "", err
 	}
 	for _, c := range in.Components {
@@ -87,7 +89,7 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 	}
 	data := map[string]any{}
 	var failed []string
-	var sources []a2ui.Source
+	var sources []surface.Source
 	for _, b := range in.Data {
 		if !strings.HasPrefix(b.Path, "/") || b.Microtool == "" {
 			return "", errs.InvalidArgument("each data binding needs a path (/...) and a microtool")
@@ -106,7 +108,7 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 		if err == nil {
 			value, err = vmm.ToolResultValue(reply)
 		}
-		src := a2ui.Source{Path: b.Path, From: b.Microtool, Live: true}
+		src := surface.Source{Path: b.Path, From: b.Microtool, Live: true}
 		if err != nil {
 			failed = append(failed, b.Path+": "+err.Error())
 			value = map[string]any{"error": err.Error()}
@@ -123,17 +125,11 @@ func (s *Service) composeUI(ctx context.Context, spaceID, roomID identity.ID, ag
 	} else if len(issues) > 0 {
 		review = issues
 	}
-	surface := "ui-" + strings.ReplaceAll(strings.ToLower(agentName), " ", "-")
+	surfaceID := "ui-" + strings.ReplaceAll(strings.ToLower(agentName), " ", "-")
 	body, _ := json.Marshal(map[string]any{
 		"title": in.Title,
-		"messages": []map[string]any{
-			// Checked as an app screen (reviewComposed): the device gives it
-			// its window's height.
-			{"version": "v0.9", "createSurface": map[string]any{"surfaceId": surface, "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
-				"theme": map[string]any{"layout": "app"}}},
-			{"version": "v0.9", "updateComponents": map[string]any{"surfaceId": surface, "components": in.Components}},
-			{"version": "v0.9", "updateDataModel": map[string]any{"surfaceId": surface, "path": "/", "value": data}},
-		},
+		// AG-UI events: create/update/patch + state snapshot for the desk.
+		"messages": agui.EventsToMaps(agui.SurfaceEvents(surfaceID, in.Components, data, map[string]any{"layout": "app"})),
 	})
 	target, err := deskRoom(roomID, in.Room)
 	if err != nil {
@@ -182,25 +178,25 @@ func setDataPointer(model map[string]any, path string, value any) {
 // what every component shows against what the bindings really returned, and
 // its controls (a composed widget sends no events: interaction is
 // client-side or an embedded ToolFrontend's).
-func reviewComposed(components []map[string]any, data map[string]any, sources []a2ui.Source, failed []string) []a2ui.Issue {
-	surface := a2ui.Inspect(components)
-	issues := append([]a2ui.Issue{}, surface.Issues...)
+func reviewComposed(components []map[string]any, data map[string]any, sources []surface.Source, failed []string) []surface.Issue {
+	inspected := surface.Inspect(components)
+	issues := append([]surface.Issue{}, inspected.Issues...)
 	for _, f := range failed {
-		issues = append(issues, a2ui.Issue{Severity: a2ui.Blocking, Area: "data", Where: "data " + strings.SplitN(f, ": ", 2)[0],
+		issues = append(issues, surface.Issue{Severity: surface.Blocking, Area: "data", Where: "data " + strings.SplitN(f, ": ", 2)[0],
 			Problem: "the microtool failed when the widget was filled: " + f, Fix: "call it with arguments its schema accepts, or leave it out"})
 	}
-	for _, e := range surface.Events {
-		issues = append(issues, a2ui.Issue{Severity: a2ui.Blocking, Area: "interaction", Where: e.Component,
+	for _, e := range inspected.Events {
+		issues = append(issues, surface.Issue{Severity: surface.Blocking, Area: "interaction", Where: e.Component,
 			Problem: "sends the event " + e.Name + ", but a composed widget sends no events, so it does nothing",
 			Fix:     "use a client-side functionCall (setValue, toggle…), a selection, or embed the tool's frontend (ToolFrontend)"})
 	}
-	return append(issues, surface.CheckData(data, sources)...)
+	return append(issues, inspected.CheckData(data, sources)...)
 }
 
-func blocking(issues []a2ui.Issue) int {
+func blocking(issues []surface.Issue) int {
 	n := 0
 	for _, i := range issues {
-		if i.Severity == a2ui.Blocking {
+		if i.Severity == surface.Blocking {
 			n++
 		}
 	}
@@ -209,11 +205,111 @@ func blocking(issues []a2ui.Issue) int {
 
 // composeReport is the review the agent gets back, to fix the widget and
 // compose it again.
-func composeReport(issues []a2ui.Issue) string {
+func composeReport(issues []surface.Issue) string {
 	var b strings.Builder
 	b.WriteString("the widget was filled and checked before opening, and it does not work yet; nothing was opened. Fix these and call ui_compose again:")
 	for _, i := range issues {
 		b.WriteString("\n- " + i.Severity + " " + i.String())
 	}
 	return b.String()
+}
+
+// presentInput is an agent's ui_present call: show a Surface Spec UI in chat,
+// on the desk, or both.
+type presentInput struct {
+	Title      string           `json:"title"`
+	Components []map[string]any `json:"components"`
+	Data       map[string]any   `json:"data"`
+	// Placement: chat | desk | both (default chat).
+	Placement string `json:"placement"`
+	// Layout hint: chat | app.
+	Layout  string       `json:"layout"`
+	Room    string       `json:"room"`
+	X       *float64     `json:"x"`
+	Y       *float64     `json:"y"`
+	W       *float64     `json:"w"`
+	H       *float64     `json:"h"`
+	Compact *DeskCompact `json:"compact"`
+}
+
+// presentUI implements ui_present: AG-UI Surface Spec in chat and/or desk.
+func (s *Service) presentUI(ctx context.Context, spaceID, roomID identity.ID, agentName, argsJSON string) (string, error) {
+	var in presentInput
+	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
+		return "", errs.InvalidArgument("ui_present arguments must be a JSON object")
+	}
+	if len(in.Components) == 0 || len(in.Components) > maxComposedComponents {
+		return "", errs.InvalidArgument("ui_present needs 1..200 components")
+	}
+	list := make([]any, len(in.Components))
+	for i, c := range in.Components {
+		list[i] = c
+	}
+	in.Components = surface.Flatten(list)
+	surface.Normalize(in.Components)
+	if err := surface.Check(in.Components); err != nil {
+		return "", errs.InvalidArgument("ui_present: " + err.Error())
+	}
+	placement := strings.ToLower(strings.TrimSpace(in.Placement))
+	if placement == "" {
+		placement = "chat"
+	}
+	if placement != "chat" && placement != "desk" && placement != "both" {
+		return "", errs.InvalidArgument("placement must be chat, desk, or both")
+	}
+	layout := in.Layout
+	if layout == "" {
+		if placement == "desk" {
+			layout = "app"
+		} else {
+			layout = "chat"
+		}
+	}
+	data := in.Data
+	if data == nil {
+		data = map[string]any{}
+	}
+	surfaceID := "present-" + strings.ReplaceAll(strings.ToLower(agentName), " ", "-")
+	events := agui.EventsToMaps(agui.SurfaceEvents(surfaceID, in.Components, data, map[string]any{"layout": layout}))
+	title := strings.TrimSpace(in.Title)
+	if title == "" {
+		title = "UI"
+	}
+	out := map[string]any{"ok": true, "placement": placement, "title": title}
+	target, err := deskRoom(roomID, in.Room)
+	if err != nil {
+		return "", err
+	}
+	if placement == "chat" || placement == "both" {
+		sender := identity.ID{}
+		if policy := vmm.ExecutionFrom(ctx); policy.AgentID != "" {
+			if agentID, err := identity.Parse(policy.AgentID); err == nil {
+				if rec, err := s.Bots.GetBot(ctx, agentID); err == nil {
+					sender = rec.AccountID
+				}
+			}
+		}
+		if sender.IsZero() {
+			return "", errs.InvalidArgument("ui_present chat placement needs an agent sender")
+		}
+		body, _ := json.Marshal(map[string]any{"title": title, "messages": events, "layout": layout})
+		if err := s.postMessage(ctx, spaceID, target, sender, string(body), message.KindAgui); err != nil {
+			return "", err
+		}
+		out["chat"] = true
+	}
+	if placement == "desk" || placement == "both" {
+		widget := map[string]any{"title": title, "messages": events}
+		d, ids, err := s.UpdateDesk(ctx, spaceID, target, agentName, []DeskOp{{
+			Op: "open", Kind: DeskComposed, Title: title, Widget: widget,
+			X: in.X, Y: in.Y, W: in.W, H: in.H, Compact: in.Compact,
+		}})
+		if err != nil {
+			return "", err
+		}
+		out["window"] = windowJSON(d, ids[0])
+		out["desk"] = d.Summary()
+	}
+	raw, _ := json.Marshal(out)
+	return string(raw), nil
 }

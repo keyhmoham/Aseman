@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aseman/aseman/pkg/a2ui"
+	"github.com/aseman/aseman/pkg/surface"
 )
 
 var weatherCommands = []map[string]any{
@@ -67,9 +67,10 @@ func TestReviewFindsWhatDoesNotWork(t *testing.T) {
 		"weather_now takes no argument units",
 		`/now has no "temp" (it has: condition, temperature)`,
 		`sends save without "city" in its context`,
-		"No way to pick a city.",
+		"No way to pick a city.", // advice-only design note
 		"neither shows its result nor reloads",
 		"save_city) checked, not run",
+		"compact", // deterministic composition gate
 	} {
 		if !strings.Contains(feedback, want) {
 			t.Errorf("feedback lacks %q:\n%s", want, feedback)
@@ -112,7 +113,7 @@ func TestReviewPassesAWorkingFrontend(t *testing.T) {
 		t.Fatalf("a working frontend did not pass:\n%s", r.feedback())
 	}
 	for _, i := range r.Issues {
-		if i.Severity == a2ui.Blocking {
+		if i.Severity == surface.Blocking {
 			t.Errorf("blocking: %v", i)
 		}
 	}
@@ -128,9 +129,9 @@ func TestReviewPassesAWorkingFrontend(t *testing.T) {
 
 // Of two candidates, the one that works more wins.
 func TestReviewWorse(t *testing.T) {
-	broken := &Review{broken: 1, Issues: []a2ui.Issue{{Severity: a2ui.Blocking}}}
-	unclean := &Review{Issues: []a2ui.Issue{{Severity: a2ui.Blocking}, {Severity: a2ui.Advice}}}
-	clean := &Review{Issues: []a2ui.Issue{{Severity: a2ui.Advice}}}
+	broken := &Review{broken: 1, Issues: []surface.Issue{{Severity: surface.Blocking}}}
+	unclean := &Review{Issues: []surface.Issue{{Severity: surface.Blocking}, {Severity: surface.Advice}}}
+	clean := &Review{Issues: []surface.Issue{{Severity: surface.Advice}}}
 	if !broken.worse(unclean) || !unclean.worse(clean) || clean.worse(unclean) {
 		t.Fatal("candidates ranked wrongly")
 	}
@@ -139,13 +140,21 @@ func TestReviewWorse(t *testing.T) {
 // A template designed as an app screen tells the device so, and one made
 // before does not (it is shown as a page, as it was).
 func TestTemplatesSayTheirLayout(t *testing.T) {
-	app := Template{Layout: AppLayout, Components: []map[string]any{{"id": "root", "component": "Text", "text": "Hi"}}}
-	create := app.Messages("s", nil)[0]["createSurface"].(map[string]any)
-	if theme, _ := create["theme"].(map[string]any); theme["layout"] != "app" {
-		t.Fatalf("createSurface: %v", create)
+	app := Template{Layout: AppLayout, Components: []map[string]any{{"id": "root", "type": "Text", "text": "Hi"}}}
+	create := app.Messages("s", nil)[0]
+	if create["type"] != "CUSTOM" || create["name"] != "aseman.surface.create" {
+		t.Fatalf("expected AG-UI surface create: %v", create)
+	}
+	value, _ := create["value"].(map[string]any)
+	theme, _ := value["theme"].(map[string]any)
+	if theme["layout"] != "app" && value["layout"] != "app" {
+		t.Fatalf("create layout: %v", create)
 	}
 	old := Template{Components: app.Components}
-	if _, ok := old.Messages("s", nil)[0]["createSurface"].(map[string]any)["theme"]; ok {
+	oldCreate := old.Messages("s", nil)[0]
+	oldVal, _ := oldCreate["value"].(map[string]any)
+	oldTheme, _ := oldVal["theme"].(map[string]any)
+	if oldTheme["layout"] == "app" || oldVal["layout"] == "app" {
 		t.Fatal("a template made before app layout was marked as one")
 	}
 }

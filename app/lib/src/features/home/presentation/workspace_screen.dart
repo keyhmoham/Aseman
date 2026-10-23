@@ -14,13 +14,13 @@ import '../../../data/models/space.dart';
 import '../../../data/models/uploaded_file.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../elpian/core/media.dart' show ElpianMediaScope;
-import '../../../genui/genui.dart'
+import '../../../agui/agui.dart'
     show
         CompactSummary,
         CompactSummaryView,
         FrontendPresentation,
-        GenUiFrame,
-        GenUiView;
+        AgUiFrame,
+        AgUiView;
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/mini_tag.dart';
@@ -1999,14 +1999,14 @@ class _CenterDesk extends StatelessWidget {
           userId: dependencies.sessionController.session?.accountId ?? '',
           shown: shown);
 
-  /// A widget an agent composed (ui_compose): A2UI over the space's tools'
+  /// A widget an agent composed (ui_compose): AG-UI Surface over the space's tools'
   /// data, embedding tools' own frontends.
   Widget _composed(String id, Map<String, dynamic> widget) =>
       Builder(
           key: ValueKey('composed-$id'),
           builder: (context) {
             final messages = ComposedSurfaces.of(widget);
-            final view = GenUiView(
+            final view = AgUiView(
               messages: messages,
               toolFrontend: (context, botId, height, props) => SizedBox(
                   height: height,
@@ -2014,7 +2014,7 @@ class _CenterDesk extends StatelessWidget {
             );
             // A phone-board widget shows the compact form as it is.
             if (FrontendPresentation.isCompact(context)) return view;
-            return GenUiFrame(messages: messages, child: view);
+            return AgUiFrame(messages: messages, child: view);
           });
 
   /// A web page window: the page itself, or, as a phone-board widget, a

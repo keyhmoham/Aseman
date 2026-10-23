@@ -225,7 +225,7 @@
     <t-app-bar title="AppBar" leading="menu"><t-icon-button icon="search"></t-icon-button></t-app-bar>
   </t-section>
 
-  <t-section title="A2UI surface" icon="auto_awesome" subtitle="The same JSON the app renders">
+  <t-section title="AG-UI surface" icon="auto_awesome" subtitle="The same JSON the app renders">
     <t-surface>
       <script type="application/json">{"components":[{"id":"root","component":"Column","children":["h","g","b"]},{"id":"h","component":"Text","variant":"h5","text":"Hello ${/name}"},{"id":"g","component":"Grid","minColumnWidth":150,"children":{"componentId":"s","path":"/stats"}},{"id":"s","component":"Stat","label":{"path":"label"},"value":{"path":"value"}},{"id":"b","component":"Button","variant":"primary","child":"bt","action":{"functionCall":{"call":"increment","args":{"path":"/stats/0/value"}}}},{"id":"bt","component":"Text","text":"Increment"}],"data":{"name":"Aseman","stats":[{"label":"Clicks","value":1},{"label":"Users","value":42}]}}</script>
     </t-surface>

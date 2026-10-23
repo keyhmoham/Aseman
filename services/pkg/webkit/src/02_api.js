@@ -108,7 +108,7 @@ Aseman.tool = (name) => new Proxy({
   show: (opts) => Aseman.show(name, opts),
 }, { get: (t, k) => (k in t || typeof k === 'symbol' ? t[k] : (args) => Aseman.call(name, k, args)) });
 
-/** A tool's own frontend: {mode, messages (A2UI, for generative), template, …}. */
+/** A tool's own frontend: {mode, messages (AG-UI events, for generative), template, …}. */
 Aseman.frontend = (tool, opts = {}) => api('frontend', { tool, ...opts });
 /** Runs an action of a tool's generative frontend; returns {data}. */
 Aseman.frontendAction = (tool, action, opts = {}) => api('action', { tool, action, ...opts });

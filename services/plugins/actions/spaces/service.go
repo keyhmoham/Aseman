@@ -52,6 +52,9 @@ type Service struct {
 	SandboxImage     string
 	SandboxResources bot.ResourceProfile
 	proxyCreateMu    sync.Mutex
+	// webShowAttempts counts web_show / proxy_create open tries per space+page
+	// so agents cannot loop forever on design/polish retries.
+	webShowAttempts sync.Map // key string → int
 
 	// Routines is the per-room task scheduler (wired by the root); agents manage
 	// routines through the routine_create/list/delete tools.

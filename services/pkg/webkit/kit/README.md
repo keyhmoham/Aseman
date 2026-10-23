@@ -6,8 +6,8 @@ use), build an **interactive web page** for it: a small web app in the
 sandbox, served through a preview gateway, that opens as a card window on
 the room's desk next to the tools' own frontends. It looks exactly like the
 app (this kit) and calls the tool's microtools through the Aseman API, as
-the person using it. Do not rely on a generated (A2UI) frontend or
-`ui_compose` for interaction: they show results; a page *does things*.
+the person using it. Do not rely on a generated (AG-UI Surface Spec) frontend or
+`ui_compose` / `ui_present` for interaction: they show results; a page *does things*.
 
 The kit's files are in the sandbox at `/opt/aseman/webkit/`
 (`aseman-ui.js`, `aseman-ui.css`, `gallery.html` with every component, this
@@ -123,7 +123,7 @@ without the gateway, `Aseman.configure({ mock: { Weather: { forecast: (args) => 
 `bind-value="/form/city"` or `value='{"path": "/form/city"}'`; inputs write
 back to it; anything reading a path re-renders when it changes. Props take
 literals (attributes are parsed as JSON when they look like it), bindings,
-and A2UI function calls: `text='{"call": "formatString", "args": {"value": "High ${/fc/high}°"}}'`.
+and Surface Spec function calls: `text='{"call": "formatString", "args": {"value": "High ${/fc/high}°"}}'`.
 In script, set props as properties: `el.data = rows`, `el.props = {…}`,
 `el.set('value', 3)`. Build elements with `Aseman.el('stat', {label, value})`
 and `Aseman.h('div', {class, on: {click}}, …children)`.
@@ -151,7 +151,7 @@ Formats (`format`, `y-format`, column formats): `number[:decimals]`,
 ## 5. Components
 
 Every element is `<t-…>` with the props of the app's component of the same
-name (A2UI catalog, tool UI kit, Elpian widgets); camelCase props are
+name (Surface Spec catalog, tool UI kit, Elpian widgets); camelCase props are
 kebab-case attributes (`min-column-width`). Events: `t-press`, `t-change`
 (`detail.value`), `t-select` (tapped row), `t-action`, `t-result`, `t-error`,
 `t-submit`. The gallery (`/_aseman/kit/gallery.html`) shows them all.
@@ -211,7 +211,7 @@ force|circle|tree, directed}.
 row|large}, `t-order-book` {bids, asks, levels}, `t-ticker-tape`,
 `t-allocation-bar`.
 
-**Escape hatches** — `t-surface` renders A2UI (messages or {components,
+**Escape hatches** — ``t-surface` renders AG-UI surfaces (messages or {components,
 data}, the JSON tools' generated frontends use); `t-tool-frontend` {tool,
 microtool, args} embeds a tool's own frontend (its generative surface with
 working actions, or its result in an automatic view); `t-elpian` {node}

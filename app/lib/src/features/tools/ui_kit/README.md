@@ -7,13 +7,13 @@ implementation serves both frontend modes:
 | Mode | How a frontend uses the kit |
 |---|---|
 | **Static** (Elpian VM / QuickJS program) | Return kit nodes in the view tree: `{type: 'Chart', props: {...}, events: {select: 'onPick'}}`. Rendered by `kitEngine()` in `ToolFrontendView`. |
-| **Generative** (A2UI) and agent widgets (`ui_compose`) | Use the components of Aseman's genui catalog (`lib/src/genui/catalog`): `{"id": "c", "component": "Chart", "data": {"path": "/history"}, ...}`. Props take literals, `{"path"}` bindings or function calls at any depth. |
+| **Generative** (AG-UI) and agent widgets (`ui_compose`) | Use Aseman's Surface Spec catalog (`lib/src/agui/catalog`): `{"id": "c", "type": "Chart", "data": {"path": "/history"}, ...}`. Props take literals, `{"path"}` bindings or function calls at any depth. |
 
-The node (Go) knows the same component list (`services/pkg/a2ui`). It teaches it to models with `CatalogPrompt` and rejects components devices can't render. A test there checks that the two lists match.
+The node (Go) knows the same component list (`services/pkg/surface`). It teaches it to models with `CatalogPrompt` and rejects components devices can't render. A test there checks that the two lists match.
 
 ## Data views
 
-Node type (static) / component (A2UI) and its props. Field props name a key of each row (`a.b` reaches nested keys).
+Node type (static) / component (AG-UI) and its props. Field props name a key of each row (`a.b` reaches nested keys).
 
 | Node / component | Props |
 |---|---|
@@ -32,7 +32,7 @@ Node type (static) / component (A2UI) and its props. Field props name a key of e
 | `CodeBlock` | `code`, `language`, `lineNumbers`, `maxHeight` |
 | `Progress` | `value`, `max`, `variant` (`linear`/`circular`), `label`, `showValue`, `format`, `color`/`status`, `size`, `thickness` |
 | `Tag` / `Badge` | `text`, `color`/`status`, `variant` (`tonal` `filled` `outline`), `icon` |
-| `Rating` | `value`, `max`, `size`, `color`, `showValue` (A2UI: `editable` with a bound `value`) |
+| `Rating` | `value`, `max`, `size`, `color`, `showValue` (AG-UI: `editable` with a bound `value`) |
 | `Callout` | `title`, `text`, `severity` (`info` `good` `warning` `critical`), `icon`; children below the text |
 | `Avatar` | `name` (initials), `url`, `size`, `color` |
 
@@ -43,7 +43,7 @@ Node type (static) / component (A2UI) and its props. Field props name a key of e
 **Taps**: `Chart`, `Heatmap`, `Treemap`, `Graph`, `DataGrid`, `Timeline` and `TreeView` send `select` with `{index, row, …}`:
 
 * In a static program, declare `events: {select: 'handler'}`. The handler gets the event in the VM's typed-value form; `ToolTemplates.jsDashboardFrontend` shows how to unwrap it.
-* In A2UI, `selection: {"path": "/selected"}` writes the tapped row there, so a detail view can bind to `/selected/…` without a round trip. `action` fires a Button-style action whose context resolves against the tapped row.
+* In AG-UI, `selection: {"path": "/selected"}` writes the tapped row there, so a detail view can bind to `/selected/…` without a round trip. `action` fires a Button-style action whose context resolves against the tapped row.
 
 ## Layout
 
@@ -55,4 +55,4 @@ Node type (static) / component (A2UI) and its props. Field props name a key of e
 | `Scroll` | `Scroll` | `direction`, `maxHeight` |
 | Elpian `Wrap`, `Stack`, `Container`, `Center`, `SizedBox`, `AspectRatio` | `Wrap`, `Stack`, `Box`, `Center`, `Spacer`, `AspectRatio` | see `CatalogPrompt` |
 
-A2UI's `Elpian` component embeds any raw Elpian node tree. Bindings inside its props are evaluated, `{"slot": "<component id>"}` places an A2UI component inside it, and an event whose value is an A2UI action fires that action. Use it when no component fits.
+AG-UI's `Elpian` component embeds any raw Elpian node tree. Bindings inside its props are evaluated, `{"slot": "<component id>"}` places an AG-UI component inside it, and an event whose value is an AG-UI action fires that action. Use it when no component fits.

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aseman/aseman/pkg/a2ui"
+	"github.com/aseman/aseman/pkg/surface"
 )
 
 // kitJS is the built kit script.
@@ -80,21 +80,21 @@ func definedTags(js string) map[string]bool {
 	return out
 }
 
-// Every component the node teaches and checks (the app's genui catalog)
-// has an element, and the A2UI renderer maps it.
-func TestKitCoversEveryA2UIComponent(t *testing.T) {
+// Every component the node teaches and checks (the Surface Spec catalog)
+// has a kit element, and the AG-UI surface renderer maps it.
+func TestKitCoversEverySurfaceComponent(t *testing.T) {
 	js := kitJS(t)
 	tags := definedTags(js)
-	for _, c := range a2ui.Components() {
+	for _, c := range surface.Components() {
 		tag := "t-" + kebab(c)
 		if c == "CheckBox" {
 			tag = "t-checkbox"
 		}
 		if !tags[tag] {
-			t.Errorf("no element %s for the A2UI component %s", tag, c)
+			t.Errorf("no element %s for the Surface Spec component %s", tag, c)
 		}
 		if !strings.Contains(js, "  "+c+": 't-") && !strings.Contains(js, " "+c+": 't-") {
-			t.Errorf("the A2UI renderer does not map %s", c)
+			t.Errorf("the AG-UI surface renderer does not map %s", c)
 		}
 	}
 }

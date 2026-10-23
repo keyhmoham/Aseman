@@ -7,12 +7,16 @@ package spaces
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/surface"
 	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
+
+func itoa(n int) string { return strconv.Itoa(n) }
 
 // deskRoom is the desk an agent tool acts on: the room it names, else the
 // turn's.
@@ -235,9 +239,24 @@ func (s *Service) showPage(ctx context.Context, spaceID, roomID identity.ID, age
 	if err != nil {
 		return Desktop{}, "", nil, err
 	}
-	review := s.reviewPage(ctx, spaceID, in.page(), in.Tool)
+	page := in.page()
+	attemptKey := spaceID.String() + "|" + page
+	attempts := 1
+	if v, ok := s.webShowAttempts.Load(attemptKey); ok {
+		attempts = v.(int) + 1
+	}
+	s.webShowAttempts.Store(attemptKey, attempts)
+	if attempts > surface.MaxWebShowAttempts {
+		return Desktop{}, "", nil, errs.InvalidArgument(
+			"web_show refused: this page failed review " + itoa(attempts-1) + " times (cap " + itoa(surface.MaxWebShowAttempts) +
+				"). Rewrite the page from a known-good kit template, or open a different path — do not keep calling web_show.")
+	}
+	review := s.reviewPage(ctx, spaceID, page, in.Tool)
 	if review != nil && review.broken > 0 {
-		return Desktop{}, "", review, errs.InvalidArgument(review.report(false))
+		return Desktop{}, "", review, errs.InvalidArgument(review.report(false)+"\nAttempt "+itoa(attempts)+" of "+itoa(surface.MaxWebShowAttempts)+".")
+	}
+	if review != nil && review.Passed {
+		s.webShowAttempts.Delete(attemptKey)
 	}
 	w, h := in.W, in.H
 	if w == nil && h == nil {
@@ -245,7 +264,7 @@ func (s *Service) showPage(ctx context.Context, spaceID, roomID identity.ID, age
 		dw, dh := 720.0, 600.0
 		w, h = &dw, &dh
 	}
-	ops := []DeskOp{{Op: "open", Kind: DeskWeb, Tool: in.Tool, Title: in.Title, Args: map[string]any{"page": in.page()},
+	ops := []DeskOp{{Op: "open", Kind: DeskWeb, Tool: in.Tool, Title: in.Title, Args: map[string]any{"page": page},
 		X: in.X, Y: in.Y, W: w, H: h, Compact: in.Compact}}
 	if err := s.resolveDeskOpens(ctx, spaceID, ops); err != nil {
 		return Desktop{}, "", review, err
@@ -272,7 +291,8 @@ func (s *Service) webShowTool(ctx context.Context, spaceID, roomID identity.ID, 
 	out := map[string]any{"ok": true, "window": windowJSON(d, id), "desk": d.Summary()}
 	if review != nil {
 		out["review"] = review
-		if !review.Passed || len(review.Issues) > 0 {
+		// Only push a retry when the deterministic gate failed; advice is polish.
+		if !review.Passed {
 			out["next"] = review.report(true)
 		}
 	}

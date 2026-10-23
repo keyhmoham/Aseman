@@ -475,6 +475,10 @@ func (s *Service) frontendGet(ctx context.Context, req *api.ActionRequest) (*api
 		out["messages"] = t.Messages("tool-"+tool.BotID, data)
 		out["actions"] = actionNames(&t)
 		out["review"] = t.Review
+		// Always return the template so frontend_action can run against the
+		// same Surface Bundle the person is looking at (registry key churn
+		// must not regenerate a different actions map under them).
+		out["template"] = templateMap(&t)
 	}
 	// No frontend: the mode says so (people get one designed for their
 	// request on the desk).
@@ -529,7 +533,9 @@ func (s *Service) frontendAction(ctx context.Context, req *api.ActionRequest) (*
 		if !spec.Cached() {
 			return nil, errs.InvalidArgument("this tool's frontend is generated for each request: pass the template frontend_get returned")
 		}
-		component, _, err := s.component(ctx, c, tool, spec, false, Shown{})
+		// Never regenerate here: a new Surface Bundle would not match the
+		// buttons already on screen (→ "no action … design it again").
+		component, err := s.loadComponent(ctx, tool, spec, c)
 		if err != nil {
 			return nil, err
 		}
@@ -549,7 +555,14 @@ func (s *Service) frontendAction(ctx context.Context, req *api.ActionRequest) (*
 		// tool's microtools: it runs that microtool with what the
 		// surface holds for it.
 		if action, ok = s.namedAction(ctx, c, tool, in.Action, in.Context, data); !ok {
-			return nil, errs.NotFound("this frontend has no action " + in.Action + "; design it again")
+			known := actionNames(t)
+			sort.Strings(known)
+			msg := "this frontend has no action " + in.Action
+			if len(known) > 0 {
+				msg += " (known: " + strings.Join(known, ", ") + ")"
+			}
+			msg += "; open the tool again so its Surface Bundle matches the buttons"
+			return nil, errs.NotFound(msg)
 		}
 	}
 	var result any
@@ -658,6 +671,50 @@ func (s *Service) cachedFixedSchema(ctx context.Context, botID, _ string) *model
 	return nil
 }
 
+// templateMap is the Surface Bundle JSON clients pass back on frontend_action.
+func templateMap(t *Template) map[string]any {
+	if t == nil {
+		return nil
+	}
+	raw, err := json.Marshal(t)
+	if err != nil {
+		return nil
+	}
+	var out map[string]any
+	_ = json.Unmarshal(raw, &out)
+	return out
+}
+
+// loadComponent reads the tool's Surface Bundle from the registry without
+// generating a new one. Used by frontend_action so taps never redesign the UI.
+func (s *Service) loadComponent(ctx context.Context, tool *models.Tool, spec models.FrontendSpec, c caller) (*models.Component, error) {
+	commands, err := s.CommandsFor(ctx, tool.BotID, c.Caller.ID.String(), c.Space)
+	if err != nil || len(commands) == 0 {
+		commands = tool.Commands
+	}
+	key := componentKey(spec, commands)
+	id := s.key("component/" + tool.BotID + "/" + key)
+	var row models.Component
+	if err := s.R.GetString(ctx, "tool_components", id, &row); err == nil {
+		return &row, nil
+	}
+	if cached := s.cachedComponent(ctx, tool.BotID); cached != nil {
+		return cached, nil
+	}
+	return nil, errs.NotFound("this tool has no generated frontend yet; open it once first")
+}
+
+// cachedComponent is the newest registry row for the tool (any key/model).
+func (s *Service) cachedComponent(ctx context.Context, botID string) *models.Component {
+	var rows []models.Component
+	if err := s.R.List(ctx, "tool_components", database.Filter{
+		Equal: map[string]any{"bot_id": botID}, OrderBy: "updated_at", Asc: false,
+	}, &rows); err != nil || len(rows) == 0 {
+		return nil
+	}
+	return &rows[0]
+}
+
 // component returns the tool's generated frontend from the registry, or
 // generates it (as the caller, who pays for the model) when the registry has
 // none for the current skill and microtools.
@@ -690,6 +747,14 @@ func (s *Service) component(ctx context.Context, c caller, tool *models.Tool, sp
 				_ = s.R.UpdateString(ctx, "tool_components", cached.ID, cached)
 				return cached, true, nil
 			}
+		}
+		// Free-form skills: prefer any existing bundle over regenerating on
+		// a key mismatch (which would desync buttons from actions).
+		if cached := s.cachedComponent(ctx, tool.BotID); cached != nil {
+			cached.Uses++
+			cached.UpdatedAt = time.Now().UTC()
+			_ = s.R.UpdateString(ctx, "tool_components", cached.ID, cached)
+			return cached, true, nil
 		}
 	}
 	t, model, err := s.generate(ctx, c, tool, skill, commands, shown)

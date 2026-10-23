@@ -376,8 +376,9 @@ class ToolFrontendPayload {
   final bool cached;
   final String version;
 
-  /// A generated frontend that is not cached: the template it was generated
-  /// as, which its actions and reloads pass back (nobody else keeps it).
+  /// The Surface Bundle to pass back on actions/reloads. Always set for
+  /// generative frontends (cached or not) so taps run against the same
+  /// template the person is looking at.
   final Map<String, dynamic>? template;
 
   factory ToolFrontendPayload.fromJson(Map<String, dynamic> j) {

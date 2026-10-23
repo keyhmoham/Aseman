@@ -9,14 +9,23 @@ Prefer **author once, bind always** — never a serve-time generate→LLM-judge 
 
 ## Skill contract
 
+Fixed Schema applies **only** when the skill names an `archetype:` or embeds a
+````surface``` fence. Prose words like “analytics”, “KPI”, or “weather” never
+opt a tool in.
+
 At the top of `frontend_skill`:
 
 ```
 archetype: analytics_console
-title: Weather
+title: My console
 data_path: /report
-microtool: weather_report
+microtool: my_report
+args: {"q": "default"}
+slots: {"kpis":[{"label":"Total","field":"total","format":"integer"}],"hero_array":"series","hero_x":"label","hero_y":"value","table_array":"rows"}
 ```
+
+Domain layout (weather KPIs, CRM columns, …) belongs in that tool’s `slots` /
+embedded surface — not in platform heuristics.
 
 Or embed a full template:
 
@@ -25,6 +34,8 @@ Or embed a full template:
 {"title":"…","components":[…],"data":[…],"actions":{…}}
 ```
 ````
+
+Skills without `archetype` / ```surface``` use the bounded LLM generator at serve time.
 
 ## Archetypes
 

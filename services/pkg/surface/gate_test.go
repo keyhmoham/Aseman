@@ -91,13 +91,17 @@ func TestParseSkillArchetypeAndFence(t *testing.T) {
 	}
 }
 
-func TestParseSkillArgsFrontmatterAndInline(t *testing.T) {
-	c := ParseSkill("archetype: analytics_console\nargs: {\"city\": \"Lisbon\"}\n\nFill with weather_report.\n")
+func TestParseSkillArgsAndSlotsFrontmatter(t *testing.T) {
+	c := ParseSkill("archetype: analytics_console\nargs: {\"city\": \"Lisbon\"}\nslots: {\"hero_array\": \"hours\", \"strip_value\": \"temperature\", \"kpis\": [{\"label\": \"Temp\", \"field\": \"current/temperature\", \"format\": \"number:1\"}]}\n")
 	if city, _ := c.Args["city"].(string); city != "Lisbon" {
 		t.Fatalf("frontmatter args: %+v", c.Args)
 	}
-	c = ParseSkill("Fill `/report` with weather_report for `{\"city\": \"London\"}`.\n")
-	if city, _ := c.Args["city"].(string); city != "London" {
-		t.Fatalf("inline args: %+v", c.Args)
+	if c.Slots.HeroArray != "hours" || c.Slots.StripValue != "temperature" || len(c.Slots.KPIs) != 1 {
+		t.Fatalf("slots: %+v", c.Slots)
+	}
+	// Prose alone never implies Fixed Schema / weather slots.
+	c = ParseSkill("Build an analytics dashboard with KPI tiles. visualization-first.\n")
+	if c.Archetype != "" || c.Slots.HeroArray != "" {
+		t.Fatalf("prose must not infer fixed schema: %+v", c)
 	}
 }

@@ -5,11 +5,14 @@ title: Weather
 data_path: /report
 microtool: weather_report
 args: {"city": "{{DEFAULT_CITY}}"}
+slots: {"kpis":[{"label":"Temperature","field":"current/temperature","format":"number:1"},{"label":"Humidity","field":"current/humidity","format":"integer"},{"label":"Wind","field":"current/wind_speed","format":"number:1"},{"label":"Precip","field":"current/precipitation","format":"number:1"},{"label":"Pressure","field":"current/pressure","format":"integer"}],"hero_array":"hours","hero_x":"label","hero_y":"temperature","hero_label":"Next hours","hero_type":"area","strip_array":"hours","strip_label":"label","strip_value":"temperature","gauge_field":"today/uv_index","gauge_label":"UV","gauge_max":11,"table_array":"days","table_columns":[{"field":"label","label":"Day"},{"field":"high","label":"High","format":"number:0"},{"field":"low","label":"Low","format":"number:0"},{"field":"condition","label":"Condition"}],"search_path":"/form/city","search_event":"search","search_label":"Show","toggles":{"metric":"°C","imperial":"°F"}}
 
 A professional weather console as an Aseman Surface Spec Fixed Schema over AG-UI
 (archetype `analytics_console`): visualization-first, sparse text, app layout that
 works on phone and desktop. The surface is compiled once from this skill (no
-serve-time generation loop); opening the tool only fills data bindings.
+serve-time generation loop); opening the tool only fills data bindings. Layout
+slots above are weather-specific to this skill — other tools must declare their
+own `archetype` / `slots` (or omit Fixed Schema and use LLM generation).
 
 ## Data
 

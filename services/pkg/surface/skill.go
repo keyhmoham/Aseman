@@ -22,6 +22,8 @@ type SkillContract struct {
 	Microtool string
 	// Args are literal default binding arguments (e.g. {"city":"London"}).
 	Args map[string]any
+	// Slots are optional archetype fill-ins from a `slots: {...}` line.
+	Slots ArchetypeSlots
 	// Raw is the original skill text.
 	Raw string
 }
@@ -32,12 +34,13 @@ var (
 	dataPathLine  = regexp.MustCompile(`(?im)^(?:data_path|surface\.data_path)\s*[:=]\s*(/\S+)`)
 	microLine     = regexp.MustCompile(`(?im)^(?:microtool|surface\.microtool)\s*[:=]\s*([a-zA-Z0-9_]+)`)
 	argsLine      = regexp.MustCompile(`(?im)^(?:args|surface\.args)\s*[:=]\s*(\{.+\})\s*$`)
-	// Inline JSON in prose, e.g. for `{"city": "London"}`.
-	inlineArgsJSON = regexp.MustCompile(`\{[^{}]*"[a-zA-Z_][a-zA-Z0-9_]*"\s*:\s*"[^"]*"[^{}]*\}`)
-	surfaceFence   = regexp.MustCompile("(?s)```(?:surface|json)\\s*\n(\\{.*?\\})\n```")
+	slotsLine     = regexp.MustCompile(`(?im)^(?:slots|surface\.slots)\s*[:=]\s*(\{.+\})\s*$`)
+	surfaceFence  = regexp.MustCompile("(?s)```(?:surface|json)\\s*\n(\\{.*?\\})\n```")
 )
 
 // ParseSkill extracts a Fixed Schema contract from a frontend skill.
+// Fixed Schema applies only when the skill names an archetype or embeds a
+// ```surface``` fence — never from prose keywords.
 func ParseSkill(skill string) SkillContract {
 	c := SkillContract{Raw: skill, DataPath: "/report"}
 	if m := archetypeLine.FindStringSubmatch(skill); len(m) == 2 {
@@ -58,14 +61,8 @@ func ParseSkill(skill string) SkillContract {
 			c.Args = args
 		}
 	}
-	if c.Args == nil {
-		for _, m := range inlineArgsJSON.FindAllString(skill, -1) {
-			var args map[string]any
-			if err := json.Unmarshal([]byte(m), &args); err == nil && len(args) > 0 {
-				c.Args = args
-				break
-			}
-		}
+	if m := slotsLine.FindStringSubmatch(skill); len(m) == 2 {
+		c.Slots = parseSlotsJSON(m[1])
 	}
 	if m := surfaceFence.FindStringSubmatch(skill); len(m) == 2 {
 		var raw map[string]any
@@ -74,6 +71,51 @@ func ParseSkill(skill string) SkillContract {
 		}
 	}
 	return c
+}
+
+// parseSlotsJSON maps a slots frontmatter object onto ArchetypeSlots.
+func parseSlotsJSON(raw string) ArchetypeSlots {
+	var in struct {
+		KPIs []struct {
+			Label  string `json:"label"`
+			Field  string `json:"field"`
+			Format string `json:"format"`
+			Icon   string `json:"icon"`
+		} `json:"kpis"`
+		HeroArray    string            `json:"hero_array"`
+		HeroX        string            `json:"hero_x"`
+		HeroY        string            `json:"hero_y"`
+		HeroLabel    string            `json:"hero_label"`
+		HeroType     string            `json:"hero_type"`
+		StripArray   string            `json:"strip_array"`
+		StripLabel   string            `json:"strip_label"`
+		StripValue   string            `json:"strip_value"`
+		GaugeField   string            `json:"gauge_field"`
+		GaugeLabel   string            `json:"gauge_label"`
+		GaugeMax     float64           `json:"gauge_max"`
+		TableArray   string            `json:"table_array"`
+		TableColumns []TableCol        `json:"table_columns"`
+		SearchPath   string            `json:"search_path"`
+		SearchEvent  string            `json:"search_event"`
+		SearchLabel  string            `json:"search_label"`
+		Toggles      map[string]string `json:"toggles"`
+		Caption      string            `json:"caption"`
+	}
+	if err := json.Unmarshal([]byte(raw), &in); err != nil {
+		return ArchetypeSlots{}
+	}
+	out := ArchetypeSlots{
+		Caption: in.Caption, HeroArray: in.HeroArray, HeroX: in.HeroX, HeroY: in.HeroY,
+		HeroLabel: in.HeroLabel, HeroType: in.HeroType, StripArray: in.StripArray,
+		StripLabel: in.StripLabel, StripValue: in.StripValue, GaugeField: in.GaugeField,
+		GaugeLabel: in.GaugeLabel, GaugeMax: in.GaugeMax, TableArray: in.TableArray,
+		TableColumns: in.TableColumns, SearchPath: in.SearchPath, SearchEvent: in.SearchEvent,
+		SearchLabel: in.SearchLabel, Toggles: in.Toggles,
+	}
+	for _, k := range in.KPIs {
+		out.KPIs = append(out.KPIs, KPISlot{Label: k.Label, Field: k.Field, Format: k.Format, Icon: k.Icon})
+	}
+	return out
 }
 
 // HasFixedSchema reports whether the skill embeds a ready surface or names an archetype.

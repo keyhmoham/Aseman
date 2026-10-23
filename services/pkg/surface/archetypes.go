@@ -34,7 +34,8 @@ type ArchetypeSlots struct {
 	TableColumns []TableCol
 	// Optional horizontal strip (List) over an array path.
 	StripArray string
-	StripLabel string // field shown on each chip
+	StripLabel string // field shown on each chip (caption)
+	StripValue string // field shown on each chip (body); default "value"
 	// Optional Gauge bound relative to DataPath.
 	GaugeField string
 	GaugeLabel string
@@ -233,13 +234,17 @@ func expandAnalytics(s ArchetypeSlots) (string, []map[string]any, []map[string]a
 		if field == "" {
 			field = "label"
 		}
+		valueField := s.StripValue
+		if valueField == "" {
+			valueField = "value"
+		}
 		comps = append(comps,
 			map[string]any{"id": "strip", "type": "List", "direction": "horizontal",
 				"children": map[string]any{"componentId": "strip_item", "path": joinPtr(s.DataPath, s.StripArray)}},
 			map[string]any{"id": "strip_item", "type": "Card", "child": "strip_row"},
 			map[string]any{"id": "strip_row", "type": "Column", "children": []any{"strip_label", "strip_value"}},
 			map[string]any{"id": "strip_label", "type": "Text", "text": pathRef(field), "variant": "caption"},
-			map[string]any{"id": "strip_value", "type": "Text", "text": pathRef("temperature"), "variant": "body"},
+			map[string]any{"id": "strip_value", "type": "Text", "text": pathRef(valueField), "variant": "body"},
 		)
 		bodyKids = append(bodyKids, "strip")
 	}
@@ -390,54 +395,28 @@ func joinPtr(base, rel string) string {
 	return strings.TrimRight(base, "/") + "/" + strings.TrimLeft(rel, "/")
 }
 
-// SlotsFromSkill builds archetype slots from a skill contract and optional defaults.
+// SlotsFromSkill builds archetype slots from a skill contract only — no
+// domain heuristics (weather or otherwise). Deployers declare layout in
+// archetype + slots frontmatter (or an embedded ```surface``` fence).
 func SlotsFromSkill(c SkillContract, defaultMicro string, defaultArgs map[string]any) ArchetypeSlots {
-	slots := ArchetypeSlots{
-		Title:     c.Title,
-		DataPath:  c.DataPath,
-		Microtool: c.Microtool,
-		Args:      defaultArgs,
+	slots := c.Slots
+	if slots.Title == "" {
+		slots.Title = c.Title
+	}
+	if slots.DataPath == "" {
+		slots.DataPath = c.DataPath
+	}
+	if slots.Microtool == "" {
+		slots.Microtool = c.Microtool
+	}
+	if len(slots.Args) == 0 {
+		slots.Args = defaultArgs
 	}
 	if slots.Title == "" {
 		slots.Title = "Console"
 	}
 	if slots.Microtool == "" {
 		slots.Microtool = defaultMicro
-	}
-	// Weather-shaped defaults when skill mentions forecast / hours / days.
-	raw := strings.ToLower(c.Raw)
-	if strings.Contains(raw, "weather") || strings.Contains(raw, "/report/hours") {
-		slots.KPIs = []KPISlot{
-			{Label: "Temperature", Field: "current/temperature", Format: "number:1"},
-			{Label: "Humidity", Field: "current/humidity", Format: "integer"},
-			{Label: "Wind", Field: "current/wind_speed", Format: "number:1"},
-			{Label: "Precip", Field: "current/precipitation", Format: "number:1"},
-			{Label: "Pressure", Field: "current/pressure", Format: "integer"},
-		}
-		slots.HeroArray = "hours"
-		slots.HeroX = "label"
-		slots.HeroY = "temperature"
-		slots.HeroLabel = "Next hours"
-		slots.HeroType = "area"
-		slots.StripArray = "hours"
-		slots.StripLabel = "label"
-		slots.GaugeField = "today/uv_index"
-		slots.GaugeLabel = "UV"
-		slots.GaugeMax = 11
-		slots.TableArray = "days"
-		slots.TableColumns = []TableCol{
-			{Field: "label", Label: "Day"},
-			{Field: "high", Label: "High", Format: "number:0"},
-			{Field: "low", Label: "Low", Format: "number:0"},
-			{Field: "condition", Label: "Condition"},
-		}
-		slots.SearchPath = "/form/city"
-		slots.SearchEvent = "search"
-		slots.SearchLabel = "Show"
-		slots.Toggles = map[string]string{"metric": "°C", "imperial": "°F"}
-		if slots.Title == "Console" {
-			slots.Title = "Weather"
-		}
 	}
 	return slots
 }

@@ -669,6 +669,10 @@ func (s *Service) component(ctx context.Context, c caller, tool *models.Tool, sp
 	key := componentKey(spec, commands)
 	id := s.key("component/" + tool.BotID + "/" + key)
 	var row models.Component
+	skill, err := s.entity(ctx, tool.BotID, models.EntityFrontendSkill)
+	if err != nil {
+		return nil, false, err
+	}
 	if !regenerate {
 		if err := s.R.GetString(ctx, "tool_components", id, &row); err == nil {
 			row.Uses++
@@ -677,17 +681,16 @@ func (s *Service) component(ctx context.Context, c caller, tool *models.Tool, sp
 			return &row, true, nil
 		}
 		// Eager compile fingerprints tool.Commands; serve may see CommandsFor
-		// shape differ. Reuse the latest Fixed Schema row for this bot+version.
-		if cached := s.cachedFixedSchema(ctx, tool.BotID, key); cached != nil {
-			cached.Uses++
-			cached.UpdatedAt = time.Now().UTC()
-			_ = s.R.UpdateString(ctx, "tool_components", cached.ID, cached)
-			return cached, true, nil
+		// shape differ. Reuse a Fixed Schema row only when the skill still
+		// declares Fixed Schema (never for free-form / LLM skills).
+		if surface.ParseSkill(skill).HasFixedSchema() {
+			if cached := s.cachedFixedSchema(ctx, tool.BotID, key); cached != nil {
+				cached.Uses++
+				cached.UpdatedAt = time.Now().UTC()
+				_ = s.R.UpdateString(ctx, "tool_components", cached.ID, cached)
+				return cached, true, nil
+			}
 		}
-	}
-	skill, err := s.entity(ctx, tool.BotID, models.EntityFrontendSkill)
-	if err != nil {
-		return nil, false, err
 	}
 	t, model, err := s.generate(ctx, c, tool, skill, commands, shown)
 	if err != nil {

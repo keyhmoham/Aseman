@@ -29,26 +29,15 @@ func compileFromSkill(skill string, commands []map[string]any) (*Template, error
 		}
 		return &t, nil
 	}
+	// Fixed Schema only when the skill explicitly names an archetype — never
+	// from prose keywords (that hijacked unrelated tools into weather-shaped consoles).
 	if contract.Archetype == "" {
-		// Infer analytics console for dashboard-shaped skills (weather, etc.).
-		low := strings.ToLower(skill)
-		if strings.Contains(low, "kpi") || strings.Contains(low, "hero chart") ||
-			strings.Contains(low, "visualization-first") || strings.Contains(low, "analytics") ||
-			strings.Contains(low, "weather console") || strings.Contains(low, "stat tiles") {
-			contract.Archetype = surface.ArchetypeAnalyticsConsole
-		} else {
-			return nil, nil
-		}
+		return nil, nil
 	}
 	defaultMicro := firstMicrotool(commands)
 	args := map[string]any{}
 	for k, v := range contract.Args {
 		args[k] = v
-	}
-	if _, has := args["city"]; !has && strings.Contains(skill, "city") {
-		if city := defaultCityFromSkill(skill); city != "" {
-			args["city"] = city
-		}
 	}
 	slots := surface.SlotsFromSkill(contract, defaultMicro, args)
 	title, comps, data, actions, layout, err := surface.ExpandArchetype(contract.Archetype, slots)
@@ -81,16 +70,6 @@ func firstMicrotool(commands []map[string]any) string {
 		}
 	}
 	return ""
-}
-
-func defaultCityFromSkill(skill string) string {
-	// Prefer a parsed {"city":"..."} object (upsert substitutes {{DEFAULT_CITY}}).
-	if c := surface.ParseSkill(skill); c.Args != nil {
-		if city, _ := c.Args["city"].(string); strings.TrimSpace(city) != "" {
-			return strings.TrimSpace(city)
-		}
-	}
-	return "London"
 }
 
 // gateTemplate runs deterministic catalog + composition checks (no LLM).
@@ -155,6 +134,9 @@ func (s *Service) eagerCompileAndStore(ctx context.Context, tool *models.Tool, s
 		return err
 	}
 	if fixed == nil {
+		// Skill is free-form (LLM at serve time): drop any leftover Fixed Schema
+		// rows from an earlier mistaken compile.
+		s.pruneStaleComponents(ctx, tool.BotID, "")
 		return nil
 	}
 	microtools := map[string]bool{}
@@ -198,8 +180,8 @@ func (s *Service) eagerCompileAndStore(ctx context.Context, tool *models.Tool, s
 	return nil
 }
 
-// pruneStaleComponents drops older Surface Bundles for the tool so only the
-// current Fixed Schema / generated row remains (avoids mangled leftovers).
+// pruneStaleComponents drops Surface Bundles for the tool other than keepID.
+// When keepID is empty, every row is removed (skill left Fixed Schema).
 func (s *Service) pruneStaleComponents(ctx context.Context, botID, keepID string) {
 	var rows []models.Component
 	if err := s.R.List(ctx, "tool_components", database.Filter{
@@ -208,7 +190,7 @@ func (s *Service) pruneStaleComponents(ctx context.Context, botID, keepID string
 		return
 	}
 	for i := range rows {
-		if rows[i].ID == keepID {
+		if keepID != "" && rows[i].ID == keepID {
 			continue
 		}
 		if id, err := identity.Parse(rows[i].ID); err == nil {

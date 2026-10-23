@@ -389,19 +389,18 @@ first time).
 `pkg/surface/inspect.go`, `gate.go`, `archetypes.go`): the bundle is
 inspected (tree, app shell, composition codes such as `missing_compact` /
 `missing_kpi_strip`), props-validated, live-filled against microtools, and
-action-checked. Optional model notes are **advice only** and never block
-accept or repair. LLM fallback (when the skill has no Fixed Schema) is
-capped at `surface.MaxRepairAttempts` (3) and stops when the blocking
-issue fingerprint does not shrink. The review travels with the template
-(`review` in `frontend_get`). Agents' `ui_compose` widgets get the same
-deterministic inspection and data test.
+action-checked. There is no LLM design judge. LLM fallback (when the skill
+has no Fixed Schema) is capped at `surface.MaxRepairAttempts` (3) and stops
+when the blocking issue fingerprint does not shrink. The review travels with
+the template (`review` in `frontend_get`). Agents' `ui_compose` widgets get
+the same deterministic inspection and data test.
 
 Interactive web pages agents build are gated the same way before they open
-(`spaces/page_review.go`, `pkg/webkit/inspect.go`): inspect + live calls;
-model polish is advice only. `web_show` / `proxy_create` open retries are
-capped at `surface.MaxWebShowAttempts` (3). The node does not paint the
-page, so agents must still **see** it before reporting ready: screenshots
-at phone (~360) and desktop (~1400) widths and click every control.
+(`spaces/page_review.go`, `pkg/webkit/inspect.go`): inspect + live calls only.
+`web_show` / `proxy_create` open retries are capped at
+`surface.MaxWebShowAttempts` (3). The node does not paint the page, so agents
+must still **see** it before reporting ready: screenshots at phone (~360) and
+desktop (~1400) widths and click every control.
 
 **Every generated interface is a professional application screen**, designed
 by the shared product-designer skill (`surface.DesignPrompt` /

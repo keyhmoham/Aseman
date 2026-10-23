@@ -10,10 +10,9 @@ import (
 	"github.com/aseman/aseman/pkg/surface"
 )
 
-// A frontend is reviewed with a deterministic gate only (A2UI / OpenUI
-// production pattern): inspect + composition rules + live microtool fill +
-// action checks. An optional LLM lookAt may append Advice, never Blocking —
-// subjective design judges are not in the accept or repair loop.
+// A frontend is reviewed with a deterministic gate only: inspect +
+// composition rules + live microtool fill + action checks. Subjective LLM
+// design judges are not in the accept or repair loop.
 //
 // Author-time repair (LLM fallback only) is capped at surface.MaxRepairAttempts
 // and stops when the blocking issue fingerprint does not shrink.
@@ -31,7 +30,7 @@ type Review struct {
 	Tested []string     `json:"tested,omitempty"`
 	Issues []surface.Issue `json:"issues,omitempty"`
 	// broken counts blocking issues from the deterministic gate (inspect,
-	// composition, live fill, actions). LLM design notes never increment it.
+	// composition, live fill, actions).
 	broken int
 }
 
@@ -113,8 +112,6 @@ type reviewer struct {
 	// rounds that follow (the same call is not paid for twice).
 	call  func(microtool string, args map[string]any) (any, error)
 	calls map[string]result
-	// look asks the model to review the rendered surface; nil skips it.
-	look func(messages []map[string]any) (string, error)
 }
 
 type result struct {
@@ -122,15 +119,14 @@ type result struct {
 	err   error
 }
 
-func newReviewer(tool, skill string, commands []map[string]any, shown Shown, call func(string, map[string]any) (any, error),
-	look func([]map[string]any) (string, error)) *reviewer {
+func newReviewer(tool, skill string, commands []map[string]any, shown Shown, call func(string, map[string]any) (any, error)) *reviewer {
 	byName := map[string]map[string]any{}
 	for _, cmd := range commands {
 		if name, _ := cmd["name"].(string); name != "" {
 			byName[name] = cmd
 		}
 	}
-	return &reviewer{tool: tool, skill: skill, commands: byName, shown: shown, call: call, calls: map[string]result{}, look: look}
+	return &reviewer{tool: tool, skill: skill, commands: byName, shown: shown, call: call, calls: map[string]result{}}
 }
 
 // run calls a microtool once per arguments across the rounds.
@@ -167,8 +163,8 @@ func (rv *reviewer) checkArgs(where, microtool string, args map[string]any) []su
 	return surface.CheckArgs(where, microtool, schema, args, "a literal, {\"$data\": \"/form/…\"} or {\"$context\": \"…\"} in an action")
 }
 
-// review inspects, tests and optionally notes design advice for a template,
-// filling it as the person asking would see it. Accept/reject is deterministic.
+// review inspects and tests a template, filling it as the person asking
+// would see it. Accept/reject is deterministic.
 func (rv *reviewer) review(t *Template) *Review {
 	r := &Review{}
 	inspected := surface.Inspect(t.Components)
@@ -290,23 +286,6 @@ func (rv *reviewer) review(t *Template) *Review {
 	}
 	r.broken = r.blocking()
 	r.Passed = r.broken == 0
-
-	// Optional LLM polish: Advice only (never affects Passed / broken / repair).
-	if rv.look != nil {
-		issues, err := rv.lookAt(t, inspected, data, r.Issues)
-		if err != nil {
-			r.Tested = append(r.Tested, "design notes unavailable: "+err.Error())
-		} else {
-			for i := range issues {
-				issues[i].Severity = surface.Advice
-				if issues[i].Code == "" {
-					issues[i].Code = "design_note"
-				}
-			}
-			r.Issues = append(r.Issues, issues...)
-			r.Tested = append(r.Tested, "design notes (advice only)")
-		}
-	}
 	return r
 }
 
@@ -336,66 +315,6 @@ func (rv *reviewer) tryAction(name string, a Action, data map[string]any, events
 		return "action " + name + " run: failed"
 	}
 	return "action " + name + " run with " + compact(args)
-}
-
-var reviewPrompt = `You add optional polish notes for a tool frontend that already passed a deterministic gate (structure, composition, live data, actions).
-Do NOT restate automatic findings. Reply with ONE JSON object:
-{"issues": [{"severity": "advice", "area": "purpose" | "design" | "interaction" | "data", "where": "<id>", "problem": "…", "fix": "…"}]}.
-Every issue MUST be severity "advice". Empty list is fine.
-` + surface.DesignPrompt
-
-// lookAt has the model review the rendered surface.
-func (rv *reviewer) lookAt(t *Template, surface *surface.Surface, data map[string]any, found []surface.Issue) ([]surface.Issue, error) {
-	var b strings.Builder
-	b.WriteString("Tool: " + rv.tool + "\n\nWhat the deployer wants (skill):\n" + rv.skill + "\n\nMicrotools:\n")
-	names := make([]string, 0, len(rv.commands))
-	for name := range rv.commands {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		b.WriteString("- " + name + ": " + strings.TrimSpace(asString(rv.commands[name]["description"])) + "\n")
-	}
-	b.WriteString("\nTitle: " + t.Title + "\n\nThe surface as it renders:\n" + surface.Outline(data, 12000))
-	raw, _ := json.Marshal(t.Actions)
-	b.WriteString("\nActions (event → microtool): " + string(raw) + "\n")
-	if len(found) > 0 {
-		b.WriteString("\nAutomatic findings (already reported):\n")
-		for _, i := range found {
-			b.WriteString("- " + i.Severity + " " + i.String() + "\n")
-		}
-	}
-	content, err := rv.look([]map[string]any{{"role": "system", "content": reviewPrompt}, {"role": "user", "content": b.String()}})
-	if err != nil {
-		return nil, err
-	}
-	return lookedAt(content)
-}
-
-// lookedAt reads the issues a model's review reports.
-func lookedAt(content string) ([]surface.Issue, error) {
-	var out struct {
-		Issues []surface.Issue `json:"issues"`
-	}
-	if err := json.Unmarshal([]byte(jsonObject(content)), &out); err != nil {
-		return nil, err
-	}
-	issues := out.Issues[:0]
-	for _, i := range out.Issues {
-		if strings.TrimSpace(i.Problem) == "" {
-			continue
-		}
-			// Design notes are never Blocking — the deterministic gate owns accept/reject.
-		i.Severity = surface.Advice
-		if i.Code == "" {
-			i.Code = "design_note"
-		}
-		if i.Area == "" {
-			i.Area = "design"
-		}
-		issues = append(issues, i)
-	}
-	return issues, nil
 }
 
 // shape sums up a result for the review's account of it.
@@ -439,11 +358,10 @@ func contains(list []string, s string) bool {
 }
 
 // reviewerFor is a reviewer that calls the tool's microtools as [c] (billed
-// to them, as opening the frontend is) and looks with [look].
-func (s *Service) reviewerFor(ctx context.Context, c caller, botID, toolName, skill string, commands []map[string]any, shown Shown,
-	look func([]map[string]any) (string, error)) *reviewer {
+// to them, as opening the frontend is).
+func (s *Service) reviewerFor(ctx context.Context, c caller, botID, toolName, skill string, commands []map[string]any, shown Shown) *reviewer {
 	call := func(microtool string, args map[string]any) (any, error) {
 		return s.call(ctx, c, botID, microtool, args)
 	}
-	return newReviewer(toolName, skill, commands, shown, call, look)
+	return newReviewer(toolName, skill, commands, shown, call)
 }

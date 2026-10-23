@@ -34,15 +34,11 @@ import (
 //     space's tools, their microtools and schemas; what it loads when it
 //     opens is really loaded, as the agent, and every value it shows is
 //     looked up in what came back; buttons whose microtool only reads
-//     (readOnlyHint) are run;
-//   - looked at: the model reviews its source, with what its calls returned
-//     and what the inspection found, for fitness to the tool and what was
-//     asked, cleanness and the design standard (tools.ReviewPage).
+//     (readOnlyHint) are run.
 //
 // A page that does not work does not open: the agent gets the whole report
-// to fix and opens it again (web_show), which reviews it again. What the
-// design review finds comes back with the opened window, for the agent to
-// fix before it tells anyone the page is ready.
+// to fix and opens it again (web_show), which reviews it again. There is no
+// LLM design judge — only the deterministic inspect + live-call gate.
 
 // pageReview is what the review of a page found.
 type pageReview struct {
@@ -88,7 +84,6 @@ func (r *pageReview) report(opened bool) string {
 // Bounds of a page review.
 const (
 	maxPageResources = 20
-	maxPageSource    = 16000
 	pageFetchTimeout = 15 * time.Second
 )
 
@@ -163,9 +158,6 @@ type pageReviewer struct {
 	tools    []vmm.Tool
 	commands func(vmm.Tool) map[string]map[string]any
 	call     func(t *pageTool, microtool string, args map[string]any) (any, error)
-	// look is the design review; nil skips it.
-	look func(page string, inspected *webkit.Page, source []byte, data map[string]any, looked *pageTool,
-		tools map[string]*pageTool, found []surface.Issue) ([]surface.Issue, error)
 }
 
 // reviewPage reviews the page at [page] (a preview gateway path) before it
@@ -186,29 +178,20 @@ func (s *Service) reviewPage(ctx context.Context, spaceID identity.ID, page, too
 		call: func(t *pageTool, microtool string, args map[string]any) (any, error) {
 			return s.callPageTool(ctx, spaceID, t, microtool, args)
 		},
-		// Deterministic inspect + live calls only — no LLM design judge (cost + non-convergence).
-		look: nil,
 	}
-	return pr.review(page, rest, toolName)
+	_ = toolName // reserved for callers that name the tool this page fronts
+	return pr.review(page, rest)
 }
 
 // review reviews the page at [page], [rest] inside its preview.
-func (pr *pageReviewer) review(page, rest, toolName string) *pageReview {
+func (pr *pageReviewer) review(page, rest string) *pageReview {
 	r := &pageReview{Page: page}
-	// What the inspection and the tests found is everything up to the
-	// design review's issues.
-	tested := -1
 	defer func() {
-		if tested < 0 {
-			tested = len(r.Issues)
-		}
 		r.Passed = true
-		for k, i := range r.Issues {
+		for _, i := range r.Issues {
 			if i.Severity == surface.Blocking {
 				r.Passed = false
-				if k < tested {
-					r.broken++
-				}
+				r.broken++
 			}
 		}
 	}()
@@ -295,7 +278,6 @@ func (pr *pageReviewer) review(page, rest, toolName string) *pageReview {
 	data := map[string]any{}
 	var sources []surface.Source
 	ran := map[string]bool{}
-	var looked *pageTool
 	for _, c := range inspected.Calls {
 		name := c.Tool + "/" + c.Microtool
 		t := resolve(c.Tool)
@@ -303,9 +285,6 @@ func (pr *pageReviewer) review(page, rest, toolName string) *pageReview {
 			r.add(surface.Blocking, "interaction", c.Element, "calls "+name+", but "+c.Tool+" is no tool of this space (its tools: "+strings.Join(toolNames, ", ")+")",
 				"call one of the space's tools by its name")
 			continue
-		}
-		if looked == nil {
-			looked = t
 		}
 		cmd, ok := t.commands[c.Microtool]
 		if !ok && len(t.commands) > 0 {
@@ -379,21 +358,6 @@ func (pr *pageReviewer) review(page, rest, toolName string) *pageReview {
 		unfilled = surface.Advice // its scripts may write it
 	}
 	r.Issues = append(r.Issues, surface.CheckReads(inspected.Reads, inspected.Writes, inspected.Aliases, data, sources, unfilled)...)
-
-	// The page as a whole, looked at.
-	if looked == nil && toolName != "" {
-		looked = resolve(toolName)
-	}
-	tested = len(r.Issues)
-	if pr.look == nil {
-		return r
-	}
-	if issues, err := pr.look(page, inspected, body, data, looked, resolved, r.Issues); err != nil {
-		r.Tested = append(r.Tested, "design review unavailable: "+err.Error())
-	} else if issues != nil {
-		r.Issues = append(r.Issues, issues...)
-		r.Tested = append(r.Tested, "design review of the page")
-	}
 	return r
 }
 
@@ -456,69 +420,6 @@ func (s *Service) callPageTool(ctx context.Context, spaceID identity.ID, t *page
 		return nil, err
 	}
 	return vmm.ToolResultValue(reply)
-}
-
-// lookAtPage has the model review the page (tools.ReviewPage), billed to
-// whoever the agent's turn is for. It returns nil, nil when there is no one
-// to bill or no tool to bill it as.
-func (s *Service) lookAtPage(ctx context.Context, spaceID identity.ID, page string, inspected *webkit.Page, source []byte,
-	data map[string]any, looked *pageTool, tools map[string]*pageTool, found []surface.Issue) ([]surface.Issue, error) {
-	payer := s.turnPayer(ctx)
-	if payer == "" || looked == nil || s.K == nil {
-		return nil, nil
-	}
-	var b strings.Builder
-	b.WriteString("Page: " + page + "\nTitle: " + inspected.Title + "\nIt is the frontend of " + looked.tool.Name + ": " + strings.TrimSpace(looked.tool.Description) + "\n")
-	b.WriteString("\nTools it calls:\n")
-	names := make([]string, 0, len(tools))
-	for name, t := range tools {
-		if t != nil {
-			names = append(names, name)
-		}
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		t := tools[name]
-		b.WriteString("- " + t.tool.Name + ": " + strings.TrimSpace(t.tool.Description) + "\n")
-		mts := make([]string, 0, len(t.commands))
-		for mt := range t.commands {
-			mts = append(mts, mt)
-		}
-		sort.Strings(mts)
-		for _, mt := range mts {
-			desc, _ := t.commands[mt]["description"].(string)
-			b.WriteString("  - " + mt + ": " + strings.TrimSpace(desc) + "\n")
-		}
-	}
-	html := string(source)
-	if len(html) > maxPageSource {
-		html = html[:maxPageSource] + "\n…(cut)"
-	}
-	b.WriteString("\nHTML source:\n" + html + "\n")
-	if len(data) > 0 {
-		raw, _ := json.Marshal(data)
-		text := string(raw)
-		if len(text) > 6000 {
-			text = text[:6000] + "…"
-		}
-		b.WriteString("\nWhat its calls returned when the page was opened for the review (the data model): " + text + "\n")
-	}
-	if len(found) > 0 {
-		b.WriteString("\nAutomatic findings (already reported):\n")
-		for _, i := range found {
-			b.WriteString("- " + i.Severity + " " + i.String() + "\n")
-		}
-	}
-	room := vmm.RoomFrom(ctx)
-	var raw string
-	if err := bridge.Invoke(ctx, s.K, "tools", "ReviewPage", []any{ctx, payer, spaceID.String(), room, looked.tool.BotID, b.String()}, &raw); err != nil {
-		return nil, err
-	}
-	var issues []surface.Issue
-	if err := json.Unmarshal([]byte(raw), &issues); err != nil {
-		return nil, err
-	}
-	return issues, nil
 }
 
 func compactJSON(v any) string {

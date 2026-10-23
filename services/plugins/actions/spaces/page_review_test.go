@@ -10,8 +10,6 @@ import (
 
 	"github.com/aseman/aseman/internal/plugins/entity"
 	"github.com/aseman/aseman/internal/plugins/identity"
-	"github.com/aseman/aseman/pkg/surface"
-	"github.com/aseman/aseman/pkg/webkit"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
 	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
@@ -71,9 +69,9 @@ func weatherCommands(vmm.Tool) map[string]map[string]any {
 	}
 }
 
-func testReviewer(server *httptest.Server, calls *[]string, look bool) *pageReviewer {
+func testReviewer(server *httptest.Server, calls *[]string) *pageReviewer {
 	record := &proxy.Proxy{TargetURL: server.URL}
-	pr := &pageReviewer{
+	return &pageReviewer{
 		fetch: func(rest string, maxBody int64) (int, string, []byte, bool, error) {
 			return upstreamGet(context.Background(), record, rest, maxBody)
 		},
@@ -87,21 +85,15 @@ func testReviewer(server *httptest.Server, calls *[]string, look bool) *pageRevi
 			return map[string]any{"temperature": 3.5, "condition": "Snow"}, nil
 		},
 	}
-	if look {
-		pr.look = func(string, *webkit.Page, []byte, map[string]any, *pageTool, map[string]*pageTool, []surface.Issue) ([]surface.Issue, error) {
-			return []surface.Issue{{Severity: surface.Blocking, Area: "purpose", Where: "body", Problem: "There is no way to pick a city."}}, nil
-		}
-	}
-	return pr
 }
 
 // A page that does not work is found out: fetched, inspected, its calls
 // checked against the space's tools and run, what it shows looked up in what
-// came back, and looked at.
+// came back.
 func TestPageReviewFindsWhatDoesNotWork(t *testing.T) {
 	var calls []string
 	server := servePages(t, map[string]string{"/": brokenPage})
-	r := testReviewer(server, &calls, true).review("/v1/proxy/x/", "/", "Weather")
+	r := testReviewer(server, &calls).review("/v1/proxy/x/", "/")
 	if r.Passed || r.broken == 0 {
 		t.Fatalf("a broken page passed: %+v", r)
 	}
@@ -113,7 +105,6 @@ func TestPageReviewFindsWhatDoesNotWork(t *testing.T) {
 		"Weather/forecast failed when the review ran it",
 		"Weather has no microtool radar (it has: forecast, save_city)",
 		"Rain is no tool of this space",
-		"There is no way to pick a city.",
 		"checked Weather/save_city (t-button[text=\"Save\"]), not run: it may change data",
 	} {
 		if !strings.Contains(report, want) {
@@ -128,21 +119,16 @@ func TestPageReviewFindsWhatDoesNotWork(t *testing.T) {
 }
 
 // A page that works passes; what it shows is checked against what its
-// loads really returned; the design review's judgement does not count as
-// broken.
+// loads really returned.
 func TestPageReviewPassesAWorkingPage(t *testing.T) {
 	var calls []string
 	server := servePages(t, map[string]string{"/app/": cleanPage, "/app/app.js": "console.log(1)"})
-	r := testReviewer(server, &calls, false).review("/v1/proxy/x/app/", "/app/", "Weather")
+	r := testReviewer(server, &calls).review("/v1/proxy/x/app/", "/app/")
 	if !r.Passed || r.broken != 0 {
 		t.Fatalf("a working page did not pass:\n%s", r.report(false))
 	}
 	if len(calls) != 1 || calls[0] != "forecast" {
 		t.Errorf("calls: %v", calls)
-	}
-	looked := testReviewer(server, &calls, true).review("/v1/proxy/x/app/", "/app/", "Weather")
-	if looked.Passed || looked.broken != 0 {
-		t.Fatalf("the design review's issue should fail the review without breaking it: %+v", looked)
 	}
 }
 

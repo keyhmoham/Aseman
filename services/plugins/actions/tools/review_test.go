@@ -42,15 +42,7 @@ func mustTemplate(t *testing.T, raw string) Template {
 // testing it, and the generator is told exactly what to fix.
 func TestReviewFindsWhatDoesNotWork(t *testing.T) {
 	var calls []string
-	looked := false
-	rv := newReviewer("Weather", "Show the weather of a city.", weatherCommands, Shown{}, fakeWeather(&calls),
-		func(messages []map[string]any) (string, error) {
-			looked = true
-			if !strings.Contains(messages[1]["content"].(string), "MISSING") {
-				t.Error("the design review was not shown the missing value")
-			}
-			return `{"issues": [{"severity": "blocking", "area": "purpose", "where": "root", "problem": "No way to pick a city.", "fix": "Add a city field."}]}`, nil
-		})
+	rv := newReviewer("Weather", "Show the weather of a city.", weatherCommands, Shown{}, fakeWeather(&calls))
 	tpl := mustTemplate(t, `{"title": "Weather", "components": [
 		{"id": "root", "component": "Column", "children": ["temp", "save"]},
 		{"id": "temp", "component": "Stat", "label": "Temperature", "value": {"path": "/now/temp"}},
@@ -67,7 +59,6 @@ func TestReviewFindsWhatDoesNotWork(t *testing.T) {
 		"weather_now takes no argument units",
 		`/now has no "temp" (it has: condition, temperature)`,
 		`sends save without "city" in its context`,
-		"No way to pick a city.", // advice-only design note
 		"neither shows its result nor reloads",
 		"save_city) checked, not run",
 		"compact", // deterministic composition gate
@@ -75,9 +66,6 @@ func TestReviewFindsWhatDoesNotWork(t *testing.T) {
 		if !strings.Contains(feedback, want) {
 			t.Errorf("feedback lacks %q:\n%s", want, feedback)
 		}
-	}
-	if !looked {
-		t.Error("the surface was not looked at")
 	}
 	for _, c := range calls {
 		if c == "save_city" {
@@ -90,8 +78,7 @@ func TestReviewFindsWhatDoesNotWork(t *testing.T) {
 // repeated across rounds.
 func TestReviewPassesAWorkingFrontend(t *testing.T) {
 	var calls []string
-	rv := newReviewer("Weather", "Show the weather of a city.", weatherCommands, Shown{}, fakeWeather(&calls),
-		func([]map[string]any) (string, error) { return `{"issues": []}`, nil })
+	rv := newReviewer("Weather", "Show the weather of a city.", weatherCommands, Shown{}, fakeWeather(&calls))
 	raw := `{"title": "Weather", "components": [
 		{"id": "root", "component": "Column", "children": ["title", "body"]},
 		{"id": "title", "component": "Text", "text": "Weather", "variant": "h4"},

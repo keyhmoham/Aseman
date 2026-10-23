@@ -814,7 +814,7 @@ func (s *Service) generate(ctx context.Context, c caller, tool *models.Tool, ski
 		if err != nil {
 			return nil, "", err
 		}
-		rv := s.reviewerFor(ctx, c, tool.BotID, rec.Name, skill, commands, shown, nil)
+		rv := s.reviewerFor(ctx, c, tool.BotID, rec.Name, skill, commands, shown)
 		review := rv.review(fixed)
 		review.Rounds = 1
 		fixed.Review, fixed.Layout = review, AppLayout
@@ -848,7 +848,7 @@ func (s *Service) generate(ctx context.Context, c caller, tool *models.Tool, ski
 	user := "Tool: " + rec.Name + "\n\nWhat the deployer wants (skill):\n" + skill + "\n\nMicrotools:\n" + list.String()
 	var tokensIn, tokensOut int64
 	// No LLM design judge in the repair loop — deterministic gate only.
-	rv := s.reviewerFor(ctx, c, tool.BotID, rec.Name, skill, commands, shown, nil)
+	rv := s.reviewerFor(ctx, c, tool.BotID, rec.Name, skill, commands, shown)
 	var best *Template
 	var lastErr error
 	var prevFingerprint string

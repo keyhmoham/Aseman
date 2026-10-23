@@ -218,7 +218,7 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
   // ── rooms ────────────────────────────────────────────────────────────────
 
   Future<void> _createRoom() async {
-    final name = await showDialog<String>(
+    final name = await showAppDialog<String>(
       context: context,
       builder: (_) => const _PromptDialog(
         title: 'New room',
@@ -266,7 +266,7 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
   // ── members ──────────────────────────────────────────────────────────────
 
   Future<void> _invite() async {
-    final invitee = await showDialog<AccountInvite>(
+    final invitee = await showAppDialog<AccountInvite>(
       context: context,
       builder: (_) => _InviteDialog(dependencies: widget.dependencies),
     );
@@ -1055,19 +1055,20 @@ class _InviteDialogState extends State<_InviteDialog> {
                     ),
                 ])),
           const SizedBox(height: 6),
-          Row(children: [
-            const Text('Role: ', style: TextStyle(fontSize: 12)),
-            const SizedBox(width: 8),
-            for (final role in const ['member', 'admin', 'guest'])
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              const Text('Role: ', style: TextStyle(fontSize: 12)),
+              for (final role in const ['member', 'admin', 'guest'])
+                ChoiceChip(
                   label: Text(role, style: const TextStyle(fontSize: 11)),
                   selected: _role == role,
                   onSelected: (_) => setState(() => _role = role),
                 ),
-              ),
-          ]),
+            ],
+          ),
         ]),
       ),
       actions: [

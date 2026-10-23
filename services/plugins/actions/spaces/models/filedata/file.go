@@ -21,4 +21,10 @@ type File struct {
 	Size       int64       `db:"size" json:"size"`
 	StorageKey string      `db:"storage_key" json:"storage_key"`
 	Public     bool        `db:"public" json:"public"`
+	// SourceURL is the remote address a hosted media file was fetched from
+	// (normalized). Empty for uploads that were never remote. Used to reuse a
+	// cached copy instead of downloading the same URL again.
+	SourceURL string `db:"source_url" json:"source_url,omitempty"`
+	// ContentHash is the SHA-256 of the stored bytes (hex), when known.
+	ContentHash string `db:"content_hash" json:"content_hash,omitempty"`
 }

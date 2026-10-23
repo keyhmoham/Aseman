@@ -270,34 +270,23 @@ class _SpreadsheetViewState extends State<SpreadsheetView> {
         ),
         if (widget.sheets.length > 1 || sheet.rows.length > _maxRows)
           Container(
-            height: 40,
             color: scheme.surfaceContainer,
-            child: Row(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 4,
               children: [
-                Expanded(
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    children: [
-                      for (final (i, s) in widget.sheets.indexed)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: ChoiceChip(
-                            visualDensity: VisualDensity.compact,
-                            label: Text(s.name),
-                            selected: i == _sheet,
-                            onSelected: (_) => setState(() => _sheet = i),
-                          ),
-                        ),
-                    ],
+                for (final (i, s) in widget.sheets.indexed)
+                  ChoiceChip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(s.name),
+                    selected: i == _sheet,
+                    onSelected: (_) => setState(() => _sheet = i),
                   ),
-                ),
                 if (sheet.rows.length > _maxRows)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Text(
                       'First $_maxRows of ${sheet.rows.length} rows',
                       style: TextStyle(

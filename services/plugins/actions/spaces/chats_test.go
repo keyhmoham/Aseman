@@ -69,6 +69,20 @@ func TestDirectChatMessagesAreEditedAndTakenBackByTheirSender(t *testing.T) {
 	if len(got.Messages) != 1 || got.Messages[0]["body"] != "hello" || got.Messages[0]["edited_at"] == nil {
 		t.Fatalf("the peer does not see the change: %v", got.Messages)
 	}
+	var history struct {
+		Current  map[string]any   `json:"current"`
+		Previous []map[string]any `json:"previous"`
+	}
+	callAs(t, ctx, alice, s.messageEdits, map[string]any{"message": id}, &history)
+	if history.Current["body"] != "hello" || len(history.Previous) != 1 || history.Previous[0]["body"] != "helo" {
+		t.Fatalf("edit history: %+v", history)
+	}
+	callAs(t, ctx, bob, s.messageEdit, map[string]any{"message": id, "body": "hello!"}, &edited)
+	callAs(t, ctx, bob, s.messageEdits, map[string]any{"message": id}, &history)
+	if history.Current["body"] != "hello!" || len(history.Previous) != 2 ||
+		history.Previous[0]["body"] != "hello" || history.Previous[1]["body"] != "helo" {
+		t.Fatalf("stacked edit history: %+v", history)
+	}
 	// Bob is a member, not a manager of the conversation: his own message is
 	// still his to take back.
 	if err := callErr(ctx, alice, (&msgDeleteAction{s: s}).Handle, map[string]any{"space": sp.ID.String(), "message": id}); err == nil {

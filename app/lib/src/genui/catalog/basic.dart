@@ -25,6 +25,7 @@ import '../runtime/host.dart';
 import 'app_layout.dart';
 import 'item.dart';
 import 'style.dart';
+import '../../shared/widgets/overlay_panels.dart';
 
 const _variants = ['h1', 'h2', 'h3', 'h4', 'h5', 'caption', 'body'];
 const _justify = [
@@ -299,6 +300,14 @@ CrossAxisAlignment _cross(Object? align, CrossAxisAlignment fallback) =>
       _ => fallback,
     };
 
+WrapCrossAlignment _wrapCross(Object? align, WrapCrossAlignment fallback) =>
+    switch (align) {
+      'start' => WrapCrossAlignment.start,
+      'center' => WrapCrossAlignment.center,
+      'end' => WrapCrossAlignment.end,
+      _ => fallback,
+    };
+
 /// Components that keep their own size in a Row (others share its width).
 const Set<String> _rigidInRow = {
   'Icon', 'Badge', 'Avatar', 'Spacer', 'Divider', 'IconButton', 'Rating', //
@@ -374,7 +383,9 @@ final listItem = asemanItem(
       'relative to the item.',
   properties: {
     'children': P.children(),
-    'direction': P.str('Scroll direction.', ['vertical', 'horizontal']),
+    'direction': P.str(
+        'Layout direction (horizontal wraps onto more rows).',
+        ['vertical', 'horizontal']),
     'align': P.str('Cross-axis alignment.', _align),
     'gap': P.any('Aseman: space between items.'),
     'emptyText': P.any('Aseman: shown when the bound list is empty.'),
@@ -392,17 +403,16 @@ final listItem = asemanItem(
                 child: Text(empty, style: genUiTextStyle(c, 'caption'))));
       }
       if (horizontal) {
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            crossAxisAlignment: _cross(item.raw['align'], CrossAxisAlignment.start),
-            spacing: gap,
-            children: [
-              for (final c in children)
-                ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 320), child: c),
-            ],
-          ),
+        return Wrap(
+          crossAxisAlignment:
+              _wrapCross(item.raw['align'], WrapCrossAlignment.start),
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final c in children)
+              ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 320), child: c),
+          ],
         );
       }
       return Column(
@@ -584,7 +594,7 @@ final modalItem = asemanItem(
             useSafeArea: true,
             builder: body);
       } else {
-        showDialog<void>(
+        showAppDialog<void>(
             context: context,
             builder: (c) => Dialog(
                 insetPadding: const EdgeInsets.all(20),

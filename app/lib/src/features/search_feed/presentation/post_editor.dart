@@ -246,7 +246,7 @@ class _MarkupDesignerState extends State<MarkupDesigner> {
   Future<void> _insertLink() async {
     final target = _activeText;
     if (target == null) return;
-    final link = await showDialog<(String, String)>(
+    final link = await showAppDialog<(String, String)>(
       context: context,
       builder: (_) => _LinkDialog(label: target.selectedText),
     );
@@ -538,48 +538,43 @@ class _Palette extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return SizedBox(
-      height: 38,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          spacing: 6,
-          children: [
-            for (final k in kinds)
-              Tooltip(
-                message: 'Add ${k.label.toLowerCase()}',
-                child: Material(
-                  color: scheme.surfaceContainerHighest.withValues(alpha: .6),
-                  shape: const StadiumBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () => onAdd(k),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 9,
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final k in kinds)
+          Tooltip(
+            message: 'Add ${k.label.toLowerCase()}',
+            child: Material(
+              color: scheme.surfaceContainerHighest.withValues(alpha: .6),
+              shape: const StadiumBorder(),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => onAdd(k),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(k.icon, size: 17, color: scheme.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        k.label,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(k.icon, size: 17, color: scheme.primary),
-                          const SizedBox(width: 6),
-                          Text(
-                            k.label,
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    ],
                   ),
                 ),
               ),
-          ],
-        ),
-      ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -609,48 +604,49 @@ class _FormatBar extends StatelessWidget {
           color: scheme.primaryContainer.withValues(alpha: .35),
           borderRadius: BorderRadius.circular(14),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              button(
-                Icons.format_bold_rounded,
-                'Bold (Ctrl+B)',
-                () => controller.toggleWrap('**', '**'),
-              ),
-              button(
-                Icons.format_italic_rounded,
-                'Italic (Ctrl+I)',
-                () => controller.toggleWrap('*', '*'),
-              ),
-              button(
-                Icons.format_strikethrough_rounded,
-                'Strikethrough',
-                () => controller.toggleWrap('~~', '~~'),
-              ),
-              button(
-                Icons.code_rounded,
-                'Inline code',
-                () => controller.toggleWrap('`', '`', placeholder: 'code'),
-              ),
-              button(Icons.link_rounded, 'Link', onLink),
-              button(
-                Icons.alternate_email_rounded,
-                'Mention',
-                () => controller.insert('@'),
-              ),
-              const SizedBox(width: 8),
-              Text(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 0,
+          runSpacing: 0,
+          children: [
+            button(
+              Icons.format_bold_rounded,
+              'Bold (Ctrl+B)',
+              () => controller.toggleWrap('**', '**'),
+            ),
+            button(
+              Icons.format_italic_rounded,
+              'Italic (Ctrl+I)',
+              () => controller.toggleWrap('*', '*'),
+            ),
+            button(
+              Icons.format_strikethrough_rounded,
+              'Strikethrough',
+              () => controller.toggleWrap('~~', '~~'),
+            ),
+            button(
+              Icons.code_rounded,
+              'Inline code',
+              () => controller.toggleWrap('`', '`', placeholder: 'code'),
+            ),
+            button(Icons.link_rounded, 'Link', onLink),
+            button(
+              Icons.alternate_email_rounded,
+              'Mention',
+              () => controller.insert('@'),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
                 'Select text, then format it',
                 style: TextStyle(
                   fontSize: 11.5,
                   color: scheme.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(width: 8),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -772,24 +768,20 @@ class _BlockCard extends StatelessWidget {
       ValueChanged<T> on,
     ) => Align(
       alignment: Alignment.centerLeft,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (final (value, label) in options)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: ChoiceChip(
-                  label: Text(label, style: const TextStyle(fontSize: 11.5)),
-                  selected: value == selected,
-                  showCheckmark: false,
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  onSelected: (_) => on(value),
-                ),
-              ),
-          ],
-        ),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          for (final (value, label) in options)
+            ChoiceChip(
+              label: Text(label, style: const TextStyle(fontSize: 11.5)),
+              selected: value == selected,
+              showCheckmark: false,
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              onSelected: (_) => on(value),
+            ),
+        ],
       ),
     );
     switch (block.kind) {
@@ -1493,7 +1485,6 @@ class _MediaEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     final url = block.url.text.trim();
     final valid = Uri.tryParse(url)?.hasScheme ?? false;
-    final noun = block.kind.label.toLowerCase();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1523,7 +1514,8 @@ class _MediaEditor extends StatelessWidget {
           RichPostContent(block.toMarkup())
         else
           Text(
-            'Paste the address of the $noun to show it here.',
+            'Paste a web address. On publish it is saved on Aseman and '
+            'readers load it from here, not the original link.',
             style: TextStyle(
               fontSize: 12,
               color: Theme.of(context).colorScheme.onSurfaceVariant,

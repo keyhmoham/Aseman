@@ -14,6 +14,7 @@ import 'avatar.dart';
 import 'avatar_editor.dart';
 import 'mini_tag.dart';
 import 'skeleton.dart';
+import 'overlay_panels.dart';
 
 /// User profile sheet shown from the profile menu. Server-backed: the header
 /// shows the signed-in account, the stats reflect the live wallet/bots/posts,
@@ -95,7 +96,7 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
       }
     } catch (_) {}
     if (!mounted) return;
-    final result = await showDialog<_EditProfileResult>(
+    final result = await showAppDialog<_EditProfileResult>(
       context: context,
       builder: (_) => _EditProfileDialog(displayName: displayName, bio: bio),
     );

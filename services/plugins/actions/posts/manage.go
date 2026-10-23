@@ -9,6 +9,7 @@ import (
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/plugins/actions/posts/models"
+	"github.com/aseman/aseman/plugins/actions/support/mediahost"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
@@ -22,11 +23,19 @@ const (
 var reportReasons = map[string]bool{"spam": true, "harassment": true, "abuse": true, "scam": true, "inappropriate": true, "other": true}
 
 // Update changes the body of a post the caller wrote. A shared post keeps
-// its original's words, so it cannot be edited.
+// its original's words, so it cannot be edited. Remote media in the new body
+// are hosted on Aseman like [Create].
 func (s *Service) Update(ctx context.Context, caller, id identity.ID, body string) (*post.Post, error) {
 	body = strings.TrimSpace(body)
 	if body == "" {
 		return nil, errs.InvalidArgument("post body required")
+	}
+	hosted, _, err := mediahost.HostBody(ctx, s.K, caller, body)
+	if err != nil {
+		return nil, err
+	}
+	if hosted != "" {
+		body = hosted
 	}
 	if len(body) > 4000 {
 		return nil, errs.InvalidArgument("post body too long (max 4000)")

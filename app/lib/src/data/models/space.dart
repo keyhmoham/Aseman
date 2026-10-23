@@ -438,6 +438,58 @@ class ChatSummary {
   }
 }
 
+/// One superseded wording of a room message (`spaces.message_edits`).
+class MessageEditVersion {
+  const MessageEditVersion({required this.body, required this.at, this.id = ''});
+
+  final String id;
+  final String body;
+
+  /// When this body was current until (replaced_at), or when the current
+  /// body was last set (edited_at / created_at).
+  final DateTime at;
+
+  factory MessageEditVersion.fromJson(Map<String, dynamic> json) =>
+      MessageEditVersion(
+        id: '${json['id'] ?? ''}',
+        body: json['body'] as String? ?? '',
+        at: DateTime.tryParse(
+                '${json['replaced_at'] ?? json['edited_at'] ?? json['created_at'] ?? ''}') ??
+            DateTime.fromMillisecondsSinceEpoch(0),
+      );
+}
+
+/// Current body plus earlier wording of an edited room message.
+class MessageEditHistory {
+  const MessageEditHistory({
+    required this.messageId,
+    required this.current,
+    this.previous = const [],
+  });
+
+  final String messageId;
+  final MessageEditVersion current;
+
+  /// Earlier bodies, newest superseded first.
+  final List<MessageEditVersion> previous;
+
+  factory MessageEditHistory.fromJson(Map<String, dynamic> json) {
+    final currentRaw = json['current'];
+    final currentMap = currentRaw is Map
+        ? Map<String, dynamic>.from(currentRaw)
+        : <String, dynamic>{};
+    return MessageEditHistory(
+      messageId: json['message_id'] as String? ?? '',
+      current: MessageEditVersion.fromJson(currentMap),
+      previous: [
+        for (final row in json['previous'] as List? ?? const [])
+          if (row is Map)
+            MessageEditVersion.fromJson(Map<String, dynamic>.from(row))
+      ],
+    );
+  }
+}
+
 /// A room's conversation as `spaces.message_list` reads it for a chat: its
 /// messages, the agent working in it, who is typing and, for a direct chat,
 /// how far the other side has read and whether anyone can write.
@@ -451,6 +503,7 @@ class RoomChatPage {
     this.blocked = false,
     this.canSend = true,
     this.saved = false,
+    this.hasMore = false,
   });
 
   final List<RoomMessage> messages;
@@ -463,6 +516,32 @@ class RoomChatPage {
   final bool blocked;
   final bool canSend;
   final bool saved;
+
+  /// True when older messages than [messages] still exist on the node.
+  final bool hasMore;
+
+  RoomChatPage copyWith({
+    List<RoomMessage>? messages,
+    String? working,
+    String? workingDetail,
+    List<String>? typing,
+    DateTime? peerSeenAt,
+    bool? blocked,
+    bool? canSend,
+    bool? saved,
+    bool? hasMore,
+  }) =>
+      RoomChatPage(
+        messages: messages ?? this.messages,
+        working: working ?? this.working,
+        workingDetail: workingDetail ?? this.workingDetail,
+        typing: typing ?? this.typing,
+        peerSeenAt: peerSeenAt ?? this.peerSeenAt,
+        blocked: blocked ?? this.blocked,
+        canSend: canSend ?? this.canSend,
+        saved: saved ?? this.saved,
+        hasMore: hasMore ?? this.hasMore,
+      );
 
   factory RoomChatPage.fromJson(Map<String, dynamic> json) => RoomChatPage(
         messages: (json['messages'] as List? ?? const [])
@@ -483,5 +562,48 @@ class RoomChatPage {
         blocked: json['blocked'] == true,
         canSend: json['can_send'] != false,
         saved: json['saved'] == true,
+        hasMore: json['has_more'] == true,
       );
+}
+
+/// Sorts room messages oldest→newest (id as tiebreaker), matching the chat UI.
+List<RoomMessage> sortRoomMessages(List<RoomMessage> messages) {
+  final out = [...messages];
+  out.sort((a, b) {
+    final c = a.createdAt.compareTo(b.createdAt);
+    return c != 0 ? c : a.id.compareTo(b.id);
+  });
+  return out;
+}
+
+/// Merges a newest [page] from `message_list` into [existing], keeping any
+/// older messages already loaded and replacing the overlapping window so
+/// edits and deletes in that window apply.
+List<RoomMessage> mergeNewestRoomMessages(
+    List<RoomMessage> existing, List<RoomMessage> page) {
+  if (page.isEmpty) return existing;
+  if (existing.isEmpty) return sortRoomMessages(page);
+  var oldestInPage = page.first.createdAt;
+  for (final m in page) {
+    if (m.createdAt.isBefore(oldestInPage)) oldestInPage = m.createdAt;
+  }
+  // Strictly older than the page's oldest: history already scrolled into.
+  // Everything from that instant onward is the page (rotations and deletes).
+  final older = [
+    for (final m in existing)
+      if (m.createdAt.isBefore(oldestInPage)) m
+  ];
+  return sortRoomMessages([...older, ...page]);
+}
+
+/// Prepends an older [page] (messages before what the client already holds).
+List<RoomMessage> mergeOlderRoomMessages(
+    List<RoomMessage> existing, List<RoomMessage> page) {
+  if (page.isEmpty) return existing;
+  final ids = {for (final m in existing) m.id};
+  return sortRoomMessages([
+    ...existing,
+    for (final m in page)
+      if (!ids.contains(m.id)) m
+  ]);
 }

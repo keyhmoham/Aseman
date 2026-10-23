@@ -46,6 +46,13 @@ void main() {
     expect(designToMarkup(blocks), 'hello\n\n$shared');
   });
 
+  test('a lone markdown image becomes an image design block', () {
+    final blocks = markupToDesign('![photo](https://example.com/a.png)');
+    expect(blocks.single.kind, DesignKind.image);
+    expect(blocks.single.url.text, 'https://example.com/a.png');
+    expect(designToMarkup(blocks), ':::image https://example.com/a.png');
+  });
+
   test('empty blocks are left out and lists convert to text', () {
     final blocks = [
       DesignBlock(DesignKind.paragraph),

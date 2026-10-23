@@ -12,12 +12,17 @@ import '../../../../data/models/space.dart';
 import '../../../../data/services/aseman_service.dart';
 import '../../../../shared/widgets/avatar.dart';
 import '../../../../shared/widgets/mini_tag.dart';
+import '../../../../shared/widgets/overlay_panels.dart';
+import '../../../../shared/widgets/skeleton.dart';
 import '../../../home/presentation/widgets/routines_panel.dart';
 import '../../../search_feed/presentation/post_editor.dart';
 import '../../../search_feed/presentation/rich_post_content.dart';
 import '../../domain/room_work.dart';
+import '../room_chat_scroll.dart';
 import '../room_work_controller.dart';
 import 'attachment_bubble.dart';
+import 'forward_message_sheet.dart';
+import 'message_edit_history.dart';
 import 'room_work_view.dart';
 import 'workspace_links.dart';
 
@@ -56,6 +61,10 @@ class RoomChat extends StatefulWidget {
     this.composerNotice,
     this.headerActions = const [],
     this.canModerate = false,
+    this.hasMore = false,
+    this.loading = false,
+    this.loadingOlder = false,
+    this.onLoadOlder,
   });
   final String room;
   final List<RoomMessage> messages;
@@ -118,6 +127,16 @@ class RoomChat extends StatefulWidget {
 
   /// Whether the caller may delete other people's messages.
   final bool canModerate;
+
+  /// Whether older messages than [messages] still exist; scrolling to the top
+  /// of the list asks [onLoadOlder] for the next page.
+  final bool hasMore;
+
+  /// First page of the conversation is still loading; show message skeletons
+  /// instead of the empty state when [messages] is empty.
+  final bool loading;
+  final bool loadingOlder;
+  final VoidCallback? onLoadOlder;
   @override
   State<RoomChat> createState() => _RoomChatState();
 }
@@ -130,6 +149,31 @@ class _RoomChatState extends State<RoomChat> {
   final ScrollController _chatScroll = ScrollController();
   final Set<String> _expandedLogs = {};
   bool _sending = false;
+
+  /// Scroll to restore after this chat was left and opened again; null when
+  /// the person has not scrolled this room yet (land on the live bottom).
+  RoomChatScroll? _restore;
+
+  /// True once [_restore] has been applied (or abandoned for a fresh bottom).
+  bool _didRestore = false;
+
+  /// Skips persist while a programmatic [jumpTo] is in flight so restore
+  /// does not overwrite the saved session with a half-laid-out offset.
+  bool _suppressPersist = false;
+
+  /// Frames spent waiting for layout before restore; capped so a short chat
+  /// that truly does not scroll still lands.
+  int _restoreAttempts = 0;
+
+  /// Last [maxScrollExtent] while waiting for layout to settle before restore.
+  double? _restoreExtent;
+
+  /// Consecutive frames with an unchanged extent before applying restore.
+  int _restoreStableFrames = 0;
+
+  /// Whether the list is following the live end. Kept across remounts when
+  /// the saved scroll was near the bottom, so new messages still stick.
+  bool _pinToBottom = true;
 
   /// The room's agent work (runs, live drafts, questions), when the chat
   /// knows its project and room.
@@ -157,8 +201,151 @@ class _RoomChatState extends State<RoomChat> {
   @override
   void initState() {
     super.initState();
+    _restore = RoomChatScrollStore.read(widget.spaceId, widget.roomId);
+    if (_restore != null) _pinToBottom = _restore!.nearBottom;
+    _chatScroll.addListener(_onScroll);
     _followWork();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _afterFirstLayout());
+  }
+
+  void _afterFirstLayout() {
+    if (!mounted) return;
+    if (_tryRestore()) return;
+    // First visit to this room in the session: start at the live end.
+    if (_restore == null) _jumpToBottom();
+  }
+
+  /// Schedules another restore attempt after the next frame (layout may
+  /// still be settling or messages still arriving).
+  void _scheduleRestoreRetry() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _didRestore) return;
+      if (_tryRestore()) return;
+      if (_restore == null) _jumpToBottom();
+    });
+    // A post-frame callback alone does not schedule a frame; without this,
+    // retries stall when nothing else is animating (common in tests and when
+    // returning to a settled chat).
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  /// Persists the current offset so a later visit to this room restores it.
+  void _persistScroll([String? spaceId, String? roomId]) {
+    if (_suppressPersist || !_chatScroll.hasClients) return;
+    // Do not overwrite a saved session with a half-restored / unloaded list.
+    if (!_didRestore && _restore != null) return;
+    final pos = _chatScroll.position;
+    final nearBottom = pos.maxScrollExtent - pos.pixels < 160;
+    _pinToBottom = nearBottom;
+    RoomChatScrollStore.save(
+      spaceId ?? widget.spaceId,
+      roomId ?? widget.roomId,
+      RoomChatScroll(
+        offset: pos.pixels,
+        nearBottom: nearBottom,
+        maxExtent: pos.maxScrollExtent,
+      ),
+    );
+  }
+
+  void _onScroll() {
+    if (!_chatScroll.hasClients) return;
+    _persistScroll();
+    if (widget.onLoadOlder == null ||
+        !widget.hasMore ||
+        widget.loadingOlder) {
+      return;
+    }
+    // Near the top of an oldest→newest list: ask for the previous page.
+    if (_chatScroll.position.pixels <= 80) widget.onLoadOlder!();
+  }
+
+  void _runWithoutPersist(VoidCallback fn) {
+    _suppressPersist = true;
+    try {
+      fn();
+    } finally {
+      _suppressPersist = false;
+    }
+  }
+
+  /// Applies a saved scroll once the list has laid out. Returns true when
+  /// restore is done or still pending another frame of content.
+  bool _tryRestore() {
+    final saved = _restore;
+    if (saved == null || _didRestore) return saved != null && _didRestore;
+    if (!_chatScroll.hasClients) {
+      _scheduleRestoreRetry();
+      return true;
+    }
+    // First page still arriving: keep the pending restore until it lands.
+    if (widget.messages.isEmpty) {
+      if (widget.loading) {
+        _scheduleRestoreRetry();
+        return true;
+      }
+      // Truly empty conversation — nothing to restore to.
+      _runWithoutPersist(
+          () => _chatScroll.jumpTo(_chatScroll.position.maxScrollExtent));
+      _pinToBottom = true;
+      _didRestore = true;
+      return true;
+    }
+    final max = _chatScroll.position.maxScrollExtent;
+    _restoreAttempts++;
+    // Children often report max==0 for a frame before layout finishes.
+    final expectScroll =
+        saved.maxExtent > 0 || saved.offset > 0 || saved.nearBottom;
+    if (max <= 0 && expectScroll && _restoreAttempts < 45) {
+      _restoreExtent = null;
+      _restoreStableFrames = 0;
+      _scheduleRestoreRetry();
+      return true;
+    }
+    // Wait until the extent stops changing so proportional restore is not
+    // applied against a mid-layout height.
+    if (_restoreExtent == null || (_restoreExtent! - max).abs() > 1) {
+      _restoreExtent = max;
+      _restoreStableFrames = 0;
+      _scheduleRestoreRetry();
+      return true;
+    }
+    _restoreStableFrames++;
+    if (_restoreStableFrames < 2) {
+      _scheduleRestoreRetry();
+      return true;
+    }
+    final target = saved.offsetFor(max);
+    _runWithoutPersist(() => _chatScroll.jumpTo(target));
+    _pinToBottom = saved.nearBottom;
+    _didRestore = true;
+    _restoreAttempts = 0;
+    _restoreExtent = null;
+    _restoreStableFrames = 0;
+    // Persist the applied position (now that restore is done) so leave /
+    // remount keeps the corrected offset, not a stale pre-layout value.
+    _persistScroll();
+    return true;
+  }
+
+  void _jumpToBottom() {
+    if (!_chatScroll.hasClients) return;
+    _runWithoutPersist(
+        () => _chatScroll.jumpTo(_chatScroll.position.maxScrollExtent));
+    _pinToBottom = true;
+    _didRestore = true;
+    _persistScroll();
+  }
+
+  /// The id of the chronologically oldest message, for detecting prepends.
+  static String? _oldestId(List<RoomMessage> messages) {
+    if (messages.isEmpty) return null;
+    var oldest = messages.first;
+    for (final m in messages) {
+      final c = m.createdAt.compareTo(oldest.createdAt);
+      if (c < 0 || (c == 0 && m.id.compareTo(oldest.id) < 0)) oldest = m;
+    }
+    return oldest.id;
   }
 
   void _followWork() {
@@ -228,9 +415,45 @@ class _RoomChatState extends State<RoomChat> {
   void didUpdateWidget(covariant RoomChat oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.spaceId != widget.spaceId ||
+        oldWidget.roomId != widget.roomId) {
+      _persistScroll(oldWidget.spaceId, oldWidget.roomId);
+      _restore = RoomChatScrollStore.read(widget.spaceId, widget.roomId);
+      _didRestore = false;
+      _restoreAttempts = 0;
+      _restoreExtent = null;
+      _restoreStableFrames = 0;
+      _pinToBottom = _restore?.nearBottom ?? true;
+      _scheduleRestoreRetry();
+    }
+    if (oldWidget.spaceId != widget.spaceId ||
         oldWidget.roomId != widget.roomId ||
         oldWidget.dependencies != widget.dependencies) {
       _followWork();
+    }
+    // Finish a pending restore once messages (and layout) have arrived.
+    if (!_didRestore && _restore != null) {
+      _scheduleRestoreRetry();
+      return;
+    }
+    final oldOldest = _oldestId(oldWidget.messages);
+    final newOldest = _oldestId(widget.messages);
+    final prepended = oldOldest != null &&
+        newOldest != null &&
+        oldOldest != newOldest &&
+        widget.messages.length > oldWidget.messages.length;
+    if (prepended && _chatScroll.hasClients) {
+      // Keep the viewport on the same messages when older ones are inserted
+      // above (scroll-to-load history).
+      final oldMax = _chatScroll.position.maxScrollExtent;
+      final oldPixels = _chatScroll.position.pixels;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_chatScroll.hasClients) return;
+        final newMax = _chatScroll.position.maxScrollExtent;
+        _runWithoutPersist(() => _chatScroll.jumpTo(
+            (oldPixels + (newMax - oldMax)).clamp(0.0, newMax)));
+        _persistScroll();
+      });
+      return;
     }
     // New messages arrived (async agent replies / logs): follow the bottom when
     // the user was already near it, so aseman's flow appears live.
@@ -243,8 +466,10 @@ class _RoomChatState extends State<RoomChat> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_chatScroll.hasClients) return;
       final pos = _chatScroll.position;
-      if (pos.maxScrollExtent - pos.pixels < 160) {
-        _chatScroll.jumpTo(pos.maxScrollExtent);
+      if (_pinToBottom || pos.maxScrollExtent - pos.pixels < 160) {
+        _runWithoutPersist(() => _chatScroll.jumpTo(pos.maxScrollExtent));
+        _pinToBottom = true;
+        _persistScroll();
       }
     });
   }
@@ -257,6 +482,9 @@ class _RoomChatState extends State<RoomChat> {
 
   @override
   void dispose() {
+    // Only write when we have a trustworthy position (restore finished or
+    // there was nothing to restore). Leaving mid-restore keeps the prior save.
+    if (_didRestore || _restore == null) _persistScroll();
     _work?.removeListener(_workChanged);
     _work?.dispose();
     input.dispose();
@@ -264,15 +492,17 @@ class _RoomChatState extends State<RoomChat> {
     super.dispose();
   }
 
-  void _pickMention() {
+  void _pickMention([BuildContext? anchor]) {
     final agents = widget.mentionable;
     if (agents.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('No agents in this workspace to mention.')));
       return;
     }
-    showModalBottomSheet<Bot>(
+    showAppPicker<Bot>(
         context: context,
+        anchor: anchor,
+        showDragHandle: false,
         builder: (context) => SafeArea(
                 child: SizedBox(
               height: 360,
@@ -407,24 +637,30 @@ class _RoomChatState extends State<RoomChat> {
     return null;
   }
 
-  Future<void> _messageMenu(RoomMessage m) async {
+  Future<void> _messageMenu(RoomMessage m, {Offset? at, BuildContext? anchor}) async {
     if (m.id.isEmpty || m.kind == 'log') return;
     final mine = m.senderId == widget.me;
     final canWrite = widget.onSend != null && widget.composerNotice == null;
     final actions = <(IconData, String, String)>[
       if (canWrite) (Icons.reply_rounded, 'Reply', 'reply'),
+      if (widget.dependencies != null &&
+          (m.body.trim().isNotEmpty || m.attachments.isNotEmpty))
+        (Icons.forward_rounded, 'Forward', 'forward'),
       if (m.body.trim().isNotEmpty) (Icons.copy_rounded, 'Copy text', 'copy'),
       if (mine && widget.onEdit != null && canWrite && m.body.trim().isNotEmpty)
         (Icons.edit_outlined, 'Edit', 'edit'),
+      if (m.edited && widget.dependencies != null)
+        (Icons.history_rounded, 'Edit history', 'history'),
       if ((mine || widget.canModerate) && widget.onDelete != null)
         (Icons.delete_outline_rounded, 'Delete for everyone', 'delete'),
       if (!mine && widget.onReport != null)
         (Icons.flag_outlined, 'Report', 'report'),
     ];
     if (actions.isEmpty) return;
-    final picked = await showModalBottomSheet<String>(
+    final picked = await showAppPicker<String>(
       context: context,
-      showDragHandle: true,
+      anchor: anchor,
+      anchorPoint: at,
       builder: (context) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (final (icon, label, value) in actions)
@@ -458,8 +694,27 @@ class _RoomChatState extends State<RoomChat> {
           _editing = m;
           input.text = m.body;
         });
+      case 'forward':
+        final deps = widget.dependencies;
+        if (deps != null) {
+          final from = m.senderId == widget.me
+              ? 'you'
+              : _senderOf(m).name;
+          await showForwardMessageSheet(context,
+              dependencies: deps,
+              message: m,
+              fromName: from,
+              excludeSpaceId: widget.spaceId,
+              excludeRoomId: widget.roomId);
+        }
+      case 'history':
+        final service = widget.dependencies?.service;
+        if (service != null) {
+          await showMessageEditHistory(context,
+              service: service, message: m);
+        }
       case 'delete':
-        final ok = await showDialog<bool>(
+        final ok = await showAppDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             icon: const Icon(Icons.delete_outline_rounded),
@@ -587,10 +842,12 @@ class _RoomChatState extends State<RoomChat> {
 
   // ── file attachments ────────────────────────────────────────────────────
 
-  void _showAttachSheet() {
+  void _showAttachSheet([BuildContext? anchor]) {
     final scheme = Theme.of(context).colorScheme;
-    showModalBottomSheet<void>(
+    showAppPicker<void>(
         context: context,
+        anchor: anchor,
+        showDragHandle: false,
         builder: (context) => SafeArea(
             child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -850,6 +1107,48 @@ class _RoomChatState extends State<RoomChat> {
         ]));
   }
 
+  Widget _olderLoading() {
+    if (!widget.loadingOlder && !widget.hasMore) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Center(
+        child: widget.loadingOlder
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2))
+            : const SizedBox(height: 18),
+      ),
+    );
+  }
+
+  List<Widget> _messageChildren(
+      BuildContext context, List<RoomMessage> messages, Widget? working,
+      {bool withHeader = false}) {
+    return [
+      if (withHeader) ...[
+        _chatHeader(),
+        const SizedBox(height: 10),
+      ],
+      if (widget.hasMore || widget.loadingOlder) _olderLoading(),
+      if (messages.isEmpty && working == null && widget.typing.isEmpty)
+        (widget.loading
+            ? const SkeletonMessages(
+                count: 5, scrollable: false, padding: EdgeInsets.zero)
+            : const _NoMessages())
+      else ...[
+        ...List.generate(
+            messages.length,
+            (i) => _chatBubble(context, messages[i],
+                previous: i == 0 ? null : messages[i - 1])),
+        if (working != null) working,
+        if (widget.typing.isNotEmpty) _typingRow(),
+      ],
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     // Show the conversation chronologically (oldest→newest). message_list
@@ -871,20 +1170,8 @@ class _RoomChatState extends State<RoomChat> {
                   controller: _chatScroll,
                   padding:
                       EdgeInsets.fromLTRB(12, widget.topContentInset, 12, 94),
-                  children: [
-                    _chatHeader(),
-                    const SizedBox(height: 10),
-                    if (messages.isEmpty && working == null)
-                      const _NoMessages()
-                    else ...[
-                      ...List.generate(
-                          messages.length,
-                          (i) => _chatBubble(context, messages[i],
-                              previous: i == 0 ? null : messages[i - 1])),
-                      if (working != null) working,
-                    ],
-                    if (widget.typing.isNotEmpty) _typingRow(),
-                  ]),
+                  children: _messageChildren(context, messages, working,
+                      withHeader: true)),
             )),
             Positioned(left: 10, right: 10, bottom: 10, child: _composer()),
           ]));
@@ -897,19 +1184,19 @@ class _RoomChatState extends State<RoomChat> {
             child: CustomPaint(
           painter: _ChatPatternPainter(
               Theme.of(context).colorScheme.primary, widget.room),
-          child: messages.isEmpty && widget.typing.isEmpty && working == null
+          child: messages.isEmpty &&
+                  widget.typing.isEmpty &&
+                  working == null &&
+                  !widget.loadingOlder &&
+                  !widget.loading
               ? const _NoMessages()
-              : ListView(
-                  controller: _chatScroll,
-                  padding: const EdgeInsets.all(12),
-                  children: List.generate(
-                          messages.length,
-                          (i) => _chatBubble(context, messages[i],
-                              previous: i == 0 ? null : messages[i - 1])) +
-                      [
-                        if (working != null) working,
-                        if (widget.typing.isNotEmpty) _typingRow(),
-                      ]),
+              : messages.isEmpty && widget.loading
+                  ? const SkeletonMessages()
+                  : ListView(
+                      controller: _chatScroll,
+                      padding: const EdgeInsets.all(12),
+                      children:
+                          _messageChildren(context, messages, working)),
         )),
         Padding(padding: const EdgeInsets.all(10), child: _composer()),
       ]),
@@ -1068,15 +1355,14 @@ class _RoomChatState extends State<RoomChat> {
               if (_drafts.isNotEmpty)
                 Padding(
                     padding: const EdgeInsets.fromLTRB(4, 2, 4, 6),
-                    child: SizedBox(
-                        height: 42,
-                        child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _drafts.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(width: 6),
-                            itemBuilder: (context, index) =>
-                                _draftChip(_drafts[index])))),
+                    child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              for (final d in _drafts) _draftChip(d)
+                            ]))),
               if (_mentions.isNotEmpty)
                 Padding(
                     padding: const EdgeInsets.fromLTRB(6, 2, 6, 4),
@@ -1101,11 +1387,13 @@ class _RoomChatState extends State<RoomChat> {
               LayoutBuilder(builder: (context, box) {
                 final actions = [
                   _composerAction(Icons.add_rounded, 'Attach file',
-                      _sending ? null : _showAttachSheet),
+                      _sending ? null : (ctx) => _showAttachSheet(ctx)),
                   _composerAction(Icons.alternate_email_rounded,
-                      'Mention an agent', _pickMention),
-                  _composerAction(Icons.auto_awesome_rounded,
-                      'Design a message', _sending ? null : _openDesigner),
+                      'Mention an agent', (ctx) => _pickMention(ctx)),
+                  _composerAction(
+                      Icons.auto_awesome_rounded,
+                      'Design a message',
+                      _sending ? null : (_) => _openDesigner()),
                 ];
                 final field = TextField(
                     controller: input,
@@ -1179,12 +1467,14 @@ class _RoomChatState extends State<RoomChat> {
     ]);
   }
 
-  Widget _composerAction(IconData icon, String tooltip, VoidCallback? onTap) =>
-      IconButton(
-          tooltip: tooltip,
-          visualDensity: VisualDensity.compact,
-          onPressed: onTap,
-          icon: Icon(icon, size: 20));
+  Widget _composerAction(
+          IconData icon, String tooltip, void Function(BuildContext)? onTap) =>
+      Builder(
+          builder: (ctx) => IconButton(
+              tooltip: tooltip,
+              visualDensity: VisualDensity.compact,
+              onPressed: onTap == null ? null : () => onTap(ctx),
+              icon: Icon(icon, size: 20)));
 
   // Resolves a sender id to a display name: the agents in the workspace are
   // known by name, other members fall back to a short id.
@@ -1264,6 +1554,7 @@ class _RoomChatState extends State<RoomChat> {
               if (m.body.trim().isNotEmpty)
                 RichPostContent(m.body,
                     headers: deps?.service.authHeaders() ?? const {},
+                    resolveUrl: deps?.service.resolveContentUrl,
                     onLinkTap: deps == null
                         ? null
                         : (link) =>
@@ -1280,9 +1571,19 @@ class _RoomChatState extends State<RoomChat> {
                         page: _proxyPathIn(m.body) ?? '')),
               const SizedBox(height: 2),
               Row(mainAxisSize: MainAxisSize.min, children: [
-                Text(m.edited ? 'edited · $time' : time,
-                    style: TextStyle(
-                        fontSize: 10, color: fg.withValues(alpha: .65))),
+                if (m.edited)
+                  _EditedLabel(
+                    time: time,
+                    color: fg.withValues(alpha: .65),
+                    onTap: deps == null
+                        ? null
+                        : () => showMessageEditHistory(context,
+                            service: deps.service, message: m),
+                  )
+                else
+                  Text(time,
+                      style: TextStyle(
+                          fontSize: 10, color: fg.withValues(alpha: .65))),
                 // In a direct chat, the caller's messages show whether the
                 // other side has read them.
                 if (mine && widget.receipts) ...[
@@ -1350,11 +1651,14 @@ class _RoomChatState extends State<RoomChat> {
                                           MiniTag('AI', scheme.tertiary),
                                         ],
                                       ])),
-                            GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onLongPress: () => _messageMenu(m),
-                                onSecondaryTap: () => _messageMenu(m),
-                                child: bubble),
+                            Builder(
+                                builder: (bubbleCtx) => GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onLongPressStart: (d) => _messageMenu(m,
+                                        at: d.globalPosition, anchor: bubbleCtx),
+                                    onSecondaryTapDown: (d) => _messageMenu(m,
+                                        at: d.globalPosition, anchor: bubbleCtx),
+                                    child: bubble)),
                           ]))),
               SizedBox(width: mine ? 4 : 12),
             ]));
@@ -1548,6 +1852,46 @@ class _NoMessages extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
         ]),
+      ),
+    );
+  }
+}
+
+/// Compact "edited · time" affordance; opens the message's earlier wording.
+class _EditedLabel extends StatelessWidget {
+  const _EditedLabel({required this.time, required this.color, this.onTap});
+
+  final String time;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = Text.rich(
+      TextSpan(children: [
+        TextSpan(
+            text: 'edited',
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: color,
+                decoration: onTap == null ? null : TextDecoration.underline,
+                decorationColor: color.withValues(alpha: .5))),
+        TextSpan(
+            text: ' · $time',
+            style: TextStyle(fontSize: 10, color: color)),
+      ]),
+    );
+    if (onTap == null) return label;
+    return Tooltip(
+      message: 'View edit history',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+          child: label,
+        ),
       ),
     );
   }
@@ -1766,7 +2110,8 @@ class _LogSection extends StatelessWidget {
                     style:
                         TextStyle(fontSize: 11, color: scheme.onSurfaceVariant))
                 : RichPostContent(body,
-                    headers: dependencies?.service.authHeaders() ?? const {}),
+                    headers: dependencies?.service.authHeaders() ?? const {},
+                    resolveUrl: dependencies?.service.resolveContentUrl),
           ),
       ]),
     );

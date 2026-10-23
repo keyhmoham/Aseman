@@ -284,25 +284,20 @@ class _SharePostSheetState extends State<SharePostSheet> {
                   ),
                 ),
                 SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 96,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: _loading && _spaces.isEmpty
                         ? Skeleton(
-                            child: ListView(
-                              scrollDirection: Axis.horizontal,
-                              physics: const NeverScrollableScrollPhysics(),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
                               children: [
                                 for (var i = 0; i < 6; i++)
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 6,
-                                    ),
+                                  const SizedBox(
+                                    width: 76,
                                     child: Column(
                                       children: [
+                                        SizedBox(height: 4),
                                         SkeletonCircle(size: 52),
                                         SizedBox(height: 8),
                                         SkeletonLine(width: 48, height: 9),
@@ -312,9 +307,9 @@ class _SharePostSheetState extends State<SharePostSheet> {
                               ],
                             ),
                           )
-                        : ListView(
-                            scrollDirection: Axis.horizontal,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                        : Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
                             children: [
                               if (showPublic)
                                 _FeedTarget(

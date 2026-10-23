@@ -8,7 +8,7 @@ import '../domain/desk_models.dart';
 /// The desk of the room on screen: what the node keeps (windows, pins) kept
 /// in step by polling, changed optimistically by the person using it, plus
 /// what is only this screen's (the tool shown alone, the pinned desk, a
-/// maximized window).
+/// maximized window, minimized windows).
 class DeskController extends ChangeNotifier {
   DeskController(this.api, {this.pollEvery = const Duration(seconds: 3)});
 
@@ -30,6 +30,9 @@ class DeskController extends ChangeNotifier {
   /// A window filling the visible desk for now.
   String? _maximized;
 
+  /// Windows hidden to the dock on this screen (still open on the node).
+  final Set<String> _minimized = {};
+
   int _pending = 0;
   int _interacting = 0;
   Timer? _poll;
@@ -47,6 +50,10 @@ class DeskController extends ChangeNotifier {
   String? get maximized =>
       _state.windows.any((w) => w.id == _maximized) ? _maximized : null;
 
+  /// Whether [id] is minimized to the dock on this screen.
+  bool isMinimized(String id) =>
+      _minimized.contains(id) && _state.windows.any((w) => w.id == id);
+
   /// Shows the desk of [room] (a room id, or `home`) in [space].
   void attach(String space, String room) {
     room = room.isEmpty ? 'home' : room;
@@ -58,6 +65,7 @@ class DeskController extends ChangeNotifier {
     _focusTool = null;
     _pinnedOpen = false;
     _maximized = null;
+    _minimized.clear();
     _reported = Size.zero;
     _poll?.cancel();
     _notify();
@@ -82,6 +90,7 @@ class DeskController extends ChangeNotifier {
       error = null;
       if (changed) {
         _state = next;
+        _minimized.removeWhere((id) => !_state.windows.any((w) => w.id == id));
         _notify();
       }
     } catch (e) {
@@ -154,6 +163,10 @@ class DeskController extends ChangeNotifier {
           size: size)
     ]);
     _focusTool = null;
+    // A freshly opened window should be visible, not left minimized.
+    for (final id in ids) {
+      _minimized.remove(id);
+    }
     return ids.isEmpty ? null : ids.first;
   }
 
@@ -253,6 +266,7 @@ class DeskController extends ChangeNotifier {
 
   Future<void> close(String id) {
     if (_maximized == id) _maximized = null;
+    _minimized.remove(id);
     return _send([DeskOps.close(id)],
         optimistic: _state.copyWith(
             windows: _state.windows.where((w) => w.id != id).toList()));
@@ -261,9 +275,31 @@ class DeskController extends ChangeNotifier {
   /// Closes every window of [tool] (the dock's close).
   Future<void> closeTool(String tool) {
     if (_focusTool == tool) _focusTool = null;
+    _minimized.removeWhere(
+        (id) => _state.windows.any((w) => w.id == id && w.tool == tool));
     return _send([DeskOps.closeTool(tool)],
         optimistic: _state.copyWith(
             windows: _state.windows.where((w) => w.tool != tool).toList()));
+  }
+
+  /// Hides [id] to the dock on this screen without closing it on the node.
+  void minimize(String id) {
+    if (!_state.windows.any((w) => w.id == id)) return;
+    if (_maximized == id) _maximized = null;
+    if (_minimized.add(id)) _notify();
+  }
+
+  /// Brings a minimized window back onto the desk.
+  void restore(String id) {
+    if (_minimized.remove(id)) _notify();
+  }
+
+  /// Brings every minimized window of [tool] back onto the desk.
+  void restoreTool(String tool) {
+    final before = _minimized.length;
+    _minimized.removeWhere(
+        (id) => _state.windows.any((w) => w.id == id && w.tool == tool));
+    if (_minimized.length != before) _notify();
   }
 
   /// The pin keeping [w] (a composed widget is kept by its title).
@@ -287,11 +323,26 @@ class DeskController extends ChangeNotifier {
           pins: _state.pins.where((p) => p.id != pinId).toList()));
 
   /// Shows only [tool]'s windows, gathered; the same tool again (or null)
-  /// shows every window where it was.
+  /// shows every window where it was. Tapping a tool also restores its
+  /// minimized windows from the dock (without toggling focus away).
   void focusOn(String? tool) {
-    _focusTool = tool == null || tool == _focusTool ? null : tool;
     _pinnedOpen = false;
     _maximized = null;
+    if (tool == null) {
+      _focusTool = null;
+      _notify();
+      return;
+    }
+    final hadMinimized = _state.windows
+        .any((w) => w.tool == tool && _minimized.contains(w.id));
+    _minimized.removeWhere(
+        (id) => _state.windows.any((w) => w.id == id && w.tool == tool));
+    if (hadMinimized) {
+      _focusTool = tool;
+      _notify();
+      return;
+    }
+    _focusTool = tool == _focusTool ? null : tool;
     _notify();
   }
 
@@ -301,6 +352,7 @@ class DeskController extends ChangeNotifier {
   }
 
   void toggleMaximized(String id) {
+    if (_maximized != id) _minimized.remove(id);
     _maximized = _maximized == id ? null : id;
     _notify();
   }

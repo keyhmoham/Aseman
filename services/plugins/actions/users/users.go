@@ -59,6 +59,8 @@ func BuildActions(s *Service) []api.Action {
 		&fileUploadAction{s: s},
 		&fileDownloadAction{s: s},
 		&fileDeleteAction{s: s},
+		&fileIngestAction{s: s},
+		&hostMarkupAction{s: s},
 	}, append(accountActions(s), append(pushActions(s), notificationActions(s)...)...)...)
 }
 

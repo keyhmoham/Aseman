@@ -7,6 +7,7 @@ import '../../../core/formatting/billing_units.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/skeleton.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 
 /// Where the developer API answers, set at build time
 /// (`--dart-define=DEVELOPER_API_BASE=https://api.example.com/v1`). Empty
@@ -230,7 +231,7 @@ void _snack(BuildContext context, String text) =>
 Future<String?> _ask(BuildContext context, String title, String label,
     {String hint = '', String action = 'Save', String initial = ''}) async {
   final controller = TextEditingController(text: initial);
-  final value = await showDialog<String>(
+  final value = await showAppDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
       title: Text(title),
@@ -258,7 +259,7 @@ Future<String?> _ask(BuildContext context, String title, String label,
 
 Future<bool> _confirm(BuildContext context, String title, String body,
     {String action = 'Continue'}) async {
-  final ok = await showDialog<bool>(
+  final ok = await showAppDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
       title: Text(title),
@@ -579,7 +580,7 @@ class _KeysState extends _LoadedState<_Keys> {
   Future<_Json> fetch() => call('keys_list');
 
   Future<void> _create() async {
-    final input = await showDialog<_Json>(
+    final input = await showAppDialog<_Json>(
         context: context, builder: (_) => const _KeyDialog());
     if (input == null) return;
     try {
@@ -647,7 +648,7 @@ class _KeysState extends _LoadedState<_Keys> {
 }
 
 Future<void> _showSecret(BuildContext context, String secret) =>
-    showDialog<void>(
+    showAppDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
@@ -900,7 +901,7 @@ class _LogsState extends _LoadedState<_Logs> {
   void _open(_Json l) {
     String pretty(dynamic v) =>
         v == null ? '—' : const JsonEncoder.withIndent('  ').convert(v);
-    showDialog<void>(
+    showAppDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('${l['method']} ${l['path']}'),
@@ -1192,7 +1193,7 @@ class _ComputersState extends _LoadedState<_Computers> {
   }
 
   Future<void> _create() async {
-    final input = await showDialog<_Json>(
+    final input = await showAppDialog<_Json>(
         context: context,
         builder: (_) => _ComputerDialog(options: _map(data['options'])));
     if (input == null) return;
@@ -1206,7 +1207,7 @@ class _ComputersState extends _LoadedState<_Computers> {
     try {
       final r = await call('computer_exec', {'id': c['id'], 'command': command});
       if (!mounted) return;
-      await showDialog<void>(
+      await showAppDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
           title: Text('Exit ${r['exitCode']} · ${r['ms']} ms'),
@@ -1480,7 +1481,7 @@ class _TeamState extends _LoadedState<_Team> {
     final handle = await _ask(context, 'Invite someone', 'Username',
         hint: 'ada', action: 'Next');
     if (handle == null || handle.trim().isEmpty || !mounted) return;
-    final role = await showDialog<String>(
+    final role = await showAppDialog<String>(
       context: context,
       builder: (context) => SimpleDialog(
         title: Text('@${handle.trim().replaceFirst('@', '')} joins as'),

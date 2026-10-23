@@ -108,7 +108,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> {
 
   Future<void> _stopEditing() async {
     if (_dirty) {
-      final discard = await showDialog<bool>(
+      final discard = await showAppDialog<bool>(
         context: context,
         builder: (dialog) => AlertDialog(
           title: const Text('Discard your changes?'),

@@ -354,14 +354,30 @@ class FakeAsemanService extends AsemanService {
   Future<List<Message>> fetchMessages(String roomId) async => const [];
 
   @override
-  Future<({List<RoomMessage> messages, String working, String workingDetail})>
-      fetchRoomMessages(String spaceId, String roomId,
-              {int limit = 50, int offset = 0}) async =>
-          (
-            messages: roomMessages[spaceId + '/' + roomId] ?? const [],
-            working: workingAgent,
-            workingDetail: workingDetailAgent,
-          );
+  Future<
+      ({
+        List<RoomMessage> messages,
+        String working,
+        String workingDetail,
+        bool hasMore
+      })> fetchRoomMessages(String spaceId, String roomId,
+      {int limit = 50, DateTime? before}) async {
+    final all = roomMessages[spaceId + '/' + roomId] ?? const <RoomMessage>[];
+    final sorted = sortRoomMessages(all);
+    // Newest page, or the page older than [before], matching message_list.
+    final filtered = before == null
+        ? sorted
+        : sorted.where((m) => m.createdAt.isBefore(before)).toList();
+    final page = filtered.length <= limit
+        ? filtered
+        : filtered.sublist(filtered.length - limit);
+    return (
+      messages: List.of(page.reversed),
+      working: workingAgent,
+      workingDetail: workingDetailAgent,
+      hasMore: filtered.length > page.length,
+    );
+  }
 
   final Map<String, List<RoomMessage>> roomMessages = {};
 
@@ -480,19 +496,27 @@ class FakeAsemanService extends AsemanService {
 
   @override
   Future<RoomChatPage> fetchRoomChat(String spaceId, String roomId,
-      {int limit = 50}) async {
+      {int limit = 50, DateTime? before}) async {
     final extra = chatState[spaceId] ?? const RoomChatPage();
+    final page =
+        await fetchRoomMessages(spaceId, roomId, limit: limit, before: before);
     return RoomChatPage(
-        // A fresh list per read, as the node sends.
-        messages: List.of(roomMessages[spaceId + '/' + roomId] ?? const []),
-        working: workingAgent,
-        workingDetail: workingDetailAgent,
+        messages: page.messages,
+        working: page.working,
+        workingDetail: page.workingDetail,
         typing: extra.typing,
         peerSeenAt: extra.peerSeenAt,
         blocked: extra.blocked,
         canSend: extra.canSend,
-        saved: extra.saved);
+        saved: extra.saved,
+        hasMore: page.hasMore);
   }
+
+  /// Earlier bodies kept when a message is edited, by message id (newest first).
+  final Map<String, List<MessageEditVersion>> messageEdits = {};
+
+  @override
+  Future<String> hostMarkupMedia(String body) async => body;
 
   @override
   Future<void> editRoomMessage(String messageId, String body) async {
@@ -501,6 +525,9 @@ class FakeAsemanService extends AsemanService {
       final i = list.indexWhere((m) => m.id == messageId);
       if (i < 0) continue;
       final m = list[i];
+      final now = DateTime.now();
+      messageEdits.putIfAbsent(messageId, () => []).insert(
+          0, MessageEditVersion(body: m.body, at: now, id: 'e-${m.body.hashCode}'));
       list[i] = RoomMessage(
           id: m.id,
           spaceId: m.spaceId,
@@ -509,13 +536,34 @@ class FakeAsemanService extends AsemanService {
           body: body,
           createdAt: m.createdAt,
           replyTo: m.replyTo,
-          editedAt: DateTime.now());
+          editedAt: now);
     }
+  }
+
+  @override
+  Future<MessageEditHistory> fetchMessageEdits(String messageId) async {
+    chatCalls.add('edits:$messageId');
+    RoomMessage? current;
+    for (final list in roomMessages.values) {
+      for (final m in list) {
+        if (m.id == messageId) current = m;
+      }
+    }
+    return MessageEditHistory(
+      messageId: messageId,
+      current: MessageEditVersion(
+          body: current?.body ?? '',
+          at: current?.editedAt ??
+              current?.createdAt ??
+              DateTime.fromMillisecondsSinceEpoch(0)),
+      previous: List.of(messageEdits[messageId] ?? const []),
+    );
   }
 
   @override
   Future<void> deleteRoomMessage(String spaceId, String messageId) async {
     chatCalls.add('delete:$messageId');
+    messageEdits.remove(messageId);
     for (final list in roomMessages.values) {
       list.removeWhere((m) => m.id == messageId);
     }
@@ -879,6 +927,7 @@ class FakeAsemanService extends AsemanService {
       {String kind = '', int limit = 20, int offset = 0}) async {
     final bots = await fetchBots();
     return bots
+        .where((b) => !b.isSandbox)
         .where((b) => kind.isEmpty || kind.split(',').any((k) => k == b.kind))
         .where((b) => b.name.toLowerCase().contains(query.toLowerCase()))
         .skip(offset)

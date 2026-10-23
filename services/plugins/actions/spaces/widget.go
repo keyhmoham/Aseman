@@ -43,8 +43,8 @@ func (s *Service) RoomWidgets(ctx context.Context, spaceID, roomID identity.ID) 
 		if rec.Kind != bot.KindTool {
 			continue
 		}
-		// The shared per-space sandbox is not a desk widget.
-		if rec.VMType == bot.VMTypeDocker || rec.VMType == bot.VMTypeContainer {
+		// The shared per-space sandbox is a computer, not a desk app.
+		if rec.IsSandbox() {
 			continue
 		}
 		w := s.widgetFor(ctx, spaceID, roomID, rec)

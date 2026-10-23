@@ -95,7 +95,10 @@ class _AddAppDialogState extends State<AddAppDialog> {
           for (final t in catalog)
             if (!inSpace.contains(t.id)) t,
           for (final b in results[2] as List<Bot>)
-            if (b.isTool && !inSpace.contains(b.id) && !listed.contains(b.id))
+            if (b.isTool &&
+                !b.isSandbox &&
+                !inSpace.contains(b.id) &&
+                !listed.contains(b.id))
               (id: b.id, name: b.name, auth: '', avatar: b.avatar),
         ];
         _loading = false;

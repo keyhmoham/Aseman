@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/utils/context_extensions.dart';
 import '../data/workspace_files.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 
 /// Makes a change to the workspace's files. It does not wake the computer:
 /// only when the node says the change needs it (a very large file, or what
@@ -16,7 +17,7 @@ Future<bool> runWorkspaceChange(
     await change(wake: false);
   } on WorkspaceNeedsComputer catch (e) {
     if (!context.mounted) return false;
-    final wake = await showDialog<bool>(
+    final wake = await showAppDialog<bool>(
       context: context,
       builder: (dialog) => AlertDialog(
         icon: const Icon(Icons.power_settings_new_rounded),
@@ -59,7 +60,7 @@ Future<String?> askFileName(
   required String action,
   String initial = '',
   String hint = '',
-}) => showDialog<String>(
+}) => showAppDialog<String>(
   context: context,
   builder: (_) =>
       _NameDialog(title: title, action: action, initial: initial, hint: hint),
@@ -144,7 +145,7 @@ Future<bool> confirmFileDelete(
   BuildContext context,
   WorkspaceEntry entry,
 ) async =>
-    await showDialog<bool>(
+    await showAppDialog<bool>(
       context: context,
       builder: (dialog) => AlertDialog(
         icon: const Icon(Icons.delete_outline_rounded),

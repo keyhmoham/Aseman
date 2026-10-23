@@ -43,7 +43,7 @@ Future<void> showNotificationsMenu(
       barrierDismissible: true,
       barrierLabel: 'Close notifications',
       barrierColor: AppSurfaces.barrier,
-      transitionDuration: const Duration(milliseconds: 260),
+      transitionDuration: const Duration(milliseconds: 420),
       pageBuilder: (dialogContext, _, __) => SafeArea(
         child: Align(
           alignment: Alignment.topLeft,
@@ -65,17 +65,8 @@ Future<void> showNotificationsMenu(
           ),
         ),
       ),
-      transitionBuilder: (_, animation, __, child) {
-        final curved =
-            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-              alignment: Alignment.topLeft,
-              scale: Tween(begin: .92, end: 1.0).animate(curved),
-              child: child),
-        );
-      },
+      transitionBuilder: (routeContext, animation, __, child) =>
+          desktopFloatingPanelTransition(routeContext, animation, child),
     );
   }
   if (picked == null || !context.mounted) return;

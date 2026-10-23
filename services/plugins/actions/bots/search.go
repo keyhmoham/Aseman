@@ -38,6 +38,10 @@ func (s *Service) SearchBots(ctx context.Context, query, kind string, limit, off
 	q := strings.ToLower(strings.TrimSpace(query))
 	var out []bot.Bot
 	for _, b := range all {
+		// Space sandboxes are computers, not apps — never surface them as tools.
+		if b.IsSandbox() {
+			continue
+		}
 		if kinds != nil && !kinds[string(b.Kind)] {
 			continue
 		}

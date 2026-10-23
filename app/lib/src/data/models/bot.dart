@@ -30,8 +30,11 @@ class Bot {
   bool get isTool => kind == 'tool';
 
   /// The space's own computer (its sandbox), shown as the space's files
-  /// rather than as an app.
-  bool get isSandbox => isTool && name.startsWith('sbx-');
+  /// rather than as an app. Matches the backend [Bot.IsSandbox] rule.
+  bool get isSandbox =>
+      isTool &&
+      name.startsWith('sbx-') &&
+      const {'container', 'docker', 'modal'}.contains(vmType);
 
   /// A tool whose backend serves microtools over MCP — an external server, a
   /// backend this node runs (Elpian VM, QuickJS or docker) or one installed
@@ -39,7 +42,7 @@ class Bot {
   /// (features/tools).
   bool get isUnifiedTool =>
       isTool &&
-      !name.startsWith('sbx-') &&
+      !isSandbox &&
       const {'mcp', 'elpian', 'quickjs', 'installed', 'docker'}
           .contains(vmType);
 

@@ -7,32 +7,32 @@ import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_surfaces.dart';
 import '../../data/models/space.dart';
 import 'skeleton.dart';
+import 'overlay_panels.dart';
 
 /// Shared top app bar of the workspace and the feed: the ASEMAN name in the
-/// middle, the account avatar (its menu) on the right edge. On phones the
-/// left edge opens the navigation drawer; on wider screens it shows the
-/// current space. On the feed the left edge holds the notifications. The workspace
-/// switcher opens from the [SwitcherEdgeHandle]. No background, border or shadow: the page's glow
-/// shows through. Optional callbacks hide the corresponding controls.
+/// middle, the account avatar (its menu) on the right edge. On the workspace
+/// the left edge is a Home pill that returns to the feed. On phones the
+/// navigation drawer opens from a menu on the desk below this bar, not from
+/// here. On the feed the left edge holds the notifications. On the workspace
+/// the switcher opens from the [SwitcherEdgeHandle] (hidden on the feed). No
+/// background, border or shadow: the page's glow shows through. Optional
+/// callbacks hide the corresponding controls.
 class WorkspaceHeader extends StatelessWidget {
   const WorkspaceHeader({
     super.key,
-    required this.workspace,
     required this.compact,
     this.feed = false,
     this.room,
-    this.onOpenNavigation,
     this.onOpenNotifications,
     this.unreadNotifications = 0,
+    this.onBackToFeed,
     this.onGoHome,
     this.onOpenAdmin,
     required this.onOpenProfile,
     this.handle = '',
     this.avatar,
-    this.workspaceAvatar,
   });
 
-  final String workspace;
   final String? room;
   final bool compact;
 
@@ -47,9 +47,8 @@ class WorkspaceHeader extends StatelessWidget {
   /// The signed-in account's picture, shown over its initial.
   final ImageProvider? avatar;
 
-  /// The current space's picture, shown over its initials.
-  final ImageProvider? workspaceAvatar;
-  final VoidCallback? onOpenNavigation;
+  /// Leaves the workspace for the search feed (Home).
+  final VoidCallback? onBackToFeed;
   final VoidCallback? onGoHome;
   final VoidCallback? onOpenAdmin;
   final VoidCallback onOpenProfile;
@@ -71,33 +70,23 @@ class WorkspaceHeader extends StatelessWidget {
                         ? '99+'
                         : '$unreadNotifications'),
                     child: const Icon(Icons.notifications_none_rounded)))
-          else if (compact && onOpenNavigation != null)
-            IconButton(
-                visualDensity: VisualDensity.compact,
-                tooltip: 'Rooms and workspace',
-                onPressed: onOpenNavigation,
-                icon: const Icon(Icons.menu_rounded))
-          else if (!compact && !feed)
-            Flexible(
-                child: _CurrentPlace(
-                    workspace: workspace, avatar: workspaceAvatar)),
-          if (room != null) ...[
-            if (!compact) ...[
-              const SizedBox(width: 6),
-              const Icon(Icons.chevron_right_rounded),
-            ],
+          else if (onBackToFeed != null)
+            _HomePill(onPressed: onBackToFeed),
+          // Room path (hall shortcut + room title) is desktop-only; on phones
+          // the Desk / Feed|Chat tabs already cover navigation.
+          if (room != null && !compact) ...[
+            const SizedBox(width: 6),
+            const Icon(Icons.chevron_right_rounded),
             if (onGoHome != null)
               IconButton(
-                  visualDensity: compact ? VisualDensity.compact : null,
                   onPressed: onGoHome,
                   tooltip: 'Workspace home',
                   icon: const Icon(Icons.home_outlined, size: 18)),
-            if (!compact)
-              Flexible(
-                  child: Text(room!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700)))
+            Flexible(
+                child: Text(room!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700)))
           ],
         ])),
         SizedBox(width: compact ? 6 : 12),
@@ -130,30 +119,23 @@ class WorkspaceHeader extends StatelessWidget {
       ]));
 }
 
-/// Where the user is, on the app bar's left edge: the current space's
-/// avatar and name.
-class _CurrentPlace extends StatelessWidget {
-  const _CurrentPlace({required this.workspace, this.avatar});
-  final String workspace;
-  final ImageProvider? avatar;
+/// Filled stadium control that returns to the feed from any workspace.
+class _HomePill extends StatelessWidget {
+  const _HomePill({required this.onPressed});
+  final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
-        CircleAvatar(
-            radius: 16,
-            foregroundImage: avatar,
-            onForegroundImageError: avatar == null ? null : (_, __) {},
-            child: Text(
-                workspace.substring(0, math.min(2, workspace.length)).toUpperCase(),
-                style: const TextStyle(fontSize: 11))),
-        const SizedBox(width: 10),
-        Flexible(
-            child: Text(workspace,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style:
-                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
-      ]);
+  Widget build(BuildContext context) => FilledButton.icon(
+      onPressed: onPressed,
+      icon: const Icon(Icons.arrow_back_rounded, size: 18),
+      label: const Text('Home'),
+      style: FilledButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          textStyle: Theme.of(context)
+              .textTheme
+              .labelLarge
+              ?.copyWith(fontWeight: FontWeight.w700, fontSize: 13)));
 }
 
 /// The workspace switcher's handle: a bump stuck to the screen's right edge,
@@ -317,7 +299,7 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
 
   Future<void> _create() async {
     final deps = widget.dependencies;
-    final name = await showDialog<String>(
+    final name = await showAppDialog<String>(
       context: context,
       builder: (_) => const _CreateWorkspaceDialog(),
     );

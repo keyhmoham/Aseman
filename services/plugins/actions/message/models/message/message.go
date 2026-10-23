@@ -118,6 +118,17 @@ type Message struct {
 	EditedAt time.Time `db:"edited_at" json:"edited_at,omitempty"`
 }
 
+// Edit is a previous body of a room message: kept when the sender changes it,
+// so anyone who can read the room can still open the older wording.
+type Edit struct {
+	entity.Entity
+	MessageID identity.ID `db:"message_id" json:"message_id"`
+	Body      string      `db:"body" json:"body"`
+	// ReplacedAt is when this body stopped being current (the edit that
+	// superseded it).
+	ReplacedAt time.Time `db:"replaced_at" json:"replaced_at"`
+}
+
 // ParseMentions decodes the mentions JSON column into the mentioned member ids.
 func (m *Message) ParseMentions() []string {
 	if m.Mentions == "" {

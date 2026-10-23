@@ -57,11 +57,13 @@ builds too — with `preserve_path` for frameworks that compile their base path)
   <t-split weight="1">
     <t-column title="Forecast" gap="16">
       <t-show when='{"path":"/fc__loading"}'><t-skeleton variant="card"></t-skeleton></t-show>
-      <t-grid min-column-width="160">
-        <t-card><t-stat label="Temperature" bind-value="/fc/temp" format="number:1" icon="thermostat"></t-stat></t-card>
-        <t-card><t-stat label="Humidity" bind-value="/fc/humidity" format="percent"></t-stat></t-card>
+      <t-grid min-column-width="150">
+        <t-card><t-stat label="Temperature" bind-value="/fc/temp" format="number:1" delta='{"path":"/fc/feels"}' delta-label="feels like" icon="thermostat"></t-stat></t-card>
+        <t-card><t-stat label="Humidity" bind-value="/fc/humidity" format="percent" icon="water_drop"></t-stat></t-card>
+        <t-card><t-stat label="Wind" bind-value="/fc/wind" icon="air"></t-stat></t-card>
+        <t-card><t-gauge label="UV" bind-value="/fc/uv" min="0" max="11"></t-gauge></t-card>
       </t-grid>
-      <t-card><t-chart type="line" title="Next 24 h" bind-data="/fc/hours" x="time" x-format="time" y="temp" height="240"></t-chart></t-card>
+      <t-card><t-chart type="area" title="Next 24 h" bind-data="/fc/hours" x="time" x-format="time" y="temp" smooth height="260"></t-chart></t-card>
     </t-column>
     <t-form title="Alert" call="Weather/set_alert" into="/alert" toast="Alert saved">
       <t-text-field name="threshold" label="Alert above (°C)" variant="number"></t-text-field>
@@ -220,38 +222,51 @@ that fits; every Elpian animation and gesture widget is there too
 `t-drag-target`, …). Plain HTML (tables, forms, details, dialogs…) is styled
 like the app too.
 
-## 6. Design
+## 6. Design (professional product UI)
 
-A page is an application screen, not a web page or a document, and it works
-on a phone (~360 × 640) and a desktop window (~1400 × 900):
+Design as a senior product designer shipping a real application console —
+visualization-first, sparse text — not a document, landing page or chat
+card. It must work on a phone (~360 × 640) and a desktop window (~1400 × 900).
+
+**Composition (top → bottom)**
+
+1. Fixed header — title + one caption + main actions / filters.
+2. KPI strip — `t-grid` (min-column-width ~160) of 3–5 `t-stat`s (value,
+   format, delta / trend / sparkline when available).
+3. Hero visualization — one `t-chart` / `t-gauge` / `t-heatmap` / domain
+   viz (`t-quote`, `t-order-book`, `t-allocation-bar`…) answering the main
+   question.
+4. Supporting views — secondary charts, `t-tabs` / `t-segmented-control`,
+   or `t-split` (list + detail).
+5. Evidence — dense `t-table` (≤ 6–8 columns); selection → detail pane.
+
+Prefer `t-stat`, `t-chart`, `t-gauge`, `t-table`, `t-sparkline` over walls
+of `t-text` / `t-markdown` whenever the data is numeric, temporal,
+categorical or tabular.
+
+**App viewport**
 
 - `<body class="t-app">` fills the window exactly and never scrolls as a
-  whole. Its children are a header (title + one caption line, the screen's
-  main actions and filters at the end) that stays put, then the body region
-  with `weight="1"` that takes the rest of the height, and optionally an
-  action bar at the bottom.
-- Every region that can grow (tables, `t-for` lists, timelines, logs,
-  details, long forms, markdown) scrolls inside itself: the body is a
-  `t-scroll weight="1"`, a `t-split` or a `t-tabs weight="1"` — never a
-  plain column of blocks that pushes the page taller.
-- Several regions side by side (a list and its details, a form and its
-  preview) are a `t-split`: its children are panes (`title="…"`), side by
-  side and each scrolling on a desktop, tabs on a phone. Views of the same
-  screen are `t-tabs` (each tab scrolls by itself), not long stacked
-  sections. Never a `t-row` of panes.
+  whole. Children: a header that stays put, then the body region with
+  `weight="1"`, optionally a bottom action bar.
+- Growing content (tables, `t-for`, timelines, logs, details, long forms)
+  scrolls inside its region: body is `t-scroll weight="1"`, `t-split` or
+  `t-tabs weight="1"` — never a plain column that pushes the page taller.
+- Side-by-side regions use `t-split` (panes with `title="…"`: side by side
+  on desktop, tabs on a phone). Never a `t-row` of panes. Alternate lenses
+  are `t-tabs`, not long stacked sections.
 - Responsive: one column on a phone, no horizontal overflow, no fixed
-  widths; tiles and fields in a `t-grid` with min-column-width; groups of
-  buttons and chips in a `t-wrap`.
-- No page patterns: no hero banners, landing sections, footers or long prose.
+  widths; tiles/fields in `t-grid` with min-column-width; button groups in
+  `t-wrap`.
+- No page patterns: no hero banners, landing sections, footers or long
+  prose. Short labels (2–4 words); format every number; one primary button
+  per region; status colors only for state.
 
-Opening a page checks this, and refuses a page that would be cut off or
-scroll like a web page. Otherwise the quality bar of generated surfaces
-applies: headline numbers in a `t-grid` of `t-stat`s; every control does
-something that works; one primary button per region; format every number;
-status colors only for state. Colors are CSS
-variables (`var(--t-primary)`, `--t-surface`, `--t-series-1…8`, `--t-good`,
-`--t-critical`…); the page follows the app's light/dark theme and accent by
-itself — never hard-code colors or a theme.
+Opening a page checks the viewport rules and refuses a page that would be
+cut off or scroll like a web page. The model review also judges
+visualization-first fitness. Colors are CSS variables (`var(--t-primary)`,
+`--t-surface`, `--t-series-1…8`, `--t-good`, `--t-critical`…); the page
+follows the app's light/dark theme — never hard-code colors or a theme.
 
 ## 7. Check it
 
@@ -271,16 +286,23 @@ came back, then has the page reviewed for fitness to the tool, cleanness
 and the design standard. A page that does not work is not opened: you get
 the report, fix it, and `web_show` it again until the review passes.
 
-The node does not run the page's scripts in a browser, so before reporting
-it ready, test it yourself too, and repeat until nothing is left:
+The node does not paint the page in a browser, so before reporting it ready
+(and after every edit), **you must see the frontend window yourself** and
+reform from the pixels — not from HTML alone. Repeat until nothing is left:
 
 1. `proxy_get` with `probe: true`: the page and the kit load.
-2. Open the page in the desktop browser (`aseman-desktop open http://localhost:8080`)
-   and take screenshots at ~360 px and ~1400 px wide; read the console for
-   errors.
-3. Click through every control: each call returns real data (no `/x__error`,
+2. Open the page in the desktop browser
+   (`aseman-desktop open http://localhost:8080`).
+3. Screenshot at phone and desktop widths, then **read each PNG** so you
+   see the UI:
+   `aseman-desktop screenshot /workspace/ui-phone.png 360` then
+   `aseman-desktop screenshot /workspace/ui-desktop.png 1400`, then
+   `read_file` on both paths (the tool returns the image; judge layout,
+   overflow, contrast, empty charts, cramped KPIs, text-heavy walls).
+4. Click through every control: each call returns real data (no `/x__error`,
    no empty or missing values), each button does what its label says and
    the page shows the outcome; nothing is dead or decorative.
-4. Review it as its user would: clean and standard (section 6), every
+5. Review it as its user would: clean and standard (section 6), every
    number formatted and labelled, and right for the tool and what was asked.
-5. Fix everything found, then go back to 1.
+6. Fix everything the screenshots and clicks found, then go back to 1.
+   Do not say the page is ready until the pictures match the design standard.

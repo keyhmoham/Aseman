@@ -15,6 +15,7 @@ import (
 	"github.com/aseman/aseman/plugins/actions/message/models/message"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/permission"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/mediahost"
 	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
@@ -201,6 +202,7 @@ type ChatReport struct {
 func chatActions(s *Service) []api.Action {
 	return []api.Action{
 		helper.Action{Namespace: "spaces", Name: "message_edit", Summary: "Change the text of a message you sent", Handler: s.messageEdit},
+		helper.Action{Namespace: "spaces", Name: "message_edits", Summary: "Earlier wording of an edited message", Handler: s.messageEdits},
 		helper.Action{Namespace: "spaces", Name: "typing_set", Summary: "Say you are typing in a room (or stopped)", Handler: s.typingSet},
 		helper.Action{Namespace: "spaces", Name: "chat_pin", Summary: "Pin a chat to the top of your chats, or unpin it", Handler: s.chatPin},
 		helper.Action{Namespace: "spaces", Name: "chat_clear", Summary: "Delete a direct chat for yourself: you see only what comes after", Handler: s.chatClear},
@@ -246,15 +248,107 @@ func (s *Service) messageEdit(ctx context.Context, req *api.ActionRequest) (*api
 	if blocked, byMe := s.directBlock(ctx, msg.SpaceID, req.Caller.ID); blocked {
 		return nil, blockError(byMe)
 	}
+	hosted, _, err := mediahost.HostBody(ctx, s.K, req.Caller.ID, body)
+	if err != nil {
+		return nil, err
+	}
+	if hosted != "" {
+		body = hosted
+	}
 	if body == msg.Body {
 		return helper.JSON(map[string]any{"ok": true, "message": messageToMap(msg)})
 	}
 	now := time.Now().UTC()
+	// Keep the wording that is about to be replaced so the room can still
+	// open earlier versions from the edited message.
+	if err := s.saveMessageEdit(ctx, msgID, msg.Body, now); err != nil {
+		return nil, err
+	}
 	msg.Body, msg.EditedAt, msg.UpdatedAt = body, now, now
 	if err := s.R.Update(ctx, "messages", msgID, msg); err != nil {
 		return nil, err
 	}
 	return helper.JSON(map[string]any{"ok": true, "message": messageToMap(msg)})
+}
+
+// saveMessageEdit stores [body] as a superseded version of [messageID].
+func (s *Service) saveMessageEdit(ctx context.Context, messageID identity.ID, body string, at time.Time) error {
+	id, err := identity.New(s.K.NodeID())
+	if err != nil {
+		return err
+	}
+	edit := &message.Edit{
+		Entity:     entity.Entity{ID: id, CreatedAt: at, UpdatedAt: at},
+		MessageID:  messageID,
+		Body:       body,
+		ReplacedAt: at,
+	}
+	return s.R.CreateID(ctx, "message_edits", id, edit)
+}
+
+// messageEdits returns the current body and every earlier wording of a message,
+// newest superseded version first. Anyone who can read the room can open it.
+func (s *Service) messageEdits(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+	if err := helper.RequireAuthenticated(req); err != nil {
+		return nil, err
+	}
+	var in struct {
+		Message string `json:"message"`
+	}
+	if err := helper.Decode(req, &in); err != nil {
+		return nil, err
+	}
+	msgID, err := identity.Parse(in.Message)
+	if err != nil {
+		return nil, errs.InvalidArgument("invalid message id")
+	}
+	msg := &message.Message{}
+	if err := s.R.Get(ctx, "messages", msgID, msg); err != nil {
+		return nil, err
+	}
+	if err := s.Can(ctx, msg.SpaceID, msg.RoomID, req.Caller.ID, permission.RoomRead); err != nil {
+		return nil, err
+	}
+	var edits []message.Edit
+	if err := s.R.List(ctx, "message_edits", database.Filter{
+		Equal: map[string]any{"message_id": msgID.String()}, OrderBy: "replaced_at", Asc: false, Limit: 100,
+	}, &edits); err != nil {
+		return nil, err
+	}
+	previous := make([]map[string]any, 0, len(edits))
+	for _, e := range edits {
+		previous = append(previous, map[string]any{
+			"id":          e.ID.String(),
+			"body":        e.Body,
+			"replaced_at": e.ReplacedAt,
+		})
+	}
+	current := map[string]any{
+		"body":       msg.Body,
+		"created_at": msg.CreatedAt,
+	}
+	if !msg.EditedAt.IsZero() {
+		current["edited_at"] = msg.EditedAt
+	}
+	return helper.JSON(map[string]any{
+		"message_id": msgID.String(),
+		"current":    current,
+		"previous":   previous,
+	})
+}
+
+// deleteMessageEdits removes every kept version of a message (when it is
+// taken back for everyone).
+func (s *Service) deleteMessageEdits(ctx context.Context, messageID identity.ID) {
+	var edits []message.Edit
+	if err := s.R.List(ctx, "message_edits", database.Filter{
+		Equal: map[string]any{"message_id": messageID.String()}, Limit: 200,
+	}, &edits); err != nil {
+		return
+	}
+	for i := range edits {
+		_ = s.R.Delete(ctx, "message_edits", edits[i].ID)
+	}
 }
 
 func (s *Service) typingSet(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {

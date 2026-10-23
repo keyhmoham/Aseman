@@ -37,6 +37,20 @@ func runDesktopCommand(t *testing.T, setup string, args ...string) (string, erro
 	return string(out), err
 }
 
+func TestDesktopScreenshotRejectsNonNumericWidth(t *testing.T) {
+	setup := `x_up() { return 0; }
+have() { return 0; }
+xdotool() { return 0; }
+scrot() { echo unexpected >&2; return 1; }`
+	out, err := runDesktopCommand(t, setup, "screenshot", "/tmp/shot.png", "wide")
+	if err == nil {
+		t.Fatalf("expected failure for non-numeric width, got %q", out)
+	}
+	if !strings.Contains(out, "width must be pixels") {
+		t.Fatalf("unexpected error: %s", out)
+	}
+}
+
 func TestDesktopBrowserAliasesUseSafeLaunchFlags(t *testing.T) {
 	for _, alias := range []string{"chrome", "chromium", "chromium-browser", "google-chrome", "browser", "https://example.com"} {
 		t.Run(alias, func(t *testing.T) {

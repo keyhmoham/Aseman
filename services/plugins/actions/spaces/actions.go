@@ -18,6 +18,7 @@ import (
 	"github.com/aseman/aseman/plugins/actions/spaces/models/permission"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/space"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/mediahost"
 	"github.com/aseman/aseman/plugins/actions/support/models/kv"
 	"github.com/aseman/aseman/plugins/actions/support/models/metadata"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
@@ -1020,6 +1021,9 @@ func (a *botsListAction) Handle(ctx context.Context, req *api.ActionRequest) (*a
 	if err := a.s.Can(ctx, spID, identity.ID{}, req.Caller.ID, permission.SpaceView); err != nil {
 		return nil, err
 	}
+	// Agents need the shared sandbox as an app (bot id for routines, ask, …).
+	// People-facing clients omit it; it is a computer, not an installable app.
+	forAgents := a.s.isBotAccount(ctx, req.Caller.ID)
 	var mems []membership.Membership
 	if err := a.s.R.List(ctx, "memberships", database.Filter{
 		Equal: map[string]any{"space_id": spID.String(), "role": string(membership.RoleBot)},
@@ -1031,6 +1035,9 @@ func (a *botsListAction) Handle(ctx context.Context, req *api.ActionRequest) (*a
 	for i := range mems {
 		rec, err := a.s.botForMember(ctx, mems[i].MemberID)
 		if err != nil {
+			continue
+		}
+		if !forAgents && rec.IsSandbox() {
 			continue
 		}
 		if seen[rec.ID.String()] {
@@ -1099,6 +1106,17 @@ func (a *msgSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	}
 	if in.Body == "" && len(in.Attachments) == 0 {
 		return nil, errs.InvalidArgument("body or attachments required")
+	}
+	// Host remote designer media on Aseman before the message is stored so
+	// readers never hit the original URL.
+	if in.Body != "" {
+		hosted, _, err := mediahost.HostBody(ctx, a.s.K, req.Caller.ID, in.Body)
+		if err != nil {
+			return nil, err
+		}
+		if hosted != "" {
+			in.Body = hosted
+		}
 	}
 	if blocked, byMe := a.s.directBlock(ctx, spID, req.Caller.ID); blocked {
 		return nil, blockError(byMe)
@@ -1316,6 +1334,7 @@ func (a *msgDeleteAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 	} else if sp.Direct || a.s.Can(ctx, spID, msg.RoomID, req.Caller.ID, permission.SpaceManageMessages) != nil {
 		return nil, errs.Permission("only the sender or a manager can delete")
 	}
+	a.s.deleteMessageEdits(ctx, msgID)
 	_ = a.s.R.Delete(ctx, "messages", msgID)
 	return helper.JSON(map[string]any{"ok": true})
 }

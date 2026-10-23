@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../data/models/uploaded_file.dart';
+import '../../../../shared/widgets/network_content_image.dart';
 import 'audio_bubble.dart';
 import 'download_helper.dart';
 import 'media_preview_screen.dart';
@@ -214,8 +215,8 @@ class AttachmentBubble extends StatelessWidget {
             child: Stack(fit: StackFit.expand, children: [
               file.bytes != null
                 ? Image.memory(file.bytes!, fit: BoxFit.cover)
-                : Image.network(
-                    _url,
+                : NetworkContentImage(
+                    url: _url,
                     headers: headers,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(

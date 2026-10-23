@@ -21,100 +21,116 @@ class PinnedDesk extends StatelessWidget {
   final Widget Function(DeskPin pin) preview;
   final double bottomInset;
 
+  /// Cap how wide the panel grows so it does not stretch across the desk.
+  static const double maxWidth = 520;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final pins = controller.state.pins;
-    return Container(
-      margin: EdgeInsets.fromLTRB(12, 12, 12, bottomInset),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .6)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: .18),
-              blurRadius: 32,
-              offset: const Offset(0, 12)),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 18, 12, 8),
-            child: Row(children: [
-              Icon(Icons.space_dashboard_rounded, color: scheme.primary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Pinned desk',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleLarge
-                            ?.copyWith(fontWeight: FontWeight.w800)),
-                    Text('Windows you pinned, ready to open again',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: scheme.onSurfaceVariant)),
-                  ],
-                ),
-              ),
-              IconButton.filledTonal(
-                tooltip: 'Back to the desk',
-                onPressed: () => controller.setPinnedOpen(false),
-                icon: const Icon(Icons.close_rounded),
-              ),
-            ]),
+    return Align(
+      alignment: Alignment.center,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: maxWidth),
+        child: Container(
+          margin: EdgeInsets.fromLTRB(12, 12, 12, bottomInset),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(32),
+            border:
+                Border.all(color: scheme.outlineVariant.withValues(alpha: .6)),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: .18),
+                  blurRadius: 32,
+                  offset: const Offset(0, 12)),
+            ],
           ),
-          Expanded(
-            child: pins.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.push_pin_outlined,
-                            size: 40, color: scheme.outline),
-                        const SizedBox(height: 12),
-                        Text('Nothing pinned yet',
-                            style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 4),
-                        Text('Pin a window from its title bar to keep it here.',
-                            textAlign: TextAlign.center,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 18, 12, 8),
+                child: Row(children: [
+                  Icon(Icons.space_dashboard_rounded, color: scheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Pinned desk',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w800)),
+                        Text('Windows you pinned, ready to open again',
                             style: Theme.of(context)
                                 .textTheme
                                 .bodySmall
                                 ?.copyWith(color: scheme.onSurfaceVariant)),
-                      ]),
-                    ),
-                  )
-                : GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 320,
-                      mainAxisSpacing: 16,
-                      crossAxisSpacing: 16,
-                      childAspectRatio: .78,
-                    ),
-                    itemCount: pins.length,
-                    itemBuilder: (context, i) => _PinTile(
-                      key: ValueKey(pins[i].id),
-                      pin: pins[i],
-                      preview: preview(pins[i]),
-                      onOpen: () {
-                        controller.setPinnedOpen(false);
-                        controller.openPin(pins[i]);
-                      },
-                      onUnpin: () => controller.unpin(pins[i].id),
+                      ],
                     ),
                   ),
+                  IconButton.filledTonal(
+                    tooltip: 'Back to the desk',
+                    onPressed: () => controller.setPinnedOpen(false),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ]),
+              ),
+              Expanded(
+                child: pins.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.push_pin_outlined,
+                                    size: 40, color: scheme.outline),
+                                const SizedBox(height: 12),
+                                Text('Nothing pinned yet',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium),
+                                const SizedBox(height: 4),
+                                Text(
+                                    'Pin a window from its title bar to keep it here.',
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                            color: scheme.onSurfaceVariant)),
+                              ]),
+                        ),
+                      )
+                    : GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                        gridDelegate:
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 240,
+                          mainAxisSpacing: 14,
+                          crossAxisSpacing: 14,
+                          childAspectRatio: .78,
+                        ),
+                        itemCount: pins.length,
+                        itemBuilder: (context, i) => _PinTile(
+                          key: ValueKey(pins[i].id),
+                          pin: pins[i],
+                          preview: preview(pins[i]),
+                          onOpen: () {
+                            controller.setPinnedOpen(false);
+                            controller.openPin(pins[i]);
+                          },
+                          onUnpin: () => controller.unpin(pins[i].id),
+                        ),
+                      ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

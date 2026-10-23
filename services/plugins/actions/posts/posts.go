@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/aseman/aseman/internal/plugins/api"
@@ -15,6 +16,7 @@ import (
 	"github.com/aseman/aseman/pkg/logger"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 	"github.com/aseman/aseman/plugins/actions/posts/models"
+	"github.com/aseman/aseman/plugins/actions/support/mediahost"
 	"github.com/aseman/aseman/plugins/actions/support/repo"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
@@ -32,10 +34,19 @@ func NewService(k api.Kernel, r *repo.Repo, log *logger.Logger) *Service {
 }
 
 // Create publishes a post. When SpaceID is set the post is attached to the
-// workspace; otherwise it is global.
+// workspace; otherwise it is global. Remote image/video/audio in the body are
+// downloaded into Aseman storage and the markup rewritten to file paths.
 func (s *Service) Create(ctx context.Context, author identity.ID, spaceID, parentID identity.ID, body string, tags, media []string) (*post.Post, error) {
+	body = strings.TrimSpace(body)
 	if body == "" {
 		return nil, errs.InvalidArgument("post body required")
+	}
+	hosted, _, err := mediahost.HostBody(ctx, s.K, author, body)
+	if err != nil {
+		return nil, err
+	}
+	if hosted != "" {
+		body = hosted
 	}
 	if len(body) > 4000 {
 		return nil, errs.InvalidArgument("post body too long (max 4000)")

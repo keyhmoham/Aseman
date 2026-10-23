@@ -5,6 +5,7 @@
 /// for rich content:
 ///
 /// ```text
+/// :::image https://…/photo.png
 /// :::chart {"type":"bar","labels":["A","B"],"values":[1,2]}
 /// :::video https://…/clip.mp4
 /// :::audio https://…/note.mp3
@@ -14,6 +15,10 @@
 /// :::card space WorkspaceName
 /// :::post {"id":"…","author_id":"…","name":"…","handle":"…","body":"…"}
 /// ```
+///
+/// A line that is only a standard markdown image (`![alt](url)`) is also a
+/// block image, so posts and messages authored that way render the same as
+/// `:::image`.
 ///
 /// `:::post` is a feed post shared into a chat: it shows as a card naming the
 /// post's author, who can be opened from it.
@@ -202,6 +207,16 @@ List<PostBlock> parseRichMarkdown(String source) {
           blocks.add(PostBlock(BlockKind.forward, const [], data: _json(rest)));
           break;
       }
+      continue;
+    }
+
+    // A line that is only `![alt](url)` → block image (same as :::image).
+    final aloneImage = RegExp(r'^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)$')
+        .firstMatch(trimmed);
+    if (aloneImage != null) {
+      flushParagraph();
+      blocks.add(
+          PostBlock(BlockKind.image, const [], url: aloneImage.group(2)!));
       continue;
     }
 

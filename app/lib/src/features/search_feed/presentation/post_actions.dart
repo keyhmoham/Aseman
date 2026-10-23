@@ -4,10 +4,11 @@ import 'package:share_plus/share_plus.dart';
 
 import '../domain/feed_post.dart';
 import 'rich_post_parser.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 
 /// Asks before deleting a post; true when the user confirmed.
 Future<bool> confirmDeletePost(BuildContext context) async {
-  final ok = await showDialog<bool>(
+  final ok = await showAppDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
       icon: const Icon(Icons.delete_outline_rounded),
@@ -78,7 +79,7 @@ const postReportReasons = [
 /// Asks why a post is being reported; null when the user cancelled.
 Future<({String reason, String note})?> showReportPostDialog(
   BuildContext context,
-) => showDialog<({String reason, String note})>(
+) => showAppDialog<({String reason, String note})>(
   context: context,
   builder: (_) => const _ReportPostDialog(),
 );

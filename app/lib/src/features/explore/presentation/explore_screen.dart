@@ -102,17 +102,18 @@ class _ExploreScreenState extends State<ExploreScreen> {
                             prefixIcon: Icon(Icons.search_rounded),
                             hintText: 'Search agents, rooms, traders, apps…')),
                     const SizedBox(height: 16),
-                    SizedBox(
-                        height: 38,
-                        child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: categories.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(width: 8),
-                            itemBuilder: (_, index) => FilterChip(
+                    Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (var index = 0;
+                              index < categories.length;
+                              index++)
+                            FilterChip(
                                 selected: model.selectedCategory == index,
                                 onSelected: (_) => model.selectCategory(index),
-                                label: Text(categories[index])))),
+                                label: Text(categories[index])),
+                        ]),
                     const SizedBox(height: 24),
                     const Text('🔥 Trending AI agents',
                         style: TextStyle(

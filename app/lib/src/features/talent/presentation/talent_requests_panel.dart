@@ -100,7 +100,7 @@ class _TalentRequestsPanelState extends State<TalentRequestsPanel> {
   }
 
   Future<void> _delete(Map<String, dynamic> r) async {
-    final ok = await showDialog<bool>(
+    final ok = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.delete_outline_rounded),

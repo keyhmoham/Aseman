@@ -123,6 +123,21 @@ void main() {
       c.focusOn('wx');
       expect(c.focusTool, isNull, reason: 'the same tool again shows all');
 
+      c.minimize('a');
+      expect(c.isMinimized('a'), isTrue);
+      expect(c.state.windows.map((w) => w.id), ['a', 'b', 'c'],
+          reason: 'minimize keeps the window open on the node');
+      c.focusOn('wx');
+      expect(c.isMinimized('a'), isFalse,
+          reason: 'the dock restores that tool’s minimized windows');
+      expect(c.focusTool, 'wx');
+      c.minimize('a');
+      c.focusOn('wx');
+      expect(c.focusTool, 'wx',
+          reason: 'restoring minimized windows does not toggle focus off');
+      c.restore('a'); // already restored by focusOn
+      expect(c.isMinimized('a'), isFalse);
+
       await c.togglePin(c.state.windows.firstWhere((w) => w.id == 'c'));
       expect(c.state.pins, hasLength(1));
       expect(
@@ -233,6 +248,44 @@ void main() {
       expect(tester.getTopLeft(find.byKey(const ValueKey('a'))),
           const Offset(700, 400),
           reason: 'back where it was');
+      c.dispose();
+    });
+
+    testWidgets('minimize hides a window to the dock without closing it',
+        (tester) async {
+      final (c, node) = await pump(
+          tester,
+          _Node([
+            _window('a', 'wx', 'Weather', 40, 40, title: 'Weather'),
+            _window('c', 'mk', 'Markets', 560, 40, title: 'Markets', z: 2),
+          ]));
+      expect(find.byTooltip('Minimize'), findsNWidgets(2));
+      await tester.tap(find.byIcon(Icons.minimize_rounded).last);
+      await tester.pumpAndSettle();
+      expect(c.isMinimized('c'), isTrue);
+      expect(c.state.windows.map((w) => w.id), ['a', 'c']);
+      expect(node.ops.where((o) => o['op'] == 'close'), isEmpty);
+      expect(
+          tester
+              .widget<IgnorePointer>(find
+                  .ancestor(
+                      of: find.text('content of c'),
+                      matching: find.byType(IgnorePointer))
+                  .first)
+              .ignoring,
+          isTrue);
+      await tester.tap(find.byTooltip('Markets · 1 window'));
+      await tester.pumpAndSettle();
+      expect(c.isMinimized('c'), isFalse);
+      expect(
+          tester
+              .widget<IgnorePointer>(find
+                  .ancestor(
+                      of: find.text('content of c'),
+                      matching: find.byType(IgnorePointer))
+                  .first)
+              .ignoring,
+          isFalse);
       c.dispose();
     });
 

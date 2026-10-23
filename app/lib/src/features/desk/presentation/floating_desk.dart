@@ -14,6 +14,10 @@ import 'tool_avatar.dart';
 /// people and agents open, move, resize and close; it pans and scrolls when
 /// windows lie beyond the screen. The dock is pinned to its bottom; the
 /// pinned desk opens over it from the dock.
+///
+/// [underlay] (workspace side panels) sits above the desk surface and below
+/// the windows, so cards can float over the panels while empty desk areas
+/// still let those panels receive taps and scrolls.
 class FloatingDesk extends StatefulWidget {
   const FloatingDesk({
     super.key,
@@ -21,6 +25,7 @@ class FloatingDesk extends StatefulWidget {
     required this.windowContent,
     required this.pinPreview,
     this.emptyState,
+    this.underlay,
     this.topInset = 0,
   });
 
@@ -34,6 +39,9 @@ class FloatingDesk extends StatefulWidget {
 
   /// Shown on an empty desk.
   final Widget? emptyState;
+
+  /// Drawn between the desk surface and the windows (e.g. left/right panels).
+  final Widget? underlay;
 
   /// Room at the top for something drawn over the desk (mobile tabs).
   final double topInset;
@@ -251,7 +259,9 @@ class _FloatingDeskState extends State<FloatingDesk>
       for (final w in windows) {
         if (maximized == w.id) {
           placed[w.id] = usable;
-        } else if (focus != null && w.tool != focus) {
+        } else if (c.isMinimized(w.id) ||
+            (focus != null && w.tool != focus)) {
+          // Minimized, or another tool's while one is focused: into the dock.
           hidden.add(w.id);
           placed[w.id] = Rect.fromCenter(
               center: dock, width: w.rect.width, height: w.rect.height);
@@ -306,6 +316,8 @@ class _FloatingDeskState extends State<FloatingDesk>
               ),
             ),
           ),
+          // Side panels (and similar): above the surface, under the windows.
+          if (widget.underlay != null) Positioned.fill(child: widget.underlay!),
           Positioned(
             left: -_scroll.dx,
             top: -_scroll.dy,
@@ -455,6 +467,7 @@ class _FloatingDeskState extends State<FloatingDesk>
               onResizeEnd: () => _commit(w.id),
               onClose: () => c.close(w.id),
               onPin: () => c.togglePin(w),
+              onMinimize: () => c.minimize(w.id),
               onMaximize: () => c.toggleMaximized(w.id),
               child: KeyedSubtree(
                   key: ValueKey('content-${w.id}'),

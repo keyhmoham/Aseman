@@ -63,8 +63,10 @@ func files() database.Model {
 			f("metadata_id", database.KindString), f("meta_path", database.KindString),
 			f("name", database.KindString), f("mime", database.KindString),
 			f("size", database.KindInt64), f("storage_key", database.KindString),
-			f("public", database.KindBool), f("created_at", database.KindTime),
-			f("updated_at", database.KindTime),
+			f("public", database.KindBool),
+			{Name: "source_url", Kind: database.KindString, Index: true},
+			f("content_hash", database.KindString),
+			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		},
 	}
 }

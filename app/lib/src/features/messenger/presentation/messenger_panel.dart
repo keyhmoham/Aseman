@@ -165,9 +165,9 @@ class _ChatListState extends State<_ChatList> {
   }
 
   Future<void> _open(ChatSummary chat) async {
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) =>
-            ChatPage(dependencies: widget.dependencies, chat: chat)));
+    // Direct chats (and Saved Messages) float as their own desktop modal;
+    // project rooms still slide in over the list inside this panel.
+    await showChat(context, widget.dependencies, chat);
     if (mounted) unawaited(_load());
   }
 
@@ -185,10 +185,11 @@ class _ChatListState extends State<_ChatList> {
 
   // Long-pressing a chat pins or unpins it (and deletes a direct chat for
   // the caller).
-  Future<void> _chatMenu(ChatSummary chat) async {
-    final picked = await showModalBottomSheet<String>(
+  Future<void> _chatMenu(ChatSummary chat, {Offset? at, BuildContext? anchor}) async {
+    final picked = await showAppPicker<String>(
       context: context,
-      showDragHandle: true,
+      anchor: anchor,
+      anchorPoint: at,
       builder: (context) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
@@ -360,7 +361,8 @@ class _ChatListState extends State<_ChatList> {
                                 chat: shown[i],
                                 me: _me,
                                 onTap: () => _open(shown[i]),
-                                onMenu: () => _chatMenu(shown[i]),
+                                onMenu: (at, anchor) =>
+                                    _chatMenu(shown[i], at: at, anchor: anchor),
                               ),
                             ),
                           ),
@@ -381,7 +383,7 @@ class _ChatTile extends StatelessWidget {
   final ChatSummary chat;
   final String me;
   final VoidCallback onTap;
-  final VoidCallback onMenu;
+  final void Function(Offset at, BuildContext anchor) onMenu;
 
   String get _preview {
     final body = markupPreview(chat.lastBody);
@@ -416,9 +418,13 @@ class _ChatTile extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        onLongPress: onMenu,
-        onSecondaryTap: onMenu,
-        child: Padding(
+        onLongPress: null,
+        onSecondaryTap: null,
+        child: GestureDetector(
+          behavior: HitTestBehavior.deferToChild,
+          onLongPressStart: (d) => onMenu(d.globalPosition, context),
+          onSecondaryTapDown: (d) => onMenu(d.globalPosition, context),
+          child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           child: Row(children: [
             Stack(clipBehavior: Clip.none, children: [
@@ -524,6 +530,7 @@ class _ChatTile extends StatelessWidget {
                 const SizedBox(height: 16),
             ]),
           ]),
+        ),
         ),
       ),
     );

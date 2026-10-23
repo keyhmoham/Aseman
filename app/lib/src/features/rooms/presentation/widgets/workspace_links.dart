@@ -6,6 +6,7 @@ import '../../../desk/presentation/desk_controller.dart';
 import '../../../desk/presentation/web/web_page_frame.dart';
 import 'attachment_bubble.dart';
 import 'proxy_webview.dart';
+import '../../../../shared/widgets/overlay_panels.dart';
 
 /// Resolve server report links through the current signed-in workspace client.
 /// Never attach credentials to an arbitrary external URL from model output.
@@ -21,7 +22,7 @@ Future<void> openWorkspaceLink(
         !uri.hasFragment) {
       final file = await service.fetchFile(uri.host);
       if (!context.mounted) return;
-      await showDialog<void>(
+      await showAppDialog<void>(
           context: context,
           builder: (_) => AlertDialog(
                 title: const Text('Delivered file'),

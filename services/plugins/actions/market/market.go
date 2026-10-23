@@ -81,6 +81,9 @@ func (s *Service) Publish(ctx context.Context, publisher identity.ID, botID iden
 		if rec.Kind != bot.KindTool {
 			return nil, errs.InvalidArgument("app listings require an app")
 		}
+		if rec.IsSandbox() {
+			return nil, errs.InvalidArgument("sandbox instances cannot be listed as apps")
+		}
 	default:
 		return nil, errs.InvalidArgument("type must be agent or tool")
 	}

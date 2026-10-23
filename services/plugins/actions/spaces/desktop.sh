@@ -8,7 +8,10 @@
 #   aseman-desktop stop         stop it and forget its password
 #   aseman-desktop forget-logins   close the browser and erase its saved logins
 #   aseman-desktop status       exit 0 when the VNC stream is up
-#   aseman-desktop screenshot [file.png]   saves the screen (default /workspace/screenshot.png)
+#   aseman-desktop screenshot [file.png] [width]
+#       saves the focused browser window (fallback: whole screen). Optional
+#       width (e.g. 360 or 1400) resizes that window first for phone/desktop
+#       checks of a tool frontend. Default file: /workspace/screenshot.png.
 #   aseman-desktop open <url|file|app>     opens a URL or a file (image, PDF, ...) in the browser, a folder in Files, or runs an app
 #   aseman-desktop click <x> <y> [button]  moves the mouse and clicks (1 left, 3 right)
 #   aseman-desktop type <text>             types text into the focused window
@@ -973,10 +976,38 @@ case "$cmd" in
     ;;
   status) x_up && wm_up && stream_ok ;;
   screenshot)
+    # Optional width: resize the focused browser so agents can check a tool
+    # frontend at phone (~360) and desktop (~1400) widths, then capture that
+    # window (not the whole desk) so read_file shows the UI they must judge.
     out="${1:-/workspace/screenshot.png}"
+    width="${2:-}"
     x_up || { echo "the desktop is not running; run: aseman-desktop start" >&2; exit 1; }
     mkdir -p "$(dirname "$out")"
-    scrot -o "$out" && echo "$out"
+    have scrot || { echo "scrot is missing; this computer's image is out of date" >&2; exit 1; }
+    win=""
+    if have xdotool; then
+      win=$(xdotool search --onlyvisible --class 'chromium|chrome|firefox' 2>/dev/null | tail -n 1)
+      [ -n "$win" ] || win=$(xdotool getactivewindow 2>/dev/null || true)
+    fi
+    if [ -n "$width" ]; then
+      case "$width" in
+        *[!0-9]*|"") echo "screenshot width must be pixels, e.g. 360 or 1400" >&2; exit 2 ;;
+      esac
+      [ -n "$win" ] || { echo "no browser window to resize; open the page first (aseman-desktop open …)" >&2; exit 1; }
+      # Phone / desktop check heights for a tool frontend card.
+      h=640
+      [ "$width" -ge 900 ] && h=900
+      xdotool windowactivate --sync "$win" 2>/dev/null
+      xdotool windowsize "$win" "$width" "$h" 2>/dev/null
+      sleep 0.3
+    elif [ -n "$win" ]; then
+      xdotool windowactivate --sync "$win" 2>/dev/null
+    fi
+    if [ -n "$win" ] && scrot -u -o "$out" 2>/dev/null; then
+      echo "$out"
+    else
+      scrot -o "$out" && echo "$out"
+    fi
     ;;
   launch)
     # What the dock runs: an app on the running desktop, nothing is repaired.
@@ -1058,5 +1089,5 @@ case "$cmd" in
     x_up || { echo "the desktop is not running" >&2; exit 1; }
     xdotool key -- "$@"
     ;;
-  *) echo "usage: aseman-desktop start|restart|stop|status|screenshot|open|click|type|key" >&2; exit 2 ;;
+  *) echo "usage: aseman-desktop start|restart|stop|status|screenshot [file.png] [width]|open|click|type|key" >&2; exit 2 ;;
 esac

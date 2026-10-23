@@ -9,7 +9,6 @@ import '../../../data/models/space.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/notifications_menu.dart';
-import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/profile_menu.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/skeleton.dart';
@@ -27,10 +26,10 @@ import 'search_feed_view_model.dart';
 
 /// Landing page: a Google-like search engine fused with the Following feed
 /// (the posts of the people and agents the user follows mixed with the posts
-/// of their spaces). The robot head + search bar live in a collapsible header
-/// and the workspace switcher stays pinned on top. Beside the feed, like the
-/// workspace's panels, the user's spaces sit on the left and their direct
-/// chats on the right; on phones they are tabs after the feed's own.
+/// of their spaces). The robot head + search bar live in a collapsible header.
+/// Beside the feed, like the workspace's panels, the user's spaces sit on the
+/// left and their direct chats on the right; on phones they are tabs after
+/// the feed's own. The workspace-switch rocket is not shown here.
 class SearchFeedScreen extends StatefulWidget {
   const SearchFeedScreen({
     super.key,
@@ -140,33 +139,13 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   }
 
   Future<void> _openChat(ChatSummary chat) async {
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) =>
-            ChatPage(dependencies: widget.dependencies, chat: chat)));
+    await showChat(context, widget.dependencies, chat);
     if (mounted) unawaited(model.loadChats());
   }
 
   Future<void> _openMessenger() async {
     await showMessenger(context, widget.dependencies);
     if (mounted) unawaited(model.loadChats());
-  }
-
-  void _openWorkspaces(BuildContext context) {
-    showFloatingPanel(
-      context,
-      WorkspacePicker(
-        current: model.workspace,
-        feedSelected: true,
-        onOpenFeed: () => Navigator.pop(context),
-        dependencies: widget.dependencies,
-        onPick: (name) async {
-          Navigator.pop(context);
-          await Future<void>.delayed(const Duration(milliseconds: 320));
-          if (mounted) await _enterWorkspace(name);
-        },
-      ),
-      barrierLabel: 'Workspaces',
-    );
   }
 
   /// The search bar opens Explore: the server's search across people,
@@ -271,7 +250,6 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                             ]));
                       })),
                     ]))),
-        SwitcherEdgeHandle(onTap: () => _openWorkspaces(context)),
       ]),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'feed-composer',
@@ -340,7 +318,6 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
       ListenableBuilder(
           listenable: widget.dependencies.sessionController,
           builder: (context, _) => WorkspaceHeader(
-              workspace: model.workspace,
               compact: compact,
               feed: true,
               onOpenNotifications: _openNotifications,
@@ -586,22 +563,25 @@ class _SuggestionChips extends StatelessWidget {
   static const suggestions = ['About Aseman', 'Best agents', 'News'];
   @override
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
+        final chips = [
+          for (final s in suggestions) ...[
+            if (s != suggestions.first) const SizedBox(width: 8),
+            ActionChip(
+                avatar: const Icon(Icons.help_outline_rounded, size: 14),
+                label: Text(s),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => onSuggestion(s)),
+          ],
+        ];
+        // One horizontal row: centered when it fits, scrollable when it does not.
         return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: ConstrainedBox(
                 constraints: BoxConstraints(minWidth: box.maxWidth - 24),
-                child:
-                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  for (var i = 0; i < suggestions.length; i++) ...[
-                    ActionChip(
-                        avatar: const Icon(Icons.help_outline_rounded, size: 14),
-                        label: Text(suggestions[i]),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => onSuggestion(suggestions[i])),
-                    if (i != suggestions.length - 1) const SizedBox(width: 8),
-                  ],
-                ])));
+                child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: chips)));
       });
 }
 
@@ -793,6 +773,8 @@ class _SpacesList extends StatelessWidget {
         itemBuilder: (context, i) => _SpaceTile(
             space: spaces[i],
             selected: spaces[i].name == current,
+            // Side panels on desktop use a denser row than the phone tabs.
+            dense: !shrinkWrap,
             onTap: () => onOpen(spaces[i])));
     return shrinkWrap ? _ListCard(child: list) : list;
   }
@@ -800,10 +782,16 @@ class _SpacesList extends StatelessWidget {
 
 class _SpaceTile extends StatelessWidget {
   const _SpaceTile(
-      {required this.space, required this.selected, required this.onTap});
+      {required this.space,
+      required this.selected,
+      required this.onTap,
+      this.dense = false});
   final Workspace space;
   final bool selected;
   final VoidCallback onTap;
+
+  /// Narrower desktop side-panel rows; phone tabs keep the larger size.
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -816,6 +804,8 @@ class _SpaceTile extends StatelessWidget {
       if (role.isNotEmpty) role,
       space.public ? 'Public' : 'Private',
     ].join(' · ');
+    final avatarSize = dense ? 36.0 : 52.0;
+    final avatarRadius = dense ? 12.0 : 16.0;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
@@ -828,28 +818,29 @@ class _SpaceTile extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            padding: EdgeInsets.symmetric(
+                horizontal: dense ? 10 : 12, vertical: dense ? 8 : 12),
             child: Row(children: [
               AvatarPicture(
                 avatar: space.avatar,
-                size: 38,
-                radius: 12,
+                size: avatarSize,
+                radius: avatarRadius,
                 fallback: Container(
-                  width: 38,
-                  height: 38,
+                  width: avatarSize,
+                  height: avatarSize,
                   alignment: Alignment.center,
                   decoration: ShapeDecoration(
                       color: scheme.secondaryContainer,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12))),
+                          borderRadius: BorderRadius.circular(avatarRadius))),
                   child: Text(space.initials,
                       style: TextStyle(
-                          fontSize: 14,
+                          fontSize: dense ? 13 : 18,
                           fontWeight: FontWeight.w800,
                           color: scheme.onSecondaryContainer)),
                 ),
               ),
-              const SizedBox(width: 11),
+              SizedBox(width: dense ? 10 : 14),
               Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -857,18 +848,18 @@ class _SpaceTile extends StatelessWidget {
                       Text(space.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 2),
+                          style: TextStyle(
+                              fontSize: dense ? 13.5 : 16,
+                              fontWeight: FontWeight.w700)),
+                      SizedBox(height: dense ? 2 : 3),
                       Text(details,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: 12, color: scheme.onSurfaceVariant)),
+                              fontSize: dense ? 11.5 : 13.5,
+                              color: scheme.onSurfaceVariant)),
                     ]),
               ),
-              Icon(Icons.chevron_right_rounded,
-                  size: 20, color: scheme.onSurfaceVariant),
             ]),
           ),
         ),
@@ -923,17 +914,27 @@ class _ChatsList extends StatelessWidget {
             : const EdgeInsets.fromLTRB(8, 0, 8, 12),
         itemCount: chats.length,
         itemBuilder: (context, i) => _DirectChatTile(
-            chat: chats[i], me: me, onTap: () => onOpen(chats[i])));
+            chat: chats[i],
+            me: me,
+            // Side panels on desktop use a denser row than the phone tabs.
+            dense: !shrinkWrap,
+            onTap: () => onOpen(chats[i])));
     return shrinkWrap ? _ListCard(child: list) : list;
   }
 }
 
 class _DirectChatTile extends StatelessWidget {
   const _DirectChatTile(
-      {required this.chat, required this.me, required this.onTap});
+      {required this.chat,
+      required this.me,
+      required this.onTap,
+      this.dense = false});
   final ChatSummary chat;
   final String me;
   final VoidCallback onTap;
+
+  /// Narrower desktop side-panel rows; phone tabs keep the larger size.
+  final bool dense;
 
   String get _preview {
     if (chat.working) return 'Agent is working…';
@@ -974,10 +975,11 @@ class _DirectChatTile extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            padding: EdgeInsets.symmetric(
+                horizontal: dense ? 10 : 12, vertical: dense ? 8 : 12),
             child: Row(children: [
-              ChatAvatar(chat: chat, radius: 20),
-              const SizedBox(width: 11),
+              ChatAvatar(chat: chat, radius: dense ? 18 : 26),
+              SizedBox(width: dense ? 10 : 14),
               Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -986,15 +988,15 @@ class _DirectChatTile extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: 14,
+                              fontSize: dense ? 13.5 : 16,
                               fontWeight:
                                   unread ? FontWeight.w800 : FontWeight.w700)),
-                      const SizedBox(height: 2),
+                      SizedBox(height: dense ? 2 : 3),
                       Text(_preview,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: 12,
+                              fontSize: dense ? 11.5 : 13.5,
                               color: chat.working || chat.typing
                                   ? scheme.primary
                                   : unread
@@ -1006,10 +1008,10 @@ class _DirectChatTile extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Text(_when(chat.updatedAt),
                     style: TextStyle(
-                        fontSize: 11,
+                        fontSize: dense ? 11 : 12,
                         color:
                             unread ? scheme.primary : scheme.onSurfaceVariant)),
-                const SizedBox(height: 5),
+                SizedBox(height: dense ? 4 : 6),
                 if (unread)
                   Badge(
                       label:
@@ -1017,7 +1019,7 @@ class _DirectChatTile extends StatelessWidget {
                       backgroundColor: scheme.primary,
                       textColor: scheme.onPrimary)
                 else
-                  const SizedBox(height: 16),
+                  SizedBox(height: dense ? 14 : 18),
               ]),
             ]),
           ),

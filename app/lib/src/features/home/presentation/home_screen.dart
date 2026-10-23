@@ -99,12 +99,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 final feed = ListView(
                     padding: const EdgeInsets.fromLTRB(24, 0, 14, 24),
                     children: [
-                      SizedBox(
-                          height: 82,
-                          child: ListView(
-                              scrollDirection: Axis.horizontal,
-                              children:
-                                  model.quotes.map(_MarketTile.new).toList())),
+                      Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children:
+                              model.quotes.map(_MarketTile.new).toList()),
                       const SizedBox(height: 16),
                       if (_loading)
                         const SkeletonList(itemCount: 3, item: SkeletonPost())
@@ -174,7 +173,7 @@ class _MarketTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         width: 165,
-        margin: const EdgeInsets.only(right: 10),
+        height: 82,
         padding: const EdgeInsets.all(14),
         decoration: AppSurfaces.cardDecoration(context),
         child: Row(children: [

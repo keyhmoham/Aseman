@@ -5,6 +5,7 @@ import 'package:aseman/src/app.dart';
 import 'package:aseman/src/app_dependencies.dart';
 import 'package:aseman/src/data/models/bot.dart';
 import 'package:aseman/src/data/models/space.dart';
+import 'package:aseman/src/features/messenger/presentation/chat_page.dart';
 import 'package:aseman/src/features/messenger/presentation/messenger_panel.dart';
 
 import '../../fake_aseman_service.dart';
@@ -100,7 +101,8 @@ void main() {
     expect(inMessenger(find.text('Atlas Capital')), findsOneWidget);
   });
 
-  testWidgets('a chat opens inside the messenger and back returns to the list',
+  testWidgets(
+      'a direct chat opens as a floating modal and close returns to the list',
       (tester) async {
     await openMessenger(tester);
     await tester.tap(inMessenger(find.text('Maya Chen')));
@@ -108,6 +110,25 @@ void main() {
     expect(find.text('Message Maya Chen…'), findsOneWidget);
     expect(find.byTooltip('Work'), findsOneWidget);
     expect(find.byTooltip('Attach file'), findsOneWidget);
+    // Direct chats float above the messenger: close the chat, not the list.
+    final closeChat = find.descendant(
+        of: find.byType(ChatPage), matching: find.byTooltip('Close'));
+    expect(closeChat, findsOneWidget);
+
+    await tester.tap(closeChat);
+    await tester.pumpAndSettle();
+    expect(find.text('Search chats'), findsOneWidget);
+    expect(find.byType(ChatPage), findsNothing);
+  });
+
+  testWidgets(
+      'a project room chat still opens inside the messenger panel',
+      (tester) async {
+    await openMessenger(tester);
+    await tester.tap(inMessenger(find.text('general').last));
+    await tester.pumpAndSettle();
+    expect(find.text('Message general…'), findsOneWidget);
+    expect(find.byTooltip('Back to chats'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Back to chats'));
     await tester.pumpAndSettle();

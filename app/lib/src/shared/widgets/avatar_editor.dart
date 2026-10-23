@@ -2,6 +2,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/services/aseman_service.dart';
+import 'overlay_panels.dart';
 
 /// The largest picture taken as an avatar.
 const int maxAvatarBytes = 5 * 1024 * 1024;
@@ -85,9 +86,9 @@ class _AvatarEditorState extends State<AvatarEditor> {
   }
 
   Future<void> _change() async {
-    final choice = await showModalBottomSheet<String>(
+    final choice = await showAppPicker<String>(
       context: context,
-      showDragHandle: true,
+      anchor: context,
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,

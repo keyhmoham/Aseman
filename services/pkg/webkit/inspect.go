@@ -178,6 +178,7 @@ func InspectPage(src []byte) *Page {
 	}
 	walk(doc, "", nil)
 	p.appLayout(doc, usesKit)
+	p.vizDensity(doc, usesKit)
 	p.finish(viewport, tPage, css, usesKit)
 	return p
 }
@@ -884,6 +885,98 @@ func (p *Page) appLayout(doc *html.Node, usesKit bool) {
 	if weighted == 0 {
 		p.issue(a2ui.Blocking, "layout", "<body>", "nothing in the body takes the rest of the screen's height, so content below the window is cut off",
 			`give the body region — a t-scroll, t-split or t-tabs holding everything below the header — weight="1"`)
+	}
+}
+
+// visualTags / proseTags mirror a2ui's visualization-first density check for
+// kit pages: dashboards of t-text/t-markdown without stats or charts are
+// flagged so the model review has automatic evidence.
+var visualTags = map[string]bool{
+	"t-chart": true, "t-sparkline": true, "t-gauge": true, "t-heatmap": true, "t-treemap": true,
+	"t-graph": true, "t-table": true, "t-data-grid": true, "t-stat": true, "t-stat-card": true,
+	"t-key-value": true, "t-timeline": true, "t-progress": true, "t-quote": true,
+	"t-order-book": true, "t-ticker-tape": true, "t-allocation-bar": true, "t-trend": true,
+	"t-tree-view": true,
+}
+
+var proseTags = map[string]bool{
+	"t-text": true, "t-markdown": true, "t-callout": true, "t-code-block": true, "t-json-view": true,
+}
+
+var formTags = map[string]bool{
+	"t-text-field": true, "t-search-field": true, "t-checkbox": true, "t-switch": true,
+	"t-slider": true, "t-range-slider": true, "t-dropdown": true, "t-choice-picker": true,
+	"t-segmented-control": true, "t-number-stepper": true, "t-date-time-input": true,
+	"t-form": true,
+}
+
+func (p *Page) vizDensity(doc *html.Node, usesKit bool) {
+	if !usesKit && !p.Kit {
+		return
+	}
+	body := find(doc, "body")
+	if body == nil {
+		return
+	}
+	visual, prose, form, elements := 0, 0, 0, 0
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode {
+			if n.Data == "script" || n.Data == "style" || n.Data == "template" {
+				return
+			}
+			if strings.HasPrefix(n.Data, "t-") {
+				elements++
+			}
+			if visualTags[n.Data] {
+				visual++
+			}
+			if proseTags[n.Data] {
+				prose++
+			}
+			if formTags[n.Data] {
+				form++
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(body)
+	if elements <= 8 {
+		return
+	}
+	if form >= 3 && visual == 0 {
+		return
+	}
+	if visual == 0 && prose >= 3 {
+		p.issue(a2ui.Advice, "design", "<body>", "the page is mostly text with no Stats, Charts, Tables or other visual components",
+			"lead with a t-grid of t-stat and a t-chart or t-table; keep t-text/t-markdown for short labels only")
+		return
+	}
+	if visual > 0 && prose > visual*2 && prose >= 4 {
+		p.issue(a2ui.Advice, "design", "<body>", "prose components outnumber visual ones — the page reads like a document",
+			"replace walls of t-text/t-markdown with t-stat, t-chart and t-table")
+	}
+	hasStat, hasChartish := false, false
+	var findKinds func(*html.Node)
+	findKinds = func(n *html.Node) {
+		if n.Type == html.ElementNode {
+			switch n.Data {
+			case "t-stat", "t-stat-card", "t-quote", "t-gauge", "t-trend":
+				hasStat = true
+			case "t-chart", "t-heatmap", "t-treemap", "t-sparkline", "t-graph", "t-allocation-bar", "t-order-book":
+				hasChartish = true
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			findKinds(c)
+		}
+	}
+	findKinds(body)
+	if hasChartish && !hasStat && visual >= 2 {
+		p.issue(a2ui.Advice, "design", "<body>", "has charts but no KPI Stat strip",
+			"put 3–5 t-stat tiles above the hero chart so headline numbers are readable at a glance")
 	}
 }
 

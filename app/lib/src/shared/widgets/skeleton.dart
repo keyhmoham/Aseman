@@ -394,6 +394,96 @@ class SkeletonGrid extends StatelessWidget {
       );
 }
 
+/// One chat bubble placeholder: left for theirs, right for yours.
+class SkeletonMessage extends StatelessWidget {
+  const SkeletonMessage({
+    super.key,
+    this.mine = false,
+    this.widthFactor = .55,
+    this.lines = 2,
+  });
+
+  final bool mine;
+  final double widthFactor;
+  final int lines;
+
+  @override
+  Widget build(BuildContext context) => Skeleton(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Row(
+            mainAxisAlignment:
+                mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (mine) const SizedBox(width: 48),
+              if (!mine) ...[
+                const SkeletonCircle(size: 30),
+                const SizedBox(width: 8),
+              ],
+              Flexible(
+                child: FractionallySizedBox(
+                  widthFactor: widthFactor.clamp(.35, .85),
+                  alignment:
+                      mine ? Alignment.centerRight : Alignment.centerLeft,
+                  child: SkeletonBox(
+                    height: 18.0 + lines * 14,
+                    radius: 16,
+                  ),
+                ),
+              ),
+              if (!mine) const SizedBox(width: 48),
+            ],
+          ),
+        ),
+      );
+}
+
+/// A short stack of chat bubbles, the stand-in while a conversation loads.
+class SkeletonMessages extends StatelessWidget {
+  const SkeletonMessages({
+    super.key,
+    this.count = 6,
+    this.padding = const EdgeInsets.all(12),
+    this.scrollable = true,
+  });
+
+  final int count;
+  final EdgeInsetsGeometry padding;
+
+  /// When false, lays out as a column (safe inside another scroll view).
+  final bool scrollable;
+
+  static const _widths = [.62, .48, .7, .4, .55, .68];
+
+  List<Widget> get _bubbles => [
+        for (var i = 0; i < count; i++)
+          SkeletonMessage(
+            mine: i.isOdd,
+            widthFactor: _widths[i % _widths.length],
+            lines: i.isEven ? 2 : 1,
+          ),
+      ];
+
+  @override
+  Widget build(BuildContext context) => Skeleton(
+        child: scrollable
+            ? ListView(
+                physics: const NeverScrollableScrollPhysics(),
+                padding: padding,
+                children: _bubbles,
+              )
+            : Padding(
+                padding: padding,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: _bubbles,
+                ),
+              ),
+      );
+}
+
 /// A whole page or panel that is loading: a heading, a row of stat
 /// blocks and a list.
 class SkeletonPage extends StatelessWidget {

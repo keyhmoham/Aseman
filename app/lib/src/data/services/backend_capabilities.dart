@@ -222,6 +222,7 @@ abstract final class BackendCapabilities {
       'members_list',
       'message_delete',
       'message_edit',
+      'message_edits',
       'message_list',
       'message_report',
       'message_search',

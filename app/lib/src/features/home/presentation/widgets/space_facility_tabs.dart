@@ -13,6 +13,7 @@ import '../../../computer/computer_view.dart';
 import '../../../computer/preview_view.dart';
 import '../../../computer/space_computer.dart';
 import '../../../search_feed/presentation/rich_post_content.dart';
+import '../../../../shared/widgets/overlay_panels.dart';
 
 // The space's own facilities, shown as tabs of the workspace's left panel:
 // its computer, the agent team's memory and the published previews. Files,
@@ -74,7 +75,7 @@ class _SpaceComputerTabState extends State<SpaceComputerTab> {
   }
 
   Future<void> _replace() async {
-    final ok = await showDialog<bool>(
+    final ok = await showAppDialog<bool>(
       context: context,
       builder: (dialog) => AlertDialog(
         icon: const Icon(Icons.restart_alt_rounded),
@@ -330,7 +331,7 @@ class _SpaceMemoryTabState extends State<SpaceMemoryTab> {
   Future<void> _choose(String agent) async {
     if (agent == _agent) return;
     if (_dirty) {
-      final leave = await showDialog<bool>(
+      final leave = await showAppDialog<bool>(
         context: context,
         builder: (dialog) => AlertDialog(
           title: const Text('Discard your changes?'),
@@ -373,27 +374,25 @@ class _SpaceMemoryTabState extends State<SpaceMemoryTab> {
           ),
           if (widget.agents.isNotEmpty) ...[
             const SizedBox(height: 10),
-            SizedBox(
-              height: 34,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _WhoseChip(
+                  label: 'Shared',
+                  icon: Icons.groups_2_outlined,
+                  selected: _agent.isEmpty,
+                  onTap: () => _choose(''),
+                ),
+                for (final a in widget.agents)
                   _WhoseChip(
-                    label: 'Shared',
-                    icon: Icons.groups_2_outlined,
-                    selected: _agent.isEmpty,
-                    onTap: () => _choose(''),
+                    label: a.name,
+                    initial: a.name.isEmpty ? '?' : a.name[0].toUpperCase(),
+                    avatar: a.avatar,
+                    selected: a.id == _agent,
+                    onTap: () => _choose(a.id),
                   ),
-                  for (final a in widget.agents)
-                    _WhoseChip(
-                      label: a.name,
-                      initial: a.name.isEmpty ? '?' : a.name[0].toUpperCase(),
-                      avatar: a.avatar,
-                      selected: a.id == _agent,
-                      onTap: () => _choose(a.id),
-                    ),
-                ],
-              ),
+              ],
             ),
           ],
           const SizedBox(height: 10),
@@ -570,31 +569,28 @@ class _WhoseChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        selected: selected,
-        onSelected: (_) => onTap(),
-        showCheckmark: false,
-        visualDensity: VisualDensity.compact,
-        labelStyle: const TextStyle(fontSize: 11.5),
-        avatar: icon != null
-            ? Icon(icon, size: 16)
-            : CircleAvatar(
-                backgroundColor: scheme.tertiaryContainer,
-                foregroundImage: Avatars.of(avatar),
-                onForegroundImageError: avatar.isEmpty ? null : (_, __) {},
-                child: Text(
-                  initial ?? '',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: scheme.onTertiaryContainer,
-                  ),
+    return ChoiceChip(
+      selected: selected,
+      onSelected: (_) => onTap(),
+      showCheckmark: false,
+      visualDensity: VisualDensity.compact,
+      labelStyle: const TextStyle(fontSize: 11.5),
+      avatar: icon != null
+          ? Icon(icon, size: 16)
+          : CircleAvatar(
+              backgroundColor: scheme.tertiaryContainer,
+              foregroundImage: Avatars.of(avatar),
+              onForegroundImageError: avatar.isEmpty ? null : (_, __) {},
+              child: Text(
+                initial ?? '',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: scheme.onTertiaryContainer,
                 ),
               ),
-        label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-      ),
+            ),
+      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
     );
   }
 }
@@ -681,7 +677,7 @@ class _SpacePreviewsTabState extends State<SpacePreviewsTab> {
   );
 
   Future<void> _publish() async {
-    final published = await showDialog<PublishedPreview>(
+    final published = await showAppDialog<PublishedPreview>(
       context: context,
       builder: (_) => _PublishDialog(
         service: widget.dependencies.service,
@@ -694,7 +690,7 @@ class _SpacePreviewsTabState extends State<SpacePreviewsTab> {
   }
 
   Future<void> _remove(PublishedPreview p) async {
-    final ok = await showDialog<bool>(
+    final ok = await showAppDialog<bool>(
       context: context,
       builder: (dialog) => AlertDialog(
         icon: const Icon(Icons.link_off_rounded),

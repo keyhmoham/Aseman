@@ -72,7 +72,7 @@ Future<void> showProfileMenu(
       barrierDismissible: true,
       barrierLabel: 'Close profile menu',
       barrierColor: AppSurfaces.barrier,
-      transitionDuration: const Duration(milliseconds: 260),
+      transitionDuration: const Duration(milliseconds: 420),
       pageBuilder: (dialogContext, _, __) => SafeArea(
         child: Align(
           alignment: Alignment.topRight,
@@ -94,17 +94,8 @@ Future<void> showProfileMenu(
           ),
         ),
       ),
-      transitionBuilder: (_, animation, __, child) {
-        final curved =
-            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-              alignment: Alignment.topRight,
-              scale: Tween(begin: .92, end: 1.0).animate(curved),
-              child: child),
-        );
-      },
+      transitionBuilder: (routeContext, animation, __, child) =>
+          desktopFloatingPanelTransition(routeContext, animation, child),
     );
   }
   if (action != null) await _dispatch(context, dependencies, action);

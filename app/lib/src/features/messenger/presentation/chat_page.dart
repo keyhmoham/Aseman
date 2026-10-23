@@ -7,18 +7,48 @@ import '../../../data/models/bot.dart';
 import '../../../data/models/space.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import 'report_dialog.dart';
+
+/// Opens [chat]: on a wide screen a direct chat (or Saved Messages) is a
+/// floating modal; project rooms and compact widths keep a full-page push.
+Future<void> showChat(
+  BuildContext context,
+  AppDependencies dependencies,
+  ChatSummary chat,
+) {
+  final wide = MediaQuery.sizeOf(context).width >= 820;
+  if (wide && chat.direct) {
+    return showFloatingPanel(
+      context,
+      ChatPage(dependencies: dependencies, chat: chat, asModal: true),
+      maxWidth: 560,
+      maxHeight: 780,
+      barrierLabel: 'Close chat',
+    );
+  }
+  return Navigator.of(context).push<void>(MaterialPageRoute<void>(
+      builder: (_) => ChatPage(dependencies: dependencies, chat: chat)));
+}
 
 /// One conversation of the messenger, direct or a project room. Both are rooms
 /// of a space (a direct chat is a one-room space shared by two accounts), so
 /// the page is the project room chat itself: files, voice, agent mentions,
 /// the message designer, agent work and routines all work the same.
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key, required this.dependencies, required this.chat});
+  const ChatPage({
+    super.key,
+    required this.dependencies,
+    required this.chat,
+    this.asModal = false,
+  });
 
   final AppDependencies dependencies;
   final ChatSummary chat;
+
+  /// Shown as a floating desktop panel: close control instead of back-to-list.
+  final bool asModal;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -29,6 +59,10 @@ class _ChatPageState extends State<ChatPage> {
   List<Bot> _agents = const [];
   Timer? _poll;
   bool _loading = false;
+
+  /// True until the first fetch of this chat finishes (success or failure).
+  bool _initialLoading = true;
+  bool _loadingOlder = false;
   DateTime? _seen;
   late ChatSummary _chat = widget.chat;
 
@@ -59,28 +93,60 @@ class _ChatPageState extends State<ChatPage> {
     try {
       final res = await _service.fetchRoomChat(chat.spaceId, chat.roomId);
       if (!mounted) return;
-      final msgs = res.messages;
       final old = _page;
+      final msgs = mergeNewestRoomMessages(old.messages, res.messages);
+      final holdsOlder = msgs.length > res.messages.length;
+      final hasMore =
+          holdsOlder ? old.hasMore : res.hasMore;
       final changed = msgs.length != old.messages.length ||
-          List.generate(msgs.length, (i) => i)
-              .any((i) => !old.messages[i].hasSameContentAs(msgs[i])) ||
+          List.generate(msgs.length, (i) => i).any((i) =>
+              i >= old.messages.length ||
+              !old.messages[i].hasSameContentAs(msgs[i])) ||
           res.working != old.working ||
           res.workingDetail != old.workingDetail ||
           res.typing.join('\n') != old.typing.join('\n') ||
           res.peerSeenAt != old.peerSeenAt ||
           res.blocked != old.blocked ||
-          res.canSend != old.canSend;
-      if (changed) {
+          res.canSend != old.canSend ||
+          hasMore != old.hasMore;
+      if (changed || _initialLoading) {
         setState(() {
-          _page = res;
+          _page = res.copyWith(messages: msgs, hasMore: hasMore);
           _chat = _chat.copyWith(blocked: res.blocked, canSend: res.canSend);
+          _initialLoading = false;
         });
       }
       _markSeen(msgs);
     } catch (_) {
       // The next poll can recover without clearing the conversation.
+      if (_initialLoading && mounted) {
+        setState(() => _initialLoading = false);
+      }
     } finally {
       _loading = false;
+    }
+  }
+
+  Future<void> _loadOlder() async {
+    if (_loadingOlder || !_page.hasMore || _page.messages.isEmpty) return;
+    _loadingOlder = true;
+    setState(() {});
+    try {
+      final oldest = _page.messages.first;
+      final res = await _service.fetchRoomChat(chat.spaceId, chat.roomId,
+          before: oldest.createdAt);
+      if (!mounted) return;
+      setState(() {
+        _page = _page.copyWith(
+          messages: mergeOlderRoomMessages(_page.messages, res.messages),
+          hasMore: res.hasMore,
+        );
+      });
+    } catch (_) {
+      // Leave hasMore as-is so the user can try again.
+    } finally {
+      _loadingOlder = false;
+      if (mounted) setState(() {});
     }
   }
 
@@ -164,7 +230,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _clear() async {
-    final ok = await showDialog<bool>(
+    final ok = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.delete_sweep_outlined),
@@ -195,7 +261,7 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _toggleBlock() async {
     final block = !chat.blocked;
     if (block) {
-      final ok = await showDialog<bool>(
+      final ok = await showAppDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           icon: const Icon(Icons.block_rounded),
@@ -278,6 +344,7 @@ class _ChatPageState extends State<ChatPage> {
     final scheme = Theme.of(context).colorScheme;
     final peer = chat.peer;
     final canPop = Navigator.of(context).canPop();
+    final modal = widget.asModal;
     final receipts = chat.direct && !chat.saved && !(peer?.isAgent ?? false);
     return Scaffold(
       backgroundColor: scheme.surface,
@@ -293,6 +360,7 @@ class _ChatPageState extends State<ChatPage> {
           spaceId: chat.spaceId,
           roomId: chat.roomId,
           canModerate: chat.canModerate,
+          loading: _initialLoading,
           mentionable: _agents,
           onSend: _send,
           onEdit: (m, body) =>
@@ -326,13 +394,18 @@ class _ChatPageState extends State<ChatPage> {
           memberNames: {
             if (peer != null && peer.id.isNotEmpty) peer.id: peer.displayName,
           },
-          leading: canPop
+          leading: modal || canPop
               ? IconButton(
-                  tooltip: 'Back to chats',
+                  tooltip: modal ? 'Close' : 'Back to chats',
                   onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.arrow_back_rounded))
+                  icon: Icon(modal
+                      ? Icons.close_rounded
+                      : Icons.arrow_back_rounded))
               : null,
           avatar: ChatAvatar(chat: chat, radius: 21),
+          hasMore: _page.hasMore,
+          loadingOlder: _loadingOlder,
+          onLoadOlder: _loadOlder,
         ),
       ),
     );

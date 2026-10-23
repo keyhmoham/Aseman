@@ -328,7 +328,7 @@ def _platform_tool(ctx: TurnContext, platform_name: str, name: str, spec: dict[s
     if spec.get("usage"):
         description += "\n" + _clip(spec["usage"], DESCRIPTION_MAX)
 
-    async def run(**kwargs: Any) -> str:
+    async def run(**kwargs: Any) -> Any:
         try:
             res = await ctx.gateway.call("spaces", "ask", {
                 "space": ctx.space, "room": ctx.room, "tool": platform_name,
@@ -337,9 +337,33 @@ def _platform_tool(ctx: TurnContext, platform_name: str, name: str, spec: dict[s
         except GatewayError as exc:
             return _err(exc)
         result = res.get("result", res)
-        return result if isinstance(result, str) else json.dumps(result)
+        if not isinstance(result, str):
+            result = json.dumps(result)
+        # file_read on an image (chat attachment or sandbox screenshot) returns
+        # {"__multimodal": {text, image_url}} so the agent can see the pixels —
+        # expand that into vision content blocks instead of a JSON string.
+        return _as_vision_content(result)
 
     return StructuredTool(name=name, description=description or name, args_schema=schema, coroutine=run)
+
+
+def _as_vision_content(result: str) -> Any:
+    """Turn a platform `__multimodal` image marker into model-visible blocks."""
+    stripped = result.strip()
+    if not stripped.startswith("{") or "__multimodal" not in stripped:
+        return result
+    try:
+        data = json.loads(stripped)
+    except ValueError:
+        return result
+    multi = data.get("__multimodal") if isinstance(data, dict) else None
+    if not isinstance(multi, dict):
+        return result
+    url = multi.get("image_url")
+    if not isinstance(url, str) or not url.startswith("data:"):
+        return result
+    text = str(multi.get("text") or "image")
+    return [{"type": "text", "text": text}, {"type": "image_url", "image_url": {"url": url}}]
 
 
 def presentation_hint(spec: dict[str, Any], function: str | None = None) -> str:

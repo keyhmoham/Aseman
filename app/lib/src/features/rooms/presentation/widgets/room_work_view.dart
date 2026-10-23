@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/overlay_panels.dart';
 import '../../domain/room_work.dart';
 import '../room_work_controller.dart';
 
@@ -55,20 +56,20 @@ class RoomWorkNeeds extends StatelessWidget {
       if (q.options.isEmpty && q.approval) ...['Yes, go ahead', 'No'],
       if (!q.approval) 'Use placeholders for now',
     ];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(children: [
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 6,
+      runSpacing: 6,
+      children: [
         Icon(q.approval ? Icons.verified_user_outlined : Icons.reply_rounded,
             size: 16, color: scheme.primary),
-        const SizedBox(width: 6),
         Text(
             q.approval ? '${q.agent} needs your go-ahead' : 'Answer ${q.agent}',
             style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: scheme.onSurfaceVariant)),
-        for (final c in choices) ...[
-          const SizedBox(width: 6),
+        for (final c in choices)
           ActionChip(
               visualDensity: VisualDensity.compact,
               label: Text(c, style: const TextStyle(fontSize: 12)),
@@ -77,8 +78,7 @@ class RoomWorkNeeds extends StatelessWidget {
                   c == 'Use placeholders for now'
                       ? 'Use reasonable placeholders for now and carry on; I will fill them in later.'
                       : c)),
-        ],
-      ]),
+      ],
     );
   }
 
@@ -117,13 +117,13 @@ class RoomWorkNeeds extends StatelessWidget {
 /// waiting request can be dropped and a failed one run again.
 Future<void> showRoomWork(BuildContext context, RoomWorkController work,
         {void Function(WorkEntry failed)? onRunAgain}) =>
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => FractionallySizedBox(
-          heightFactor: .7,
-          child: RoomWorkPanel(work: work, onRunAgain: onRunAgain)),
+    showAdaptivePanel<void>(
+      context,
+      RoomWorkPanel(work: work, onRunAgain: onRunAgain),
+      breakpoint: 720,
+      maxWidth: 520,
+      maxHeight: 640,
+      heightFactor: .7,
     );
 
 class RoomWorkPanel extends StatelessWidget {

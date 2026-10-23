@@ -341,15 +341,16 @@ func (rv *reviewer) tryAction(name string, a Action, data map[string]any, events
 	return "action " + name + " run with " + compact(args)
 }
 
-var reviewPrompt = `You review a generated tool frontend before it is shown to the person who asked for it, as a careful QA engineer and product designer.
+var reviewPrompt = `You review a generated tool frontend before it is shown, as a senior product designer and QA lead who ships real application UIs.
 You are given the tool, what its deployer wants (the skill), its microtools, the surface as it renders (an outline: each component with the data it shows, filled by really running the tool, and what each control does) and what the automatic tests found.
 Judge:
-- Purpose: does it serve the skill and what the tool is for — the right data first, the actions the tool offers, nothing it cannot do, nothing important missing? Does it read naturally for this tool's domain?
-- Cleanness and standards: the design rules below — structure, responsive layout, formatted numbers with units, clear labels, one primary action per block, no placeholders, filler, duplicates or decorative controls, a compact phone widget.
-- Interaction: can a person do each thing from it and see the outcome? Inputs labelled, bound and read by the action that submits them; selections shown by a detail block.
-- Data: what is shown is meaningful as filled (no MISSING values, no raw JSON or ids where people expect names, empty states handled).
+- Purpose: does it serve the skill and the tool — right data first, actions offered, nothing it cannot do, nothing important missing? Does it read as this domain's real product screen?
+- Visualization-first: for numeric, temporal, categorical or tabular data, are Stats / Charts / Gauges / Tables used instead of walls of Text or Markdown? Is the hierarchy KPI strip → hero viz → evidence? Flag text-heavy or document-like screens as blocking when the data is visualizable.
+- App layout & standards: the design rules below — fills the window, regions scroll inside, responsive at phone and desktop, formatted numbers with units, short labels, one primary action per region, no placeholders, filler, heroes, footers, duplicates or decorative controls, a compact phone widget.
+- Interaction: can a person do each thing and see the outcome? Inputs labelled, bound and read by the action that submits them; selections shown by a detail block.
+- Data: meaningful as filled (no MISSING values, no raw JSON or ids where people expect names, empty/loading states handled).
 Reply with ONE JSON object: {"issues": [{"severity": "blocking" | "advice", "area": "purpose" | "design" | "interaction" | "data", "where": "<component id, data path or action>", "problem": "…", "fix": "…"}]}.
-"blocking" is what makes it broken, misleading, unclean or unfit for the tool; "advice" is polish. Name concrete component ids and concrete fixes. Do not repeat the automatic findings. An empty list means it is ready to show.
+"blocking" is what makes it broken, misleading, unclean, text-heavy where it should be visual, or unfit for the tool; "advice" is polish. Name concrete component ids and concrete fixes. Do not repeat the automatic findings. An empty list means it is ready to show.
 ` + a2ui.DesignPrompt
 
 // lookAt has the model review the rendered surface.

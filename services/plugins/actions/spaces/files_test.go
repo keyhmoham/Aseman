@@ -156,6 +156,24 @@ func TestResolveAttachmentsAreTagOnly(t *testing.T) {
 	}
 }
 
+func TestSandboxScreenshotPathSniffsAsImage(t *testing.T) {
+	// Agents screenshot tool frontends to /workspace/*.png; file_read must
+	// treat those paths as images (see readSandboxImage) so the agent sees them.
+	img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	mime := sniffMime("/workspace/ui-phone.png", buf.Bytes())
+	if !strings.HasPrefix(mime, "image/") {
+		t.Fatalf("screenshot path sniffed as %q, want image/*", mime)
+	}
+	pixels, outMime := imageDataForContent(mime, buf.Bytes())
+	if len(pixels) == 0 || outMime == "" {
+		t.Fatal("screenshot bytes not embeddable as multimodal content")
+	}
+}
+
 func TestReadFileForAgentReturnsImageMultimodal(t *testing.T) {
 	s, ctx := fileToolHarness(t)
 	owner := idFromHex(t, "00000000000000010000000000000001")

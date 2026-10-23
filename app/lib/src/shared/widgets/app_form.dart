@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_inputs.dart';
+import 'overlay_panels.dart';
 
 /// Shows [form] as a bottom sheet on phones and as a dialog elsewhere, and
 /// returns what the form pops with.
@@ -17,7 +18,7 @@ Future<T?> showAppForm<T>(BuildContext context, Widget form) {
       ),
     );
   }
-  return showDialog<T>(
+  return showAppDialog<T>(
     context: context,
     builder: (context) => Dialog(
       child: ConstrainedBox(

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 
 /// Where the provider sends the person back. The in-app web view stops at
 /// it before it loads, so it only has to be an address the provider accepts:
@@ -53,7 +54,7 @@ Future<String?> _inBrowser(BuildContext context, String url) async {
   await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   if (!context.mounted) return null;
   final controller = TextEditingController();
-  final pasted = await showDialog<String>(
+  final pasted = await showAppDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Finish signing in'),

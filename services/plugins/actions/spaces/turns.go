@@ -13,6 +13,7 @@ import (
 	"github.com/aseman/aseman/plugins/actions/spaces/models/permission"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/turn"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/mediahost"
 	"github.com/aseman/aseman/plugins/actions/support/repo"
 	"github.com/aseman/aseman/plugins/actions/usage/models"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
@@ -34,6 +35,16 @@ func (s *Service) SubmitRoomTurn(ctx context.Context, actor, spaceID, roomID ide
 	}
 	if room.SpaceID != spaceID {
 		return nil, errs.InvalidArgument("room belongs to another space")
+	}
+	// Host remote designer media before the message is stored.
+	promptWasBody := strings.TrimSpace(prompt) == "" || prompt == body
+	if hosted, _, err := mediahost.HostBody(ctx, s.K, actor, body); err != nil {
+		return nil, err
+	} else if hosted != "" {
+		body = hosted
+		if promptWasBody {
+			prompt = hosted
+		}
 	}
 	if strings.TrimSpace(prompt) == "" {
 		prompt = body

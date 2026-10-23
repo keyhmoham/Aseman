@@ -262,7 +262,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
   }
 
   Future<void> _delete(SocialPost c) async {
-    final ok = await showDialog<bool>(
+    final ok = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.delete_outline_rounded),
@@ -444,6 +444,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
             byPostAuthor: c.authorId == widget.post.authorId,
             busy: _deleting.contains(c.id),
             headers: widget.dependencies.service.authHeaders(),
+            resolveUrl: widget.dependencies.service.resolveContentUrl,
             onLike: () => _toggleLike(c),
             onReply: () => _replyTo(c),
             onCopy: () => _copy(c),
@@ -582,6 +583,7 @@ class _CommentTile extends StatelessWidget {
     required this.byPostAuthor,
     required this.busy,
     required this.headers,
+    this.resolveUrl,
     required this.onLike,
     required this.onReply,
     required this.onCopy,
@@ -593,6 +595,7 @@ class _CommentTile extends StatelessWidget {
   final bool byPostAuthor;
   final bool busy;
   final Map<String, String> headers;
+  final String Function(String url)? resolveUrl;
   final VoidCallback onLike;
   final VoidCallback onReply;
   final VoidCallback onCopy;
@@ -685,6 +688,7 @@ class _CommentTile extends StatelessWidget {
                             child: RichPostContent(
                               comment.body,
                               headers: headers,
+                              resolveUrl: resolveUrl,
                             ),
                           ),
                         ],

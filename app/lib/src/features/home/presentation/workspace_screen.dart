@@ -103,6 +103,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   List<WorkspaceRoom> currentRooms = [];
   final Map<String, List<RoomMessage>> roomMessages = {};
 
+  /// Whether older messages than what [roomMessages] holds still exist, by
+  /// workspace/room scope.
+  final Map<String, bool> roomHasMore = {};
+  final Set<String> _loadingOlder = {};
+
   /// The desk of the room on screen: tools' card windows.
   late final DeskController deskController =
       DeskController(DeskApi.of(widget.dependencies.service));
@@ -261,6 +266,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       setState(() {
         currentRooms = rooms;
         roomMessages.removeWhere((key, _) => key.startsWith('$workspace/'));
+        roomHasMore.removeWhere((key, _) => key.startsWith('$workspace/'));
       });
       _attachDesk();
     } catch (_) {}
@@ -289,15 +295,23 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
           workspace != requestedWorkspace ||
           room != roomName ||
           _currentRoomId != r.first.id) return;
-      // Only rebuild when the conversation or the working-agent indicator
-      // actually changed, to avoid 3s rebuild churn.
+      // Keep any older pages already loaded; only refresh the newest window
+      // so scrolling back through history is not wiped every few seconds.
       final prev = roomMessages[requestedScope] ?? const <RoomMessage>[];
-      final msgs = res.messages;
+      final msgs = mergeNewestRoomMessages(prev, res.messages);
+      // The newest page's has_more is only about history before that page.
+      // Once older pages are already held, keep the flag from load-older.
+      final holdsOlder = msgs.length > res.messages.length;
+      final hasMore = holdsOlder
+          ? (roomHasMore[requestedScope] ?? false)
+          : res.hasMore;
       final changed = prev.length != msgs.length ||
-          List.generate(msgs.length, (index) => index)
-              .any((index) => !prev[index].hasSameContentAs(msgs[index])) ||
+          List.generate(msgs.length, (index) => index).any((index) =>
+              index >= prev.length ||
+              !prev[index].hasSameContentAs(msgs[index])) ||
           _workingAgent != res.working ||
-          _workingDetail != res.workingDetail;
+          _workingDetail != res.workingDetail ||
+          (roomHasMore[requestedScope] ?? false) != hasMore;
       if (changed) {
         setState(() {
           final oldFiles = {
@@ -310,6 +324,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
           };
           if (!setEquals(oldFiles, newFiles)) _fileRevision++;
           roomMessages[requestedScope] = List.unmodifiable(msgs);
+          roomHasMore[requestedScope] = hasMore;
           _workingAgent = res.working;
           _workingDetail = res.workingDetail;
         });
@@ -318,6 +333,45 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       // The next poll can recover without clearing the conversation.
     } finally {
       _messageLoads.remove(requestKey);
+    }
+  }
+
+  /// Loads the next older page when the user scrolls to the top of the chat.
+  Future<void> _loadOlderRoomMessages() async {
+    final roomName = room;
+    final sp = _spaceFor(workspace);
+    if (roomName == null || sp == null) return;
+    final r = currentRooms.where((x) => x.name == roomName).toList();
+    if (r.isEmpty) return;
+    final requestedWorkspace = workspace;
+    final requestedScope = '$requestedWorkspace/$roomName';
+    if (!(roomHasMore[requestedScope] ?? false)) return;
+    final prev = roomMessages[requestedScope] ?? const <RoomMessage>[];
+    if (prev.isEmpty) return;
+    final requestKey = 'older:${sp.id}/${r.first.id}';
+    if (!_loadingOlder.add(requestKey)) return;
+    setState(() {});
+    try {
+      final oldest = prev.first;
+      final res = await widget.dependencies.service.fetchRoomMessages(
+          sp.id, r.first.id,
+          before: oldest.createdAt);
+      if (!mounted ||
+          workspace != requestedWorkspace ||
+          room != roomName ||
+          _currentRoomId != r.first.id) return;
+      // Merge into whatever the poll may have refreshed while we waited.
+      final current = roomMessages[requestedScope] ?? prev;
+      final msgs = mergeOlderRoomMessages(current, res.messages);
+      setState(() {
+        roomMessages[requestedScope] = List.unmodifiable(msgs);
+        roomHasMore[requestedScope] = res.hasMore;
+      });
+    } catch (_) {
+      // Leave hasMore as-is so the user can try again.
+    } finally {
+      _loadingOlder.remove(requestKey);
+      if (mounted) setState(() {});
     }
   }
 
@@ -373,7 +427,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   }
 
   Future<void> _createRoom() async {
-    final name = await showDialog<String>(
+    final name = await showAppDialog<String>(
       context: context,
       builder: (_) => const _RoomNameDialog(),
     );
@@ -450,6 +504,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   void _attachDesk() => deskController.attach(_spaceFor(workspace)?.id ?? '',
       _currentRoomId.isEmpty ? 'home' : _currentRoomId);
   List<RoomMessage> get chatMessages => roomMessages[scopeKey] ?? const [];
+  bool get chatHasMore => roomHasMore[scopeKey] ?? false;
+  bool get chatLoadingOlder =>
+      _currentRoomId.isNotEmpty &&
+      _loadingOlder.contains(
+          'older:${_spaceFor(workspace)?.id ?? ''}/$_currentRoomId');
 
   String get _currentRoomId {
     if (room == null) return '';
@@ -566,18 +625,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               ListenableBuilder(
                 listenable: widget.dependencies.sessionController,
                 builder: (context, _) => WorkspaceHeader(
-                  workspace: workspace,
                   room: room,
                   compact: compact,
-                  workspaceAvatar: widget.dependencies.service
-                      .avatarImage(_spaceFor(workspace)?.avatar ?? ''),
                   handle:
                       widget.dependencies.sessionController.session?.handle ??
                           '',
                   avatar: widget.dependencies.service.avatarImage(
                       widget.dependencies.sessionController.avatar),
-                  onOpenNavigation: () =>
-                      scaffoldKey.currentState?.openDrawer(),
+                  onBackToFeed: widget.onBackToFeed == null
+                      ? null
+                      : _leaveToFeed,
                   onGoHome: goHome,
                   onOpenAdmin: !widget.dependencies.sessionController.isAdmin
                       ? null
@@ -598,100 +655,115 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                       scaleFrom: WorkspacePanelMotions.mobileScale,
                       child: _mobile());
                 }
+                // Desk fills the row; left/right panels sit under the card
+                // windows so windows can float over them on desktop.
                 return Padding(
                     padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
-                    child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          WorkspacePanelMotion(
-                              animation: workspaceMotion,
-                              hiddenOffset: WorkspacePanelMotions.left,
-                              child: SizedBox(
-                                  width: math.min(286, box.maxWidth * .22),
-                                  height: box.maxHeight * .82,
-                                  child: _LibraryPanel(
-                                      room: room,
-                                      workspace: workspace,
-                                      rooms: rooms,
-                                      bots: bots,
-                                      spaceBots: spaceBots,
-                                      allBots: bots,
-                                      tab: libraryTab,
-                                      dependencies: widget.dependencies,
-                                      spaceId: _spaceFor(workspace)?.id ?? '',
-                                      roomId: _currentRoomId,
-                                      fileRevision: _fileRevision,
-                                      onTab: (v) =>
-                                          setState(() => libraryTab = v),
-                                      onOpenSettings:
-                                          _spaceFor(workspace) == null
-                                              ? null
-                                              : _openSpaceSettings,
-                                      onOpenApp: openApp,
-                                      onOpenFile: _openFile,
-                          openFilePath: _openFilePath,
-                                      onCreateRoom: _createRoom,
-                                      onSearch: () => _search(context),
-                                      onAddBot: _addBotToWorkspace,
-                                      onRemoveBot: _removeBotFromWorkspace,
-                                      onAddApp: _addAppToWorkspace,
-                                      appConnections:
-                                          _appConnections[workspace] ??
-                                              const {},
-                                      onConnectApp: _connectApp,
-                                      openRoom: openRoom))),
-                          const SizedBox(width: 16),
-                          Expanded(
-                              child: WorkspacePanelMotion(
+                    child: _CenterDesk(
+                        workspace: workspace,
+                        room: room,
+                        pointer: pointer,
+                        controller: deskController,
+                        dependencies: widget.dependencies,
+                        spaceId: _spaceFor(workspace)?.id ?? '',
+                        roomId: _currentRoomId,
+                        underlay: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              WorkspacePanelMotion(
                                   animation: workspaceMotion,
-                                  scaleFrom: WorkspacePanelMotions.centerScale,
-                                  child: _CenterDesk(
-                                      workspace: workspace,
-                                      room: room,
-                                      pointer: pointer,
-                                      controller: deskController,
-                                      dependencies: widget.dependencies,
-                                      spaceId: _spaceFor(workspace)?.id ?? '',
-                                      roomId: _currentRoomId))),
-                          const SizedBox(width: 16),
-                          WorkspacePanelMotion(
-                              animation: workspaceMotion,
-                              hiddenOffset: WorkspacePanelMotions.right,
-                              child: SizedBox(
-                                  width: math.min(330, box.maxWidth * .25),
-                                  height: box.maxHeight * .88,
-                                  child: room == null
-                                      ? _SocialFeed(
+                                  hiddenOffset: WorkspacePanelMotions.left,
+                                  child: SizedBox(
+                                      width:
+                                          math.min(286, box.maxWidth * .22),
+                                      height: box.maxHeight * .82,
+                                      child: _LibraryPanel(
+                                          room: room,
                                           workspace: workspace,
-                                          dependencies: widget.dependencies,
-                                          spaceId:
-                                              _spaceFor(workspace)?.id ?? '')
-                                      : RoomChat(
-                                          key: ValueKey(
-                                              '${_spaceFor(workspace)?.id}/$_currentRoomId'),
-                                          room: room!,
-                                          messages: chatMessages,
-                                          working: _workingAgent,
-                                          workingDetail: _workingDetail,
-                                          me: widget
-                                                  .dependencies
-                                                  .sessionController
-                                                  .session
-                                                  ?.accountId ??
-                                              '',
+                                          rooms: rooms,
+                                          bots: bots,
+                                          spaceBots: spaceBots,
+                                          allBots: bots,
+                                          tab: libraryTab,
                                           dependencies: widget.dependencies,
                                           spaceId:
                                               _spaceFor(workspace)?.id ?? '',
                                           roomId: _currentRoomId,
-                                          mentionable: spaceBots
-                                              .where((b) => b.isAgent)
-                                              .toList(),
-                                          onSend: _sendRoomMessage,
-                                          onEdit: _editRoomMessage,
-                                          onDelete: _deleteRoomMessage,
-                                          onReport: _reportRoomMessage,
-                                          canModerate: _canManageTasks))),
-                        ]));
+                                          fileRevision: _fileRevision,
+                                          onTab: (v) => setState(
+                                              () => libraryTab = v),
+                                          onOpenSettings:
+                                              _spaceFor(workspace) == null
+                                                  ? null
+                                                  : _openSpaceSettings,
+                                          onOpenApp: openApp,
+                                          onOpenFile: _openFile,
+                                          openFilePath: _openFilePath,
+                                          onCreateRoom: _createRoom,
+                                          onSearch: () =>
+                                              _search(context),
+                                          onAddBot: _addBotToWorkspace,
+                                          onRemoveBot:
+                                              _removeBotFromWorkspace,
+                                          onAddApp: _addAppToWorkspace,
+                                          appConnections:
+                                              _appConnections[workspace] ??
+                                                  const {},
+                                          onConnectApp: _connectApp,
+                                          openRoom: openRoom))),
+                              const Expanded(
+                                  child: IgnorePointer(
+                                      child: SizedBox.expand())),
+                              WorkspacePanelMotion(
+                                  animation: workspaceMotion,
+                                  hiddenOffset: WorkspacePanelMotions.right,
+                                  child: SizedBox(
+                                      width:
+                                          math.min(330, box.maxWidth * .25),
+                                      height: box.maxHeight * .88,
+                                      child: room == null
+                                          ? _SocialFeed(
+                                              key: ValueKey(
+                                                  'space-feed-${_spaceFor(workspace)?.id ?? workspace}'),
+                                              workspace: workspace,
+                                              dependencies:
+                                                  widget.dependencies,
+                                              spaceId: _spaceFor(workspace)
+                                                      ?.id ??
+                                                  '')
+                                          : RoomChat(
+                                              key: ValueKey(
+                                                  '${_spaceFor(workspace)?.id}/$_currentRoomId'),
+                                              room: room!,
+                                              messages: chatMessages,
+                                              working: _workingAgent,
+                                              workingDetail: _workingDetail,
+                                              me: widget
+                                                      .dependencies
+                                                      .sessionController
+                                                      .session
+                                                      ?.accountId ??
+                                                  '',
+                                              dependencies:
+                                                  widget.dependencies,
+                                              spaceId: _spaceFor(workspace)
+                                                      ?.id ??
+                                                  '',
+                                              roomId: _currentRoomId,
+                                              mentionable: spaceBots
+                                                  .where((b) => b.isAgent)
+                                                  .toList(),
+                                              onSend: _sendRoomMessage,
+                                              onEdit: _editRoomMessage,
+                                              onDelete: _deleteRoomMessage,
+                                              onReport: _reportRoomMessage,
+                                              canModerate: _canManageTasks,
+                                              hasMore: chatHasMore,
+                                              loadingOlder:
+                                                  chatLoadingOlder,
+                                              onLoadOlder:
+                                                  _loadOlderRoomMessages))),
+                            ])));
               }))
             ])),
             SwitcherEdgeHandle(onTap: () => _workspacePicker(context)),
@@ -699,65 +771,87 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     ));
   }
 
-  Widget _mobile() => Stack(children: [
-        Positioned.fill(
-            child: PageView(
-                controller: mobilePages,
-                onPageChanged: (value) => setState(() => mobilePage = value),
-                children: [
-              _CenterDesk(
-                  workspace: workspace,
+  Widget _mobile() {
+    final scheme = Theme.of(context).colorScheme;
+    return Stack(children: [
+      Positioned.fill(
+          child: PageView(
+              controller: mobilePages,
+              onPageChanged: (value) => setState(() => mobilePage = value),
+              children: [
+            _CenterDesk(
+                workspace: workspace,
+                room: room,
+                pointer: pointer,
+                controller: deskController,
+                dependencies: widget.dependencies,
+                spaceId: _spaceFor(workspace)?.id ?? '',
+                roomId: _currentRoomId,
+                topContentInset: 62),
+            room == null
+                ? _SocialFeed(
+                    key: ValueKey(
+                        'space-feed-m-${_spaceFor(workspace)?.id ?? workspace}'),
+                    workspace: workspace,
+                    flat: true,
+                    topContentInset: 62,
+                    dependencies: widget.dependencies,
+                    spaceId: _spaceFor(workspace)?.id ?? '')
+                : RoomChat(
+                    key: ValueKey(
+                        '${_spaceFor(workspace)?.id}/$_currentRoomId'),
+                    room: room!,
+                    messages: chatMessages,
+                    working: _workingAgent,
+                    workingDetail: _workingDetail,
+                    me: widget.dependencies.sessionController.session
+                            ?.accountId ??
+                        '',
+                    dependencies: widget.dependencies,
+                    spaceId: _spaceFor(workspace)?.id ?? '',
+                    roomId: _currentRoomId,
+                    mentionable: spaceBots.where((b) => b.isAgent).toList(),
+                    onSend: _sendRoomMessage,
+                    onEdit: _editRoomMessage,
+                    onDelete: _deleteRoomMessage,
+                    onReport: _reportRoomMessage,
+                    canModerate: _canManageTasks,
+                    hasMore: chatHasMore,
+                    loadingOlder: chatLoadingOlder,
+                    onLoadOlder: _loadOlderRoomMessages,
+                    flat: true,
+                    topContentInset: 62),
+          ])),
+      Positioned(
+          top: 5,
+          left: 0,
+          right: 0,
+          child: Center(
+              child: _MobileTabs(
+                  selected: mobilePage,
                   room: room,
-                  pointer: pointer,
-                  controller: deskController,
-                  dependencies: widget.dependencies,
-                  spaceId: _spaceFor(workspace)?.id ?? '',
-                  roomId: _currentRoomId,
-                  topContentInset: 62),
-              room == null
-                  ? _SocialFeed(
-                      workspace: workspace,
-                      flat: true,
-                      topContentInset: 62,
-                      dependencies: widget.dependencies,
-                      spaceId: _spaceFor(workspace)?.id ?? '')
-                  : RoomChat(
-                      key: ValueKey(
-                          '${_spaceFor(workspace)?.id}/$_currentRoomId'),
-                      room: room!,
-                      messages: chatMessages,
-                      working: _workingAgent,
-                      workingDetail: _workingDetail,
-                      me: widget.dependencies.sessionController.session
-                              ?.accountId ??
-                          '',
-                      dependencies: widget.dependencies,
-                      spaceId: _spaceFor(workspace)?.id ?? '',
-                      roomId: _currentRoomId,
-                      mentionable: spaceBots.where((b) => b.isAgent).toList(),
-                      onSend: _sendRoomMessage,
-                      onEdit: _editRoomMessage,
-                      onDelete: _deleteRoomMessage,
-                      onReport: _reportRoomMessage,
-                      canModerate: _canManageTasks,
-                      flat: true,
-                      topContentInset: 62),
-            ])),
-        Positioned(
-            top: 5,
-            left: 0,
-            right: 0,
-            child: Center(
-                child: _MobileTabs(
-                    selected: mobilePage,
-                    room: room,
-                    onSelect: (value) {
-                      setState(() => mobilePage = value);
-                      mobilePages.animateToPage(value,
-                          duration: const Duration(milliseconds: 320),
-                          curve: Curves.easeOutCubic);
-                    }))),
-      ]);
+                  onSelect: (value) {
+                    setState(() => mobilePage = value);
+                    mobilePages.animateToPage(value,
+                        duration: const Duration(milliseconds: 320),
+                        curve: Curves.easeOutCubic);
+                  }))),
+      // Below the app bar: opens the rooms / library drawer.
+      Positioned(
+          top: 12,
+          left: 12,
+          child: Material(
+              color: scheme.surface.withValues(alpha: .92),
+              elevation: 1.5,
+              shadowColor: Colors.black26,
+              shape: const CircleBorder(),
+              clipBehavior: Clip.antiAlias,
+              child: IconButton(
+                  tooltip: 'Rooms and workspace',
+                  onPressed: () => scaffoldKey.currentState?.openDrawer(),
+                  icon: const Icon(Icons.menu_rounded)))),
+    ]);
+  }
   void _search(BuildContext context) => _sheet(
       context,
       _SearchPanel(
@@ -1685,7 +1779,7 @@ class _AddBotTile extends StatelessWidget {
 
   void _pick(BuildContext context) {
     if (candidates.isEmpty) {
-      showDialog<void>(
+      showAppDialog<void>(
           context: context,
           builder: (context) => AlertDialog(
                 title: const Text('Nothing to add'),
@@ -1699,8 +1793,10 @@ class _AddBotTile extends StatelessWidget {
               ));
       return;
     }
-    showModalBottomSheet<Bot>(
+    showAppPicker<Bot>(
         context: context,
+        anchor: context,
+        showDragHandle: false,
         builder: (context) => SafeArea(
                 child: SizedBox(
               height: 420,
@@ -1865,7 +1961,8 @@ class _LibraryToolCard extends StatelessWidget {
 
 /// The room's desk: tools' frontends as floating card windows (opened by
 /// people from the library and by agents showing results) and the dock. An
-/// empty desk shows the machine.
+/// empty desk shows the machine. On desktop, [underlay] holds the left/right
+/// panels under the windows so cards can float over them.
 class _CenterDesk extends StatelessWidget {
   const _CenterDesk(
       {required this.workspace,
@@ -1875,6 +1972,7 @@ class _CenterDesk extends StatelessWidget {
       required this.dependencies,
       required this.spaceId,
       required this.roomId,
+      this.underlay,
       this.topContentInset = 0});
   final String workspace;
   final String? room;
@@ -1883,6 +1981,7 @@ class _CenterDesk extends StatelessWidget {
   final AppDependencies dependencies;
   final String spaceId;
   final String roomId;
+  final Widget? underlay;
   final double topContentInset;
 
   Widget _frontend(String tool, ShownResult? shown,
@@ -2070,6 +2169,7 @@ class _CenterDesk extends StatelessWidget {
                   : FloatingDesk(
                       controller: controller,
                       topInset: topContentInset,
+                      underlay: underlay,
                       windowContent: _windowContent,
                       pinPreview: _pinPreview,
                       emptyState: _emptyState(context),
@@ -2193,6 +2293,7 @@ class _MachineFace extends StatelessWidget {
 
 class _SocialFeed extends StatefulWidget {
   const _SocialFeed({
+    super.key,
     required this.workspace,
     this.dependencies,
     this.spaceId = '',
@@ -2217,10 +2318,16 @@ class _SocialFeedState extends State<_SocialFeed> {
   int _offset = 0;
   bool _publishing = false;
 
+  /// Bumps when the feed's space changes so a late response for the previous
+  /// space (or the unfiltered global feed) cannot paint over the new one.
+  int _loadGen = 0;
+
   @override
   void initState() {
     super.initState();
-    _load();
+    // Wait for the workspace's space id; fetching with an empty id returns
+    // the global/following feed and flashes the wrong posts.
+    if (widget.spaceId.isNotEmpty) _load();
   }
 
   @override
@@ -2233,7 +2340,10 @@ class _SocialFeedState extends State<_SocialFeed> {
       hasMore = true;
       loading = true;
       loadingMore = false;
-      _load();
+      _loadGen++;
+      if (widget.spaceId.isNotEmpty) {
+        _load();
+      }
     }
   }
 
@@ -2280,18 +2390,24 @@ class _SocialFeedState extends State<_SocialFeed> {
       setState(() => loading = false);
       return;
     }
+    // Spaces list is still resolving; keep the skeleton up.
+    if (widget.spaceId.isEmpty) {
+      if (!more && mounted) setState(() => loading = true);
+      return;
+    }
     if (more) {
       if (loadingMore || !hasMore || loading) return;
       setState(() => loadingMore = true);
     } else {
       setState(() => loading = true);
     }
+    final gen = _loadGen;
+    final spaceId = widget.spaceId;
     try {
-      final spaceFilter = widget.spaceId.isEmpty ? null : widget.spaceId;
       final offset = more ? _offset : 0;
       final feed = await deps.service
-          .fetchFeed(spaceId: spaceFilter, limit: _pageSize, offset: offset);
-      if (!mounted) return;
+          .fetchFeed(spaceId: spaceId, limit: _pageSize, offset: offset);
+      if (!mounted || gen != _loadGen || widget.spaceId != spaceId) return;
       setState(() {
         if (more) {
           posts.addAll(feed);
@@ -2305,7 +2421,7 @@ class _SocialFeedState extends State<_SocialFeed> {
         loadingMore = false;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || gen != _loadGen) return;
       setState(() {
         loading = false;
         loadingMore = false;
@@ -2892,8 +3008,7 @@ class _SearchResultsState extends State<_SearchResults> {
     final deps = widget.dependencies;
     final payload = hit.payload;
     if (payload is ChatSummary && deps != null) {
-      return () => Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => ChatPage(dependencies: deps, chat: payload)));
+      return () => showChat(context, deps, payload);
     }
     if (payload is SocialPost) {
       return () => showFloatingPanel(
@@ -2962,7 +3077,7 @@ class _SearchResultsState extends State<_SearchResults> {
         if (space.isEmpty) return const [];
         final sb = await deps.service.fetchSpaceBots(space);
         return sb
-            .where((b) => isTool ? b.isTool : b.isAgent)
+            .where((b) => isTool ? (b.isTool && !b.isSandbox) : b.isAgent)
             .where((b) => b.name.toLowerCase().contains(q))
             .skip(offset)
             .take(_pageSize)
@@ -3414,7 +3529,9 @@ class _PostPreview extends StatelessWidget {
                   style: const TextStyle(fontSize: 15, height: 1.45),
                   child: RichPostContent(post.body,
                       headers: dependencies?.service.authHeaders() ??
-                          const {})))),
+                          const {},
+                      resolveUrl:
+                          dependencies?.service.resolveContentUrl)))),
     ]);
   }
 }
@@ -3507,7 +3624,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
           var bot = bots
               .where((b) => widget.section == 'Agents'
                   ? b.isAgent
-                  : b.isTool)
+                  : (b.isTool && !b.isSandbox))
               .where((b) => b.name == widget.title)
               .firstOrNull;
           // Agents/tools opened from a workspace tab are space bots; resolve
@@ -3518,7 +3635,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
               bot = sb
                   .where((b) => widget.section == 'Agents'
                       ? b.isAgent
-                      : b.isTool)
+                      : (b.isTool && !b.isSandbox))
                   .where((b) => b.name == widget.title)
                   .firstOrNull;
             } catch (_) {}
@@ -4061,7 +4178,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
   static void _showAccountList(BuildContext context, AppDependencies deps,
       String userId, bool following) {
     final title = following ? 'Following' : 'Followers';
-    showDialog<void>(
+    showAppDialog<void>(
         context: context,
         builder: (ctx) => Dialog(
             child: SizedBox(
@@ -4196,7 +4313,9 @@ class _TraderProfileDetail extends StatelessWidget {
                               child: RichPostContent(p.body,
                                   headers:
                                       dependencies?.service.authHeaders() ??
-                                          const {})),
+                                          const {},
+                                  resolveUrl: dependencies
+                                      ?.service.resolveContentUrl)),
                           Text(_timeAgo(p.createdAt),
                               style: TextStyle(
                                   fontSize: 8,

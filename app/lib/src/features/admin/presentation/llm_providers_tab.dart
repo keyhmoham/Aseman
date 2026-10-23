@@ -7,6 +7,7 @@ import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/status_tag.dart';
 import 'admin_widgets.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 
 /// Admin panel section managing the node's LLM providers: API keys (owned by
 /// the admin's account), the models agents can choose as their backbone and the
@@ -61,7 +62,7 @@ class _LlmProvidersTabState extends State<LlmProvidersTab> {
   }
 
   Future<void> _edit([LlmProvider? provider]) async {
-    final saved = await showDialog<bool>(
+    final saved = await showAppDialog<bool>(
       context: context,
       builder: (_) => _ProviderDialog(
           service: widget.service, kinds: _kinds, provider: provider),
@@ -70,7 +71,7 @@ class _LlmProvidersTabState extends State<LlmProvidersTab> {
   }
 
   Future<void> _delete(LlmProvider p) async {
-    final ok = await showDialog<bool>(
+    final ok = await showAppDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Delete ${p.name}?'),

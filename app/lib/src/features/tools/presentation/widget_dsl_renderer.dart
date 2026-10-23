@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain/widget_dsl.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 
 /// Renders an app [DeskWidgetDsl] inside a room-desk tile. Rows are laid
 /// out vertically and are kept compact to fit small mosaic tiles. Actions are
@@ -125,7 +126,7 @@ class _WidgetDslRendererState extends State<WidgetDslRenderer> {
   Future<void> _run(DslAction action, Map<String, dynamic> inline) async {
     if (action.op.isEmpty) return;
     if (action.confirm.isNotEmpty && mounted) {
-      final ok = await showDialog<bool>(
+      final ok = await showAppDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Confirm action'),

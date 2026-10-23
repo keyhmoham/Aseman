@@ -161,3 +161,50 @@ func TestInspectChecksTheAppLayout(t *testing.T) {
 		}
 	}
 }
+
+func TestInspectFlagsTextHeavyScreens(t *testing.T) {
+	prose := Inspect([]map[string]any{
+		{"id": "root", "component": "Column", "children": []any{"title", "body"}},
+		{"id": "title", "component": "Text", "text": "Report", "variant": "h4"},
+		{"id": "body", "component": "Scroll", "weight": 1, "child": "col"},
+		{"id": "col", "component": "Column", "children": []any{"a", "b", "c", "d"}},
+		{"id": "a", "component": "Markdown", "text": "Long intro"},
+		{"id": "b", "component": "Text", "text": "Paragraph one", "variant": "body"},
+		{"id": "c", "component": "Text", "text": "Paragraph two", "variant": "body"},
+		{"id": "d", "component": "Callout", "text": "More notes", "severity": "info"},
+	})
+	if !has(prose.Issues, Advice, "root", "mostly text") {
+		t.Errorf("expected advice on a text-heavy screen; got %v", prose.Issues)
+	}
+	chartOnly := Inspect([]map[string]any{
+		{"id": "root", "component": "Column", "children": []any{"title", "body"}},
+		{"id": "title", "component": "Text", "text": "Sales", "variant": "h4"},
+		{"id": "body", "component": "Scroll", "weight": 1, "child": "col"},
+		{"id": "col", "component": "Column", "children": []any{"chart", "table"}},
+		{"id": "chart", "component": "Chart", "type": "line", "data": []any{}, "x": "t", "y": "v", "height": 260},
+		{"id": "table", "component": "Table", "data": []any{}, "columns": []any{map[string]any{"field": "name"}}},
+		{"id": "compact", "component": "Stat", "label": "Total", "value": 1},
+	})
+	if !has(chartOnly.Issues, Advice, "root", "no KPI Stat") {
+		t.Errorf("expected advice when charts lack a Stat strip; got %v", chartOnly.Issues)
+	}
+	balanced := Inspect([]map[string]any{
+		{"id": "root", "component": "Column", "children": []any{"title", "body"}},
+		{"id": "title", "component": "Text", "text": "Sales", "variant": "h4"},
+		{"id": "body", "component": "Scroll", "weight": 1, "child": "col"},
+		{"id": "col", "component": "Column", "children": []any{"kpis", "chart"}},
+		{"id": "kpis", "component": "Grid", "minColumnWidth": 160, "children": []any{"s1", "s2"}},
+		{"id": "s1", "component": "Stat", "label": "Revenue", "value": 12},
+		{"id": "s2", "component": "Stat", "label": "Orders", "value": 3},
+		{"id": "chart", "component": "Chart", "type": "area", "data": []any{}, "x": "t", "y": "v", "height": 260},
+		{"id": "compact", "component": "Stat", "label": "Revenue", "value": 12},
+	})
+	for _, i := range balanced.Issues {
+		if i.Area == "design" && strings.Contains(i.Problem, "text") {
+			t.Errorf("a balanced viz screen was faulted: %v", i)
+		}
+		if i.Area == "design" && strings.Contains(i.Problem, "KPI") {
+			t.Errorf("a screen with Stats was faulted for missing KPIs: %v", i)
+		}
+	}
+}

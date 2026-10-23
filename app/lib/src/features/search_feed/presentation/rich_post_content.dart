@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/code_highlight.dart';
+import '../../../shared/widgets/network_content_image.dart';
 import '../../../shared/widgets/skeleton.dart';
 import '../../rooms/presentation/widgets/audio_bubble.dart';
 import '../../rooms/presentation/widgets/video_bubble.dart';
@@ -28,11 +29,20 @@ abstract final class PostLinks {
 /// charts and user/agent/tool/space cards.
 class RichPostContent extends StatelessWidget {
   const RichPostContent(this.source,
-      {super.key, this.headers = const {}, this.onLinkTap});
+      {super.key,
+      this.headers = const {},
+      this.resolveUrl,
+      this.onLinkTap});
 
   final String source;
   final Map<String, String> headers;
+
+  /// Turns a markup media address (file id, `/v1/files/…`, relative path)
+  /// into an absolute URL the network image/player can load.
+  final String Function(String url)? resolveUrl;
   final Future<void> Function(String link)? onLinkTap;
+
+  String _url(String raw) => resolveUrl?.call(raw) ?? raw;
 
   @override
   Widget build(BuildContext context) {
@@ -40,15 +50,18 @@ class RichPostContent extends StatelessWidget {
     if (blocks.isEmpty) return const SizedBox.shrink();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       for (final block in blocks)
-        _BlockView(block, headers: headers, onLinkTap: onLinkTap),
+        _BlockView(block,
+            headers: headers, resolveUrl: _url, onLinkTap: onLinkTap),
     ]);
   }
 }
 
 class _BlockView extends StatelessWidget {
-  const _BlockView(this.block, {required this.headers, this.onLinkTap});
+  const _BlockView(this.block,
+      {required this.headers, required this.resolveUrl, this.onLinkTap});
   final PostBlock block;
   final Map<String, String> headers;
+  final String Function(String url) resolveUrl;
   final Future<void> Function(String link)? onLinkTap;
 
   @override
@@ -67,7 +80,11 @@ class _BlockView extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.only(top: 8, bottom: 4),
           child: Text.rich(
-              _inline(context, block.inline.first, onLinkTap, size),
+              _inline(context, block.inline.first,
+                  onLinkTap: onLinkTap,
+                  headers: headers,
+                  resolveUrl: resolveUrl,
+                  fontSize: size),
               style: TextStyle(
                   fontSize: size,
                   fontWeight: FontWeight.w900,
@@ -77,7 +94,11 @@ class _BlockView extends StatelessWidget {
       case BlockKind.paragraph:
         return Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: Text.rich(_inline(context, block.inline.first, onLinkTap),
+          child: Text.rich(
+              _inline(context, block.inline.first,
+                  onLinkTap: onLinkTap,
+                  headers: headers,
+                  resolveUrl: resolveUrl),
               style: const TextStyle(fontSize: 12.5, height: 1.5)),
         );
       case BlockKind.bulletList:
@@ -99,7 +120,10 @@ class _BlockView extends StatelessWidget {
                           style: const TextStyle(fontSize: 12.5)),
                       Expanded(
                           child: Text.rich(
-                              _inline(context, block.inline[i], onLinkTap),
+                              _inline(context, block.inline[i],
+                                  onLinkTap: onLinkTap,
+                                  headers: headers,
+                                  resolveUrl: resolveUrl),
                               style: const TextStyle(
                                   fontSize: 12.5, height: 1.45))),
                     ]),
@@ -115,7 +139,11 @@ class _BlockView extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             border: Border(left: BorderSide(color: scheme.primary, width: 3)),
           ),
-          child: Text.rich(_inline(context, block.inline.first, onLinkTap),
+          child: Text.rich(
+              _inline(context, block.inline.first,
+                  onLinkTap: onLinkTap,
+                  headers: headers,
+                  resolveUrl: resolveUrl),
               style: TextStyle(
                   fontSize: 12.5,
                   height: 1.45,
@@ -187,7 +215,10 @@ class _BlockView extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 5),
                         child: Text.rich(
-                            _inline(context, [rows[r][c]], onLinkTap),
+                            _inline(context, [rows[r][c]],
+                                onLinkTap: onLinkTap,
+                                headers: headers,
+                                resolveUrl: resolveUrl),
                             style: TextStyle(
                                 fontSize: 11.5,
                                 fontWeight: r == 0
@@ -205,40 +236,44 @@ class _BlockView extends StatelessWidget {
           child: _ChartWidget(block.chart ?? const {}),
         );
       case BlockKind.image:
-        final url = block.url ?? '';
-        if (url.isEmpty) return const SizedBox.shrink();
+        final raw = block.url ?? '';
+        if (raw.isEmpty) return const SizedBox.shrink();
+        final url = resolveUrl(raw);
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.network(url,
+            child: NetworkContentImage(
+                url: url,
                 headers: headers,
-                fit: BoxFit.cover,
+                fit: BoxFit.fitWidth,
+                alignment: Alignment.center,
                 errorBuilder: (_, __, ___) =>
-                    _MediaFallback(Icons.image_outlined, 'Image · $url'),
+                    _mediaFallback(Icons.image_outlined, 'Image · $raw'),
                 loadingBuilder: (_, child, progress) => progress == null
                     ? child
                     : const SkeletonBox(
                         width: double.infinity, height: 180, radius: 0),
-                width: double.infinity,
-                height: 180),
+                width: double.infinity),
           ),
         );
       case BlockKind.video:
-        final url = block.url ?? '';
-        if (url.isEmpty) return const SizedBox.shrink();
+        final raw = block.url ?? '';
+        if (raw.isEmpty) return const SizedBox.shrink();
+        final url = resolveUrl(raw);
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: LayoutBuilder(
               builder: (context, box) => VideoBubble(
                   url: url,
-                  headers: headers,
+                  headers: mediaRequestHeaders(url, headers),
                   radius: 12,
                   width: box.maxWidth.isFinite ? box.maxWidth : 320)),
         );
       case BlockKind.audio:
-        final url = block.url ?? '';
-        if (url.isEmpty) return const SizedBox.shrink();
+        final raw = block.url ?? '';
+        if (raw.isEmpty) return const SizedBox.shrink();
+        final url = resolveUrl(raw);
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(10),
@@ -248,7 +283,7 @@ class _BlockView extends StatelessWidget {
           child: LayoutBuilder(
               builder: (context, box) => AudioBubble(
                   url: url,
-                  headers: headers,
+                  headers: mediaRequestHeaders(url, headers),
                   mime: '',
                   durationLabel: 'audio',
                   voice: false,
@@ -265,43 +300,62 @@ class _BlockView extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: _ForwardedPost(block.data ?? const {},
-              headers: headers, onLinkTap: onLinkTap),
+              headers: headers,
+              resolveUrl: resolveUrl,
+              onLinkTap: onLinkTap),
         );
     }
   }
 
-  static Widget _MediaFallback(IconData icon, String label) =>
-      Builder(builder: (context) {
-        final scheme = Theme.of(context).colorScheme;
-        return Container(
-          height: 140,
-          alignment: Alignment.center,
-          color: scheme.surfaceContainerHighest,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 30, color: scheme.onSurfaceVariant),
-            const SizedBox(height: 6),
-            Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
-          ]),
-        );
-      });
 }
 
+Widget _mediaFallback(IconData icon, String label) =>
+    Builder(builder: (context) {
+      final scheme = Theme.of(context).colorScheme;
+      return Container(
+        height: 140,
+        alignment: Alignment.center,
+        color: scheme.surfaceContainerHighest,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 30, color: scheme.onSurfaceVariant),
+          const SizedBox(height: 6),
+          Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
+        ]),
+      );
+    });
+
 /// Builds a rich [TextSpan] from inline tokens.
-InlineSpan _inline(BuildContext context, List<InlineToken> tokens,
-    [Future<void> Function(String)? onLinkTap, double fontSize = 12.5]) {
+InlineSpan _inline(
+  BuildContext context,
+  List<InlineToken> tokens, {
+  Future<void> Function(String)? onLinkTap,
+  Map<String, String> headers = const {},
+  String Function(String url)? resolveUrl,
+  double fontSize = 12.5,
+}) {
   final scheme = Theme.of(context).colorScheme;
   return TextSpan(children: [
     for (final t in tokens)
-      _tokenSpan(context, t, scheme, onLinkTap, fontSize),
+      _tokenSpan(context, t, scheme,
+          onLinkTap: onLinkTap,
+          headers: headers,
+          resolveUrl: resolveUrl,
+          fontSize: fontSize),
   ]);
 }
 
-InlineSpan _tokenSpan(BuildContext context, InlineToken t, ColorScheme scheme,
-    Future<void> Function(String)? onLinkTap,
-    [double fontSize = 12.5]) {
+InlineSpan _tokenSpan(
+  BuildContext context,
+  InlineToken t,
+  ColorScheme scheme, {
+  Future<void> Function(String)? onLinkTap,
+  Map<String, String> headers = const {},
+  String Function(String url)? resolveUrl,
+  double fontSize = 12.5,
+}) {
   // A heading's runs keep its size.
   final base =
       TextStyle(fontSize: fontSize, height: 1.5, color: scheme.onSurface);
@@ -359,20 +413,22 @@ InlineSpan _tokenSpan(BuildContext context, InlineToken t, ColorScheme scheme,
               fontWeight: FontWeight.w800,
               color: scheme.primary));
     case InlineKind.image:
-      final url = t.href ?? '';
-      if (url.isEmpty) return TextSpan(text: t.text, style: base);
+      final raw = t.href ?? '';
+      if (raw.isEmpty) return TextSpan(text: t.text, style: base);
+      final url = resolveUrl?.call(raw) ?? raw;
       return WidgetSpan(
-          alignment: PlaceholderAlignment.top,
+          alignment: PlaceholderAlignment.middle,
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(vertical: 4),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
-              child: Image.network(url,
-                  width: 200,
-                  height: 120,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) =>
-                      const SizedBox(width: 200, height: 60)),
+              child: NetworkContentImage(
+                  url: url,
+                  headers: headers,
+                  width: 220,
+                  fit: BoxFit.fitWidth,
+                  errorBuilder: (_, __, ___) => _mediaFallback(
+                      Icons.image_outlined, 'Image · $raw')),
             ),
           ));
     case InlineKind.text:
@@ -560,9 +616,11 @@ class _InfoCard extends StatelessWidget {
 /// A feed post shared into a chat (a `:::post` directive): a "Forwarded
 /// from" tag naming its author, who opens on a tap, over the post itself.
 class _ForwardedPost extends StatelessWidget {
-  const _ForwardedPost(this.data, {required this.headers, this.onLinkTap});
+  const _ForwardedPost(this.data,
+      {required this.headers, required this.resolveUrl, this.onLinkTap});
   final Map<String, dynamic> data;
   final Map<String, String> headers;
+  final String Function(String url) resolveUrl;
   final Future<void> Function(String link)? onLinkTap;
 
   @override
@@ -594,7 +652,9 @@ class _ForwardedPost extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         RichPostContent('${data['body'] ?? ''}',
-            headers: headers, onLinkTap: onLinkTap),
+            headers: headers,
+            resolveUrl: resolveUrl,
+            onLinkTap: onLinkTap),
       ]),
     );
   }

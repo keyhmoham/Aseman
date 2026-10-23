@@ -7,6 +7,7 @@ import '../../../data/models/bot.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar_editor.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/skeleton.dart';
@@ -64,7 +65,8 @@ class _AgentsScreenState extends State<AgentsScreen> {
   }
 
   List<Bot> get _agents => _bots.where((b) => b.isAgent).toList();
-  List<Bot> get _tools => _bots.where((b) => b.isTool).toList();
+  List<Bot> get _tools =>
+      _bots.where((b) => b.isTool && !b.isSandbox).toList();
 
   /// Create an agent or a tool.
   Future<void> _create(String what) =>
@@ -296,13 +298,16 @@ class _AgentsScreenState extends State<AgentsScreen> {
   }
 
   Future<void> _chat(Bot bot) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => _AgentChatSheet(
+    await showAdaptivePanel<void>(
+      context,
+      _AgentChatSheet(
         dependencies: widget.dependencies,
         bot: bot,
       ),
+      breakpoint: 720,
+      maxWidth: 560,
+      maxHeight: 780,
+      heightFactor: .92,
     );
   }
 

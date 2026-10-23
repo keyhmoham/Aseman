@@ -593,14 +593,22 @@ class AsemanService implements BackendService {
 
   // ── room messages ─────────────────────────────────────────────────────────
 
-  Future<({List<RoomMessage> messages, String working, String workingDetail})>
-      fetchRoomMessages(String spaceId, String roomId,
-          {int limit = 50, int offset = 0}) async {
+  /// A room's newest messages, or the page older than [before] (a message's
+  /// creation time). `spaces.message_list` pages with before/after cursors,
+  /// not offsets; [hasMore] is true when older messages still exist.
+  Future<
+      ({
+        List<RoomMessage> messages,
+        String working,
+        String workingDetail,
+        bool hasMore
+      })> fetchRoomMessages(String spaceId, String roomId,
+      {int limit = 50, DateTime? before}) async {
     final resp = await client.call('spaces', 'message_list', body: {
       'space': spaceId,
       'room': roomId,
       'limit': limit,
-      if (offset > 0) 'offset': offset,
+      if (before != null) 'before': before.toUtc().toIso8601String(),
     });
     final body = resp.body as Map? ?? const {};
     final list = body['messages'] as List? ?? [];
@@ -614,23 +622,38 @@ class AsemanService implements BackendService {
           .toList(),
       working: body['working'] as String? ?? '',
       workingDetail: body['working_detail'] as String? ?? '',
+      hasMore: body['has_more'] == true,
     );
   }
 
   /// A room's conversation for a chat page: messages plus who is typing and,
   /// for a direct chat, the peer's read cursor and whether anyone can write.
+  /// Pass [before] to page further back through history.
   Future<RoomChatPage> fetchRoomChat(String spaceId, String roomId,
-      {int limit = 50}) async {
-    final resp = await client.call('spaces', 'message_list',
-        body: {'space': spaceId, 'room': roomId, 'limit': limit});
+      {int limit = 50, DateTime? before}) async {
+    final resp = await client.call('spaces', 'message_list', body: {
+      'space': spaceId,
+      'room': roomId,
+      'limit': limit,
+      if (before != null) 'before': before.toUtc().toIso8601String(),
+    });
     return RoomChatPage.fromJson(
         (resp.body as Map?)?.cast<String, dynamic>() ?? const {});
   }
 
   /// Changes the text of a message the caller sent.
   Future<void> editRoomMessage(String messageId, String body) async {
+    body = await hostMarkupMedia(body);
     await client.call('spaces', 'message_edit',
         body: {'message': messageId, 'body': body});
+  }
+
+  /// Earlier wording of an edited message (plus the current body).
+  Future<MessageEditHistory> fetchMessageEdits(String messageId) async {
+    final resp = await client
+        .call('spaces', 'message_edits', body: {'message': messageId});
+    return MessageEditHistory.fromJson(
+        (resp.body as Map?)?.cast<String, dynamic>() ?? const {});
   }
 
   /// Deletes a message for everyone: the caller's own, or anyone's for a
@@ -718,6 +741,7 @@ class AsemanService implements BackendService {
       {List<String> mentions = const [],
       List<String> attachments = const [],
       String replyTo = ''}) async {
+    body = await hostMarkupMedia(body);
     final resp = mentions.isNotEmpty
         ? await client.call('spaces', 'turn_submit', body: {
             'space': spaceId,
@@ -766,6 +790,33 @@ class AsemanService implements BackendService {
       }
     }
     return base;
+  }
+
+  /// Turns a media address from post/message markup into a URL [Image.network]
+  /// (and video/audio players) can load: a stored file id or `/v1/files/…`
+  /// path becomes [fileContentUrl], a root-relative path is joined to the
+  /// gateway, and http(s)/data URLs are left as they are.
+  String resolveContentUrl(String ref) {
+    ref = ref.trim();
+    if (ref.isEmpty) return ref;
+    final lower = ref.toLowerCase();
+    if (lower.startsWith('http://') ||
+        lower.startsWith('https://') ||
+        lower.startsWith('data:')) {
+      return ref;
+    }
+    final fileId = RegExp(
+            r'^(?:(?:attachment|file):/?/?|/v1/files/)?([0-9a-fA-F]{32})(?:/content)?(?:\?.*)?$')
+        .firstMatch(ref)
+        ?.group(1);
+    if (fileId != null && !RegExp(r'^0+$').hasMatch(fileId)) {
+      return fileContentUrl(fileId);
+    }
+    if (ref.startsWith('/')) {
+      final base = client.baseUrl.replaceFirst(RegExp(r'/$'), '');
+      return '$base$ref';
+    }
+    return ref;
   }
 
   /// Build the absolute gateway URL for a sandbox proxy path (e.g.
@@ -971,11 +1022,17 @@ class AsemanService implements BackendService {
       if (offset > 0) 'offset': offset,
     });
     final list = (resp.body as Map?)?['bots'] as List? ?? [];
-    return list.whereType<Map<String, dynamic>>().map(Bot.fromJson).toList();
+    // Sandboxes are computers, not apps — never surface them in bot lists.
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(Bot.fromJson)
+        .where((b) => !b.isSandbox)
+        .toList();
   }
 
   /// List the bots (agents and apps) installed in a space. Bots are only
-  /// present here when explicitly added through [addBotToSpace].
+  /// present here when explicitly added through [addBotToSpace]. The space
+  /// sandbox is omitted: it is a computer, not an app.
   Future<List<Bot>> fetchSpaceBots(String spaceId) async {
     final resp =
         await client.call('spaces', 'bots_list', body: {'space': spaceId});
@@ -992,6 +1049,7 @@ class AsemanService implements BackendService {
               'status': j['status'],
               'avatar': j['avatar'],
             }))
+        .where((b) => !b.isSandbox)
         .toList();
   }
 
@@ -1206,7 +1264,7 @@ class AsemanService implements BackendService {
     return list.whereType<Map<String, dynamic>>().toList();
   }
 
-  /// List the apps (and the sandbox) available to agents in a space.
+  /// List the apps available to agents in a space (sandbox is sandbox_exec).
   Future<List<Map<String, dynamic>>> fetchSpaceTools(String spaceId,
       {String? roomId}) async {
     final resp = await client.call('spaces', 'tools_list', body: {
@@ -1217,7 +1275,8 @@ class AsemanService implements BackendService {
     return list.whereType<Map<String, dynamic>>().toList();
   }
 
-  /// Search agents and apps across the whole platform (paged).
+  /// Search agents and apps across the whole platform (paged). Sandbox
+  /// instances are never returned as apps.
   Future<List<Map<String, dynamic>>> searchBots(String query,
       {String kind = '', int limit = 20, int offset = 0}) async {
     final resp = await client.call('bots', 'bot_search', body: {
@@ -1227,7 +1286,18 @@ class AsemanService implements BackendService {
       if (offset > 0) 'offset': offset,
     });
     final list = (resp.body as Map?)?['bots'] as List? ?? [];
-    return list.whereType<Map<String, dynamic>>().toList();
+    return list
+        .whereType<Map<String, dynamic>>()
+        .where((b) => !Bot.fromJson({
+              'id': b['id'],
+              'owner_id': b['owner_id'] ?? '',
+              'account_id': b['account_id'] ?? '',
+              'name': b['name'],
+              'kind': b['kind'],
+              'vm_type': b['vm_type'],
+              'status': b['status'] ?? '',
+            }).isSandbox)
+        .toList();
   }
 
   /// Members of a space (enriched with handle/kind/role), paged. [kind]
@@ -1444,8 +1514,21 @@ class AsemanService implements BackendService {
     return const [];
   }
 
+  /// Downloads every remote image/video/audio in [body] into Aseman storage
+  /// (reusing the URL cache) and returns markup that only references hosted
+  /// files. Call before publishing a designed post or message so previews and
+  /// readers never hit the original link.
+  Future<String> hostMarkupMedia(String body) async {
+    if (body.trim().isEmpty) return body;
+    final resp =
+        await client.call('users', 'host_markup', body: {'body': body});
+    final hosted = (resp.body as Map?)?['body'];
+    return hosted is String && hosted.isNotEmpty ? hosted : body;
+  }
+
   Future<SocialPost> createPost(String body,
       {String? spaceId, List<String> tags = const []}) async {
+    body = await hostMarkupMedia(body);
     final resp = await client.call('posts', 'post_create', body: {
       'body': body,
       if (spaceId != null && spaceId.isNotEmpty) 'space': spaceId,
@@ -1463,6 +1546,7 @@ class AsemanService implements BackendService {
 
   /// Edits one of the signed-in user's posts.
   Future<void> updatePost(String postId, String body) async {
+    body = await hostMarkupMedia(body);
     await client
         .call('posts', 'post_update', body: {'post': postId, 'body': body});
   }

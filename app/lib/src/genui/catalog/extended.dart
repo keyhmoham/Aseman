@@ -104,8 +104,8 @@ const _changeAction =
 
 final segmentedControlItem = asemanItem(
   'SegmentedControl',
-  description: 'A pill row of mutually exclusive choices (periods, views, '
-      'buy / sell), bound to the chosen value.',
+  description: 'Mutually exclusive choices (periods, views, buy / sell) that '
+      'wrap onto more rows when needed, bound to the chosen value.',
   properties: {
     'options': _options,
     'value': P.any('A {"path"} binding to the chosen value.'),
@@ -126,23 +126,19 @@ final segmentedControlItem = asemanItem(
         mainAxisSize: MainAxisSize.min,
         children: [
           _label(context, stringifyValue(p['label'])),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SegmentedButton<String>(
-              showSelectedIcon: false,
-              emptySelectionAllowed: true,
-              segments: [
-                for (final o in options)
-                  ButtonSegment(
-                      value: o.value,
-                      label: Text(o.label),
-                      icon: o.icon == null ? null : Icon(o.icon, size: 18)),
-              ],
-              selected: {if (options.any((o) => o.value == selected)) selected},
-              onSelectionChanged: (s) {
-                if (s.isNotEmpty) set(s.first);
-              },
-            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final o in options)
+                ChoiceChip(
+                  selected: o.value == selected,
+                  showCheckmark: false,
+                  avatar: o.icon == null ? null : Icon(o.icon, size: 18),
+                  label: Text(o.label),
+                  onSelected: (_) => set(o.value),
+                ),
+            ],
           ),
         ],
       );

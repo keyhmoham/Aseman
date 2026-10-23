@@ -5,6 +5,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../data/models/uploaded_file.dart';
+import '../../../../shared/widgets/network_content_image.dart';
 import 'audio_bubble.dart';
 import 'download_helper.dart';
 
@@ -100,7 +101,8 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
           maxScale: 6,
           child: file.bytes != null
               ? Image.memory(file.bytes!)
-              : Image.network(_url,
+              : NetworkContentImage(
+                  url: _url,
                   headers: widget.headers,
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const Icon(Icons.broken_image,

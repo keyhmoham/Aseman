@@ -77,7 +77,7 @@ func (s *Service) catalog(ctx context.Context, caller identity.ID, admin bool, s
 	}
 	for i := range bots {
 		rec := &bots[i]
-		if seen[rec.ID.String()] || rec.Kind == bot.KindTool && strings.HasPrefix(rec.Name, "sbx-") {
+		if seen[rec.ID.String()] || rec.IsSandbox() {
 			continue
 		}
 		row := s.catalogBot(ctx, rec)

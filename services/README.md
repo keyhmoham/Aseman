@@ -414,19 +414,25 @@ every value it shows up in what came back, and have the model review the
 page (`tools.ReviewPage`) for fitness, cleanness and the design standard. A
 page that does not work is not opened: the agent gets the report, fixes it
 and opens it again, which reviews it again; the review of a page that opens
-comes back with it. The node does not execute the page's scripts, so agents
-are also told to test pages in the sandbox's browser (screenshots at phone
-and desktop widths, every control clicked) before reporting them ready.
+comes back with it. The node does not paint the page, so agents must
+**see** it before reporting ready: open it in the sandbox browser, take
+screenshots at phone (~360) and desktop (~1400) widths
+(`aseman-desktop screenshot file.png width`), `read_file` each PNG so they
+see the frontend window, click every control, and reform from what the
+pictures show — not from HTML alone.
 
-**Every generated interface is an app screen, not a web page**, on a phone
-(~360 × 640) and a desktop window (~1400 × 900) alike (`a2ui.AppLayout`,
-taught to every generator and checked by every review). It fills its window
-and never scrolls as a whole: a header that stays put, then a body region
-(`"weight": 1`) taking the rest of the height, and every region that can
-grow (lists, tables, timelines, details, long forms) scrolls inside itself.
-Panes side by side are a `Split` (A2UI) or `<t-split>` (web kit): panes
-on a desktop, tabs on a phone; views of one screen are `Tabs` whose tabs
-scroll by themselves. A2UI surfaces designed this way are created with
+**Every generated interface is a professional application screen**, designed
+by the shared product-designer skill (`a2ui.DesignPrompt` /
+`a2ui.AppLayout`): visualization-first (KPI Stats → hero Chart → evidence
+Table), sparse text, responsive on a phone (~360 × 640) and a desktop
+window (~1400 × 900). Taught to every generator and checked by every review
+(and by automatic density inspection). It fills its window and never scrolls
+as a whole: a header that stays put, then a body region (`"weight": 1`)
+taking the rest of the height, and every region that can grow (lists,
+tables, timelines, details, long forms) scrolls inside itself. Panes side by
+side are a `Split` (A2UI) or `<t-split>` (web kit): panes on a desktop, tabs
+on a phone; views of one screen are `Tabs` whose tabs scroll by themselves.
+A2UI surfaces designed this way are created with
 `createSurface.theme.layout = "app"`, and the app gives them their window's
 height (`GenUiFrame`); templates made before keep scrolling as pages. Web
 pages use `<body class="t-app">`, the kit's app shell.

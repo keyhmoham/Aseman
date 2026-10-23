@@ -64,3 +64,26 @@ func TestComponentsMatchTheApp(t *testing.T) {
 		}
 	}
 }
+
+// DesignPrompt is the product-designer skill every generator and reviewer
+// shares: visualization-first application screens, not documents.
+func TestDesignPromptIsVisualizationFirst(t *testing.T) {
+	for _, want := range []string{
+		"senior product designer",
+		"Visualization",
+		"KPI",
+		"Stat",
+		"Chart",
+		"App layout",
+		"360",
+		"1400",
+		"Anti-patterns",
+	} {
+		if !strings.Contains(DesignPrompt, want) {
+			t.Errorf("DesignPrompt missing %q", want)
+		}
+	}
+	if !strings.Contains(CatalogPrompt, DesignPrompt) {
+		t.Error("CatalogPrompt must include DesignPrompt")
+	}
+}

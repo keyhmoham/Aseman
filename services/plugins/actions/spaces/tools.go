@@ -61,9 +61,10 @@ func toolDetail(toolName string) string {
 	}
 }
 
-// SpaceTools lists the apps (tools and the shared sandbox) installed
-// in a space, with a human description for each. This is what a langchain agent
-// sees when it wakes up in a space: every tool becomes a callable function that
+// SpaceTools lists the apps installed in a space, with a human description for
+// each. Agents also see the shared sandbox listed as an app (and reach its
+// shell through the sandbox_exec builtin). This is what a langchain agent sees
+// when it wakes up in a space: every tool becomes a callable function that
 // routes back through spaces.ask.
 func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) ([]vmm.Tool, error) {
 	eq := map[string]any{
@@ -102,16 +103,19 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 			continue
 		}
 		toolBots[rec.ID.String()] = true
-		// The shared sandbox is exposed once, as the dedicated sandbox_exec tool.
-		if hasSandbox && rec.ID == sandboxID {
-			continue
-		}
 		name := slugToolName(rec.Name, rec.ID.String(), used)
 		tool := vmm.Tool{
 			Name:        name,
 			Description: s.toolDescription(ctx, rec),
 			BotID:       rec.ID.String(),
 			Kind:        string(rec.Kind),
+		}
+		// Sandbox is listed so agents can address it as an app (routines, ask);
+		// shell still goes through sandbox_exec below.
+		if rec.IsSandbox() || (hasSandbox && rec.ID == sandboxID) {
+			tool.Description = "The space's shared computer (sandbox). Use this bot id as a routine target or when addressing the sandbox as an app; run shell with sandbox_exec."
+			tools = append(tools, tool)
+			continue
 		}
 		if rec.IsToolBackend() {
 			tool.Commands = s.appCommands(ctx, spaceID, rec)
@@ -483,6 +487,11 @@ func (s *Service) readFileForAgent(ctx context.Context, spaceID identity.ID, arg
 				around = *in.Context
 			}
 			return s.searchSandboxText(ctx, spaceID, in.Path, in.Pattern, around, in.MaxChars, in.Literal)
+		}
+		// Screenshots and other sandbox images: return the pixels so the agent
+		// can see a tool frontend window (aseman-desktop screenshot → file_read).
+		if out, ok, err := s.readSandboxImage(ctx, spaceID, in.Path); ok || err != nil {
+			return out, err
 		}
 		return s.readSandboxText(ctx, spaceID, in.Path, in.Start, in.End, in.MaxChars)
 	}

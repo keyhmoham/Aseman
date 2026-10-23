@@ -230,7 +230,9 @@ class _FeedPostCardState extends State<FeedPostCard> {
                         style: const TextStyle(fontSize: 15, height: 1.45),
                         child: RichPostContent(post.body,
                             headers:
-                                widget.dependencies.service.authHeaders())),
+                                widget.dependencies.service.authHeaders(),
+                            resolveUrl: widget
+                                .dependencies.service.resolveContentUrl)),
                   ),
                   if (post.media.isNotEmpty) ...[
                     const SizedBox(height: 12),

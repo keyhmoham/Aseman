@@ -10,6 +10,7 @@ import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/skeleton.dart';
 import 'google_sign_in_button.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 
 /// Gates the whole app behind authentication. Shows the auth screen until a
 /// session exists, then the main shell.
@@ -178,7 +179,7 @@ class _AuthScreenState extends State<AuthScreen>
     bool obscure = false,
   }) async {
     final controller = TextEditingController();
-    final value = await showDialog<String>(
+    final value = await showAppDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title),

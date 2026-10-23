@@ -131,6 +131,7 @@ func Inspect(components []map[string]any) *Surface {
 	}
 	s.visit("root", "", nil, false, false)
 	s.appShell()
+	s.vizDensity()
 	if _, ok := s.byID["compact"]; ok {
 		if !s.placed["compact"] {
 			s.visit("compact", "", nil, false, true) // a widget, not a screen
@@ -271,7 +272,7 @@ func (s *Surface) visit(id, scope string, path []string, inCard, scrolled bool) 
 		s.issue(Advice, "layout", id, "is a Scroll inside a region that already scrolls", "drop the inner Scroll, or give it a maxHeight")
 	}
 	if h, ok := number(c["height"]); ok && h > 640 {
-		s.issue(Advice, "layout", id, fmt.Sprintf("is %v px tall, taller than a phone's screen", h), "keep heights to a chart's 220–320")
+		s.issue(Advice, "layout", id, fmt.Sprintf("is %v px tall, taller than a phone's screen", h), "keep heights to a chart's 240–300")
 	}
 	inner := scrolled || scrolls(kind, c) || kind == "Modal"
 	for _, ch := range s.children(id, c, scope) {
@@ -342,6 +343,79 @@ func (s *Surface) small() bool {
 // smallScreen is how many components a screen may have without a scrolling
 // body.
 const smallScreen = 6
+
+// visualKinds are components that carry data as graphics or dense structure —
+// preferred over prose for numeric, temporal, categorical and tabular data.
+var visualKinds = map[string]bool{
+	"Chart": true, "Sparkline": true, "Gauge": true, "Heatmap": true, "Treemap": true,
+	"Graph": true, "Table": true, "Stat": true, "KeyValue": true, "Timeline": true,
+	"Progress": true, "Quote": true, "OrderBook": true, "TickerTape": true,
+	"AllocationBar": true, "Trend": true, "TreeView": true,
+}
+
+// proseKinds are components that read as document text when overused.
+var proseKinds = map[string]bool{
+	"Text": true, "Markdown": true, "Callout": true, "CodeBlock": true, "JsonView": true,
+}
+
+// vizDensity flags screens that look like documents when they should look like
+// product UIs: too much prose and almost no visual components, while the tree
+// is large enough to be a real screen (not a one-line confirmation).
+func (s *Surface) vizDensity() {
+	if s.small() {
+		return
+	}
+	visual, prose, form := 0, 0, 0
+	for id := range s.placed {
+		c := s.byID[id]
+		if c == nil {
+			continue
+		}
+		kind, _ := c["component"].(string)
+		if visualKinds[kind] {
+			visual++
+		}
+		if proseKinds[kind] {
+			prose++
+		}
+		if inputs[kind] {
+			form++
+		}
+	}
+	// A form-heavy screen with few visuals is fine; a dashboard of prose is not.
+	if form >= 3 && visual == 0 {
+		return
+	}
+	if visual == 0 && prose >= 3 {
+		s.issue(Advice, "design", "root", "the screen is mostly text with no Stats, Charts, Tables or other visual components",
+			"lead with a Grid of Stats and a Chart or Table for the data; keep Text/Markdown for short labels and genuine notes only")
+		return
+	}
+	if visual > 0 && prose > visual*2 && prose >= 4 {
+		s.issue(Advice, "design", "root", "prose components outnumber visual ones — the screen reads like a document",
+			"replace walls of Text/Markdown with Stat tiles, Charts and Tables; keep captions short")
+	}
+	if visual > 0 {
+		hasStat, hasChartish := false, false
+		for id := range s.placed {
+			c := s.byID[id]
+			if c == nil {
+				continue
+			}
+			kind, _ := c["component"].(string)
+			switch kind {
+			case "Stat", "Quote", "Gauge", "Trend":
+				hasStat = true
+			case "Chart", "Heatmap", "Treemap", "Sparkline", "Graph", "AllocationBar", "OrderBook":
+				hasChartish = true
+			}
+		}
+		if hasChartish && !hasStat && visual >= 2 {
+			s.issue(Advice, "design", "root", "has charts but no KPI Stat strip",
+				"put 3–5 Stat tiles above the hero chart so headline numbers are readable at a glance")
+		}
+	}
+}
 
 // appShell checks the root is laid out as an app screen: a Column whose
 // body takes the rest of the window's height and scrolls inside itself (or

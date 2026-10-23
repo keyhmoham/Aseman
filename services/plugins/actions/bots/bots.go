@@ -657,6 +657,10 @@ func (a *botListAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	}
 	out := make([]map[string]any, 0, len(list))
 	for i := range list {
+		// Space sandboxes are computers, not apps — omit them from owned-bot lists.
+		if list[i].IsSandbox() {
+			continue
+		}
 		row := map[string]any{}
 		b, _ := json.Marshal(list[i])
 		_ = json.Unmarshal(b, &row)

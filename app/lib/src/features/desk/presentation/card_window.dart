@@ -4,8 +4,8 @@ import '../domain/desk_models.dart';
 import 'tool_avatar.dart';
 
 /// A tool's frontend as a floating card window: a title bar to drag it by
-/// (with the result it shows, pin, maximize and close), the frontend, and a
-/// grip to resize it. Pressing anywhere brings it to the front.
+/// (with the result it shows, pin, minimize, maximize and close), the
+/// frontend, and a grip to resize it. Pressing anywhere brings it to the front.
 class CardWindow extends StatefulWidget {
   const CardWindow({
     super.key,
@@ -23,6 +23,7 @@ class CardWindow extends StatefulWidget {
     this.onResizeEnd,
     this.onClose,
     this.onPin,
+    this.onMinimize,
     this.onMaximize,
   });
 
@@ -44,6 +45,7 @@ class CardWindow extends StatefulWidget {
   final VoidCallback? onResizeEnd;
   final VoidCallback? onClose;
   final VoidCallback? onPin;
+  final VoidCallback? onMinimize;
   final VoidCallback? onMaximize;
 
   @override
@@ -116,83 +118,93 @@ class _CardWindowState extends State<CardWindow>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // The title bar: drag the window by it; double-click maximizes.
-          MouseRegion(
-            cursor:
-                widget.movable ? SystemMouseCursors.grab : MouseCursor.defer,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onDoubleTap: widget.onMaximize,
-              onPanStart: widget.movable
-                  ? (_) {
-                      setState(() => _dragging = true);
-                      widget.onDragStart?.call();
-                    }
-                  : null,
-              onPanUpdate:
-                  widget.movable ? (d) => widget.onDrag?.call(d.delta) : null,
-              onPanEnd: widget.movable
-                  ? (_) {
-                      setState(() => _dragging = false);
-                      widget.onDragEnd?.call();
-                    }
-                  : null,
-              child: Container(
-                height: 56,
-                padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
-                color: widget.front
-                    ? scheme.surfaceContainer
-                    : scheme.surfaceContainerLow,
-                child: Row(children: [
-                  ToolAvatar(tool: w.tool, name: w.name, size: 34),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(w.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w700)),
-                        if (subtitle.isNotEmpty)
-                          Text(subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(color: scheme.onSurfaceVariant)),
-                      ],
-                    ),
+          // The title bar: drag by the label; chrome buttons stay tappable.
+          Container(
+            height: 56,
+            padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+            color: widget.front
+                ? scheme.surfaceContainer
+                : scheme.surfaceContainerLow,
+            child: Row(children: [
+              Expanded(
+                child: MouseRegion(
+                  cursor: widget.movable
+                      ? SystemMouseCursors.grab
+                      : MouseCursor.defer,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onDoubleTap: widget.onMaximize,
+                    onPanStart: widget.movable
+                        ? (_) {
+                            setState(() => _dragging = true);
+                            widget.onDragStart?.call();
+                          }
+                        : null,
+                    onPanUpdate: widget.movable
+                        ? (d) => widget.onDrag?.call(d.delta)
+                        : null,
+                    onPanEnd: widget.movable
+                        ? (_) {
+                            setState(() => _dragging = false);
+                            widget.onDragEnd?.call();
+                          }
+                        : null,
+                    child: Row(children: [
+                      ToolAvatar(tool: w.tool, name: w.name, size: 34),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(w.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700)),
+                            if (subtitle.isNotEmpty)
+                              Text(subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                          color: scheme.onSurfaceVariant)),
+                          ],
+                        ),
+                      ),
+                    ]),
                   ),
-                  _ChromeButton(
-                    tooltip: widget.pinned ? 'Unpin' : 'Pin to the pinned desk',
-                    icon: widget.pinned
-                        ? Icons.push_pin
-                        : Icons.push_pin_outlined,
-                    selected: widget.pinned,
-                    onPressed: widget.onPin,
-                  ),
-                  _ChromeButton(
-                    tooltip: widget.maximized ? 'Restore' : 'Maximize',
-                    icon: widget.maximized
-                        ? Icons.close_fullscreen_rounded
-                        : Icons.open_in_full_rounded,
-                    onPressed: widget.onMaximize,
-                  ),
-                  _ChromeButton(
-                    tooltip: 'Close',
-                    icon: Icons.close_rounded,
-                    danger: true,
-                    onPressed: widget.onClose == null ? null : _close,
-                  ),
-                ]),
+                ),
               ),
-            ),
+              _ChromeButton(
+                tooltip: widget.pinned ? 'Unpin' : 'Pin to the pinned desk',
+                icon: widget.pinned ? Icons.push_pin : Icons.push_pin_outlined,
+                selected: widget.pinned,
+                onPressed: widget.onPin,
+              ),
+              _ChromeButton(
+                tooltip: 'Minimize',
+                icon: Icons.minimize_rounded,
+                onPressed: widget.onMinimize,
+              ),
+              _ChromeButton(
+                tooltip: widget.maximized ? 'Restore' : 'Maximize',
+                icon: widget.maximized
+                    ? Icons.close_fullscreen_rounded
+                    : Icons.open_in_full_rounded,
+                onPressed: widget.onMaximize,
+              ),
+              _ChromeButton(
+                tooltip: 'Close',
+                icon: Icons.close_rounded,
+                danger: true,
+                onPressed: widget.onClose == null ? null : _close,
+              ),
+            ]),
           ),
           Divider(
               height: 1,

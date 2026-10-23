@@ -10,6 +10,7 @@ import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/skeleton.dart';
 import 'admin_widgets.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 
 typedef AdminAction = Future<void> Function(
     String namespace, String action, Map<String, dynamic> initialBody);
@@ -870,7 +871,7 @@ class _AppPageContentState extends State<AdminPageContent> {
       ..sort((a, b) => '${a['name'] ?? a['id']}'
           .toLowerCase()
           .compareTo('${b['name'] ?? b['id']}'.toLowerCase()));
-    final picked = await showDialog<Map<String, dynamic>>(
+    final picked = await showAppDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) =>
           _AdminsSpacePicker(projects: candidates, currentId: currentId),
@@ -1293,7 +1294,7 @@ class _AppPageContentState extends State<AdminPageContent> {
       'scopes': 'Scopes (optional)',
       'params': 'Extra sign-in parameters (optional, name=value&…)',
     };
-    final body = await showDialog<Map<String, dynamic>>(
+    final body = await showAppDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.key_rounded),
@@ -1704,7 +1705,7 @@ class _AppPageContentState extends State<AdminPageContent> {
 
   Future<void> _createPartnerKey() async {
     final controller = TextEditingController();
-    final name = await showDialog<String>(
+    final name = await showAppDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.key_rounded),
@@ -1738,7 +1739,7 @@ class _AppPageContentState extends State<AdminPageContent> {
     }
     final secret = '${_map(result)['secret'] ?? ''}';
     if (secret.isEmpty || !mounted) return;
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
@@ -1765,7 +1766,7 @@ class _AppPageContentState extends State<AdminPageContent> {
   }
 
   Future<void> _revokePartnerKey(Map<String, dynamic> key) async {
-    final ok = await showDialog<bool>(
+    final ok = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.key_off_rounded),
@@ -1927,7 +1928,7 @@ class _AppPageContentState extends State<AdminPageContent> {
     final total = _map(_map(d['usage'])['total']);
     final storage = _map(d['storage']);
     final settings = _map(d['settings']);
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       builder: (context) => Dialog(
         child: ConstrainedBox(
@@ -2738,7 +2739,7 @@ class _AppPageContentState extends State<AdminPageContent> {
         for (final m in _listOfMaps(p['models']))
           if (m['markup'] is num) _number(m['markup'])
     ];
-    final picked = await showDialog<(String, double)>(
+    final picked = await showAppDialog<(String, double)>(
       context: context,
       builder: (_) => _ImportVercelDialog(
           providers: vercel,
@@ -2758,7 +2759,7 @@ class _AppPageContentState extends State<AdminPageContent> {
     final skipped = _map(r['skipped']);
     final needPrice = _stringList(r['need_price']);
     final gone = _stringList(r['gone']);
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.download_done_rounded),
@@ -2804,7 +2805,7 @@ class _AppPageContentState extends State<AdminPageContent> {
     final selected = provider ??
         providers.firstWhere((p) => '${p['id']}' == filter,
             orElse: () => providers.first);
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       builder: (_) => _ModelEditorDialog(
         providers: providers,
@@ -2818,7 +2819,7 @@ class _AppPageContentState extends State<AdminPageContent> {
 
   Future<void> _removeModel(Map<String, dynamic> model) async {
     final provider = _map(model['_provider']);
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.delete_outline_rounded),
@@ -3126,7 +3127,7 @@ class _AppPageContentState extends State<AdminPageContent> {
   }
 
   Future<bool> _confirm(String title, String message, String action) async =>
-      await showDialog<bool>(
+      await showAppDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           icon: const Icon(Icons.help_outline_rounded),
@@ -3870,7 +3871,7 @@ class _AppPageContentState extends State<AdminPageContent> {
   }
 
   Future<void> _terminateSandbox(Map<String, dynamic> row) async {
-    final ok = await showDialog<bool>(
+    final ok = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.power_settings_new_rounded),
@@ -4457,7 +4458,7 @@ class _AppPageContentState extends State<AdminPageContent> {
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
         .replaceAll(RegExp(r'^-+|-+$'), '');
-    final value = await showDialog<String>(
+    final value = await showAppDialog<String>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialog) => AlertDialog(
@@ -4504,7 +4505,7 @@ class _AppPageContentState extends State<AdminPageContent> {
 
   void _showProject(Map<String, dynamic> project) {
     final id = '${project['id'] ?? project['space_id'] ?? ''}';
-    showDialog<void>(
+    showAppDialog<void>(
       context: context,
       builder: (context) => _ProjectDialog(
         project: project,
@@ -4520,7 +4521,7 @@ class _AppPageContentState extends State<AdminPageContent> {
   }
 
   void _showUser(Map<String, dynamic> account, {int tab = 0}) {
-    showDialog<void>(
+    showAppDialog<void>(
       context: context,
       builder: (context) => _UserDialog(
         account: account,

@@ -490,8 +490,8 @@ class AdminFilterOption<T> {
   final IconData? icon;
 }
 
-/// A single-choice row of filter chips with optional counts. Scrolls
-/// sideways when it does not fit instead of wrapping onto many lines.
+/// A single-choice set of filter chips with optional counts. Wraps onto
+/// more rows when the chips do not fit on one line.
 class AdminFilterChips<T> extends StatelessWidget {
   const AdminFilterChips({
     super.key,
@@ -506,10 +506,11 @@ class AdminFilterChips<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(children: [
-        for (final option in options) ...[
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final option in options)
           ChoiceChip(
             selected: option.value == selected,
             showCheckmark: false,
@@ -540,9 +541,7 @@ class AdminFilterChips<T> extends StatelessWidget {
             ]),
             onSelected: (_) => onSelected(option.value),
           ),
-          const SizedBox(width: 8),
-        ],
-      ]),
+      ],
     );
   }
 }

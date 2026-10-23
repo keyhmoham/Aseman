@@ -235,6 +235,34 @@ printf 'ASEMAN_FILE_EDITED\n'
 `, shellFilePath(path+".aseman-edit.XXXXXX"), shellFilePath(base64.StdEncoding.EncodeToString(before)), shellFilePath(path), shellFilePath(base64.StdEncoding.EncodeToString(after)), shellFilePath(path), shellFilePath(path))
 }
 
+// readSandboxImage returns multimodal content when [path] is an image the
+// agent should see (e.g. an aseman-desktop screenshot of a tool frontend).
+// ok is false when the path is not an image; then the caller reads it as text.
+func (s *Service) readSandboxImage(ctx context.Context, spaceID identity.ID, path string) (out string, ok bool, err error) {
+	if !vmm.ExecutionFrom(ctx).Allows("sandbox_exec") {
+		return "", false, errs.Permission("sandbox filesystem access is not granted")
+	}
+	data, err := s.sandboxReadFile(ctx, spaceID, path)
+	if err != nil {
+		return "", true, err
+	}
+	mime := sniffMime(path, data)
+	if !strings.HasPrefix(strings.ToLower(mime), "image/") {
+		return "", false, nil
+	}
+	pixels, outMime := imageDataForContent(mime, data)
+	if len(pixels) == 0 {
+		return "file: sandbox " + path + " (" + mime + ")\nCould not decode this image for inline viewing.", true, nil
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"__multimodal": map[string]any{
+			"text":      "file: sandbox " + path + " (" + mime + ") — this is the requested image (e.g. a screenshot of a tool frontend). Judge the design from what you see.",
+			"image_url": "data:" + outMime + ";base64," + base64.StdEncoding.EncodeToString(pixels),
+		},
+	})
+	return string(payload), true, nil
+}
+
 func (s *Service) readSandboxText(ctx context.Context, spaceID identity.ID, path string, start, end, maxChars int) (string, error) {
 	if !vmm.ExecutionFrom(ctx).Allows("sandbox_exec") {
 		return "", errs.Permission("sandbox filesystem access is not granted")
@@ -244,7 +272,7 @@ func (s *Service) readSandboxText(ctx context.Context, spaceID identity.ID, path
 		return "", err
 	}
 	if !utf8.Valid(data) {
-		return "", errs.InvalidArgument("sandbox file is binary; use file_send to deliver it")
+		return "", errs.InvalidArgument("sandbox file is binary; use file_send to deliver it, or file_read an image path to see it")
 	}
 	lines := strings.Split(string(data), "\n")
 	if start <= 0 {

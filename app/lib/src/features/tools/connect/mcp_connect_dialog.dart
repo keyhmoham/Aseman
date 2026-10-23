@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../data/services/aseman_service.dart';
 import 'mcp_sign_in.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 
 /// Asks the person to connect their own account to the tool [botId] in the
 /// project [spaceId]: sign in with the provider (OAuth), with an OAuth client
@@ -18,7 +19,7 @@ Future<bool> connectMcpTool(
   bool reconnect = false,
   OAuthOpener? open,
 }) async =>
-    await showDialog<bool>(
+    await showAppDialog<bool>(
       context: context,
       builder: (_) => McpConnectDialog(
           sign: McpSignIn(service),

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_shape.dart';
+import 'overlay_panels.dart';
 
 export '../../core/theme/app_shape.dart';
 
@@ -283,7 +284,7 @@ class AppAmountField extends StatelessWidget {
         text: value == value.roundToDouble()
             ? value.round().toString()
             : value.toStringAsFixed(decimals));
-    final result = await showDialog<double>(
+    final result = await showAppDialog<double>(
       context: context,
       builder: (context) {
         void submit() {

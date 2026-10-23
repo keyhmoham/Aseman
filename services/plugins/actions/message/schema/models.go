@@ -8,7 +8,7 @@ import (
 func f(name string, k database.Kind) database.Field { return database.Field{Name: name, Kind: k} }
 
 func Models() []database.Model {
-	return append(shared.Models(), []database.Model{messages(), directs(), packets()}...)
+	return append(shared.Models(), []database.Model{messages(), messageEdits(), directs(), packets()}...)
 }
 
 func messages() database.Model {
@@ -23,6 +23,18 @@ func messages() database.Model {
 			f("attachment_ids", database.KindJSON),
 			f("reply_to", database.KindString),
 			f("edited_at", database.KindTime),
+			f("created_at", database.KindTime), f("updated_at", database.KindTime),
+		},
+	}
+}
+
+func messageEdits() database.Model {
+	return database.Model{
+		Name:  "message_edits",
+		Table: "message_edits",
+		Fields: []database.Field{
+			f("id", database.KindString), f("message_id", database.KindString),
+			f("body", database.KindString), f("replaced_at", database.KindTime),
 			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		},
 	}

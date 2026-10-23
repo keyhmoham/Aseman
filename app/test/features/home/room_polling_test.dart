@@ -14,7 +14,8 @@ import '../../fake_aseman_service.dart';
 typedef _Page = ({
   List<RoomMessage> messages,
   String working,
-  String workingDetail
+  String workingDetail,
+  bool hasMore
 });
 
 class _Service extends FakeAsemanService {
@@ -42,13 +43,13 @@ class _Service extends FakeAsemanService {
 
   @override
   Future<_Page> fetchRoomMessages(String spaceId, String roomId,
-      {int limit = 50, int offset = 0}) {
+      {int limit = 50, DateTime? before}) {
     if (pending != null && roomId == 'a1') {
       pendingCalls++;
       return pending!.future;
     }
     return super
-        .fetchRoomMessages(spaceId, roomId, limit: limit, offset: offset);
+        .fetchRoomMessages(spaceId, roomId, limit: limit, before: before);
   }
 }
 
@@ -174,7 +175,8 @@ void main() {
     pending.complete((
       messages: [_message('late', 'a1', 'Late general response')],
       working: 'old-worker',
-      workingDetail: 'Old task'
+      workingDetail: 'Old task',
+      hasMore: false,
     ));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Macro room content'), findsOneWidget);

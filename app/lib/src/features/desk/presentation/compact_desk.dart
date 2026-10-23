@@ -22,8 +22,9 @@ const double compactDeskWidth = 600;
 /// that opens the full frontend in a bottom sheet when tapped. Widgets are
 /// arranged by dragging (long-press, then move); the menu of each sets its
 /// size (small 1×1, medium 2×1, large 2×2 cells) and shape (card, squircle,
-/// pill, circle, leaf), pins or closes it. The arrangement is kept on the
-/// node with the window (its `compact`), so it follows the person.
+/// pill, circle, leaf), pins or deletes it. Closing the sheet minimizes the
+/// window to the dock. The arrangement is kept on the node with the window
+/// (its `compact`), so it follows the person.
 class CompactDesk extends StatefulWidget {
   const CompactDesk({
     super.key,
@@ -257,7 +258,7 @@ class CompactDeskState extends State<CompactDesk> {
     final focus = c.focusTool;
     final board = [
       for (final w in c.state.boardOrder)
-        if (focus == null || w.tool == focus) w,
+        if (!c.isMinimized(w.id) && (focus == null || w.tool == focus)) w,
     ];
     final order = _dragOrder;
     if (order == null) return board;
@@ -389,6 +390,8 @@ class CompactDeskState extends State<CompactDesk> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
       builder: (context) => _WidgetMenu(
         window: w,
         shape: shape,
@@ -413,7 +416,11 @@ class CompactDeskState extends State<CompactDesk> {
             builder: (context, box) {
               final width = box.maxWidth;
               final layout = _layout(windows, width);
-              if (windows.isEmpty && widget.emptyState != null) {
+              // Minimized windows stay in the dock; only a truly empty desk
+              // shows the empty state.
+              if (windows.isEmpty &&
+                  c.state.windows.isEmpty &&
+                  widget.emptyState != null) {
                 return Padding(
                   padding: EdgeInsets.only(
                     top: widget.topInset,
@@ -722,7 +729,7 @@ class CompactWidgetTile extends StatelessWidget {
 }
 
 /// The full frontend of a window in the sheet, with its title and actions;
-/// closes itself when the window closes (here, by an agent, elsewhere).
+/// closes itself when the window closes or is minimized away.
 class _WindowSheet extends StatelessWidget {
   const _WindowSheet({
     required this.controller,
@@ -800,12 +807,12 @@ class _WindowSheet extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Close window',
+                      tooltip: 'Minimize',
                       onPressed: () {
-                        controller.close(w.id);
+                        controller.minimize(w.id);
                         Navigator.of(context).maybePop();
                       },
-                      icon: const Icon(Icons.close_rounded),
+                      icon: const Icon(Icons.minimize_rounded),
                     ),
                   ],
                 ),
@@ -823,7 +830,7 @@ class _WindowSheet extends StatelessWidget {
   }
 }
 
-/// A widget's options: its size and shape, open, pin, close.
+/// A widget's options: its size and shape, open, pin, delete.
 class _WidgetMenu extends StatefulWidget {
   const _WidgetMenu({
     required this.window,
@@ -883,85 +890,174 @@ class _WidgetMenuState extends State<_WidgetMenu> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+    final maxH = MediaQuery.sizeOf(context).height * .72;
+    final subtitle = [
+      if (widget.window.argsSummary.isNotEmpty && !widget.window.isDesigned)
+        widget.window.argsSummary,
+      if (widget.window.isDesigned && widget.window.request.trim().isNotEmpty)
+        'for “${widget.window.request.trim()}”',
+    ].join('  ·  ');
+    Widget label(String title) => Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            title,
+            style: text.labelLarge?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              letterSpacing: .2,
+            ),
+          ),
+        );
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        4,
+        20,
+        16 + MediaQuery.paddingOf(context).bottom,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxH),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              widget.window.label,
-              style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Size',
-              style: text.labelLarge?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 8),
-            SegmentedButton<String>(
-              showSelectedIcon: false,
-              segments: [
-                for (final s in DeskCompact.sizes)
-                  ButtonSegment(value: s, label: Text(_sizeLabels[s]!)),
-              ],
-              selected: {_size},
-              onSelectionChanged: (s) => _set(size: s.first),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Shape',
-              style: text.labelLarge?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
+            Row(
               children: [
-                for (final s in DeskCompact.shapes)
-                  Semantics(
-                    button: true,
-                    selected: s == _shape,
-                    label: _shapeLabels[s],
-                    child: InkWell(
-                      customBorder: boardShape(s),
-                      onTap: () => _set(shape: s),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: s == 'pill' ? 64 : 44,
-                            height: 44,
-                            decoration: ShapeDecoration(
-                              color: s == _shape
-                                  ? scheme.primaryContainer
-                                  : scheme.surfaceContainerHighest,
-                              shape: boardShape(s) is OutlinedBorder
-                                  ? (boardShape(s) as OutlinedBorder).copyWith(
-                                      side: BorderSide(
-                                        color: s == _shape
-                                            ? scheme.primary
-                                            : Colors.transparent,
-                                        width: 2,
-                                      ),
-                                    )
-                                  : boardShape(s),
-                            ),
+                ToolAvatar(
+                  tool: widget.window.tool,
+                  name: widget.window.name,
+                  size: 40,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.window.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      Text(
+                        subtitle.isEmpty ? 'Board widget' : subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.labelSmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    label('Size'),
+                    SegmentedButton<String>(
+                      segments: [
+                        for (final s in DeskCompact.sizes)
+                          ButtonSegment(
+                            value: s,
+                            label: Text(_sizeLabels[s]!),
                           ),
-                          const SizedBox(height: 4),
-                          Text(_shapeLabels[s]!, style: text.labelSmall),
-                        ],
+                      ],
+                      selected: {_size},
+                      onSelectionChanged: (v) => _set(size: v.first),
+                      showSelectedIcon: false,
+                      style: const ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     ),
-                  ),
-              ],
+                    const SizedBox(height: 16),
+                    label('Shape'),
+                    SizedBox(
+                      height: 76,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: DeskCompact.shapes.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 10),
+                        itemBuilder: (context, i) {
+                          final s = DeskCompact.shapes[i];
+                          final selected = s == _shape;
+                          return Semantics(
+                            button: true,
+                            selected: selected,
+                            label: _shapeLabels[s],
+                            child: InkWell(
+                              customBorder: boardShape(s),
+                              onTap: () => _set(shape: s),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                curve: Curves.easeOutCubic,
+                                width: s == 'pill' ? 76 : 64,
+                                padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? scheme.primaryContainer
+                                          .withValues(alpha: .55)
+                                      : scheme.surfaceContainerHighest
+                                          .withValues(alpha: .55),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: selected
+                                        ? scheme.primary.withValues(alpha: .55)
+                                        : scheme.outlineVariant
+                                            .withValues(alpha: .35),
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      width: s == 'pill' ? 44 : 28,
+                                      height: 28,
+                                      decoration: ShapeDecoration(
+                                        color: selected
+                                            ? scheme.primary
+                                            : scheme.onSurfaceVariant
+                                                .withValues(alpha: .35),
+                                        shape: boardShape(s),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _shapeLabels[s]!,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: text.labelSmall?.copyWith(
+                                        fontWeight: selected
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        color: selected
+                                            ? scheme.onPrimaryContainer
+                                            : scheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Row(
               children: [
                 Expanded(
-                  child: FilledButton.tonalIcon(
+                  child: FilledButton.icon(
                     onPressed: () {
                       Navigator.of(context).pop();
                       widget.onOpen();
@@ -970,8 +1066,8 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                     label: const Text('Open'),
                   ),
                 ),
-                const SizedBox(width: 8),
-                IconButton.outlined(
+                const SizedBox(width: 10),
+                IconButton.filledTonal(
                   tooltip: widget.pinned ? 'Unpin' : 'Pin',
                   onPressed: () {
                     widget.onPin();
@@ -982,14 +1078,18 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton.outlined(
-                  tooltip: 'Close window',
-                  color: scheme.error,
+                IconButton.filledTonal(
+                  tooltip: 'Delete window',
+                  style: IconButton.styleFrom(
+                    foregroundColor: scheme.error,
+                    backgroundColor:
+                        scheme.errorContainer.withValues(alpha: .55),
+                  ),
                   onPressed: () {
                     widget.onClose();
                     Navigator.of(context).pop();
                   },
-                  icon: const Icon(Icons.close_rounded),
+                  icon: const Icon(Icons.delete_outline_rounded),
                 ),
               ],
             ),

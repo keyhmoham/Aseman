@@ -97,19 +97,21 @@ CREATE TABLE IF NOT EXISTS directs (
 );
 
 CREATE TABLE IF NOT EXISTS files (
-    id          TEXT PRIMARY KEY,
-    owner_id    TEXT,
-    space_id    TEXT,
-    room_id     TEXT,
-    metadata_id TEXT,
-    meta_path   TEXT,
-    name        TEXT,
-    mime        TEXT,
-    size        BIGINT,
-    storage_key TEXT,
-    public      BOOLEAN,
-    created_at  TIMESTAMPTZ,
-    updated_at  TIMESTAMPTZ
+    id           TEXT PRIMARY KEY,
+    owner_id     TEXT,
+    space_id     TEXT,
+    room_id      TEXT,
+    metadata_id  TEXT,
+    meta_path    TEXT,
+    name         TEXT,
+    mime         TEXT,
+    size         BIGINT,
+    storage_key  TEXT,
+    public       BOOLEAN,
+    source_url   TEXT,
+    content_hash TEXT,
+    created_at   TIMESTAMPTZ,
+    updated_at   TIMESTAMPTZ
 );
 
 -- Wallets and the distributed ledger.

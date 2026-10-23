@@ -50,6 +50,26 @@ func TestSearchBotsPlatformWide(t *testing.T) {
 		t.Fatalf("agent,tool search = %v", combos)
 	}
 
+	// A space sandbox must never appear as an app in search results.
+	sbxID, _ := identity.New(1)
+	sbx := &bot.Bot{
+		Entity:  entity.Entity{ID: sbxID, CreatedAt: now, UpdatedAt: now},
+		OwnerID: owner, Name: "sbx-space1", Kind: bot.KindTool,
+		VMType: bot.VMTypeContainer, Status: bot.StatusRunning,
+	}
+	if err := s.R.CreateID(ctx, "bots", sbxID, sbx); err != nil {
+		t.Fatal(err)
+	}
+	tools, err := s.SearchBots(ctx, "", "tool", 50, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range tools {
+		if b.IsSandbox() {
+			t.Fatalf("sandbox surfaced as app: %+v", b)
+		}
+	}
+
 	// name substring filter + pagination.
 	page1, err := s.SearchBots(ctx, "alpha", "", 1, 0)
 	if err != nil {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../data/services/aseman_service.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 
 /// Why something is reported, as `spaces.message_report` takes it.
 const reportReasons = <(String, String)>[
@@ -19,7 +20,7 @@ Future<bool> reportToAdmins(BuildContext context, AsemanService service,
     {required String spaceId,
     required String roomId,
     String messageId = ''}) async {
-  final result = await showDialog<(String, String)>(
+  final result = await showAppDialog<(String, String)>(
       context: context, builder: (_) => _ReportDialog(chat: messageId.isEmpty));
   if (result == null || !context.mounted) return false;
   try {

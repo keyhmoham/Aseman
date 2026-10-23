@@ -34,6 +34,7 @@ Some **bold** and *italic* with a [link](https://example.com) and `code`.
 
   test('parses extended directives', () {
     final md = '''
+:::image https://cdn/photo.png
 :::chart {"type":"bar","labels":["A"],"values":[3]}
 :::video https://cdn/clip.mp4
 :::audio https://cdn/note.mp3
@@ -41,6 +42,9 @@ Some **bold** and *italic* with a [link](https://example.com) and `code`.
 :::card space Atlas Capital
 ''';
     final blocks = parseRichMarkdown(md);
+    expect(blocks.any((b) => b.kind == BlockKind.image), isTrue);
+    expect(blocks.firstWhere((b) => b.kind == BlockKind.image).url,
+        'https://cdn/photo.png');
     expect(blocks.any((b) => b.kind == BlockKind.chart), isTrue);
     final chart = blocks.firstWhere((b) => b.kind == BlockKind.chart);
     expect(chart.chart?['type'], 'bar');
@@ -55,6 +59,17 @@ Some **bold** and *italic* with a [link](https://example.com) and `code`.
     expect(cards[0].card?.kind, CardKind.agent);
     expect(cards[0].card?.target, 'SignalBot');
     expect(cards[1].card?.kind, CardKind.space);
+  });
+
+  test('a lone markdown image is a block image like :::image', () {
+    final blocks = parseRichMarkdown(
+        'Before\n\n![alt text](https://cdn/a.png)\n\nAfter');
+    expect(blocks.map((b) => b.kind).toList(), [
+      BlockKind.paragraph,
+      BlockKind.image,
+      BlockKind.paragraph,
+    ]);
+    expect(blocks[1].url, 'https://cdn/a.png');
   });
 
   test('parses tables and quotes', () {

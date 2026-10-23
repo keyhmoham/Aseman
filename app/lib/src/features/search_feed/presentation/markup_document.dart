@@ -438,6 +438,15 @@ List<DesignBlock> markupToDesign(String source) {
       blocks.add(DesignBlock(DesignKind.quote, text: quote.join('\n')));
       continue;
     }
+    // A line that is only `![alt](url)` — same as :::image for the designer.
+    final aloneImage = RegExp(r'^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)$')
+        .firstMatch(t);
+    if (aloneImage != null) {
+      flush();
+      blocks.add(DesignBlock(DesignKind.image, url: aloneImage.group(2)!));
+      i++;
+      continue;
+    }
     final list = bullet.hasMatch(line)
         ? (bullet, DesignKind.bullets)
         : number.hasMatch(line)

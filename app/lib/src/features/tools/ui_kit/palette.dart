@@ -60,6 +60,23 @@ class VizPalette {
 
   List<Color> get categorical => categoricalOf(dark);
 
+  /// The person's accent: the color of single-valued views (a tag, a
+  /// progress bar, a sparkline) so they read as part of the app.
+  Color get accent => scheme.primary;
+
+  /// A soft tonal fill of [color] on the surface (tags, callouts, icon
+  /// containers).
+  Color tonal(Color color, [double strength = 1]) =>
+      Color.lerp(scheme.surface, color, (dark ? 0.26 : 0.16) * strength)!;
+
+  /// Ink of [color] that reads on its [tonal] fill.
+  Color onTonal(Color color) => Color.lerp(
+    color,
+    dark ? Colors.white : Colors.black,
+    dark ? 0.45 : 0.35,
+  )!;
+
+
   /// The categorical slots for a light or dark surface.
   static List<Color> categoricalOf(bool dark) =>
       dark ? _categoricalDark : _categoricalLight;
@@ -177,8 +194,14 @@ class VizText {
       height: 1.2,
       fontFeatures: const [FontFeature.tabularFigures()]));
 
-  static TextStyle title(VizPalette p) => p.font(TextStyle(
-      fontSize: 14, color: p.textPrimary, fontWeight: FontWeight.w600));
+  static TextStyle title(VizPalette p) => p.font(
+    TextStyle(
+      fontSize: 16,
+      color: p.textPrimary,
+      fontWeight: FontWeight.w600,
+      height: 1.25,
+    ),
+  );
 
   static TextStyle subtitle(VizPalette p) =>
       p.font(TextStyle(fontSize: 12, color: p.textSecondary));

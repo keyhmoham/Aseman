@@ -237,42 +237,5 @@ List<double> niceTicks(double min, double max, {int count = 5}) {
 /// names like `arrow_upward`), or null.
 IconData? iconFor(Object? name) {
   if (name is! String || name.isEmpty) return null;
-  return _extraIcons[name] ?? ElpianIcon.iconData(name);
+  return ElpianIcon.iconData(name);
 }
-
-const Map<String, IconData> _extraIcons = {
-  'trendingUp': Icons.trending_up,
-  'trendingDown': Icons.trending_down,
-  'trendingFlat': Icons.trending_flat,
-  'showChart': Icons.show_chart,
-  'barChart': Icons.bar_chart,
-  'pieChart': Icons.pie_chart,
-  'table': Icons.table_chart_outlined,
-  'wallet': Icons.account_balance_wallet_outlined,
-  'bank': Icons.account_balance_outlined,
-  'money': Icons.attach_money,
-  'clock': Icons.schedule,
-  'bolt': Icons.bolt,
-  'cloud': Icons.cloud_outlined,
-  'sun': Icons.wb_sunny_outlined,
-  'rain': Icons.water_drop_outlined,
-  'wind': Icons.air,
-  'thermometer': Icons.thermostat,
-  'user': Icons.person_outline,
-  'users': Icons.group_outlined,
-  'globe': Icons.public,
-  'link': Icons.link,
-  'code': Icons.code,
-  'database': Icons.storage,
-  'server': Icons.dns_outlined,
-  'chat': Icons.chat_bubble_outline,
-  'flag': Icons.flag_outlined,
-  'tag': Icons.sell_outlined,
-  'bookmark': Icons.bookmark_outline,
-  'filter': Icons.filter_list,
-  'sort': Icons.sort,
-  'speed': Icons.speed,
-  'timeline': Icons.timeline,
-  'hub': Icons.hub_outlined,
-  'tree': Icons.account_tree_outlined,
-};

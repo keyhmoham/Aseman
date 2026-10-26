@@ -69,6 +69,7 @@ class Pill extends StatelessWidget {
     required this.color,
     this.variant = 'tonal',
     this.icon,
+    this.dot = true,
   });
 
   final String text;
@@ -78,43 +79,59 @@ class Pill extends StatelessWidget {
   final String variant;
   final IconData? icon;
 
+  /// Whether a tonal or outlined pill without an icon shows a color dot.
+  final bool dot;
+
   @override
   Widget build(BuildContext context) {
     final p = VizPalette.of(context);
     final filled = variant == 'filled';
-    final outline = variant == 'outline';
+    final outline = variant == 'outline' || variant == 'outlined';
     final bg = filled
         ? color
         : outline
-            ? Colors.transparent
-            : color.withValues(alpha: p.dark ? 0.24 : 0.14);
-    final fg = filled ? VizPalette.onFill(color) : p.textPrimary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        ? Colors.transparent
+        : p.tonal(color);
+    final fg = filled ? VizPalette.onFill(color) : p.onTonal(color);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeInOutCubicEmphasized,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(999),
-        border: outline ? Border.all(color: color) : null,
+        border: outline
+            ? Border.all(color: color.withValues(alpha: 0.7))
+            : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 13, color: filled ? fg : color),
+            Icon(icon, size: 14, color: filled ? fg : color),
             const SizedBox(width: 4),
-          ] else if (!filled) ...[
+          ] else if (!filled && dot) ...[
             Container(
-                width: 6,
-                height: 6,
-                decoration:
-                    BoxDecoration(color: color, shape: BoxShape.circle)),
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
             const SizedBox(width: 6),
           ],
           Flexible(
-            child: Text(text,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w500, color: fg)),
+            child: Text(
+              text,
+              overflow: TextOverflow.ellipsis,
+              style: p.font(
+                TextStyle(
+                  fontSize: 12,
+                  height: 1.3,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.1,
+                  color: fg,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -122,16 +139,22 @@ class Pill extends StatelessWidget {
   }
 
   static Widget fromProps(Map<String, dynamic> props, VizPalette p) => Pill(
-        text: asText(props['text'] ?? props['label'] ?? props['value']),
-        color: p.parse(props['color'] ?? props['status']) ?? p.series(0),
-        variant: '${props['variant'] ?? 'tonal'}',
-        icon: iconFor(props['icon']),
-      );
+    text: asText(props['text'] ?? props['label'] ?? props['value']),
+    color: p.parse(props['color'] ?? props['status']) ?? p.accent,
+    variant: '${props['variant'] ?? 'tonal'}',
+    icon: iconFor(props['icon']),
+    dot: asBool(props['dot'], props['status'] != null),
+  );
 }
 
 class KitAvatar extends StatelessWidget {
-  const KitAvatar(
-      {super.key, this.name = '', this.url, this.size = 36, this.color});
+  const KitAvatar({
+    super.key,
+    this.name = '',
+    this.url,
+    this.size = 36,
+    this.color,
+  });
   final String name;
   final String? url;
   final double size;
@@ -149,34 +172,48 @@ class KitAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = VizPalette.of(context);
     final words = name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
-    final initials =
-        words.take(2).map((w) => w.characters.first.toUpperCase()).join();
+    final initials = words
+        .take(2)
+        .map((w) => w.characters.first.toUpperCase())
+        .join();
     final hue =
         color ?? p.series(name.codeUnits.fold<int>(0, (a, b) => a + b) % 8);
+    // Tonal: a soft fill of the hue with its ink, as M3 avatars are drawn.
     final fallback = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: hue, shape: BoxShape.circle),
-      child: Text(initials,
-          style: TextStyle(
-              fontSize: size * 0.4,
-              fontWeight: FontWeight.w600,
-              color: VizPalette.onFill(hue))),
+      decoration: BoxDecoration(
+        color: p.tonal(hue, 1.6),
+        shape: BoxShape.circle,
+      ),
+      child: Text(
+        initials,
+        style: p.font(
+          TextStyle(
+            fontSize: size * 0.38,
+            fontWeight: FontWeight.w700,
+            color: p.onTonal(hue),
+          ),
+        ),
+      ),
     );
     if (url == null || url!.isEmpty) return fallback;
     return ClipOval(
-      child: Image.network(url!,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => fallback),
+      child: Image.network(
+        url!,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback,
+      ),
     );
   }
 }
 
 /// A stat tile: label, value (auto-compacted), an optional delta against a
-/// named period, and an optional trend sparkline.
+/// named period, and an optional trend sparkline. The icon sits in a tonal
+/// rounded square; the delta is a tonal chip with its arrow.
 class StatTile extends StatelessWidget {
   const StatTile({super.key, required this.props});
   final Map<String, dynamic> props;
@@ -196,73 +233,108 @@ class StatTile extends StatelessWidget {
     final trend = asList(props['trend']);
     final icon = iconFor(props['icon']);
     final status = props['status'] as String?;
+    final accent =
+        p.parse(props['color']) ??
+        (status != null ? p.status(status) : p.accent);
+    final goodDown = props['goodDirection'] == 'down';
+    final label = Text(
+      asText(props['label']),
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
+      style: p.font(
+        TextStyle(
+          fontSize: compact ? 12 : 13,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.1,
+          color: p.textSecondary,
+        ),
+      ),
+    );
+    final iconBox = compact ? 28.0 : 36.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(children: [
-          if (icon != null) ...[
-            Icon(icon,
-                size: 16,
-                color: status != null ? p.status(status) : p.textSecondary),
-            const SizedBox(width: 6),
+        Row(
+          children: [
+            if (icon != null) ...[
+              Container(
+                width: iconBox,
+                height: iconBox,
+                decoration: BoxDecoration(
+                  color: p.tonal(accent, 1.3),
+                  borderRadius: BorderRadius.circular(iconBox * 0.32),
+                ),
+                child: Icon(
+                  icon,
+                  size: iconBox * 0.55,
+                  color: p.onTonal(accent),
+                ),
+              ),
+              SizedBox(width: compact ? 8 : 10),
+            ],
+            Expanded(child: label),
           ],
-          Expanded(
-            child: Text(asText(props['label']),
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: compact ? 12 : 13, color: p.textSecondary)),
-          ),
-        ]),
-        SizedBox(height: compact ? 2 : 4),
+        ),
+        SizedBox(height: compact ? 4 : 8),
         // Big figures shrink to fit rather than lose digits.
         FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
-          child: Text(value,
-              maxLines: 1,
-              style: TextStyle(
-                  fontSize: hero
-                      ? 48
-                      : compact
-                          ? 20
-                          : 28,
-                  height: 1.1,
-                  fontWeight: FontWeight.w600,
-                  color: p.textPrimary)),
+          child: Text(
+            value,
+            maxLines: 1,
+            style: p.font(
+              TextStyle(
+                fontSize: hero
+                    ? 52
+                    : compact
+                    ? 22
+                    : 32,
+                height: 1.05,
+                letterSpacing: hero ? -1.2 : (compact ? -0.2 : -0.6),
+                fontWeight: hero ? FontWeight.w700 : FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                color: p.textPrimary,
+              ),
+            ),
+          ),
         ),
-        if (delta != null || props['caption'] != null)
+        if (delta != null ||
+            props['deltaLabel'] != null ||
+            props['caption'] != null)
           Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Row(children: [
-              if (delta != null)
-                TrendText(
-                  value: delta,
-                  format: props['deltaFormat'] as String? ?? '+number',
-                  goodDown: props['goodDirection'] == 'down',
-                  style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w500),
-                ),
-              if (props['deltaLabel'] != null || props['caption'] != null) ...[
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(asText(props['deltaLabel'] ?? props['caption']),
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: p.textMuted)),
-                ),
+            padding: EdgeInsets.only(top: compact ? 4 : 8),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (delta != null)
+                  _DeltaChip(
+                    delta: delta,
+                    format: props['deltaFormat'] as String?,
+                    goodDown: goodDown,
+                  ),
+                if (props['deltaLabel'] != null || props['caption'] != null)
+                  Text(
+                    asText(props['deltaLabel'] ?? props['caption']),
+                    overflow: TextOverflow.ellipsis,
+                    style: p.font(TextStyle(fontSize: 12, color: p.textMuted)),
+                  ),
               ],
-            ]),
+            ),
           ),
         if (trend.length > 1)
           Padding(
-            padding: const EdgeInsets.only(top: 8),
+            padding: EdgeInsets.only(top: compact ? 6 : 10),
             child: Sparkline(
               values: [
                 for (final t in trend)
-                  asNum(t is Map ? t['value'] : t)?.toDouble()
+                  asNum(t is Map ? t['value'] : t)?.toDouble(),
               ],
-              height: hero ? 48 : 32,
-              color: p.parse(props['color']),
+              height: hero ? 56 : (compact ? 24 : 36),
+              color: accent,
               area: true,
             ),
           ),
@@ -271,8 +343,63 @@ class StatTile extends StatelessWidget {
   }
 }
 
+/// A delta as a small tonal chip: arrow and signed value, green when it
+/// moves the good way.
+class _DeltaChip extends StatelessWidget {
+  const _DeltaChip({required this.delta, this.format, this.goodDown = false});
+  final num delta;
+  final String? format;
+  final bool goodDown;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = VizPalette.of(context);
+    final up = delta > 0, down = delta < 0;
+    final good = goodDown ? down : up;
+    final color = up || down
+        ? (good ? VizPalette.good : VizPalette.critical)
+        : p.textSecondary;
+    final f = format ?? '+number';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 2, 8, 2),
+      decoration: BoxDecoration(
+        color: p.tonal(color),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            up
+                ? Icons.arrow_upward_rounded
+                : down
+                ? Icons.arrow_downward_rounded
+                : Icons.remove_rounded,
+            size: 14,
+            color: p.onTonal(color),
+          ),
+          const SizedBox(width: 2),
+          Text(
+            formatValue(delta, f.startsWith('+') ? f : '+$f'),
+            style: p.font(
+              TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                color: p.onTonal(color),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Progress: a linear bar or a ring. A value ≤ 1 without `max` is a
-/// fraction.
+/// fraction. The bar is the M3 Expressive one: rounded, a gap between the
+/// active part and the track, a stop dot at the end, and with `wavy` an
+/// animated wave on the active part.
 class ProgressView extends StatelessWidget {
   const ProgressView({super.key, required this.props});
   final Map<String, dynamic> props;
@@ -284,49 +411,60 @@ class ProgressView extends StatelessWidget {
     final max =
         asNum(props['max'])?.toDouble() ?? (v != null && v <= 1 ? 1 : 100);
     final t = v == null || max == 0 ? null : (v / max).clamp(0.0, 1.0);
-    final color = p.parse(props['color'] ?? props['status']) ?? p.series(0);
-    final track = Color.lerp(color, p.surface, 0.8)!;
+    final color = p.parse(props['color'] ?? props['status']) ?? p.accent;
+    final track = p.tonal(color, 1.5);
     final label = props['label'] == null ? null : asText(props['label']);
     final showValue = asBool(props['showValue'], true) && v != null;
+    final wavy = asBool(props['wavy']) || props['variant'] == 'wavy';
     final text = showValue
         ? (props['format'] != null
-            ? formatValue(v, props['format'] as String)
-            : max == 1
-                ? formatValue(v, 'percent')
-                : max == 100
-                    ? '${formatValue(v, null)}%'
-                    : '${formatValue(v, null)} / ${formatValue(max, null)}')
+              ? formatValue(v, props['format'] as String)
+              : max == 1
+              ? formatValue(v, 'percent')
+              : max == 100
+              ? '${formatValue(v, null)}%'
+              : '${formatValue(v, null)} / ${formatValue(max, null)}')
         : null;
     if (props['variant'] == 'circular') {
       final size = asDouble(props['size'], 56);
-      return Column(mainAxisSize: MainAxisSize.min, children: [
-        SizedBox(
-          width: size,
-          height: size,
-          child: Stack(alignment: Alignment.center, children: [
-            SizedBox(
-              width: size,
-              height: size,
-              child: CircularProgressIndicator(
-                value: t,
-                strokeWidth: math.max(3, size / 10),
-                color: color,
-                backgroundColor: track,
-                strokeCap: StrokeCap.round,
-              ),
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: size,
+            height: size,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: size,
+                  height: size,
+                  child: CircularProgressIndicator(
+                    value: t,
+                    strokeWidth: math.max(4, size / 9),
+                    color: color,
+                    backgroundColor: track,
+                    strokeCap: StrokeCap.round,
+                  ),
+                ),
+                if (text != null)
+                  Text(
+                    text,
+                    style: VizText.value(p).copyWith(
+                      fontSize: math.max(10, size / 4.5),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+              ],
             ),
-            if (text != null)
-              Text(text,
-                  style: VizText.value(p)
-                      .copyWith(fontSize: math.max(10, size / 4.5))),
-          ]),
-        ),
-        if (label != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(label, style: VizText.subtitle(p)),
           ),
-      ]);
+          if (label != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(label, style: VizText.subtitle(p)),
+            ),
+        ],
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -334,28 +472,214 @@ class ProgressView extends StatelessWidget {
       children: [
         if (label != null || text != null)
           Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Row(children: [
-              if (label != null)
-                Expanded(
-                    child: Text(label,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13, color: p.textPrimary))),
-              if (text != null) Text(text, style: VizText.value(p)),
-            ]),
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                if (label != null)
+                  Expanded(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: p.font(
+                        TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: p.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (text != null)
+                  Text(
+                    text,
+                    style: VizText.value(
+                      p,
+                    ).copyWith(fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
+              ],
+            ),
           ),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: t,
-            minHeight: asDouble(props['thickness'], 8),
-            color: color,
-            backgroundColor: track,
-          ),
+        ExpressiveBar(
+          value: t,
+          color: color,
+          track: track,
+          thickness: asDouble(props['thickness'], wavy ? 6 : 8),
+          wavy: wavy,
         ),
       ],
     );
   }
+}
+
+/// The M3 Expressive linear progress bar: rounded ends, a gap between the
+/// active part and the track, a stop dot at the track's end; [wavy] draws
+/// the active part as a travelling wave. A null [value] sweeps
+/// (indeterminate).
+class ExpressiveBar extends StatefulWidget {
+  const ExpressiveBar({
+    super.key,
+    required this.value,
+    required this.color,
+    required this.track,
+    this.thickness = 8,
+    this.wavy = false,
+  });
+
+  final double? value;
+  final Color color;
+  final Color track;
+  final double thickness;
+  final bool wavy;
+
+  @override
+  State<ExpressiveBar> createState() => _ExpressiveBarState();
+}
+
+class _ExpressiveBarState extends State<ExpressiveBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _phase = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 2),
+  );
+
+  bool get _moving => widget.wavy || widget.value == null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_moving) _phase.repeat();
+  }
+
+  @override
+  void didUpdateWidget(ExpressiveBar old) {
+    super.didUpdateWidget(old);
+    if (_moving && !_phase.isAnimating) _phase.repeat();
+    if (!_moving && _phase.isAnimating) _phase.stop();
+  }
+
+  @override
+  void dispose() {
+    _phase.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final height = widget.wavy ? widget.thickness * 2.4 : widget.thickness;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: widget.value ?? 0),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, _) => SizedBox(
+        height: height,
+        child: RepaintBoundary(
+          child: CustomPaint(
+            painter: _BarPainter(
+              value: widget.value == null ? null : t,
+              phase: _phase,
+              color: widget.color,
+              track: widget.track,
+              thickness: widget.thickness,
+              wavy: widget.wavy,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BarPainter extends CustomPainter {
+  _BarPainter({
+    required this.value,
+    required this.phase,
+    required this.color,
+    required this.track,
+    required this.thickness,
+    required this.wavy,
+  }) : super(repaint: phase);
+
+  final double? value;
+  final Animation<double> phase;
+  final Color color;
+  final Color track;
+  final double thickness;
+  final bool wavy;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final cy = size.height / 2;
+    final half = thickness / 2;
+    final gap = thickness * 0.75;
+    final stroke = Paint()
+      ..strokeWidth = thickness
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    double start = 0, end;
+    if (value == null) {
+      // Indeterminate: a segment sweeping across.
+      final x = phase.value * 1.6 - 0.3;
+      start = (x * w).clamp(0, w);
+      end = ((x + 0.35) * w).clamp(0, w);
+    } else {
+      end = value! * w;
+    }
+    final activeFrom = start + half, activeTo = end - half;
+    // Track: everything not active, apart by the gap.
+    void line(double a, double b, Color c) {
+      if (b - a < 0.5) return;
+      canvas.drawLine(Offset(a, cy), Offset(b, cy), stroke..color = c);
+    }
+
+    if (value == null) {
+      line(half, start - gap - half, track);
+      line(end + gap + half, w - half, track);
+    } else {
+      line(math.max(half, end + gap + half), w - half, track);
+      // The stop dot marks where the track ends.
+      if (value! < 0.98) {
+        canvas.drawCircle(
+          Offset(w - half, cy),
+          thickness * 0.22,
+          Paint()..color = color,
+        );
+      }
+    }
+    if (activeTo <= activeFrom) {
+      if (end - start > 0) {
+        canvas.drawCircle(
+          Offset((start + end) / 2, cy),
+          half,
+          Paint()..color = color,
+        );
+      }
+      return;
+    }
+    if (!wavy) {
+      line(activeFrom, activeTo, color);
+      return;
+    }
+    final amp = thickness * 0.55;
+    const wave = 28.0;
+    final shift = phase.value * wave;
+    final path = Path();
+    for (var x = activeFrom; x <= activeTo; x += 1) {
+      // The wave flattens into its ends.
+      final fade = math.min(1.0, math.min(x - activeFrom, activeTo - x) / wave);
+      final y = cy + math.sin((x - shift) / wave * 2 * math.pi) * amp * fade;
+      x == activeFrom ? path.moveTo(x, y) : path.lineTo(x, y);
+    }
+    canvas.drawPath(path, stroke..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_BarPainter old) =>
+      old.value != value ||
+      old.color != color ||
+      old.track != track ||
+      old.wavy != wavy ||
+      old.thickness != thickness;
 }
 
 /// Stars: [value] of [max], with halves.
@@ -417,7 +741,7 @@ class KeyValueList extends StatelessWidget {
       if (type == 'badge')
         return Pill(
             text: formatValue(v, format),
-            color: p.parse(asText(v).toLowerCase()) ?? p.series(0));
+            color: p.parse(asText(v).toLowerCase()) ?? p.accent);
       if (v is List) {
         return Text(v.map((x) => formatValue(x, format)).join(', '),
             style: style);
@@ -534,7 +858,7 @@ class TimelineView extends StatelessWidget {
                       Container(
                         width: 2,
                         height: 6,
-                        color: i == 0 ? Colors.transparent : p.axis,
+                        color: i == 0 ? Colors.transparent : p.grid,
                       ),
                       _dot(rows[i], p),
                       Expanded(
@@ -542,7 +866,7 @@ class TimelineView extends StatelessWidget {
                           width: 2,
                           color: i == rows.length - 1
                               ? Colors.transparent
-                              : p.axis,
+                              : p.grid,
                         ),
                       ),
                     ]),
@@ -604,15 +928,18 @@ class TimelineView extends StatelessWidget {
 
   Widget _dot(Map<String, dynamic> row, VizPalette p) {
     final status = row['status'] as String?;
-    final color = p.parse(row['color']) ??
-        (status != null ? p.status(status) : p.series(0));
+    final color =
+        p.parse(row['color']) ?? (status != null ? p.status(status) : p.accent);
     final icon = iconFor(row['icon']);
     if (icon != null) {
       return Container(
-        width: 22,
-        height: 22,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        child: Icon(icon, size: 13, color: VizPalette.onFill(color)),
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: p.tonal(color, 1.8),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 14, color: p.onTonal(color)),
       );
     }
     return Container(
@@ -628,7 +955,8 @@ class TimelineView extends StatelessWidget {
   }
 }
 
-/// A highlighted message: info, good, warning or critical, with its icon.
+/// A highlighted message: info, good, warning or critical, with its icon
+/// on a tonal container (no side stripe).
 class Callout extends StatelessWidget {
   const Callout({super.key, required this.props, this.children = const []});
   final Map<String, dynamic> props;
@@ -638,46 +966,79 @@ class Callout extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = VizPalette.of(context);
     final severity = '${props['severity'] ?? props['status'] ?? 'info'}';
-    final color = severity == 'info' ? p.series(0) : p.status(severity);
-    final icon = iconFor(props['icon']) ??
+    final color =
+        p.parse(props['color']) ??
+        (severity == 'info' ? p.accent : p.status(severity));
+    final icon =
+        iconFor(props['icon']) ??
         switch (severity) {
-          'good' || 'success' => Icons.check_circle_outline,
-          'warning' => Icons.warning_amber_rounded,
-          'critical' || 'error' || 'serious' => Icons.error_outline,
-          _ => Icons.info_outline,
+          'good' || 'success' => Icons.check_circle_rounded,
+          'warning' => Icons.warning_rounded,
+          'critical' || 'error' || 'serious' => Icons.error_rounded,
+          _ => Icons.info_rounded,
         };
+    final ink = p.onTonal(color);
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: p.dark ? 0.16 : 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border(left: BorderSide(color: color, width: 3)),
+        color: p.tonal(color),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: color),
-          const SizedBox(width: 10),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: p.tonal(color, 2.4),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 18, color: ink),
+          ),
+          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (props['title'] != null)
-                  Text(asText(props['title']),
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: p.textPrimary)),
-                if (props['text'] != null)
-                  Padding(
-                    padding:
-                        EdgeInsets.only(top: props['title'] != null ? 2 : 0),
-                    child: Text(asText(props['text']),
-                        style: TextStyle(fontSize: 13, color: p.textSecondary)),
-                  ),
-                ...children,
-              ],
+            child: Padding(
+              padding: const EdgeInsets.only(top: 5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (props['title'] != null &&
+                      asText(props['title']).isNotEmpty)
+                    Text(
+                      asText(props['title']),
+                      style: p.font(
+                        TextStyle(
+                          fontSize: 15,
+                          height: 1.3,
+                          fontWeight: FontWeight.w700,
+                          color: p.textPrimary,
+                        ),
+                      ),
+                    ),
+                  if (props['text'] != null)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        top: props['title'] != null ? 4 : 0,
+                      ),
+                      child: Text(
+                        asText(props['text']),
+                        style: p.font(
+                          TextStyle(
+                            fontSize: 13.5,
+                            height: 1.4,
+                            color: p.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (children.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    ...children,
+                  ],
+                ],
+              ),
             ),
           ),
         ],

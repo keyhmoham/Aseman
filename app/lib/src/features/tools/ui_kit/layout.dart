@@ -62,6 +62,8 @@ class ResponsiveGrid extends StatelessWidget {
 }
 
 /// A titled block of content, with an optional subtitle and trailing text.
+/// An icon sits in a tonal rounded square; the title takes the emphasized
+/// title style.
 class KitSection extends StatelessWidget {
   const KitSection({super.key, required this.props, required this.children});
   final Map<String, dynamic> props;
@@ -71,41 +73,61 @@ class KitSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = VizPalette.of(context);
     final icon = iconFor(props['icon']);
+    final hasTitle = asText(props['title']).isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(children: [
-          if (icon != null) ...[
-            Icon(icon, size: 18, color: p.textSecondary),
-            const SizedBox(width: 8),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(asText(props['title']),
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: p.textPrimary)),
-                if (props['subtitle'] != null)
-                  Text(asText(props['subtitle']), style: VizText.subtitle(p)),
-              ],
+        if (hasTitle || icon != null)
+          Row(children: [
+            if (icon != null) ...[
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: p.scheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon,
+                    size: 20, color: p.scheme.onSecondaryContainer),
+              ),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(asText(props['title']),
+                      style: p.font(TextStyle(
+                          fontSize: 18,
+                          height: 1.25,
+                          letterSpacing: -0.1,
+                          fontWeight: FontWeight.w700,
+                          color: p.textPrimary))),
+                  if (props['subtitle'] != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(asText(props['subtitle']),
+                          style: VizText.subtitle(p).copyWith(fontSize: 13)),
+                    ),
+                ],
+              ),
             ),
-          ),
-          if (props['trailing'] != null)
-            Text(asText(props['trailing']), style: VizText.subtitle(p)),
-        ]),
-        SizedBox(height: asDouble(props['gap'], 10)),
+            if (props['trailing'] != null)
+              Text(asText(props['trailing']),
+                  style: VizText.subtitle(p)
+                      .copyWith(fontWeight: FontWeight.w600)),
+          ]),
+        SizedBox(height: asDouble(props['gap'], 12)),
         ...children,
       ],
     );
   }
 }
 
-/// A panel whose content shows when its header is tapped.
+/// A panel whose content shows when its header is tapped: a tonal
+/// container whose corners and height spring open.
 class Expandable extends StatefulWidget {
   const Expandable({super.key, required this.props, required this.children});
   final Map<String, dynamic> props;
@@ -121,31 +143,41 @@ class _ExpandableState extends State<Expandable> {
   @override
   Widget build(BuildContext context) {
     final p = VizPalette.of(context);
-    return Container(
+    final icon = iconFor(widget.props['icon']);
+    final radius = BorderRadius.circular(_open ? 24 : 20);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOutCubicEmphasized,
       decoration: BoxDecoration(
-        border: Border.all(color: p.grid),
-        borderRadius: BorderRadius.circular(10),
+        color: _open
+            ? p.scheme.surfaceContainerHigh
+            : p.scheme.surfaceContainerLow,
+        borderRadius: radius,
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           InkWell(
-            borderRadius: BorderRadius.circular(10),
             onTap: () => setState(() => _open = !_open),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
               child: Row(children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 20, color: p.scheme.primary),
+                  const SizedBox(width: 12),
+                ],
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(asText(widget.props['title']),
-                          style: TextStyle(
-                              fontSize: 14,
+                          style: p.font(TextStyle(
+                              fontSize: 15,
                               fontWeight: FontWeight.w600,
-                              color: p.textPrimary)),
+                              color: p.textPrimary))),
                       if (widget.props['subtitle'] != null)
                         Text(asText(widget.props['subtitle']),
                             style: VizText.subtitle(p)),
@@ -154,21 +186,39 @@ class _ExpandableState extends State<Expandable> {
                 ),
                 AnimatedRotation(
                   turns: _open ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 150),
-                  child: Icon(Icons.expand_more, color: p.textSecondary),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOutCubicEmphasized,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: _open
+                          ? p.scheme.secondaryContainer
+                          : Colors.transparent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.expand_more_rounded,
+                        color: p.textSecondary),
+                  ),
                 ),
               ]),
             ),
           ),
-          if (_open)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: widget.children,
-              ),
-            ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeInOutCubicEmphasized,
+            alignment: Alignment.topCenter,
+            child: _open
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: widget.children,
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
         ],
       ),
     );

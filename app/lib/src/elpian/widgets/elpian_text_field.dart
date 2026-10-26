@@ -4,6 +4,7 @@ import '../models/elpian_node.dart';
 import '../core/elpian_services.dart';
 import '../core/event_dispatcher.dart';
 import '../css/css_properties.dart';
+import 'elpian_expressive.dart';
 
 /// A text input.
 ///
@@ -13,7 +14,11 @@ import '../css/css_properties.dart';
 /// (`text`, `number`, `email`, `phone`, `url`, or `date` / `time` /
 /// `datetime-local`, which open the platform pickers and report
 /// `yyyy-MM-dd` / `HH:mm` / `yyyy-MM-ddTHH:mm`); `min` / `max` bound the date
-/// pickers. Events: `input` (each change), `submit`.
+/// pickers. Material 3 decoration: `label` (floating label), `icon` /
+/// `trailingIcon` (Material icon names inside the field), `prefix` /
+/// `suffix` (text such as `$` or `kg`), `helper`, `error` (shown in the
+/// error color), `counter`, `variant` (`filled`, the default, or
+/// `outlined`), `disabled`. Events: `input` (each change), `submit`.
 class ElpianTextField {
   static Widget build(ElpianNode node, List<Widget> children) {
     final elementId = node.key ?? 'element_${node.hashCode}';
@@ -47,8 +52,9 @@ class _ElpianTextFieldView extends StatefulWidget {
 }
 
 class _ElpianTextFieldViewState extends State<_ElpianTextFieldView> {
-  late final TextEditingController _controller =
-      TextEditingController(text: _value ?? '');
+  late final TextEditingController _controller = TextEditingController(
+    text: _value ?? '',
+  );
 
   Map<String, dynamic> get _props => widget.node.props;
 
@@ -130,22 +136,25 @@ class _ElpianTextFieldViewState extends State<_ElpianTextFieldView> {
     final value = _mode == 'date'
         ? _date(date!)
         : _mode == 'time'
-            ? t
-            : '${_date(date!)}T$t';
+        ? t
+        : '${_date(date!)}T$t';
     _controller.text = value;
     _input(value);
   }
 
   TextInputType get _keyboard => switch (_mode) {
-        'number' =>
-          const TextInputType.numberWithOptions(decimal: true, signed: true),
-        'email' => TextInputType.emailAddress,
-        'phone' => TextInputType.phone,
-        'url' => TextInputType.url,
-        _ => _props['multiline'] == true
-            ? TextInputType.multiline
-            : TextInputType.text,
-      };
+    'number' => const TextInputType.numberWithOptions(
+      decimal: true,
+      signed: true,
+    ),
+    'email' => TextInputType.emailAddress,
+    'phone' => TextInputType.phone,
+    'url' => TextInputType.url,
+    _ =>
+      _props['multiline'] == true
+          ? TextInputType.multiline
+          : TextInputType.text,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -155,13 +164,44 @@ class _ElpianTextFieldViewState extends State<_ElpianTextFieldView> {
     final maxLines = obscure
         ? 1
         : (_props['maxLines'] as num?)?.toInt() ?? (multiline ? null : 1);
+    String? text(String key) {
+      final v = _props[key];
+      return v == null || '$v'.isEmpty ? null : '$v';
+    }
+
+    final scheme = Theme.of(context).colorScheme;
+    final outlined = _props['variant'] == 'outlined';
+    final error = text('error');
+    final icon = iconWidget(_props['icon'] ?? _props['prefixIcon']);
+    final trailing = _picker
+        ? Icon(
+            _mode == 'time'
+                ? Icons.schedule_rounded
+                : Icons.calendar_today_rounded,
+          )
+        : iconWidget(_props['trailingIcon'] ?? _props['suffixIcon']);
+    OutlineInputBorder border(Color color, [double width = 1]) =>
+        OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: color, width: width),
+        );
     return TextField(
       controller: _controller,
+      enabled: _props['disabled'] != true,
       decoration: InputDecoration(
-        hintText: hint,
-        suffixIcon: _picker
-            ? Icon(_mode == 'time' ? Icons.schedule : Icons.calendar_today)
-            : null,
+        hintText: hint.isEmpty ? null : hint,
+        labelText: text('label'),
+        helperText: text('helper'),
+        errorText: error,
+        counterText: text('counter'),
+        prefixText: text('prefix'),
+        suffixText: text('suffix'),
+        prefixIcon: icon,
+        suffixIcon: trailing,
+        filled: outlined ? false : null,
+        border: outlined ? border(scheme.outline) : null,
+        enabledBorder: outlined ? border(scheme.outline) : null,
+        focusedBorder: outlined ? border(scheme.primary, 2) : null,
       ),
       obscureText: obscure,
       minLines: multiline && !obscure ? 1 : null,

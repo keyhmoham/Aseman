@@ -107,6 +107,16 @@ class ElpianEngine {
     _registry.register('Drawer', ElpianDrawer.build);
     _registry.register(
         'FloatingActionButton', ElpianFloatingActionButton.build);
+    _registry.register('FAB', ElpianFloatingActionButton.build);
+
+    // Material 3 Expressive components
+    _registry.register('IconButton', ElpianIconButton.build);
+    _registry.register('SegmentedButton', ElpianSegmentedButton.build);
+    _registry.register('ListTile', ElpianListTile.build);
+    _registry.register('ListGroup', ElpianListGroup.build);
+    _registry.register('NavigationBar', ElpianNavigationBar.build);
+    _registry.register('SearchBar', ElpianSearchBar.build);
+    _registry.register('LoadingIndicator', ElpianLoadingIndicator.build);
     _registry.register('Canvas', ElpianCanvasWidget.build);
     _registry.register('CachedCanvas', ElpianCachedCanvas.build);
     _registry.register(ScopeContract.type, ElpianScope.build);
@@ -291,6 +301,14 @@ class ElpianEngine {
     'DragTarget',
     'Dismissible',
     'FloatingActionButton',
+    'FAB',
+    'Button',
+    'IconButton',
+    'Card',
+    'Chip',
+    'ListTile',
+    'SegmentedButton',
+    'NavigationBar',
   };
 
   /// The render itself, always run inside this engine's service scope so

@@ -414,7 +414,7 @@ class Sparkline extends StatelessWidget {
         height: height,
         width: w,
         child: CustomPaint(
-          painter: _SparkPainter(values, color ?? p.series(0), bars, area, p),
+          painter: _SparkPainter(values, color ?? p.accent, bars, area, p),
         ),
       );
     });
@@ -512,7 +512,7 @@ class Gauge extends StatelessWidget {
     final format = props['format'] as String?;
     // Thresholds: [{value, status|color}] — the fill takes the color of the
     // highest threshold the value reaches.
-    Color fill = p.parse(props['color']) ?? p.series(0);
+    Color fill = p.parse(props['color']) ?? p.accent;
     for (final t in asList(props['thresholds'])) {
       final m = asMap(t);
       final at = asNum(m['value'])?.toDouble();

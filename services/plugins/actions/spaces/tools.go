@@ -42,20 +42,20 @@ func toolDetail(toolName string) string {
 		return "checking the room…"
 	case "ask_user":
 		return "asking the user…"
+	case "ui_present":
+		return "showing an in-chat UI…"
 	case "db_tables", "db_read":
 		return "reading the platform database…"
 	case "routine_create":
 		return "scheduling a routine…"
 	case "proxy_create":
 		return "opening a gateway proxy…"
-	case "ui_compose":
-		return "composing a widget…"
-	case "ui_present":
-		return "presenting a UI…"
-	case "frontend_show":
-		return "opening the result on the desk…"
-	case "web_show":
-		return "opening the page on the desk…"
+	case "appui_create":
+		return "building an interactive UI…"
+	case "opencode_run":
+		return "running OpenCode…"
+	case "opencode_status", "opencode_models":
+		return "checking OpenCode…"
 	case "desk_state", "desk_arrange", "desk_close":
 		return "arranging the desk…"
 	default:
@@ -122,22 +122,13 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 		if rec.IsToolBackend() {
 			tool.Commands = s.appCommands(ctx, spaceID, rec)
 			tool.Frontend = s.toolFrontend(ctx, rec)
-			if tool.Frontend == "generative" {
-				_ = bridge.Invoke(ctx, s.K, "tools", "FrontendPerRequest", []any{ctx, rec.ID.String()}, &tool.FrontendPerRequest)
-			}
-			// Every result of a tool is shown in an interface on the desk.
-			show := " Show people the results you get from it with frontend_show ({\"tool\": \"" + rec.ID.String() + "\", \"microtool\": <the one you called>, \"args\": <the same arguments>}): it opens them as a card window on the desk, not as text"
+			show := " When the person asks for a UI, interface, dashboard or similar, use appui_create with a brief (OpenCode builds fullstack software that calls space apps via preview `_aseman/api/call`; tool: \"" + rec.ID.String() + "\" for dock association). For unsolicited structured data prefer plain chat text"
 			switch tool.Frontend {
-			case "generative":
-				if tool.FrontendPerRequest {
-					tool.Description += " It has a generative frontend designed anew for each request." + show + ", in a frontend generated for the person's request (pass request)."
-				} else {
-					tool.Description += " It has a generative frontend." + show + ", in that frontend."
-				}
 			case "static":
-				tool.Description += " It has a static frontend (frontend_show without a microtool opens and runs it)." + show + ", in an interface designed for the person's request (pass request)."
+				tool.Description += " It has a static frontend (people can open it from the dock)." + show + "."
 			default:
-				tool.Description += " It has no frontend of its own." + show + ", in an interface designed for the person's request (pass request)."
+				tool.Frontend = ""
+				tool.Description += " It has no dedicated frontend." + show + ", or expose an already-running sandbox HTTP service with proxy_create as a DeskWeb card."
 			}
 			var apps []string
 			for _, c := range tool.Commands {
@@ -146,10 +137,16 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 				}
 			}
 			if len(apps) > 0 {
-				tool.Description += " The results of " + strings.Join(apps, ", ") + " are shown in the tool's own app instead (frontend_show with exactly the arguments you called it with)."
+				tool.Description += " The results of " + strings.Join(apps, ", ") + " are shown in the tool's own MCP App."
 			}
 		}
 		tools = append(tools, tool)
+	}
+	// OpenCode is listed like the sandbox: a builtin app with microtool-style
+	// commands; agents call the platform builtins (appui_create / opencode_*).
+	if !used["opencode"] {
+		used["opencode"] = true
+		tools = append(tools, openCodeBuiltinApp())
 	}
 	for _, t := range vmm.Builtins() {
 		if strings.HasPrefix(t.Name, "routine_") && s.Routines == nil {
@@ -194,7 +191,7 @@ func (s *Service) appCommands(ctx context.Context, spaceID identity.ID, rec *bot
 	return out
 }
 
-// toolFrontend is the mode of a tool's frontend (static, generative or none).
+// toolFrontend is the mode of a tool's frontend (static or none).
 func (s *Service) toolFrontend(ctx context.Context, rec *bot.Bot) string {
 	var mode string
 	if err := bridge.Invoke(ctx, s.K, "tools", "FrontendMode", []any{ctx, rec.ID.String()}, &mode); err != nil {
@@ -241,7 +238,8 @@ func (s *Service) toolDescription(ctx context.Context, rec *bot.Bot) string {
 func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName, argsJSON string) (string, error) {
 	if vmm.ExecutionFrom(ctx).NoSandbox {
 		switch toolName {
-		case "sandbox_exec", "file_send", "file_upload", "file_edit", "proxy_create", "proxy_list", "proxy_get", "proxy_delete":
+		case "sandbox_exec", "file_send", "file_upload", "file_edit", "proxy_create", "proxy_list", "proxy_get", "proxy_delete",
+			"appui_create", "opencode_run", "opencode_status", "opencode_models":
 			return "", errs.Permission("sandbox access is disabled for this request")
 		}
 	}
@@ -375,18 +373,20 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 		result, terr = s.dbTool(ctx, id, toolName, argsJSON)
 	case toolName == "ask_user":
 		result, terr = s.askUserTool(ctx, id, argsJSON)
+	case toolName == "ui_present":
+		result, terr = s.uiPresentTool(ctx, id, argsJSON)
 	case toolName == "proxy_list" || toolName == "proxy_get" || toolName == "proxy_delete":
 		result, terr = s.proxyManageTool(ctx, id, toolName, argsJSON)
 	case toolName == "proxy_create":
 		result, terr = s.proxyCreateTool(ctx, id, agentName, argsJSON)
-	case toolName == "ui_compose":
-		result, terr = s.composeUI(ctx, id, roomID, agentName, argsJSON)
-	case toolName == "ui_present":
-		result, terr = s.presentUI(ctx, id, roomID, agentName, argsJSON)
-	case toolName == "frontend_show":
-		result, terr = s.showTool(ctx, id, roomID, agentName, argsJSON)
-	case toolName == "web_show":
-		result, terr = s.webShowTool(ctx, id, roomID, agentName, argsJSON)
+	case toolName == "appui_create":
+		result, terr = s.appuiCreateTool(ctx, id, roomID, agentName, argsJSON)
+	case toolName == "opencode_run":
+		result, terr = s.opencodeRunTool(ctx, id, argsJSON)
+	case toolName == "opencode_status":
+		result, terr = s.opencodeStatusTool(ctx, id, argsJSON)
+	case toolName == "opencode_models":
+		result, terr = s.opencodeModelsTool(ctx, id)
 	case toolName == "desk_state":
 		result, terr = s.deskStateTool(ctx, id, roomID, argsJSON)
 	case toolName == "desk_arrange":

@@ -3,7 +3,6 @@
 /// as last shown. Coordinates are logical pixels from the desk's top-left.
 library;
 
-import 'dart:convert';
 import 'dart:ui';
 
 import '../../tools/domain/tool_models.dart';
@@ -23,24 +22,9 @@ Map<String, dynamic> _map(Object? v) =>
     v is Map ? v.cast<String, dynamic>() : <String, dynamic>{};
 double _num(Object? v, double fallback) => v is num ? v.toDouble() : fallback;
 
-/// AG-UI messages a composed window holds (`{title, messages}`), or none.
-List<Map<String, dynamic>> surfaceOf(Map<String, dynamic> widget) => [
-      for (final m in (widget['messages'] as List?) ?? const <dynamic>[])
-        if (m is Map) m.cast<String, dynamic>(),
-    ];
-
-/// The kind of a window that holds a widget an agent composed (ui_compose)
-/// rather than one tool's frontend; such windows share the dock entry
-/// [composedTool].
-const String composedKind = 'composed';
-
-/// The frontend of a window whose interface was designed for one request.
-const String designedFrontend = 'auto';
-
 /// The frontend of a window that shows its result with the tool's own app
 /// (MCP Apps).
 const String appFrontend = 'app';
-const String composedTool = 'widgets';
 
 /// The kind of a window that shows a web page served from the space's
 /// sandbox through a preview gateway (an agent's interactive frontend for a
@@ -60,6 +44,11 @@ const String fileTool = 'files';
 /// desktop when it shows one); there is one at most, under [computerTool].
 const String computerKind = 'computer';
 const String computerTool = 'computer';
+
+/// The kind of a window that shows an AG-UI generative surface (complex
+/// non-interactive data viz). Args hold `{"surface": {…}}`.
+const String aguiKind = 'agui';
+const String aguiTool = 'agui';
 
 /// How a window sits on the phone board (the desk as compact widgets).
 /// Empty [shape] / [size] take the frontend's hint, else a medium card.
@@ -102,10 +91,6 @@ class DeskWindow {
     required this.id,
     required this.tool,
     this.kind = '',
-    this.widget = const {},
-    this.request = '',
-    this.template = const {},
-    this.status = '',
     this.name = '',
     this.title = '',
     this.frontend = '',
@@ -121,10 +106,6 @@ class DeskWindow {
         id: '${j['id'] ?? ''}',
         tool: '${j['tool'] ?? ''}',
         kind: '${j['kind'] ?? ''}',
-        widget: _map(j['widget']),
-        request: '${j['request'] ?? ''}',
-        template: _map(j['template']),
-        status: '${j['status'] ?? ''}',
         name: '${j['name'] ?? ''}',
         title: '${j['title'] ?? ''}',
         frontend: '${j['frontend'] ?? ''}',
@@ -143,26 +124,12 @@ class DeskWindow {
 
   final String id;
 
-  /// The tool's bot id ([composedTool] for composed widgets).
+  /// The tool's bot id.
   final String tool;
 
-  /// Empty for a tool's frontend; [composedKind] for a composed widget.
+  /// Empty for a tool's frontend; [webKind], [fileKind], [computerKind], or
+  /// [aguiKind] for desk card kinds.
   final String kind;
-
-  /// A composed widget's `{title, messages}`.
-  final Map<String, dynamic> widget;
-
-  bool get isComposed => kind == composedKind;
-
-  /// What the person asked for: an interface designed for it is shown
-  /// (frontend `auto`), its [template] kept with the window.
-  final String request;
-  final Map<String, dynamic> template;
-
-  /// designing, ready, or `failed: why`.
-  final String status;
-
-  bool get isDesigned => frontend == designedFrontend;
 
   /// Shown with the tool's own app (MCP Apps).
   bool get isApp => frontend == appFrontend;
@@ -185,10 +152,30 @@ class DeskWindow {
 
   /// The project's computer rather than a tool's own frontend.
   bool get isComputer => kind == computerKind;
+
+  /// An AG-UI generative surface window.
+  bool get isAgui => kind == aguiKind || frontend == aguiKind;
+
+  /// The AG-UI surface payload (null when not an AG-UI window).
+  Map<String, dynamic>? get aguiSurface {
+    if (!isAgui) return null;
+    final s = args['surface'];
+    if (s is Map<String, dynamic>) return s;
+    if (s is Map) return Map<String, dynamic>.from(s);
+    final root = args['root'];
+    if (root is Map) {
+      return {
+        'layout': 'desk',
+        'title': title,
+        'root': Map<String, dynamic>.from(root),
+      };
+    }
+    return null;
+  }
   final String name;
   final String title;
 
-  /// static or generative.
+  /// static, app, web, …
   final String frontend;
   final String microtool;
   final Map<String, dynamic> args;
@@ -206,23 +193,19 @@ class DeskWindow {
       ? null
       : ShownResult(microtool: microtool, args: args);
 
-  /// "city: New York · units: metric" (nothing for a web page or a file).
-  String get argsSummary => isWeb || isFile
+  /// "city: New York · units: metric" (nothing for web, file, or AG-UI).
+  String get argsSummary => isWeb || isFile || isAgui
       ? ''
       : args.entries
-      .where((e) => e.value is! Map && e.value is! List)
-      .map((e) => '${e.key}: ${e.value}')
-      .join(' · ');
+          .where((e) => e.value is! Map && e.value is! List)
+          .map((e) => '${e.key}: ${e.value}')
+          .join(' · ');
 
   DeskWindow copyWith({Rect? rect, int? z, DeskCompact? compact}) =>
       DeskWindow(
         id: id,
         tool: tool,
         kind: kind,
-        widget: widget,
-        request: request,
-        template: template,
-        status: status,
         name: name,
         title: title,
         frontend: frontend,
@@ -240,10 +223,6 @@ class DeskPin {
     required this.id,
     required this.tool,
     this.kind = '',
-    this.widget = const {},
-    this.request = '',
-    this.template = const {},
-    this.status = '',
     this.name = '',
     this.title = '',
     this.frontend = '',
@@ -257,10 +236,6 @@ class DeskPin {
         id: '${j['id'] ?? ''}',
         tool: '${j['tool'] ?? ''}',
         kind: '${j['kind'] ?? ''}',
-        widget: _map(j['widget']),
-        request: '${j['request'] ?? ''}',
-        template: _map(j['template']),
-        status: '${j['status'] ?? ''}',
         name: '${j['name'] ?? ''}',
         title: '${j['title'] ?? ''}',
         frontend: '${j['frontend'] ?? ''}',
@@ -275,7 +250,6 @@ class DeskPin {
   final String id;
   final String tool;
   final String kind;
-  final Map<String, dynamic> widget;
   final String name;
   final String title;
   final String frontend;
@@ -285,18 +259,6 @@ class DeskPin {
 
   /// The look its widget had on the phone board.
   final DeskCompact? compact;
-
-  bool get isComposed => kind == composedKind;
-
-  /// What the person asked for: an interface designed for it is shown
-  /// (frontend `auto`), its [template] kept with the window.
-  final String request;
-  final Map<String, dynamic> template;
-
-  /// designing, ready, or `failed: why`.
-  final String status;
-
-  bool get isDesigned => frontend == designedFrontend;
 
   /// Shown with the tool's own app (MCP Apps).
   bool get isApp => frontend == appFrontend;
@@ -313,13 +275,16 @@ class DeskPin {
   /// The project's computer.
   bool get isComputer => kind == computerKind;
 
+  /// An AG-UI generative surface pin.
+  bool get isAgui => kind == aguiKind || frontend == aguiKind;
+
   String get label => title.isNotEmpty ? title : name;
 
   ShownResult? get shown => microtool.isEmpty && args.isEmpty
       ? null
       : ShownResult(microtool: microtool, args: args);
 
-  String get argsSummary => isWeb || isFile
+  String get argsSummary => isWeb || isFile || isAgui
       ? ''
       : args.entries
           .where((e) => e.value is! Map && e.value is! List)
@@ -387,19 +352,4 @@ class DeskState {
           viewport: viewport,
           windows: windows ?? this.windows,
           pins: pins ?? this.pins);
-}
-
-/// [surfaceOf], the same list for the same content: what renders a composed
-/// window reloads only when its widget really changed, not on every poll.
-abstract final class ComposedSurfaces {
-  static final Expando<String> _signatures = Expando();
-  static final Map<String, List<Map<String, dynamic>>> _cache = {};
-
-  static List<Map<String, dynamic>> of(Map<String, dynamic> widget) {
-    final signature = _signatures[widget] ??= jsonEncode(widget);
-    final cached = _cache[signature];
-    if (cached != null) return cached;
-    if (_cache.length > 64) _cache.remove(_cache.keys.first);
-    return _cache[signature] = surfaceOf(widget);
-  }
 }

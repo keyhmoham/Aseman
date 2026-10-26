@@ -11,9 +11,8 @@ import (
 	"github.com/aseman/aseman/plugins/actions/support/helper"
 )
 
-// SetWidget stores the desk-widget DSL of a bot. The canonical copy lives in
-// the bot's entity store under the widget_dsl contract key; a metadata mirror
-// is kept for backward compatibility with older clients.
+// SetWidget stores the desk-widget DSL of a bot in the entity store
+// (widget_dsl) and mirrors it on account metadata for room widget polls.
 func (s *Service) SetWidget(ctx context.Context, caller, botID identity.ID, dsl string) (*bot.Bot, error) {
 	rec, err := s.GetBot(ctx, botID)
 	if err != nil {
@@ -31,8 +30,7 @@ func (s *Service) SetWidget(ctx context.Context, caller, botID identity.ID, dsl 
 	return rec, nil
 }
 
-// Widget returns the desk-widget DSL of a bot, or "" when unset. Reads the
-// entity store first, then the legacy metadata mirror.
+// Widget returns the desk-widget DSL of a bot, or "" when unset.
 func (s *Service) Widget(ctx context.Context, botID identity.ID) string {
 	if ent, err := s.GetEntity(ctx, botID, bot.EntityWidget); err == nil && len(ent.Value) > 0 {
 		return string(ent.Value)

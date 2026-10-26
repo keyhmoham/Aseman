@@ -2,65 +2,53 @@ package apihttp
 
 // A web page an agent builds is served from the space's sandbox through a
 // preview gateway (/v1/proxy/{id}/). Under its own prefix the gateway also
-// answers two things itself, never forwarded to the sandbox:
+// answers the page's Aseman API itself, never forwarded to the sandbox:
 //
-//   - _aseman/kit/<file>: Aseman's web UI kit (pkg/webkit), the app's look
-//     and components for web pages, so "/_aseman/kit/aseman-ui.js" works
-//     whatever the page's base path;
 //   - _aseman/api/<op>: the page's client for the Aseman API. It calls the
 //     space's tools' microtools as the person viewing the page, in the
 //     preview's space, the way a frontend calls its backend:
-//     context, tools, microtools {tool} and call {tool, microtool, args}.
+//     context, tools, microtools {tool}, call {tool, microtool, args},
+//     agents, and ask {agent, body} for OpenUI agent-backed islands.
+//   - _aseman/kit/openui/*: the OpenUI component kit (JS/CSS) OpenCode mixes
+//     into App UIs under the same Aseman theme tokens.
 //
-// Both are authorized like the rest of the preview: the person's session
-// (the preview cookie after the first load) and membership of its space;
-// requests that change something come from the preview's own page only.
+// Authorized like the rest of the preview: the person's session (the preview
+// cookie after the first load) and membership of its space; requests that
+// change something come from the preview's own page only.
+//
+// Interactive tool UIs use appui_create (OpenCode fullstack) shown as DeskWeb.
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"net/http"
+	"path"
 	"strings"
 
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/asemanopenui"
 	"github.com/aseman/aseman/pkg/errs"
-	"github.com/aseman/aseman/pkg/webkit"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
 	"github.com/aseman/aseman/plugins/adapters/network/ports"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // pagePrefix is the part of a preview's path the gateway answers itself.
 const pagePrefix = "_aseman/"
 
-// webkitServe serves the kit's files at /v1/webkit/{file}, for pages served
-// from anywhere (they hold no data, so no sign-in is needed).
-func (a *API) webkitServe(ctx context.Context, req *network.Request) (*network.Response, error) {
-	params := map[string]string{}
-	if raw := req.Header["x-route-params"]; raw != "" {
-		_ = json.Unmarshal([]byte(raw), &params)
-	}
-	return kitFile(params["file"])
-}
-
-func kitFile(name string) (*network.Response, error) {
-	body, ctype, ok := webkit.File(name)
-	if !ok {
-		return nil, errs.NotFound("no kit file " + name)
-	}
-	return &network.Response{Status: http.StatusOK, Body: body, Header: map[string]string{
-		"Content-Type":                ctype,
-		"Cache-Control":               "public, max-age=300",
-		"Access-Control-Allow-Origin": "*",
-	}}, nil
-}
-
 // proxyPage answers a preview's _aseman/ request (rest is the path after
 // the prefix) for [acc], a member of the preview's space.
 func (a *API) proxyPage(ctx context.Context, req *network.Request, p *proxy.Proxy, acc *account.Account, method, rest string) (*network.Response, error) {
-	if file, ok := strings.CutPrefix(rest, "kit/"); ok {
-		return kitFile(file)
+	if kit, ok := strings.CutPrefix(rest, "kit/openui/"); ok {
+		return pageOpenUIKit(method, kit)
+	}
+	if strings.HasPrefix(rest, "kit/") {
+		return nil, errs.NotFound("no such kit; use kit/openui/ for the OpenUI component kit")
 	}
 	op, ok := strings.CutPrefix(rest, "api/")
 	if !ok {
@@ -125,15 +113,14 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		Tool      string         `json:"tool"`
 		Microtool string         `json:"microtool"`
 		Args      map[string]any `json:"args"`
-		// frontend / action: a tool's generative frontend and its actions.
-		Action   string         `json:"action"`
-		Context  map[string]any `json:"context"`
-		Data     map[string]any `json:"data"`
-		Template map[string]any `json:"template"`
+		Agent     string         `json:"agent"`
+		Bot       string         `json:"bot"`
+		Body      string         `json:"body"`
+		Prompt    string         `json:"prompt"`
+		History   []any          `json:"history"`
 		// show: the desk window's title, rectangle and phone look.
-		Title   string         `json:"title"`
-		Request string         `json:"request"`
-		Rect    map[string]any `json:"rect"`
+		Title string         `json:"title"`
+		Rect  map[string]any `json:"rect"`
 	}
 	if method != http.MethodGet && len(req.Body) > 0 {
 		if err := json.Unmarshal(req.Body, &in); err != nil {
@@ -141,6 +128,8 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		}
 	} else {
 		in.Tool, in.Microtool = first(req.Query["tool"]), first(req.Query["microtool"])
+		in.Agent, in.Bot = first(req.Query["agent"]), first(req.Query["bot"])
+		in.Body, in.Prompt = first(req.Query["body"]), first(req.Query["prompt"])
 		if raw := first(req.Query["args"]); raw != "" {
 			if err := json.Unmarshal([]byte(raw), &in.Args); err != nil {
 				return nil, errs.InvalidArgument("args must be a JSON object")
@@ -155,11 +144,52 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 			"space":   space,
 			"user":    map[string]any{"id": acc.ID.String(), "handle": acc.Handle},
 			"preview": map[string]any{"id": p.ID.String(), "title": p.Title, "path": p.GatewayPath()},
+			"openui":  map[string]any{"kit": "_aseman/kit/openui/", "version": "1.1.0", "catalog": "catalog.spec.json"},
 		}
 		if !p.RoomID.IsZero() {
 			out["room"] = p.RoomID.String()
 		}
 		return out, nil
+	case "agents":
+		agents, err := a.pageAgents(ctx, caller, space)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"agents": agents}, nil
+	case "ask":
+		if method == http.MethodGet {
+			return nil, errs.InvalidArgument("ask an agent with POST")
+		}
+		agent := strings.TrimSpace(in.Agent)
+		if agent == "" {
+			agent = strings.TrimSpace(in.Bot)
+		}
+		body := strings.TrimSpace(in.Body)
+		if body == "" {
+			body = strings.TrimSpace(in.Prompt)
+		}
+		if agent == "" || body == "" {
+			return nil, errs.InvalidArgument(`ask needs {"agent"|"bot", "body"|"prompt"}`)
+		}
+		rec, err := a.pageResolveAgent(ctx, caller, space, agent)
+		if err != nil {
+			return nil, err
+		}
+		askBody := map[string]any{"space": space, "bot": rec.ID, "body": body}
+		if !p.RoomID.IsZero() {
+			askBody["room"] = p.RoomID.String()
+		}
+		if len(in.History) > 0 {
+			askBody["history"] = in.History
+		}
+		var res struct {
+			Reply string `json:"reply"`
+			BotID string `json:"bot_id"`
+		}
+		if err := a.pageDispatch(ctx, caller, "spaces", "ask", askBody, &res); err != nil {
+			return nil, err
+		}
+		return map[string]any{"agent": rec.Name, "bot_id": res.BotID, "reply": res.Reply}, nil
 	case "tools":
 		tools, err := a.pageTools(ctx, caller, space)
 		if err != nil {
@@ -203,10 +233,15 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		}, &res); err != nil {
 			return nil, err
 		}
-		return map[string]any{"tool": t.Name, "microtool": in.Microtool, "result": res.Result}, nil
-	case "frontend", "action":
-		// The tool's own frontend for the page to render (a generative one
-		// is AG-UI Surface Spec, the same surface the app shows), and its actions.
+		// MCP backends return {content:[{type:text,text:…}]}; App UIs need the
+		// unwrapped value (structuredContent, JSON text, or plain text).
+		result, err := pageToolResult(res.Result)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"tool": t.Name, "microtool": in.Microtool, "result": result}, nil
+	case "frontend":
+		// Static frontend program, or mode metadata when empty/unknown.
 		t, err := a.pageResolve(ctx, caller, space, in.Tool)
 		if err != nil {
 			return nil, err
@@ -218,22 +253,8 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		if len(in.Args) > 0 {
 			body["args"] = in.Args
 		}
-		if in.Template != nil {
-			body["template"] = in.Template
-		}
-		if in.Request != "" {
-			body["request"] = in.Request
-		}
-		name := "frontend_get"
-		if op == "action" {
-			if method == http.MethodGet || in.Action == "" {
-				return nil, errs.InvalidArgument(`action needs POST {"tool", "action", "context", "data"}`)
-			}
-			name = "frontend_action"
-			body["action"], body["context"], body["data"] = in.Action, orEmpty(in.Context), orEmpty(in.Data)
-		}
 		var out map[string]any
-		if err := a.pageDispatch(ctx, caller, "tools", name, body, &out); err != nil {
+		if err := a.pageDispatch(ctx, caller, "tools", "frontend_get", body, &out); err != nil {
 			return nil, err
 		}
 		return out, nil
@@ -247,7 +268,7 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		if err != nil {
 			return nil, err
 		}
-		open := map[string]any{"op": "open", "tool": t.ID, "title": in.Title, "request": in.Request}
+		open := map[string]any{"op": "open", "tool": t.ID, "title": in.Title}
 		if in.Microtool != "" {
 			open["microtool"] = in.Microtool
 		}
@@ -275,7 +296,101 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		}
 		return map[string]any{"ok": true, "window": window}, nil
 	}
-	return nil, errs.NotFound("no page api " + op + "; use context, tools, microtools, call, frontend, action or show")
+	return nil, errs.NotFound("no page api " + op + "; use context, tools, microtools, call, agents, ask, frontend or show")
+}
+
+// pageOpenUIKit serves the embedded OpenUI kit for App UIs.
+func pageOpenUIKit(method, name string) (*network.Response, error) {
+	if method != http.MethodGet && method != http.MethodHead {
+		return nil, errs.InvalidArgument("kit assets are GET only")
+	}
+	name = path.Clean("/" + name)
+	name = strings.TrimPrefix(name, "/")
+	if name == "" || name == "." {
+		name = "README.md"
+	}
+	data, err := asemanopenui.File(name)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, errs.NotFound("no such OpenUI kit file")
+		}
+		return nil, errs.Wrap(errs.CodeInternal, err, "openui kit")
+	}
+	ctype := "application/octet-stream"
+	switch {
+	case strings.HasSuffix(name, ".js"):
+		ctype = "text/javascript; charset=utf-8"
+	case strings.HasSuffix(name, ".css"):
+		ctype = "text/css; charset=utf-8"
+	case strings.HasSuffix(name, ".md"):
+		ctype = "text/markdown; charset=utf-8"
+	case strings.HasSuffix(name, ".json"):
+		ctype = "application/json; charset=utf-8"
+	case strings.HasSuffix(name, ".html"):
+		ctype = "text/html; charset=utf-8"
+	}
+	body := data
+	if method == http.MethodHead {
+		body = nil
+	}
+	return &network.Response{Status: http.StatusOK, Body: body, Header: map[string]string{
+		"Content-Type": ctype, "Cache-Control": "public, max-age=300",
+	}}, nil
+}
+
+// pageAgent is one space agent as an OpenUI page sees it.
+type pageAgent struct {
+	Name        string `json:"name"`
+	ID          string `json:"id"`
+	Description string `json:"description,omitempty"`
+	Status      string `json:"status,omitempty"`
+}
+
+func (a *API) pageAgents(ctx context.Context, caller api.Caller, space string) ([]pageAgent, error) {
+	var res struct {
+		Bots []struct {
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			Kind        string `json:"kind"`
+			Description string `json:"description"`
+			Status      string `json:"status"`
+		} `json:"bots"`
+	}
+	if err := a.pageDispatch(ctx, caller, "spaces", "bots_list", map[string]any{"space": space}, &res); err != nil {
+		return nil, err
+	}
+	out := []pageAgent{}
+	for _, b := range res.Bots {
+		if b.Kind != string(bot.KindAgent) || b.ID == "" {
+			continue
+		}
+		out = append(out, pageAgent{Name: b.Name, ID: b.ID, Description: b.Description, Status: b.Status})
+	}
+	return out, nil
+}
+
+func (a *API) pageResolveAgent(ctx context.Context, caller api.Caller, space, agent string) (*pageAgent, error) {
+	agent = strings.TrimSpace(agent)
+	if agent == "" {
+		return nil, errs.InvalidArgument("name the agent")
+	}
+	agents, err := a.pageAgents(ctx, caller, space)
+	if err != nil {
+		return nil, err
+	}
+	for i := range agents {
+		if agents[i].ID == agent || strings.EqualFold(agents[i].Name, agent) {
+			return &agents[i], nil
+		}
+	}
+	names := make([]string, 0, len(agents))
+	for _, ag := range agents {
+		names = append(names, ag.Name)
+	}
+	if len(names) == 0 {
+		return nil, errs.NotFound(agent + " is no agent of this space (none installed)")
+	}
+	return nil, errs.NotFound(agent + " is no agent of this space; its agents: " + strings.Join(names, ", "))
 }
 
 // pageTools lists the space's tools (not the agents' built-in ones).
@@ -362,11 +477,23 @@ func (a *API) pageDispatch(ctx context.Context, caller api.Caller, ns, action st
 	return json.Unmarshal(resp.Body, out)
 }
 
-func orEmpty(m map[string]any) map[string]any {
-	if m == nil {
-		return map[string]any{}
+// pageToolResult turns a tools.invoke result into App UI data: unwrap MCP
+// content / structuredContent (JSON text becomes an object; plain text stays
+// a string). Non-MCP payloads pass through unchanged.
+func pageToolResult(v any) (any, error) {
+	if v == nil {
+		return nil, nil
 	}
-	return m
+	switch x := v.(type) {
+	case string:
+		return vmm.ToolResultValue(x)
+	default:
+		raw, err := json.Marshal(x)
+		if err != nil {
+			return v, nil
+		}
+		return vmm.ToolResultValue(string(raw))
+	}
 }
 
 func first(v []string) string {

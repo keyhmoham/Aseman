@@ -30,8 +30,7 @@ import (
 //	          inside the sandbox of each space that adds it, on the same three
 //	          runtimes)
 //	frontend  static (an Elpian app program on the Elpian VM or QuickJS)
-//	          or generative (a skill AG-UI Surface Spec is generated from on first use, then
-//	          served from the component registry)
+//	          or empty (no frontend)
 //
 // Whatever the backend, it is reached as an MCP server, so its microtools are
 // agents' tools (spaces.tools_list / spaces.ask) and the frontend's API
@@ -67,10 +66,6 @@ type frontendInput struct {
 	// node without a tool compiler.
 	Bytecode string `json:"bytecode,omitempty"`
 	Skill    string `json:"skill,omitempty"`
-	// Cache: a generative frontend is generated once and served from the
-	// component registry (true or absent), or generated for every request
-	// (false). See models.FrontendSpec.Cache.
-	Cache *bool `json:"cache,omitempty"`
 }
 
 type toolInput struct {
@@ -159,15 +154,8 @@ func (f *frontendInput) validate() error {
 		if len(f.Source) > maxProgram || len(f.Bytecode) > 2*maxProgram {
 			return errs.InvalidArgument("the frontend program is too large")
 		}
-	case models.FrontendGenerative:
-		if strings.TrimSpace(f.Skill) == "" {
-			return errs.InvalidArgument("a generative frontend needs its skill (what to show and how)")
-		}
-		if len(f.Skill) > maxProgram {
-			return errs.InvalidArgument("the skill is too large")
-		}
 	default:
-		return errs.InvalidArgument("the frontend mode is static, generative or none")
+		return errs.InvalidArgument("the frontend mode is static or none")
 	}
 	return nil
 }
@@ -218,12 +206,6 @@ func (s *Service) toolCreate(ctx context.Context, req *api.ActionRequest) (*api.
 	tool.UpdatedAt = time.Now().UTC()
 	if err := s.R.UpdateString(ctx, "tool_registry", tool.ID, tool); err != nil {
 		return nil, err
-	}
-	if frontend.Mode == models.FrontendGenerative {
-		skill := string(entities[models.EntityFrontendSkill])
-		if err := s.eagerCompileAndStore(ctx, tool, frontend, skill, tool.Commands); err != nil {
-			return nil, err
-		}
 	}
 	if err := s.describe(ctx, req.Caller, tool.BotID, in); err != nil {
 		return nil, err
@@ -352,15 +334,6 @@ func (s *Service) prepareFrontend(ctx context.Context, f frontendInput) (models.
 			entities[models.EntityFrontendBytecode] = []byte(base64.StdEncoding.EncodeToString(bytecode))
 		}
 		spec.Version = fingerprint(f.Runtime, f.Language, f.Source, f.Bytecode)
-	case models.FrontendGenerative:
-		entities[models.EntityFrontendSkill] = []byte(f.Skill)
-		// Version fingerprints the skill so a Fixed Schema / archetype change
-		// invalidates the cached Surface Bundle in tool_components.
-		spec.Version = fingerprint("generative", f.Skill)
-		if f.Cache != nil && !*f.Cache {
-			off := false
-			spec.Cache = &off
-		}
 	}
 	return spec, entities, nil
 }
@@ -458,8 +431,7 @@ func (s *Service) descriptor(ctx context.Context, caller api.Caller, botID strin
 // external backend is reached, a new backend program and/or a new frontend.
 // A managed backend is restarted to load its new program; an installed one is
 // reinstalled by the next call in each space (its version no longer
-// matches); a generative frontend is regenerated on next use. Where it runs
-// (its mode and runtime) stays: that is a new tool.
+// matches). Where it runs (its mode and runtime) stays: that is a new tool.
 func (s *Service) toolUpdate(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if e := helper.RequireUser(req); e != nil {
 		return nil, e
@@ -557,16 +529,6 @@ func (s *Service) toolUpdate(ctx context.Context, req *api.ActionRequest) (*api.
 		}
 		raw, _ := json.Marshal(spec)
 		tool.Frontend = string(raw)
-		if spec.Mode == models.FrontendGenerative {
-			skill := string(entities[models.EntityFrontendSkill])
-			cmds := tool.Commands
-			if len(cmds) == 0 {
-				cmds, _ = s.CommandsFor(ctx, tool.BotID, req.Caller.ID.String(), "")
-			}
-			if err := s.eagerCompileAndStore(ctx, tool, spec, skill, cmds); err != nil {
-				return nil, err
-			}
-		}
 	}
 	tool.UpdatedAt = time.Now().UTC()
 	if err := s.R.UpdateString(ctx, "tool_registry", tool.ID, tool); err != nil {
@@ -698,7 +660,8 @@ func (s *Service) Install(ctx context.Context, spaceID, botID string) error {
 	return err
 }
 
-// FrontendMode is the mode of a tool's frontend (static, generative or empty).
+// FrontendMode is the mode of a tool's frontend (static or empty).
+// Unknown values (including retired wire tokens) are reported as empty.
 func (s *Service) FrontendMode(ctx context.Context, botID string) (string, error) {
 	var tool models.Tool
 	if err := s.R.GetString(ctx, "tool_registry", botID, &tool); err != nil {
@@ -706,17 +669,10 @@ func (s *Service) FrontendMode(ctx context.Context, botID string) (string, error
 	}
 	var spec models.FrontendSpec
 	_ = json.Unmarshal([]byte(tool.Frontend), &spec)
-	return spec.Mode, nil
-}
-
-// FrontendPerRequest reports whether a tool's generative frontend is
-// generated for every request rather than cached (its Cache is off).
-func (s *Service) FrontendPerRequest(ctx context.Context, botID string) (bool, error) {
-	var tool models.Tool
-	if err := s.R.GetString(ctx, "tool_registry", botID, &tool); err != nil {
-		return false, err
+	switch strings.TrimSpace(spec.Mode) {
+	case models.FrontendStatic, models.FrontendNone:
+		return strings.TrimSpace(spec.Mode), nil
+	default:
+		return models.FrontendNone, nil
 	}
-	var spec models.FrontendSpec
-	_ = json.Unmarshal([]byte(tool.Frontend), &spec)
-	return spec.Mode == models.FrontendGenerative && !spec.Cached(), nil
 }

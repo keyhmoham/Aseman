@@ -3,18 +3,26 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/settings/app_settings.dart';
 import '../../../data/services/aseman_service.dart';
 import 'web/web_page_frame.dart';
 
-/// The app's theme as Aseman's web UI kit takes it: the brightness, the
-/// color scheme's roles and where the page is shown.
-Map<String, dynamic> webPageTheme(ThemeData theme, {String embed = 'desk'}) {
+/// The app's theme as desk App UIs take it: brightness, accent seed, Material
+/// color-scheme roles, and where the page is shown. Passed on the preview URL
+/// (`aseman_theme`, `aseman_accent`, `aseman_scheme`) and live via
+/// `aseman:theme` / `__asemanSetTheme` when Settings change.
+Map<String, dynamic> webPageTheme(
+  ThemeData theme, {
+  String embed = 'desk',
+  Color? accent,
+}) {
   String hex(Color c) =>
       '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
   final s = theme.colorScheme;
   return {
     'mode': theme.brightness == Brightness.dark ? 'dark' : 'light',
     'embed': embed,
+    'accent': hex(accent ?? s.primary),
     'scheme': {
       'primary': hex(s.primary),
       'onPrimary': hex(s.onPrimary),
@@ -67,6 +75,7 @@ String webPageUrl(
           ...base.queryParameters,
           'aseman_theme': '${theme['mode']}',
           'aseman_embed': '${theme['embed']}',
+          'aseman_accent': '${theme['accent']}',
           'aseman_scheme': scheme,
         },
       )
@@ -120,7 +129,11 @@ class _WebPageViewState extends State<WebPageView> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final theme = webPageTheme(Theme.of(context), embed: widget.embed);
+    final theme = webPageTheme(
+      Theme.of(context),
+      embed: widget.embed,
+      accent: AppSettingsScope.maybeOf(context)?.accent,
+    );
     final key = jsonEncode(theme);
     if (key == _themeKey) return;
     _themeKey = key;

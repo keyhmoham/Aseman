@@ -12,7 +12,6 @@ import '../scope/scope_patch.dart';
 import 'vm_runtime_client.dart';
 import 'host_api_catalog.dart';
 import 'host_handler.dart';
-import '../agui/elpian.dart';
 import 'timer_host_api.dart';
 
 /// A Flutter widget that runs an Elpian Rust VM sandbox and renders
@@ -101,18 +100,6 @@ class ElpianVmWidget extends StatefulWidget {
   /// JSON input to pass to the entry function.
   final String? entryInput;
 
-  /// The mini app's id, for reaching its agents: `AgUiSurface` widgets and the
-  /// `agent.*` host APIs post to `<agentBaseUrl>/apps/<agentAppId>/agent/<agent>`
-  /// unless they name another app. Without it (or [agentBaseUrl]) agent
-  /// surfaces only render static messages.
-  final String? agentAppId;
-
-  /// The server base URL the app's agents are reached at (the dev server
-  /// serving the app, e.g. `Uri.base.resolve('.')` in a browser).
-  final String? agentBaseUrl;
-
-  /// Extra headers for agent requests (authorization, …).
-  final Map<String, String>? agentHeaders;
 
   const ElpianVmWidget({
     super.key,
@@ -129,9 +116,6 @@ class ElpianVmWidget extends StatefulWidget {
     this.hostHandlers,
     this.entryFunction,
     this.entryInput,
-    this.agentAppId,
-    this.agentBaseUrl,
-    this.agentHeaders,
     this.runtime = ElpianRuntime.elpian,
   }) : assert(code != null || astJson != null || bytecode != null,
             'Either code, astJson, or bytecode must be provided');
@@ -150,9 +134,6 @@ class ElpianVmWidget extends StatefulWidget {
     this.hostHandlers,
     this.entryFunction,
     this.entryInput,
-    this.agentAppId,
-    this.agentBaseUrl,
-    this.agentHeaders,
     this.runtime = ElpianRuntime.elpian,
   })  : code = null,
         bytecode = null;
@@ -171,9 +152,6 @@ class ElpianVmWidget extends StatefulWidget {
     this.hostHandlers,
     this.entryFunction,
     this.entryInput,
-    this.agentAppId,
-    this.agentBaseUrl,
-    this.agentHeaders,
     this.runtime = ElpianRuntime.elpian,
   })  : astJson = null,
         bytecode = null;
@@ -192,9 +170,6 @@ class ElpianVmWidget extends StatefulWidget {
     this.hostHandlers,
     this.entryFunction,
     this.entryInput,
-    this.agentAppId,
-    this.agentBaseUrl,
-    this.agentHeaders,
     this.runtime = ElpianRuntime.elpian,
   })  : code = null,
         astJson = null;
@@ -225,29 +200,7 @@ class _ElpianVmWidgetState extends State<ElpianVmWidget>
     if (widget.stylesheet != null) {
       _engine.loadStylesheet(widget.stylesheet!);
     }
-    _configureAgents();
     _initVm();
-  }
-
-  /// Point this app's AG-UI registry at its agents (see [ElpianVmWidget.agentAppId]).
-  void _configureAgents() {
-    if (widget.agentAppId == null && widget.agentBaseUrl == null) return;
-    final registry = agUiRegistry(_engine.services);
-    registry.defaults = AgUiDefaults(
-      baseUrl: widget.agentBaseUrl ?? registry.defaults.baseUrl,
-      appId: widget.agentAppId ?? registry.defaults.appId,
-      headers: widget.agentHeaders ?? registry.defaults.headers,
-    );
-  }
-
-  @override
-  void didUpdateWidget(ElpianVmWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.agentAppId != widget.agentAppId ||
-        oldWidget.agentBaseUrl != widget.agentBaseUrl ||
-        oldWidget.agentHeaders != widget.agentHeaders) {
-      _configureAgents();
-    }
   }
 
   @override
@@ -795,9 +748,6 @@ class ElpianVmScope extends StatefulWidget {
   final Map<String, HostCallHandler>? hostHandlers;
   final String? entryFunction;
   final String? entryInput;
-  final String? agentAppId;
-  final String? agentBaseUrl;
-  final Map<String, String>? agentHeaders;
   final ElpianRuntime runtime;
 
   const ElpianVmScope({
@@ -815,9 +765,6 @@ class ElpianVmScope extends StatefulWidget {
     this.hostHandlers,
     this.entryFunction,
     this.entryInput,
-    this.agentAppId,
-    this.agentBaseUrl,
-    this.agentHeaders,
     this.runtime = ElpianRuntime.elpian,
   });
 
@@ -858,9 +805,6 @@ class _ElpianVmScopeState extends State<ElpianVmScope> {
       hostHandlers: widget.hostHandlers,
       entryFunction: widget.entryFunction,
       entryInput: widget.entryInput,
-      agentAppId: widget.agentAppId,
-      agentBaseUrl: widget.agentBaseUrl,
-      agentHeaders: widget.agentHeaders,
       runtime: widget.runtime,
     );
   }

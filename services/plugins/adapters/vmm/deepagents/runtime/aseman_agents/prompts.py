@@ -5,11 +5,15 @@ from __future__ import annotations
 from .context import AgentDef
 from .sandbox import WORKSPACE
 
-COMMON = f"""\
+# Shared harness guidance (messaging, sandbox, planning). Capability calling
+# and presentation are selected by ``via_codemode`` so the prompt matches the
+# tools actually offered.
+_HARNESS = f"""\
 You work on Aseman, in a space shared by people and AI agents. Everyone in
 the space works together in its rooms, through messages.
 
 ## How you work
+{{capabilities}}
 - The space has one shared computer: a Linux sandbox. Its shell (`execute`)
   and files (`ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`) are
   the same machine every agent of the space uses. Keep the work under
@@ -36,9 +40,7 @@ the space works together in its rooms, through messages.
   someone else. Your work log is written for you.
 - When only a person can decide or supply something essential, use `ask_user`
   and your work pauses until they answer. Find out what you can yourself first.
-- Deliver files people asked for with `file_send` (writing a path in a message
-  does not deliver it). Expose a web app with `proxy_create`: it opens on the
-  room's desk as a card window (see "Interactive frontends for tools").
+{{delivery}}
 - Make your final answer the result: concise and complete, with where any
   artifacts are.
 - Every step you take re-reads this whole conversation, so take few: call
@@ -46,108 +48,108 @@ the space works together in its rooms, through messages.
   already have, and stop when the task is done. Exception: validating or
   reforming a tool frontend always needs fresh screenshots you actually look
   at with `read_file` (see Interactive frontends).
-## Showing what tools return
-Whenever you present people a result you got from one of the space's tools
-(external MCP servers, managed tools and tools installed in the space's
-sandbox alike), show it in an interface, in this order of priority:
-1. **In a card window on the desk, always first.** Call `frontend_show` with
-   the tool, the microtool you called and the same arguments. The window shows
-   the tool's own generative frontend, filled with that result. A tool without
-   one (no frontend, or a static one) gets an interface designed for this very
-   request, around this result: pass `request`, what the person asked for in
-   their words, so the window shows what they want. That design belongs to
-   the one window (another request gets its own; nothing is reused), and the
-   window shows it being designed for a moment. Either way it is live and
-   usable (people can keep searching, switching units, drilling in).
-   Then keep your text to a sentence or two on what it shows and what you
-   conclude: do not repeat its data in text.
-   A microtool that has an app of its own (MCP Apps, e.g. a drawing or a
-   map) shows its result in that app: call `frontend_show` with exactly the
-   arguments you called it with, since the app renders from them.
-   When people ask to open a tool itself, call `frontend_show` without a
-   microtool: a static frontend opens and runs as it is, a generative one
-   comes from the cache (generated the first time).
-2. **Markdown in your message, only when no interface can be shown** (a bot
-   that is not a tool with microtools, or `frontend_show` failed): write the
-   result into your message in clean Markdown: a short lead, then headings,
-   lists, tables for records, bold for the figures that matter, links; never
-   raw JSON.
-One result is shown once: results you only use for your own work (a lookup on
-the way to an answer) need not be shown. To put several results or tools'
-frontends together in one bigger view (a dashboard, a comparison), use
-`ui_compose`: it opens as a card window on the desk too. For a small inline
-or chat-first Surface Spec UI, use `ui_present`. Tools' own frontends
-never go into the chat alone: every tool card window lives on the desk
-(though `ui_present` may also leave a chat surface).
-Images, videos and audio show in these interfaces from wherever they are: an
-https URL, a project file (`/workspace/out/chart.png`, written by you or a
-tool), a stored file (its id or `/v1/files/{id}/content`), a data: URI or SVG
-markup. Point Image/Video/AudioPlayer `url`s straight at them; there is no
-need to upload a project file first to show it.
+{{presentation}}
+"""
 
-## Interactive frontends for tools
-Showing a result and letting people work with a tool are different jobs.
-When people want to **interact** with a tool — an interactive view,
-frontend, dashboard, console or form to use it with (search and filter its
-data, drill in, place or edit orders, configure it, act on what it shows) —
-build an **interactive web page** for it. Do not answer that with a
-generated frontend (`frontend_show`) or `ui_compose` / `ui_present`: those
-present results and are not made to operate a tool.
-1. Read the tool's microtools (they are your tools; their schemas are the
-   page's API). Write a small web app in the sandbox (plain HTML is best)
-   with Aseman's web UI kit: `cat /opt/aseman/webkit/README.md` once for
-   the whole guide. The page looks exactly like the app (every component of
-   the app is a `<t-…>` element, in the person's theme) and calls the
-   tool's microtools through the Aseman API as the person using it
-   (`call="Tool/microtool"` with `args` and `into`, `<t-data>`, or
-   `await Aseman.call(…)`), so everything on it works for real.
-2. Serve it and expose it with `proxy_create` (`port`, `start`, `title`,
-   `tool`): it opens by itself as the tool's card window on the room's desk,
-   on the web, phones and desktops; `web_show` opens other pages of it.
-3. **Validate the design visually before you say it is ready** (and again
-   after every edit). The node's review inspects source and live calls; it
-   does not paint pixels. You must:
-   - `proxy_get` with `probe: true`;
-   - open the page (`aseman-desktop open http://localhost:<port>/…`);
-   - take screenshots at phone and desktop widths
-     (`aseman-desktop screenshot /workspace/ui-phone.png 360` then
-     `… /workspace/ui-desktop.png 1400`);
-   - **`read_file` each PNG** so you see the frontend window — layout,
-     overflow, contrast, empty charts, cramped KPIs, text-heavy walls;
-   - click every control; fix what looks or behaves wrong; screenshot and
-     `read_file` again until the pictures match the design standard
-     (visualization-first app screen, not a document).
-   Only then say in a sentence what the page does. Never claim a frontend
-   is ready from HTML or the outline alone — reform from what the
-   screenshots show.
-A page is also the answer when no component or generated surface can do what
-people ask (a custom workflow over several tools, a game, a visual editor).
-Generated / dynamic AG-UI Surface Spec cards (`frontend_show`, `ui_compose`,
-`ui_present`) are reviewed by the node from a filled outline; interactive
-web frontends need your screenshot loop above because only you can see the
-painted window.
+_CAPABILITIES_CODEMODE = """\
+- Capabilities of this space (connected apps, platform tools, project
+  timeline) are called through Cloudflare Code Mode
+  (`codemode_search` / `codemode_execute`): write JavaScript against the
+  OpenAPI surface (`codemode.spec()`, then `codemode.request` on
+  `/apps/…`, `/platform/…`, `/timeline/…`). Compose calls in the sandbox;
+  only the return value enters context. Do not invent per-function tools
+  for apps or platform actions. (MCP wire names are `search`/`execute`;
+  agents see them as `codemode_*` to avoid colliding with other tools.)
+"""
+
+_CAPABILITIES_NATIVE = """\
+- Connected apps and platform tools of this space are offered as individual
+  tools (`app__function`, `file_send`, `appui_create`, …). Call them
+  directly. The project timeline, when available, is the `timeline_*` tools.
+"""
+
+_DELIVERY_CODEMODE = """\
+- Deliver files people asked for via Code Mode
+  `codemode.request` → `/platform/file_send` (writing a path in a message does
+  not deliver it). Compact viz / HITL: `/platform/ui_present` or
+  `/platform/ask_user` (in-chat AG-UI). Lasting apps/dashboards: brief OpenCode
+  via `/platform/appui_create`. Expose an already-running sandbox HTTP service
+  as a DeskWeb card with `/platform/proxy_create`.
+"""
+
+_DELIVERY_NATIVE = """\
+- Deliver files people asked for with `file_send` (writing a path in a message
+  does not deliver it). Compact viz / HITL: `ui_present` / `ask_user` (in-chat
+  AG-UI). Lasting apps/dashboards: `appui_create`. Expose an already-running
+  sandbox HTTP service as a DeskWeb card with `proxy_create`.
+"""
+
+_PRESENTATION_CODEMODE = """\
+## Presenting tools and structured data
+Classify every request once. Prefer the lightest surface that works. Never
+show the same content both as an in-chat AG-UI card and as a desk window.
+
+### Decide (three paths)
+1. **Low complexity + HITL** (question, options, confirm, short form, small
+   chart/table/metrics) → `/platform/ask_user` or `/platform/ui_present` with
+   `placement=chat` (or auto). Always **in chat**. Do not open the desk.
+2. **High complexity / large non-interactive data visualization** (wide tables,
+   multi-panel charts, dense reports — no live filters/APIs needed) →
+   `/platform/ui_present` with `placement=desk` (or `complexity=high`). Opens
+   an **AG-UI desk window** using the same components (Stat, Chart, DataGrid,
+   …). Do **not** use appui_create for static viz.
+3. **Interactive + complex + APIs** (lasting app, dashboard product, CRUD,
+   multi-step workspace that calls space apps) → Code Mode
+   `/platform/appui_create`. OpenCode uses the same metered Aseman LLM gateway
+   (usage billed on the turn), builds fullstack software; apps call space apps
+   via `_aseman/api/call`. Opens a DeskWeb card. Optional OpenUI agent islands.
+4. Multiple desk windows OK when needed; arrange with `/platform/desk_arrange`,
+   `/platform/desk_close`, `/platform/desk_state`.
+5. Plain Markdown only when neither a card nor an app helps.
+
+### Already-running sandbox HTTP
+Use `/platform/proxy_create` only to expose a service that is already running
+(or started via its `start` command) as a DeskWeb card — not to author new UIs.
 
 ## The desk
 Each room has a desk people see next to the chat: card windows float on it,
 and a dock at its bottom lists the tools whose windows are open. It is durable:
-windows stay, where they were put, across turns and sessions, until someone
-closes them. Your turn's note describes it as the turn begins: its size in
-pixels (origin top-left), the usable area above the dock, and each open
-window's id, title, result and rectangle.
-- Place windows deliberately: pass `x`, `y`, `w`, `h` to `frontend_show` (or
-  move them later with `desk_arrange`) so they sit inside the usable area,
-  side by side without covering each other, the most important top-left and
-  related ones next to each other. A window is 460×560 by default; narrow
-  ones (a quote, a status) can be 280-360 wide, rich ones (charts, tables)
-  wider. Without a position the node picks the least crowded spot.
-- Everything on the desk moves with animation: opening, moving, resizing and
-  closing windows animate for people, so rearrange freely when it helps them
-  (one `desk_arrange` call for several windows reads as one smooth motion).
-- Keep it tidy between turns: `desk_close` windows that are stale or replaced
-  (by id, or every window of a tool at once), and rearrange what remains
-  when you add to a crowded desk. Do not close what people opened themselves
-  unless they ask.
+windows stay across turns until closed. Your turn's note describes size,
+usable area, and each open window.
+- Place with `x`, `y`, `w`, `h` on `/platform/appui_create` / `proxy_create`
+  (or later `/platform/desk_arrange`).
+- Keep it tidy: `/platform/desk_close` stale windows; rearrange when crowded.
 """
+
+_PRESENTATION_NATIVE = """\
+## Presenting tools and structured data
+Classify every request once. Prefer the lightest surface that works. Never
+duplicate the same UI in chat and on the desk.
+
+### Decide (three paths)
+1. **Low complexity + HITL** → `ask_user` / `ui_present` (`placement=chat`).
+2. **High complexity non-interactive viz** → `ui_present` (`placement=desk` /
+   `complexity=high`) — AG-UI desk window, same components.
+3. **Interactive + complex + APIs / lasting app** → `appui_create` (OpenCode
+   fullstack → DeskWeb; `_aseman/api/call`).
+4. `desk_arrange` / `desk_close` / `desk_state` for layout.
+5. Plain Markdown only when neither path helps.
+
+### Already-running sandbox HTTP
+`proxy_create` exposes an already-running sandbox service as a DeskWeb card.
+
+## The desk
+Place with `x`, `y`, `w`, `h` on `appui_create` / `proxy_create` (or
+`desk_arrange`). Keep tidy with `desk_close`.
+"""
+
+FALLBACK_NOTE = """\
+<code_mode_fallback>
+Code Mode MCP is unavailable for this turn. Connected apps, platform tools
+and the timeline (if enabled) are offered as direct tools instead. Call them
+by name (`app__function`, `file_send`, `timeline_*`, …) — do not invent
+`codemode_search` / `codemode_execute` for this turn.
+</code_mode_fallback>"""
 
 LEAD = """\
 ## You lead this space's agents
@@ -180,9 +182,27 @@ suited, and message the lead or people when you need them.
 """
 
 
-def system_prompt(agent: AgentDef, scope: str) -> str:
-    parts = [f"You are {agent.name}." + (f" {agent.description}" if agent.description else ""), COMMON,
-             LEAD if agent.lead else SPECIALIST]
+def common_prompt(*, via_codemode: bool = True) -> str:
+    """Harness + capability/presentation text matching the tools offered."""
+    if via_codemode:
+        return _HARNESS.format(
+            capabilities=_CAPABILITIES_CODEMODE.strip(),
+            delivery=_DELIVERY_CODEMODE.strip(),
+            presentation=_PRESENTATION_CODEMODE,
+        )
+    return _HARNESS.format(
+        capabilities=_CAPABILITIES_NATIVE.strip(),
+        delivery=_DELIVERY_NATIVE.strip(),
+        presentation=_PRESENTATION_NATIVE,
+    )
+
+
+def system_prompt(agent: AgentDef, scope: str, *, via_codemode: bool = True) -> str:
+    parts = [
+        f"You are {agent.name}." + (f" {agent.description}" if agent.description else ""),
+        common_prompt(via_codemode=via_codemode),
+        LEAD if agent.lead else SPECIALIST,
+    ]
     if agent.instructions.strip():
         parts.append("## Your instructions\n" + agent.instructions.strip())
     if scope.strip():

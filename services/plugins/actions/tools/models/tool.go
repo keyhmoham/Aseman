@@ -27,9 +27,8 @@ const (
 
 // Frontend modes of a tool.
 const (
-	FrontendNone       = ""
-	FrontendStatic     = "static"     // an Elpian app: a program on the Elpian VM or QuickJS
-	FrontendGenerative = "generative" // Fixed Schema / archetype Surface Bundle from a skill, cached in tool_components
+	FrontendNone   = ""
+	FrontendStatic = "static" // an Elpian app: a program on the Elpian VM or QuickJS
 )
 
 // Tool is the registry record of a tool: how its backend is reached and what
@@ -75,49 +74,23 @@ func (t *Tool) EffectiveMode() string {
 
 // FrontendSpec is what a tool shows people.
 type FrontendSpec struct {
-	// Mode is static, generative or empty (no frontend).
+	// Mode is static or empty (no frontend).
 	Mode string `json:"mode,omitempty"`
 	// Runtime and Language of a static frontend (elpian: dart or js; quickjs: js).
 	Runtime  string `json:"runtime,omitempty"`
 	Language string `json:"language,omitempty"`
-	// Version changes whenever the frontend's program or skill changes, so a
-	// generated frontend cached for an older one is not served again.
+	// Version changes whenever the frontend's program changes.
 	Version string `json:"version,omitempty"`
-	// Cache, for a generative frontend, keeps the first frontend generated
-	// in the component registry and serves it to everyone after that. Off,
-	// a frontend is generated for every request, designed for what the
-	// person asked, following the skill. Unset means on.
-	Cache *bool `json:"cache,omitempty"`
 }
-
-// Cached reports whether a generated frontend is kept and served again.
-func (f FrontendSpec) Cached() bool { return f.Cache == nil || *f.Cache }
 
 // Bot entity keys of a tool's programs.
 const (
 	EntityBackendSource    = "backend"           // backend program source (elpian/quickjs)
 	EntityFrontendSource   = "frontend"          // static frontend program source
 	EntityFrontendBytecode = "frontend_bytecode" // static Elpian frontend, compiled
-	EntityFrontendSkill    = "frontend_skill"    // generative frontend skill / prompt
+	EntityFrontendSkill    = "frontend_skill"    // optional freeform author notes for the tool
 )
 
-// Component is a generated frontend kept in the component registry: the AG-UI Surface Spec
-// surface generated once for a tool (and frontend version), served again for
-// every later request and filled with fresh data each time.
-type Component struct {
-	ID    string `db:"id" json:"id"`
-	BotID string `db:"bot_id" json:"bot_id"`
-	// Key identifies what it was generated from (frontend version, skill and
-	// the microtools it may call); a change of any of them makes a new one.
-	Key string `db:"key" json:"key"`
-	// Template is the generated frontend: Surface Spec components, the data bindings
-	// that fill it and the actions it runs (Template as JSON).
-	Template  string    `db:"template" json:"template"`
-	Model     string    `db:"model" json:"model,omitempty"`
-	Uses      int64     `db:"uses" json:"uses"`
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
-}
 type Connection struct {
 	ID        string     `db:"id" json:"id"`
 	Owner     string     `db:"owner" json:"owner"`
@@ -139,7 +112,6 @@ func Models() []database.Model {
 	f := func(n string, k database.Kind) database.Field { return database.Field{Name: n, Kind: k} }
 	return []database.Model{
 		{Name: "tool_registry", Table: "tool_registry", Fields: []database.Field{f("id", database.KindString), f("bot_id", database.KindString), f("owner", database.KindString), f("url", database.KindString), f("auth", database.KindString), f("commands", database.KindJSON), f("secrets", database.KindString), f("mode", database.KindString), f("runtime", database.KindString), f("language", database.KindString), f("image", database.KindString), f("port", database.KindInt64), f("endpoint", database.KindString), f("runtime_key", database.KindString), f("frontend", database.KindString), f("updated_at", database.KindTime)}},
-		{Name: "tool_components", Table: "tool_components", Fields: []database.Field{f("id", database.KindString), f("bot_id", database.KindString), f("key", database.KindString), f("template", database.KindString), f("model", database.KindString), f("uses", database.KindInt64), f("created_at", database.KindTime), f("updated_at", database.KindTime)}},
 		{Name: "tool_connections", Table: "tool_connections", Fields: []database.Field{f("id", database.KindString), f("owner", database.KindString), f("bot_id", database.KindString), f("space_id", database.KindString), f("secret", database.KindString), f("expires_at", database.KindTime), f("updated_at", database.KindTime)}},
 		{Name: "tool_oauth", Table: "tool_oauth", Fields: []database.Field{f("id", database.KindString), f("owner", database.KindString), f("status", database.KindString), f("secret", database.KindString), f("expires_at", database.KindTime)}},
 	}

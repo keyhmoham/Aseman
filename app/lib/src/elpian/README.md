@@ -11,7 +11,6 @@ the web runtimes (`assets/elpian`) are part of the app.
 | `core/`, `css/`, `html_widgets/`, `widgets/`, `models/`, `parser/`, `canvas/` | the rendering engine: JSON nodes (HTML, CSS, the Flutter DSL, canvas) as Flutter widgets |
 | `vm/` | the runtimes a program runs on: the Elpian VM (`ElpianVm`, FFI on devices, WebAssembly on the web) and QuickJS (`QuickJsVm`), the `ElpianVmWidget` that hosts one, host-call handling and governance |
 | `superapp/` | the miniapp model: manifest ∩ grant → policy, and the governed host |
-| `agui/` | the AG-UI Surface Spec renderer: generated tool frontends and agents' widgets |
 | `scope/`, `stream/`, `diagnostics/` | scoped components, streamed UI, tracing |
 | `godot/` | the `Scene3D` widget: an embedded Godot 4 3D scene, driven by ops (its native engine is `packages/elpian_godot_native`; without the engine artifacts it shows a placeholder) |
 
@@ -23,9 +22,6 @@ Changes made to the copy, so a refresh can repeat them:
 * the `wasm` runtime kind is removed;
 * asset and font paths point at the app's own (`assets/elpian/…`,
   families `serif` / `monospace`);
-* `agui/` keeps Elpian's agent transport, conversations, the `AgUiSurface`
-  element and the agent host APIs, but renders with Aseman's AG-UI surface
-  runtime and catalog (`lib/src/agui`);
 * `ElpianEngine.selfDispatchingTypes` is extensible, for host widgets that
   dispatch their own events;
 

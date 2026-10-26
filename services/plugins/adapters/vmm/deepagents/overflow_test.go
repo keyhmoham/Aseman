@@ -47,6 +47,10 @@ func (p fakePlatform) TimelineMCP(_ context.Context, spaceID string, body []byte
 	return p.timeline(spaceID, body)
 }
 
+func (p fakePlatform) CodeModeMCP(context.Context, string, []byte) ([]byte, error) {
+	return []byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`), nil
+}
+
 func (p fakePlatform) ResolveChat(context.Context, string, string) (vmm.ProviderConfig, error) {
 	return p.provider, nil
 }

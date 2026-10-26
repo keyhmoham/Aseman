@@ -128,6 +128,8 @@ class TurnContext:
     memory: Any = None
     # Whether the node serves the space's timeline to the turn (timeline.py).
     timeline: bool = False
+    # Whether the node serves Cloudflare Code Mode over space apps (codemode.py).
+    codemode: bool = False
     # The agent's own chat model for side calls (the swarm's planning and team
     # setup): a LangChain chat model behind the turn's metered LLM endpoint.
     llm: Any = None

@@ -259,13 +259,6 @@ enum ElpianCapability {
   /// function is routinely given state without being given a filesystem.
   state('state'),
 
-  /// Talking to this mini app's own agents (`agent.send`, `agent.action`) and
-  /// reading the AG-UI surfaces they produced (`agui.dataModel`).
-  ///
-  /// Its own gate because an agent request spends the app's model budget and
-  /// may run its server functions as tools.
-  agents('agents'),
-
   /// The fail-safe gate for anything the VM does not recognise. Never grant it
   /// to widen a mini app's reach — narrow the API into a real family instead.
   other('other');

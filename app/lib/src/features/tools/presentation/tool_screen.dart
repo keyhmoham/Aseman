@@ -8,8 +8,7 @@ import '../data/tools_api.dart';
 import '../domain/tool_models.dart';
 import 'tool_frontend_view.dart';
 
-/// A tool opened full screen in a space: its frontend, what its backend is,
-/// and — for its owner — regenerating a generated frontend.
+/// A tool opened full screen in a space: its frontend and what its backend is.
 class ToolScreen extends StatefulWidget {
   const ToolScreen({
     super.key,
@@ -33,7 +32,7 @@ class _ToolScreenState extends State<ToolScreen> {
   ToolInfo? _info;
   ToolFrontendPayload? _payload;
 
-  /// Times the owner asked for the frontend to be generated again.
+  /// Bumped to reload the frontend (e.g. after connecting an account).
   int _generations = 0;
 
   /// For a tool each person connects with their own account: whether the
@@ -77,7 +76,6 @@ class _ToolScreenState extends State<ToolScreen> {
   @override
   Widget build(BuildContext context) {
     final info = _info;
-    final owner = widget.bot.ownerId.isNotEmpty && widget.bot.ownerId == _me;
     return Scaffold(
       appBar: AppBar(
         title: Text(_payload?.title.isNotEmpty == true
@@ -101,12 +99,6 @@ class _ToolScreenState extends State<ToolScreen> {
                   _connected! ? Icons.link_rounded : Icons.link_off_rounded),
               onPressed: _connect,
             ),
-          if (owner && info?.frontendMode == FrontendMode.generative)
-            IconButton(
-              tooltip: 'Generate the frontend again',
-              icon: const Icon(Icons.auto_awesome_rounded),
-              onPressed: () => setState(() => _generations++),
-            ),
           const SizedBox(width: 8),
         ],
       ),
@@ -117,7 +109,6 @@ class _ToolScreenState extends State<ToolScreen> {
         spaceId: widget.spaceId,
         roomId: widget.roomId,
         userId: _me,
-        regenerate: _generations > 0,
         onConnected: () {
           if (mounted) setState(() => _connected = true);
         },

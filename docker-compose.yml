@@ -202,7 +202,14 @@ services:
       # Bound a provider call, its time to first SSE event and silence between events.
       ASEMAN_LLM_CALL_TIMEOUT: ${ASEMAN_LLM_CALL_TIMEOUT:-5m}
       ASEMAN_LLM_FIRST_EVENT_TIMEOUT: ${ASEMAN_LLM_FIRST_EVENT_TIMEOUT:-2m}
-      ASEMAN_LLM_STREAM_IDLE_TIMEOUT: ${ASEMAN_LLM_STREAM_IDLE_TIMEOUT:-45s}
+      # Long App UI / sandbox tool rounds can leave the model quiet between
+      # tool results; 45s was killing turns mid-appui_create.
+      ASEMAN_LLM_STREAM_IDLE_TIMEOUT: ${ASEMAN_LLM_STREAM_IDLE_TIMEOUT:-180s}
+      # OpenCode (sandbox App UI) uses the agent turn's metered LLM gateway
+      # (/deepagents/v1/llm) — same backbone + billing as agents. Optional
+      # overrides when sandboxes cannot resolve ASEMAN_AGENT_NODE_URL:
+      ASEMAN_SANDBOX_LLM_URL: ${ASEMAN_SANDBOX_LLM_URL:-}
+      OPENCODE_MODEL: ${OPENCODE_MODEL:-aseman/default}
       # The agents' memory: the self-hosted OpenViking above, as the runtime
       # reaches it, and how much it recalls with each message (tokens).
       ASEMAN_OPENVIKING_URL: ${ASEMAN_OPENVIKING_URL:-http://openviking:1933}

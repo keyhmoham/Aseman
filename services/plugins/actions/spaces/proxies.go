@@ -175,21 +175,27 @@ func (s *Service) proxyCreateTool(ctx context.Context, spaceID identity.ID, agen
 		return "", errs.InvalidArgument("proxy_create args: {\"port\":...,\"title\":\"...\"}")
 	}
 	var roomID identity.ID
-	if in.Room != "" {
-		r, err := identity.Parse(in.Room)
+	roomLabel := strings.TrimSpace(in.Room)
+	// "home" is the space hall desk, not a room id — bind the proxy record to
+	// the execution room (for the chat notice) and open the card on home below.
+	switch {
+	case roomLabel != "" && roomLabel != "home":
+		r, err := identity.Parse(roomLabel)
 		if err != nil {
 			return "", errs.InvalidArgument("invalid room id")
 		}
 		roomID = r
-	} else if r := vmm.RoomFrom(ctx); r != "" {
-		rid, err := identity.Parse(r)
+	case vmm.RoomFrom(ctx) != "":
+		rid, err := identity.Parse(vmm.RoomFrom(ctx))
 		if err != nil {
 			return "", errs.InvalidArgument("invalid room from context")
 		}
 		roomID = rid
 	}
-	if r := vmm.RoomFrom(ctx); r != "" && r != roomID.String() {
-		return "", errs.Permission("proxy room differs from execution room")
+	if roomLabel != "" && roomLabel != "home" {
+		if r := vmm.RoomFrom(ctx); r != "" && r != roomID.String() {
+			return "", errs.Permission("proxy room differs from execution room")
+		}
 	}
 	if err := helper.CheckContextAccess(ctx, s.R, spaceID, roomID, true, "proxy_create"); err != nil {
 		return "", err
@@ -223,26 +229,27 @@ func (s *Service) proxyCreateTool(ctx context.Context, spaceID identity.ID, agen
 	// resolves the absolute URL and renders an "Open in webview" button.
 	_ = s.PostMessage(ctx, spaceID, roomID, dec, fmt.Sprintf(
 		"🔗 **%s** preview gateway created. Readiness must be verified after starting the service.\n\nOpen it: %s", p.Title, p.GatewayPath()))
-	// The page opens in a card window on the room's desk, where tools'
-	// frontends are: people see and use it in the app, with the tool it is
-	// the frontend of when one is named.
+	// Open as a DeskWeb card on the room's desk (the room of this turn, or an
+	// explicit room=). room=home is the space hall ("My trading desk").
 	if in.Show == nil || *in.Show {
-		show := webShowInput{Page: p.GatewayPath(), Path: in.Path, Tool: in.Tool, Title: in.Title}
-		if !roomID.IsZero() {
-			show.Room = roomID.String()
-		} else {
+		show := webPageInput{Page: p.GatewayPath(), Path: in.Path, Tool: in.Tool, Title: in.Title}
+		deskRoomID := roomID
+		switch {
+		case roomLabel == "home" || roomID.IsZero():
 			show.Room = "home"
+			deskRoomID = identity.ID{}
+		default:
+			show.Room = roomID.String()
 		}
-		if d, id, review, err := s.showPage(ctx, spaceID, roomID, agentName, show); err != nil {
-			status += "\nThe page could not be opened on the desk: " + err.Error() + "\nFix it and open it with web_show."
+		if d, id, err := s.openWebPage(ctx, spaceID, deskRoomID, agentName, show); err != nil {
+			status += "\nThe page could not be opened on the desk: " + err.Error()
 		} else if w := windowJSON(d, id); w != nil {
 			raw, _ := json.Marshal(w)
-			status += "\nOpened on the room's desk as a card window: " + string(raw) + ". Arrange it with desk_arrange; open other pages of the service with web_show."
-			if review != nil && len(review.Issues) > 0 {
-				status += "\n" + review.report(true)
-			} else if review != nil {
-				status += "\nIts review passed: " + strings.Join(review.Tested, "; ") + "."
+			where := "room desk"
+			if show.Room == "home" {
+				where = "hall desk"
 			}
+			status += "\nOpened on the " + where + " as a card window: " + string(raw) + ". Arrange it with desk_arrange."
 		}
 	}
 	return p.GatewayPath() + status, nil

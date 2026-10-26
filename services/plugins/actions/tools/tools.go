@@ -145,6 +145,9 @@ func (s *Service) CommandsFor(ctx context.Context, botID, actorID, spaceID strin
 		if schema, ok := c["schema"].(map[string]any); ok && schema != nil {
 			row["schema"] = schema
 		}
+		if ann, ok := c["annotations"].(map[string]any); ok && ann != nil {
+			row["annotations"] = ann
+		}
 		if ui, ok := c["ui"].(string); ok && ui != "" {
 			row["ui"] = ui
 		}
@@ -419,14 +422,6 @@ func (s *Service) mcpDelete(ctx context.Context, req *api.ActionRequest) (*api.A
 			}
 		}
 	}
-	var components []models.Component
-	if e := s.R.List(ctx, "tool_components", database.Filter{Equal: map[string]any{"bot_id": in.Bot}}, &components); e == nil {
-		for i := range components {
-			if id, e := identity.Parse(components[i].ID); e == nil {
-				_ = s.R.Delete(ctx, "tool_components", id)
-			}
-		}
-	}
 	if e := s.R.Delete(ctx, "tool_registry", rec.ID); e != nil {
 		return nil, e
 	}
@@ -637,8 +632,9 @@ func (s *Service) invoke(ctx context.Context, req *api.ActionRequest) (*api.Acti
 		Space    string         `json:"space"`
 		Function string         `json:"function"`
 		Payload  map[string]any `json:"payload"`
-		// Room, when set, posts the reply into that room as a tool message so
-		// everyone in it sees the result and it survives a reload.
+		// Room, when set, posts the reply into that room as a KindTool message.
+		// Do not set this for microtool/page API traffic (preview kit calls):
+		// those results belong only on the HTTP response to the webview host.
 		Room string `json:"room"`
 	}
 	if e := helper.Decode(req, &in); e != nil {
@@ -780,15 +776,13 @@ func NewPlugin() api.Plugin {
 		s := &Service{K: d.Kernel, R: repo.New(d.Kernel), Client: mcp.New(os.Getenv("ASEMAN_MCP_ALLOW_PRIVATE") == "true"), Internal: mcp.New(true), Compiler: NewCompiler(os.Getenv("ASEMAN_TOOL_COMPILER_URL"))}
 		actions := []api.Action{helper.Action{Namespace: "tools", Name: "mcp_register", Summary: "Register a remote MCP tool", Handler: s.mcpRegister}, helper.Action{Namespace: "tools", Name: "mcp_update", Summary: "Update remote MCP configuration", Handler: s.mcpUpdate}, helper.Action{Namespace: "tools", Name: "mcp_oauth_get", Summary: "Read the OAuth client saved for an MCP server", Handler: s.mcpOAuthGet}, helper.Action{Namespace: "tools", Name: "mcp_oauth_set", Summary: "Save the OAuth client people sign in to an MCP server with", Handler: s.mcpOAuthSet}, helper.Action{Namespace: "tools", Name: "mcp_delete", Summary: "Delete a registered MCP server", Handler: s.mcpDelete}, helper.Action{Namespace: "tools", Name: "mcp_samples", Summary: "Admin: the sample MCP servers and which are already in the catalog", Handler: s.mcpSamples}, helper.Action{Namespace: "tools", Name: "mcp_import_samples", Summary: "Admin: add the sample MCP servers to the catalog", Handler: s.mcpImportSamples}, helper.Action{Namespace: "tools", Name: "connection_set", Summary: "Set a personal project connection", Handler: s.connectionSet}, helper.Action{Namespace: "tools", Name: "commands_list", Summary: "Discover tool commands", Handler: s.commandsList}, helper.Action{Namespace: "tools", Name: "invoke", Summary: "Invoke a project tool as its caller", Handler: s.invoke}}
 		actions = append(actions,
-			helper.Action{Namespace: "tools", Name: "tool_create", Summary: "Create a tool: an external, managed or installed backend and a static or generative frontend", Handler: s.toolCreate},
+			helper.Action{Namespace: "tools", Name: "tool_create", Summary: "Create a tool: an external, managed or installed backend and a static frontend (or none)", Handler: s.toolCreate},
 			helper.Action{Namespace: "tools", Name: "tool_update", Summary: "Replace a tool's backend program or frontend", Handler: s.toolUpdate},
 			helper.Action{Namespace: "tools", Name: "tool_get", Summary: "Read a tool: its backend mode, runtime, frontend and microtools", Handler: s.toolGet},
 			helper.Action{Namespace: "tools", Name: "tool_delete", Summary: "Delete a tool", Handler: s.toolDelete},
 			helper.Action{Namespace: "tools", Name: "tool_microtools", Summary: "List a tool's microtools, asking its backend", Handler: s.toolMicrotools},
-			helper.Action{Namespace: "tools", Name: "frontend_get", Summary: "A tool's frontend: its static program, or its generated surface filled with data", Handler: s.frontendGet},
-			helper.Action{Namespace: "tools", Name: "frontend_action", Summary: "Run an action of a tool's generated frontend", Handler: s.frontendAction},
+			helper.Action{Namespace: "tools", Name: "frontend_get", Summary: "A tool's frontend: its static program, or mode metadata when empty/unknown", Handler: s.frontendGet},
 			helper.Action{Namespace: "tools", Name: "app_rpc", Summary: "A tool's app (MCP Apps) asks its server: resources/read or tools/call, as the person in the space", Handler: s.appRPC},
-			helper.Action{Namespace: "tools", Name: "components_list", Summary: "The generated frontends the component registry holds for a tool", Handler: s.componentsList},
 		)
 		var release func()
 		return module.Instance{Service: s, Models: append(schema.Models(), models.Models()...), Actions: append(actions, oauthActions(s)...),

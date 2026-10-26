@@ -63,6 +63,8 @@ func routes(a *Adapter) []route {
 		{network.MethodPost, gatewayPrefix + "/memory/embeddings", a.serveMemoryEmbeddings},
 		// The space's timeline, as a built-in MCP server (timeline.go).
 		{network.MethodPost, gatewayPrefix + "/timeline/mcp", a.serveTimeline},
+		// Cloudflare Code Mode: search/execute over the space's apps (codemode.go).
+		{network.MethodPost, gatewayPrefix + "/codemode/mcp", a.serveCodeMode},
 		// The agents' learning: their playbook improving between turns (learn.go).
 		{network.MethodPost, gatewayPrefix + "/learn/chat/completions", a.serveLearn},
 		{network.MethodPost, gatewayPrefix + "/learn/decision/evaluate", a.serveLearnDecision},
@@ -83,6 +85,8 @@ type platform interface {
 	// TimelineEnabled means the timeline namespace is not loaded.
 	TimelineEnabled(ctx context.Context) (bool, error)
 	TimelineMCP(ctx context.Context, spaceID string, body []byte) ([]byte, error)
+	// CodeModeMCP is Cloudflare Code Mode over the space's connected apps.
+	CodeModeMCP(ctx context.Context, spaceID string, body []byte) ([]byte, error)
 }
 
 type kernelPlatform struct{ K api.Kernel }
@@ -498,8 +502,12 @@ func (a *Adapter) serveModels(ctx context.Context, req *network.Request) (*netwo
 	if model == "" {
 		model = "default"
 	}
+	// Include stable aliases OpenCode (and other OpenAI clients) select as
+	// aseman/default; serveChat still rewrites to the agent's provider model.
 	return jsonResponse(200, map[string]any{"object": "list", "data": []map[string]any{
 		{"id": model, "object": "model", "owned_by": "aseman"},
+		{"id": "default", "object": "model", "owned_by": "aseman"},
+		{"id": "aseman/default", "object": "model", "owned_by": "aseman"},
 	}}), nil
 }
 

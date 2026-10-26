@@ -1257,6 +1257,7 @@ func (a *msgListAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 			msgs[i], msgs[j] = msgs[j], msgs[i]
 		}
 	}
+	msgs = withoutToolMessages(msgs)
 	// Surface which agent is currently working in this room (if any) and what it
 	// is doing right now, so the client can show a live status sentence under the
 	// chat ("code-agent is running in the sandbox", "aseman is planning", …).

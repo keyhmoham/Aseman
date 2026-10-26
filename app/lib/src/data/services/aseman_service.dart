@@ -2062,7 +2062,7 @@ class AsemanService implements BackendService {
         .toList();
   }
 
-  // ── legacy AsemanService surface (kept for compatibility) ─────────────
+  // ── BackendService home/market helpers ───────────────────────────────
 
   @override
   Future<List<MarketQuote>> fetchMarketQuotes() async {

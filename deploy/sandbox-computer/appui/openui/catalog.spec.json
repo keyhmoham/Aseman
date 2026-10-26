@@ -1,0 +1,555 @@
+{
+  "root": "AppShell",
+  "version": "1.0.0",
+  "format": "Aseman OpenUI JSON tree: {\"c\":\"ComponentName\",\"p\":{...props},\"children\":[...]} or type/openui wrapper",
+  "components": {
+    "AppShell": {
+      "signature": "AppShell(children: any[], title?: string, subtitle?: string)",
+      "description": "Neutral root viewport \u2014 always root = AppShell([...]). Compose paradigm chrome (AppBar, Drawer, Hero, \u2026) inside; optional title/subtitle only when no custom chrome"
+    },
+    "Page": {
+      "signature": "Page(children: any[], title?: string, subtitle?: string)",
+      "description": "Full page body under AppShell; title optional, children required"
+    },
+    "Section": {
+      "signature": "Section(title: string, children: any[], description?: string, glass?: boolean)",
+      "description": "Named content section with optional description and children"
+    },
+    "Container": {
+      "signature": "Container(children: any[], size?: \"sm\" | \"md\" | \"lg\" | \"full\", center?: boolean)",
+      "description": "Width-limited content wrapper; size sm|md|lg|full (default md); optional center"
+    },
+    "Center": {
+      "signature": "Center(children: any[], minHeight?: number)",
+      "description": "Centers children horizontally (and optionally vertically in a min-height)"
+    },
+    "Stack": {
+      "signature": "Stack(children: any[], direction?: \"row\" | \"column\", gap?: \"none\" | \"xs\" | \"s\" | \"m\" | \"l\" | \"xl\" | \"2xl\", align?: \"start\" | \"center\" | \"end\" | \"stretch\" | \"baseline\", justify?: \"start\" | \"center\" | \"end\" | \"between\" | \"around\" | \"evenly\", wrap?: boolean)",
+      "description": "Flex layout; direction row|column (default column), gap none\u20132xl, align/justify, wrap"
+    },
+    "Grid": {
+      "signature": "Grid(children: any[], columns?: number, gap?: \"none\" | \"xs\" | \"s\" | \"m\" | \"l\" | \"xl\" | \"2xl\")",
+      "description": "CSS grid; columns count (default 2), gap none\u20132xl, children as cells"
+    },
+    "Split": {
+      "signature": "Split(left: any[], right: any[], ratio?: \"33\" | \"50\" | \"67\")",
+      "description": "Two-pane split; ratio \"50\"|\"33\"|\"67\" (left share), left and right child arrays"
+    },
+    "Sidebar": {
+      "signature": "Sidebar(side: any[], main: any[])",
+      "description": "Sidebar + main content layout for desk navigation panels"
+    },
+    "Tabs": {
+      "signature": "Tabs(items: TabItem[], defaultValue?: string)",
+      "description": "Tabbed views; pass TabItem refs \u2014 ideal for chart/table alternate views"
+    },
+    "TabItem": {
+      "signature": "TabItem(value: string, trigger: string, content: any[])",
+      "description": "Single tab: value id, trigger label, content children"
+    },
+    "Accordion": {
+      "signature": "Accordion(items: AccordionItem[])",
+      "description": "Stacked expandable AccordionItem refs"
+    },
+    "AccordionItem": {
+      "signature": "AccordionItem(title: string, content: any[], defaultOpen?: boolean)",
+      "description": "Accordion panel with title and content children"
+    },
+    "Divider": {
+      "signature": "Divider(label?: string)",
+      "description": "Horizontal rule separating sections"
+    },
+    "Spacer": {
+      "signature": "Spacer(size?: \"none\" | \"xs\" | \"s\" | \"m\" | \"l\" | \"xl\" | \"2xl\", grow?: boolean)",
+      "description": "Flexible empty space; size xs\u20132xl or grow to fill remaining flex space"
+    },
+    "ScrollArea": {
+      "signature": "ScrollArea(children: any[], maxHeight?: number)",
+      "description": "Scrollable region with optional maxHeight in pixels"
+    },
+    "Frame": {
+      "signature": "Frame(children: any[], variant?: \"plain\" | \"panel\" | \"bleed\", pad?: \"none\" | \"sm\" | \"md\" | \"lg\")",
+      "description": "Content stage; children required; variant \"plain\"|\"panel\"|\"bleed\" (default plain); optional pad sm|md|lg"
+    },
+    "Overlay": {
+      "signature": "Overlay(children: any[])",
+      "description": "Dimmed backdrop wrapping a Sheet or focused content (visual only in desk cards)"
+    },
+    "Sheet": {
+      "signature": "Sheet(children: any[], title?: string, side?: \"center\" | \"end\")",
+      "description": "Elevated panel/sheet for focused tasks; title optional, children required; side \"center\"|\"end\" (default center)"
+    },
+    "AppBar": {
+      "signature": "AppBar(title?: string, leading?: any[], actions?: any[], dense?: boolean)",
+      "description": "Top chrome bar for apps: optional leading children (menu/back), title, trailing action children"
+    },
+    "NavBar": {
+      "signature": "NavBar(items: NavItem[], brand?: string)",
+      "description": "Horizontal navigation of NavItem refs (site/app sections)"
+    },
+    "NavItem": {
+      "signature": "NavItem(label: string, action?: ActionExpression, active?: boolean, icon?: string)",
+      "description": "Nav / drawer / bottom-nav item; label, optional action, active highlight"
+    },
+    "Drawer": {
+      "signature": "Drawer(side: any[], main: any[], title?: string, variant?: \"rail\" | \"panel\")",
+      "description": "Side navigation + main stage; side children (NavItems/Menu), main children; variant \"rail\"|\"panel\" (default panel)"
+    },
+    "BottomNav": {
+      "signature": "BottomNav(items: BottomNavItem[])",
+      "description": "Bottom tab bar of BottomNavItem refs for compact/mobile app paradigms"
+    },
+    "BottomNavItem": {
+      "signature": "BottomNavItem(label: string, icon?: string, action?: ActionExpression, active?: boolean)",
+      "description": "Bottom navigation destination; label, optional icon + action, active state"
+    },
+    "Masthead": {
+      "signature": "Masthead(brand: string, children?: any[])",
+      "description": "Brand masthead: brand name + optional trailing NavItem/Button children"
+    },
+    "Hero": {
+      "signature": "Hero(headline: string, subcopy?: string, actions?: any[], media?: string, align?: \"start\" | \"center\")",
+      "description": "Landing hero: headline, optional subcopy, CTA children, optional media/image URL; align start|center"
+    },
+    "Dock": {
+      "signature": "Dock(children: any[], note?: string)",
+      "description": "Sticky bottom action dock; children usually ButtonGroup; optional leading note"
+    },
+    "Breadcrumb": {
+      "signature": "Breadcrumb(items: BreadcrumbItem[])",
+      "description": "Hierarchy trail of BreadcrumbItem refs"
+    },
+    "BreadcrumbItem": {
+      "signature": "BreadcrumbItem(label: string, action?: ActionExpression)",
+      "description": "Breadcrumb segment; label, optional action (omit action on current)"
+    },
+    "Segmented": {
+      "signature": "Segmented(items: Segment[])",
+      "description": "Segmented control of Segment refs (view switcher)"
+    },
+    "Segment": {
+      "signature": "Segment(label: string, action?: ActionExpression, active?: boolean)",
+      "description": "Segmented-control option; label, optional action, active"
+    },
+    "CommandBar": {
+      "signature": "CommandBar(children: any[], label?: string)",
+      "description": "Dense action strip under AppBar; children usually Button/IconButton/Segmented"
+    },
+    "StatusBar": {
+      "signature": "StatusBar(text: string, children?: any[])",
+      "description": "Footer status strip; leading text, optional trailing children"
+    },
+    "Pagination": {
+      "signature": "Pagination(page: number, pages: number, prev?: ActionExpression, next?: ActionExpression)",
+      "description": "Simple pager; page, pages, optional prev/next actions"
+    },
+    "Fab": {
+      "signature": "Fab(label: string, action?: ActionExpression, icon?: string)",
+      "description": "Floating action button; label or icon string + action"
+    },
+    "WizardRail": {
+      "signature": "WizardRail(steps: WizardRailStep[])",
+      "description": "Horizontal wizard step rail of WizardRailStep refs"
+    },
+    "WizardRailStep": {
+      "signature": "WizardRailStep(label: string, state?: \"todo\" | \"current\" | \"done\")",
+      "description": "Wizard rail step; label, state todo|current|done"
+    },
+    "Footer": {
+      "signature": "Footer(brand?: string, children?: any[], note?: string)",
+      "description": "Page footer with optional brand, link children, and note"
+    },
+    "Card": {
+      "signature": "Card(children?: any[], title?: string, description?: string, media?: string, footer?: any[], tone?: \"neutral\" | \"accent\" | \"success\" | \"warning\" | \"danger\" | \"info\")",
+      "description": "Interactive or static surface card; optional title, description, media URL, footer children, tone"
+    },
+    "Tile": {
+      "signature": "Tile(label: string, value: string, hint?: string, tone?: \"neutral\" | \"accent\" | \"success\" | \"warning\" | \"danger\" | \"info\")",
+      "description": "Compact metric/action tile; label, value, optional hint and tone"
+    },
+    "Quote": {
+      "signature": "Quote(text: string, by?: string)",
+      "description": "Block quote / testimonial; text, optional attribution"
+    },
+    "Figure": {
+      "signature": "Figure(src: string, caption?: string, alt?: string)",
+      "description": "Figure with media URL and caption"
+    },
+    "Feature": {
+      "signature": "Feature(title: string, body?: string, icon?: string)",
+      "description": "Feature bullet for landing/marketing; title, body, optional icon emoji"
+    },
+    "FeatureGrid": {
+      "signature": "FeatureGrid(items: Feature[], columns?: number)",
+      "description": "Grid of Feature refs; columns 2|3 (default 3)"
+    },
+    "ProsCons": {
+      "signature": "ProsCons(pros: string[], cons: string[])",
+      "description": "Two-column pros/cons lists from string arrays"
+    },
+    "LogoStrip": {
+      "signature": "LogoStrip(items: string[], label?: string)",
+      "description": "Row of brand/logo labels (strings) for social proof"
+    },
+    "Title": {
+      "signature": "Title(text: string, size?: \"xl\" | \"lg\" | \"md\" | \"sm\")",
+      "description": "Heading text; size xl|lg|md|sm (default lg)"
+    },
+    "Text": {
+      "signature": "Text(text: string, tone?: \"primary\" | \"secondary\" | \"muted\", size?: \"sm\" | \"md\" | \"lg\", mono?: boolean)",
+      "description": "Body copy; tone primary|secondary|muted, size sm|md|lg"
+    },
+    "Markdown": {
+      "signature": "Markdown(content: string)",
+      "description": "Lightweight markdown body (headings, bold, lists, code)"
+    },
+    "Callout": {
+      "signature": "Callout(title: string, body?: string, tone?: \"neutral\" | \"accent\" | \"success\" | \"warning\" | \"danger\" | \"info\")",
+      "description": "Highlighted notice; tone info|success|warning|danger|neutral, title, body"
+    },
+    "Badge": {
+      "signature": "Badge(label: string, tone?: \"neutral\" | \"accent\" | \"success\" | \"warning\" | \"danger\" | \"info\")",
+      "description": "Compact status/label chip; tone neutral|accent|success|warning|danger"
+    },
+    "Avatar": {
+      "signature": "Avatar(name: string, src?: string, size?: \"sm\" | \"md\" | \"lg\")",
+      "description": "User/tool avatar from initials or image URL; size sm|md|lg"
+    },
+    "AvatarGroup": {
+      "signature": "AvatarGroup(names: string[], max?: number)",
+      "description": "Stacked initials/names from string array; optional max visible"
+    },
+    "Image": {
+      "signature": "Image(src: string, alt?: string)",
+      "description": "Image by URL with optional alt text"
+    },
+    "CodeBlock": {
+      "signature": "CodeBlock(code: string, language?: string)",
+      "description": "Monospace code block; optional language label"
+    },
+    "JsonBlock": {
+      "signature": "JsonBlock(value: string, title?: string)",
+      "description": "Pretty-printed JSON/text block for debug/API responses"
+    },
+    "EmptyState": {
+      "signature": "EmptyState(title: string, description?: string)",
+      "description": "Placeholder when a list/table/query has no data"
+    },
+    "Skeleton": {
+      "signature": "Skeleton(width?: string, height?: string)",
+      "description": "Loading placeholder block; width/height as CSS strings (e.g. 100%, 16px)"
+    },
+    "Stat": {
+      "signature": "Stat(label: string, value: string, delta?: string, deltaTone?: \"up\" | \"down\" | \"neutral\", glass?: boolean)",
+      "description": "Single KPI: label, value string, optional delta and deltaTone up|down|neutral"
+    },
+    "StatRow": {
+      "signature": "StatRow(children: any[])",
+      "description": "Horizontal row of Stat children (use Stat refs)"
+    },
+    "KPIStrip": {
+      "signature": "KPIStrip(children: any[])",
+      "description": "Compact strip of Stat children for desk card headers"
+    },
+    "Progress": {
+      "signature": "Progress(value: number, label?: string)",
+      "description": "Progress bar 0\u2013100 with optional label"
+    },
+    "Meter": {
+      "signature": "Meter(value: number, min?: number, max?: number, label?: string)",
+      "description": "Meter gauge with value, min, max and optional label"
+    },
+    "Sparkline": {
+      "signature": "Sparkline(values: number[])",
+      "description": "Tiny SVG sparkline from a number array"
+    },
+    "Table": {
+      "signature": "Table(columns: Col[])",
+      "description": "Column-oriented table: Table([Col(header, dataArray), ...]) \u2014 define each Col as its own statement"
+    },
+    "Col": {
+      "signature": "Col(header: string, data: any[], align?: \"left\" | \"center\" | \"right\")",
+      "description": "Table column: header label and data array (positional rows); optional align left|center|right"
+    },
+    "DataList": {
+      "signature": "DataList(items: {label: string, value: string}[])",
+      "description": "Labeled rows from {label, value} objects"
+    },
+    "KeyValue": {
+      "signature": "KeyValue(keyLabel: string, value: string)",
+      "description": "Simple key/value pair row"
+    },
+    "List": {
+      "signature": "List(items: ListItem[])",
+      "description": "Vertical list of ListItem refs"
+    },
+    "ListItem": {
+      "signature": "ListItem(label: string, subtitle?: string, action?: ActionExpression)",
+      "description": "List row with label, optional subtitle and click action"
+    },
+    "Chip": {
+      "signature": "Chip(label: string, active?: boolean)",
+      "description": "Pill chip label; active highlights with accent"
+    },
+    "TagGroup": {
+      "signature": "TagGroup(children: any[])",
+      "description": "Wraps Badge/Chip children in a flex tag cluster"
+    },
+    "Timeline": {
+      "signature": "Timeline(items: TimelineItem[])",
+      "description": "Vertical timeline of TimelineItem refs"
+    },
+    "TimelineItem": {
+      "signature": "TimelineItem(title: string, time?: string, body?: string)",
+      "description": "Timeline entry: title, optional time and body text"
+    },
+    "Tree": {
+      "signature": "Tree(items: TreeItem[])",
+      "description": "Hierarchical Tree of TreeItem refs"
+    },
+    "TreeItem": {
+      "signature": "TreeItem(label: string, children?: any[], action?: ActionExpression)",
+      "description": "Tree node; label, optional nested TreeItem children, optional action"
+    },
+    "Checklist": {
+      "signature": "Checklist(items: CheckItem[])",
+      "description": "Stack of CheckItem refs"
+    },
+    "CheckItem": {
+      "signature": "CheckItem(label: string, done?: boolean)",
+      "description": "Checklist row; label, done boolean"
+    },
+    "FileRow": {
+      "signature": "FileRow(name: string, meta?: string, action?: ActionExpression)",
+      "description": "File list row; name, optional size/meta and action"
+    },
+    "Compare": {
+      "signature": "Compare(headers: string[], rows: CompareRow[])",
+      "description": "Plan comparison: headers string array + CompareRow refs"
+    },
+    "CompareRow": {
+      "signature": "CompareRow(feature: string, values: string[])",
+      "description": "Comparison table row; feature label and values string array (one per plan)"
+    },
+    "Feed": {
+      "signature": "Feed(items: FeedItem[])",
+      "description": "Vertical feed of FeedItem refs"
+    },
+    "FeedItem": {
+      "signature": "FeedItem(author: string, body: string, time?: string, action?: ActionExpression)",
+      "description": "Social/activity feed row; author, body, optional time and action"
+    },
+    "Comment": {
+      "signature": "Comment(author: string, body: string, time?: string)",
+      "description": "Comment bubble; author, body, optional time"
+    },
+    "NotificationItem": {
+      "signature": "NotificationItem(title: string, body?: string, unread?: boolean, action?: ActionExpression)",
+      "description": "Notification row; title, body, optional unread flag and action"
+    },
+    "MediaCard": {
+      "signature": "MediaCard(src: string, title: string, meta?: string, action?: ActionExpression)",
+      "description": "Media tile; image URL, title, optional meta and action"
+    },
+    "ProductCard": {
+      "signature": "ProductCard(title: string, price: string, image?: string, rating?: number, badge?: string, action?: ActionExpression)",
+      "description": "Commerce card; title, price, optional image, rating, badge, action"
+    },
+    "Gallery": {
+      "signature": "Gallery(images: string[], columns?: number)",
+      "description": "Image gallery grid from URL string array"
+    },
+    "Carousel": {
+      "signature": "Carousel(slides: any[])",
+      "description": "Simple carousel of child slides (Stack/Card/Image refs)"
+    },
+    "Kanban": {
+      "signature": "Kanban(columns: KanbanColumn[])",
+      "description": "Horizontal board of KanbanColumn refs"
+    },
+    "KanbanColumn": {
+      "signature": "KanbanColumn(title: string, children: any[])",
+      "description": "Kanban column; title and KanbanCard children"
+    },
+    "KanbanCard": {
+      "signature": "KanbanCard(title: string, meta?: string)",
+      "description": "Kanban card; title, optional meta"
+    },
+    "CalendarGrid": {
+      "signature": "CalendarGrid(label?: string, days: string[], highlights?: number[])",
+      "description": "Month day grid; days string array length 28\u201342 (labels), optional highlight indexes"
+    },
+    "MapPlaceholder": {
+      "signature": "MapPlaceholder(pin: string, subtitle?: string)",
+      "description": "Map stand-in with pin label (no live tiles); optional subtitle"
+    },
+    "Rating": {
+      "signature": "Rating(value: number, count?: number)",
+      "description": "Star rating display; value 0\u20135, optional count label"
+    },
+    "Price": {
+      "signature": "Price(amount: string, compareAt?: string, period?: string)",
+      "description": "Price display; amount string, optional compare-at and period"
+    },
+    "BarChart": {
+      "signature": "BarChart(labels: string[], values: number[], title?: string)",
+      "description": "Vertical bar chart from labels[] and values[]; optional title"
+    },
+    "LineChart": {
+      "signature": "LineChart(labels: string[], values: number[], title?: string)",
+      "description": "Line chart from labels[] and values[]; optional title"
+    },
+    "AreaChart": {
+      "signature": "AreaChart(labels: string[], values: number[], title?: string)",
+      "description": "Filled area chart from labels[] and values[]; optional title"
+    },
+    "PieChart": {
+      "signature": "PieChart(labels: string[], values: number[], title?: string)",
+      "description": "Pie chart from labels[] and numeric values[]; optional title"
+    },
+    "DonutChart": {
+      "signature": "DonutChart(labels: string[], values: number[], title?: string)",
+      "description": "Donut chart from labels[] and values[]; optional title"
+    },
+    "Form": {
+      "signature": "Form(name: string, fields: any[], buttons: any)",
+      "description": "Form container: name, fields[], buttons \u2014 NEVER nest Form in Form; pass explicit buttons"
+    },
+    "FormControl": {
+      "signature": "FormControl(label: string, field: any, hint?: string)",
+      "description": "Labeled field wrapper: label, field (Input|Select|\u2026), optional hint \u2014 define each as its own statement"
+    },
+    "FieldRow": {
+      "signature": "FieldRow(children: any[])",
+      "description": "Responsive multi-column row of FormControl children"
+    },
+    "Input": {
+      "signature": "Input(name: string, value?: string, placeholder?: string, type?: \"text\" | \"email\" | \"password\" | \"number\" | \"url\", rules?: {required?: boolean, email?: boolean, minLength?: number, maxLength?: number, min?: number, max?: number, pattern?: string, url?: boolean, numeric?: boolean})",
+      "description": "Text input bound by name; optional value, placeholder, type, rules"
+    },
+    "TextArea": {
+      "signature": "TextArea(name: string, value?: string, placeholder?: string, rules?: {required?: boolean, email?: boolean, minLength?: number, maxLength?: number, min?: number, max?: number, pattern?: string, url?: boolean, numeric?: boolean})",
+      "description": "Multi-line text field bound by name"
+    },
+    "Select": {
+      "signature": "Select(name: string, items: SelectItem[], value?: string, placeholder?: string)",
+      "description": "Dropdown bound by name; items are SelectItem refs"
+    },
+    "SelectItem": {
+      "signature": "SelectItem(value: string, label: string)",
+      "description": "Select option with value and label"
+    },
+    "Checkbox": {
+      "signature": "Checkbox(name: string, label: string, value?: boolean)",
+      "description": "Boolean checkbox bound by name with label"
+    },
+    "Switch": {
+      "signature": "Switch(name: string, label: string, value?: boolean)",
+      "description": "Toggle switch bound by name with label"
+    },
+    "Slider": {
+      "signature": "Slider(name: string, value?: number, min?: number, max?: number, step?: number)",
+      "description": "Numeric slider bound by name; min/max/step optional"
+    },
+    "RadioGroup": {
+      "signature": "RadioGroup(name: string, options: Radio[], value?: string)",
+      "description": "Radio group bound by name; options are Radio refs"
+    },
+    "Radio": {
+      "signature": "Radio(value: string, label: string)",
+      "description": "Single radio option: value and label (used inside RadioGroup)"
+    },
+    "DateField": {
+      "signature": "DateField(name: string, value?: string)",
+      "description": "Date input bound by name (YYYY-MM-DD)"
+    },
+    "SearchField": {
+      "signature": "SearchField(name: string, value?: string, placeholder?: string)",
+      "description": "Search input bound by name with magnifier affordance"
+    },
+    "Button": {
+      "signature": "Button(label: string, action?: ActionExpression, variant?: \"primary\" | \"secondary\" | \"ghost\" | \"danger\", size?: \"sm\" | \"md\" | \"lg\")",
+      "description": "Action button; label, optional action, variant primary|secondary|ghost|danger, size sm|md|lg"
+    },
+    "ButtonGroup": {
+      "signature": "ButtonGroup(children: any[])",
+      "description": "Horizontal group of Button children"
+    },
+    "IconButton": {
+      "signature": "IconButton(icon: string, action?: ActionExpression, label?: string)",
+      "description": "Square icon-only button; icon is a short emoji/symbol string, optional action"
+    },
+    "LinkButton": {
+      "signature": "LinkButton(label: string, action?: ActionExpression)",
+      "description": "Text-style link button that triggers an action"
+    },
+    "Menu": {
+      "signature": "Menu(items: MenuItem[])",
+      "description": "Vertical menu of MenuItem refs"
+    },
+    "MenuItem": {
+      "signature": "MenuItem(label: string, action?: ActionExpression)",
+      "description": "Menu row with label and optional action"
+    },
+    "Toolbar": {
+      "signature": "Toolbar(children: any[])",
+      "description": "Compact action toolbar for Button/IconButton children"
+    },
+    "Alert": {
+      "signature": "Alert(title: string, body?: string, tone?: \"neutral\" | \"accent\" | \"success\" | \"warning\" | \"danger\" | \"info\")",
+      "description": "Inline alert; tone info|success|warning|danger, title, optional body"
+    },
+    "Toast": {
+      "signature": "Toast(message: string, tone?: \"neutral\" | \"accent\" | \"success\" | \"warning\" | \"danger\" | \"info\")",
+      "description": "Transient toast message (render when visible via $var)"
+    },
+    "Banner": {
+      "signature": "Banner(text: string)",
+      "description": "Full-width informational banner strip"
+    },
+    "Spinner": {
+      "signature": "Spinner(label?: string)",
+      "description": "Loading spinner; optional label"
+    },
+    "StatusDot": {
+      "signature": "StatusDot(status: \"ok\" | \"warn\" | \"err\" | \"busy\" | \"idle\", label?: string)",
+      "description": "Status indicator; status ok|warn|err|busy|idle with optional label"
+    },
+    "Result": {
+      "signature": "Result(title: string, description?: string, tone?: \"neutral\" | \"accent\" | \"success\" | \"warning\" | \"danger\" | \"info\", actions?: any[])",
+      "description": "Centered success/empty/error result panel with title, description, optional actions children"
+    },
+    "ChatCard": {
+      "signature": "ChatCard(children: any[], title?: string)",
+      "description": "Glass chat card wrapping message children and optional follow-ups / actions"
+    },
+    "MessageBubble": {
+      "signature": "MessageBubble(role: \"user\" | \"assistant\", text: string)",
+      "description": "Chat bubble; role user|assistant and text body"
+    },
+    "FollowUpChips": {
+      "signature": "FollowUpChips(suggestions: string[])",
+      "description": "Suggested follow-up prompts as clickable chips (each fires ToAssistant with its label)"
+    },
+    "StepList": {
+      "signature": "StepList(steps: Step[])",
+      "description": "Ordered agent/tool progress of Step refs"
+    },
+    "Step": {
+      "signature": "Step(title: string, description?: string, status?: \"pending\" | \"active\" | \"done\")",
+      "description": "Agent step row: title, optional description, status pending|active|done"
+    },
+    "ToolHeader": {
+      "signature": "ToolHeader(name: string, subtitle?: string, avatar?: string)",
+      "description": "Microtool card header: name, optional avatar URL/initials source, subtitle"
+    },
+    "MicrotoolResult": {
+      "signature": "MicrotoolResult(data: string, label?: string)",
+      "description": "Pretty-printed JSON/text result from a microtool Query/Mutation"
+    },
+    "BindingHint": {
+      "signature": "BindingHint(name: string, hint?: string)",
+      "description": "Shows an OpenUI $variable binding hint for desk authors (e.g. $search)"
+    }
+  }
+}

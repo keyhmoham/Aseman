@@ -53,7 +53,8 @@ func TestPreviewAuthenticatesEveryAssetAndPreservesFrameworkProtocol(t *testing.
 	requests := 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		if r.URL.Path != prefix+"blog" || r.URL.Query().Get("token") != "" || r.URL.Query().Get("page") != "2" {
+		if r.URL.Path != prefix+"blog" || r.URL.Query().Get("token") != "" || r.URL.Query().Get("page") != "2" ||
+			r.URL.Query().Get("aseman_theme") != "" || r.URL.Query().Get("aseman_embed") != "" {
 			t.Errorf("upstream URL %s", r.URL)
 		}
 		if r.Header.Get("Authorization") != "Bearer tunnel-secret" || r.Header.Get("RSC") != "1" || r.Header.Get("Next-Router-State-Tree") != "router-state" {
@@ -68,7 +69,7 @@ func TestPreviewAuthenticatesEveryAssetAndPreservesFrameworkProtocol(t *testing.
 	spaces := &previewSpaces{p: &proxy.Proxy{Entity: entity.Entity{ID: id}, TargetURL: upstream.URL + prefix, Token: "tunnel-secret"}, member: true}
 	a := &API{Auth: auth, Spaces: spaces}
 	params, _ := json.Marshal(map[string]string{"id": id.String(), "*": "blog"})
-	req := &network.Request{Header: map[string]string{"x-route-params": string(params), "Authorization": "Bearer test-session", "RSC": "1", "Next-Router-State-Tree": "router-state"}, Query: map[string][]string{"token": {"test-session"}, "page": {"2"}}}
+	req := &network.Request{Header: map[string]string{"x-route-params": string(params), "Authorization": "Bearer test-session", "RSC": "1", "Next-Router-State-Tree": "router-state"}, Query: map[string][]string{"token": {"test-session"}, "page": {"2"}, "aseman_theme": {"light"}, "aseman_embed": {"desk"}}}
 	result, err := a.proxyServe(context.Background(), req)
 	if err != nil || result.Status != 200 || strings.Contains(string(result.Body), prefix+"v1/proxy") || result.Header["Vary"] == "" {
 		t.Fatalf("response=%+v err=%v", result, err)

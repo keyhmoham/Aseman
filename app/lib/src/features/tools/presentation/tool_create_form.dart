@@ -10,7 +10,7 @@ import '../domain/tool_templates.dart';
 
 /// Opens the tool form and returns what was filled in, or null when
 /// cancelled. One form for every kind of tool: a backend (external,
-/// managed or installed) and a frontend (none, static or generative).
+/// managed or installed) and a frontend (none or static).
 Future<ToolDraft?> showCreateToolForm(BuildContext context) =>
     showAppForm<ToolDraft>(context, const _ToolForm());
 
@@ -55,8 +55,6 @@ class _ToolFormState extends State<_ToolForm> {
   final frontendSource = TextEditingController(text: ToolTemplates.jsFrontend);
   Uint8List? frontendBytecode;
   String bytecodeName = '';
-  final skill = TextEditingController(text: ToolTemplates.skill);
-  bool cacheFrontend = true;
 
   bool get editing => widget.initial != null;
 
@@ -79,22 +77,18 @@ class _ToolFormState extends State<_ToolForm> {
     frontendMode = t.frontendMode;
     if (t.frontendRuntime != null) frontendRuntime = t.frontendRuntime!;
     if (t.frontendLanguage.isNotEmpty) frontendLanguage = t.frontendLanguage;
-    // An empty program or skill is shown empty, not as the starter template,
-    // so leaving it alone never replaces what the tool runs.
+    // An empty program is shown empty, not as the starter template, so
+    // leaving it alone never replaces what the tool runs.
     if (t.frontendMode == FrontendMode.static) {
       frontendSource.text = t.frontendSource;
     }
-    if (t.frontendMode == FrontendMode.generative) {
-      skill.text = t.frontendSkill;
-    }
-    cacheFrontend = t.frontendCache;
   }
 
   @override
   void dispose() {
     for (final c in [
       name, description, url, token, backendSource, image, port, path, //
-      frontendSource, skill,
+      frontendSource,
     ]) {
       c.dispose();
     }
@@ -192,9 +186,6 @@ class _ToolFormState extends State<_ToolForm> {
             !kept) {
           return 'Upload or write the frontend program.';
         }
-      case FrontendMode.generative:
-        if (skill.text.trim().isEmpty)
-          return 'Describe the frontend to generate.';
       case FrontendMode.none:
     }
     return null;
@@ -205,9 +196,6 @@ class _ToolFormState extends State<_ToolForm> {
     switch (frontendMode) {
       case FrontendMode.none:
         return false;
-      case FrontendMode.generative:
-        return skill.text != t.frontendSkill ||
-            cacheFrontend != t.frontendCache;
       case FrontendMode.static:
         final language =
             frontendRuntime == ToolRuntime.quickjs ? 'js' : frontendLanguage;
@@ -260,8 +248,6 @@ class _ToolFormState extends State<_ToolForm> {
           language: frontendLanguage,
           source: frontendSource.text,
           bytecode: frontendBytecode,
-          skill: skill.text,
-          cache: cacheFrontend,
         ),
       );
 
@@ -330,10 +316,6 @@ class _ToolFormState extends State<_ToolForm> {
                   icon: Icons.phone_android_rounded,
                   hint:
                       'Your program, on the Elpian VM or QuickJS. It calls microtools with askHost(\'tool.call\', [name, args]).'),
-              AppChoice(FrontendMode.generative, 'Generative',
-                  icon: Icons.auto_awesome_rounded,
-                  hint:
-                      'Generated as AG-UI Surface Spec from your skill the first time it is opened, then kept in the component registry and filled with fresh data.'),
             ],
           ),
           ..._frontendFields(context),
@@ -469,22 +451,6 @@ class _ToolFormState extends State<_ToolForm> {
     switch (frontendMode) {
       case FrontendMode.none:
         return const [];
-      case FrontendMode.generative:
-        return [
-          _program('Skill', skill,
-              hint:
-                  'What to show, what each part does, which microtools fill it.',
-              onUpload: () => _upload(skill, ['md', 'txt'])),
-          AppSwitchCard(
-            icon: Icons.cached_rounded,
-            title: 'Cache frontend',
-            subtitle: cacheFrontend
-                ? 'The first frontend generated is kept and shown to everyone after that.'
-                : 'A new frontend is generated each time it is opened, designed for what the person asked while following the skill.',
-            value: cacheFrontend,
-            onChanged: (v) => setState(() => cacheFrontend = v),
-          ),
-        ];
       case FrontendMode.static:
         return [
           AppSegmentedField<ToolRuntime>(

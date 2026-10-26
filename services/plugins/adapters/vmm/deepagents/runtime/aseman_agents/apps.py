@@ -1,17 +1,10 @@
-"""Connected apps' functions, loaded when the agent needs them.
+"""Native app-tool deferral — **fallback only**.
 
-Each function of a connected app is a tool of its own (``board__create_items``
-is a function of ``board``), and a space with several apps has many: every
-model call would carry every schema. When an agent has more app functions
-than ``DEFER_ABOVE``, they are deferred, as Claude Code defers MCP tools: the
-model sees ``load_app_tools``, whose description lists each app with its
-functions, and an app it loads (or any function it calls) is offered whole
-from its next call on. Its own working tools are always offered.
-
-Which apps are loaded is read from the conversation itself (the
-``load_app_tools`` calls and the app functions called in it), so it holds
-across steps, turns and resumes, and only grows while the conversation lasts.
-A deferred function still runs when called.
+Production turns call connected apps through Cloudflare Code Mode, so app
+microtools are never listed and this module is a no-op. It still runs when
+Code Mode is off or its MCP cannot be listed: each ``app__function`` is a
+native LLM tool, and when there are more than ``DEFER_ABOVE`` they are
+deferred (``load_app_tools``) the way Claude Code defers MCP tools.
 """
 
 from __future__ import annotations

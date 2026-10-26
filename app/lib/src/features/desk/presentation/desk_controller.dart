@@ -140,9 +140,6 @@ class DeskController extends ChangeNotifier {
 
   Future<String?> open(String tool,
       {String kind = '',
-      Map<String, dynamic> widget = const {},
-      String request = '',
-      Map<String, dynamic> template = const {},
       String title = '',
       String microtool = '',
       Map<String, dynamic> args = const {},
@@ -153,9 +150,6 @@ class DeskController extends ChangeNotifier {
       DeskOps.open(tool,
           compact: compact,
           kind: kind,
-          widget: widget,
-          request: request,
-          template: template,
           title: title,
           microtool: microtool,
           args: args,
@@ -209,9 +203,6 @@ class DeskController extends ChangeNotifier {
 
   Future<String?> openPin(DeskPin pin) => open(pin.tool,
       kind: pin.kind,
-      widget: pin.widget,
-      request: pin.request,
-      template: pin.template,
       title: pin.title,
       microtool: pin.microtool,
       args: pin.args,
@@ -261,9 +252,6 @@ class DeskController extends ChangeNotifier {
         ]));
   }
 
-  /// Designs a designed window again (after it failed, or to start over).
-  Future<void> redesign(String id) => _send([DeskOps.redesign(id)]);
-
   Future<void> close(String id) {
     if (_maximized == id) _maximized = null;
     _minimized.remove(id);
@@ -302,13 +290,11 @@ class DeskController extends ChangeNotifier {
     if (_minimized.length != before) _notify();
   }
 
-  /// The pin keeping [w] (a composed widget is kept by its title).
-  bool _pins(DeskPin p, DeskWindow w) => w.isComposed
-      ? p.isComposed && p.title.toLowerCase() == w.title.toLowerCase()
-      : !p.isComposed &&
-          p.tool == w.tool &&
-          p.microtool == w.microtool &&
-          mapEquals(p.args, w.args);
+  /// The pin keeping [w].
+  bool _pins(DeskPin p, DeskWindow w) =>
+      p.tool == w.tool &&
+      p.microtool == w.microtool &&
+      mapEquals(p.args, w.args);
 
   bool isPinned(DeskWindow w) => _state.pins.any((p) => _pins(p, w));
 

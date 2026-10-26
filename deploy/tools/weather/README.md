@@ -5,7 +5,7 @@ A ready-made Aseman tool, deployed with one script:
 | | |
 |---|---|
 | **Backend** | managed, QuickJS — [`backend.js`](backend.js), run by the node as a Nomad service of the tool runtime image. Weather from [Open-Meteo](https://open-meteo.com) (free, no API key), reached through the runtime's `aseman.fetch`. |
-| **Frontend** | generative **Fixed Schema** — [`frontend-skill.md`](frontend-skill.md) declares `archetype: analytics_console`. The node compiles a Surface Bundle once (KPI strip, hero chart, evidence table, compact widget), caches it in `tool_components`, and on every open only fills `/report` from `weather_report` (bind-only; no serve-time generation or LLM design judge). |
+| **Frontend** | none dedicated — agents brief OpenCode via `appui_create` for interactive UIs; people can also call microtools from chat. |
 
 Microtools (agents get them as tools too): `weather_report`, `current_weather`,
 `daily_forecast`, `hourly_forecast`, `search_places`. Each takes a `city` (or
@@ -21,15 +21,13 @@ deploy/tools/weather/upsert.sh --server http://localhost:8080 --space <space-id>
 ```
 
 It **upserts**: a tool named `weather` you own is updated in place (new
-program and skill — the frontend is recompiled on next use); one
-deployed some other way (not managed QuickJS) is replaced; otherwise it is
-created. `--space` also adds it to a space, `--dry-run` prints the calls
-without sending them. The aseman CLI is taken from `PATH`, else
-`services/bin/aseman`, else built with Go.
+backend program); one deployed some other way (not managed QuickJS)
+is replaced; otherwise it is created. `--space` also adds it to a space,
+`--dry-run` prints the calls without sending them. The aseman CLI is taken
+from `PATH`, else `services/bin/aseman`, else built with Go.
 
-Needs a node with the Nomad VMM and the tool runtime image; a chat model is
-only required if a skill has no Fixed Schema / archetype (LLM fallback).
-The managed backend needs outbound internet to reach Open-Meteo.
+Needs a node with the Nomad VMM and the tool runtime image. The managed
+backend needs outbound internet to reach Open-Meteo.
 
 ## Test
 

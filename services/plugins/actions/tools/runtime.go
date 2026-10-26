@@ -226,6 +226,10 @@ func (s *Service) routes() []route {
 	return []route{
 		{network.MethodGet, runtimeGatewayPrefix + "/program", s.serveProgram},
 		{network.MethodPost, runtimeGatewayPrefix + "/host", s.serveHost},
+		// Cloudflare Code Mode: OpenAPI of space apps + authenticated request + MCP.
+		{network.MethodGet, codeModeGatewayPrefix + "/openapi", s.serveCodeModeOpenAPI},
+		{network.MethodPost, codeModeGatewayPrefix + "/request", s.serveCodeModeRequest},
+		{network.MethodPost, codeModeGatewayPrefix + "/mcp", s.serveCodeModeHTTP},
 	}
 }
 

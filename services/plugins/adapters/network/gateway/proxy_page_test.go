@@ -23,7 +23,7 @@ func pageRequest(id identity.ID, rest, method string, body any) *network.Request
 	return req
 }
 
-func TestPreviewServesKitAndCallsToolsAsThePerson(t *testing.T) {
+func TestPreviewServesPageAPIAndCallsToolsAsThePerson(t *testing.T) {
 	id := identity.ID{Node: 1, Entity: 2}
 	space := identity.ID{Node: 1, Entity: 3}
 	p := &proxy.Proxy{Entity: entity.Entity{ID: id}, SpaceID: space, TargetURL: "http://127.0.0.1:1", Token: "tunnel"}
@@ -33,22 +33,45 @@ func TestPreviewServesKitAndCallsToolsAsThePerson(t *testing.T) {
 		calls = append(calls, ns+"."+action+" "+string(req.Body))
 		switch ns + "." + action {
 		case "spaces.tools_list":
-			return &api.ActionResponse{Status: 200, Body: []byte(`{"tools":[{"name":"sandbox_exec"},{"name":"Weather","bot_id":"w1","frontend":"generative","commands":[{"name":"forecast"}]}]}`)}, nil
+			return &api.ActionResponse{Status: 200, Body: []byte(`{"tools":[{"name":"sandbox_exec"},{"name":"Weather","bot_id":"w1","frontend":"static","commands":[{"name":"forecast"}]}]}`)}, nil
+		case "spaces.bots_list":
+			return &api.ActionResponse{Status: 200, Body: []byte(`{"bots":[{"id":"a1","name":"Research","kind":"agent","description":"lab agent","status":"running"},{"id":"w1","name":"Weather","kind":"tool"}]}`)}, nil
+		case "spaces.ask":
+			if !strings.Contains(string(req.Body), `"bot":"a1"`) || !strings.Contains(string(req.Body), "hello") {
+				return &api.ActionResponse{Status: 400, Body: []byte(`{"error":"bad ask","code":"invalid_argument"}`)}, nil
+			}
+			return &api.ActionResponse{Status: 200, Body: []byte(`{"bot_id":"a1","reply":"Hello from Research"}`)}, nil
 		case "tools.invoke":
-			return &api.ActionResponse{Status: 200, Body: []byte(`{"result":{"temp":21}}`)}, nil
+			body := `{"result":{"temp":21}}`
+			if strings.Contains(string(req.Body), `"function":"search"`) {
+				// MCP envelope: App UIs must receive unwrapped text, not content[].
+				body = `{"result":{"content":[{"type":"text","text":"Title: Oslo\nURL: https://example.org/oslo"}]}}`
+			}
+			return &api.ActionResponse{Status: 200, Body: []byte(body)}, nil
 		}
 		return &api.ActionResponse{Status: 404, Body: []byte(`{"error":"nope","code":"not_found"}`)}, nil
 	}
 
-	// The kit comes from the gateway, never the sandbox (whose URL is dead).
-	resp, err := a.proxyServe(context.Background(), pageRequest(id, "_aseman/kit/aseman-ui.js", "GET", nil))
-	if err != nil || resp.Status != 200 || !strings.Contains(resp.Header["Content-Type"], "javascript") {
-		t.Fatalf("kit: %+v %v", resp, err)
-	}
-
-	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_aseman/api/tools", "GET", nil))
+	// Preview pages expose tool microtool APIs; interactive UIs use appui_create (DeskWeb).
+	resp, err := a.proxyServe(context.Background(), pageRequest(id, "_aseman/api/tools", "GET", nil))
 	if err != nil || resp.Status != 200 || strings.Contains(string(resp.Body), "sandbox_exec") || !strings.Contains(string(resp.Body), `"id":"w1"`) {
 		t.Fatalf("tools: %+v %v", resp, err)
+	}
+
+	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_aseman/kit/openui/openui.js", "GET", nil))
+	if err != nil || resp.Status != 200 || !strings.Contains(string(resp.Body), "AsemanOpenUI") {
+		t.Fatalf("openui kit: %+v %v", resp, err)
+	}
+	if ct := resp.Header["Content-Type"]; !strings.Contains(ct, "javascript") {
+		t.Fatalf("openui content-type %q", ct)
+	}
+	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_aseman/kit/openui/catalog.js", "GET", nil))
+	if err != nil || resp.Status != 200 || !strings.Contains(string(resp.Body), "AsemanOpenUICatalog") {
+		t.Fatalf("openui catalog: %+v %v", resp, err)
+	}
+	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_aseman/kit/openui/catalog.spec.json", "GET", nil))
+	if err != nil || resp.Status != 200 || !strings.Contains(string(resp.Body), `"AppShell"`) {
+		t.Fatalf("openui catalog.spec: %+v %v", resp, err)
 	}
 
 	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_aseman/api/call", "POST", map[string]any{"tool": "weather", "microtool": "forecast", "args": map[string]any{"city": "Oslo"}}))
@@ -60,10 +83,24 @@ func TestPreviewServesKitAndCallsToolsAsThePerson(t *testing.T) {
 		t.Fatalf("invoke body %s", last)
 	}
 
+	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_aseman/api/call", "POST", map[string]any{"tool": "weather", "microtool": "search", "args": map[string]any{"q": "oslo"}}))
+	if err != nil || resp.Status != 200 || strings.Contains(string(resp.Body), `"content"`) || !strings.Contains(string(resp.Body), `Title: Oslo`) {
+		t.Fatalf("mcp unwrap: %+v %v body=%s", resp, err, string(resp.Body))
+	}
+
 	// An unknown tool is an error the page can show, as JSON.
 	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_aseman/api/call", "POST", map[string]any{"tool": "nope", "microtool": "x"}))
 	if err != nil || resp.Status == 200 || !strings.Contains(string(resp.Body), "Weather") {
 		t.Fatalf("unknown tool: %+v %v", resp, err)
+	}
+
+	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_aseman/api/agents", "GET", nil))
+	if err != nil || resp.Status != 200 || !strings.Contains(string(resp.Body), `"Research"`) || strings.Contains(string(resp.Body), `"Weather"`) {
+		t.Fatalf("agents: %+v %v body=%s", resp, err, string(resp.Body))
+	}
+	resp, err = a.proxyServe(context.Background(), pageRequest(id, "_aseman/api/ask", "POST", map[string]any{"agent": "research", "prompt": "hello"}))
+	if err != nil || resp.Status != 200 || !strings.Contains(string(resp.Body), "Hello from Research") {
+		t.Fatalf("ask: %+v %v body=%s", resp, err, string(resp.Body))
 	}
 
 	// Another site cannot call tools with the person's preview cookie.

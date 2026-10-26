@@ -51,18 +51,16 @@ enum FrontendMode {
   none('', 'None'),
 
   /// An Elpian app: a program on the Elpian VM or QuickJS.
-  static('static', 'Static'),
-
-  /// AG-UI Surface generated from a skill on first use, then served from the
-  /// component registry and filled with fresh data.
-  generative('generative', 'Generative');
+  static('static', 'Static');
 
   const FrontendMode(this.wire, this.label);
   final String wire;
   final String label;
 
-  static FrontendMode parse(String? v) => values
-      .firstWhere((m) => m.wire == (v ?? ''), orElse: () => FrontendMode.none);
+  static FrontendMode parse(String? v) {
+    return values
+        .firstWhere((m) => m.wire == (v ?? ''), orElse: () => FrontendMode.none);
+  }
 }
 
 /// The backend half of the tool form.
@@ -131,8 +129,6 @@ class FrontendDraft {
     this.language = 'js',
     this.source = '',
     this.bytecode,
-    this.skill = '',
-    this.cache = true,
   });
 
   final FrontendMode mode;
@@ -143,12 +139,6 @@ class FrontendDraft {
   /// A static Elpian frontend already compiled (`elpian build`), for a node
   /// without a tool compiler.
   final Uint8List? bytecode;
-  final String skill;
-
-  /// A generative frontend: keep the first one generated and serve it to
-  /// everyone (true), or generate one for every request, designed for what
-  /// the person asked while following [skill] (false).
-  final bool cache;
 
   Map<String, dynamic> toJson() => {
         'mode': mode.wire,
@@ -157,10 +147,6 @@ class FrontendDraft {
           'language': runtime == ToolRuntime.quickjs ? 'js' : language,
           if (source.isNotEmpty) 'source': source,
           if (bytecode != null) 'bytecode': base64Encode(bytecode!),
-        },
-        if (mode == FrontendMode.generative) ...{
-          'skill': skill,
-          'cache': cache,
         },
       };
 }
@@ -274,8 +260,6 @@ class ToolInfo {
     this.frontendRuntime,
     this.frontendLanguage = '',
     this.frontendSource = '',
-    this.frontendSkill = '',
-    this.frontendCache = true,
     this.editable = false,
     this.microtools = const [],
   });
@@ -301,13 +285,8 @@ class ToolInfo {
   final ToolRuntime? frontendRuntime;
   final String frontendLanguage;
 
-  /// The static frontend's program and the generative frontend's skill, for
-  /// its owner.
+  /// The static frontend's program, for its owner.
   final String frontendSource;
-  final String frontendSkill;
-
-  /// Whether a generative frontend is cached (see [FrontendDraft.cache]).
-  final bool frontendCache;
   final bool editable;
   final List<Microtool> microtools;
 
@@ -333,8 +312,6 @@ class ToolInfo {
       frontendRuntime: ToolRuntime.parse(frontend['runtime'] as String?),
       frontendLanguage: frontend['language'] as String? ?? '',
       frontendSource: j['frontend_source'] as String? ?? '',
-      frontendSkill: j['frontend_skill'] as String? ?? '',
-      frontendCache: frontend['cache'] as bool? ?? true,
       editable: j['editable'] as bool? ?? false,
       microtools: [
         for (final c in (j['commands'] as List?) ?? const <dynamic>[])
@@ -351,11 +328,8 @@ class ToolFrontendPayload {
     this.runtime,
     this.source = '',
     this.bytecode,
-    this.messages = const [],
     this.title = '',
-    this.cached = false,
     this.version = '',
-    this.template,
   });
 
   final FrontendMode mode;
@@ -366,20 +340,8 @@ class ToolFrontendPayload {
 
   /// A static Elpian frontend, compiled.
   final Uint8List? bytecode;
-
-  /// A generated frontend: the AG-UI Surface messages that create its surface, filled
-  /// with the caller's data.
-  final List<Map<String, dynamic>> messages;
   final String title;
-
-  /// Whether the generated frontend came from the component registry.
-  final bool cached;
   final String version;
-
-  /// The Surface Bundle to pass back on actions/reloads. Always set for
-  /// generative frontends (cached or not) so taps run against the same
-  /// template the person is looking at.
-  final Map<String, dynamic>? template;
 
   factory ToolFrontendPayload.fromJson(Map<String, dynamic> j) {
     final bytecode = j['bytecode'] as String?;
@@ -389,14 +351,8 @@ class ToolFrontendPayload {
       source: j['source'] as String? ?? '',
       bytecode:
           bytecode == null || bytecode.isEmpty ? null : base64Decode(bytecode),
-      messages: [
-        for (final m in (j['messages'] as List?) ?? const <dynamic>[])
-          if (m is Map) m.cast<String, dynamic>(),
-      ],
       title: j['title'] as String? ?? '',
-      cached: j['cached'] as bool? ?? false,
       version: j['version'] as String? ?? '',
-      template: (j['template'] as Map?)?.cast<String, dynamic>(),
     );
   }
 }
@@ -434,9 +390,8 @@ class MicrotoolException implements Exception {
   String toString() => message;
 }
 
-/// One result a tool's generated frontend is opened on: the microtool an
-/// agent called and the arguments it called it with (frontend_show). The
-/// node points the frontend's data bindings at them.
+/// One result a tool frontend opens on: the microtool an agent called and
+/// the arguments it called it with.
 class ShownResult {
   const ShownResult({this.microtool = '', this.args = const {}});
 

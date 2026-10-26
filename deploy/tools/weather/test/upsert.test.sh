@@ -41,15 +41,14 @@ run() { # scenario → prints the actions called, one per line
 [ "$(cat "$WORK/none.out")" = bot-new ] || fail "none: printed $(cat "$WORK/none.out")"
 create="$(grep '^tools.tool_create' "$WORK/none.log" | cut -f2)"
 [ "$(jq -r '.backend.mode + "/" + .backend.runtime' <<<"$create")" = managed/quickjs ] || fail "create backend"
-[ "$(jq -r '.frontend.mode' <<<"$create")" = generative ] || fail "create frontend"
+[ "$(jq -r '.frontend.mode // empty' <<<"$create")" = "" ] || fail "create frontend should be empty"
 jq -e '.backend.source | contains("function weather_report")' <<<"$create" >/dev/null || fail "create program"
-jq -e '.frontend.skill | contains("{\"city\": \"Lisbon\"}")' <<<"$create" >/dev/null || fail "default city in the skill"
 [ "$(grep '^spaces.bot_add' "$WORK/none.log" | cut -f2 | jq -r '.bot + "@" + .space')" = bot-new@space-1 ] || fail "added to space"
 
 [ "$(run managed)" = "bots.bot_list tools.tool_get tools.tool_update spaces.bot_add " ] || fail "managed: $(run managed)"
 update="$(grep '^tools.tool_update' "$WORK/managed.log" | cut -f2)"
 [ "$(jq -r '.bot' <<<"$update")" = bot-w ] || fail "updated the wrong tool"
-jq -e '(.source | contains("function weather_report")) and .frontend.mode == "generative"' <<<"$update" >/dev/null || fail "update body"
+jq -e '(.source | contains("function weather_report")) and ((.frontend // {}) | .mode // "") == ""' <<<"$update" >/dev/null || fail "update body"
 [ "$(cat "$WORK/managed.out")" = bot-w ] || fail "managed: printed $(cat "$WORK/managed.out")"
 
 [ "$(run external)" = "bots.bot_list tools.tool_get tools.tool_delete tools.tool_create spaces.bot_add " ] || fail "external: $(run external)"

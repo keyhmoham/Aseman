@@ -151,13 +151,4 @@ function pick(event) {
 
 askHost('render', JSON.stringify(view()));
 ''';
-
-  /// A generative frontend's skill: what to show and how.
-  static const String skill = '''
-Show a compact card titled "Greeter".
-- A text field for a name (bound to /form/name) and a "Greet" button that
-  calls the greet microtool with that name and shows its text below.
-- Under it, show how many greetings were given (the counter microtool),
-  refreshed after each greeting.
-''';
 }

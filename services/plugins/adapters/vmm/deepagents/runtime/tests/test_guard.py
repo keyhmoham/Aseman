@@ -176,7 +176,8 @@ async def test_an_apps_instructions_stay_whole_in_the_conversation(platform, tmp
     miro(platform)
     name, args = "tool_miro__canvas_get_canvas_composer_skill", {"step": "dsl"}
     r, model = runner(platform, tmp_path, [call(name, args, cid="m0"), AIMessage(content="drawn")])
-    out = await r.prompt(turn_request(LEAD, "draw on the board", token="tok-lead", role="lead", message_id="m0"))
+    out = await r.prompt(turn_request(LEAD, "draw on the board", token="tok-lead", role="lead",
+                                      message_id="m0", codemode=False))
     assert out.status == "done", out
     # The agent has the whole skill to work from, as text: not a preview of a file, not one line of JSON.
     first = next(m for m in model.seen[1] if isinstance(m, ToolMessage))
@@ -191,7 +192,8 @@ async def test_instructions_too_large_to_keep_go_to_a_file(platform, tmp_path: P
     platform.app_reply = json.dumps({"content": [{"type": "text", "text": json.dumps({"skill": huge})}]})
     name, args = "tool_miro__canvas_get_canvas_composer_skill", {"step": "dsl"}
     r, model = runner(platform, tmp_path, [call(name, args, cid="m0"), AIMessage(content="done")])
-    out = await r.prompt(turn_request(LEAD, "draw", token="tok-lead", role="lead", message_id="m0"))
+    out = await r.prompt(turn_request(LEAD, "draw", token="tok-lead", role="lead",
+                                      message_id="m0", codemode=False))
     assert out.status == "done", out
     results = [m for m in model.seen[-1] if isinstance(m, ToolMessage)]
     assert "large_tool_results" in str(results[0].content)
@@ -204,7 +206,8 @@ async def test_every_call_the_agent_makes_runs(platform, tmp_path: Path) -> None
     same = {"name": "tool_miro__canvas_get_canvas_composer_skill", "args": {"step": "items"}, "type": "tool_call"}
     step = AIMessage(content="", tool_calls=[{**same, "id": f"p{i}"} for i in range(3)])
     r, model = runner(platform, tmp_path, [step, AIMessage(content="done")])
-    out = await r.prompt(turn_request(LEAD, "list", token="tok-lead", role="lead", message_id="m0"))
+    out = await r.prompt(turn_request(LEAD, "list", token="tok-lead", role="lead",
+                                      message_id="m0", codemode=False))
     assert out.status == "done", out
     assert len([run for run in platform.tool_runs if run.get("bot") == "bot-miro"]) == 3
 

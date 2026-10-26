@@ -3,20 +3,18 @@
 #
 #   backend   managed, QuickJS — backend.js run by the node as a Nomad service
 #             of the tool runtime image (Open-Meteo data, no API key)
-#   frontend  generative — Fixed Schema Surface Bundle compiled from
-#             frontend-skill.md (archetype analytics_console) once, then
-#             bind-only from the component registry on every open
+#   frontend  none — agents brief OpenCode via appui_create for interactive UIs
 #
-# A tool named "weather" that you own is updated in place (new program, new
-# skill: the frontend is generated again on next use); one deployed some other
-# way (not managed QuickJS) is replaced; otherwise a new one is created.
+# A tool named "weather" that you own is updated in place (new program);
+# one deployed some other way (not managed QuickJS) is replaced;
+# otherwise a new one is created.
 #
 # Usage:
 #   deploy/tools/weather/upsert.sh [options]
 #
 #   --server URL     the node (default $ASEMAN_SERVER or http://localhost:8080)
 #   --space ID       also add the tool to this space (default $ASEMAN_SPACE)
-#   --city NAME      the place the frontend opens on (default $WEATHER_CITY or London)
+#   --city NAME      kept for compatibility (default $WEATHER_CITY or London)
 #   --cli PATH       the aseman CLI (default: `aseman` on PATH, else built from services/)
 #   --dry-run        print what would be sent; call nothing
 #
@@ -47,6 +45,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# CITY is accepted for compatibility with older callers; unused without a frontend.
+: "${CITY}"
+
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
 
 say() { printf '==> %s\n' "$*" >&2; }
@@ -54,9 +55,8 @@ say() { printf '==> %s\n' "$*" >&2; }
 # --- the tool --------------------------------------------------------------------
 
 backend="$(cat "$HERE/backend.js")"
-skill="$(sed "s/{{DEFAULT_CITY}}/$(printf '%s' "$CITY" | sed 's/[\/&]/\\&/g')/g" "$HERE/frontend-skill.md")"
 
-create_body="$(jq -nc --arg name "$NAME" --arg description "$DESCRIPTION" --arg source "$backend" --arg skill "$skill" '{
+create_body="$(jq -nc --arg name "$NAME" --arg description "$DESCRIPTION" --arg source "$backend" '{
   name: $name,
   description: $description,
   backend: {
@@ -65,8 +65,7 @@ create_body="$(jq -nc --arg name "$NAME" --arg description "$DESCRIPTION" --arg 
     language: "js",
     source: $source,
     resources: { cpu: 0.5, memory: 256, disk: 256 }
-  },
-  frontend: { mode: "generative", skill: $skill }
+  }
 }')"
 
 # --- the CLI ---------------------------------------------------------------------
@@ -90,8 +89,7 @@ call() {
     # Long programs are elided; everything else is shown as it would be sent.
     jq --arg action "$1" '{call: $action, body: (
         (if .backend.source then .backend.source = "<backend.js: \(.backend.source | length) chars>" else . end)
-      | (if .source then .source = "<backend.js: \(.source | length) chars>" else . end)
-      | (if .frontend.skill then .frontend.skill = "<frontend-skill.md: \(.frontend.skill | length) chars>" else . end))}' <<<"$2" >&2
+      | (if .source then .source = "<backend.js: \(.source | length) chars>" else . end))}' <<<"$2" >&2
     echo '{}'
     return
   fi
@@ -115,9 +113,9 @@ if [ -n "$existing" ]; then
   mode="$(jq -r '.mode // ""' <<<"$info")"
   runtime="$(jq -r '.runtime // ""' <<<"$info")"
   if [ "$mode" = "managed" ] && [ "$runtime" = "quickjs" ]; then
-    say "updating $NAME ($existing): new program and frontend skill"
-    call tools.tool_update "$(jq -nc --arg bot "$existing" --arg source "$backend" --arg skill "$skill" \
-      '{bot: $bot, source: $source, frontend: {mode: "generative", skill: $skill}}')" >/dev/null
+    say "updating $NAME ($existing): new program"
+    call tools.tool_update "$(jq -nc --arg bot "$existing" --arg source "$backend" \
+      '{bot: $bot, source: $source}')" >/dev/null
     bot="$existing"
   else
     say "replacing $NAME ($existing): it runs as ${mode:-unknown}/${runtime:-unknown}, not managed/quickjs"
@@ -127,7 +125,7 @@ if [ -n "$existing" ]; then
 fi
 
 if [ -z "$existing" ]; then
-  say "creating $NAME: managed QuickJS backend, generative frontend"
+  say "creating $NAME: managed QuickJS backend (no dedicated frontend)"
   bot="$(call tools.tool_create "$create_body" | jq -r '.bot_id // empty')"
   if [ -z "$bot" ] && [ -z "$DRY_RUN" ]; then
     echo "the node did not return the new tool's id" >&2

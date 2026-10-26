@@ -36,22 +36,52 @@ def last_request(messages: list[Any]) -> str:
     return ""
 
 
-#: Tools that put a result in front of the person: a file or image in the chat,
-#: or a card window / web page opened on the room's desk (a tool's frontend).
-DELIVERY_TOOLS = {"image_generate", "file_send", "file_upload", "frontend_show", "web_show", "proxy_create"}
+#: Native delivery tools (Code Mode-off fallback) and the Code Mode paths that
+#: put a result in front of the person (file/image in chat, or desk card/page).
+DELIVERY_TOOLS = {"image_generate", "file_send", "file_upload", "ui_present", "appui_create", "proxy_create"}
+DELIVERY_PLATFORM_PATHS = tuple(f"/platform/{name}" for name in sorted(DELIVERY_TOOLS))
+
+
+def _codemode_delivery_label(code: str) -> str | None:
+    """If Code Mode JS calls a delivery platform path, return a short label."""
+    for path in DELIVERY_PLATFORM_PATHS:
+        if path in code:
+            return path.removeprefix("/platform/")
+    return None
 
 
 def delivered(messages: list[Any]) -> list[str]:
-    """What the delivery tools put in front of the person since the request."""
+    """What delivery tools put in front of the person since the request.
+
+    Counts native ``file_send`` / ``appui_create`` / … results and successful
+    ``codemode_execute`` calls whose code hit a ``/platform/{delivery}`` path.
+    """
+    # tool_call_id → code string for codemode_execute calls in this window.
+    code_by_id: dict[str, str] = {}
     out: list[str] = []
+    window: list[Any] = []
     for m in reversed(messages):
         if isinstance(m, HumanMessage) and not m.text.startswith(NOTE):
             break
-        if isinstance(m, ToolMessage) and m.name in DELIVERY_TOOLS and getattr(m, "status", "success") != "error":
-            text = m.text.strip()
-            if text and not text.lower().startswith("error"):
-                out.append(f"{m.name}: {text[:300]}")
-    out.reverse()
+        window.append(m)
+    window.reverse()
+    for m in window:
+        if isinstance(m, AIMessage):
+            for call in m.tool_calls or []:
+                if call.get("name") == "codemode_execute":
+                    code_by_id[str(call.get("id") or "")] = str((call.get("args") or {}).get("code") or "")
+        if not isinstance(m, ToolMessage) or getattr(m, "status", "success") == "error":
+            continue
+        text = m.text.strip()
+        if not text or text.lower().startswith("error") or text.lower().startswith("code mode error"):
+            continue
+        if m.name in DELIVERY_TOOLS:
+            out.append(f"{m.name}: {text[:300]}")
+            continue
+        if m.name == "codemode_execute":
+            label = _codemode_delivery_label(code_by_id.get(m.tool_call_id or "", ""))
+            if label:
+                out.append(f"{label}: {text[:300]}")
     return out
 
 

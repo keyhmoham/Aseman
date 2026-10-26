@@ -13,22 +13,24 @@ scope, on the agent's durable LangGraph thread (one per agent per room):
   system prompt, what is relevant recalled with each message, memory tools,
   and every turn committed to an OpenViking session that memories are
   extracted from (see memory.py);
-* timeline — the space's dated timeline (requests, agents' work, messages,
-  files, members, routines), served by the node as a built-in MCP server and
-  offered as ``timeline_*`` tools (see timeline.py);
+* Code Mode — Cloudflare search/execute is the capability-calling system
+  (``codemode_search`` / ``codemode_execute``; see codemode.py): connected
+  apps, platform tools and the project timeline are one OpenAPI surface
+  under ``/apps``, ``/platform`` and ``/timeline``. Fallback (Code Mode
+  off or MCP down): direct LLM tools + app deferral (apps.py) and
+  ``timeline_*`` (timeline.py), with a visible system note;
 * subagents — the ``task`` tool, delegating to the space's agents over room
   messages (see subagents.py), plus background delegation tools;
 * human in the loop — ``ask_user`` and any tool in the agent's interrupt_on
   pause the thread on a question people answer in the room;
-* tools — every platform tool, through ``spaces.ask``;
+* harness tools — messaging, sandbox FS/shell, planning and swarm stay
+  native LLM tools (interrupts, shared computer, turn UX);
 * the swarm — a lead sets up a team from the space, the marketplace and new
   specialists and runs plans with it in parallel (see swarm/); a delegated
   task that reaches a busy agent runs as a parallel instance of it;
 * self-improvement — each agent's playbook in the space, evolved with GEPA
   from its own turns (see improve/);
 * work log — every step written to the room as the agent works;
-* apps — a connected app's functions are tools; when there are many, the
-  agent loads the apps it needs (see apps.py);
 * decisions — when the node admin turned on a decision model, routing and
   low-risk approvals go to it (see decision/).
 """
@@ -53,7 +55,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 from langgraph.types import Command
 
-from . import apps as applib, economy, guard as guardlib, memory as memlib, prompts, subagents, swarm as swarmlib, team as teamlib, timeline as timelinelib, tools as toollib
+from . import apps as applib, codemode as codemodelib, economy, guard as guardlib, memory as memlib, prompts, subagents, swarm as swarmlib, team as teamlib, timeline as timelinelib, tools as toollib
 from .context import AgentDef, DecisionConfig, Turn, TurnContext
 from .decision import DecisionClient, DecisionMiddleware
 from .decision import approval as decision_approval
@@ -210,6 +212,7 @@ class Runner:
         ctx.generation = self.store.generation(ctx.base_thread)
         ctx.memory = memlib.Memory.for_turn(ctx, self.memory_settings)
         ctx.timeline = bool(req.get("timeline")) and not turn.no_memory
+        ctx.codemode = bool(req.get("codemode"))
         models = req.get("memory")
         if ctx.memory is not None and isinstance(models, dict):
             ctx.memory.recall_enabled = bool(models.get("recall"))
@@ -239,15 +242,25 @@ class Runner:
             # The swarm: a team from the space, the marketplace and new
             # specialists, and plans run in parallel (see swarm/).
             tools += swarmlib.swarm_tools(ctx, self.store)
-        tools += await toollib.platform_tools(ctx)
+        # Code Mode is the capability-calling system when its MCP is up.
+        # If listing fails, fall back to direct tools and tell the model.
+        codemode = await codemodelib.codemode_tools(ctx) if ctx.codemode else []
+        via_codemode = bool(codemode)
+        codemode_fallback = bool(ctx.codemode) and not via_codemode
+        if codemode_fallback:
+            log.warning("codemode enabled but MCP tools unavailable for space %s; falling back to direct tools", ctx.space)
+        tools += await toollib.platform_tools(ctx, via_codemode=via_codemode)
         tools = toollib.filter_allowed(tools, agent.allowed_tools)
         if ctx.memory is not None:
             # Every agent has its memory, whatever tools it is allowed.
             tools += memlib.memory_tools(ctx.memory)
-        timeline = await timelinelib.timeline_tools(ctx) if ctx.timeline else []
-        # Every agent reads its project's timeline, whatever tools it is allowed.
-        tools += timeline
-        # Many app functions: the agent loads the apps it needs (apps.py).
+        timeline: list[Any] = []
+        if ctx.timeline and not via_codemode:
+            # Timeline is under /timeline/… in Code Mode OpenAPI when Code Mode is up.
+            timeline = await timelinelib.timeline_tools(ctx)
+            tools += timeline
+        tools += codemode
+        # App deferral only applies to the native app-tool fallback path.
         load, app_tools = applib.deferral(tools)
         tools += load
         for t in tools:
@@ -267,13 +280,26 @@ class Runner:
 
         own = f"{WORKSPACE}/.aseman/agents/{slug(agent.name)}"
         restricted = ctx.turn.no_sandbox or ctx.turn.no_memory
-        system = prompts.system_prompt(agent, ctx.turn.context)
+        system = prompts.system_prompt(agent, ctx.turn.context, via_codemode=via_codemode)
         if ctx.turn.no_sandbox:
             system += "\n\nFor this request, sandbox access is disabled. Answer and collaborate using the available platform tools. Do not wake, use or request access to a computer or sandbox."
         if ctx.turn.no_memory:
             system += "\n\nProcess this request freshly. Do not read or use prior room/space conversations, saved notes, AGENTS.md, or other memory. Only the current request, its attachments and work delegated during this request are context. Do not write memory for this request."
-        if timeline:
-            system += "\n\n" + timelinelib.TIMELINE_PROMPT
+        if via_codemode:
+            system += "\n\n" + codemodelib.CODEMODE_PROMPT
+            if ctx.timeline and await timelinelib.available(ctx):
+                system += "\n\n" + timelinelib.timeline_prompt(via_codemode=True)
+        else:
+            if codemode_fallback:
+                system += "\n\n" + prompts.FALLBACK_NOTE
+            if timeline:
+                system += "\n\n" + timelinelib.timeline_prompt(via_codemode=False)
+        worklog = WorkLog(ctx)
+        if codemode_fallback:
+            await worklog.write(
+                "Code Mode unavailable — using direct app/platform/timeline tools for this turn",
+                status="Code Mode unavailable; using direct tools",
+            )
         if restricted:
             for skill in agent.skills:
                 system += f"\n\nSkill: {skill.name}\n{skill.instructions}"
@@ -287,13 +313,13 @@ class Runner:
             memory.append(memlib.OpenVikingMemory(await ctx.memory.notes(self._legacy_notes(ctx, backend))))
         turn_guard = guardlib.TurnGuard(guardlib.max_calls(agent.max_turns))
         middleware = [*app_tools, *economy.middleware(model, backend, skills=skills), *memory,
-                      WorkLogMiddleware(WorkLog(ctx)), turn_guard]
+                      WorkLogMiddleware(worklog), turn_guard]
         if ctx.decision is not None:
             middleware.insert(0, DecisionMiddleware(
                 ctx.decision, lead=agent.lead,
                 agents=[m for m in members if m.kind == "agent" and m.runtime],
                 interrupt_on=set(interrupt_on), auto_approve=bool(decision and decision.auto_approve),
-                worklog=WorkLog(ctx)))
+                worklog=worklog))
         graph = create_deep_agent(
             model=model,
             tools=tools,

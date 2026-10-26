@@ -6,9 +6,12 @@ import (
 	"strings"
 
 	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/agui"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/message/models/message"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
@@ -80,14 +83,15 @@ func (s *Service) roomInfoTool(ctx context.Context, spaceID identity.ID, argsJSO
 }
 
 // askUserTool implements the ask_user tool: an agent (or aseman) asks the
-// user a clarifying question. The question is surfaced in the chat and the
-// orchestrator pauses until the user answers; the agent includes it in its reply
-// so the orchestrator can detect it and pause the workflow.
+// user a clarifying question. Posts a single AG-UI Question card in chat
+// (options as tappable choices) and pauses until the user answers. Do not
+// also paste the same options as prose — the card is the UI.
 func (s *Service) askUserTool(ctx context.Context, spaceID identity.ID, argsJSON string) (string, error) {
 	var in struct {
 		Question string   `json:"question"`
 		Options  []string `json:"options"`
 		Input    string   `json:"input"`
+		Caption  string   `json:"caption"`
 	}
 	_ = json.Unmarshal([]byte(argsJSON), &in)
 	if in.Question == "" && in.Input != "" {
@@ -106,14 +110,29 @@ func (s *Service) askUserTool(ctx context.Context, spaceID identity.ID, argsJSON
 	if len(in.Options) > 3 {
 		return "", errs.InvalidArgument("ask_user accepts at most three options")
 	}
-	question := strings.TrimSpace(in.Question)
+	opts := make([]string, 0, len(in.Options))
 	for _, option := range in.Options {
-		if strings.TrimSpace(option) != "" {
-			question += "\n- " + strings.TrimSpace(option)
+		if t := strings.TrimSpace(option); t != "" {
+			opts = append(opts, t)
 		}
 	}
-	// The question is posted to the user by the orchestrator when it detects the
-	// agent needs input. Guide the agent to surface it in its reply.
-	return "The orchestrator will ask the user: " + question +
-		"\nEnd this invocation and include the question in your reply. Await the user's later answer; do not assume an option was selected.", nil
+	question := strings.TrimSpace(in.Question)
+	surf := agui.QuestionSurface(question, opts)
+	body, err := agui.FormatMessage(strings.TrimSpace(in.Caption), surf)
+	if err != nil {
+		return "", errs.Wrap(errs.CodeInternal, err, "encode ask_user agui")
+	}
+	summary := "Asked the user via AG-UI in chat. End this invocation and await their answer; do not assume an option was selected.\nQuestion: " + question
+	for _, o := range opts {
+		summary += "\n- " + o
+	}
+	sender, err := s.toolSender(ctx)
+	if err != nil {
+		return summary, nil
+	}
+	roomID, _ := s.toolRoom(ctx, "")
+	if err := helper.CheckContextAccess(ctx, s.R, spaceID, roomID, true); err == nil {
+		_ = s.postMessage(ctx, spaceID, roomID, sender, body, message.KindMessage)
+	}
+	return summary, nil
 }

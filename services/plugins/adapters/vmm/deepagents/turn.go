@@ -112,6 +112,10 @@ type turnRequest struct {
 	// Timeline: the space's timeline is served to the turn as a built-in MCP
 	// server ({gateway}/timeline/mcp).
 	Timeline bool `json:"timeline"`
+	// CodeMode: capability calling (apps, platform tools, timeline) goes
+	// through Cloudflare Code Mode search/execute ({gateway}/codemode/mcp)
+	// instead of one LLM tool per function.
+	CodeMode bool `json:"codemode"`
 }
 
 // turnResult is what the runtime answers a turn with.
@@ -160,10 +164,19 @@ func (a *Adapter) open(ctx context.Context, vmID string, turn vmm.AgentTurn) (*s
 	if _, err := rand.Read(raw); err != nil {
 		return nil, turnRequest{}, err
 	}
+	token := hex.EncodeToString(raw)
+	base := context.WithoutCancel(ctx)
+	// Sandbox OpenCode (and any other in-turn tool) reuses this credential so
+	// its completions hit the same metered /llm proxy as the agent runtime.
+	base = vmm.WithTurnLLM(base, vmm.TurnLLM{
+		Token:   token,
+		BaseURL: a.nodeURL + gatewayPrefix + "/llm",
+		Model:   "aseman/default",
+	})
 	s := &session{
-		token: hex.EncodeToString(raw), def: def, account: account,
+		token: token, def: def, account: account,
 		botID: turn.Agent.BotID, spaceID: turn.SpaceID, roomID: turn.RoomID,
-		base: context.WithoutCancel(ctx), started: time.Now(),
+		base: base, started: time.Now(),
 		sentMessages: map[string]bool{}, attachments: map[string]bool{},
 	}
 	for _, attachment := range turn.Attachments {
@@ -188,6 +201,10 @@ func (a *Adapter) open(ctx context.Context, vmID string, turn vmm.AgentTurn) (*s
 		_, chatErr := a.platform.ResolveMemoryChat(ctx)
 		req.Memory = memoryPayload{Recall: embedErr == nil, Learn: chatErr == nil}
 		req.Timeline = a.timelineOn(ctx)
+		// Code Mode is always on when the tools namespace is loaded: agents
+		// call apps, platform tools and the timeline by writing JS against
+		// one OpenAPI surface (search + execute).
+		req.CodeMode = true
 	}
 	return s, req, nil
 }

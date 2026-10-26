@@ -2,6 +2,8 @@ package spaces
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/internal/plugins/identity"
@@ -10,7 +12,8 @@ import (
 )
 
 // proxyCreateAction implements spaces.proxy_create: open a gateway tunnel to a
-// port of the space's Modal sandbox so users can open what it serves in a webview.
+// port of the space's sandbox and (by default) open it as a DeskWeb card on
+// the named room's desk (or the hall when room=home).
 type proxyCreateAction struct{ s *Service }
 
 func (a *proxyCreateAction) Meta() api.ActionMeta {
@@ -25,7 +28,11 @@ func (a *proxyCreateAction) Handle(ctx context.Context, req *api.ActionRequest) 
 		Room         string `json:"room,omitempty"`
 		Port         int    `json:"port"`
 		Title        string `json:"title,omitempty"`
+		Start        string `json:"start,omitempty"`
+		Path         string `json:"path,omitempty"`
+		Tool         string `json:"tool,omitempty"`
 		PreservePath bool   `json:"preserve_path,omitempty"`
+		Show         *bool  `json:"show,omitempty"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
@@ -35,8 +42,9 @@ func (a *proxyCreateAction) Handle(ctx context.Context, req *api.ActionRequest) 
 		return nil, errs.InvalidArgument("invalid space id")
 	}
 	var roomID identity.ID
-	if in.Room != "" {
-		roomID, err = identity.Parse(in.Room)
+	roomLabel := strings.TrimSpace(in.Room)
+	if roomLabel != "" && roomLabel != "home" {
+		roomID, err = identity.Parse(roomLabel)
 		if err != nil {
 			return nil, errs.InvalidArgument("invalid room id")
 		}
@@ -48,10 +56,36 @@ func (a *proxyCreateAction) Handle(ctx context.Context, req *api.ActionRequest) 
 	if err != nil {
 		return nil, err
 	}
-	return helper.JSON(map[string]any{
+	if start := strings.TrimSpace(in.Start); start != "" {
+		if err := a.s.setPreviewStart(ctx, p, start); err != nil {
+			return nil, err
+		}
+		_, _, _ = a.s.servePreview(ctx, spID, in.Port, start, 75*time.Second)
+	}
+	out := map[string]any{
 		"proxy_id": p.ID.String(), "space_id": p.SpaceID.String(),
 		"port": p.Port, "title": p.Title, "url": p.GatewayPath(), "ok": true,
-	})
+	}
+	show := true
+	if in.Show != nil {
+		show = *in.Show
+	}
+	if show {
+		page := webPageInput{Page: p.GatewayPath(), Path: in.Path, Tool: in.Tool, Title: p.Title}
+		deskRoom := roomID
+		if roomLabel == "home" || roomID.IsZero() {
+			page.Room = "home"
+			deskRoom = identity.ID{}
+		} else {
+			page.Room = roomID.String()
+		}
+		if d, id, oerr := a.s.openWebPage(ctx, spID, deskRoom, req.Caller.ID.String(), page); oerr != nil {
+			out["desk_error"] = oerr.Error()
+		} else if w := windowJSON(d, id); w != nil {
+			out["desk_window"] = w
+		}
+	}
+	return helper.JSON(out)
 }
 
 // proxyListAction implements spaces.proxy_list.

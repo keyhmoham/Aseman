@@ -24,6 +24,19 @@ _STATUS = {
     "send_direct_message": "sending a direct message", "ask_user": "asking a question",
     "recruit_agent": "recruiting a specialist", "assemble_team": "setting up the team",
     "run_swarm": "running the team in parallel", "image_generate": "generating an image", "file_send": "sharing a file",
+    "codemode_search": "searching capabilities (Code Mode)",
+    "codemode_execute": "running Code Mode",
+}
+
+_CODEMODE_STATUS = {
+    "/platform/file_send": "sharing a file",
+    "/platform/file_upload": "uploading a file",
+    "/platform/image_generate": "generating an image",
+    "/platform/ui_present": "showing an in-chat UI",
+    "/platform/appui_create": "building an interactive UI",
+    "/platform/proxy_create": "exposing a preview",
+    "/timeline/": "reading the project timeline",
+    "/apps/": "calling a connected app",
 }
 
 _TODO_MARK = {"completed": "[x]", "in_progress": "[~]", "pending": "[ ]"}
@@ -41,6 +54,8 @@ def _args(args: dict[str, Any]) -> str:
         return str(args.get("file_path") or args.get("path"))
     if "subagent_type" in args:
         return f"{args['subagent_type']}: {_clip(str(args.get('description', '')), 300)}"
+    if "code" in args:
+        return _clip(str(args["code"]), 400)
     return _clip(json.dumps(args, ensure_ascii=False, default=str), 300)
 
 
@@ -63,9 +78,24 @@ class WorkLog:
             pass  # the log is best effort; the work goes on
 
 
+def _codemode_status(args: dict[str, Any]) -> str:
+    code = str(args.get("code") or "")
+    for path, label in _CODEMODE_STATUS.items():
+        if path in code:
+            return label
+    return "running Code Mode"
+
+
+def _call_status(call: dict[str, Any]) -> str:
+    name = call.get("name", "")
+    if name == "codemode_execute":
+        return _codemode_status(call.get("args") or {})
+    return _STATUS.get(name, f"using {name}")
+
+
 def _status(calls: list[dict[str, Any]]) -> str:
     """The live status of a step: what its tool calls are doing."""
-    shown = list(dict.fromkeys(_STATUS.get(c.get("name", ""), f"using {c.get('name', '')}") for c in calls))
+    shown = list(dict.fromkeys(_call_status(c) for c in calls))
     return ", ".join(shown[:3]) + (" …" if len(shown) > 3 else "") if shown else "thinking…"
 
 

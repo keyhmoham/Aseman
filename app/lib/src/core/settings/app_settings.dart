@@ -30,4 +30,11 @@ class AppSettingsScope extends InheritedNotifier<AppSettingsController> {
     assert(scope != null, 'No AppSettingsScope found');
     return scope!.notifier!;
   }
+
+  /// Null when the tree has no settings (tests, isolated previews).
+  static AppSettingsController? maybeOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<AppSettingsScope>()
+        ?.notifier;
+  }
 }

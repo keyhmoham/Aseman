@@ -1,0 +1,43 @@
+# Aseman Code Mode (Cloudflare)
+
+This Worker wraps Aseman's capability surface with Cloudflare's **search-and-execute Code Mode** MCP (`openApiMcpServer` + `DynamicWorkerExecutor`).
+
+Agents (or any MCP client) get two tools — `search` and `execute` — and write JavaScript against one OpenAPI document of the space's connected apps, platform tools and project timeline. Intermediate results stay in the Worker sandbox; only the return value enters the model context.
+
+The Aseman node already serves the same pattern natively at `/deepagents/v1/codemode/mcp` for in-platform agents. Deploy this Worker when you want:
+
+- External MCP clients (Claude, Cursor, …) to use Aseman capabilities through Code Mode
+- Cloudflare's isolated Dynamic Worker executor instead of the node's goja sandbox
+
+## Endpoints the Worker calls on Aseman
+
+| Method | Path | Purpose |
+| :--- | :--- | :--- |
+| `GET` | `/tools/v1/codemode/openapi` | OpenAPI of apps + platform + timeline (`X-Aseman-Space`) |
+| `POST` | `/tools/v1/codemode/request` | Authenticated `codemode.request` → app / platform / timeline |
+
+Paths inside the OpenAPI document:
+
+```
+POST /apps/{slug}/{function}   # JSON body = microtool arguments
+POST /apps/{slug}/ask          # apps without microtools
+POST /platform/{tool}          # files, proxies, routines, desk, UI, db, …
+POST /timeline/{tool}          # project timeline reads
+```
+
+## Deploy
+
+```bash
+cd deploy/codemode
+npm install
+# Set ASEMAN_ORIGIN to your node (e.g. https://node.example.com)
+# Clients send Authorization: Bearer <aseman-session-or-token>
+# and the Worker forwards it with X-Aseman-Space from the query or header.
+npx wrangler deploy
+```
+
+Connect an MCP client to `https://<worker>/mcp?space=<space-id>` with the person's Aseman bearer token. Optional: `X-Aseman-Room` for room-scoped platform tools.
+
+## In-platform agents
+
+No Worker required: deepagents turns receive `codemode: true` and use `codemode_search` / `codemode_execute` against `/deepagents/v1/codemode/mcp`. Apps, platform tools and the timeline are injected into that OpenAPI surface automatically. Messaging, `ask_user`, sandbox FS/shell, planning and swarm remain native harness tools.

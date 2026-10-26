@@ -135,6 +135,19 @@ func mentionsAgent(mentions []string, ids ...string) bool {
 	return false
 }
 
+// withoutToolMessages drops KindTool rows from a chat feed. Those are microtool
+// replies (microtool/page API traffic, …) and must not appear as conversation.
+func withoutToolMessages(msgs []message.Message) []message.Message {
+	out := msgs[:0]
+	for _, m := range msgs {
+		if m.Kind == message.KindTool {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
 // PostMessage posts a normal conversation message from the given sender into a
 // room (rendered as a chat message, not a log).
 func (s *Service) PostMessage(ctx context.Context, spaceID, roomID, sender identity.ID, body string) error {

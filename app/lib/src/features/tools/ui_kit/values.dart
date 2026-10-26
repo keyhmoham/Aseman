@@ -1,5 +1,5 @@
 /// Reading the loosely typed props tool frontends send (JSON from an Elpian
-/// program, or AG-UI data the node filled in) and formatting values for
+/// program) and formatting values for
 /// display.
 library;
 
@@ -233,7 +233,7 @@ List<double> niceTicks(double min, double max, {int count = 5}) {
 // Icons
 // ---------------------------------------------------------------------------
 
-/// The Material icon [name] names (AG-UI names like `arrowUpward`, Elpian
+/// The Material icon [name] names (camelCase like `arrowUpward`, Elpian
 /// names like `arrow_upward`), or null.
 IconData? iconFor(Object? name) {
   if (name is! String || name.isEmpty) return null;

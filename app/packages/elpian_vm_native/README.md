@@ -4,7 +4,7 @@ The native half of the Elpian VM Aseman's app runs tool frontends on: an
 FFI plugin that builds `libelpian_vm` (Android `.so`, iOS/macOS static
 library, Linux `.so`, Windows `.dll`) from the Rust sources under `rust/`. It
 has no Dart API of its own — the bindings, the rendering engine, the
-miniapp host and the AG-UI surface renderer are in the app, under `lib/src/elpian`.
+miniapp host are in the app, under `lib/src/elpian`.
 On the web the same VM runs as WebAssembly (`assets/elpian/web_runtime`).
 
 ## Origin

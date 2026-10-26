@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../elpian/core/media.dart';
-import '../../../agui/agui.dart'
-    show CompactHint, FrontendDisplay, FrontendPresentation;
 import '../domain/desk_models.dart';
 import 'desk_controller.dart';
 import 'desk_dock.dart';
+import 'frontend_presentation.dart'
+    show CompactHint, FrontendDisplay, FrontendPresentation;
 import 'pinned_desk.dart';
 import 'tool_avatar.dart';
 
@@ -757,9 +757,7 @@ class _WindowSheet extends StatelessWidget {
         }
         final scheme = Theme.of(context).colorScheme;
         final subtitle = [
-          if (w.argsSummary.isNotEmpty && !w.isDesigned) w.argsSummary,
-          if (w.isDesigned && w.request.trim().isNotEmpty)
-            'for “${w.request.trim()}”',
+          if (w.argsSummary.isNotEmpty) w.argsSummary,
         ].join('  ·  ');
         final pinned = controller.isPinned(w);
         return SizedBox(
@@ -892,10 +890,7 @@ class _WidgetMenuState extends State<_WidgetMenu> {
     final text = Theme.of(context).textTheme;
     final maxH = MediaQuery.sizeOf(context).height * .72;
     final subtitle = [
-      if (widget.window.argsSummary.isNotEmpty && !widget.window.isDesigned)
-        widget.window.argsSummary,
-      if (widget.window.isDesigned && widget.window.request.trim().isNotEmpty)
-        'for “${widget.window.request.trim()}”',
+      if (widget.window.argsSummary.isNotEmpty) widget.window.argsSummary,
     ].join('  ·  ');
     Widget label(String title) => Padding(
           padding: const EdgeInsets.only(bottom: 8),

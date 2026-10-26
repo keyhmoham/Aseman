@@ -84,11 +84,6 @@ func (a *API) Register(net network.Network) error {
 	if err := net.Handle(network.MethodGet, "/v1/proxy/{id}", a.proxyServe); err != nil {
 		return err
 	}
-	// Aseman's web UI kit for pages served from anywhere (pkg/webkit);
-	// previews also have it under their own prefix (proxy_page.go).
-	if err := net.Handle(network.MethodGet, "/v1/webkit/{file}", a.webkitServe); err != nil {
-		return err
-	}
 	if err := net.Handle(network.MethodGet, "/healthz", a.health); err != nil {
 		return err
 	}
@@ -262,9 +257,14 @@ func (a *API) proxyServe(ctx context.Context, req *network.Request) (*network.Re
 	if len(req.Query) > 0 {
 		query := url.Values{}
 		for key, values := range req.Query {
-			if key != "token" {
-				query[key] = values
+			// Gateway-only: session token and the app's theme/embed hints
+			// must not reach upstream. Many sandbox apps match request.url
+			// exactly ("/"); forwarding ?aseman_theme=… made them 404
+			// "Not found" in mobile desk sheets.
+			if key == "token" || strings.HasPrefix(key, "aseman_") {
+				continue
 			}
+			query[key] = values
 		}
 		u.RawQuery = query.Encode()
 	}

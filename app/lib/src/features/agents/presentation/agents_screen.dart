@@ -73,7 +73,7 @@ class _AgentsScreenState extends State<AgentsScreen> {
       what == 'tool' ? _createTool() : _createAgent();
 
   /// A tool: one form for its backend (external, managed or installed) and
-  /// its frontend (static or generative).
+  /// its frontend (none or static).
   Future<void> _createTool() async {
     final draft = await showCreateToolForm(context);
     if (draft == null || !mounted) return;

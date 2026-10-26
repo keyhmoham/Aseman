@@ -1,31 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../../elpian/elpian.dart';
-import '../../../agui/agui.dart'
-    show
-        CompactHint,
-        CompactSummary,
-        CompactSummaryView,
-        FrontendDisplay,
-        FrontendPresentation,
-        AgUiFrame;
 import '../../../shared/widgets/skeleton.dart';
-import '../../tools/presentation/app_frontend_theme.dart';
+import '../../desk/presentation/compact_summary.dart';
+import '../../desk/presentation/frontend_presentation.dart';
 import '../connect/mcp_connect_dialog.dart';
 import '../data/tools_api.dart';
 import '../domain/tool_models.dart';
 import '../runtime/tool_frontend_host.dart';
 import '../runtime/tool_media.dart';
 import '../ui_kit/kit.dart' show kitEngine;
+import 'app_frontend_theme.dart';
 
 /// A tool's frontend, in a space: a static frontend runs its program on the
 /// Elpian VM (bytecode) or QuickJS (source) with [ToolFrontendHost] as its
-/// host; a generative one is the surface the node generated (or took from the
-/// component registry) filled with this person's data, its buttons running
-/// microtools through the node.
-///
-/// It is also what a `ToolFrontend` component of a composed widget draws, so
-/// one tool's frontend can sit inside another surface.
+/// host.
 class ToolFrontendView extends StatefulWidget {
   const ToolFrontendView({
     super.key,
@@ -34,10 +23,7 @@ class ToolFrontendView extends StatefulWidget {
     required this.spaceId,
     this.roomId = '',
     this.userId = '',
-    this.regenerate = false,
     this.shown,
-    this.template,
-    this.request = '',
     this.onLoaded,
     this.onConnected,
   });
@@ -48,20 +34,8 @@ class ToolFrontendView extends StatefulWidget {
   final String roomId;
   final String userId;
 
-  /// Generate the frontend again rather than take it from the registry (the
-  /// tool's owner only).
-  final bool regenerate;
-
-  /// The result a generated frontend opens on (an agent's frontend_show).
+  /// The result a static frontend opens on (microtool + args).
   final ShownResult? shown;
-
-  /// A frontend designed for one request (a desk window's own), shown
-  /// instead of the tool's.
-  final Map<String, dynamic>? template;
-
-  /// What the person asked for, which a frontend generated for each request
-  /// (its tool does not cache it) is designed for.
-  final String request;
   final ValueChanged<ToolFrontendPayload>? onLoaded;
 
   /// Called once the person connected their own account to the tool here.
@@ -94,7 +68,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
     super.didUpdateWidget(old);
     if (old.botId != widget.botId ||
         old.spaceId != widget.spaceId ||
-        old.regenerate != widget.regenerate) {
+        old.roomId != widget.roomId) {
       _load();
     }
   }
@@ -128,10 +102,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
       final payload = await widget.api.frontend(widget.botId,
           spaceId: widget.spaceId,
           roomId: widget.roomId,
-          regenerate: widget.regenerate,
-          shown: widget.shown,
-          template: widget.template,
-          request: widget.request);
+          shown: widget.shown);
       if (!mounted) return;
       setState(() {
         _payload = payload;
@@ -158,18 +129,6 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
     widget.onConnected?.call();
     await _load();
   }
-
-  Future<Map<String, dynamic>?> _action(
-          AgUiAction action, Map<String, dynamic> data) =>
-      widget.api.frontendAction(widget.botId, action.name,
-          spaceId: widget.spaceId,
-          roomId: widget.roomId,
-          context: action.context,
-          data: data,
-          shown: widget.shown,
-          // A frontend generated for this request only exists here: its
-          // actions carry it back to the node.
-          template: widget.template ?? _payload?.template);
 
   @override
   Widget build(BuildContext context) {
@@ -205,8 +164,6 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
             padding: EdgeInsets.all(12),
             child: SkeletonParagraph(lines: 2, lineHeight: 10));
       }
-      // A generated interface takes a moment the first time (every time
-      // when its tool does not cache it).
       return const SkeletonPage(stats: false, rows: 3);
     }
     final account = _needsAccount;
@@ -279,23 +236,6 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
                   );
         if (!compact) return program;
         return _StaticCompact(summary: _summary, program: program);
-      case FrontendMode.generative:
-        final view = AgUiView(
-          messages: payload.messages,
-          onAction: _action,
-          toolFrontend: (context, botId, height, props) => SizedBox(
-            height: height,
-            child: ToolFrontendView(
-                api: widget.api,
-                botId: botId,
-                spaceId: widget.spaceId,
-                roomId: widget.roomId,
-                userId: widget.userId,
-                shown: ShownResult.fromProps(props)),
-          ),
-        );
-        if (compact) return view;
-        return AgUiFrame(messages: payload.messages, child: view);
       case FrontendMode.none:
         if (compact) return const SizedBox.shrink();
         return const Center(child: Text('This app has no screen.'));

@@ -149,6 +149,10 @@ func (s *Service) updates(ctx context.Context, req *api.ActionRequest) (*api.Act
 	}
 	visible := msgs[:0]
 	for _, m := range msgs {
+		// Microtool replies (page API / preview kit traffic, …) stay off the chat feed.
+		if m.Kind == message.KindTool {
+			continue
+		}
 		if readable[m.RoomID.String()] {
 			visible = append(visible, m)
 		}

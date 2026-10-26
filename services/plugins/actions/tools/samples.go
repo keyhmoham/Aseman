@@ -66,6 +66,7 @@ var sampleServers = []sampleServer{
 	{Name: "Context7", URL: "https://mcp.context7.com/mcp", Site: "context7.com", Description: "Current documentation and code examples for libraries and frameworks."},
 	{Name: "GitMCP", URL: "https://gitmcp.io/docs", Site: "gitmcp.io", Description: "Search and read the documentation and code of public GitHub projects."},
 	{Name: "Cloudflare Docs", URL: "https://docs.mcp.cloudflare.com/mcp", Site: "cloudflare.com", Description: "Search Cloudflare's developer documentation."},
+	{Name: "Cloudflare API (Code Mode)", URL: "https://mcp.cloudflare.com/mcp", Site: "cloudflare.com", Description: "The entire Cloudflare API via Code Mode search/execute (~1k tokens). Sign in with Cloudflare OAuth.", SignIn: true},
 	{Name: "Hugging Face", URL: "https://huggingface.co/mcp", Site: "huggingface.co", Description: "Search models, datasets and spaces on the Hugging Face Hub."},
 	{Name: "Excalidraw", URL: "https://mcp.excalidraw.com/mcp", Site: "excalidraw.com", Description: "Create and read hand-drawn style diagrams."},
 	{Name: "GoDaddy Domains", URL: "https://api.godaddy.com/v1/domains/mcp", Site: "godaddy.com", Description: "Check whether domain names are available and suggest alternatives."},

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../../agui/agui.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
@@ -14,13 +15,6 @@ import '../../../data/models/space.dart';
 import '../../../data/models/uploaded_file.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../elpian/core/media.dart' show ElpianMediaScope;
-import '../../../agui/agui.dart'
-    show
-        CompactSummary,
-        CompactSummaryView,
-        FrontendPresentation,
-        AgUiFrame,
-        AgUiView;
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/mini_tag.dart';
@@ -37,9 +31,10 @@ import '../../computer/preview_view.dart';
 import '../../desk/data/desk_api.dart';
 import '../../desk/domain/desk_models.dart';
 import '../../desk/presentation/compact_desk.dart';
-import '../../desk/presentation/designed_window.dart';
+import '../../desk/presentation/compact_summary.dart';
 import '../../desk/presentation/desk_controller.dart';
 import '../../desk/presentation/floating_desk.dart';
+import '../../desk/presentation/frontend_presentation.dart';
 import '../../desk/presentation/tool_avatar.dart';
 import '../../files/domain/file_types.dart';
 import '../../files/presentation/file_tree.dart';
@@ -448,8 +443,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     final spaceId = _spaceFor(workspace)?.id ?? '';
     if (bot.isUnifiedTool && spaceId.isNotEmpty) {
       // On the desk, as a card window (its dock entry gathers it): a static
-      // frontend runs, a generative one comes from the cache (generated the
-      // first time), and a tool without one gets a generated interface.
+      // frontend runs in-app.
       deskController.open(bot.id, title: bot.name);
       if (MediaQuery.sizeOf(context).width < 820 && mobilePage != 0) {
         setState(() => mobilePage = 0);
@@ -1984,38 +1978,14 @@ class _CenterDesk extends StatelessWidget {
   final Widget? underlay;
   final double topContentInset;
 
-  Widget _frontend(String tool, ShownResult? shown,
-          {Map<String, dynamic>? template}) =>
-      ToolFrontendView(
-          // A redesign unmounts it (back to designing), so the template is not
-          // part of its identity: polls do not reload it.
-          key: ValueKey(
-              '$tool/${shown?.microtool}/${shown?.args}/${template != null}'),
-          template: template,
-          api: ToolsApi.of(dependencies.service),
-          botId: tool,
-          spaceId: spaceId,
-          roomId: roomId,
-          userId: dependencies.sessionController.session?.accountId ?? '',
-          shown: shown);
-
-  /// A widget an agent composed (ui_compose): AG-UI Surface over the space's tools'
-  /// data, embedding tools' own frontends.
-  Widget _composed(String id, Map<String, dynamic> widget) =>
-      Builder(
-          key: ValueKey('composed-$id'),
-          builder: (context) {
-            final messages = ComposedSurfaces.of(widget);
-            final view = AgUiView(
-              messages: messages,
-              toolFrontend: (context, botId, height, props) => SizedBox(
-                  height: height,
-                  child: _frontend(botId, ShownResult.fromProps(props))),
-            );
-            // A phone-board widget shows the compact form as it is.
-            if (FrontendPresentation.isCompact(context)) return view;
-            return AgUiFrame(messages: messages, child: view);
-          });
+  Widget _frontend(String tool, ShownResult? shown) => ToolFrontendView(
+      key: ValueKey('$tool/${shown?.microtool}/${shown?.args}'),
+      api: ToolsApi.of(dependencies.service),
+      botId: tool,
+      spaceId: spaceId,
+      roomId: roomId,
+      userId: dependencies.sessionController.session?.accountId ?? '',
+      shown: shown);
 
   /// A web page window: the page itself, or, as a phone-board widget, a
   /// summary that opens it.
@@ -2038,6 +2008,8 @@ class _CenterDesk extends StatelessWidget {
   /// [FrontendPresentation] says whether in full or as a compact widget.
   Widget _windowContent(BuildContext context, DeskWindow w) => w.isWeb
       ? _page(context, w.id, w.page, w.label)
+      : w.isAgui
+      ? _aguiWindow(context, w)
       : w.isComputer
       ? (FrontendPresentation.isCompact(context)
           // A phone-board widget names the computer; it opens in the sheet.
@@ -2066,8 +2038,6 @@ class _CenterDesk extends StatelessWidget {
               spaceId: spaceId,
               path: w.filePath,
               showHeader: false))
-      : w.isComposed
-      ? _composed(w.id, w.widget)
       : w.isApp
           ? (FrontendPresentation.isCompact(context)
               // The tool's app runs once opened, not in the widget.
@@ -2085,38 +2055,47 @@ class _CenterDesk extends StatelessWidget {
                   roomId: roomId,
                   microtool: w.microtool,
                   args: w.args))
-          : w.isDesigned
-              // Designed for the request: kept with the window.
-              ? DesignedWindowContent(
-                  key: ValueKey('designed-${w.id}'),
-                  windowId: w.id,
-                  request: w.request,
-                  template: w.template,
-                  status: w.status,
-                  controller: controller,
-                  ready: (t) => _frontend(w.tool, w.shown, template: t))
-              : _frontend(w.tool, w.shown);
+          : _frontend(w.tool, w.shown);
+
+  Widget _aguiWindow(BuildContext context, DeskWindow w) {
+    if (FrontendPresentation.isCompact(context)) {
+      return CompactSummaryView(
+          summary: CompactSummary(
+              title: w.label.isEmpty ? 'Visualization' : w.label,
+              caption: 'AG-UI · tap to open',
+              icon: 'dashboard'));
+    }
+    final raw = w.aguiSurface;
+    if (raw == null) {
+      return const Center(child: Text('Empty AG-UI surface'));
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: AgUiSurfaceView(
+        key: ValueKey('agui-${w.id}'),
+        surface: AgUiSurface.fromJson(raw),
+        compact: false,
+      ),
+    );
+  }
 
   Widget _pinPreview(DeskPin p) => p.isWeb
       ? _WebPinPreview(title: p.label)
+      : p.isAgui
+      ? CompactSummaryView(
+          summary: CompactSummary(
+              title: p.label.isEmpty ? 'Visualization' : p.label,
+              caption: 'AG-UI',
+              icon: 'dashboard'))
       : p.isComputer
       ? const CompactSummaryView(
           summary: CompactSummary(
               title: 'Computer', caption: 'The project’s desktop', icon: 'computer'))
       : p.isFile
       ? _FilePreview(path: p.fileId.isEmpty ? p.filePath : p.label)
-      : p.isComposed
-      ? _composed(p.id, p.widget)
       : p.isApp
           ? _AppPinPreview(name: p.name)
-          : p.isDesigned
-              ? DesignedWindowContent(
-                  windowId: p.id,
-                  request: p.request,
-                  template: p.template,
-                  status: p.status,
-                  ready: (t) => _frontend(p.tool, p.shown, template: t))
-              : _frontend(p.tool, p.shown);
+          : _frontend(p.tool, p.shown);
 
   Widget _emptyState(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;

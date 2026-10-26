@@ -1,12 +1,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:aseman/src/elpian/core/media.dart';
 import 'package:aseman/src/features/tools/runtime/tool_media.dart';
-import 'package:aseman/src/agui/agui.dart';
 
 /// A 1x1 transparent PNG.
 final _png = base64.decode(
@@ -30,31 +27,6 @@ ToolMedia _media(List<String> reads) => ToolMedia(
         return _png;
       },
     );
-
-List<Map<String, dynamic>> _surface(String url) => [
-      {
-        'version': 'v0.9',
-        'createSurface': {
-          'surfaceId': 'w',
-          'catalogId':
-              'https://aseman.app/agui/catalogs/aseman/v1'
-        }
-      },
-      {
-        'version': 'v0.9',
-        'updateComponents': {
-          'surfaceId': 'w',
-          'components': [
-            {
-              'id': 'root',
-              'component': 'Column',
-              'children': ['img']
-            },
-            {'id': 'img', 'component': 'Image', 'url': url},
-          ]
-        }
-      },
-    ];
 
 void main() {
   group('ToolMedia', () {
@@ -133,50 +105,4 @@ void main() {
     });
   });
 
-  group('generative frontends show media from the space', () {
-    Future<void> pump(WidgetTester tester, String url, ToolMedia media) async {
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: ElpianMediaScope(
-            resolver: media.call,
-            child:
-                SingleChildScrollView(child: AgUiView(messages: _surface(url))),
-          ),
-        ),
-      ));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
-      await tester.pump();
-    }
-
-    testWidgets('a project image', (tester) async {
-      final reads = <String>[];
-      await pump(tester, '/workspace/out/a.png', _media(reads));
-      expect(reads, ['/workspace/out/a.png']);
-      final image = tester.widget<Image>(find.byType(Image));
-      expect(image.image, isA<MemoryImage>());
-    });
-
-    testWidgets('a project SVG drawing', (tester) async {
-      await pump(tester, 'out/drawing.svg', _media([]));
-      expect(find.byType(SvgPicture), findsOneWidget);
-    });
-
-    testWidgets('a stored file, with the person\'s credentials',
-        (tester) async {
-      await pump(tester, 'attachment://$_id', _media([]));
-      final image = tester.widget<Image>(find.byType(Image));
-      final provider = image.image as NetworkImage;
-      expect(provider.url, 'https://node.example/v1/files/$_id/content');
-      expect(provider.headers?['Authorization'], 'Bearer t');
-    });
-
-    testWidgets('a missing file shows a broken image, not an error',
-        (tester) async {
-      await pump(tester, '/workspace/missing.png', _media([]));
-      expect(find.byIcon(Icons.broken_image_outlined), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-  });
 }

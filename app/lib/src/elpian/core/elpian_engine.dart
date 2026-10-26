@@ -15,7 +15,6 @@ import '../models/elpian_node.dart';
 import '../widgets/widgets.dart';
 import '../scope/scope_contract.dart';
 import 'elpian_services.dart';
-import '../agui/elpian.dart';
 import 'event_dispatcher.dart';
 import 'event_enabled_widget.dart';
 import 'event_system.dart';
@@ -102,9 +101,6 @@ class ElpianEngine {
     _registry.register('Switch', ElpianSwitch.build);
     _registry.register('Slider', ElpianSlider.build);
     _registry.register('Icon', ElpianIcon.build);
-    // Agent-generated UI (AG-UI Surface Spec).
-    _registry.register('AgUiSurface', buildAgUiSurface);
-    _registry.register('agui-surface', buildAgUiSurface);
     _registry.register('Card', ElpianCard.build);
     _registry.register('Scaffold', ElpianScaffold.build);
     _registry.register('AppBar', ElpianAppBar.build);

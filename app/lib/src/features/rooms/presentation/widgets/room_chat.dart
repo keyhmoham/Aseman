@@ -4,6 +4,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../agui/agui.dart';
 import '../../../../app_dependencies.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_shape.dart';
@@ -20,7 +21,6 @@ import '../../../search_feed/presentation/rich_post_content.dart';
 import '../../domain/room_work.dart';
 import '../room_chat_scroll.dart';
 import '../room_work_controller.dart';
-import 'agui_message.dart';
 import 'attachment_bubble.dart';
 import 'forward_message_sheet.dart';
 import 'message_edit_history.dart';
@@ -783,7 +783,13 @@ class _RoomChatState extends State<RoomChat> {
   }
 
   static String _quoteText(RoomMessage m) {
-    final body = m.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    // Strip AG-UI fences so reply quotes don't leak raw ```agui JSON.
+    final parsed = parseAgUiBody(m.body);
+    var body = parsed.caption.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (body.isEmpty && parsed.surface != null) {
+      final title = parsed.surface!.title.trim();
+      body = title.isNotEmpty ? title : 'Interactive UI';
+    }
     if (body.isNotEmpty) return body;
     return m.attachments.isEmpty ? 'Message' : '📎 Attachment';
   }
@@ -1494,6 +1500,11 @@ class _RoomChatState extends State<RoomChat> {
 
   Widget _chatBubble(BuildContext context, RoomMessage m,
       {RoomMessage? previous}) {
+    // Microtool replies (kind tool) are for the desk / command path —
+    // never list them in chat (they are not conversation).
+    if (m.kind == 'tool') {
+      return const SizedBox.shrink();
+    }
     // Agentic-flow content (aseman's plans, dispatches, tool/sandbox outputs)
     // renders as a collapsible log section rather than a chat bubble.
     if (m.kind == 'log') {
@@ -1511,30 +1522,8 @@ class _RoomChatState extends State<RoomChat> {
     // one shows the sender, and the group sits tighter together.
     final continued = previous != null &&
         previous.kind != 'log' &&
-        previous.kind != 'agui' &&
         previous.senderId == m.senderId &&
         m.createdAt.difference(previous.createdAt).inMinutes.abs() < 5;
-    if (m.kind == 'agui') {
-      return Padding(
-        padding: EdgeInsets.only(top: continued ? 2 : 10, bottom: 4),
-        child: Align(
-          alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.sizeOf(context).width * 0.92,
-            ),
-            child: Material(
-              color: scheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(16),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: AgUiChatMessage(body: m.body),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
     final time = _msgTime(m.createdAt);
     final deps = widget.dependencies;
     final sender = _senderOf(m);
@@ -1574,14 +1563,7 @@ class _RoomChatState extends State<RoomChat> {
                         mine: mine,
                       ),
                     )),
-              if (m.body.trim().isNotEmpty)
-                RichPostContent(m.body,
-                    headers: deps?.service.authHeaders() ?? const {},
-                    resolveUrl: deps?.service.resolveContentUrl,
-                    onLinkTap: deps == null
-                        ? null
-                        : (link) =>
-                            openWorkspaceLink(context, deps.service, link)),
+              if (m.body.trim().isNotEmpty) ..._agUiBody(context, m, deps, fg),
               // A gateway proxy message gets an "open in webview" button
               // so the room's users can view the page served from the
               // sandbox behind it.
@@ -1689,6 +1671,44 @@ class _RoomChatState extends State<RoomChat> {
 
   static String _msgTime(DateTime t) =>
       '${t.hour}:${t.minute.toString().padLeft(2, '0')}';
+
+  /// Caption markdown + AG-UI surface (if the body carries an `agui` fence).
+  List<Widget> _agUiBody(
+      BuildContext context, RoomMessage m, AppDependencies? deps, Color fg) {
+    final parsed = parseAgUiBody(m.body);
+    final out = <Widget>[];
+    if (parsed.caption.trim().isNotEmpty) {
+      out.add(RichPostContent(parsed.caption,
+          headers: deps?.service.authHeaders() ?? const {},
+          resolveUrl: deps?.service.resolveContentUrl,
+          onLinkTap: deps == null
+              ? null
+              : (link) => openWorkspaceLink(context, deps.service, link)));
+    }
+    final surface = parsed.surface;
+    if (surface != null && surface.root != null) {
+      out.add(Padding(
+        padding: EdgeInsets.only(top: parsed.caption.trim().isEmpty ? 0 : 8),
+        child: AgUiSurfaceView(
+          surface: surface,
+          onReply: widget.onSend == null
+              ? null
+              : (value, {meta}) {
+                  widget.onSend!(value, const [], const [], replyTo: m.id);
+                },
+        ),
+      ));
+    } else if (parsed.caption.trim().isEmpty && m.body.trim().isNotEmpty) {
+      // No fence — original markdown body.
+      out.add(RichPostContent(m.body,
+          headers: deps?.service.authHeaders() ?? const {},
+          resolveUrl: deps?.service.resolveContentUrl,
+          onLinkTap: deps == null
+              ? null
+              : (link) => openWorkspaceLink(context, deps.service, link)));
+    }
+    return out;
+  }
 }
 
 /// A file picked for an in-flight room message. It is uploaded to the space's

@@ -270,6 +270,18 @@ done is never refused, so a run can finish at most one step past the cap.
   agents' reads (`MCP`, through the deepagents gateway's `/timeline/mcp`) and
   `timeline.status` shows the admin each feed's cursor. Configured by
   `ASEMAN_TIMELINE_URL` / `_EMAIL` / `_PASSWORD`; off without the URL.
+- **Code Mode** — Cloudflare's search-and-execute pattern as the agent's
+  capability-calling system. The tools namespace builds one OpenAPI document of
+  `POST /apps/{slug}/{function}` (and `/ask`), `POST /platform/{tool}` (files,
+  proxies, routines, desk, UI, database, …) and `POST /timeline/{tool}`, serves
+  `search` + `execute` as a built-in MCP at `/deepagents/v1/codemode/mcp`, and
+  runs model-written JavaScript in an isolated sandbox (`codemode.spec` /
+  `codemode.request`). Agents get `codemode_search` / `codemode_execute` instead
+  of one tool per capability, so composition stays out of the model context.
+  Messaging, HITL, sandbox FS/shell, planning and swarm stay native harness
+  tools. HTTP for external hosts (including `deploy/codemode` Cloudflare
+  Workers): `/tools/v1/codemode/{openapi,request,mcp}`. The catalog sample
+  "Cloudflare API (Code Mode)" points at `https://mcp.cloudflare.com/mcp`.
 - **developer** — the developer API: organizations (a person's own, or teams with
   their own wallet, members and roles), API keys (`dk_live_…`, hashed; permissions,
   per-key spend cap, rate limit, model and provider allow-lists, expiry), a unified
@@ -372,93 +384,53 @@ acts only in the space it was called from.
 | Mode | What it is |
 |---|---|
 | `static` | an Elpian program on the Elpian VM (compiled to bytecode by the node's tool compiler, or uploaded compiled) or QuickJS, run by the app; it calls microtools with `tool.call`, and on phones may publish its compact widget's summary with `tool.compact` (`tool.context().display` says how it is shown) |
-| `generative` | **Fixed Schema Surface Bundle** compiled once from the deployer's skill (embedded ` ```surface ` JSON, named `archetype:`, or a bounded LLM fallback), kept in the **component registry** (`tool_components`) and **bind-only** on every later open — filled with fresh microtool data; buttons map to microtools |
+| *(empty)* | no dedicated frontend; interactive UIs are authored via `appui_create` |
 
-A tool without a generative frontend still gets an interface where one is
-needed, designed for the request at hand rather than for the tool: when an
-agent shows a result (`frontend_show` with the person's `request`), or a
-person opens such a tool on the desk, the node designs a template for that
-request around the actual result (`tools.GenerateWindowFrontend`) and keeps
-it with that one desk window; nothing is cached for the tool, and another
-request gets its own. `tools.frontend_get` / `frontend_action` fill and run
-a window's own template. Opening a tool itself runs its static frontend or
-serves its generative one (from the component registry, compiled the
-first time).
+**Presentation.** Classify once — prefer the lightest surface; never duplicate
+the same UI in chat and on the desk.
 
-**Author-time gate (no LLM design judge)** (`tools/review.go`,
-`pkg/surface/inspect.go`, `gate.go`, `archetypes.go`): the bundle is
-inspected (tree, app shell, composition codes such as `missing_compact` /
-`missing_kpi_strip`), props-validated, live-filled against microtools, and
-action-checked. There is no LLM design judge. LLM fallback (when the skill
-has no Fixed Schema) is capped at `surface.MaxRepairAttempts` (3) and stops
-when the blocking issue fingerprint does not shrink. The review travels with
-the template (`review` in `frontend_get`). Agents' `ui_compose` widgets get
-the same deterministic inspection and data test.
-
-Interactive web pages agents build are gated the same way before they open
-(`spaces/page_review.go`, `pkg/webkit/inspect.go`): inspect + live calls only.
-`web_show` / `proxy_create` open retries are capped at
-`surface.MaxWebShowAttempts` (3). The node does not paint the page, so agents
-must still **see** it before reporting ready: screenshots at phone (~360) and
-desktop (~1400) widths and click every control.
-
-**Every generated interface is a professional application screen**, designed
-by the shared product-designer skill (`surface.DesignPrompt` /
-`surface.AppLayout`): visualization-first (KPI Stats → hero Chart → evidence
-Table), sparse text, responsive on a phone (~360 × 640) and a desktop
-window (~1400 × 900). Taught to every generator and checked by every review
-(and by automatic density inspection). It fills its window and never scrolls
-as a whole: a header that stays put, then a body region (`"weight": 1`)
-taking the rest of the height, and every region that can grow (lists,
-tables, timelines, details, long forms) scrolls inside itself. Panes side by
-side are a `Split` (AG-UI Surface Spec) or `<t-split>` (web kit): panes on a desktop, tabs
-on a phone; views of one screen are `Tabs` whose tabs scroll by themselves.
-AG-UI surfaces designed this way set `theme.layout = "app"` (via
-`aseman.surface.create`), and the app gives them their window's height
-(`AgUiFrame`); templates made before keep scrolling as pages. Web pages use
-`<body class="t-app">`, the kit's app shell.
+- **In-chat AG-UI** (`ui_present` / `ask_user`, `placement=chat`): low-complexity
+  structured data and human-in-the-loop. Flutter mounts the `agui` fence in the
+  message bubble.
+- **Desk AG-UI window** (`ui_present`, `placement=desk` / `complexity=high`):
+  large or multi-panel **non-interactive** visualizations using the same AG-UI
+  components on the room desk.
+- **DeskWeb App UI** (`appui_create`): interactive + complex + live APIs /
+  lasting apps. OpenCode builds fullstack software (Material 3 Expressive by
+  default; optional OpenUI agent islands via `_aseman/kit/openui`).
+- **`proxy_create`**: only to expose an already-running sandbox HTTP service.
 
 Agents get every tool's microtools as tools (`spaces.tools_list`, through
-`spaces.ask`). Tools' interfaces never go into the chat: they open as card
-windows on the room's **desk** (`spaces/desk.go`, kept in the space's
-metadata under `desktop/<room>`; `spaces.desktop_get` / `desktop_update`).
-`frontend_show` opens a tool's generative frontend on a result,
-`ui_compose` a widget built from AG-UI Surface Spec, microtool data and tools' own
-frontends (`ToolFrontend` components), and `desk_state`, `desk_arrange`
-and `desk_close` let agents lay the desk out; each turn's note describes it
-(size, usable area, open windows).
+`spaces.ask`). Interactive UIs and previews open as card windows on the room's
+**desk** (`spaces/desk.go`, `desktop/<room>`). `desk_state`, `desk_arrange` and
+`desk_close` lay the desk out; each turn's note describes it (size, usable
+area, open windows).
 
 **Web pages on the desk.** A page an agent builds in the sandbox and exposes
-with `proxy_create` (or opens with `web_show`) is a desk window of kind `web`
+with `proxy_create` (or via `appui_create`) is a desk window of kind `web`
 (`args: {"page": "/v1/proxy/<id>/…"}`), the frontend of the tool it names
-(`tool`) or of none (dock entry `pages`); `proxy_create` opens it itself.
-Agents are taught to answer a request to *interact* with a tool with such a
-page rather than a generated frontend. Under every preview's prefix the
-gateway answers two things itself (`plugins/adapters/network/gateway/proxy_page.go`),
-authorized like the preview (the person's session, membership of its space,
-same-origin writes):
+(`tool`) or of none (dock entry `pages`); creation opens it itself.
+Under every preview's prefix the gateway answers the page's Aseman API itself
+(`plugins/adapters/network/gateway/proxy_page.go`), authorized like the
+preview (the person's session, membership of its space, same-origin writes):
 
 | Path | |
 |---|---|
-| `_aseman/kit/<file>` | Aseman's web UI kit (`pkg/webkit`): `aseman-ui.css`, `aseman-ui.js`, `gallery.html`, `README.md` (also public at `/v1/webkit/<file>`, and on the space's computer at `/opt/aseman/webkit`) |
 | `_aseman/api/context` | who views the page, in which space and room |
 | `_aseman/api/tools` · `microtools {tool}` | the space's tools and their microtools |
 | `_aseman/api/call {tool, microtool, args}` | calls a microtool as the person (`tools.invoke`) |
-| `_aseman/api/frontend` · `action` | a tool's own (generative) frontend and its actions |
-| `_aseman/api/show {tool, microtool, args}` | opens a tool's frontend on the desk, next to the page |
+| `_aseman/api/frontend` | static frontend program, or mode metadata when empty/unknown |
+| `_aseman/api/show {tool, microtool, args}` | opens a tool result window on the desk, next to the page |
 | `_aseman/api/file/<id>` | a stored file the person may read |
 
-The kit is built from `pkg/webkit/src` with `node pkg/webkit/tools/build.mjs`;
-its tests check it covers every Surface Spec component and every Elpian widget the
-app renders.
+Interactive tool UIs use `appui_create` (DeskWeb), not a preview kit path.
 
 | Action | |
 |---|---|
 | `tools.tool_create` / `tool_update` / `tool_get` / `tool_delete` | the tool |
 | `tools.tool_microtools` | what its backend offers, asked live |
 | `tools.invoke` | call a microtool as the signed-in person in a space |
-| `tools.frontend_get` / `frontend_action` | its frontend, and a generated frontend's actions |
-| `tools.components_list` | the generated frontends the registry holds |
+| `tools.frontend_get` | static program, or mode metadata when empty/unknown |
 
 Configuration: `ASEMAN_TOOL_RUNTIME_IMAGE`, `ASEMAN_TOOL_RUNTIME_NETWORK`,
 `ASEMAN_TOOL_NODE_URL` (the node as backends reach it) and
@@ -645,16 +617,23 @@ and users all talk to it (and to each other) through `spaces.ask`. The sandbox
 is **started on agent activity** and **stopped after an idle window** (2
 minutes) — never deleted, restarted on the next activity.
 
+The default image (`deploy/sandbox-computer`) includes **OpenCode** and
+`aseman-appui` so every new space can generate on-demand fullstack App UIs
+(Material 3 Expressive by default). Agents brief OpenCode with `appui_create` /
+`opencode_run` on the metered Aseman LLM gateway. OpenCode is also listed in
+`spaces.tools_list` as a builtin app with microtools `run`, `status`, `models`,
+`build`.
+
 When an agent takes a turn in a space, the runtime reads the space's tools
 (`spaces.tools_list`) — every app installed in the space **plus the
-sandbox** — and exposes them to the model. Calling any of them routes back
-through `spaces.ask`:
+sandbox and OpenCode** — and exposes them to the model. Calling any of them
+routes back through `spaces.ask`:
 
 | tool | backend | routing |
 |---|---|---|
 | `execute` and the file tools | shared docker/container or modal sandbox VM | `spaces.ask` (`raw`) → docker/modal exec (`Send`) |
 | `ask_<app>` | wasm app VM | `spaces.ask` → wasm `ask` host fn |
-| platform tools (`file_send`, `image_generate`, `proxy_*`, `routine_*`) | the spaces namespace | `spaces.ask` (`tool` + `args`) |
+| platform tools (`file_send`, `image_generate`, `proxy_*`, `appui_create`, `opencode_*`, `routine_*`) | the spaces namespace | `spaces.ask` (`tool` + `args`) |
 
 ```bash
 # list the tools an agent sees in a space

@@ -55,7 +55,7 @@ async def test_lead_plans_works_in_the_sandbox_and_logs(platform: Platform, tmp_
         call("ask_weather", {"request": "tomorrow?"}),
         AIMessage(content="Done: hello.txt is in the workspace."),
     ])
-    out = await r.prompt(turn_request(LEAD, "write hello", token="tok-lead", role="lead", message_id="m0"))
+    out = await r.prompt(turn_request(LEAD, "write hello", token="tok-lead", role="lead", message_id="m0", codemode=False))
     assert out.status == "done", out
     assert out.reply == "Done: hello.txt is in the workspace."
     assert target.read_text() == "hello\n"
@@ -334,7 +334,7 @@ async def test_a_connected_apps_functions_are_tools_of_their_own(platform: Platf
         call("deepwiki__ask_question", {"repoName": "vercel/next.js", "question": "What is it?"}),
         AIMessage(content="It is a web framework."),
     ])
-    out = await r.prompt(turn_request(LEAD, "what is next.js?", token="tok-lead", role="lead", message_id="m0"))
+    out = await r.prompt(turn_request(LEAD, "what is next.js?", token="tok-lead", role="lead", message_id="m0", codemode=False))
     assert out.status == "done", out
     # The node gets the function and its arguments; the agent gets the app's words.
     sent = next(run for run in platform.tool_runs if run.get("bot") == "bot-wiki")
@@ -342,65 +342,67 @@ async def test_a_connected_apps_functions_are_tools_of_their_own(platform: Platf
     assert tool_results(model)["deepwiki__ask_question"] == "It is a web framework."
 
 
-def test_every_agent_is_told_to_show_tool_results_in_the_tools_frontend_first() -> None:
+def test_every_agent_is_told_to_present_via_code_mode_platform_paths() -> None:
     from aseman_agents.context import AgentDef
     from aseman_agents.prompts import system_prompt
 
     for lead in (True, False):
         agent = AgentDef(name="a", bot_id="b", account_id="c", vm_id="d", role="lead" if lead else "")
         prompt = system_prompt(agent, "")
-        rule = prompt[prompt.index("## Showing what tools return"):]
-        # Generative frontend first, Markdown second, for every kind of tool.
-        assert rule.index("frontend_show") < rule.index("Markdown")
-        assert "external MCP" in rule and "managed" in rule and "installed" in rule
-        assert "never go into the chat" in rule and "`ui_compose`" in rule and "`ui_present`" in rule
-        assert "designed for this very" in rule and "`request`" in rule and "nothing is reused" in rule
+        rule = prompt[prompt.index("## Presenting tools and structured data"):]
+        assert "/platform/appui_create" in rule
+        assert "/platform/ui_present" in rule
+        assert "placement=desk" in rule or "complexity=high" in rule
+        assert "Code Mode" in prompt
 
 
 def test_tool_descriptions_say_how_to_present_their_results() -> None:
     from aseman_agents.tools import presentation_hint
 
-    shown = presentation_hint({"bot_id": "bot-wx", "frontend": "generative"}, "weather_report")
-    assert "frontend_show(tool='bot-wx', microtool='weather_report'" in shown
-    assert "own generative frontend" in shown
-    # No generative frontend: still a window, in an interface generated for it.
+    shown = presentation_hint(
+        {"bot_id": "bot-wx", "frontend": "", "commands": [{"name": "weather_report"}]},
+        "weather_report",
+    )
+    assert "/platform/appui_create" in shown and "tool='bot-wx'" in shown
+    assert "/platform/ui_present" in shown
     for spec in ({"bot_id": "bot-n", "commands": [{"name": "search"}]}, {"bot_id": "bot-n", "frontend": "static"}):
         hint = presentation_hint(spec, "search")
-        assert "frontend_show(tool='bot-n', microtool='search'" in hint and "designed for their request" in hint
-        assert "request=" in hint
-    # Nothing to build an interface from: Markdown.
-    assert "Markdown" in presentation_hint({"bot_id": "bot-m"}, None)
+        assert "/platform/appui_create" in hint and "tool='bot-n'" in hint
+        assert "/platform/ui_present" in hint
+    bare = presentation_hint({"bot_id": "bot-m"}, None)
+    assert "ui_present" in bare or "Markdown" in bare
 
 
 async def test_a_result_is_shown_in_the_tools_own_frontend(platform: Platform, tmp_path: Path) -> None:
-    platform.apps = [{"name": "Weather", "kind": "tool", "bot_id": "bot-wx", "frontend": "generative",
+    platform.apps = [{"name": "Weather", "kind": "tool", "bot_id": "bot-wx", "frontend": "static",
                       "description": "Weather anywhere.", "commands": [
                           {"name": "weather_report", "description": "Weather for a city.",
                            "schema": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}]}]
     platform.app_reply = '{"content": [{"type": "text", "text": "{\\"temp\\": 21}"}]}'
     r, model = runner(platform, tmp_path, [
         call("weather__weather_report", {"city": "New York"}),
-        call("frontend_show", {"tool": "bot-wx", "microtool": "weather_report", "args": {"city": "New York"}}),
+        call("appui_create", {"tool": "bot-wx", "title": "Weather", "brief": "Weather dashboard showing temp"}),
         AIMessage(content="Here is New York's weather: mild, 21°."),
     ])
-    out = await r.prompt(turn_request(LEAD, "weather in new york?", token="tok-lead", role="lead", message_id="m0"))
+    out = await r.prompt(turn_request(LEAD, "weather in new york?", token="tok-lead", role="lead", message_id="m0", codemode=False))
     assert out.status == "done", out
-    assert {"tool": "frontend_show", "args": {"tool": "bot-wx", "microtool": "weather_report", "args": {"city": "New York"}},
-            "by": LEAD["account_id"]} in platform.tool_runs
-    # The model was given the rule.
-    assert "## Showing what tools return" in str(model.seen[0][0].content)
+    assert any(run.get("tool") == "appui_create" for run in platform.tool_runs)
+    assert "## Presenting tools and structured data" in str(model.seen[0][0].content)
 
 
-def test_frontend_show_survives_an_allow_list() -> None:
+def test_codemode_survives_an_allow_list() -> None:
     from langchain_core.tools import StructuredTool
     from aseman_agents.tools import filter_allowed
 
     def tool(name: str) -> StructuredTool:
         return StructuredTool.from_function(func=lambda: "", name=name, description=name)
 
-    desk = ["frontend_show", "desk_state", "desk_arrange", "desk_close"]
-    kept = filter_allowed([tool(n) for n in [*desk, "ui_compose"]], ["file_send"])
-    assert [t.name for t in kept] == desk
+    # Code Mode is the capability surface; it stays even when allow-lists omit it.
+    kept = filter_allowed(
+        [tool(n) for n in ["codemode_search", "codemode_execute", "appui_create", "file_send"]],
+        ["send_message"],
+    )
+    assert [t.name for t in kept] == ["codemode_search", "codemode_execute"]
 
 
 def test_agents_are_told_how_to_keep_the_desk() -> None:
@@ -409,7 +411,8 @@ def test_agents_are_told_how_to_keep_the_desk() -> None:
 
     prompt = system_prompt(AgentDef(name="a", bot_id="b", account_id="c", vm_id="d"), "")
     desk = prompt[prompt.index("## The desk"):]
-    for words in ("card windows", "dock", "durable", "x`, `y`, `w`, `h`", "desk_arrange", "desk_close", "usable area", "animat"):
+    for words in ("card windows", "dock", "durable", "x`, `y`, `w`, `h`",
+                  "/platform/desk_arrange", "/platform/desk_close"):
         assert words in desk, words
 
 
@@ -427,7 +430,7 @@ async def test_admins_space_agents_read_the_platform_database(platform: Platform
         call("db_read", {"model": "accounts", "limit": 5}),
         AIMessage(content="There are accounts."),
     ])
-    out = await r.prompt(turn_request(LEAD, "how many accounts?", token="tok-lead", role="lead", message_id="m0"))
+    out = await r.prompt(turn_request(LEAD, "how many accounts?", token="tok-lead", role="lead", message_id="m0", codemode=False))
     assert out.status == "done", out
     assert {"tool": "db_tables", "args": {}, "by": LEAD["account_id"]} in platform.tool_runs
     assert {"tool": "db_read", "args": {"model": "accounts", "limit": 5}, "by": LEAD["account_id"]} in platform.tool_runs
@@ -439,20 +442,23 @@ def test_agents_build_interactive_pages_for_tools() -> None:
     from aseman_agents.tools import presentation_hint
 
     prompt = system_prompt(AgentDef(name="a", bot_id="b", account_id="c", vm_id="d"), "")
-    rule = prompt[prompt.index("## Interactive frontends for tools"):prompt.index("## The desk")]
-    for words in ("interact", "web page", "/opt/aseman/webkit/README.md", "proxy_create", "tool", "Aseman.call", "web_show"):
+    rule = prompt[prompt.index("## Presenting tools and structured data"):prompt.index("## The desk")]
+    for words in ("appui_create", "/platform/appui_create", "/platform/proxy_create", "OpenCode"):
         assert words in rule, words
-    # Showing a result is still frontend_show; operating a tool is a page.
-    hint = presentation_hint({"bot_id": "bot-wx", "frontend": "generative", "commands": [{"name": "forecast"}]}, "forecast")
-    assert "frontend_show(tool='bot-wx'" in hint and "proxy_create(tool='bot-wx'" in hint
+    hint = presentation_hint({"bot_id": "bot-wx", "frontend": "", "commands": [{"name": "forecast"}]}, "forecast")
+    assert "/platform/appui_create" in hint and "tool='bot-wx'" in hint
+    assert "/platform/proxy_create" in hint and "tool='bot-wx'" in hint
+    native = presentation_hint({"bot_id": "bot-wx", "frontend": ""}, "forecast", via_codemode=False)
+    assert "appui_create(brief=" in native and "tool='bot-wx'" in native and "proxy_create(tool='bot-wx'" in native
 
 
-def test_web_show_survives_an_allow_list() -> None:
+def test_platform_tools_do_not_survive_allow_list_without_codemode() -> None:
+    """Desk/platform tools are not CORE when Code Mode owns them; only Code Mode is."""
     from langchain_core.tools import StructuredTool
     from aseman_agents.tools import filter_allowed
 
-    tool = StructuredTool.from_function(func=lambda: "", name="web_show", description="web_show")
-    assert [t.name for t in filter_allowed([tool], ["file_send"])] == ["web_show"]
+    tool = StructuredTool.from_function(func=lambda: "", name="appui_create", description="appui_create")
+    assert [t.name for t in filter_allowed([tool], ["file_send"])] == []
 
 
 def test_long_tool_descriptions_keep_their_usage_and_hint() -> None:
@@ -461,9 +467,9 @@ def test_long_tool_descriptions_keep_their_usage_and_hint() -> None:
     usage = "Use it like this. " * 300
     spec = {"name": "Board", "bot_id": "bot-board", "commands": [{"name": "draw"}]}
     tool = _app_command_tool(None, "board__draw", spec, {"name": "draw", "description": usage})
-    assert usage.strip() in tool.description and "frontend_show(tool='bot-board'" in tool.description
+    assert usage.strip() in tool.description and "appui_create(brief=" in tool.description and "tool='bot-board'" in tool.description
     long = _app_command_tool(None, "board__draw", spec, {"name": "draw", "description": "x" * (DESCRIPTION_MAX * 2)})
-    assert len(long.description) < DESCRIPTION_MAX + 1_000 and "frontend_show" in long.description
+    assert len(long.description) < DESCRIPTION_MAX + 1_000 and "appui_create" in long.description
 
 
 def test_an_apps_json_answer_becomes_lines() -> None:

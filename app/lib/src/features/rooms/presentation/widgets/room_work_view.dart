@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../../../agui/agui.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/overlay_panels.dart';
 import '../../domain/room_work.dart';
 import '../room_work_controller.dart';
 
 /// Above the composer, only when the room's agents need the person: the
-/// answers to the question an agent asked (its question is its last message
-/// in the thread), or the run that did not finish, to run again.
+/// answers to the question an agent asked (AG-UI Question — same HITL widgets
+/// as in-chat surfaces), or the run that did not finish, to run again.
 class RoomWorkNeeds extends StatelessWidget {
   const RoomWorkNeeds(
       {super.key,
@@ -51,34 +52,62 @@ class RoomWorkNeeds extends StatelessWidget {
 
   Widget _answers(BuildContext context, AgentQuestion q) {
     final scheme = Theme.of(context).colorScheme;
-    final choices = [
+    final options = [
       ...q.options,
       if (q.options.isEmpty && q.approval) ...['Yes, go ahead', 'No'],
-      if (!q.approval) 'Use placeholders for now',
     ];
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 6,
-      runSpacing: 6,
-      children: [
-        Icon(q.approval ? Icons.verified_user_outlined : Icons.reply_rounded,
-            size: 16, color: scheme.primary),
-        Text(
-            q.approval ? '${q.agent} needs your go-ahead' : 'Answer ${q.agent}',
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: scheme.onSurfaceVariant)),
-        for (final c in choices)
-          ActionChip(
-              visualDensity: VisualDensity.compact,
-              label: Text(c, style: const TextStyle(fontSize: 12)),
-              onPressed: () => onAnswer(
-                  q,
-                  c == 'Use placeholders for now'
-                      ? 'Use reasonable placeholders for now and carry on; I will fill them in later.'
-                      : c)),
-      ],
+    return Material(
+      color: scheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(children: [
+              Icon(
+                  q.approval
+                      ? Icons.verified_user_outlined
+                      : Icons.reply_rounded,
+                  size: 16,
+                  color: scheme.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                    q.approval
+                        ? '${q.agent} needs your go-ahead'
+                        : 'Answer ${q.agent}',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: scheme.onSurfaceVariant)),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            AgUiQuestion(
+              question: q.question,
+              options: options,
+              allowFreeText: !q.approval,
+              dense: true,
+              onReply: (value, {meta}) => onAnswer(q, value),
+            ),
+            if (!q.approval)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero),
+                  onPressed: () => onAnswer(q,
+                      'Use reasonable placeholders for now and carry on; I will fill them in later.'),
+                  child: const Text('Use placeholders for now',
+                      style: TextStyle(fontSize: 12)),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 

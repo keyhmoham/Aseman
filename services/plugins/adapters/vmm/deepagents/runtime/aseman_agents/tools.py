@@ -1,4 +1,4 @@
-"""The platform tools of a deep agent.
+"""Harness and (fallback) platform tools of a deep agent.
 
 Nothing here talks to anything but the node's action API:
 
@@ -6,13 +6,14 @@ Nothing here talks to anything but the node's action API:
   and direct messages (``users.dm_send`` / ``dm_list``);
 * delegation — the ``task`` tool (subagents.py) and the swarm hand tasks to
   the space's agents as room messages that mention them;
-* tools — the space's apps and the platform's own tools (files, images,
-  previews, routines) are all ``spaces.ask``;
 * the swarm — ``spaces.agent_recruit`` adds a specialist to the space.
 
-The shell and files of the shared sandbox are the deep agents filesystem and
-``execute`` tools (see sandbox.py); people are asked through ``ask_user``,
-which pauses the agent's thread until a person answers in the room.
+In production, apps and platform tools are called through Cloudflare Code
+Mode (``codemode_search`` / ``codemode_execute``). The ``platform_tools``
+helpers below build native LLM tools only for the Code Mode-off / MCP-down
+fallback. The shell and files of the shared sandbox stay as deep agents
+filesystem + ``execute`` (see sandbox.py); people are asked through
+``ask_user``, which pauses the agent's thread until a person answers.
 """
 
 from __future__ import annotations
@@ -44,15 +45,12 @@ PLATFORM_TOOLS = {
     "routine_get": "routine_get",
     "routine_update": "routine_update",
     "routine_delete": "routine_delete",
-    # AG-UI Surface Spec: multi-tool dashboards on the desk, and chat/desk presentation.
-    "ui_compose": "ui_compose",
+    # In-chat AG-UI + interactive App UIs (OpenCode) + desk layout.
     "ui_present": "ui_present",
-    # The room's desk: a tool's own generative frontend, filled with a result
-    # the agent got, opens as a card window; agents arrange and close them.
-    "frontend_show": "frontend_show",
-    # A web page served from the sandbox (an interactive frontend for a tool)
-    # as a card window on the desk.
-    "web_show": "web_show",
+    "appui_create": "appui_create",
+    "opencode_run": "opencode_run",
+    "opencode_status": "opencode_status",
+    "opencode_models": "opencode_models",
     "desk_state": "desk_state",
     "desk_arrange": "desk_arrange",
     "desk_close": "desk_close",
@@ -63,9 +61,10 @@ PLATFORM_TOOLS = {
 }
 
 # Tools every agent keeps whatever its allowed_tools say: without them it can
-# neither talk nor report.
+# neither talk nor report. Desk / platform presentation is reached through
+# Code Mode (`/platform/…`), not as native tools, when Code Mode is on.
 CORE_TOOLS = {"send_message", "read_room", "list_team", "ask_user", "send_direct_message", "read_direct_messages",
-              "frontend_show", "web_show", "desk_state", "desk_arrange", "desk_close"}
+              "codemode_search", "codemode_execute"}
 
 _SLUG = re.compile(r"[^a-z0-9_]+")
 # A tool's own description sent to the model, at most (characters). Apps put how
@@ -84,9 +83,13 @@ def _clip(text: str, n: int = 4000) -> str:
 def _format_messages(messages: list[dict[str, Any]], clip: int = 2000) -> str:
     lines = []
     for m in messages:
+        # Microtool/page API traffic must not enter agent context.
+        # Kind "tool" is a microtool reply body; kind "log" is agentic-flow noise.
+        kind = m.get("kind") or "message"
+        if kind in ("tool", "log"):
+            continue
         sender = m.get("sender") or {}
         name = sender.get("display_name") or sender.get("handle") or m.get("sender_id", "?")
-        kind = m.get("kind") or "message"
         tag = "" if kind in ("", "text", "message") else f" [{kind}]"
         reply = f" (reply to {m['reply_to']})" if m.get("reply_to") else ""
         files = ", ".join(a.get("name", "") + " #" + a.get("id", "") for a in m.get("attachments") or [])
@@ -224,8 +227,15 @@ def recruit_tool(ctx: TurnContext) -> BaseTool:
     return recruit_agent
 
 
-async def platform_tools(ctx: TurnContext) -> list[BaseTool]:
-    """The space's apps and the platform tools, over spaces.ask."""
+async def platform_tools(ctx: TurnContext, *, via_codemode: bool = False) -> list[BaseTool]:
+    """The space's apps and the platform tools, over spaces.ask.
+
+    When ``via_codemode`` is true, connected apps **and** platform tools are
+    not listed as individual LLM tools — agents use Cloudflare Code Mode
+    (``codemode_search`` / ``codemode_execute``) against
+    ``/apps/…`` and ``/platform/…``. That is the main capability-calling
+    system; messaging, HITL, sandbox FS/shell and swarm stay native.
+    """
     try:
         listed = await ctx.space_tools()
     except GatewayError:
@@ -237,9 +247,15 @@ async def platform_tools(ctx: TurnContext) -> list[BaseTool]:
         if ctx.turn.no_sandbox and name in {"sandbox_exec", "file_send", "file_upload", "proxy_create", "proxy_list", "proxy_get", "proxy_delete"}:
             continue
         if name in PLATFORM_TOOLS:
+            if via_codemode:
+                # Platform tools are POST /platform/{name} in Code Mode OpenAPI.
+                continue
             out.append(_platform_tool(ctx, name, PLATFORM_TOOLS[name], t))
             used.add(PLATFORM_TOOLS[name])
         elif t.get("bot_id") and t.get("kind") == "tool" and name not in ("sandbox_exec",):
+            if via_codemode:
+                # Apps are POST /apps/{slug}/{function} in Code Mode OpenAPI.
+                continue
             slug = _SLUG.sub("_", name.lower()).strip("_") or "tool"
             commands = [c for c in t.get("commands") or [] if isinstance(c, dict) and c.get("name")]
             if commands:
@@ -307,7 +323,8 @@ def _app_command_tool(ctx: TurnContext, name: str, spec: dict[str, Any], command
     raw = command.get("schema") if isinstance(command.get("schema"), dict) else {}
     schema = {"type": "object", "properties": raw.get("properties") or {}, "required": raw.get("required") or []}
     description = (str(command.get("description") or "").strip() or f"{function} of {spec.get('name')}.")
-    description = f"[{spec.get('name')}] {_clip(description, DESCRIPTION_MAX)}\n{presentation_hint(spec, function)}"
+    # Native app tools exist only on the Code Mode-off fallback path.
+    description = f"[{spec.get('name')}] {_clip(description, DESCRIPTION_MAX)}\n{presentation_hint(spec, function, via_codemode=False)}"
 
     async def run(**kwargs: Any) -> str:
         try:
@@ -367,26 +384,36 @@ def _as_vision_content(result: str) -> Any:
     return [{"type": "text", "text": text}, {"type": "image_url", "image_url": {"url": url}}]
 
 
-def presentation_hint(spec: dict[str, Any], function: str | None = None) -> str:
-    """How to show people what this tool returns (see prompts.COMMON)."""
-    if spec.get("frontend") or spec.get("commands"):
-        call = f"microtool={function!r}, args=<the same arguments>" if function else "microtool=<the function>, args=<its arguments>"
-        interactive = (f" To let people work with it interactively (an interactive view, dashboard or form), "
-                       f"build a web page with Aseman's web UI kit that calls its microtools and expose it with "
-                       f"proxy_create(tool={spec['bot_id']!r}, …).")
-        if spec.get("frontend") == "generative":
-            return (f"Show people its result as a card window on the desk, in its own generative frontend: "
-                    f"frontend_show(tool={spec['bot_id']!r}, {call}); do not restate the result as text." + interactive)
-        return (f"Show people its result as a card window on the desk, in an interface designed for their request: "
-                f"frontend_show(tool={spec['bot_id']!r}, {call}, request=<what they asked, in their words>); "
-                "do not restate the result as text." + interactive)
-    return "It has no interface to show results in: present its result to people in Markdown."
+def presentation_hint(spec: dict[str, Any], function: str | None = None, *, via_codemode: bool = True) -> str:
+    """How to show people what this tool returns (matches the tools offered)."""
+    if not (spec.get("frontend") or spec.get("commands")):
+        return ("It has no interface to show results in: for compact structured data use "
+                "ui_present (in-chat AG-UI); otherwise Markdown.")
+    bot = spec["bot_id"]
+    if via_codemode:
+        appui = f"Code Mode `/platform/appui_create` (brief=<what to build>, tool={bot!r})"
+        proxy = f"Code Mode `/platform/proxy_create` (tool={bot!r}, …)"
+        present = "Code Mode `/platform/ui_present`"
+    else:
+        appui = f"appui_create(brief=<what to build>, tool={bot!r})"
+        proxy = f"proxy_create(tool={bot!r}, …)"
+        present = "ui_present"
+    mode = spec.get("frontend") or ""
+    shared = (f"Classify: lasting interactive app/dashboard with APIs → {appui}; "
+              f"large/complex non-interactive data viz → {present} (placement=desk, AG-UI window); "
+              f"small viz or HITL → {present} (placement=chat); "
+              f"already-running sandbox HTTP → {proxy}. Never duplicate the same UI in chat and on the desk.")
+    if mode == "static":
+        return (f"It has a static frontend (people can open it from the dock). {shared}")
+    return shared
+
 
 
 def _bot_tool(ctx: TurnContext, name: str, spec: dict[str, Any]) -> BaseTool:
     bot_id = spec["bot_id"]
     description = _clip(spec.get("description") or f"The {spec.get('name')} tool of this space.", DESCRIPTION_MAX) + (
-        "\nSend it a request in natural language or its command syntax; returns its reply.\n" + presentation_hint(spec))
+        "\nSend it a request in natural language or its command syntax; returns its reply.\n"
+        + presentation_hint(spec, via_codemode=False))
 
     async def run(request: str) -> str:
         try:

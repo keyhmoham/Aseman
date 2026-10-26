@@ -2,13 +2,11 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/aseman/aseman/internal/plugins/api"
-	"github.com/aseman/aseman/plugins/actions/tools/models"
 	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
@@ -80,7 +78,7 @@ func TestToolInputValidation(t *testing.T) {
 		{"docker bad path", toolInput{Name: "x", Backend: backendInput{Mode: "managed", Runtime: "docker", Image: "a", Path: "mcp"}}, false},
 		{"unknown runtime", toolInput{Name: "x", Backend: backendInput{Mode: "managed", Runtime: "python", Source: "x"}}, false},
 		{"static frontend", toolInput{Name: "x", Backend: backendInput{Mode: "external", URL: "https://a"}, Frontend: frontendInput{Mode: "static", Runtime: "quickjs", Source: "askHost('render','{}')"}}, true},
-		{"generative without skill", toolInput{Name: "x", Backend: backendInput{Mode: "external", URL: "https://a"}, Frontend: frontendInput{Mode: "generative"}}, false},
+		{"unknown frontend mode", toolInput{Name: "x", Backend: backendInput{Mode: "external", URL: "https://a"}, Frontend: frontendInput{Mode: "html"}}, false},
 		{"no name", toolInput{Backend: backendInput{Mode: "external", URL: "https://a"}}, false},
 	}
 	for _, c := range cases {
@@ -102,46 +100,6 @@ func TestToolInputValidation(t *testing.T) {
 	}
 }
 
-func TestTemplateValidationAndMessages(t *testing.T) {
-	tpl := Template{
-		Components: []map[string]any{{"id": "root", "component": "Column", "children": []any{"t"}}, {"id": "t", "component": "Text", "text": map[string]any{"path": "/weather/summary"}}},
-		Data:       []Binding{{Path: "/weather", Microtool: "forecast", Args: map[string]any{"city": "Paris"}}},
-		Actions:    map[string]Action{"refresh": {Reload: true}},
-	}
-	if err := tpl.validate(map[string]bool{"forecast": true}); err != nil {
-		t.Fatal(err)
-	}
-	if err := tpl.validate(map[string]bool{"other": true}); err == nil {
-		t.Fatal("a binding to an unknown microtool passed")
-	}
-	noRoot := Template{Components: []map[string]any{{"id": "a", "component": "Text"}}}
-	if err := noRoot.validate(nil); err == nil {
-		t.Fatal("a template without a root passed")
-	}
-	msgs := tpl.Messages("s1", map[string]any{"weather": map[string]any{"summary": "sun"}})
-	if len(msgs) < 3 || msgs[0]["type"] != "CUSTOM" || msgs[0]["name"] != "aseman.surface.create" {
-		t.Fatalf("messages %v", msgs)
-	}
-	raw, _ := json.Marshal(msgs)
-	if !strings.Contains(string(raw), `"catalog":"https://aseman.app/agui/catalogs/aseman/v1"`) {
-		t.Fatal("surface is not in the Aseman AG-UI catalog")
-	}
-}
-
-func TestPointersAndArgs(t *testing.T) {
-	data := map[string]any{}
-	setPointer(data, "/a/b", 1)
-	setPointer(data, "/a/c~1d", 2)
-	if getPointer(data, "/a/b") != 1 || getPointer(data, "/a/c~1d") != 2 {
-		t.Fatalf("pointers %v", data)
-	}
-	args := resolveArgs(map[string]any{"city": map[string]any{"$context": "city"}, "n": map[string]any{"$data": "/a/b"}, "lit": "x"},
-		map[string]any{"city": "Rome"}, data)
-	if args["city"] != "Rome" || args["n"] != 1 || args["lit"] != "x" {
-		t.Fatalf("args %v", args)
-	}
-}
-
 func TestToolResultValue(t *testing.T) {
 	v, err := vmm.ToolResultValue(`{"content":[{"type":"text","text":"{\"t\":21}"}]}`)
 	if err != nil || v.(map[string]any)["t"] != float64(21) {
@@ -156,21 +114,6 @@ func TestToolResultValue(t *testing.T) {
 	}
 }
 
-func TestComponentKeyFollowsSkillAndMicrotools(t *testing.T) {
-	spec := models.FrontendSpec{Mode: "generative", Version: "v1"}
-	a := componentKey(spec, []map[string]any{{"name": "x"}})
-	if a != componentKey(spec, []map[string]any{{"name": "x"}}) {
-		t.Fatal("the key is not stable")
-	}
-	if a == componentKey(spec, []map[string]any{{"name": "y"}}) {
-		t.Fatal("new microtools must regenerate the frontend")
-	}
-	spec.Version = "v2"
-	if a == componentKey(spec, []map[string]any{{"name": "x"}}) {
-		t.Fatal("a new skill must regenerate the frontend")
-	}
-}
-
 func TestInstallPortIsStable(t *testing.T) {
 	p := installPort("0000000000000001abcdefabcdefabcd")
 	if p != installPort("0000000000000001abcdefabcdefabcd") || p < 20000 || p >= 40000 {
@@ -178,8 +121,14 @@ func TestInstallPortIsStable(t *testing.T) {
 	}
 }
 
-func TestJSONObjectStripsFences(t *testing.T) {
-	if jsonObject("```json\n{\"a\":1}\n```") != `{"a":1}` {
-		t.Fatal("fence not stripped")
+func TestFrontendInputModes(t *testing.T) {
+	if err := (&frontendInput{Mode: "static", Runtime: "quickjs", Source: "1"}).validate(); err != nil {
+		t.Fatalf("static: %v", err)
+	}
+	if err := (&frontendInput{Mode: ""}).validate(); err != nil {
+		t.Fatalf("none: %v", err)
+	}
+	if err := (&frontendInput{Mode: "html"}).validate(); err == nil {
+		t.Fatal("unknown frontend mode must be rejected")
 	}
 }

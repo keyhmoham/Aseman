@@ -602,12 +602,17 @@ func (a *Adapter) Send(ctx context.Context, vmID, command string) (string, error
 	// hold the docker exec open indefinitely and hang the calling agent/workflow.
 	// `timeout` sends SIGTERM then SIGKILL after a grace period; exit code 124
 	// signals a timed-out command. Launch long-lived daemons with "&" instead.
-	duration := 300 * time.Second
+	//
+	// Default 5 minutes when the caller set no deadline. When a deadline is
+	// present (e.g. appui_create's 12m build budget), honor the remaining time
+	// instead of capping below it — min(300s, 12m) used to kill OpenCode builds.
+	duration := 5 * time.Minute
 	if deadline, ok := ctx.Deadline(); ok {
-		duration = min(duration, time.Until(deadline)-3*time.Second)
-		if duration <= 0 {
+		remaining := time.Until(deadline) - 3*time.Second
+		if remaining <= 0 {
 			return "", errs.New(errs.CodeUnavailable, "insufficient remaining execution time to start a sandbox command")
 		}
+		duration = remaining
 	}
 	execCmd := []string{"timeout", "-k", "2s", fmt.Sprintf("%.3fs", duration.Seconds()), "/bin/sh", "-c", command}
 	// 1. create the exec instance.

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/aseman/aseman/internal/plugins/identity"
-	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
 func f(v float64) *float64 { return &v }
@@ -110,120 +109,6 @@ func TestDeskPersistsAndDescribesItself(t *testing.T) {
 	}
 }
 
-func TestComposedWidgetsOpenOnTheDeskNotInTheChat(t *testing.T) {
-	s, ctx := messageToolHarness(t)
-	sp, err := s.CreateSpace(ctx, idFromHex(t, "00000000000000010000000000000001"), "compose space", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	room := identity.ID{Node: 1, Entity: 9}
-	compose := func(text string) string {
-		out, err := s.composeUI(ctx, sp.ID, room, "aseman",
-			`{"title":"Portfolio","x":30,"y":40,"components":[{"id":"root","component":"Text","text":"`+text+`"}]}`)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return out
-	}
-	first := compose("v1")
-	if !strings.Contains(first, `"window"`) || !strings.Contains(first, "composed widget") {
-		t.Fatalf("compose result: %s", first)
-	}
-	compose("v2") // the same title: the same window, refreshed
-	d, _ := s.Desk(ctx, sp.ID, room)
-	if len(d.Windows) != 1 {
-		t.Fatalf("windows: %+v", d.Windows)
-	}
-	w := d.Windows[0]
-	if w.Kind != DeskComposed || w.Tool != DeskComposedTool || w.X != 30 || w.Y != 40 {
-		t.Fatalf("window: %+v", w)
-	}
-	raw, _ := json.Marshal(w.Widget)
-	if !strings.Contains(string(raw), `"text":"v2"`) || strings.Contains(string(raw), `"text":"v1"`) {
-		t.Fatalf("widget not refreshed: %s", raw)
-	}
-	// Pinned and reopened as it was.
-	d, ids, err := s.UpdateDesk(ctx, sp.ID, room, "ann", []DeskOp{{Op: "pin", ID: w.ID}, {Op: "close", ID: w.ID}})
-	if err != nil || len(d.Pins) != 1 || d.Pins[0].Kind != DeskComposed || ids[0] == "" {
-		t.Fatalf("pin: %+v %v", d.Pins, err)
-	}
-	pin := d.Pins[0]
-	ops := []DeskOp{{Op: "open", Kind: pin.Kind, Title: pin.Title, Widget: pin.Widget}}
-	if err := s.resolveDeskOpens(ctx, sp.ID, ops); err != nil {
-		t.Fatal(err)
-	}
-	if d, _, err = s.UpdateDesk(ctx, sp.ID, room, "ann", ops); err != nil || len(d.Windows) != 1 || d.Windows[0].Kind != DeskComposed {
-		t.Fatalf("reopen: %+v %v", d.Windows, err)
-	}
-	// Nothing was posted to the room.
-	var msgs []map[string]any
-	if err := s.R.List(ctx, "messages", database.Filter{}, &msgs); err != nil {
-		t.Fatal(err)
-	}
-	if len(msgs) != 0 {
-		t.Fatalf("composed widgets reached the chat: %v", msgs)
-	}
-}
-
-func TestDesignedWindowsBelongToTheirRequest(t *testing.T) {
-	d := Desktop{}
-	now := time.Now()
-	open := func(request string) string {
-		id, err := d.Apply(DeskOp{Op: "open", Tool: "notes", Frontend: DeskAutoFrontend, Status: DeskDesigning,
-			Request: request, Microtool: "search", Args: map[string]any{"q": "tax"}}, "agent", now)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return id
-	}
-	a := open("Which notes mention tax?")
-	b := open("Summarize my tax notes as a timeline")
-	if a == b || len(d.Windows) != 2 {
-		t.Fatal("another request for the same result is another window, designed for it")
-	}
-	if again := open("which notes mention tax? "); again != a {
-		t.Fatal("the same request again is the same window")
-	}
-	tpl := map[string]any{"title": "Tax notes", "components": []any{map[string]any{"id": "root", "component": "Text", "text": "x"}}}
-	if _, err := d.Apply(DeskOp{Op: "designed", ID: a, Template: tpl, Status: "ready"}, "aseman", now); err != nil {
-		t.Fatal(err)
-	}
-	if w := d.window(a); w.Status != "ready" || w.Template["title"] != "Tax notes" {
-		t.Fatalf("design saved with the window: %+v", w)
-	}
-	if !strings.Contains(d.Summary(), "designed for: Summarize my tax notes as a timeline [designing]") {
-		t.Fatalf("agents see what each window was designed for:\n%s", d.Summary())
-	}
-	if _, err := d.Apply(DeskOp{Op: "redesign", ID: a}, "ann", now); err != nil || d.window(a).Status != DeskDesigning || d.window(a).Template != nil {
-		t.Fatal("redesign starts over", err)
-	}
-	// Pinned with its design, so reopening it needs no new one.
-	d.Apply(DeskOp{Op: "designed", ID: b, Template: tpl, Status: "ready"}, "aseman", now)
-	p, _ := d.Apply(DeskOp{Op: "pin", ID: b}, "ann", now)
-	if pin := d.Pins[0]; pin.ID != p || pin.Request == "" || pin.Template == nil {
-		t.Fatalf("pin: %+v", pin)
-	}
-}
-
-func TestADesignThatCannotBeMadeSaysWhy(t *testing.T) {
-	s, ctx := messageToolHarness(t)
-	sp, err := s.CreateSpace(ctx, idFromHex(t, "00000000000000010000000000000001"), "design space", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	room := identity.ID{Node: 1, Entity: 9}
-	d, ids, err := s.UpdateDesk(ctx, sp.ID, room, "agent", []DeskOp{{Op: "open", Tool: "notes", Frontend: DeskAutoFrontend,
-		Status: DeskDesigning, Request: "Which notes mention tax?"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// No tools namespace in this node: the design fails, and the window says so.
-	s.designWindow(ctx, sp.ID, room, *d.window(ids[0]), "")
-	d, _ = s.Desk(ctx, sp.ID, room)
-	if w := d.window(ids[0]); !strings.HasPrefix(w.Status, "failed: ") || w.Template != nil {
-		t.Fatalf("status: %+v", w)
-	}
-}
 
 func TestThePhoneBoardKeepsItsArrangement(t *testing.T) {
 	var d Desktop
@@ -293,29 +178,36 @@ func TestThePhoneBoardKeepsItsArrangement(t *testing.T) {
 	}
 }
 
-// A composed widget is checked before it opens: one that does not work
-// comes back to the agent with what to fix, and nothing opens.
-func TestComposedWidgetsAreCheckedBeforeOpening(t *testing.T) {
-	s, ctx := messageToolHarness(t)
-	sp, err := s.CreateSpace(ctx, idFromHex(t, "00000000000000010000000000000001"), "compose space", "")
+func TestDeskAgUiOpen(t *testing.T) {
+	d := Desktop{}
+	now := time.Now()
+	id, err := d.Apply(DeskOp{
+		Op: "open", Kind: DeskAgUi, Title: "Revenue",
+		Args: map[string]any{"surface": map[string]any{
+			"layout": "desk",
+			"root":   map[string]any{"c": "Stat", "p": map[string]any{"label": "Rev", "value": "1"}},
+		}},
+	}, "agent", now)
+	if err != nil || id == "" {
+		t.Fatal(err, id)
+	}
+	w := d.Windows[0]
+	if w.Kind != DeskAgUi || w.Frontend != DeskAgUiFrontend || w.Tool != DeskAgUiTool {
+		t.Fatalf("%+v", w)
+	}
+	if w.W < 500 {
+		t.Fatalf("expected wider default for AG-UI viz, got %.0f", w.W)
+	}
+	if _, err := d.Apply(DeskOp{Op: "open", Kind: DeskAgUi, Title: "Bad", Args: map[string]any{}}, "agent", now); err == nil {
+		t.Fatal("expected missing surface error")
+	}
+}
+
+func mustJSON(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
 	if err != nil {
 		t.Fatal(err)
 	}
-	room := identity.ID{Node: 1, Entity: 9}
-	_, err = s.composeUI(ctx, sp.ID, room, "aseman", `{"title":"Broken","components":[
-		{"id":"root","component":"Column","children":["total","buy"]},
-		{"id":"total","component":"Stat","label":"Total","value":{"path":"/summary/total"}},
-		{"id":"buy","component":"Button","child":"buy_t","action":{"event":{"name":"buy"}}},
-		{"id":"buy_t","component":"Text","text":"Buy"}]}`)
-	if err == nil {
-		t.Fatal("a broken widget opened")
-	}
-	for _, want := range []string{"nothing was opened", "/summary/total, which nothing fills", "sends the event buy"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("report lacks %q: %v", want, err)
-		}
-	}
-	if d, _ := s.Desk(ctx, sp.ID, room); len(d.Windows) != 0 {
-		t.Fatalf("windows: %+v", d.Windows)
-	}
+	return string(b)
 }

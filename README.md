@@ -133,23 +133,16 @@ Users create tools in the Tools panel from one form with a **backend** and a
   the sandbox proxy). Every backend's microtools are agents' tools and the
   frontend's API alike.
 - **Frontend:** *static* (an Elpian program on the Elpian VM or QuickJS) or
-  *generative* (AG-UI Surface Spec generated from a skill on first use, cached in the
-  component registry and filled with fresh data). Results open as floating
-  card windows on the room's desk, placed and arranged by agents and people;
-  agents combine tools' frontends and data into bigger widgets
-  (`ui_compose`) on the desk too.
-- **Interactive web frontends:** when people want to *work with* a tool (an
-  interactive view, dashboard, form or console), agents build a web page for
-  it in the space's sandbox and expose it with `proxy_create`; it opens on
-  the desk as the tool's card window like any frontend (in an `<iframe>` on
-  the web, a native web view on Android, iOS, macOS and Windows). Pages use
-  **Aseman's web UI kit** ([`services/pkg/webkit`](services/pkg/webkit)):
-  the app's theme and every component the app renders (the AG-UI Surface Spec catalog, the
-  tool UI kit, the Elpian widgets and HTML) as `<t-…>` web elements, plus a
-  client that calls the tool's microtools through the Aseman API as the
-  person viewing the page. Every preview serves the kit at `/_aseman/kit/`
-  (its gallery: `/_aseman/kit/gallery.html`) and the page API at
-  `/_aseman/api/`.
+  empty (no dedicated frontend). Interactive UIs open as floating card
+  windows on the room's desk, placed and arranged by agents and people.
+- **Interactive web frontends:** when people want an app, dashboard, landing
+  page or custom tool UI, agents brief OpenCode via `appui_create` (fullstack
+  in the sandbox; Material 3 Expressive / `@material/web` by default; mix
+  Aseman OpenUI agent islands with programmed UI; tools via
+  `/_aseman/api/call`, agents via `/_aseman/api/ask`).
+  Use `proxy_create` to expose an already-running sandbox HTTP service as a
+  DeskWeb card. Previews serve the page API at `/_aseman/api/` (context,
+  tools, microtool calls).
 
 Ready-made tools live in [`deploy/tools`](deploy/tools), such as the
 [weather](deploy/tools/weather) tool.

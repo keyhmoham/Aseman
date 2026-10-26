@@ -51,6 +51,13 @@ func TestPreviewKeepsRootLinksInsideTheProxy(t *testing.T) {
 	if !strings.Contains(body, `var P="`+strings.TrimRight(prefix, "/")+`"`) {
 		t.Fatalf("navigation script lacks the prefix")
 	}
+	for _, want := range []string{
+		`__asemanSetTheme`, `aseman:theme`, `--md-sys-color-`, `aseman_accent`, `aseman_scheme`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("theme bridge lacks %q", want)
+		}
+	}
 }
 
 func TestProxyShimOnlyTouchesHTMLOnce(t *testing.T) {

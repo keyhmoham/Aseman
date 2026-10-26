@@ -11,8 +11,8 @@ from typing import Any
 
 import httpx
 
-# Sandbox commands and agent hand-offs can legitimately take long.
-CALL_TIMEOUT = httpx.Timeout(connect=10.0, read=900.0, write=60.0, pool=30.0)
+# Sandbox commands, App UI builds (OpenCode), and agent hand-offs can take long.
+CALL_TIMEOUT = httpx.Timeout(connect=10.0, read=960.0, write=60.0, pool=30.0)
 
 
 class GatewayError(Exception):
@@ -35,6 +35,11 @@ DECISION_TIMEOUT = httpx.Timeout(connect=5.0, read=12.0, write=10.0, pool=5.0)
 
 # A timeline read is a database query: the turn goes on without it rather than wait.
 TIMELINE_TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=5.0)
+
+# Code Mode may compose several app calls inside one sandboxed script.
+# Platform tools like appui_create (OpenCode fullstack build + tests) need a
+# long read budget — previously 180s produced VMM_ERROR: ReadTimeout mid-build.
+CODEMODE_TIMEOUT = httpx.Timeout(connect=10.0, read=900.0, write=60.0, pool=30.0)
 
 
 class Gateway:
@@ -85,6 +90,11 @@ class Gateway:
         """One MCP JSON-RPC message to the turn's space timeline (see timeline.py)."""
         resp = await self._client.post(self.base_url + "/timeline/mcp", json=message, timeout=TIMELINE_TIMEOUT)
         return _decode("timeline", "mcp", resp)
+
+    async def codemode(self, message: dict[str, Any]) -> dict[str, Any]:
+        """One MCP JSON-RPC message for Cloudflare Code Mode over space apps."""
+        resp = await self._client.post(self.base_url + "/codemode/mcp", json=message, timeout=CODEMODE_TIMEOUT)
+        return _decode("codemode", "mcp", resp)
 
     async def aclose(self) -> None:
         await self._client.aclose()

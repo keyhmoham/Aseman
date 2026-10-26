@@ -26,7 +26,7 @@ class ElpianImage {
   }
 }
 
-/// A `fit` prop: a [BoxFit], or its CSS / Surface Spec spelling (`contain`, `cover`,
+/// A `fit` prop: a [BoxFit], or its CSS spelling (`contain`, `cover`,
 /// `fill`, `none`, `scaleDown` / `scale-down`, `fitWidth`, `fitHeight`).
 BoxFit? parseBoxFit(Object? fit) {
   if (fit is BoxFit) return fit;

@@ -38,11 +38,9 @@ def apps() -> list[dict[str, Any]]:
 class RecordingModel(ScriptedModel):
     """A scripted model that records the tools it is offered on each call."""
 
-    offered: list[list[str]] = []
-
     def bind_tools(self, tools: Any, **kwargs: Any) -> "RecordingModel":
-        self.offered.append([getattr(t, "name", None) or t.get("name") or t["function"]["name"] for t in tools])
-        return self
+        # ScriptedModel already records offered; keep the same list format.
+        return super().bind_tools(tools, **kwargs)
 
 
 class Jev:
@@ -96,6 +94,8 @@ def runner(platform: Platform, tmp_path: Path, script: list[Any]) -> tuple[Runne
 
 
 def request(message: str, *, decision: bool = True, auto_approve: bool = False, **extra: Any) -> dict[str, Any]:
+    # Decision tests interrupt on native app/platform tools.
+    extra.setdefault("codemode", False)
     req = turn_request(LEAD, message, token="tok-lead", role="lead", message_id="m0", **extra)
     if decision:
         req["decision"] = {"enabled": True, "model": "typesafe-ai/jev", "auto_approve": auto_approve}
@@ -251,11 +251,27 @@ def test_a_result_shown_on_the_desk_counts_as_delivered() -> None:
         call("tool_miro__canvas_create_from_svg", {"miro_url": "https://miro.com/x"}, cid="c1"),
         ToolMessage(content='<svg xmlns="http://www.w3.org/2000/svg" width="900">…</svg>',
                     name="tool_miro__canvas_create_from_svg", tool_call_id="c1"),
-        call("frontend_show", {"tool": "bot-miro", "microtool": "canvas_create_from_svg"}, cid="c2"),
+        call("appui_create", {"tool": "bot-miro", "title": "Random Doodle", "brief": "whiteboard doodle UI"}, cid="c2"),
         ToolMessage(content='{"desk":"The room\'s desk… Open windows: b62c "Random Doodle" …"}',
-                    name="frontend_show", tool_call_id="c2"),
+                    name="appui_create", tool_call_id="c2"),
         AIMessage(content="Done — I drew a doodle and opened it on the desk."),
     ]
     sent = delivered(messages)
-    assert sent and any(s.startswith("frontend_show:") for s in sent)
+    assert sent and any(s.startswith("appui_create:") for s in sent)
     assert "Random Doodle" in sent[0]
+
+
+def test_codemode_execute_delivery_counts() -> None:
+    from langchain_core.messages import ToolMessage
+
+    from aseman_agents.decision.middleware import delivered
+
+    code = '() => codemode.request({method:"POST", path:"/platform/appui_create", body:{tool:"bot-x", brief:"weather UI"}})'
+    messages = [
+        HumanMessage(content="show the weather"),
+        call("codemode_execute", {"code": code}, cid="c1"),
+        ToolMessage(content='{"desk":"Open windows: wx Weather"}', name="codemode_execute", tool_call_id="c1"),
+        AIMessage(content="Opened on the desk."),
+    ]
+    sent = delivered(messages)
+    assert sent == ["appui_create: {\"desk\":\"Open windows: wx Weather\"}"]

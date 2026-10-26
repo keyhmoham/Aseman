@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+# Aseman App UI helper: drive OpenCode in the space sandbox against Aseman's
+# metered LLM gateway (same backbone agents use). Writes READY.json after tests.
+set -euo pipefail
+
+ROOT="${ASEMAN_APPUI_ROOT:-/opt/aseman-appui}"
+OPENCODE_BIN="${OPENCODE_BIN:-$(command -v opencode || true)}"
+CONFIG_DIR="${OPENCODE_CONFIG_DIR:-/etc/opencode}"
+export OPENCODE_CONFIG="${OPENCODE_CONFIG:-$CONFIG_DIR/opencode.json}"
+
+# Credentials / base URL from ensureOpenCodeAuth (turn-scoped). Must load
+# before reading OPENCODE_MODEL — CreateBot may still inject a stale "free".
+# shellcheck disable=SC1091
+[[ -f /etc/opencode/env.sh ]] && . /etc/opencode/env.sh
+# Prefer Aseman backbone; never keep the Zen "free" alias.
+MODEL_FLAG="${OPENCODE_MODEL:-aseman/default}"
+if [[ "$MODEL_FLAG" == "free" || "$MODEL_FLAG" == opencode/* ]]; then
+  MODEL_FLAG="aseman/default"
+fi
+unset OPENCODE_API_KEY 2>/dev/null || true
+
+die() { echo "aseman-appui: $*" >&2; exit 1; }
+
+need_opencode() {
+  [[ -n "$OPENCODE_BIN" && -x "$OPENCODE_BIN" ]] || die "opencode is not installed in this sandbox image"
+}
+
+need_llm() {
+  [[ -n "${ASEMAN_LLM_API_KEY:-}" && -n "${ASEMAN_LLM_BASE_URL:-}" ]] || \
+    die "Aseman LLM gateway not configured (ASEMAN_LLM_BASE_URL / ASEMAN_LLM_API_KEY). Run via appui_create during an agent turn."
+}
+
+write_file() {
+  local path="$1"
+  local dir
+  dir=$(dirname "$path")
+  mkdir -p "$dir"
+  cat >"$path"
+}
+
+same_file() {
+  local a b
+  a=$(readlink -f "$1" 2>/dev/null || echo "$1")
+  b=$(readlink -f "$2" 2>/dev/null || echo "$2")
+  [[ "$a" == "$b" ]]
+}
+
+cmd_models() {
+  need_opencode
+  echo "backbone: aseman metered LLM gateway"
+  echo "base_url: ${ASEMAN_LLM_BASE_URL:-unset}"
+  echo "api_key: ${ASEMAN_LLM_API_KEY:+set}"
+  echo "model: ${MODEL_FLAG}"
+  "$OPENCODE_BIN" models 2>/dev/null || true
+}
+
+cmd_status() {
+  local dir="${1:-.}"
+  dir=$(cd "$dir" && pwd)
+  if [[ -f "$dir/READY.json" ]]; then
+    echo "state: ready"
+    cat "$dir/READY.json"
+    return 0
+  fi
+  if [[ -f "$dir/STATUS.json" ]]; then
+    echo "state: $(jq -r .state "$dir/STATUS.json" 2>/dev/null || echo running)"
+    cat "$dir/STATUS.json"
+    return 0
+  fi
+  echo "state: idle"
+  echo '{"state":"idle"}'
+}
+
+run_opencode() {
+  local dir="$1"
+  shift
+  local message="$*"
+  need_opencode
+  need_llm
+  mkdir -p "$dir"
+  local logfile="$dir/opencode.log"
+  local statusfile="$dir/STATUS.json"
+  local model="${MODEL_FLAG}"
+  # Bound the coding session; platform owns the outer appui build deadline.
+  local secs="${OPENCODE_RUN_TIMEOUT_SECS:-600}"
+  write_file "$statusfile" <<EOF
+{"state":"running","model":"$model","backbone":"aseman","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+EOF
+  echo "aseman-appui: opencode run model=$model base=${ASEMAN_LLM_BASE_URL} timeout=${secs}s" | tee -a "$logfile"
+  set +e
+  (
+    cd "$dir"
+    timeout -k 15s "${secs}s" "$OPENCODE_BIN" run --auto --model "$model" --format default --title "aseman-appui" -- "$message"
+  ) >>"$logfile" 2>&1
+  local ec=$?
+  set -e
+  if [[ $ec -eq 0 ]]; then
+    write_file "$statusfile" <<EOF
+{"state":"completed","model":"$model","backbone":"aseman","finished_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+EOF
+    return 0
+  fi
+  write_file "$statusfile" <<EOF
+{"state":"failed","model":"$model","backbone":"aseman","finished_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","error":"opencode failed (exit $ec); see opencode.log"}
+EOF
+  echo "aseman-appui: opencode failed (exit $ec); see $logfile" >&2
+  return 1
+}
+
+cmd_run() {
+  local dir="."
+  local message=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dir) dir="$2"; shift 2 ;;
+      --message) message="$2"; shift 2 ;;
+      -*) die "unknown flag $1" ;;
+      *) message="${message:+$message }$1"; shift ;;
+    esac
+  done
+  [[ -n "$message" ]] || die "run needs a message"
+  dir=$(mkdir -p "$dir" && cd "$dir" && pwd)
+  run_opencode "$dir" "$message"
+  cmd_status "$dir"
+}
+
+cmd_build() {
+  local dir="" brief="" apps="" title="App" port=8787
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dir) dir="$2"; shift 2 ;;
+      --brief-file) brief="$2"; shift 2 ;;
+      --apps-file) apps="$2"; shift 2 ;;
+      --title) title="$2"; shift 2 ;;
+      --port) port="$2"; shift 2 ;;
+      *) die "unknown build flag $1" ;;
+    esac
+  done
+  [[ -n "$dir" ]] || die "build needs --dir"
+  [[ -n "$brief" && -f "$brief" ]] || die "build needs --brief-file"
+  dir=$(mkdir -p "$dir" && cd "$dir" && pwd)
+  cp -f "$ROOT/AGENTS.md" "$dir/AGENTS.md"
+  if [[ -d "$ROOT/openui" ]]; then
+    mkdir -p "$dir/vendor/aseman-openui"
+    cp -a "$ROOT/openui/." "$dir/vendor/aseman-openui/"
+  fi
+  if ! same_file "$brief" "$dir/BRIEF.md"; then
+    cp -f "$brief" "$dir/BRIEF.md"
+  fi
+  if [[ -n "$apps" && -f "$apps" ]]; then
+    if ! same_file "$apps" "$dir/APPS.json"; then
+      cp -f "$apps" "$dir/APPS.json"
+    fi
+  else
+    echo '{"apps":[]}' >"$dir/APPS.json"
+  fi
+  write_file "$dir/JOB.json" <<EOF
+{"title":$(jq -Rn --arg t "$title" '$t'),"port":$port,"dir":"$dir"}
+EOF
+  rm -f "$dir/READY.json"
+  local prompt
+  prompt=$(cat <<EOF
+Read AGENTS.md, BRIEF.md, APPS.json, JOB.json and vendor/aseman-openui/ in this directory.
+
+Build a professional fullstack web application that satisfies the brief.
+Default UI is Material 3 Expressive via @material/web (expressive labs) unless
+BRIEF.md explicitly requests another UI framework — follow AGENTS.md §2.
+Every App UI must adapt to Aseman Settings instantly (light/dark + accent via
+aseman_theme / aseman_accent / aseman_scheme and live aseman:theme) unless the
+brief asks for dedicated brand colors (then still follow light/dark only) —
+follow AGENTS.md §3.
+Mix programmed UI with Aseman OpenUI agent-backed islands where useful
+(vendor/aseman-openui or _aseman/kit/openui/; full catalog in catalog.spec.json)
+— same theme tokens; not biased to always-code or always-agent — follow AGENTS.md §4.
+Wire space apps via _aseman/api/call and agents via _aseman/api/ask.
+Write and run full tests. Only when tests pass, write READY.json exactly as
+AGENTS.md specifies (ok, tested, title, port $port, start command, summary).
+Listen on 0.0.0.0:$port. Keep the project inside $dir.
+EOF
+)
+  if ! run_opencode "$dir" "$prompt"; then
+    cmd_status "$dir"
+    return 1
+  fi
+  if ! jq -e '.ok == true and .tested == true and (.start|type=="string" and length>0) and (.port|type=="number")' "$dir/READY.json" >/dev/null 2>&1; then
+    echo "aseman-appui: READY.json incomplete or tests not confirmed" >&2
+    cmd_status "$dir"
+    return 1
+  fi
+  cmd_status "$dir"
+}
+
+usage() {
+  cat <<EOF
+Usage: aseman-appui <command> [flags]
+
+OpenCode uses Aseman's metered LLM gateway (ASEMAN_LLM_*), the same backbone
+as space agents. Token usage is billed on the agent turn.
+
+Commands:
+  models                 Show backbone / model selection
+  run --dir DIR --message TEXT
+                         Distribute a coding task to OpenCode
+  build --dir DIR --brief-file FILE [--apps-file FILE] [--title T] [--port N]
+                         Full App UI build: OpenCode + tests + READY.json
+  status [--dir DIR]     Show STATUS.json / READY.json
+EOF
+}
+
+main() {
+  local cmd="${1:-}"
+  shift || true
+  case "$cmd" in
+    models) cmd_models "$@" ;;
+    run) cmd_run "$@" ;;
+    build) cmd_build "$@" ;;
+    status) cmd_status "${1:-.}" ;;
+    -h|--help|help|"") usage ;;
+    *) die "unknown command $cmd" ;;
+  esac
+}
+
+main "$@"

@@ -51,6 +51,26 @@ if(r.type==="attributes")fixEl(r.target);else for(var i=0;i<r.addedNodes.length;
 .observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:Object.keys(A)});}
 document.addEventListener("click",function(e){var t=e.target;while(t&&t.nodeType===1&&!(t.tagName==="A"||t.tagName==="AREA"))t=t.parentNode;if(t&&t.nodeType===1)fixEl(t);},true);
 document.addEventListener("submit",function(e){fixEl(e.target);if(e.submitter)fixEl(e.submitter);},true);
+/* Aseman platform theme → CSS vars + live updates for on-demand App UIs. */
+function b64urlJSON(s){try{s=String(s).replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";return JSON.parse(decodeURIComponent(escape(atob(s))));}catch(e){return null;}}
+function kebab(k){return String(k).replace(/[A-Z]/g,function(m){return"-"+m.toLowerCase();});}
+function applyAsemanTheme(t){
+if(!t||typeof t!=="object")return;
+var mode=t.mode==="light"?"light":"dark";
+var root=document.documentElement;
+root.setAttribute("data-aseman-theme",mode);
+root.setAttribute("data-aseman-embed",t.embed||"");
+root.style.colorScheme=mode;
+var scheme=t.scheme&&typeof t.scheme==="object"?t.scheme:{};
+var accent=t.accent||scheme.primary||"";
+if(accent){root.style.setProperty("--aseman-accent",accent);root.style.setProperty("--md-sys-color-primary",accent);}
+Object.keys(scheme).forEach(function(k){var v=scheme[k];if(!v)return;root.style.setProperty("--aseman-"+k,v);root.style.setProperty("--md-sys-color-"+kebab(k),v);});
+try{window.dispatchEvent(new CustomEvent("aseman:theme",{detail:t}));}catch(e){}
+}
+window.__asemanSetTheme=function(t){if(typeof t==="string"){try{t=JSON.parse(t);}catch(e){return;}}if(t&&t.type&&t.type!=="aseman:theme"){/* keep */}applyAsemanTheme(t);};
+window.addEventListener("message",function(e){var d=e&&e.data;if(!d||d.type!=="aseman:theme")return;applyAsemanTheme(d);});
+try{var q=new URLSearchParams(location.search);var mode=q.get("aseman_theme");var accent=q.get("aseman_accent");var raw=q.get("aseman_scheme");var scheme=raw?b64urlJSON(raw):null;
+if(mode||accent||scheme)applyAsemanTheme({mode:mode||"dark",embed:q.get("aseman_embed")||"desk",accent:accent||undefined,scheme:scheme||{}});}catch(e){}
 })();</script>`
 
 // injectProxyShim adds the navigation script to an HTML page, as early as

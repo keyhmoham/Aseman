@@ -3,6 +3,7 @@ package spaces
 import (
 	"context"
 	"errors"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -32,6 +33,35 @@ const sandboxPreviewTTL = sandboxIdleTTL
 // the shared shell and filesystem every agent of the space works on, with a
 // Node.js/Python/git toolchain so agents can build and run software there.
 const defaultSandboxImage = "aseman/sandbox-computer:latest"
+
+
+// sandboxOpenCodeEnv points new sandboxes at the node's metered LLM gateway.
+// The per-turn bearer (ASEMAN_LLM_API_KEY) is injected by ensureOpenCodeAuth
+// during appui_create / opencode_run so usage bills with the agent turn.
+func sandboxOpenCodeEnv() map[string]string {
+	env := map[string]string{
+		"OPENCODE_MODEL":      "aseman/default",
+		"ASEMAN_LLM_BASE_URL": sandboxLLMBaseURL(),
+	}
+	if m := strings.TrimSpace(os.Getenv("OPENCODE_MODEL")); m != "" && m != "free" {
+		env["OPENCODE_MODEL"] = m
+	}
+	return env
+}
+
+// sandboxLLMBaseURL is the OpenAI-compatible root sandboxes reach for agent
+// LLM calls (same backbone as /deepagents/v1/llm). Override with
+// ASEMAN_SANDBOX_LLM_URL when sandboxes cannot resolve ASEMAN_AGENT_NODE_URL.
+func sandboxLLMBaseURL() string {
+	if u := strings.TrimSpace(os.Getenv("ASEMAN_SANDBOX_LLM_URL")); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	node := strings.TrimSpace(os.Getenv("ASEMAN_AGENT_NODE_URL"))
+	if node == "" {
+		node = "http://aseman:8080"
+	}
+	return strings.TrimRight(node, "/") + "/deepagents/v1/llm"
+}
 
 // sandboxImage is the configured sandbox computer image (sandbox.image).
 func (s *Service) sandboxImage() string {
@@ -119,6 +149,7 @@ func (s *Service) SandboxEnsure(ctx context.Context, spaceID identity.ID) (*bot.
 		ImageRef:  s.sandboxImage(),
 		Args:      []string{"sleep", "infinity"},
 		Resources: s.sandboxResourceProfile(ctx),
+		Env:       sandboxOpenCodeEnv(),
 		// The shared sandbox is priced by the platform (Pricing → sandbox);
 		// the proceeds go to the sandbox tool owner (the space owner).
 	})
@@ -299,9 +330,6 @@ func (s *Service) SandboxStart(ctx context.Context, spaceID identity.ID) (*bot.B
 		// Starting a computer costs time and money: record what asked for it.
 		s.L.Info("sandbox started", "space", spaceID.String(), "for", startedFor(), "agent", vmm.ExecutionFrom(ctx).AgentID)
 		s.provideDesktopScript(ctx, rec)
-		// The kit is half a megabyte: written in the background, and only when
-		// the machine's copy is missing or older.
-		go s.provideWebkit(context.WithoutCancel(ctx), rec)
 	}
 	s.touch(spaceID)
 	return rec, nil

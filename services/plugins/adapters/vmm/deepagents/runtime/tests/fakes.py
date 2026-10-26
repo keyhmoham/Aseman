@@ -16,6 +16,7 @@ import httpx
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
+from pydantic import Field
 
 from aseman_agents.gateway import Gateway
 
@@ -25,6 +26,27 @@ LEAD = {"id": "bot-lead", "account_id": "acc-lead", "name": "aseman", "vm_id": "
 CODER = {"id": "bot-coder", "account_id": "acc-coder", "name": "coder", "vm_id": "vm-coder"}
 PERSON = {"member_id": "acc-ann", "handle": "ann"}
 SANDBOX_BOT = "bot-sandbox"
+
+
+def _default_codemode(message: dict[str, Any]) -> dict[str, Any]:
+    """Minimal Code Mode MCP: tools/list with search + execute."""
+    mid = message.get("id", 1)
+    method = message.get("method")
+    if method == "tools/list":
+        return {"jsonrpc": "2.0", "id": mid, "result": {"tools": [
+            {"name": "search", "description": "Search OpenAPI", "inputSchema": {
+                "type": "object", "properties": {"code": {"type": "string"}}, "required": ["code"]}},
+            {"name": "execute", "description": "Execute against apps", "inputSchema": {
+                "type": "object", "properties": {"code": {"type": "string"}}, "required": ["code"]}},
+        ]}}
+    if method == "tools/call":
+        return {"jsonrpc": "2.0", "id": mid, "result": {
+            "content": [{"type": "text", "text": json.dumps({"ok": True})}], "isError": False}}
+    if method == "initialize":
+        return {"jsonrpc": "2.0", "id": mid, "result": {
+            "protocolVersion": "2025-06-18", "capabilities": {"tools": {}},
+            "serverInfo": {"name": "aseman-codemode", "version": "1.0.0"}}}
+    return {"jsonrpc": "2.0", "id": mid, "result": {}}
 
 
 class Platform:
@@ -63,6 +85,9 @@ class Platform:
         # The space's timeline MCP server: fn(message) → JSON-RPC reply; None is off (503).
         self.timeline: Callable[[dict[str, Any]], dict[str, Any]] | None = None
         self.timeline_calls: list[dict[str, Any]] = []
+        # Cloudflare Code Mode MCP over space apps: fn(message) → JSON-RPC reply; None is off.
+        self.codemode: Callable[[dict[str, Any]], dict[str, Any]] | None = _default_codemode
+        self.codemode_calls: list[dict[str, Any]] = []
         # The node's learn endpoints (self-improvement): each model call answers
         # with the next step of this script (say, use), recorded in learn_requests.
         self.learn: list[Any] = []
@@ -124,6 +149,11 @@ class Platform:
             if self.timeline is None:
                 return httpx.Response(503, json={"error": "the timeline is not available"})
             return httpx.Response(200, json=self.timeline(req))
+        if request.url.path.endswith("/codemode/mcp"):
+            self.codemode_calls.append(req)
+            if self.codemode is None:
+                return httpx.Response(503, json={"error": "Code Mode is not available"})
+            return httpx.Response(200, json=self.codemode(req))
         name = f"{req['namespace']}.{req['action']}"
         body = req.get("body") or {}
         self.calls.append((name, body))
@@ -178,9 +208,9 @@ class Platform:
             {"name": "file_send", "kind": "tool", "description": "Attach a sandbox file.",
              "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "caption": {"type": "string"}}}},
             {"name": "weather", "kind": "tool", "bot_id": "bot-weather", "description": "Weather forecasts."},
-            {"name": "frontend_show", "kind": "tool", "description": "Open a result in the tool's own interface on the desk.",
-             "parameters": {"type": "object", "properties": {"tool": {"type": "string"}, "microtool": {"type": "string"},
-                                                              "args": {"type": "object"}}, "required": ["tool"]}},
+            {"name": "appui_create", "kind": "tool", "description": "Brief OpenCode to build an interactive UI on the desk.",
+             "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "brief": {"type": "string"},
+                                                              "tool": {"type": "string"}}, "required": ["brief"]}},
             *self.apps,
         ]}
 
@@ -310,13 +340,22 @@ class ScriptedModel(BaseChatModel):
     AIMessage, or a function of the conversation that returns one."""
 
     script: list[Any]
-    seen: list[list[BaseMessage]] = []
+    # Per-instance via default_factory (avoid shared mutable class defaults).
+    seen: list[list[BaseMessage]] = Field(default_factory=list)
+    offered: list[list[str]] = Field(default_factory=list)
 
     @property
     def _llm_type(self) -> str:
         return "scripted"
 
     def bind_tools(self, tools: Any, **kwargs: Any) -> "ScriptedModel":
+        names: list[str] = []
+        for t in tools or []:
+            if isinstance(t, dict):
+                names.append(str(t.get("name") or (t.get("function") or {}).get("name") or ""))
+            else:
+                names.append(str(getattr(t, "name", "") or ""))
+        self.offered.append(names)
         return self
 
     def _generate(self, messages: list[BaseMessage], stop: Any = None, run_manager: Any = None, **kwargs: Any) -> ChatResult:
@@ -354,15 +393,25 @@ def call(name: str, args: dict[str, Any], cid: str | None = None) -> AIMessage:
 
 def turn_request(agent: dict[str, Any], message: str, *, token: str, sender: str = "acc-ann", sender_name: str = "ann",
                  message_id: str = "", role: str = "", **extra: Any) -> dict[str, Any]:
-    return {
+    # Match production (turn.go): Code Mode is on unless a test opts out.
+    agent_extra = {k: v for k, v in extra.items() if k not in ("codemode", "timeline", "memory", "decision")}
+    req: dict[str, Any] = {
         "token": token, "gateway": "http://node/deepagents/v1",
+        "codemode": extra.get("codemode", True),
         "agent": {"name": agent["name"], "bot_id": agent["id"], "account_id": agent["account_id"],
-                  "vm_id": agent["vm_id"], "role": role, "model": "test-model", **extra},
+                  "vm_id": agent["vm_id"], "role": role, "model": "test-model", **agent_extra},
         "turn": {"agent": {"bot_id": agent["id"], "account_id": agent["account_id"], "name": agent["name"]},
                  "space_id": SPACE, "room_id": ROOM, "message_id": message_id, "sender_id": sender,
                  "sender_name": sender_name, "message": message, "context": "Space: test",
                  "sandbox": {"type": "docker", "vm_id": "sbx"}},
     }
+    if "timeline" in extra:
+        req["timeline"] = extra["timeline"]
+    if "memory" in extra:
+        req["memory"] = extra["memory"]
+    if "decision" in extra:
+        req["decision"] = extra["decision"]
+    return req
 
 
 class FakeViking:

@@ -1,21 +1,18 @@
 # Tool frontend UI kit
 
-Charts, graphs, tables, data views and layout pieces for tool frontends, on
-top of every Flutter and HTML node the Elpian engine already renders. One
-implementation serves both frontend modes:
+Charts, graphs, tables, data views and layout pieces for **static** Elpian
+tool frontends, on top of every Flutter and HTML node the Elpian engine
+already renders.
 
 | Mode | How a frontend uses the kit |
 |---|---|
 | **Static** (Elpian VM / QuickJS program) | Return kit nodes in the view tree: `{type: 'Chart', props: {...}, events: {select: 'onPick'}}`. Rendered by `kitEngine()` in `ToolFrontendView`. |
-| **Generative** (AG-UI) and agent widgets (`ui_compose`) | Use Aseman's Surface Spec catalog (`lib/src/agui/catalog`): `{"id": "c", "type": "Chart", "data": {"path": "/history"}, ...}`. Props take literals, `{"path"}` bindings or function calls at any depth. |
-
-The node (Go) knows the same component list (`services/pkg/surface`). It teaches it to models with `CatalogPrompt` and rejects components devices can't render. A test there checks that the two lists match.
 
 ## Data views
 
-Node type (static) / component (AG-UI) and its props. Field props name a key of each row (`a.b` reaches nested keys).
+Node type and its props. Field props name a key of each row (`a.b` reaches nested keys).
 
-| Node / component | Props |
+| Node | Props |
 |---|---|
 | `Chart` | `type`: `line` `area` `bar` `scatter` `bubble` `candlestick` `histogram` `pie` `donut` `radar` `heatmap` `treemap`; `data` (rows, or plain numbers); `x` (field); `series` (`[field]` or `[{field, label, color}]`) or `y`; `title`, `subtitle`, `stacked`, `horizontal`, `smooth`, `points`, `zero`, `valueLabels`, `legend`, `xFormat`, `yFormat`, `xLabel`, `yLabel`, `min`, `max`, `height`. Candlestick: `open` `high` `low` `close` fields. Bubble: `size` field. Pie/donut: `label`, `value` fields, `centerLabel`. Histogram: `field`, `bins`. |
 | `Sparkline` | `values` (numbers or rows + `field`), `type` (`line`/`bar`/`area`), `color`, `height`, `width` |
@@ -32,7 +29,7 @@ Node type (static) / component (AG-UI) and its props. Field props name a key of 
 | `CodeBlock` | `code`, `language`, `lineNumbers`, `maxHeight` |
 | `Progress` | `value`, `max`, `variant` (`linear`/`circular`), `label`, `showValue`, `format`, `color`/`status`, `size`, `thickness` |
 | `Tag` / `Badge` | `text`, `color`/`status`, `variant` (`tonal` `filled` `outline`), `icon` |
-| `Rating` | `value`, `max`, `size`, `color`, `showValue` (AG-UI: `editable` with a bound `value`) |
+| `Rating` | `value`, `max`, `size`, `color`, `showValue` |
 | `Callout` | `title`, `text`, `severity` (`info` `good` `warning` `critical`), `icon`; children below the text |
 | `Avatar` | `name` (initials), `url`, `size`, `color` |
 
@@ -43,16 +40,13 @@ Node type (static) / component (AG-UI) and its props. Field props name a key of 
 **Taps**: `Chart`, `Heatmap`, `Treemap`, `Graph`, `DataGrid`, `Timeline` and `TreeView` send `select` with `{index, row, …}`:
 
 * In a static program, declare `events: {select: 'handler'}`. The handler gets the event in the VM's typed-value form; `ToolTemplates.jsDashboardFrontend` shows how to unwrap it.
-* In AG-UI, `selection: {"path": "/selected"}` writes the tapped row there, so a detail view can bind to `/selected/…` without a round trip. `action` fires a Button-style action whose context resolves against the tapped row.
 
 ## Layout
 
-| Node | Component | Props |
-|---|---|---|
-| `ResponsiveGrid` | `Grid` | `columns` or `minColumnWidth` (+ `maxColumns`), `gap`, `runGap`; never more columns than children |
-| `Section` | `Section` | `title`, `subtitle`, `icon`, `trailing`, `gap` |
-| `Expandable` | `Expandable` | `title`, `subtitle`, `expanded` |
-| `Scroll` | `Scroll` | `direction`, `maxHeight` |
-| Elpian `Wrap`, `Stack`, `Container`, `Center`, `SizedBox`, `AspectRatio` | `Wrap`, `Stack`, `Box`, `Center`, `Spacer`, `AspectRatio` | see `CatalogPrompt` |
-
-AG-UI's `Elpian` component embeds any raw Elpian node tree. Bindings inside its props are evaluated, `{"slot": "<component id>"}` places an AG-UI component inside it, and an event whose value is an AG-UI action fires that action. Use it when no component fits.
+| Node | Props |
+|---|---|
+| `ResponsiveGrid` | `columns` or `minColumnWidth` (+ `maxColumns`), `gap`, `runGap`; never more columns than children |
+| `Section` | `title`, `subtitle`, `icon`, `trailing`, `gap` |
+| `Expandable` | `title`, `subtitle`, `expanded` |
+| `Scroll` | `direction`, `maxHeight` |
+| Elpian `Wrap`, `Stack`, `Container`, `Center`, `SizedBox`, `AspectRatio` | same as Elpian layout nodes |

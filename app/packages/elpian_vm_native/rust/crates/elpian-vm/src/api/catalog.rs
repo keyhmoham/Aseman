@@ -47,7 +47,6 @@ fn dart_set_for(cap: Capability) -> &'static str {
         Capability::Surface => "surfaceApiNames",
         Capability::ServerCall => "serverApiNames",
         Capability::State => "stateApiNames",
-        Capability::Agents => "agentApiNames",
         Capability::VmManage | Capability::ModuleImport => "vmApiNames",
     }
 }
@@ -85,10 +84,6 @@ const SET_ORDER: &[(&str, &str)] = &[
     (
         "stateApiNames",
         "Durable per-app key/value state, and the secrets a server\n  /// function may read.",
-    ),
-    (
-        "agentApiNames",
-        "A mini app talking to its own agents, and reading the AG-UI surfaces\n  /// they produced.",
     ),
     (
         "vmApiNames",

@@ -84,15 +84,11 @@ class ToolsApi {
     return microtoolValue(body['result']);
   }
 
-  /// The tool's frontend: its static program, or its generated surface
-  /// filled with the caller's data.
+  /// The tool's frontend: its static program, when it has one.
   Future<ToolFrontendPayload> frontend(String botId,
       {required String spaceId,
       String roomId = '',
-      bool regenerate = false,
-      ShownResult? shown,
-      Map<String, dynamic>? template,
-      String request = ''}) async {
+      ShownResult? shown}) async {
     final body = _map(await _call(
         'tools',
         'frontend_get',
@@ -100,11 +96,6 @@ class ToolsApi {
           'bot': botId,
           'space': spaceId,
           if (roomId.isNotEmpty) 'room': roomId,
-          if (regenerate) 'regenerate': true,
-          // What the person asked for: a frontend generated for each request
-          // (not cached) is designed for it.
-          if (request.isNotEmpty) 'request': request,
-          if (template != null) 'template': template,
           ...?shown?.toJson(),
         },
         timeout: generationTimeout));
@@ -129,25 +120,4 @@ class ToolsApi {
             'params': params,
           },
           timeout: backendTimeout));
-
-  /// Runs an action of a generated frontend; returns the updated data model.
-  Future<Map<String, dynamic>> frontendAction(String botId, String action,
-      {required String spaceId,
-      String roomId = '',
-      Map<String, dynamic> context = const {},
-      Map<String, dynamic> data = const {},
-      ShownResult? shown,
-      Map<String, dynamic>? template}) async {
-    final body = _map(await _call('tools', 'frontend_action', {
-      'bot': botId,
-      'space': spaceId,
-      if (roomId.isNotEmpty) 'room': roomId,
-      'action': action,
-      'context': context,
-      'data': data,
-      if (template != null) 'template': template,
-      ...?shown?.toJson(),
-    }, timeout: backendTimeout));
-    return (body['data'] as Map?)?.cast<String, dynamic>() ?? const {};
-  }
 }

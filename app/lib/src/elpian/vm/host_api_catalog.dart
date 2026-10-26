@@ -229,14 +229,6 @@ class VmHostApiCatalog {
     'ctx.user',
   };
 
-  /// A mini app talking to its own agents, and reading the AG-UI surfaces
-  /// they produced.
-  static const agentApiNames = <String>{
-    'agent.send',
-    'agent.action',
-    'agui.dataModel',
-  };
-
   /// Module import and management of other VM instances.
   static const vmApiNames = <String>{
     'vm.import',
@@ -273,7 +265,6 @@ class VmHostApiCatalog {
     ...surfaceApiNames,
     ...serverApiNames,
     ...stateApiNames,
-    ...agentApiNames,
     ...vmApiNames,
   };
 
@@ -281,9 +272,6 @@ class VmHostApiCatalog {
   /// `Capability::for_api` in rust/src/sdk/capabilities.rs, so the Dart
   /// host can refuse a call for the same reason the VM would.
   static const capabilityOf = <String, String>{
-    'agui.dataModel': 'agents',
-    'agent.action': 'agents',
-    'agent.send': 'agents',
     'cache.revalidate': 'state',
     'canvas.addColorStop': 'canvas',
     'canvas.addCommand': 'canvas',

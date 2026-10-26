@@ -391,6 +391,50 @@ class AsemanService implements BackendService {
         body: {'space': spaceId, 'blocked': blocked});
   }
 
+  // ── room threads ──────────────────────────────────────────────────────────
+
+  /// A room's conversation threads: its main thread (the room itself) and
+  /// the threads opened in it, most recently active first.
+  Future<({RoomThread main, List<RoomThread> threads})> fetchRoomThreads(
+      String spaceId, String roomId) async {
+    final resp = await client.call('spaces', 'thread_list',
+        body: {'space': spaceId, 'room': roomId});
+    final body = (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+    final main = (body['main'] as Map?)?.cast<String, dynamic>() ??
+        {'id': body['room'] ?? roomId, 'title': 'Main'};
+    return (
+      main: RoomThread.fromJson(main, isMain: true),
+      threads: (body['threads'] as List? ?? const [])
+          .whereType<Map>()
+          .map((t) => RoomThread.fromJson(t.cast<String, dynamic>()))
+          .toList(),
+    );
+  }
+
+  /// Opens a new thread in a room; it is named after its first message
+  /// unless [title] names it.
+  Future<RoomThread> createRoomThread(String spaceId, String roomId,
+      {String title = ''}) async {
+    final resp = await client.call('spaces', 'thread_create', body: {
+      'space': spaceId,
+      'room': roomId,
+      if (title.trim().isNotEmpty) 'title': title.trim(),
+    });
+    final body = (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+    return RoomThread.fromJson(
+        (body['thread'] as Map?)?.cast<String, dynamic>() ?? const {});
+  }
+
+  Future<void> renameRoomThread(String threadId, String title) async {
+    await client.call('spaces', 'thread_rename',
+        body: {'thread': threadId, 'title': title});
+  }
+
+  /// Deletes a thread with its messages (and the agents' context of it).
+  Future<void> deleteRoomThread(String threadId) async {
+    await client.call('spaces', 'thread_delete', body: {'thread': threadId});
+  }
+
   /// Tells the room's others that the caller is typing (or stopped).
   Future<void> setTyping(String spaceId, String roomId, bool typing) async {
     await client.call('spaces', 'typing_set',

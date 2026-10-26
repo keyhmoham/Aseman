@@ -211,8 +211,13 @@ def recruit_tool(ctx: TurnContext) -> BaseTool:
         of working and standards. skills: optional [{name, description,
         instructions}] professional skills it loads when relevant.
         The new agent works in the same sandbox and room; give it work with
-        run_swarm (or the task tool from your next turn).
+        run_swarm (or the task tool from your next turn). Never a programmer:
+        software development goes to OpenCode (appui_create / opencode_run).
         """
+        from .swarm.team_setup import development_role
+        if development_role(f"{name} {description}"):
+            return ("error: software development is OpenCode's, not an agent's. Brief OpenCode with "
+                    "appui_create (an app people use) or opencode_run (any other coding task) instead.")
         try:
             out = await ctx.gateway.call("spaces", "agent_recruit", {
                 "space": ctx.space, "room": ctx.room, "name": name, "description": description,

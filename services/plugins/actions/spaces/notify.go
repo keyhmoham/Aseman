@@ -68,6 +68,13 @@ func (s *Service) announceMessage(ctx context.Context, msg *message.Message) {
 	if _, err := s.GetSpace(ctx, msg.SpaceID); errs.CodeOf(err) == errs.CodeNotFound {
 		return // the project was deleted: nothing to announce
 	}
+	room, thread := msg.RoomID, ""
+	if parent := s.roomParent(ctx, msg.RoomID); !parent.IsZero() {
+		if t, err := s.GetRoom(ctx, msg.RoomID); err != nil || t.Temporary {
+			return // an app's temporary thread with an agent is not conversation
+		}
+		room, thread = parent, msg.RoomID.String()
+	}
 	var to []identity.ID
 	for _, person := range s.peopleOf(ctx, msg.SpaceID) {
 		if person == msg.SenderID {
@@ -87,12 +94,16 @@ func (s *Service) announceMessage(ctx context.Context, msg *message.Message) {
 		title = sp.Name
 	}
 	sender, _ := s.participants().get(ctx, msg.SenderID)["display_name"].(string)
-	s.push(ctx, to, map[string]any{
+	note := map[string]any{
 		"title": title, "body": noticeBody(sender, msg.Body, len(msg.ParseAttachments())),
-		"kind": "message", "space": msg.SpaceID.String(), "room": msg.RoomID.String(),
+		"kind": "message", "space": msg.SpaceID.String(), "room": room.String(),
 		// The next message of this project replaces this notification rather than stacking under it.
 		"collapse": "m" + msg.SpaceID.String(),
-	})
+	}
+	if thread != "" {
+		note["thread"] = thread
+	}
+	s.push(ctx, to, note)
 }
 
 // notifyInvite tells someone they were invited to a project.

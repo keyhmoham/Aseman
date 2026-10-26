@@ -153,8 +153,12 @@ func (s *Service) turnPayer(ctx context.Context) string {
 
 // webPageInput names a sandbox preview page to open as a DeskWeb window.
 type webPageInput struct {
-	Page    string       `json:"page"`
-	Proxy   string       `json:"proxy"`
+	Page  string `json:"page"`
+	Proxy string `json:"proxy"`
+	// Elpian is the program of an Elpian app, run natively by the client.
+	Elpian string `json:"elpian"`
+	// Widget is the program of the page's phone widget.
+	Widget  string       `json:"widget"`
 	Path    string       `json:"path"`
 	Tool    string       `json:"tool"`
 	Title   string       `json:"title"`
@@ -192,7 +196,14 @@ func (s *Service) openWebPage(ctx context.Context, spaceID, roomID identity.ID, 
 		dw, dh := 720.0, 600.0
 		w, h = &dw, &dh
 	}
-	ops := []DeskOp{{Op: "open", Kind: DeskWeb, Tool: in.Tool, Title: in.Title, Args: map[string]any{"page": page},
+	args := map[string]any{"page": page}
+	if entry := strings.TrimSpace(in.Elpian); entry != "" {
+		args["elpian"] = entry
+	}
+	if entry := strings.TrimSpace(in.Widget); entry != "" {
+		args["widget"] = entry
+	}
+	ops := []DeskOp{{Op: "open", Kind: DeskWeb, Tool: in.Tool, Title: in.Title, Args: args,
 		X: in.X, Y: in.Y, W: w, H: h, Compact: in.Compact}}
 	if err := s.resolveDeskOpens(ctx, spaceID, ops); err != nil {
 		return Desktop{}, "", err

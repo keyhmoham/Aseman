@@ -170,6 +170,11 @@ func (s *Service) proxyCreateTool(ctx context.Context, spaceID identity.ID, agen
 		Tool string `json:"tool"`
 		Path string `json:"path"`
 		Show *bool  `json:"show"`
+		// Elpian opens the page as an Elpian app: the program at this path
+		// of the service, run natively by the client.
+		Elpian string `json:"elpian"`
+		// Widget is the Elpian program of its phone widget.
+		Widget string `json:"widget"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil && argsJSON != "" {
 		return "", errs.InvalidArgument("proxy_create args: {\"port\":...,\"title\":\"...\"}")
@@ -232,7 +237,7 @@ func (s *Service) proxyCreateTool(ctx context.Context, spaceID identity.ID, agen
 	// Open as a DeskWeb card on the room's desk (the room of this turn, or an
 	// explicit room=). room=home is the space hall ("My trading desk").
 	if in.Show == nil || *in.Show {
-		show := webPageInput{Page: p.GatewayPath(), Path: in.Path, Tool: in.Tool, Title: in.Title}
+		show := webPageInput{Page: p.GatewayPath(), Path: in.Path, Tool: in.Tool, Title: in.Title, Elpian: in.Elpian, Widget: in.Widget}
 		deskRoomID := roomID
 		switch {
 		case roomLabel == "home" || roomID.IsZero():

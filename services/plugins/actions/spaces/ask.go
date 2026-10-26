@@ -122,6 +122,15 @@ func (a *spaceAskAction) Handle(ctx context.Context, req *api.ActionRequest) (*a
 		// proxy_create, routine_create, ...) with Args, instead of asking a bot.
 		Tool string          `json:"tool,omitempty"`
 		Args json.RawMessage `json:"args,omitempty"`
+		// Thread runs the ask in one of the room's threads (its own history).
+		Thread string `json:"thread,omitempty"`
+		// TempThread runs an agent's ask in a temporary thread of the room,
+		// opened for it and deleted when the agent is done: a fresh, isolated
+		// conversation for each ask (how apps call agents).
+		TempThread bool `json:"temp_thread,omitempty"`
+		// Via names the app the ask comes from ("app Orders"), for the payer's
+		// usage records.
+		Via string `json:"via,omitempty"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
@@ -143,6 +152,41 @@ func (a *spaceAskAction) Handle(ctx context.Context, req *api.ActionRequest) (*a
 		if err != nil {
 			return nil, errs.InvalidArgument("invalid room id")
 		}
+	}
+	if in.Thread != "" {
+		threadID, terr := identity.Parse(in.Thread)
+		if terr != nil {
+			return nil, errs.InvalidArgument("invalid thread id")
+		}
+		thread, terr := a.s.GetRoom(ctx, threadID)
+		if terr != nil || !thread.IsThread() || thread.SpaceID != spaceID {
+			return nil, errs.NotFound("no such thread in this space")
+		}
+		if !roomID.IsZero() && a.s.mainRoom(ctx, roomID) != a.s.mainRoom(ctx, threadID) {
+			return nil, errs.InvalidArgument("the thread belongs to another room")
+		}
+		roomID = threadID
+	}
+	if in.TempThread && in.Tool == "" && in.Thread == "" {
+		var resp *api.ActionResponse
+		room := a.s.ensureRoom(ctx, spaceID, roomID)
+		if room.IsZero() {
+			return nil, errs.NotFound("no room in space")
+		}
+		err := a.s.WithTempThread(ctx, spaceID, room, req.Caller.ID, "", func(thread identity.ID) error {
+			inner := in
+			inner.Room, inner.Thread, inner.TempThread = thread.String(), "", false
+			// A fresh thread has no history: what the caller kept of its
+			// conversation with the agent travels with the ask.
+			inner.Body, inner.History = withHistory(in.History, in.Body), nil
+			body, _ := json.Marshal(inner)
+			sub := *req
+			sub.Body = body
+			var herr error
+			resp, herr = a.Handle(ctx, &sub)
+			return herr
+		})
+		return resp, err
 	}
 	// Resolve the room so the live working status has a room to be published
 	// to, and wire the activity hook into ctx for the whole ask.
@@ -206,7 +250,11 @@ func (a *spaceAskAction) Handle(ctx context.Context, req *api.ActionRequest) (*a
 	if gerr == nil {
 		botName = rec.Name
 	}
-	_, err = a.s.Bots.BillAndRecordUsage(ctx, payer, botID, elapsedSeconds(startTime), "space ask",
+	desc := "space ask"
+	if via := strings.TrimSpace(in.Via); via != "" {
+		desc += " via " + clipTrace(via, 80)
+	}
+	_, err = a.s.Bots.BillAndRecordUsage(ctx, payer, botID, elapsedSeconds(startTime), desc,
 		usage.UsageCtx{SpaceID: spaceID, RoomID: roomID, BotName: botName, RequestID: usage.RequestIDFrom(ctx), Kind: usage.KindAsk})
 	if err != nil {
 		return nil, err
@@ -235,6 +283,28 @@ func (s *Service) askTool(ctx context.Context, spaceID, roomID, caller identity.
 		return nil, err
 	}
 	return helper.JSON(map[string]any{"tool": tool, "result": result})
+}
+
+// withHistory prefixes an ask with the conversation that led to it, for an
+// agent that starts in a fresh thread. Only the latest 20 turns are kept.
+func withHistory(history []vmm.ChatMessage, body string) string {
+	if len(history) == 0 {
+		return body
+	}
+	if len(history) > 20 {
+		history = history[len(history)-20:]
+	}
+	var b strings.Builder
+	b.WriteString("Our conversation so far:\n")
+	for _, m := range history {
+		who := "Me"
+		if m.Role == "assistant" {
+			who = "You"
+		}
+		b.WriteString(who + ": " + clipTrace(strings.TrimSpace(m.Content), 2000) + "\n")
+	}
+	b.WriteString("\nNow: " + body)
+	return b.String()
 }
 
 // commandOutcome splits a sandbox reply ("exit=N\n<output>") into its exit code

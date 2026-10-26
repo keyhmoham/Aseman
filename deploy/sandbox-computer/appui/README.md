@@ -7,8 +7,8 @@ image. New spaces get them by default.
 
 | Platform builtin | Role |
 |---|---|
-| `appui_create` | Brief → OpenCode builds+tests fullstack UI → DeskWeb proxy card on hall |
-| `opencode_run` | Distribute a coding task to OpenCode |
+| `appui_create` | Brief → OpenCode plans, builds and tests a fullstack app → platform verifies it → DeskWeb card; pass an existing `dir` to change that app |
+| `opencode_run` | Every other coding task (agents never write code themselves) |
 | `opencode_status` | Job STATUS / READY |
 | `opencode_models` | Backbone / model selection |
 
@@ -72,6 +72,74 @@ theme. Islands render the full generative catalog (`catalog.js` /
 `catalog.spec.json`, ~137 components) when agents return OpenUI JSON trees;
 markdown otherwise. Preview APIs: `_aseman/api/agents`, `_aseman/api/ask`,
 plus existing `call` / `tools`.
+
+## Elpian frontends (the default)
+
+Every App UI's frontend is an **Elpian program** unless the person explicitly
+asked for web technology (`appui_create` `ui: "web"`). The program is plain
+JavaScript the Aseman client runs on its Elpian QuickJS runtime and draws
+with native widgets, the UI kit and the person's theme — on desktop and
+phones alike. Everything for it is in [`elpian/`](elpian):
+
+| File | What |
+|---|---|
+| [`ELPIAN.md`](elpian/ELPIAN.md) | The guide OpenCode follows: runtime rules, every node type and its props, events, styling and theme, the SDK, OpenUI, layout, checklist |
+| `aseman-elpian.js` | The SDK in every program: `App` (state, view, handlers), `Aseman.*` (agents, apps, the app's server, env, phone widget), Tasks |
+| `openui-elpian.js` | The OpenUI collection (all 137 components of the web kit) rendered as Elpian/UI-kit nodes, and agent-backed islands (`OpenUI.panel` / `action` / `query`) |
+| `bundle.mjs` | `elpian/src/*.js` → `elpian/app.js` (SDK + OpenUI + the app) |
+| `check.mjs` | Runs the program on QuickJS against a simulated host and the live server; fails on errors, unknown nodes, missing or throwing handlers |
+| `nodes.json` | The node types the engine and UI kit draw (a test keeps it equal to the engine source) |
+
+The app's server serves `GET /elpian/app.js`; `READY.json` says
+`"ui": "elpian", "elpian": "elpian/app.js"`. During verification the
+platform rebuilds the bundle, checks the server serves it, and runs
+`check.mjs` against the running server; failures go back to OpenCode. The
+desk window then runs the program natively (`ElpianAppView`), waking the
+sandbox and starting the server first like any preview. Test the kit with
+`node --test deploy/sandbox-computer/appui/elpian/test/elpian.test.mjs`
+(after `npm install` in `deploy/tool-runtime`, for QuickJS).
+
+## What OpenCode is given (per build)
+
+| File | What |
+|---|---|
+| `BRIEF.md` / `CHANGES.md` | The request; follow-up changes append to `CHANGES.md` (`--mode update`) |
+| `APPS.json` | Space apps with microtools **and their argument schemas**, and space agents |
+| `ASEMAN_API.md` | The page API contract (`_aseman/api/*`) with exact request/response shapes |
+| `vendor/aseman-sdk/aseman.js` | Client SDK: `call`, `ask`, `askJSON`, `conversation`, `show` |
+| `vendor/aseman-openui/` | OpenUI kit for agent-backed islands |
+
+After OpenCode reports READY, `aseman-appui build` verifies the app itself:
+`READY.json` must be complete, and the `start` command must serve `GET /` on
+the port. Failures go back to OpenCode as repair rounds
+(`ASEMAN_APPUI_REPAIRS`, default 2) before `appui_create` reports an error.
+
+## App servers use the space too
+
+An app's backend uses the space's agents and apps through the same API as
+its pages, at `$ASEMAN_API_URL/<op>` (the node's `/appapi/v1`):
+
+- **Serving a person:** every request the gateway forwards carries
+  `X-Aseman-User-Token` (plus `X-Aseman-User`, `-Space`, `-Room`, `-Api`).
+  Calls with it run as that person and are billed to their wallet.
+- **Background work:** `ASEMAN_APP_KEY` (in `.aseman/server.env`, mode 600)
+  runs as, and bills, the person who asked for the app. It is stored hashed
+  on the node, rotates on every rebuild and stops working when the app's
+  preview is deleted.
+
+Both go through `spaces.ask` like a person's own ask: funds checked first,
+one charge per ask (the bot's time plus the agent turn's metered model
+usage), the project's budget applies, and usage reads "space ask via app
+<title>". SDKs: `vendor/aseman-sdk/server.cjs` / `server.mjs` (Node) and
+`aseman_server.py` (Python).
+
+## Agents in generated apps
+
+`_aseman/api/ask` runs every ask in a **temporary room thread**: the agent
+starts a fresh conversation, nothing from the room or from other asks leaks
+in, and the thread (its messages and the agent's runtime checkpoints) is
+deleted as soon as the agent answers. Apps carry multi-turn context with
+`history`.
 
 ## Generated software → space apps
 

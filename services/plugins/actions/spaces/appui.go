@@ -13,19 +13,25 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
+	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 const (
 	appuiRoot        = "/workspace/appui"
 	appuiDefaultPort = 8787
-	// OpenCode fullstack builds can take several minutes.
-	appuiBuildWait = 12 * time.Minute
+	// OpenCode fullstack builds can take several minutes, and a build that
+	// fails its checks gets repair rounds (aseman-appui build).
+	appuiBuildWait = 30 * time.Minute
 )
 
 type appuiReady struct {
@@ -37,6 +43,36 @@ type appuiReady struct {
 	Dir     string `json:"dir"`
 	Summary string `json:"summary"`
 	Error   string `json:"error"`
+	// UI is the frontend built: "elpian" (an Elpian program the client runs
+	// natively) or "web"; Elpian is that program's path in the app.
+	UI     string `json:"ui"`
+	Elpian string `json:"elpian"`
+	// Widget is a web app's phone widget program (an Elpian app's program
+	// draws its own).
+	Widget string `json:"widget"`
+}
+
+// App UI frontends. Elpian is the default; web only when the person asked
+// for web technology.
+const (
+	appuiElpian = "elpian"
+	appuiWeb    = "web"
+)
+
+// appuiFrontend picks an App UI's frontend: the one asked for, else what an
+// existing app was built with, else Elpian.
+func appuiFrontend(asked, existing string) (string, error) {
+	switch ui := strings.ToLower(strings.TrimSpace(asked)); ui {
+	case appuiElpian, appuiWeb:
+		return ui, nil
+	case "":
+		if existing == appuiWeb {
+			return appuiWeb, nil
+		}
+		return appuiElpian, nil
+	default:
+		return "", errs.InvalidArgument(`ui is "elpian" (the default: a native Elpian frontend) or "web" (only when the person asked for web technology)`)
+	}
 }
 
 func newAppUIID() string {
@@ -103,46 +139,86 @@ func (s *Service) sandboxReadText(ctx context.Context, spaceID identity.ID, p st
 	return string(data), nil
 }
 
-// appCatalogJSON lists space apps an on-demand UI may call (bot id, name, microtools).
-func (s *Service) appCatalogJSON(ctx context.Context, spaceID, roomID identity.ID) ([]byte, error) {
+// appuiCatalog is what OpenCode is told about the space it builds for
+// (APPS.json): the apps whose microtools the software may call, with their
+// argument schemas, and the agents it may ask, so it wires real names and
+// real argument shapes instead of guessing. [apps] / [agents] narrow the
+// lists to what the brief names (names or bot ids); empty keeps them all.
+func (s *Service) appuiCatalog(ctx context.Context, spaceID, roomID identity.ID, apps, agents []string) ([]byte, error) {
 	tools, err := s.SpaceTools(ctx, spaceID, roomID)
 	if err != nil {
 		return nil, err
 	}
-	type cmd struct {
-		Name        string `json:"name"`
-		Description string `json:"description,omitempty"`
+	wanted := func(list []string, name, id string) bool {
+		if len(list) == 0 {
+			return true
+		}
+		for _, w := range list {
+			w = strings.TrimSpace(w)
+			if strings.EqualFold(w, name) || w == id {
+				return true
+			}
+		}
+		return false
+	}
+	type microtool struct {
+		Name        string         `json:"name"`
+		Description string         `json:"description,omitempty"`
+		Args        map[string]any `json:"args_schema,omitempty"`
 	}
 	type app struct {
-		BotID       string `json:"bot_id,omitempty"`
+		BotID       string      `json:"bot_id,omitempty"`
+		Name        string      `json:"name"`
+		Description string      `json:"description,omitempty"`
+		Microtools  []microtool `json:"microtools,omitempty"`
+	}
+	type agent struct {
+		ID          string `json:"id"`
 		Name        string `json:"name"`
 		Description string `json:"description,omitempty"`
-		Microtools  []cmd  `json:"microtools,omitempty"`
 	}
-	var apps []app
+	appList := []app{}
 	for _, t := range tools {
-		if t.BotID == "" || strings.HasPrefix(t.Name, "sandbox") {
+		// Platform builtins have no bot; the sandbox is a computer, not an app.
+		if t.BotID == "" || strings.HasPrefix(t.Name, "sandbox") || (t.Kind != "" && t.Kind != "tool") {
 			continue
 		}
-		// Skip platform builtins (no bot) already filtered; include tool backends.
-		if t.Kind != "" && t.Kind != "tool" {
+		if !wanted(apps, t.Name, t.BotID) {
 			continue
 		}
 		a := app{BotID: t.BotID, Name: t.Name, Description: t.Description}
 		for _, c := range t.Commands {
-			a.Microtools = append(a.Microtools, cmd{Name: c.Name, Description: c.Description})
+			a.Microtools = append(a.Microtools, microtool{Name: c.Name, Description: c.Description, Args: c.Schema})
 		}
-		apps = append(apps, a)
+		appList = append(appList, a)
 	}
-	return json.Marshal(map[string]any{
-		"apps": apps,
-		"call": map[string]any{
-			"how": "From the preview page, POST relative _aseman/api/call with {tool, microtool, args}. List with _aseman/api/tools. " +
-				"The response {result} is already unwrapped from MCP: often a plain text/markdown string (Exa, Hugging Face, …), " +
-				"sometimes a JSON object. Never invent REST shapes like {results:[{title,url}]} or {items:[…]} — parse or render the actual result (probe in tests with fixtures that match text/markdown).",
-			"path": "_aseman/api/call",
-		},
-	})
+	agentList := []agent{}
+	var mems []membership.Membership
+	_ = s.R.List(ctx, "memberships", database.Filter{
+		Equal: map[string]any{"space_id": spaceID.String(), "role": string(membership.RoleBot)},
+	}, &mems)
+	seen := map[string]bool{}
+	for i := range mems {
+		rec, err := s.botForMember(ctx, mems[i].MemberID)
+		if err != nil || rec.Kind != bot.KindAgent || seen[rec.ID.String()] {
+			continue
+		}
+		seen[rec.ID.String()] = true
+		if !wanted(agents, rec.Name, rec.ID.String()) {
+			continue
+		}
+		agentList = append(agentList, agent{ID: rec.ID.String(), Name: rec.Name, Description: s.toolDescription(ctx, rec)})
+	}
+	sp := map[string]any{"id": spaceID.String()}
+	if rec, err := s.GetSpace(ctx, spaceID); err == nil {
+		sp["name"] = rec.Name
+	}
+	return json.MarshalIndent(map[string]any{
+		"space":  sp,
+		"apps":   appList,
+		"agents": agentList,
+		"api":    "See ASEMAN_API.md: apps via POST _aseman/api/call {tool, microtool, args}; agents via POST _aseman/api/ask {agent, prompt}. vendor/aseman-sdk/aseman.js wraps both.",
+	}, "", "  ")
 }
 
 // appuiCreateTool implements appui_create: brief → OpenCode build+test → proxy DeskWeb card.
@@ -151,6 +227,8 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 		Brief   string       `json:"brief"`
 		Title   string       `json:"title"`
 		Apps    []string     `json:"apps"`
+		Agents  []string     `json:"agents"`
+		UI      string       `json:"ui"`
 		Tool    string       `json:"tool"`
 		Dir     string       `json:"dir"`
 		Port    int          `json:"port"`
@@ -203,38 +281,13 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	opCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), appuiBuildWait)
 	defer cancel()
 
-	catalog, err := s.appCatalogJSON(opCtx, spaceID, target)
+	wantApps := in.Apps
+	if t := strings.TrimSpace(in.Tool); t != "" && len(wantApps) > 0 {
+		wantApps = append(wantApps, t)
+	}
+	catalog, err := s.appuiCatalog(opCtx, spaceID, target, wantApps, in.Agents)
 	if err != nil {
 		return "", err
-	}
-	if len(in.Apps) > 0 {
-		// Narrow catalog to requested app names/ids when the agent lists them.
-		var raw map[string]any
-		_ = json.Unmarshal(catalog, &raw)
-		want := map[string]bool{}
-		for _, a := range in.Apps {
-			want[strings.ToLower(strings.TrimSpace(a))] = true
-		}
-		if want[strings.ToLower(strings.TrimSpace(in.Tool))] {
-			// ok
-		} else if t := strings.TrimSpace(in.Tool); t != "" {
-			want[strings.ToLower(t)] = true
-		}
-		filtered := []any{}
-		if apps, _ := raw["apps"].([]any); apps != nil {
-			for _, item := range apps {
-				m, _ := item.(map[string]any)
-				name, _ := m["name"].(string)
-				bot, _ := m["bot_id"].(string)
-				if want[strings.ToLower(name)] || want[strings.ToLower(bot)] {
-					filtered = append(filtered, item)
-				}
-			}
-		}
-		if len(filtered) > 0 {
-			raw["apps"] = filtered
-			catalog, _ = json.Marshal(raw)
-		}
 	}
 
 	briefPath := dir + "/.aseman-brief.md"
@@ -250,10 +303,46 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	if err := s.ensureOpenCodeAuth(opCtx, spaceID); err != nil {
 		return "", err
 	}
+	// The app's server uses the space's agents and apps too: with the token
+	// of the person using it (sent with each request), or, for work nobody
+	// is in front of, with the app's key, which acts for and bills the person
+	// who asked for the app.
+	hasKey := false
+	if owner := appOwner(ctx); !owner.IsZero() {
+		key, kerr := s.IssueAppKey(opCtx, spaceID, target, owner, dir, title)
+		if kerr != nil {
+			return "", kerr
+		}
+		if err := s.writeAppServerEnv(opCtx, spaceID, dir, key); err != nil {
+			return "", err
+		}
+		hasKey = true
+	} else if err := s.writeAppServerEnv(opCtx, spaceID, dir, ""); err != nil {
+		return "", err
+	}
 
+	// A project that was built before is changed in place (a follow-up:
+	// "add a filter", "fix the chart"), not rebuilt from nothing.
+	mode, existingUI := "new", ""
+	if job, jerr := s.sandboxReadText(opCtx, spaceID, dir+"/JOB.json"); jerr == nil && strings.TrimSpace(job) != "" {
+		mode = "update"
+		var j struct {
+			UI string `json:"ui"`
+		}
+		if json.Unmarshal([]byte(job), &j) == nil {
+			existingUI = j.UI
+		}
+		if existingUI == "" {
+			existingUI = appuiWeb // built before Elpian became the default
+		}
+	}
+	ui, err := appuiFrontend(in.UI, existingUI)
+	if err != nil {
+		return "", err
+	}
 	buildCmd := fmt.Sprintf(
-		`. /etc/opencode/env.sh 2>/dev/null || true; unset OPENCODE_API_KEY; export OPENCODE_MODEL=${OPENCODE_MODEL:-aseman/default}; aseman-appui build --dir %s --brief-file %s --apps-file %s --title %s --port %d`,
-		shellQuote(dir), shellQuote(briefPath), shellQuote(appsPath), shellQuote(title), port,
+		`. /etc/opencode/env.sh 2>/dev/null || true; unset OPENCODE_API_KEY; export OPENCODE_MODEL=${OPENCODE_MODEL:-aseman/default}; aseman-appui build --dir %s --brief-file %s --apps-file %s --title %s --port %d --mode %s --ui %s`,
+		shellQuote(dir), shellQuote(briefPath), shellQuote(appsPath), shellQuote(title), port, mode, ui,
 	)
 	out, err := s.SandboxExec(opCtx, spaceID, buildCmd)
 	// Prefer READY.json on disk; fall back to parsing build stdout (status prints it).
@@ -266,11 +355,13 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 		if readErr != nil && err != nil {
 			return "", errs.New(errs.CodeUnavailable, "appui build failed: "+clipTrace(out, 4000))
 		}
-		msg := ready.Error
+		var failed appuiReady
+		_ = json.Unmarshal([]byte(strings.TrimSpace(readyRaw)), &failed)
+		msg := failed.Error
 		if msg == "" {
 			msg = "OpenCode did not produce a tested READY.json"
 		}
-		return "", errs.Conflict("appui not ready: "+msg+"\n"+clipTrace(out, 2000))
+		return "", errs.Conflict("appui not ready: " + msg + "\n" + clipTrace(out, 2000))
 	}
 	if ready.Port > 0 {
 		port = ready.Port
@@ -283,6 +374,8 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	if !strings.Contains(start, dir) {
 		start = "cd " + shellQuote(dir) + " && " + start
 	}
+	// The server starts with its app API settings (URL and key).
+	start = appServerEnvPrefix(dir) + start
 
 	show := true
 	if in.Show != nil {
@@ -312,10 +405,35 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 		"tool":  strings.TrimSpace(in.Tool),
 		"room":  deskTarget,
 	}
+	// An Elpian app opens as itself: the client runs its program natively.
+	elpianEntry := ""
+	if ui == appuiElpian {
+		elpianEntry = strings.TrimPrefix(strings.TrimSpace(ready.Elpian), "./")
+		if elpianEntry == "" {
+			elpianEntry = "elpian/app.js"
+		}
+		if err := checkElpianEntry(elpianEntry); err != nil {
+			return "", err
+		}
+		proxyArgs["elpian"] = elpianEntry
+	} else if w := strings.TrimPrefix(strings.TrimSpace(ready.Widget), "./"); w != "" {
+		if err := checkElpianEntry(w); err != nil {
+			return "", err
+		}
+		proxyArgs["widget"] = w
+	}
 	rawArgs, _ := json.Marshal(proxyArgs)
 	proxyOut, err := s.proxyCreateTool(opCtx, spaceID, agentName, string(rawArgs))
 	if err != nil {
 		return "", err
+	}
+	// The key works while the app's preview exists.
+	if m := proxyPathID.FindStringSubmatch(proxyOut); hasKey && m != nil {
+		if pid, perr := identity.Parse(m[1]); perr == nil {
+			if err := s.BindAppKey(opCtx, spaceID, dir, pid); err != nil {
+				return "", err
+			}
+		}
 	}
 
 	// Optional desk placement after open.
@@ -332,7 +450,15 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 		"start":   start,
 		"summary": ready.Summary,
 		"tested":  true,
+		"mode":    mode,
+		"ui":      ui,
+		"next":    "To change this app later, call appui_create again with the same dir and a brief of the change.",
 		"proxy":   proxyOut,
+		"server_api": map[string]any{
+			"url":        sandboxAppAPIURL(),
+			"background": hasKey,
+			"billing":    "Calls with a request's X-Aseman-User-Token are billed to the person using the app; background calls with ASEMAN_APP_KEY to the person who asked for it.",
+		},
 	}
 	b, _ := json.Marshal(result)
 	return string(b), nil
@@ -537,4 +663,45 @@ func openCodeBuiltinApp() vmm.Tool {
 			{Name: "build", Description: "Build a tested fullstack App UI from a brief (platform: appui_create; M3 Expressive UI by default).", Schema: obj(map[string]any{"brief": str("What to build; omit UI framework to get Material 3 Expressive"), "title": str("Window title"), "apps": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "tool": str("Optional dock tool bot id"), "port": map[string]any{"type": "integer"}}, "brief")},
 		},
 	}
+}
+
+// proxyPathID finds a preview's id in proxy_create's output.
+var proxyPathID = regexp.MustCompile(`/v1/proxy/([0-9a-f]{32})/`)
+
+// appOwner is the person an app is built for: the person whose request the
+// building turn serves (never an agent).
+func appOwner(ctx context.Context) identity.ID {
+	if actor := vmm.ExecutionFrom(ctx).ActorID; actor != "" {
+		if id, err := identity.Parse(actor); err == nil {
+			return id
+		}
+	}
+	return helper.Actor(ctx)
+}
+
+// appServerEnvFile holds an app server's settings for the app API.
+func appServerEnvFile(dir string) string { return dir + "/.aseman/server.env" }
+
+// writeAppServerEnv gives the app its server API settings: the URL, and the
+// app's key when it has one. The file is the app's alone (mode 600).
+func (s *Service) writeAppServerEnv(ctx context.Context, spaceID identity.ID, dir, key string) error {
+	lines := []string{
+		"# Written by Aseman for this app's server (see ASEMAN_API.md). Do not commit.",
+		"ASEMAN_API_URL=" + sandboxAppAPIURL(),
+	}
+	if key != "" {
+		lines = append(lines, "ASEMAN_APP_KEY="+key)
+	}
+	path := appServerEnvFile(dir)
+	if err := s.sandboxWriteBytes(ctx, spaceID, path, []byte(strings.Join(lines, "\n")+"\n")); err != nil {
+		return err
+	}
+	_, err := s.SandboxExec(ctx, spaceID, "chmod 600 "+shellQuote(path)+"; printf '*\\n' > "+shellQuote(dir+"/.aseman/.gitignore"))
+	return err
+}
+
+// appServerEnvPrefix loads the app API settings into a start command.
+func appServerEnvPrefix(dir string) string {
+	f := shellQuote(appServerEnvFile(dir))
+	return "set -a; [ -f " + f + " ] && . " + f + "; set +a; "
 }

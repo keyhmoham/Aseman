@@ -120,6 +120,20 @@ class Store:
                              "ON CONFLICT(thread_id) DO UPDATE SET seen = excluded.seen", (thread_id, created_at))
             self._db.commit()
 
+    def forget_room(self, space_id: str, room_id: str) -> list[str]:
+        """Drops what the store keeps of every agent's threads in a room (a
+        deleted room thread) and returns those thread ids."""
+        patterns = _room_patterns(space_id, room_id)
+        with self._lock:
+            threads: set[str] = set()
+            for table in ("questions", "cursors", "generations", "teams"):
+                for pattern in patterns:
+                    rows = self._db.execute(f"SELECT thread_id FROM {table} WHERE thread_id LIKE ?", (pattern,)).fetchall()
+                    threads.update(r[0] for r in rows)
+                    self._db.execute(f"DELETE FROM {table} WHERE thread_id LIKE ?", (pattern,))
+            self._db.commit()
+        return sorted(threads)
+
     # --- the swarm --------------------------------------------------------------
 
     def team(self, thread_id: str) -> dict[str, Any] | None:
@@ -133,6 +147,13 @@ class Store:
             self._db.execute("INSERT INTO teams (thread_id, data) VALUES (?, ?) "
                              "ON CONFLICT(thread_id) DO UPDATE SET data = excluded.data", (thread_id, json.dumps(team)))
             self._db.commit()
+
+
+def _room_patterns(space_id: str, room_id: str) -> tuple[str, str]:
+    """LIKE patterns of every agent's threads in a room (TurnContext.base_thread:
+    ``<vm>:<space>:<room>`` and its ``:request:``/``:task:``/``:gen:`` forms)."""
+    base = f"%:{space_id}:{room_id}"
+    return base, base + ":%"
 
 
 _FIELDS = frozenset(Question.__dataclass_fields__)

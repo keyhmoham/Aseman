@@ -124,8 +124,220 @@ cmd_run() {
   cmd_status "$dir"
 }
 
+# verify_app starts READY.json's `start` command the way the preview gateway
+# will, waits for the port to answer and stops it again. Prints why it failed.
+verify_app() {
+  local dir="$1"
+  local start port pid code
+  start=$(jq -r '.start // empty' "$dir/READY.json" 2>/dev/null || true)
+  port=$(jq -r '.port // empty' "$dir/READY.json" 2>/dev/null || true)
+  if [[ -z "$start" || -z "$port" ]]; then
+    echo "READY.json has no start command or port"
+    return 1
+  fi
+  local ui entry elpian_problem=""
+  ui=$(jq -r '.ui // "web"' "$dir/READY.json" 2>/dev/null || echo web)
+  entry=$(jq -r '.elpian // "elpian/app.js"' "$dir/READY.json" 2>/dev/null || echo elpian/app.js)
+  local widget
+  widget=$(jq -r '.widget // "elpian/widget.js"' "$dir/READY.json" 2>/dev/null || echo elpian/widget.js)
+  if [[ "$ui" == "elpian" ]]; then
+    # The bundle is always rebuilt from elpian/src: what is checked and
+    # served is the current frontend (its phone widget included).
+    if ! out=$(node "$dir/vendor/aseman-elpian/bundle.mjs" "$dir" 2>&1); then
+      echo "the Elpian frontend could not be bundled: $out"
+      return 1
+    fi
+  else
+    # A web app's phone widget is an Elpian program of its own.
+    if ! out=$(node "$dir/vendor/aseman-elpian/bundle.mjs" "$dir" --widget 2>&1); then
+      echo "the phone widget could not be bundled (write it in elpian/widget/, see ELPIAN.md): $out"
+      return 1
+    fi
+  fi
+  # A previous version may still serve the port: the new build is what is
+  # checked and then served.
+  fuser -k "$port/tcp" >/dev/null 2>&1 || true
+  (cd "$dir" && PORT="$port" HOST=0.0.0.0 exec setsid bash -c "$start") >"$dir/verify.log" 2>&1 &
+  pid=$!
+  code=000
+  for _ in $(seq 1 "${ASEMAN_APPUI_VERIFY_SECS:-60}"); do
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://127.0.0.1:$port/" 2>/dev/null || true)
+    [[ -n "$code" && "$code" != "000" ]] && break
+    code=000
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 1
+  done
+  if [[ "$code" != "000" ]] && (( code < 500 )); then
+    if [[ "$ui" == "elpian" ]]; then
+      elpian_problem=$(check_elpian "$dir" "$port" "$entry" "") || true
+    else
+      elpian_problem=$(check_elpian "$dir" "$port" "$widget" "--widget-only") || true
+    fi
+  fi
+  kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+  fuser -k "$port/tcp" >/dev/null 2>&1 || true
+  wait "$pid" 2>/dev/null || true
+  if [[ "$code" == "000" ]]; then
+    echo "\`$start\` did not answer on 0.0.0.0:$port. Its output:"
+    tail -n 40 "$dir/verify.log" 2>/dev/null
+    return 1
+  fi
+  if (( code >= 500 )); then
+    echo "GET / on port $port answered HTTP $code. Server output:"
+    tail -n 40 "$dir/verify.log" 2>/dev/null
+    return 1
+  fi
+  if [[ -n "$elpian_problem" ]]; then
+    echo "$elpian_problem"
+    return 1
+  fi
+  return 0
+}
+
+# check_elpian checks an Elpian frontend against the running server: the
+# server serves the bundle, and the program runs on QuickJS (check.mjs).
+check_elpian() {
+  local dir="$1" port="$2" entry="$3" mode="$4" code out
+  code=$(curl -s -o "$dir/.elpian-served.js" -w '%{http_code}' --max-time 5 "http://127.0.0.1:$port/$entry" 2>/dev/null || echo 000)
+  if [[ "$code" != "200" ]]; then
+    echo "GET /$entry answered HTTP $code: the server must serve the Elpian bundle at that path (ELPIAN.md)."
+    return 1
+  fi
+  if ! cmp -s "$dir/.elpian-served.js" "$dir/$entry"; then
+    echo "GET /$entry does not serve the current bundle $entry (it must serve the file itself, read on each request)."
+    return 1
+  fi
+  rm -f "$dir/.elpian-served.js"
+  if ! out=$(node "$dir/vendor/aseman-elpian/check.mjs" "$dir/$entry" --apps "$dir/APPS.json" --server "http://127.0.0.1:$port" $mode 2>&1); then
+    echo "The Elpian program $entry fails on QuickJS (vendor/aseman-elpian/check.mjs):"
+    echo "$out" | tail -n 40
+    return 1
+  fi
+  return 0
+}
+
+# check_ready prints why READY.json is not acceptable (nothing when it is).
+check_ready() {
+  local dir="$1"
+  if [[ ! -f "$dir/READY.json" ]]; then
+    echo "READY.json was not written (tests not run, or failing?)"
+    return 1
+  fi
+  if jq -e '.ok == false' "$dir/READY.json" >/dev/null 2>&1; then
+    echo "READY.json reports a failure: $(jq -r '.error // "unknown"' "$dir/READY.json")"
+    return 1
+  fi
+  if ! jq -e '.ok == true and .tested == true and (.start|type=="string" and length>0) and (.port|type=="number")' \
+    "$dir/READY.json" >/dev/null 2>&1; then
+    echo "READY.json is incomplete (needs ok, tested, start, port)"
+    return 1
+  fi
+  local want
+  want=$(jq -r '.ui // "elpian"' "$dir/JOB.json" 2>/dev/null || echo elpian)
+  if [[ "$want" == "elpian" ]] && ! jq -e '.ui == "elpian" and (.elpian|type=="string" and length>0)' "$dir/READY.json" >/dev/null 2>&1; then
+    echo "this app's frontend is Elpian (JOB.json ui): READY.json needs \"ui\": \"elpian\" and \"elpian\": \"elpian/app.js\" (see ELPIAN.md)"
+    return 1
+  fi
+  if [[ "$want" == "web" ]] && ! jq -e '(.widget|type=="string" and length>0)' "$dir/READY.json" >/dev/null 2>&1; then
+    echo "every app has a phone widget: READY.json needs \"widget\": \"elpian/widget.js\" (an Elpian program in elpian/widget/, see ELPIAN.md, A web app's widget)"
+    return 1
+  fi
+}
+
+build_prompt() {
+  local dir="$1" port="$2" mode="$3" ui="${4:-elpian}" task frontend
+  if [[ "$mode" == "update" ]]; then
+    task="This is an existing app (BRIEF.md is what it was built for). Make the change requested last in CHANGES.md and keep everything else working. Read the project before editing; change only what the request needs."
+  else
+    task="Build a new app for BRIEF.md in this directory."
+  fi
+  if [[ "$ui" == "elpian" ]]; then
+    frontend=$(cat <<FRONT
+The frontend is an ELPIAN program (JOB.json ui: elpian), not a web page:
+JavaScript on the Elpian QuickJS runtime inside the Aseman client, drawing
+native UI from JSON view trees. Read ELPIAN.md in full first and study
+vendor/aseman-elpian/ (aseman-elpian.js SDK, openui-elpian.js, nodes.json).
+Write it in elpian/src/*.js with App.create + Aseman.* (no DOM, no fetch, no
+modules); use the UI kit nodes for data views; mix OpenUI agent islands
+(OpenUI.panel / action / query) with programmed UI where judgment helps.
+Give App.create its phone widget (ELPIAN.md, The phone widget): a glanceable,
+live view of the few facts that matter for this app's use case, refreshed on
+a timer, designed for small, medium and large tiles.
+Your server serves GET /elpian/app.js (the bundle) and its API. Bundle with
+node vendor/aseman-elpian/bundle.mjs . and check with
+node vendor/aseman-elpian/check.mjs elpian/app.js --apps APPS.json --server http://127.0.0.1:$port
+(with the server running) until it passes. AGENTS.md's web rules (M3E,
+web theming, the web OpenUI kit) do not apply.
+FRONT
+)
+  else
+    frontend=$(cat <<FRONT
+The frontend is WEB (JOB.json ui: web), because the person asked for web
+technology: follow AGENTS.md's web rules (Material 3 Expressive via
+@material/web unless the brief names another framework, Aseman adaptive
+theming, the web OpenUI kit).
+Every app also has a phone widget, and it is native: write it as an Elpian
+program in elpian/widget/*.js (ELPIAN.md: The phone widget, and A web app's
+widget) showing the few live facts that matter for this app's use case.
+Your server serves GET /elpian/widget.js; bundle it with
+node vendor/aseman-elpian/bundle.mjs . --widget and check it with
+node vendor/aseman-elpian/check.mjs elpian/widget.js --widget-only --apps APPS.json --server http://127.0.0.1:$port
+FRONT
+)
+  fi
+  cat <<PROMPT
+You are the software engineer of an Aseman space. $task
+
+$frontend
+
+Context files here: AGENTS.md (your rules: follow them), ELPIAN.md (the Elpian
+frontend guide and reference), BRIEF.md (+ CHANGES.md),
+APPS.json (the space: apps with microtools and their args_schema, and agents),
+ASEMAN_API.md (the exact page API contract), JOB.json (port $port, dir),
+vendor/aseman-sdk/ (aseman.js for the page; server.cjs / server.mjs /
+aseman_server.py for your server: use them for every Aseman call),
+vendor/aseman-openui/ (agent-backed UI islands).
+
+Work in this order:
+1. Plan: list the screens, the data, and for each feature whether it is
+   programmed (your server, or a microtool via Aseman.call) or needs an
+   agent's judgment (Aseman.ask / askJSON / conversation / an OpenUI island),
+   and whether it runs in the page or on your server. Server-side agent and
+   app calls use the server SDK: Aseman.fromRequest(req) while serving a
+   person (billed to them), Aseman.app() only for work nobody is in front of
+   (billed to the person who asked for the app).
+   Use only the apps, microtools, argument shapes and agents APPS.json lists.
+   Decide what the phone widget shows: the live facts someone checks at a
+   glance for this app. Write the plan to PLAN.md.
+2. Build the fullstack project (frontend + backend) as described above.
+3. Test: unit/API tests for your server, the theme applicator, parsing of
+   microtool results (fixtures shaped like real replies) and the handling of
+   agent replies (mock Aseman.ask and the server SDK). Run them until they
+   pass. Never call the real Aseman API from tests.
+4. Make sure the start command serves the built app in the foreground on
+   0.0.0.0:$port (read PORT from the environment, default $port) without
+   rebuilding, and that GET / answers.
+5. Only then write READY.json as AGENTS.md specifies (with "ui": "$ui"$( [[ "$ui" == "elpian" ]] && printf '%s' ' and "elpian": "elpian/app.js"' || printf '%s' ' and "widget": "elpian/widget.js"')).
+Keep everything inside $dir. Do not ask questions: decide sensibly and note
+assumptions in PLAN.md.
+PROMPT
+}
+
+repair_prompt() {
+  local port="$1" problem="$2"
+  cat <<PROMPT
+The app in this directory is not ready. The platform checked it and found:
+
+$problem
+
+Find the root cause and fix it (AGENTS.md, ELPIAN.md for an Elpian frontend,
+BRIEF.md, CHANGES.md and PLAN.md describe the app). Run the tests again, make sure the start command serves on
+0.0.0.0:$port and GET / answers, then rewrite READY.json.
+PROMPT
+}
+
 cmd_build() {
-  local dir="" brief="" apps="" title="App" port=8787
+  local dir="" brief="" apps="" title="App" port=8787 mode="new" ui="elpian"
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --dir) dir="$2"; shift 2 ;;
@@ -133,18 +345,42 @@ cmd_build() {
       --apps-file) apps="$2"; shift 2 ;;
       --title) title="$2"; shift 2 ;;
       --port) port="$2"; shift 2 ;;
+      --mode) mode="$2"; shift 2 ;;
+      --ui) ui="$2"; shift 2 ;;
       *) die "unknown build flag $1" ;;
     esac
   done
   [[ -n "$dir" ]] || die "build needs --dir"
   [[ -n "$brief" && -f "$brief" ]] || die "build needs --brief-file"
+  [[ "$mode" == "new" || "$mode" == "update" ]] || die "--mode is new or update"
+  [[ "$ui" == "elpian" || "$ui" == "web" ]] || die "--ui is elpian or web"
   dir=$(mkdir -p "$dir" && cd "$dir" && pwd)
   cp -f "$ROOT/AGENTS.md" "$dir/AGENTS.md"
+  if [[ -f "$ROOT/ASEMAN_API.md" ]]; then
+    cp -f "$ROOT/ASEMAN_API.md" "$dir/ASEMAN_API.md"
+  fi
   if [[ -d "$ROOT/openui" ]]; then
     mkdir -p "$dir/vendor/aseman-openui"
     cp -a "$ROOT/openui/." "$dir/vendor/aseman-openui/"
   fi
-  if ! same_file "$brief" "$dir/BRIEF.md"; then
+  if [[ -d "$ROOT/elpian" ]]; then
+    mkdir -p "$dir/vendor/aseman-elpian"
+    for f in aseman-elpian.js openui-elpian.js bundle.mjs check.mjs nodes.json ELPIAN.md; do
+      [[ -f "$ROOT/elpian/$f" ]] && cp -f "$ROOT/elpian/$f" "$dir/vendor/aseman-elpian/$f"
+    done
+    [[ -f "$ROOT/elpian/ELPIAN.md" ]] && cp -f "$ROOT/elpian/ELPIAN.md" "$dir/ELPIAN.md"
+  fi
+  if [[ -d "$ROOT/sdk" ]]; then
+    mkdir -p "$dir/vendor/aseman-sdk"
+    for f in aseman.js server.cjs server.mjs aseman_server.py; do
+      [[ -f "$ROOT/sdk/$f" ]] && cp -f "$ROOT/sdk/$f" "$dir/vendor/aseman-sdk/$f"
+    done
+  fi
+  if [[ "$mode" == "update" ]]; then
+    # Keep the history of what was asked: the original brief and each change.
+    { echo; echo "## Change requested $(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo; cat "$brief"; } >>"$dir/CHANGES.md"
+    [[ -f "$dir/BRIEF.md" ]] || cp -f "$brief" "$dir/BRIEF.md"
+  elif ! same_file "$brief" "$dir/BRIEF.md"; then
     cp -f "$brief" "$dir/BRIEF.md"
   fi
   if [[ -n "$apps" && -f "$apps" ]]; then
@@ -152,41 +388,43 @@ cmd_build() {
       cp -f "$apps" "$dir/APPS.json"
     fi
   else
-    echo '{"apps":[]}' >"$dir/APPS.json"
+    echo '{"apps":[],"agents":[]}' >"$dir/APPS.json"
   fi
   write_file "$dir/JOB.json" <<EOF
-{"title":$(jq -Rn --arg t "$title" '$t'),"port":$port,"dir":"$dir"}
+{"title":$(jq -Rn --arg t "$title" '$t'),"port":$port,"dir":"$dir","mode":"$mode","ui":"$ui"}
 EOF
   rm -f "$dir/READY.json"
-  local prompt
-  prompt=$(cat <<EOF
-Read AGENTS.md, BRIEF.md, APPS.json, JOB.json and vendor/aseman-openui/ in this directory.
 
-Build a professional fullstack web application that satisfies the brief.
-Default UI is Material 3 Expressive via @material/web (expressive labs) unless
-BRIEF.md explicitly requests another UI framework — follow AGENTS.md §2.
-Every App UI must adapt to Aseman Settings instantly (light/dark + accent via
-aseman_theme / aseman_accent / aseman_scheme and live aseman:theme) unless the
-brief asks for dedicated brand colors (then still follow light/dark only) —
-follow AGENTS.md §3.
-Mix programmed UI with Aseman OpenUI agent-backed islands where useful
-(vendor/aseman-openui or _aseman/kit/openui/; full catalog in catalog.spec.json)
-— same theme tokens; not biased to always-code or always-agent — follow AGENTS.md §4.
-Wire space apps via _aseman/api/call and agents via _aseman/api/ask.
-Write and run full tests. Only when tests pass, write READY.json exactly as
-AGENTS.md specifies (ok, tested, title, port $port, start command, summary).
-Listen on 0.0.0.0:$port. Keep the project inside $dir.
-EOF
-)
-  if ! run_opencode "$dir" "$prompt"; then
-    cmd_status "$dir"
-    return 1
+  # OpenCode builds; the platform then checks the result itself (READY.json,
+  # and that the app really starts and answers) and sends what it found back
+  # to OpenCode for up to ASEMAN_APPUI_REPAIRS rounds.
+  local rounds="${ASEMAN_APPUI_REPAIRS:-2}" round=0 problem=""
+  if ! run_opencode "$dir" "$(build_prompt "$dir" "$port" "$mode" "$ui")"; then
+    problem="the OpenCode session failed or timed out (see opencode.log); finish the work"
   fi
-  if ! jq -e '.ok == true and .tested == true and (.start|type=="string" and length>0) and (.port|type=="number")' "$dir/READY.json" >/dev/null 2>&1; then
-    echo "aseman-appui: READY.json incomplete or tests not confirmed" >&2
-    cmd_status "$dir"
-    return 1
-  fi
+  while true; do
+    if [[ -z "$problem" ]]; then
+      problem=$(check_ready "$dir") || true
+    fi
+    if [[ -z "$problem" ]]; then
+      problem=$(verify_app "$dir") || true
+    fi
+    if [[ -z "$problem" ]]; then
+      echo "aseman-appui: verified: the app starts and answers on port $port"
+      break
+    fi
+    if (( round >= rounds )); then
+      echo "aseman-appui: not ready after $round repair round(s): $problem" >&2
+      jq -n --arg e "$problem" '{ok:false, error:$e}' >"$dir/READY.json"
+      cmd_status "$dir"
+      return 1
+    fi
+    round=$((round + 1))
+    echo "aseman-appui: repair round $round: $problem" | tee -a "$dir/opencode.log"
+    rm -f "$dir/READY.json"
+    run_opencode "$dir" "$(repair_prompt "$port" "$problem")" || true
+    problem=""
+  done
   cmd_status "$dir"
 }
 
@@ -201,8 +439,13 @@ Commands:
   models                 Show backbone / model selection
   run --dir DIR --message TEXT
                          Distribute a coding task to OpenCode
-  build --dir DIR --brief-file FILE [--apps-file FILE] [--title T] [--port N]
-                         Full App UI build: OpenCode + tests + READY.json
+  build --dir DIR --brief-file FILE [--apps-file FILE] [--title T] [--port N] [--mode new|update] [--ui elpian|web]
+                         Full App UI build: OpenCode plans, builds and tests; the
+                         platform then starts the app and checks that it answers,
+                         with repair rounds (ASEMAN_APPUI_REPAIRS, default 2).
+                         update changes an existing app in place (CHANGES.md).
+                         --ui elpian (default: an Elpian program, ELPIAN.md) or web
+                         (only when the person asked for web technology).
   status [--dir DIR]     Show STATUS.json / READY.json
 EOF
 }

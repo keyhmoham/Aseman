@@ -47,7 +47,13 @@ const DeskAppFrontend = "app"
 // Web page windows: a page served from the space's sandbox through a preview
 // gateway (proxy_create). Its Args hold {"page": the gateway path,
 // "/v1/proxy/<id>/…"}; Tool is the tool it is a frontend of, or DeskWebTool
-// for a page of no tool (they share that dock entry).
+// for a page of no tool (they share that dock entry). An Elpian app (an App
+// UI whose frontend is an Elpian program) is such a window too: Args also
+// hold {"elpian": the program's path in the app, "elpian/app.js"}, and the
+// client runs that program natively instead of showing a web page. Every
+// generated app's window also holds {"widget": its phone widget's program}
+// when that is a separate program (a web app's); the phone board runs it
+// natively as the window's widget (an Elpian app's program draws its own).
 const (
 	DeskWeb         = "web"
 	DeskWebFrontend = "web"
@@ -137,6 +143,37 @@ func (w *DeskWindow) Page() string {
 	}
 	page, _ := w.Args["page"].(string)
 	return page
+}
+
+// Elpian is the program path of an Elpian app window ("" for a web page).
+func (w *DeskWindow) Elpian() string {
+	if w.Kind != DeskWeb {
+		return ""
+	}
+	entry, _ := w.Args["elpian"].(string)
+	return entry
+}
+
+// Widget is the program a window's phone widget runs: its own widget
+// program, else an Elpian app's program ("" for a plain web page).
+func (w *DeskWindow) Widget() string {
+	if w.Kind != DeskWeb {
+		return ""
+	}
+	if entry, _ := w.Args["widget"].(string); entry != "" {
+		return entry
+	}
+	return w.Elpian()
+}
+
+// checkElpianEntry accepts an Elpian program's path inside its app: a
+// relative .js path, nothing that leaves the app.
+func checkElpianEntry(entry string) error {
+	if entry == "" || len(entry) > 200 || strings.HasPrefix(entry, "/") || !strings.HasSuffix(entry, ".js") ||
+		strings.Contains(entry, "..") || strings.Contains(entry, "://") || strings.ContainsAny(entry, " \\\n\r\t?#") {
+		return errs.InvalidArgument("an Elpian app's program is a relative .js path in the app, like elpian/app.js")
+	}
+	return nil
 }
 
 // checkAgUiArgs requires a surface object (or root) for an AG-UI desk window.
@@ -402,7 +439,20 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 			if op.Tool == "" || op.Tool == DeskWebTool {
 				op.Tool, op.Name = DeskWebTool, "Web pages"
 			}
-			op.Frontend, op.Microtool, op.Args = DeskWebFrontend, "", map[string]any{"page": page}
+			args := map[string]any{"page": page}
+			if entry, _ := op.Args["elpian"].(string); entry != "" {
+				if err := checkElpianEntry(entry); err != nil {
+					return "", err
+				}
+				args["elpian"] = entry
+			}
+			if entry, _ := op.Args["widget"].(string); entry != "" {
+				if err := checkElpianEntry(entry); err != nil {
+					return "", err
+				}
+				args["widget"] = entry
+			}
+			op.Frontend, op.Microtool, op.Args = DeskWebFrontend, "", args
 		} else if op.Kind == DeskFile && op.Args["file_id"] != nil {
 			id, _ := op.Args["file_id"].(string)
 			if !isFileID(id) {
@@ -667,6 +717,9 @@ func (d *Desktop) Summary() string {
 			what := w.Microtool + args
 			if w.Kind == DeskWeb {
 				what = "web page " + w.Page()
+				if entry := w.Elpian(); entry != "" {
+					what = "Elpian app " + w.Page() + " (" + entry + ")"
+				}
 			}
 			if w.Kind == DeskFile {
 				what = "file " + w.FilePath()
@@ -745,6 +798,7 @@ func (s *Service) saveDesktop(ctx context.Context, spaceID identity.ID, room str
 
 // Desk reads a room's desk.
 func (s *Service) Desk(ctx context.Context, spaceID, roomID identity.ID) (Desktop, error) {
+	roomID = s.mainRoom(ctx, roomID) // a thread shares its room's desk
 	s.desks.mu.Lock()
 	defer s.desks.mu.Unlock()
 	d, err := s.loadDesktop(ctx, spaceID, deskKey(roomID))
@@ -763,6 +817,7 @@ func (s *Service) UpdateDesk(ctx context.Context, spaceID, roomID identity.ID, a
 	if len(ops) == 0 || len(ops) > 100 {
 		return Desktop{}, nil, errs.InvalidArgument("1..100 desk ops")
 	}
+	roomID = s.mainRoom(ctx, roomID) // a thread shares its room's desk
 	s.desks.mu.Lock()
 	defer s.desks.mu.Unlock()
 	room := deskKey(roomID)

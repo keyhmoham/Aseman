@@ -14,7 +14,7 @@ from aseman_agents.agent import Runner
 from aseman_agents.memory import Settings
 from aseman_agents.server import create_app
 from aseman_agents.store import Store
-from fakes import CODER, LEAD, FakeViking, Platform, ScriptedModel, call, turn_request
+from fakes import CODER, LEAD, ROOM, SPACE, FakeViking, Platform, ScriptedModel, call, turn_request
 
 WORKSPACE = Path(os.environ["ASEMAN_WORKSPACE"])
 
@@ -205,6 +205,47 @@ def test_server_contract(platform: Platform, tmp_path: Path) -> None:
         assert res.json()["status"] == "failed"
         assert client.post("/v1/playbooks/reset", json={}).status_code == 401
         assert client.post("/v1/playbooks/reset", headers=headers, json={}).json() == {"reset": 0}  # no learning
+        assert client.post("/v1/rooms/forget", headers=headers, json={"space": "s"}).status_code == 400
+        assert client.post("/v1/rooms/forget", json={"space": "s", "room": "r"}).status_code == 401
+
+
+def _thread(agent: dict[str, Any], room: str = ROOM) -> str:
+    return f"{agent['vm_id']}:{SPACE}:{room}"
+
+
+async def test_a_deleted_room_thread_is_forgotten_by_every_agent(platform: Platform, tmp_path: Path) -> None:
+    platform.post("acc-ann", "earlier in the room")
+    r, _ = runner(platform, tmp_path, [AIMessage(content="first"), AIMessage(content="second")])
+    await r.prompt(turn_request(CODER, "hello", token="tok-coder"))
+    other = turn_request(CODER, "elsewhere", token="tok-coder")
+    other["turn"]["room_id"] = "room-other"
+    await r.prompt(other)
+    config = lambda room: {"configurable": {"thread_id": _thread(CODER, room), "checkpoint_ns": ""}}
+    assert await r.checkpointer.aget_tuple(config(ROOM)) is not None
+    assert r.store.seen(_thread(CODER))
+
+    assert await r.forget_room(SPACE, ROOM) >= 1
+    assert await r.checkpointer.aget_tuple(config(ROOM)) is None
+    assert r.store.seen(_thread(CODER)) == ""
+    # Other rooms keep their conversations.
+    assert await r.checkpointer.aget_tuple(config("room-other")) is not None
+    assert await r.forget_room(SPACE, "") == 0
+
+
+async def test_forgetting_a_room_thread_clears_sqlite_checkpoints(platform: Platform, tmp_path: Path) -> None:
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+    model = ScriptedModel(script=[AIMessage(content="first")])
+    async with AsyncSqliteSaver.from_conn_string(str(tmp_path / "cp.db")) as saver:
+        r = Runner(Store(str(tmp_path / "rt.db")), saver, model_factory=lambda a, g: model,
+                   gateway_factory=platform.gateway)
+        await r.prompt(turn_request(CODER, "hello", token="tok-coder"))
+        # A thread the store does not know (e.g. a later generation) is found in the checkpoints.
+        r.store.forget_room(SPACE, ROOM)
+        config = {"configurable": {"thread_id": _thread(CODER), "checkpoint_ns": ""}}
+        assert await saver.aget_tuple(config) is not None
+        assert await r.forget_room(SPACE, ROOM) == 1
+        assert await saver.aget_tuple(config) is None
 
 
 def modified_request(message: str, *, no_sandbox: bool = False, no_memory: bool = False, scope: str = "request-1") -> dict[str, Any]:
@@ -526,3 +567,14 @@ async def test_files_go_through_the_computer_when_not_stored(platform: Platform,
     assert "beta" in tool_results(model)["read_file"]
     assert (ws / "lib" / "a.txt").read_text() == "alpha\ngamma\n"
     assert [body for name, body in platform.calls if name == "spaces.ask"]
+
+
+def test_every_agent_hands_development_to_opencode() -> None:
+    from aseman_agents.prompts import LEAD as LEAD_PROMPT, common_prompt
+
+    for via_codemode, appui, run in ((True, "/platform/appui_create", "/platform/opencode_run"),
+                                     (False, "appui_create", "opencode_run")):
+        prompt = common_prompt(via_codemode=via_codemode)
+        rule = prompt[prompt.index("## Software development is OpenCode's"):prompt.index("## Presenting")]
+        assert appui in rule and run in rule and "never write or edit source code yourself" in rule
+    assert "Programming is never a role of the team" in LEAD_PROMPT

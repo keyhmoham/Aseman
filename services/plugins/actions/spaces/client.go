@@ -231,6 +231,7 @@ func (s *Service) spaceDetail(ctx context.Context, req *api.ActionRequest) (*api
 	if err = s.R.List(ctx, "rooms", database.Filter{Equal: map[string]any{"space_id": id.String()}, OrderBy: "created_at", Asc: true}, &rooms); err != nil {
 		return nil, err
 	}
+	rooms = visibleRooms(rooms)
 	meta, err := s.M.Get(ctx, id)
 	if err != nil {
 		return nil, err

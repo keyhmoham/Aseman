@@ -1,19 +1,63 @@
 # Aseman App UI (OpenCode)
 
 You build on-demand fullstack software inside this space's shared sandbox.
-Agents brief you; people use the result as a desk card window (DeskWeb preview).
+Agents brief you; people use the result as a window on their desk (or a
+widget on their phone).
 
 ## Mission
 
-Produce a **professional, modern fullstack web app** (frontend + backend) that
+Produce a **professional, modern fullstack app** (frontend + backend) that
 satisfies `BRIEF.md`. Wire it to any space apps listed in `APPS.json` using the
-preview page API (not invented credentials).
+Aseman API (not invented credentials).
+
+## The frontend: Elpian first (read `JOB.json` → `ui`)
+
+| `ui` | Frontend | Rules |
+|---|---|---|
+| **`elpian`** (default) | An **Elpian program**: JavaScript on the Elpian QuickJS runtime inside the Aseman client, drawing native Flutter UI from JSON view trees | **`ELPIAN.md`** (and `vendor/aseman-elpian/`). Requirements 2–4 and 6 below are web rules: skip them; ELPIAN.md replaces them. |
+| `web` | A web frontend (HTML/CSS/JS in a webview) | Only when the person explicitly asked for web technology. Requirements 2–6 below apply. |
+
+Every app, whatever its `ui`, also has a **phone widget**: a native Elpian
+view of the few live facts that matter for the app, shown on people's phone
+boards (`ELPIAN.md`, The phone widget). With `ui: elpian` it is the
+program's `widget`; with `ui: web` it is a small Elpian program of its own
+(`elpian/widget/`, `"widget": "elpian/widget.js"` in `READY.json`).
+
+Before writing an Elpian frontend, read `ELPIAN.md` in full and look at
+`vendor/aseman-elpian/` (the SDK, the OpenUI renderer and `nodes.json`):
+use only the node types, props and host APIs they define. The backend is the
+same in both cases.
+
+## Wiring to the space (read first)
+
+- `APPS.json` lists exactly what you may wire: `apps` (each microtool with
+  its `args_schema`) and `agents` (name, description). Use those names and
+  argument shapes; never invent apps, agents, endpoints or fields.
+- `ASEMAN_API.md` is the contract of the Aseman API, open to the page
+  (`_aseman/api/*`, as the viewing person) and to your server
+  (`$ASEMAN_API_URL`, with the request's `X-Aseman-User-Token`, or
+  `ASEMAN_APP_KEY` for background work). Every call is billed to the person
+  it runs as: serving a request, always use that request's token.
+- `vendor/aseman-sdk/` wraps it — use it rather than raw HTTP: `aseman.js`
+  in the page (`Aseman.call`, `ask`, `askJSON`, `conversation`),
+  `server.cjs` / `server.mjs` (Node) or `aseman_server.py` (Python) on the
+  server (`Aseman.fromRequest(req)` / `Aseman.app()`). Never log or expose
+  the token or the app key, and never call the real API from tests.
+- Every agent ask is a fresh, isolated conversation (a temporary room thread
+  deleted when the agent answers). Multi-turn features send `history` (the
+  SDK's `conversation` does).
+- `PLAN.md` is yours: write the plan before coding. In update mode,
+  `CHANGES.md` holds the change requests (the last one is current).
+- After you write `READY.json`, the platform itself starts your `start`
+  command and requests `GET /` on the port; if that fails, you get the
+  failure back to fix. Make the app start reliably.
 
 ## Hard requirements
 
 1. **Fullstack**: real frontend + backend (Node/Express, Fastify, Next.js, or
-   Python FastAPI). No static-only mock unless the brief says so.
-2. **UI framework (default)**: **Material 3 Expressive (M3E)** for the entire
+   Python FastAPI). No static-only mock unless the brief says so. With
+   `ui: elpian`, the server also serves `GET /elpian/app.js` (the bundle).
+2. **Web UI framework (`ui: web` only)**: **Material 3 Expressive (M3E)** for the entire
    frontend — same design system as
    [Material 3 Expressive Screen UI](https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI)
    and Google's M3E guidelines. Use this unless `BRIEF.md` (or the person)
@@ -164,7 +208,8 @@ preview page API (not invented credentials).
 6. **Design**: polished UI (M3E by default — §2). Responsive for desk card +
    phone widths. One clear visual direction. OpenUI islands included.
 7. **Tests**: write automated tests (unit and/or API), including theme
-   adaption and OpenUI helpers where used. **Run them**. Do not claim ready
+   adaption and OpenUI helpers where used (web), or the frontend's logic and
+   `vendor/aseman-elpian/check.mjs` (Elpian). **Run them**. Do not claim ready
    if tests fail.
 8. **Listen**: bind `0.0.0.0` on the port in `JOB.json` (`port`).
 9. **READY.json**: only after tests pass, write this file in the project root:
@@ -177,9 +222,16 @@ preview page API (not invented credentials).
      "port": 8787,
      "start": "node server.js",
      "dir": ".",
-     "summary": "one sentence"
+     "summary": "one sentence",
+     "ui": "elpian",
+     "elpian": "elpian/app.js"
    }
    ```
+
+   `ui` is the frontend you built (`elpian` or `web`); with `elpian`,
+   `elpian` is the bundle's path, served by your server at the same path.
+   With `web`, add `"widget": "elpian/widget.js"` (the phone widget's
+   program, served at that path).
 
    `start` must run from the project directory, stay in the foreground, and
    serve without rebuilding. Failures: write `READY.json` with

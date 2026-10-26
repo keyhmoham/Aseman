@@ -102,6 +102,7 @@ func (s *Service) updates(ctx context.Context, req *api.ActionRequest) (*api.Act
 	if err := s.R.List(ctx, "rooms", database.Filter{Equal: map[string]any{"space_id": spID.String()}, OrderBy: "created_at", Asc: true}, &rooms); err != nil {
 		return nil, err
 	}
+	rooms = visibleRooms(rooms)
 	readable := map[string]bool{}
 	activity := []map[string]any{}
 	visibleRooms := make([]space.Room, 0, len(rooms))

@@ -289,6 +289,7 @@ func (s *Service) chatList(ctx context.Context, req *api.ActionRequest) (*api.Ac
 		if err := s.R.List(ctx, "rooms", filter, &rooms); err != nil {
 			continue
 		}
+		rooms = visibleRooms(rooms)
 		seen := s.SeenAt(ctx, req.Caller.ID, sp.ID)
 		tree := s.chatTree(ctx, sp.ID)
 		cleared := time.Time{}

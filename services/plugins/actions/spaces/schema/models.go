@@ -8,7 +8,7 @@ import (
 func f(name string, k database.Kind) database.Field { return database.Field{Name: name, Kind: k} }
 
 func Models() []database.Model {
-	return append(shared.Models(), []database.Model{spaces(), rooms(), memberships(), files(), proxies(), invitations(), turns(), executionEvents(), executionArtifacts(), chatReports()}...)
+	return append(shared.Models(), []database.Model{spaces(), rooms(), memberships(), files(), proxies(), invitations(), turns(), executionEvents(), executionArtifacts(), chatReports(), appKeys()}...)
 }
 
 func spaces() database.Model {
@@ -33,8 +33,10 @@ func rooms() database.Model {
 		Fields: []database.Field{
 			f("id", database.KindString), f("space_id", database.KindString),
 			f("name", database.KindString), f("topic", database.KindString),
-			f("metadata_id", database.KindString), f("created_at", database.KindTime),
-			f("updated_at", database.KindTime),
+			f("metadata_id", database.KindString),
+			f("parent_id", database.KindString), f("temporary", database.KindBool),
+			f("creator_id", database.KindString),
+			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		},
 	}
 }
@@ -143,6 +145,21 @@ func chatReports() database.Model {
 			f("reason", database.KindString), f("note", database.KindString),
 			f("evidence", database.KindString), f("status", database.KindString),
 			f("resolved_by", database.KindString), f("resolved_at", database.KindTime),
+			f("created_at", database.KindTime), f("updated_at", database.KindTime),
+		},
+	}
+}
+
+// appKeys are apps' credentials for background work (see spaces/app_access.go).
+func appKeys() database.Model {
+	return database.Model{
+		Name:  "app_keys",
+		Table: "app_keys",
+		Fields: []database.Field{
+			f("id", database.KindString), f("app_id", database.KindString),
+			f("space_id", database.KindString), f("room_id", database.KindString),
+			f("proxy_id", database.KindString), f("owner_id", database.KindString),
+			f("title", database.KindString), f("hash", database.KindString),
 			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		},
 	}

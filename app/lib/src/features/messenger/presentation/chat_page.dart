@@ -66,7 +66,13 @@ class _ChatPageState extends State<ChatPage> {
   DateTime? _seen;
   late ChatSummary _chat = widget.chat;
 
+  /// The open thread of the chat's room; null for its main thread.
+  RoomThread? _thread;
+
   ChatSummary get chat => _chat;
+
+  /// Where the open conversation's messages live: the thread, else the room.
+  String get _roomId => _thread?.id ?? chat.roomId;
   AsemanService get _service => widget.dependencies.service;
   String get _me =>
       widget.dependencies.sessionController.session?.accountId ?? '';
@@ -90,9 +96,16 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _load() async {
     if (_loading) return;
     _loading = true;
+    var switched = false;
     try {
-      final res = await _service.fetchRoomChat(chat.spaceId, chat.roomId);
+      final thread = _roomId;
+      final res = await _service.fetchRoomChat(chat.spaceId, thread);
       if (!mounted) return;
+      // The thread was switched while this was loading: load the new one.
+      if (thread != _roomId) {
+        switched = true;
+        return;
+      }
       final old = _page;
       final msgs = mergeNewestRoomMessages(old.messages, res.messages);
       final holdsOlder = msgs.length > res.messages.length;
@@ -124,6 +137,7 @@ class _ChatPageState extends State<ChatPage> {
       }
     } finally {
       _loading = false;
+      if (switched) unawaited(_load());
     }
   }
 
@@ -133,9 +147,10 @@ class _ChatPageState extends State<ChatPage> {
     setState(() {});
     try {
       final oldest = _page.messages.first;
-      final res = await _service.fetchRoomChat(chat.spaceId, chat.roomId,
+      final thread = _roomId;
+      final res = await _service.fetchRoomChat(chat.spaceId, thread,
           before: oldest.createdAt);
-      if (!mounted) return;
+      if (!mounted || thread != _roomId) return;
       setState(() {
         _page = _page.copyWith(
           messages: mergeOlderRoomMessages(_page.messages, res.messages),
@@ -187,7 +202,7 @@ class _ChatPageState extends State<ChatPage> {
       to.removeWhere((id) => id.isEmpty);
     }
     try {
-      await _service.sendRoomMessage(chat.spaceId, chat.roomId, body,
+      await _service.sendRoomMessage(chat.spaceId, _roomId, body,
           mentions: to, attachments: attachments, replyTo: replyTo);
       await _load();
     } catch (e) {
@@ -213,7 +228,19 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _typing() => unawaited(
-      _service.setTyping(chat.spaceId, chat.roomId, true).catchError((_) {}));
+      _service.setTyping(chat.spaceId, _roomId, true).catchError((_) {}));
+
+  /// Switches to another thread of the room: its own history, loaded fresh.
+  void _switchThread(RoomThread thread) {
+    final next = thread.isMain || thread.id == chat.roomId ? null : thread;
+    if (next?.id == _thread?.id) return;
+    setState(() {
+      _thread = next;
+      _page = const RoomChatPage();
+      _initialLoading = true;
+    });
+    unawaited(_load());
+  }
 
   Future<void> _togglePin() async {
     final pin = !chat.pinned;
@@ -358,7 +385,10 @@ class _ChatPageState extends State<ChatPage> {
           me: _me,
           dependencies: widget.dependencies,
           spaceId: chat.spaceId,
-          roomId: chat.roomId,
+          roomId: _roomId,
+          threadRoomId: chat.roomId,
+          threadTitle: _thread?.title ?? '',
+          onThread: _switchThread,
           canModerate: chat.canModerate,
           loading: _initialLoading,
           mentionable: _agents,
@@ -368,7 +398,7 @@ class _ChatPageState extends State<ChatPage> {
           onDelete: (m) =>
               _change(() => _service.deleteRoomMessage(chat.spaceId, m.id)),
           onReport: (m) => reportToAdmins(context, _service,
-              spaceId: chat.spaceId, roomId: chat.roomId, messageId: m.id),
+              spaceId: chat.spaceId, roomId: _roomId, messageId: m.id),
           onTyping: chat.saved ? null : _typing,
           typing: _page.typing,
           receipts: receipts,

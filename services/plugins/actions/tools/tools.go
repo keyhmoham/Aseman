@@ -636,6 +636,8 @@ func (s *Service) invoke(ctx context.Context, req *api.ActionRequest) (*api.Acti
 		// Do not set this for microtool/page API traffic (preview kit calls):
 		// those results belong only on the HTTP response to the webview host.
 		Room string `json:"room"`
+		// Via names the app the call comes from, for usage records.
+		Via string `json:"via"`
 	}
 	if e := helper.Decode(req, &in); e != nil {
 		return nil, e
@@ -661,7 +663,7 @@ func (s *Service) invoke(ctx context.Context, req *api.ActionRequest) (*api.Acti
 		return nil, e
 	}
 	body, _ := json.Marshal(map[string]any{"function": in.Function, "payload": in.Payload})
-	b, _ := json.Marshal(map[string]any{"space": in.Space, "bot": in.Bot, "body": string(body)})
+	b, _ := json.Marshal(map[string]any{"space": in.Space, "bot": in.Bot, "body": string(body), "via": in.Via})
 	response, e := s.K.Actions().Dispatch(ctx, "spaces", "ask", &api.ActionRequest{Caller: req.Caller, Body: b})
 	if e != nil {
 		return nil, e

@@ -88,6 +88,53 @@ class WorkspaceRoom {
       );
 }
 
+/// A conversation thread of a room (`spaces.thread_list`): its own message
+/// history and its own context for the room's agents. The room itself is its
+/// main thread ([isMain]); threads are addressed like rooms by their [id].
+class RoomThread {
+  const RoomThread({
+    required this.id,
+    required this.title,
+    this.roomId = '',
+    this.isMain = false,
+    this.updatedAt,
+    this.lastBody = '',
+    this.lastAt,
+  });
+
+  final String id;
+  final String title;
+
+  /// The room the thread belongs to.
+  final String roomId;
+  final bool isMain;
+  final DateTime? updatedAt;
+
+  /// The newest message, for the thread list.
+  final String lastBody;
+  final DateTime? lastAt;
+
+  /// When something last happened in it.
+  DateTime? get activeAt => lastAt ?? updatedAt;
+
+  factory RoomThread.fromJson(Map<String, dynamic> json,
+      {bool isMain = false}) {
+    final last = json['last'] is Map
+        ? (json['last'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    return RoomThread(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? (isMain ? 'Main' : 'Thread'),
+      roomId: json['room_id'] as String? ?? '',
+      isMain: isMain,
+      updatedAt:
+          DateTime.tryParse('${json['updated_at'] ?? ''}')?.toLocal(),
+      lastBody: last['body'] as String? ?? '',
+      lastAt: DateTime.tryParse('${last['created_at'] ?? ''}')?.toLocal(),
+    );
+  }
+}
+
 /// A room message as returned by spaces.message_list.
 class RoomMessage {
   const RoomMessage({

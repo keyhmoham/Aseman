@@ -286,6 +286,18 @@ func (p *guardedVMM) Questions(ctx context.Context, id, spaceID string) ([]vmm.A
 	}
 	return port.Questions(ctx, id, spaceID)
 }
+func (p *guardedVMM) ForgetRoom(ctx context.Context, spaceID, roomID string) error {
+	ctx, release, err := p.gate.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	port, ok := p.port.(vmm.RoomForgetter)
+	if !ok {
+		return nil
+	}
+	return port.ForgetRoom(ctx, spaceID, roomID)
+}
 
 func Guard(port vmm.VMM, gate *lifetime.Gate) vmm.VMM {
 	return &guardedVMM{port: port, gate: gate}

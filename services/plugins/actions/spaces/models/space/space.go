@@ -28,13 +28,29 @@ type Space struct {
 }
 
 // Room scopes messages, files and bots within a space.
+//
+// A room's conversation can be split into threads. A thread is stored as a
+// room of its own whose ParentID names the room it belongs to: its messages,
+// and the agents' conversation context (keyed by room), are its own, while
+// the desk, grants and listings stay the parent room's. The room itself is
+// its main thread.
 type Room struct {
 	entity.Entity
 	SpaceID    identity.ID `db:"space_id" json:"space_id"`
 	Name       string      `db:"name" json:"name"`
 	Topic      string      `db:"topic" json:"topic,omitempty"`
 	MetadataID identity.ID `db:"metadata_id" json:"metadata_id"`
+	// ParentID is the room a thread belongs to (empty for a room).
+	ParentID string `db:"parent_id" json:"parent_id,omitempty"`
+	// Temporary marks a thread opened for one piece of work (an app asking an
+	// agent): it is deleted when the work is done.
+	Temporary bool `db:"temporary" json:"temporary,omitempty"`
+	// CreatorID is who opened a thread.
+	CreatorID string `db:"creator_id" json:"creator_id,omitempty"`
 }
+
+// IsThread reports whether the room is a thread of another room.
+func (r *Room) IsThread() bool { return r != nil && r.ParentID != "" }
 
 // New assembles a fresh space.
 func New(id, owner identity.ID, name string) *Space {

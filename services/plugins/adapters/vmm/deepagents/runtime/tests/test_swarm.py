@@ -50,6 +50,8 @@ def js(value: Any) -> AIMessage:
 
 
 ROLES = {"roles": [
+    {"key": "research", "title": "Market researcher", "needs": "research the market the dashboard serves", "instances": 2},
+    # Programming is OpenCode's: a development role is never staffed.
     {"key": "engineer", "title": "Software engineer", "needs": "write and test the code", "instances": 2},
     {"key": "analyst", "title": "Data analyst", "needs": "analyse sales data and build dashboards"},
     {"key": "visuals", "title": "Visual designer", "needs": "design illustrations and visuals"},
@@ -62,7 +64,7 @@ def decide_team(state: dict[str, Any], questions: dict[str, Any]) -> dict[str, A
     for qid, q in questions.items():
         text = q["instructions"]
         p = 0.05
-        if "`coder`" in text and "Software engineer" in text:
+        if "`coder`" in text and "Market researcher" in text:
             p = 0.92
         elif "`Data Analyst`" in text and "Data analyst" in text:
             p = 0.88
@@ -88,8 +90,10 @@ async def test_a_team_reuses_the_space_and_the_market_and_writes_only_what_is_mi
     team = store.team(ctx.base_thread)
     by_role = {r["role"]: r for r in team["roles"]}
     # Reused from the space, picked by the decision model alone.
-    assert by_role["engineer"]["agent"] == "coder" and by_role["engineer"]["source"] == "space"
-    assert by_role["engineer"]["how"] == "decision model" and by_role["engineer"]["instances"] == 2
+    assert by_role["research"]["agent"] == "coder" and by_role["research"]["source"] == "space"
+    assert by_role["research"]["how"] == "decision model" and by_role["research"]["instances"] == 2
+    # No agent is staffed for programming.
+    assert "engineer" not in by_role
     # Hired from the marketplace.
     assert by_role["analyst"]["agent"] == "Data Analyst" and by_role["analyst"]["source"] == "hired"
     # A close call settled by the language model.
@@ -104,6 +108,15 @@ async def test_a_team_reuses_the_space_and_the_market_and_writes_only_what_is_mi
     # One decision request scored every shortlisted pair at once.
     team_scoring = [d for d in platform.decisions if any(k.startswith("r") for k in d["questions"])]
     assert len(team_scoring) == 1
+
+
+def test_development_roles_are_opencodes() -> None:
+    for title in ("Software engineer", "Frontend developer", "Full-stack dev", "Backend", "DevOps"):
+        assert team_setup.development_role(title), title
+    assert team_setup.development_role("Engineer", "write and test the code")
+    for title in ("Data analyst", "Market researcher", "Visual designer", "Contract lawyer", "Copywriter",
+                  "Mechanical engineer", "Product development manager"):
+        assert not team_setup.development_role(title, "review the requirements"), title
 
 
 async def test_without_a_decision_model_the_language_model_picks(platform: Platform, tmp_path: Path) -> None:

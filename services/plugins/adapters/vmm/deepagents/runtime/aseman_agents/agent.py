@@ -189,6 +189,32 @@ class Runner:
     def questions(self, vm_id: str, space_id: str) -> list[dict[str, Any]]:
         return [q.public() for q in self.store.questions(vm_id, space_id)]
 
+    async def forget_room(self, space_id: str, room_id: str) -> int:
+        """Forgets every agent's conversation of a room: a room thread was
+        deleted (an app's temporary thread once its agent is done). Returns
+        how many agent threads were dropped."""
+        if not space_id or not room_id:
+            return 0
+        threads = set(self.store.forget_room(space_id, room_id))
+        conn = getattr(self.checkpointer, "conn", None)
+        if conn is not None:
+            from .store import _room_patterns
+            try:
+                for pattern in _room_patterns(space_id, room_id):
+                    async with conn.execute("SELECT DISTINCT thread_id FROM checkpoints WHERE thread_id LIKE ?",
+                                            (pattern,)) as cur:
+                        threads.update(row[0] for row in await cur.fetchall())
+            except Exception as exc:  # noqa: BLE001 - a saver without that table
+                log.warning("listing the room's checkpoints failed: %s", exc)
+        for thread in threads:
+            async with self._lock(thread):
+                try:
+                    await self.checkpointer.adelete_thread(thread)
+                except Exception as exc:  # noqa: BLE001 - the rest still go
+                    log.warning("forgetting thread %s failed: %s", thread, exc)
+            self._locks.pop(thread, None)
+        return len(threads)
+
     # --- a turn -------------------------------------------------------------
 
     def _instance(self, ctx: TurnContext) -> None:

@@ -112,8 +112,10 @@ function add(event, app) {                         // event is plain JSON
 | `Aseman.conversation(agent)` | `.send(text)` keeps the history in the program |
 | `Aseman.call(tool, microtool, args)` | a space app's microtool: its unwrapped result (often a markdown string) |
 | `Aseman.agents()`, `Aseman.tools()`, `Aseman.microtools(tool)`, `Aseman.context()` | discovery |
-| `Aseman.env()` | `{display: full\|compact\|sheet, theme: {mode, accent, colors}, user, space, room, title}`; `Aseman.onEnv(fn)` on change (the app re-renders by itself) |
-| `Aseman.compact(summary)`, `Aseman.expand()` | the phone widget summary (see below), open in full |
+| `Aseman.env()` | `{display: full\|compact\|sheet, widget: {size, shape} (compact), theme: {mode, accent, colors}, user, space, room, title}`; `Aseman.onEnv(fn)` on change (the app re-renders by itself) |
+| `App.create({…, widget: {view, refresh, size, shape, refreshMs, static}})` | the phone widget (required; see The phone widget) |
+| `app.every(key, ms, fn)`, `app.isWidget()` | a timer (min 5 s); whether it is drawn as the widget now |
+| `Aseman.compact(summary)`, `Aseman.expand()` | a published summary instead of a drawn widget; open in full |
 | `Aseman.Task`, `Task.all([...])`, `Aseman.plain(v)`, `Aseman.parseJSON(text)`, `Aseman.log(...)` | utilities |
 
 Who pays: every agent ask and app call from the frontend runs as **the person
@@ -257,13 +259,97 @@ microtool, args}` runs a microtool; `{type: "set", set: {...}}` sets values.
 Islands keep their state in `app.state.__openui[key]`; reuse a key to keep
 one, use a new key for a new island.
 
-## Phones: the compact widget
+## The phone widget (required)
 
-On a phone the app sits on the board as a widget; tapped, it opens in full.
-`Aseman.env().display` is `compact`, `sheet` or `full`. Publish what the
-widget shows with `Aseman.compact({title, value, format, delta, deltaFormat,
-caption, trend, progress, status, icon, metrics: [{label, value}]})` and
-call it again as data changes.
+On a phone, the desk is a board of widgets: every app sits there as a small
+tile, and a tap opens it in full. **Every app ships its own widget**: a
+second, glanceable view of the same program that shows the few live facts
+that matter for what the app is for — the number to watch, the next thing
+due, the latest result, the trend. Design it with the same care as the app.
+
+```js
+App.create({
+  state: { orders: [], revenue: 0, trend: [] },
+  view: function (s, app) { /* the full app */ },
+  init: function (app) { load(app); },                 // runs in both displays
+  widget: {
+    size: "medium",                                     // small 1×1 · medium 2×1 · large 2×2
+    shape: "card",                                      // card · squircle · pill · circle · leaf
+    refreshMs: 60000,                                   // live: refresh runs on this timer (min 5 s)
+    refresh: function (app) { load(app); },             // defaults to init
+    view: function (s, app) {
+      var size = (Aseman.env().widget || {}).size || "medium";
+      var open = s.orders.filter(function (o) { return !o.done; }).length;
+      return { type: "Row", props: { style: { gap: "12", padding: "12", alignItems: "center" } }, children: [
+        { type: "Stat", props: { label: "Revenue today", value: s.revenue, format: "currency:USD:0",
+                                 trend: s.trend, size: "compact" } },
+        size === "small" ? null : { type: "Column", props: { style: { gap: "4" } }, children: [
+          { type: "Tag", props: { text: open + " open", status: open ? "warning" : "good" } },
+          { type: "Sparkline", props: { values: s.trend, height: 28 } },
+        ] },
+      ].filter(Boolean) };
+    },
+  },
+});
+```
+
+When the program runs as the widget, `Aseman.env().display` is `compact`
+and `Aseman.env().widget` is `{size, shape}` (the tile the person chose,
+which can differ from yours); the SDK draws `widget.view` instead of `view`,
+tells the board your preferred size and shape, runs `init`, then `refresh`
+every `refreshMs`. Opened in full (`display` `sheet` or `full`), the same
+program draws `view` — no restart, same state.
+
+Make it good:
+
+* **Live, from real data**: the widget loads its data (your server, a space
+  app, an agent's summary) — never placeholders. `widget.static: true` only
+  for an app that truly has no changing data.
+* **One glance, one story**: lead with the single most useful value
+  (`Stat` with `format`, `delta`, `trend`), then at most two supporting
+  facts (`Tag`, `Sparkline`, `Progress`, `Gauge`, a short `Text`, a tiny
+  `Chart` in `large`). No tables, lists, inputs or app chrome
+  (`DataGrid`, `ListView`, `TextField`, `AppBar` are refused); at most
+  80 nodes.
+* **Fit every size**: read `Aseman.env().widget.size` — `small` shows one
+  value, `medium` a value and a fact or trend, `large` a small chart or
+  three facts. Keep text short; no scrolling.
+* **Theme**: leave colors to the theme (or `env().theme.colors`); status by
+  `Tag`/`Stat` `status`, not raw colors.
+* **States**: show a quiet skeleton or `—` while loading and a short line
+  on errors, never a stack trace.
+* **No interaction**: taps open the full app; don't put events in the
+  widget.
+
+`check.mjs` runs the program as its widget too: it fails when there is no
+widget, when it is not glanceable, when it loads no live data, or when its
+refresh throws.
+
+You can also publish a summary instead of drawing (`Aseman.compact({title,
+value, format, delta, …})`), but a drawn `widget` is expected.
+
+### A web app's widget
+
+An app with a web frontend (`ui: web`) has a native widget too: a small
+Elpian program of its own, in `elpian/widget/*.js`, bundled to
+`elpian/widget.js` (`bundle.mjs . --widget`) and served by your server at
+`GET /elpian/widget.js`. It is only ever drawn as the widget; opened, the
+web app shows. Write it exactly like an Elpian app with a widget, and reach
+your server with `Aseman.fetch` as usual:
+
+```js
+App.create({
+  state: { due: null, count: 0 },
+  view: function (s, app) { return app.widgetSpec().view(s, app); },   // never shown in full
+  init: function (app) {
+    Aseman.fetch("api/summary").then(function (r) { app.set({ due: r.json.next, count: r.json.open }); });
+  },
+  widget: { size: "medium", view: function (s) { /* … */ } },
+});
+```
+
+Check it with `check.mjs elpian/widget.js --widget-only …`; `READY.json`
+names it: `"widget": "elpian/widget.js"`.
 
 ## Checklist
 
@@ -272,4 +358,6 @@ call it again as data changes.
 3. `node vendor/aseman-elpian/bundle.mjs .` then `check.mjs … --server …` pass.
 4. Tests for the server, and for the frontend's pure logic (state updates,
    parsing microtool / agent replies) run with `node --test`.
-5. `READY.json` has `"ui": "elpian"` and `"elpian": "elpian/app.js"`.
+5. A `widget` that shows live, use-case-specific facts at a glance in every
+   size (see The phone widget); `check.mjs` passes for it too.
+6. `READY.json` has `"ui": "elpian"` and `"elpian": "elpian/app.js"`.

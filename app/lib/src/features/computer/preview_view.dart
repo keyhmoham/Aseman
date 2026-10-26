@@ -116,6 +116,7 @@ class LivePreview extends StatefulWidget {
     this.embed = 'desk',
     this.onClose,
     this.content,
+    this.compact = false,
   });
 
   final AsemanService service;
@@ -137,6 +138,10 @@ class LivePreview extends StatefulWidget {
   /// What is shown once the service is up, instead of the web page (an
   /// Elpian app's native view).
   final WidgetBuilder? content;
+
+  /// Shown as a phone-board widget: while it is not ready, a quiet tile
+  /// state instead of the full explanations (a tap opens it in full).
+  final bool compact;
 
   @override
   State<LivePreview> createState() => _LivePreviewState();
@@ -263,6 +268,22 @@ class _LivePreviewState extends State<LivePreview> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.compact && _phase != _Phase.ready) {
+      final scheme = Theme.of(context).colorScheme;
+      return Center(
+        child: _phase == _Phase.preparing
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: scheme.primary))
+            : Icon(
+                _phase == _Phase.asleep
+                    ? Icons.bedtime_outlined
+                    : Icons.cloud_off_rounded,
+                color: scheme.onSurfaceVariant),
+      );
+    }
     final body = switch (_phase) {
       _Phase.ready when widget.content != null => KeyedSubtree(
         key: ValueKey('${widget.page}#$_generation'),

@@ -9,7 +9,10 @@
 // With --server, the program's requests to its own server (Aseman.fetch) go
 // to the running server, so the frontend and backend are checked together.
 //
-//   node check.mjs elpian/app.js [--server http://127.0.0.1:8787] [--apps APPS.json] [--json]
+// It also runs the program as its phone-board widget (display "compact"): the
+// app must declare one, keep it glanceable and fed with live data.
+//
+//   node check.mjs elpian/app.js [--server http://127.0.0.1:8787] [--apps APPS.json] [--no-widget | --widget-only] [--json]
 
 import fs from "node:fs";
 import path from "node:path";
@@ -64,7 +67,38 @@ export const SAMPLE_ENV = {
   title: "Check",
 };
 
-export async function check(source, { server = "", apps = null, maxHandlers = 40, millis = 10000 } = {}) {
+// Nodes that do not belong on a glanceable phone widget.
+const NOT_IN_WIDGET = new Set(["DataGrid", "ListView", "GridView", "TextField", "Scaffold", "AppBar", "Drawer", "textarea", "input", "form", "table"]);
+const WIDGET_MAX_NODES = 80;
+
+// check runs the app as people use it (display "full") and, with
+// widget: true, as its phone-board widget (display "compact").
+export async function check(source, opts = {}) {
+  // A web app's widget program is only ever drawn as the widget.
+  if (opts.widgetOnly) {
+    const widget = await run(source, { ...opts, display: "compact" });
+    return { ...widget, errors: widget.errors.map((e) => `widget: ${e}`), warnings: widget.warnings.map((w) => `widget: ${w}`),
+      widget: { renders: widget.renders, nodes: widget.nodes, hint: widget.hint, requests: widget.requests } };
+  }
+  const full = await run(source, { ...opts, display: "full" });
+  if (!opts.widget) return full;
+  const widget = await run(source, { ...opts, display: "compact" });
+  return {
+    ok: full.ok && widget.ok,
+    errors: [...full.errors, ...widget.errors.map((e) => `widget: ${e}`)],
+    warnings: [...full.warnings, ...widget.warnings.map((w) => `widget: ${w}`)],
+    renders: full.renders,
+    handlers: full.handlers,
+    widget: { renders: widget.renders, nodes: widget.nodes, hint: widget.hint, requests: widget.requests },
+  };
+}
+
+async function run(source, { server = "", apps = null, maxHandlers = 40, millis = 10000, display = "full" } = {}) {
+  const compact = display === "compact";
+  const env = { ...SAMPLE_ENV, display, widget: compact ? { size: "medium", shape: "card" } : undefined };
+  const intervals = [];
+  let hint = null;
+  let requests = 0;
   const errors = [];
   const warnings = [];
   const renders = [];
@@ -99,14 +133,24 @@ export async function check(source, { server = "", apps = null, maxHandlers = 40
         break;
       case "aseman.env":
       case "env.get":
-        reply = SAMPLE_ENV;
+        reply = env;
+        break;
+      case "aseman.compact":
+        hint = parsed;
+        break;
+      case "setInterval":
+        if (parsed && (parsed.handler || parsed.fn)) intervals.push(parsed.handler || parsed.fn);
+        reply = intervals.length;
         break;
       case "println":
         if (typeof parsed === "string" && parsed.startsWith("app error:")) errors.push(`${running}: ${parsed.slice(11).trim()}`);
         break;
       case "aseman.request":
         if (!parsed || !parsed.id || !(parsed.op || parsed.path !== undefined)) errors.push(`aseman.request without id and op/path: ${JSON.stringify(parsed)}`);
-        else queue.push(parsed);
+        else {
+          queue.push(parsed);
+          requests++;
+        }
         reply = { accepted: true };
         break;
       default:
@@ -218,6 +262,44 @@ export async function check(source, { server = "", apps = null, maxHandlers = 40
   await drain();
   if (!renders.length) errors.push("the program never rendered (call App.create({view}) or askHost('render', …))");
 
+  if (compact) {
+    // The widget refreshes its live data: run each refresh once.
+    for (const name of intervals.slice(0, 5)) {
+      running = `the widget's refresh (${name})`;
+      const r = evaluate(`globalThis[${JSON.stringify(name)}]()`, "refresh.js");
+      if (r.error) errors.push(`its refresh threw: ${r.error}`);
+      await drain();
+    }
+    const tree = latest();
+    const nodes = [];
+    const count = (n) => {
+      if (!n || typeof n !== "object") return;
+      nodes.push(n);
+      (n.children || []).forEach(count);
+    };
+    count(tree);
+    const report = { ok: false, errors, warnings, renders: renders.length, handlers: 0, nodes: nodes.length, hint, requests };
+    if (!hint || hint.view !== "self") {
+      errors.push("the app has no phone widget: give App.create a widget {view(state, app), refresh(app), size, shape} (ELPIAN.md, The phone widget)");
+    } else {
+      if (hint.size && !["small", "medium", "large"].includes(hint.size)) errors.push(`widget size "${hint.size}" is not small, medium or large`);
+      if (hint.shape && !["card", "squircle", "pill", "circle", "leaf"].includes(hint.shape)) errors.push(`widget shape "${hint.shape}" is not card, squircle, pill, circle or leaf`);
+      if (nodes.length > WIDGET_MAX_NODES) errors.push(`the widget draws ${nodes.length} nodes: keep it a glanceable summary (at most ${WIDGET_MAX_NODES})`);
+      const heavy = [...new Set(nodes.map((n) => n.type).filter((t) => NOT_IN_WIDGET.has(t)))];
+      if (heavy.length) errors.push(`the widget uses ${heavy.join(", ")}: a widget is a glance (stats, a chart, a few lines), not a screen; taps open the full app`);
+      if (requests === 0 && !(hint.static === true)) errors.push("the widget shows no live data: load it in init or widget.refresh (Aseman.fetch / call / ask), or declare widget.static: true when the app truly has none");
+      if (!intervals.length && !(hint.static === true)) warnings.push("the widget never refreshes: give it widget.refresh (or init) to run on a timer");
+      if (nodes.some((n) => n.events && Object.keys(n.events).length)) warnings.push("widget nodes have events: taps on a widget open the full app instead");
+    }
+    const walked = [];
+    walk(tree, "widget", walked);
+    vm.dispose();
+    runtime.dispose();
+    report.ok = errors.length === 0;
+    report.errors = [...new Set(errors)];
+    return report;
+  }
+
   // Every handler the screens name exists and works with a sample event.
   const tried = new Set();
   for (let pass = 0; pass < 3 && tried.size < maxHandlers; pass++) {
@@ -266,6 +348,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const report = await check(fs.readFileSync(file, "utf8"), {
     server: opt("--server"),
     apps: appsFile && fs.existsSync(appsFile) ? JSON.parse(fs.readFileSync(appsFile, "utf8")) : null,
+    widget: !args.includes("--no-widget"),
+    widgetOnly: args.includes("--widget-only"),
   }).catch((e) => ({ ok: false, errors: [e.message], warnings: [] }));
   if (args.includes("--json")) {
     console.log(JSON.stringify(report, null, 2));

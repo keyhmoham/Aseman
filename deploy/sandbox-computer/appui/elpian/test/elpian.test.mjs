@@ -37,6 +37,17 @@ var app = App.create({
     ] };
   },
   init: function (app) { load(); },
+  widget: {
+    size: "medium",
+    view: function (s) {
+      return { type: "Row", props: { style: { gap: "12", padding: "12" } }, children: [
+        { type: "Stat", props: { label: "Open todos", value: s.items.length, size: "compact" } },
+        { type: "Sparkline", props: { values: [1, 2, s.items.length] } },
+      ] };
+    },
+    refresh: function () { load(); },
+    refreshMs: 30000,
+  },
 });
 function load() {
   Aseman.fetch("api/todos").then(function (r) { app.set({ items: r.json.items }); });
@@ -72,8 +83,10 @@ test("a bundled app runs on QuickJS against its own server and the space", async
   assert.deepEqual(out.files.slice(0, 2), ["aseman-elpian.js", "openui-elpian.js"]);
   const { srv, items, url } = await server();
   try {
-    const report = await check(fs.readFileSync(out.target, "utf8"), { server: url });
+    const report = await check(fs.readFileSync(out.target, "utf8"), { server: url, widget: true });
     assert.equal(report.ok, true, report.errors.join("\n"));
+    assert.deepEqual(report.widget.hint, { view: "self", size: "medium", shape: "card", static: false });
+    assert.ok(report.widget.requests >= 2, "the widget loads, then refreshes, its live data");
     assert.ok(report.renders >= 3, "renders after data and the agent's answer arrive");
     assert.ok(report.handlers >= 2);
     assert.ok(items.length >= 1);
@@ -173,4 +186,29 @@ test("nodes.json lists exactly what the engine and the UI kit draw", () => {
   assert.deepEqual([...NODES.kit].sort(), [...kitNodes].sort());
   const doc = fs.readFileSync(path.join(kit, "ELPIAN.md"), "utf8");
   for (const n of [...NODES.elpian, ...NODES.kit]) assert.ok(doc.includes("`" + n + "`"), `ELPIAN.md does not document ${n}`);
+});
+
+test("every app ships a glanceable, live phone widget", async () => {
+  const none = await check(SDK + `App.create({ view: function () { return { type: "Text", props: { text: "hi" } }; } });`, { widget: true });
+  assert.equal(none.ok, false);
+  assert.match(none.errors.join("\n"), /widget: the app has no phone widget/);
+
+  const screen = await check(SDK + `App.create({
+    view: function () { return { type: "Text", props: { text: "full" } }; },
+    widget: function () { return { type: "Column", children: [{ type: "DataGrid", props: { data: [] } }, { type: "TextField", props: {} }] }; },
+  });`, { widget: true });
+  const all = screen.errors.join("\n");
+  assert.match(all, /uses DataGrid, TextField/);
+  assert.match(all, /shows no live data/);
+
+  const calm = await check(SDK + `App.create({
+    view: function () { return { type: "Text", props: { text: "full" } }; },
+    widget: { static: true, view: function () { return { type: "Stat", props: { label: "Timer", value: "25:00" } }; } },
+  });`, { widget: true });
+  assert.equal(calm.ok, true, calm.errors.join("\n"));
+
+  // The full app is unchanged by having a widget.
+  const fullOnly = await check(SDK + `App.create({ view: function () { return { type: "Text", props: { text: "full" } }; },
+    widget: function () { return { type: "Text", props: { text: "w" } }; } });`);
+  assert.equal(fullOnly.ok, true);
 });

@@ -144,6 +144,14 @@ class DeskWindow {
   /// it natively rather than showing a web page ('' for a web page).
   String get elpian => isWeb ? '${args['elpian'] ?? ''}' : '';
 
+  /// The Elpian program its phone widget runs: a web app's own widget
+  /// program, else an Elpian app's program ('' for a plain web page).
+  String get widget {
+    if (!isWeb) return '';
+    final own = '${args['widget'] ?? ''}';
+    return own.isNotEmpty ? own : elpian;
+  }
+
   /// A workspace file rather than a tool's own frontend.
   bool get isFile => kind == fileKind;
 

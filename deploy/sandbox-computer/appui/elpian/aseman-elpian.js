@@ -4,7 +4,10 @@
  * Elpian QuickJS runtime the Aseman client hosts (no DOM, no fetch, no
  * modules). See ELPIAN.md.
  *
- *   App.create({ state, view(state, app), init(app) })  render loop
+ *   App.create({ state, view(state, app), init(app), widget })  render loop
+ *     widget: the phone-board widget, {view(state, app), refresh(app), size,
+ *     shape, refreshMs} (or just a view function): drawn instead of `view`
+ *     when the app is shown as a widget, its live data refreshed on a timer
  *   app.set(patch) / app.render() / app.handler(key, fn) / app.input(key, field)
  *   Aseman.ask / askJSON / conversation / call / agents / tools / microtools /
  *     context / fetch (the app's own server) / env / compact / expand
@@ -418,6 +421,50 @@
     this.render();
   };
 
+  // The widget spec, normalized: {view, refresh, size, shape, refreshMs}.
+  App.prototype.widgetSpec = function () {
+    var w = this.spec.widget;
+    if (!w) return null;
+    if (typeof w === "function") w = { view: w };
+    return typeof w.view === "function" ? w : null;
+  };
+
+  // Whether the app is shown as a phone-board widget now.
+  App.prototype.isWidget = function () {
+    return currentEnv().display === "compact";
+  };
+
+  // Calls fn(app) every ms (at least 5 s) while the program runs.
+  App.prototype.every = function (key, ms, fn) {
+    var app = this;
+    var name = this.handler("__every_" + key, function () { fn(app); });
+    try {
+      return ask("setInterval", JSON.stringify({ handler: name, ms: Math.max(5000, ms | 0) }));
+    } catch (e) {
+      log("timer unavailable:", String(e));
+      return null;
+    }
+  };
+
+  // In the widget display: tell the board to draw the program itself (in
+  // its preferred size and shape), and keep the widget's data live.
+  App.prototype.startWidget = function () {
+    var w = this.widgetSpec();
+    if (!w || this.widgetStarted || !this.isWidget()) return;
+    this.widgetStarted = true;
+    Aseman.compact({ view: "self", size: w.size || "medium", shape: w.shape || "card", static: !!w.static });
+    var refresh = typeof w.refresh === "function" ? w.refresh : this.spec.init;
+    if (typeof refresh === "function") {
+      this.every("widget_refresh", w.refreshMs || 60000, function (app) {
+        try {
+          refresh(app);
+        } catch (e) {
+          app.fail(e);
+        }
+      });
+    }
+  };
+
   App.prototype.render = function () {
     if (this.rendering) {
       this.dirty = true;
@@ -429,7 +476,8 @@
         this.dirty = false;
         var tree;
         try {
-          tree = this.spec.view(this.state, this);
+          var w = this.isWidget() ? this.widgetSpec() : null;
+          tree = w ? w.view(this.state, this) : this.spec.view(this.state, this);
         } catch (e) {
           this.error = (e && e.message) || String(e);
           tree = null;
@@ -459,6 +507,8 @@
     if (!spec || typeof spec.view !== "function") throw new Error("App.create needs view(state, app)");
     var app = new App(spec);
     app.render();
+    app.startWidget();
+    Aseman.onEnv(function () { app.startWidget(); });
     if (typeof spec.init === "function") {
       try {
         spec.init(app);

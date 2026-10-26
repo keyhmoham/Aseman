@@ -127,8 +127,15 @@ class _ElpianAppViewState extends State<ElpianAppView> {
     String hex(Color c) =>
         '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
     final session = widget.service.session;
+    final presentation = FrontendPresentation.maybeOf(context);
+    final display = FrontendPresentation.displayOf(context);
     return {
-      'display': FrontendPresentation.displayOf(context).name,
+      'display': display.name,
+      if (display == FrontendDisplay.compact)
+        'widget': {
+          'size': presentation?.size ?? 'medium',
+          'shape': presentation?.shape ?? 'card',
+        },
       'theme': {
         'mode': theme.brightness == Brightness.dark ? 'dark' : 'light',
         'accent': hex(s.primary),
@@ -160,13 +167,24 @@ class _ElpianAppViewState extends State<ElpianAppView> {
 
   @override
   Widget build(BuildContext context) {
+    final compact = FrontendPresentation.isCompact(context);
     final error = _error;
-    if (error != null) return _AppError(error: error, onRetry: _load);
+    if (error != null) {
+      // A widget says it quietly; the full app explains.
+      return compact
+          ? Center(
+              child: Icon(Icons.cloud_off_rounded,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant))
+          : _AppError(error: error, onRetry: _load);
+    }
+    final loading = compact
+        ? const Padding(
+            padding: EdgeInsets.all(12),
+            child: SkeletonParagraph(lines: 2, lineHeight: 10))
+        : const SkeletonPage(stats: false, rows: 3);
     final code = _code;
     final host = _host;
-    if (code == null || host == null) {
-      return const SkeletonPage(stats: false, rows: 3);
-    }
+    if (code == null || host == null) return loading;
     final program = ElpianVmScope(
       key: ValueKey('elpian-${widget.page}${widget.entry}#${identityHashCode(host)}'),
       controller: _vm,
@@ -176,8 +194,12 @@ class _ElpianAppViewState extends State<ElpianAppView> {
       engine: _engine,
       stylesheet: AppFrontendTheme.stylesheet(Theme.of(context)),
       hostHandlers: host.handlers(),
-      loadingWidget: const SkeletonPage(stats: false, rows: 3),
-      errorBuilder: (e) => _AppError(error: e, onRetry: _load),
+      loadingWidget: loading,
+      errorBuilder: (e) => compact
+          ? Center(
+              child: Icon(Icons.error_outline_rounded,
+                  color: Theme.of(context).colorScheme.error))
+          : _AppError(error: e, onRetry: _load),
     );
     if (widget.spaceId.isEmpty) return program;
     // Images and media load from the space's files as this person.

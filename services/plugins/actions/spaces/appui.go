@@ -47,6 +47,9 @@ type appuiReady struct {
 	// natively) or "web"; Elpian is that program's path in the app.
 	UI     string `json:"ui"`
 	Elpian string `json:"elpian"`
+	// Widget is a web app's phone widget program (an Elpian app's program
+	// draws its own).
+	Widget string `json:"widget"`
 }
 
 // App UI frontends. Elpian is the default; web only when the person asked
@@ -413,6 +416,11 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 			return "", err
 		}
 		proxyArgs["elpian"] = elpianEntry
+	} else if w := strings.TrimPrefix(strings.TrimSpace(ready.Widget), "./"); w != "" {
+		if err := checkElpianEntry(w); err != nil {
+			return "", err
+		}
+		proxyArgs["widget"] = w
 	}
 	rawArgs, _ := json.Marshal(proxyArgs)
 	proxyOut, err := s.proxyCreateTool(opCtx, spaceID, agentName, string(rawArgs))

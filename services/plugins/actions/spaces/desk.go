@@ -50,7 +50,10 @@ const DeskAppFrontend = "app"
 // for a page of no tool (they share that dock entry). An Elpian app (an App
 // UI whose frontend is an Elpian program) is such a window too: Args also
 // hold {"elpian": the program's path in the app, "elpian/app.js"}, and the
-// client runs that program natively instead of showing a web page.
+// client runs that program natively instead of showing a web page. Every
+// generated app's window also holds {"widget": its phone widget's program}
+// when that is a separate program (a web app's); the phone board runs it
+// natively as the window's widget (an Elpian app's program draws its own).
 const (
 	DeskWeb         = "web"
 	DeskWebFrontend = "web"
@@ -149,6 +152,18 @@ func (w *DeskWindow) Elpian() string {
 	}
 	entry, _ := w.Args["elpian"].(string)
 	return entry
+}
+
+// Widget is the program a window's phone widget runs: its own widget
+// program, else an Elpian app's program ("" for a plain web page).
+func (w *DeskWindow) Widget() string {
+	if w.Kind != DeskWeb {
+		return ""
+	}
+	if entry, _ := w.Args["widget"].(string); entry != "" {
+		return entry
+	}
+	return w.Elpian()
 }
 
 // checkElpianEntry accepts an Elpian program's path inside its app: a
@@ -430,6 +445,12 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 					return "", err
 				}
 				args["elpian"] = entry
+			}
+			if entry, _ := op.Args["widget"].(string); entry != "" {
+				if err := checkElpianEntry(entry); err != nil {
+					return "", err
+				}
+				args["widget"] = entry
 			}
 			op.Frontend, op.Microtool, op.Args = DeskWebFrontend, "", args
 		} else if op.Kind == DeskFile && op.Args["file_id"] != nil {

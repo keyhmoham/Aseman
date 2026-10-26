@@ -49,6 +49,18 @@ func TestElpianAppWindowsCarryTheirProgram(t *testing.T) {
 			t.Fatalf("elpian %q accepted", bad)
 		}
 	}
+	// A web app's phone widget is a program of its own.
+	var web Desktop
+	id, err = web.Apply(DeskOp{Op: "open", Kind: DeskWeb, Args: map[string]any{"page": page, "widget": "elpian/widget.js"}}, "agent", time.Now())
+	if err != nil || web.window(id).Widget() != "elpian/widget.js" || web.window(id).Elpian() != "" {
+		t.Fatalf("web app widget: %v %+v", err, web.window(id))
+	}
+	if d.window(d.Windows[0].ID).Widget() != "elpian/app.js" {
+		t.Fatal("an Elpian app's widget is not its program")
+	}
+	if _, err := web.Apply(DeskOp{Op: "open", Kind: DeskWeb, Args: map[string]any{"page": page, "widget": "../w.js"}}, "agent", time.Now()); err == nil {
+		t.Fatal("a widget outside the app was accepted")
+	}
 	var plain Desktop
 	id, _ = plain.Apply(DeskOp{Op: "open", Kind: DeskWeb, Args: map[string]any{"page": page}}, "agent", time.Now())
 	if plain.window(id).Elpian() != "" {

@@ -17,6 +17,12 @@ Aseman API (not invented credentials).
 | **`elpian`** (default) | An **Elpian program**: JavaScript on the Elpian QuickJS runtime inside the Aseman client, drawing native Flutter UI from JSON view trees | **`ELPIAN.md`** (and `vendor/aseman-elpian/`). Requirements 2–4 and 6 below are web rules: skip them; ELPIAN.md replaces them. |
 | `web` | A web frontend (HTML/CSS/JS in a webview) | Only when the person explicitly asked for web technology. Requirements 2–6 below apply. |
 
+Every app, whatever its `ui`, also has a **phone widget**: a native Elpian
+view of the few live facts that matter for the app, shown on people's phone
+boards (`ELPIAN.md`, The phone widget). With `ui: elpian` it is the
+program's `widget`; with `ui: web` it is a small Elpian program of its own
+(`elpian/widget/`, `"widget": "elpian/widget.js"` in `READY.json`).
+
 Before writing an Elpian frontend, read `ELPIAN.md` in full and look at
 `vendor/aseman-elpian/` (the SDK, the OpenUI renderer and `nodes.json`):
 use only the node types, props and host APIs they define. The backend is the
@@ -224,6 +230,8 @@ same in both cases.
 
    `ui` is the frontend you built (`elpian` or `web`); with `elpian`,
    `elpian` is the bundle's path, served by your server at the same path.
+   With `web`, add `"widget": "elpian/widget.js"` (the phone widget's
+   program, served at that path).
 
    `start` must run from the project directory, stay in the foreground, and
    serve without rebuilding. Failures: write `READY.json` with

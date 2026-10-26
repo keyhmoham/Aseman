@@ -493,6 +493,36 @@ def test_agents_build_interactive_pages_for_tools() -> None:
     assert "appui_create(brief=" in native and "tool='bot-wx'" in native and "proxy_create(tool='bot-wx'" in native
 
 
+async def test_agents_see_attached_images_with_code_mode_on(platform: Platform, tmp_path: Path) -> None:
+    """read_attachment stays a native tool under Code Mode: the image comes back
+    as vision content, not as JSON text clipped by codemode_execute."""
+    platform.apps.append({"name": "file_read", "kind": "tool", "description": "Read an attached file.",
+                          "parameters": {"type": "object", "properties": {"file_id": {"type": "string"}}}})
+    ask = platform.do_spaces_ask
+
+    def do_spaces_ask(caller: str, body: dict[str, Any]) -> dict[str, Any]:
+        if body.get("tool") == "file_read":
+            platform.tool_runs.append({"tool": "file_read", "args": body.get("args"), "by": caller})
+            return {"tool": "file_read", "result": json.dumps({"__multimodal": {
+                "text": "file: cat.png", "image_url": "data:image/jpeg;base64,AAAA"}})}
+        return ask(caller, body)
+
+    platform.do_spaces_ask = do_spaces_ask
+    r, model = runner(platform, tmp_path, [
+        call("read_attachment", {"file_id": "file-1"}),
+        AIMessage(content="A cat."),
+    ])
+    req = turn_request(CODER, "what is in this photo?", token="tok-coder", allowed_tools=["send_message"])
+    req["turn"]["attachments"] = [{"id": "file-1", "name": "cat.png", "mime": "image/png", "size": 4}]
+    out = await r.prompt(req)
+    assert out.status == "done", out
+    assert {"tool": "file_read", "args": {"file_id": "file-1"}, "by": CODER["account_id"]} in platform.tool_runs
+    seen = [m for convo in model.seen for m in convo if isinstance(m, ToolMessage) and m.name == "read_attachment"]
+    assert seen and isinstance(seen[-1].content, list), seen
+    assert any(b.get("type") == "image_url" and b["image_url"]["url"].startswith("data:image/jpeg;base64,")
+               for b in seen[-1].content)
+
+
 def test_platform_tools_do_not_survive_allow_list_without_codemode() -> None:
     """Desk/platform tools are not CORE when Code Mode owns them; only Code Mode is."""
     from langchain_core.tools import StructuredTool

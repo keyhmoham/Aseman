@@ -60,11 +60,17 @@ PLATFORM_TOOLS = {
     "db_read": "db_read",
 }
 
+# Platform tools that stay native LLM tools when Code Mode is on. read_attachment
+# returns an image as vision content the model sees; through codemode_execute it
+# would come back as clipped JSON text, and the agent could not see the picture.
+NATIVE_PLATFORM_TOOLS = {"file_read"}
+
 # Tools every agent keeps whatever its allowed_tools say: without them it can
-# neither talk nor report. Desk / platform presentation is reached through
-# Code Mode (`/platform/…`), not as native tools, when Code Mode is on.
+# neither talk, report, nor read what it is sent. Desk / platform presentation
+# is reached through Code Mode (`/platform/…`), not as native tools, when Code
+# Mode is on.
 CORE_TOOLS = {"send_message", "read_room", "list_team", "ask_user", "send_direct_message", "read_direct_messages",
-              "codemode_search", "codemode_execute"}
+              "read_attachment", "codemode_search", "codemode_execute"}
 
 _SLUG = re.compile(r"[^a-z0-9_]+")
 # A tool's own description sent to the model, at most (characters). Apps put how
@@ -252,7 +258,7 @@ async def platform_tools(ctx: TurnContext, *, via_codemode: bool = False) -> lis
         if ctx.turn.no_sandbox and name in {"sandbox_exec", "file_send", "file_upload", "proxy_create", "proxy_list", "proxy_get", "proxy_delete"}:
             continue
         if name in PLATFORM_TOOLS:
-            if via_codemode:
+            if via_codemode and name not in NATIVE_PLATFORM_TOOLS:
                 # Platform tools are POST /platform/{name} in Code Mode OpenAPI.
                 continue
             out.append(_platform_tool(ctx, name, PLATFORM_TOOLS[name], t))

@@ -63,6 +63,7 @@ returns only the final result — intermediates stay out of context.
 
 Do not invent direct `app__function`, `file_send`, `appui_create` or
 `timeline_*` tools — use Code Mode. Messaging (`send_message`, …), `ask_user`,
+`read_attachment` (files and images people attach: it shows you the picture),
 sandbox files/shell (`execute`, `read_file`, …), `write_todos` and `task` /
 swarm remain native tools.
 </code_mode>"""

@@ -48,9 +48,11 @@ var codeModeSlug = regexp.MustCompile(`[^a-z0-9_]+`)
 
 // Platform builtins served through Code Mode (not as one LLM tool each).
 // sandbox_exec / file_edit stay on the deepagents FS+shell; message_send,
-// room_info and ask_user stay as native communication / HITL tools.
+// room_info and ask_user stay as native communication / HITL tools; file_read
+// stays the agent's native read_attachment, because an image it returns is
+// vision input only as a tool result, not as Code Mode's text result.
 var codeModePlatform = map[string]bool{
-	"file_read": true, "file_send": true, "file_upload": true, "image_generate": true,
+	"file_send": true, "file_upload": true, "image_generate": true,
 	"proxy_create": true, "proxy_list": true, "proxy_get": true, "proxy_delete": true,
 	"appui_create": true, "opencode_run": true, "opencode_status": true, "opencode_models": true,
 	"routine_create": true, "routine_list": true, "routine_get": true, "routine_update": true, "routine_delete": true,

@@ -27,8 +27,8 @@ Node type and its props. Field props name a key of each row (`a.b` reaches neste
 | `TreeView` | `data` (`{label, value, icon, children}` or a list of them); `labelField`, `childrenField`, `expanded` (levels), `format` |
 | `JsonView` | `value`, `expanded` |
 | `CodeBlock` | `code`, `language`, `lineNumbers`, `maxHeight` |
-| `Progress` | `value`, `max`, `variant` (`linear`/`circular`), `label`, `showValue`, `format`, `color`/`status`, `size`, `thickness` |
-| `Tag` / `Badge` | `text`, `color`/`status`, `variant` (`tonal` `filled` `outline`), `icon` |
+| `Progress` | `value`, `max`, `variant` (`linear`/`circular`), `wavy` (the M3 Expressive wavy bar), `label`, `showValue`, `format`, `color`/`status`, `size`, `thickness` |
+| `Tag` / `Badge` | `text`, `color`/`status` (default: the accent), `variant` (`tonal` `filled` `outline`), `icon`, `dot` |
 | `Rating` | `value`, `max`, `size`, `color`, `showValue` |
 | `Callout` | `title`, `text`, `severity` (`info` `good` `warning` `critical`), `icon`; children below the text |
 | `Avatar` | `name` (initials), `url`, `size`, `color` |

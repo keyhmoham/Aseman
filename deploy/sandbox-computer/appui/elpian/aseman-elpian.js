@@ -393,11 +393,15 @@
   };
 
   // A TextField-style input bound to state[field]: {value, events.input}.
+  // props are TextField props (label, hint, icon, helper, …); search: true
+  // draws the M3 SearchBar instead.
   App.prototype.input = function (key, field, props) {
     var app = this;
     var p = merge(props, { value: app.state[field] == null ? "" : String(app.state[field]) });
+    var search = !!p.search;
+    delete p.search;
     return {
-      type: "TextField",
+      type: search ? "SearchBar" : "TextField",
       key: key,
       props: p,
       events: {
@@ -498,9 +502,9 @@
     var banner = {
       type: "Callout",
       props: { severity: "critical", title: "Something went wrong", text: app.error },
-      children: [{ type: "Button", props: { text: "Dismiss" }, events: { tap: dismiss } }],
+      children: [{ type: "Button", props: { text: "Dismiss", variant: "tonal", size: "xs", icon: "close" }, events: { tap: dismiss } }],
     };
-    return { type: "Column", props: { style: { gap: "12", padding: "12" } }, children: tree ? [banner, tree] : [banner] };
+    return { type: "Column", props: { style: { gap: "12", padding: "16" } }, children: tree ? [banner, tree] : [banner] };
   }
 
   App.create = function (spec) {

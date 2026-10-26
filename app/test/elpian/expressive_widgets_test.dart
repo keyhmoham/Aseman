@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:aseman/src/core/theme/app_theme.dart';
 import 'package:aseman/src/elpian/elpian.dart';
 import 'package:aseman/src/elpian/widgets/elpian_expressive.dart';
@@ -348,4 +351,30 @@ void main() {
         .reduce((a, b) => a > b ? a : b);
     expect(peak, greaterThan(1));
   });
+
+  // The trees the reference app (appui/elpian/examples/showcase.js) renders,
+  // captured from the program: what the design guide teaches must draw.
+  final renders = jsonDecode(
+          File('test/elpian/fixtures/showcase_renders.json').readAsStringSync())
+      as Map<String, dynamic>;
+  for (final screen in renders.keys) {
+    for (final dark in [false, true]) {
+      testWidgets('the showcase $screen screen draws (${dark ? 'dark' : 'light'})',
+          (tester) async {
+        tester.view.physicalSize = const Size(420, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final engine = kitEngine();
+        await tester.pumpWidget(MaterialApp(
+          theme: dark ? AppTheme.dark : AppTheme.light,
+          home: Builder(
+              builder: (_) => engine
+                  .renderFromJson(renders[screen] as Map<String, dynamic>)),
+        ));
+        await tester.pump(const Duration(milliseconds: 600));
+        expect(tester.takeException(), isNull);
+        expect(find.byType(NavigationBar), findsOneWidget);
+      });
+    }
+  }
 }

@@ -53,17 +53,32 @@
     return { success: "good", warning: "warning", danger: "critical" }[tone] || "info";
   }
 
-  function text(t, style) {
-    return { type: "Text", props: { text: str(t), style: style || {} } };
+  function text(t, style, variant) {
+    var props = { text: str(t), style: style || {} };
+    if (variant) props.variant = variant;
+    return { type: "Text", props: props };
   }
 
   function muted(t) {
-    return text(t, { color: color("onSurfaceVariant", "#6b6f76"), fontSize: "13" });
+    return { type: "Text", props: { text: str(t), variant: "bodyMedium", color: "muted" } };
   }
 
+  // M3 type roles: titles take the emphasized weight of M3 Expressive.
   function title(t, size) {
-    var px = { xl: "28", lg: "22", md: "17", sm: "15" }[size || "md"] || "17";
-    return text(t, { fontSize: px, fontWeight: "bold" });
+    var role = { xl: "headlineMediumEmphasized", lg: "titleLargeEmphasized", md: "titleMediumEmphasized", sm: "titleSmallEmphasized" }[size || "md"] || "titleMediumEmphasized";
+    return text(t, {}, role);
+  }
+
+  // A Material icon name (snake_case), as opposed to an emoji or a label.
+  function isIconName(v) {
+    return typeof v === "string" && /^[a-z][a-z0-9_]*$/.test(v);
+  }
+
+  // A leading glyph: a Material icon, or the emoji/text as given.
+  function glyph(v, size) {
+    if (!v) return null;
+    if (isIconName(v)) return { type: "Icon", props: { icon: v, size: size || 22, style: { color: color("primary", "#6750A4") } } };
+    return text(v, { fontSize: String(size || 22) });
   }
 
   // Elpian lays rows and columns out from CSS-like style: gap,
@@ -84,8 +99,13 @@
     return { type: "Wrap", props: { style: { gap: gap(g, 8) } }, children: compact(children) };
   }
 
-  function card(children, extra) {
-    return { type: "Card", props: { style: extra || {} }, children: [column(children, "s", { padding: "12" })] };
+  // A Material 3 card: 16 padding, 10 between parts.
+  function card(children, extra, variant) {
+    var style = { padding: "16", gap: "10" };
+    for (var k in extra || {}) style[k] = extra[k];
+    var props = { style: style };
+    if (variant) props.variant = variant;
+    return { type: "Card", props: props, children: compact(children) };
   }
 
   function compact(list) {
@@ -197,9 +217,24 @@
     }
   }
 
+  var VARIANTS = { primary: "filled", secondary: "tonal", ghost: "text", danger: "danger", outline: "outlined" };
+
+  // A Material 3 Expressive button (filled / tonal / outlined / text /
+  // danger), with a Material icon when one is named.
   function button(ctx, label, action, variant, icon) {
     var name = handler(ctx, "tap", function () { act(ctx, action, label); });
-    var node = { type: "Button", props: { text: (icon ? icon + " " : "") + str(label), className: variant || "primary" } };
+    var props = { text: str(label), variant: VARIANTS[variant] || variant || "filled" };
+    if (isIconName(icon)) props.icon = icon;
+    else if (icon) props.text = icon + " " + props.text;
+    var node = { type: "Button", props: props };
+    if (name) node.events = { tap: name };
+    return node;
+  }
+
+  function iconButton(ctx, icon, action, label, variant) {
+    if (!isIconName(icon)) return button(ctx, icon || label || "•", action, "ghost");
+    var name = handler(ctx, "tap", function () { act(ctx, action, label || icon); });
+    var node = { type: "IconButton", props: { icon: icon, variant: variant || "standard", tooltip: label || undefined } };
     if (name) node.events = { tap: name };
     return node;
   }
@@ -207,25 +242,26 @@
   function field(ctx, p, opts) {
     var name = str(p.name);
     var value = valueOf(ctx, name, p.value === undefined ? "" : p.value);
-    var props = { hint: p.placeholder || opts.hint || name, value: str(value) };
+    var props = { hint: p.placeholder || opts.hint || undefined, label: opts.bare ? undefined : (p.label || name || undefined), value: str(value) };
+    if (isIconName(p.icon)) props.icon = p.icon;
     if (opts.multiline) props.multiline = true;
     if (p.type === "password") props.obscureText = true;
     if (p.type === "number") props.keyboardType = "number";
     if (p.type === "email") props.keyboardType = "email";
     if (opts.date) props.keyboardType = "date";
     var input = handler(ctx, "input", function (e) { setValue(ctx, name, e && e.value !== undefined ? e.value : (e && e.data), false); });
-    var node = { type: "TextField", key: ctx.key + "_" + ctx.path, props: props };
+    var node = { type: opts.search ? "SearchBar" : "TextField", key: ctx.key + "_" + ctx.path, props: props };
     if (input) node.events = { input: input };
-    return column([name && !opts.bare ? muted(name) : null, node], "xs");
+    return node;
   }
 
   function toggle(ctx, p, kind) {
     var name = str(p.name);
     var on = !!valueOf(ctx, name, !!p.value);
     var change = handler(ctx, "change", function (e) { setValue(ctx, name, !!(e && (e.value !== undefined ? e.value : e.data)), true); });
-    var node = { type: kind, key: ctx.key + "_" + ctx.path, props: { value: on } };
+    var node = { type: kind, key: ctx.key + "_" + ctx.path, props: { value: on, label: str(p.label || name) } };
     if (change) node.events = { change: change };
-    return row([node, text(p.label || name)]);
+    return node;
   }
 
   function choice(ctx, name, options, current) {
@@ -236,12 +272,27 @@
       var val = o.value !== undefined ? o.value : o.label;
       var selected = String(val) === String(current);
       (function (v, idx) {
-        var tap = handler(child(ctx, "o" + idx), "pick", function () { setValue(ctx, name, v, true); });
-        var chip = { type: "Tag", props: { text: str(o.label || v), variant: selected ? "filled" : "outline" } };
-        chips.push(tap ? { type: "InkWell", events: { tap: tap }, children: [chip] } : chip);
+        var pick = handler(child(ctx, "o" + idx), "pick", function () { setValue(ctx, name, v, true); });
+        var chip = { type: "Chip", props: { label: str(o.label || v), selected: selected } };
+        if (isIconName(o.icon)) chip.props.icon = o.icon;
+        if (pick) chip.events = { change: pick };
+        chips.push(chip);
       })(val, i);
     }
     return wrap(chips, "s");
+  }
+
+  // A connected button group for a few short options, chips otherwise.
+  function segmented(ctx, options, current, onPick) {
+    if (options.length < 2 || options.length > 5) return null;
+    for (var i = 0; i < options.length; i++) if (str(options[i].label).length > 14) return null;
+    var pick = handler(ctx, "segment", function (e) { onPick(e && e.value !== undefined ? e.value : (e && e.data)); });
+    var node = { type: "SegmentedButton", key: ctx.key + "_" + ctx.path + "_seg", props: {
+      segments: options.map(function (o) { var seg = { value: str(o.value), label: str(o.label) }; if (isIconName(o.icon)) seg.icon = o.icon; return seg; }),
+      selected: str(current),
+    } };
+    if (pick) node.events = { change: pick };
+    return node;
   }
 
   // ── charts and tables through the UI kit ─────────────────────────────────
@@ -419,15 +470,17 @@
       var active = state.tab !== undefined ? state.tab : str(p.defaultValue || tabs[0].value);
       var triggers = [];
       var panel = null;
+      var seg = segmented(ctx, tabs, active, function (v) { state.tab = str(v); rerender(ctx); });
       for (var t = 0; t < tabs.length; t++) {
         (function (tab, idx) {
           var tap = handler(child(ctx, "t" + idx), "tab", function () { state.tab = tab.value; rerender(ctx); });
-          var chip = { type: "Tag", props: { text: tab.label, variant: tab.value === active ? "filled" : "outline" } };
-          triggers.push(tap ? { type: "InkWell", events: { tap: tap }, children: [chip] } : chip);
+          var chip = { type: "Chip", props: { label: tab.label, selected: tab.value === active } };
+          if (tap) chip.events = { change: tap };
+          triggers.push(chip);
           if (tab.value === active) panel = column(propKids(tab.node.p.content || tab.node.children, child(ctx, "p" + idx)), "m");
         })(tabs[t], t);
       }
-      return column([wrap(triggers, "s"), panel], "m");
+      return column([seg || wrap(triggers, "s"), panel], "m");
     },
     TabItem: function (n, p, ctx) { return column(propKids(p.content || n.children, ctx), "m"); },
     Accordion: function (n, p, ctx) {
@@ -449,18 +502,39 @@
     Overlay: function (n, p, ctx) { return column(kids(n, ctx), "m"); },
     Sheet: function (n, p, ctx) { return card([p.title ? title(p.title, "sm") : null].concat(kids(n, ctx))); },
     AppBar: function (n, p, ctx) {
-      return row(compact(propKids(p.leading, child(ctx, "l")).concat([{ type: "Expanded", children: [title(p.title, "md")] }]).concat(propKids(p.actions, child(ctx, "a")))));
+      return row(compact(propKids(p.leading, child(ctx, "l")).concat([{ type: "Expanded", children: [title(p.title, "lg")] }]).concat(propKids(p.actions, child(ctx, "a")))), "s", { padding: "4" });
     },
     NavBar: function (n, p, ctx) { return wrap([p.brand ? title(p.brand, "sm") : null].concat(itemsAs(p.items || n.children, "NavItem", ctx)), "s"); },
-    NavItem: function (n, p, ctx) { return button(ctx, (p.icon ? p.icon + " " : "") + str(p.label), p.action, p.active ? "primary" : "ghost"); },
+    NavItem: function (n, p, ctx) { return button(ctx, str(p.label), p.action, p.active ? "secondary" : "ghost", p.icon); },
     Drawer: function (n, p, ctx) {
       return card([p.title ? title(p.title, "sm") : null, R.Sidebar(n, p, ctx)]);
     },
-    BottomNav: function (n, p, ctx) { return wrap(itemsAs(p.items || n.children, "BottomNavItem", ctx), "s"); },
-    BottomNavItem: function (n, p, ctx) { return button(ctx, (p.icon ? p.icon + " " : "") + str(p.label), p.action, p.active ? "primary" : "ghost"); },
+    BottomNav: function (n, p, ctx) {
+      var items = (p.items || n.children || []).map(function (it) { var x = normalize(it && (it.c || it.component) ? it : { c: "BottomNavItem", p: it }); return (x && x.p) || {}; });
+      if (items.length < 2 || items.length > 5) return wrap(itemsAs(p.items || n.children, "BottomNavItem", ctx), "s");
+      var state = local(ctx);
+      var active = state.nav !== undefined ? state.nav : Math.max(0, items.map(function (x) { return !!x.active; }).indexOf(true));
+      var change = handler(ctx, "nav", function (e) {
+        var i = Number(e && e.value !== undefined ? e.value : (e && e.data));
+        state.nav = i;
+        act(ctx, items[i].action === undefined ? { type: "ask", prompt: str(items[i].label) } : items[i].action, items[i].label);
+        rerender(ctx);
+      });
+      var node = { type: "NavigationBar", props: { selected: active, items: items.map(function (x) {
+        return { icon: isIconName(x.icon) ? x.icon : "circle", label: str(x.label), badge: x.badge };
+      }) } };
+      if (change) node.events = { change: change };
+      return node;
+    },
+    BottomNavItem: function (n, p, ctx) { return button(ctx, str(p.label), p.action, p.active ? "secondary" : "ghost", p.icon); },
     Masthead: function (n, p, ctx) { return row([{ type: "Expanded", children: [title(p.brand, "md")] }].concat(kids(n, ctx))); },
     Hero: function (n, p, ctx) {
-      return column([p.media ? { type: "Image", props: { src: p.media, fit: "cover", height: 180 } } : null, title(p.headline, "xl"), p.subcopy ? muted(p.subcopy) : null, wrap(propKids(p.actions, child(ctx, "a")), "s")], "m", { padding: "8" });
+      return { type: "Card", props: { tone: "primary", style: { padding: "24", gap: "12" } }, children: compact([
+        p.media ? { type: "ClipRRect", props: { style: { borderRadius: "20" } }, children: [{ type: "Image", props: { src: p.media, fit: "cover", style: { height: "180" } } }] } : null,
+        text(p.headline, {}, "headlineLargeEmphasized"),
+        p.subcopy ? text(p.subcopy, {}, "bodyLarge") : null,
+        p.actions ? wrap(propKids(p.actions, child(ctx, "a")), "s") : null,
+      ]) };
     },
     Dock: function (n, p, ctx) { return wrap([p.note ? muted(p.note) : null].concat(kids(n, ctx)), "s"); },
     Breadcrumb: function (n, p, ctx) {
@@ -475,12 +549,12 @@
     BreadcrumbItem: function (n, p) { return text(p.label); },
     Segmented: function (n, p, ctx) {
       var items = p.items || n.children || [];
-      var options = items.map(function (it) { var x = normalize(it) || { p: it }; return { label: x.p.label, value: x.p.value || x.p.label }; });
+      var options = items.map(function (it) { var x = normalize(it) || { p: it }; return { label: x.p.label, value: x.p.value || x.p.label, icon: x.p.icon }; });
       var name = p.name || "segment";
       var current = valueOf(ctx, name, (options.filter(function (o, i) { var x = normalize(items[i]); return x && x.p.active; })[0] || options[0] || {}).value);
-      return choice(ctx, name, options, current);
+      return segmented(ctx, options, current, function (v) { setValue(ctx, name, v, true); }) || choice(ctx, name, options, current);
     },
-    Segment: function (n, p) { return { type: "Tag", props: { text: str(p.label), variant: p.active ? "filled" : "outline" } }; },
+    Segment: function (n, p) { return { type: "Chip", props: { label: str(p.label), selected: !!p.active } }; },
     CommandBar: function (n, p, ctx) { return wrap([p.label ? muted(p.label) : null].concat(kids(n, ctx)), "s"); },
     StatusBar: function (n, p, ctx) { return row([{ type: "Expanded", children: [muted(p.text)] }].concat(kids(n, ctx))); },
     Pagination: function (n, p, ctx) {
@@ -493,19 +567,24 @@
         });
       };
       return row([
-        { type: "Button", props: { text: "Prev", className: "ghost", disabled: page <= 1 }, events: ctx.app ? { tap: go(-1) } : undefined },
-        text(page + " / " + pages),
-        { type: "Button", props: { text: "Next", className: "ghost", disabled: page >= pages }, events: ctx.app ? { tap: go(1) } : undefined },
-      ]);
+        { type: "IconButton", props: { icon: "chevron_left", variant: "tonal", tooltip: "Previous", disabled: page <= 1 }, events: ctx.app ? { tap: go(-1) } : undefined },
+        text(page + " / " + pages, {}, "labelLarge"),
+        { type: "IconButton", props: { icon: "chevron_right", variant: "tonal", tooltip: "Next", disabled: page >= pages }, events: ctx.app ? { tap: go(1) } : undefined },
+      ], "s", { justifyContent: "center" });
     },
-    Fab: function (n, p, ctx) { return button(ctx, str(p.label || p.icon || "+"), p.action, "primary", p.label ? p.icon : ""); },
+    Fab: function (n, p, ctx) {
+      var name = handler(ctx, "tap", function () { act(ctx, p.action, p.label || p.icon); });
+      var node = { type: "FAB", props: { icon: isIconName(p.icon) ? p.icon : "add", label: p.label || undefined } };
+      if (name) node.events = { tap: name };
+      return node;
+    },
     WizardRail: function (n, p, ctx) { return wrap(itemsAs(p.steps || n.children, "WizardRailStep", ctx), "s"); },
     WizardRailStep: function (n, p) {
       return { type: "Tag", props: { text: str(p.label), status: { done: "good", current: "info", error: "critical" }[p.state] || "", variant: p.state === "current" ? "filled" : "tonal" } };
     },
     Footer: function (n, p, ctx) { return column([{ type: "Divider" }, p.brand ? title(p.brand, "sm") : null].concat(kids(n, ctx)).concat([p.note ? muted(p.note) : null]), "s"); },
     Card: function (n, p, ctx) {
-      var body = [p.media ? { type: "Image", props: { src: p.media, fit: "cover", height: 160 } } : null, p.title ? title(p.title, "md") : null, p.description ? muted(p.description) : null]
+      var body = [p.media ? { type: "ClipRRect", props: { style: { borderRadius: "16" } }, children: [{ type: "Image", props: { src: p.media, fit: "cover", style: { height: "160" } } }] } : null, p.title ? title(p.title, "md") : null, p.description ? muted(p.description) : null]
         .concat(kids(n, ctx)).concat(p.footer ? [wrap(propKids(p.footer, child(ctx, "f")), "s")] : []);
       if (p.tone && p.tone !== "neutral") return { type: "Callout", props: { severity: severity(p.tone), title: str(p.title), text: p.description || undefined }, children: kids(n, ctx) };
       return card(body);
@@ -513,7 +592,7 @@
     Tile: function (n, p) { return { type: "Stat", props: { label: str(p.label), value: str(p.value), deltaLabel: p.hint || undefined, status: status(p.tone) || undefined, size: "compact" } }; },
     Quote: function (n, p) { return { type: "Callout", props: { severity: "info", text: "“" + str(p.text) + "”" + (p.by ? " — " + p.by : "") } }; },
     Figure: function (n, p) { return column([{ type: "Image", props: { src: str(p.src), fit: "contain" } }, p.caption ? muted(p.caption) : null], "xs"); },
-    Feature: function (n, p) { return card([title((p.icon ? p.icon + " " : "") + str(p.title), "sm"), p.body ? muted(p.body) : null]); },
+    Feature: function (n, p) { return card([glyph(p.icon, 26), title(p.title, "sm"), p.body ? muted(p.body) : null], null, "filled"); },
     FeatureGrid: function (n, p, ctx) { return { type: "ResponsiveGrid", props: { columns: Number(p.columns) || 3, gap: 12 }, children: itemsAs(p.items || n.children, "Feature", ctx) }; },
     ProsCons: function (n, p) {
       var list = function (head, items) { return card([title(head, "sm")].concat((items || []).map(function (x) { return text("• " + str(x)); }))); };
@@ -522,10 +601,11 @@
     LogoStrip: function (n, p) { return wrap([p.label ? muted(p.label) : null].concat((p.items || []).map(function (x) { return { type: "Tag", props: { text: str(x), variant: "outline" } }; })), "s"); },
     Title: function (n, p) { return title(p.text, p.size || "lg"); },
     Text: function (n, p) {
-      var style = { fontSize: { sm: "12", md: "14", lg: "16" }[p.size || "md"] || "14" };
-      if (p.tone === "secondary" || p.tone === "muted") style.color = color("onSurfaceVariant", "#6b6f76");
+      var style = {};
       if (p.mono) style.fontFamily = "monospace";
-      return text(p.text, style);
+      var node = text(p.text, style, { sm: "bodySmall", md: "bodyMedium", lg: "bodyLarge" }[p.size || "md"] || "bodyMedium");
+      if (p.tone === "secondary" || p.tone === "muted") node.props.color = "muted";
+      return node;
     },
     Markdown: function (n, p) { return markdown(p.content || p.text); },
     Callout: function (n, p, ctx) { return { type: "Callout", props: { severity: severity(p.tone), title: str(p.title), text: p.body || undefined }, children: kids(n, ctx) }; },
@@ -547,8 +627,14 @@
       }
       return column([p.title ? muted(p.title) : null, { type: "JsonView", props: { value: v, expanded: 1 } }], "xs");
     },
-    EmptyState: function (n, p) { return { type: "Center", children: [column([title(p.title, "sm"), p.description ? muted(p.description) : null], "xs", { padding: "16" })] }; },
-    Skeleton: function () { return { type: "Shimmer", children: [{ type: "Container", props: { style: { height: "16", borderRadius: "6", backgroundColor: color("surfaceContainerHighest", "#e3e3e8") } } }] }; },
+    EmptyState: function (n, p) {
+      return { type: "Center", children: [column([
+        { type: "Container", props: { style: { width: "72", height: "72", borderRadius: "28", backgroundColor: color("secondaryContainer", color("primaryContainer", "#e8def8")) } },
+          children: [{ type: "Center", children: [{ type: "Icon", props: { icon: isIconName(p.icon) ? p.icon : "inbox", size: 32 } }] }] },
+        title(p.title, "md"), p.description ? muted(p.description) : null,
+      ], "s", { padding: "24", alignItems: "center" })] };
+    },
+    Skeleton: function () { return { type: "Shimmer", children: [{ type: "Container", props: { style: { height: "16", borderRadius: "8", backgroundColor: color("surfaceContainerHighest", "#e3e3e8") } } }] }; },
     Stat: function (n, p) {
       return { type: "Stat", props: { label: str(p.label), value: str(p.value), deltaLabel: p.delta !== undefined ? str(p.delta) : undefined, status: { up: "good", down: "critical" }[p.deltaTone] || undefined } };
     },
@@ -561,9 +647,19 @@
     Col: function () { return null; },
     DataList: function (n, p) { return { type: "KeyValue", props: { items: (p.items || []).map(function (it) { return { label: str(it.label), value: str(it.value) }; }) } }; },
     KeyValue: function (n, p) { return { type: "KeyValue", props: { items: [{ label: str(p.keyLabel || p.key), value: str(p.value) }] } }; },
-    List: function (n, p, ctx) { return column(itemsAs(p.items || n.children, "ListItem", ctx), "s"); },
-    ListItem: function (n, p) { return column([text(p.label, { fontSize: "14", fontWeight: "bold" }), p.subtitle ? muted(p.subtitle) : null], "xs"); },
-    Chip: function (n, p) { return { type: "Tag", props: { text: str(p.label), variant: p.active ? "filled" : "outline" } }; },
+    List: function (n, p, ctx) { return { type: "ListGroup", children: itemsAs(p.items || n.children, "ListItem", ctx) }; },
+    ListItem: function (n, p, ctx) {
+      var props = { title: str(p.label || p.title), subtitle: p.subtitle || undefined, trailingText: p.meta || p.trailing || undefined };
+      if (isIconName(p.icon)) props.leading = p.icon;
+      else if (p.avatar) props.leadingAvatar = str(p.avatar);
+      var node = { type: "ListTile", props: props };
+      if (p.action !== undefined) {
+        var tap = handler(ctx, "tap", function () { act(ctx, p.action, p.label); });
+        if (tap) { node.events = { tap: tap }; if (!props.trailingText) props.trailing = "chevron_right"; }
+      }
+      return node;
+    },
+    Chip: function (n, p) { var c = { type: "Chip", props: { label: str(p.label) } }; if (p.active !== undefined) c.props.selected = !!p.active; if (isIconName(p.icon)) c.props.icon = p.icon; return c; },
     TagGroup: function (n, p, ctx) { return wrap(kids(n, ctx), "s"); },
     Timeline: function (n, p, ctx) {
       var items = p.items || n.children || [];
@@ -578,12 +674,12 @@
     Alert: function (n, p) { return { type: "Callout", props: { severity: severity(p.tone), title: str(p.title), text: p.body || undefined } }; },
     Toast: function (n, p) { return { type: "Callout", props: { severity: severity(p.tone), text: str(p.message) } }; },
     Banner: function (n, p) { return { type: "Callout", props: { severity: "info", text: str(p.text) } }; },
-    Spinner: function (n, p) { return row([{ type: "Progress", props: { variant: "circular", size: 18 } }, muted(p.label || "Loading…")]); },
+    Spinner: function (n, p) { return row([{ type: "LoadingIndicator", props: { size: 36 } }, muted(p.label || "Loading…")], "m"); },
     StatusDot: function (n, p) { return { type: "Tag", props: { text: str(p.label || p.status), status: { ok: "good", online: "good", busy: "warning", error: "critical", offline: "critical" }[p.status] || undefined, variant: "tonal" } }; },
     Result: function (n, p) { return { type: "Callout", props: { severity: severity(p.tone || "success"), title: str(p.title), text: p.description || undefined } }; },
     Input: function (n, p, ctx) { return field(ctx, p, {}); },
     TextArea: function (n, p, ctx) { return field(ctx, p, { multiline: true }); },
-    SearchField: function (n, p, ctx) { return field(ctx, p, { hint: "Search", bare: true }); },
+    SearchField: function (n, p, ctx) { return field(ctx, p, { hint: "Search", bare: true, search: true }); },
     DateField: function (n, p, ctx) { return field(ctx, p, { date: true, hint: "YYYY-MM-DD" }); },
     Select: function (n, p, ctx) {
       var name = str(p.name);
@@ -605,7 +701,8 @@
       var change = handler(ctx, "slide", function (e) { setValue(ctx, name, Number(e && (e.value !== undefined ? e.value : e.data)), true); });
       var node = { type: "Slider", key: ctx.key + "_" + ctx.path, props: { value: value, min: min, max: max } };
       if (change) node.events = { change: change };
-      return column([muted(name + " (" + value + ")"), node], "xs");
+      node.props.label = true;
+      return column([row([{ type: "Expanded", children: [muted(p.label || name)] }, text(String(value), {}, "labelLarge")]), node], "xs");
     },
     FormControl: function (n, p, ctx) { return column([p.label ? muted(p.label) : null].concat(propKids(p.field, ctx)).concat([p.hint ? muted(p.hint) : null]), "xs"); },
     FieldRow: function (n, p, ctx) { return { type: "ResponsiveGrid", props: { minColumnWidth: 180, gap: 12 }, children: kids(n, ctx) }; },
@@ -620,12 +717,12 @@
       };
       return card(propKids(p.fields || n.children, form, "f").concat([wrap(propKids(p.buttons, form, "b"), "s")]));
     },
-    Button: function (n, p, ctx) { return button(ctx, p.label, p.action, { secondary: "secondary", ghost: "ghost", danger: "danger" }[p.variant] || "primary"); },
+    Button: function (n, p, ctx) { return button(ctx, p.label, p.action, { secondary: "secondary", ghost: "ghost", danger: "danger", outline: "outline", tonal: "tonal" }[p.variant] || "primary", p.icon); },
     ButtonGroup: function (n, p, ctx) { return wrap(kids(n, ctx), "s"); },
-    IconButton: function (n, p, ctx) { return button(ctx, p.icon || p.label || "•", p.action, "ghost"); },
-    LinkButton: function (n, p, ctx) { return button(ctx, p.label, p.action, "ghost"); },
+    IconButton: function (n, p, ctx) { return iconButton(ctx, p.icon, p.action, p.label); },
+    LinkButton: function (n, p, ctx) { return button(ctx, p.label, p.action, "ghost", p.icon); },
     Menu: function (n, p, ctx) { return column(itemsAs(p.items || n.children, "MenuItem", ctx), "xs"); },
-    MenuItem: function (n, p, ctx) { return button(ctx, p.label, p.action, "ghost"); },
+    MenuItem: function (n, p, ctx) { return button(ctx, p.label, p.action, "ghost", p.icon); },
     Toolbar: function (n, p, ctx) { return wrap(kids(n, ctx), "s"); },
     BarChart: function (n, p) { return chart("BarChart", p); },
     LineChart: function (n, p) { return chart("LineChart", p); },
@@ -635,7 +732,7 @@
     MessageBubble: function (n, p) {
       var mine = p.role === "user";
       return row([{ type: "Container", props: { style: {
-        padding: "10", borderRadius: "14", maxWidth: "520",
+        padding: "12", borderRadius: "20", maxWidth: "520",
         backgroundColor: mine ? color("primaryContainer", "#dfe3ff") : color("surfaceContainerHighest", "#ececf1"),
       } }, children: [text(p.text)] }], "s", { justifyContent: mine ? "flex-end" : "flex-start" });
     },
@@ -654,13 +751,13 @@
     Price: function (n, p) {
       return row(compact([title(p.amount, "md"), p.compareAt ? muted("was " + p.compareAt) : null, p.period ? muted("/" + p.period) : null]));
     },
-    MediaCard: function (n, p) { return card([p.src ? { type: "Image", props: { src: p.src, fit: "cover", height: 140 } } : null, title(p.title, "sm"), p.meta ? muted(p.meta) : null]); },
+    MediaCard: function (n, p) { return card([p.src ? { type: "Image", props: { src: p.src, fit: "cover", style: { height: "140", borderRadius: "16" } } } : null, title(p.title, "sm"), p.meta ? muted(p.meta) : null]); },
     ProductCard: function (n, p, ctx) {
-      return card([p.image ? { type: "Image", props: { src: p.image, fit: "cover", height: 140 } } : null, p.badge ? { type: "Tag", props: { text: str(p.badge), status: "info" } } : null,
+      return card([p.image ? { type: "Image", props: { src: p.image, fit: "cover", style: { height: "140", borderRadius: "16" } } } : null, p.badge ? { type: "Tag", props: { text: str(p.badge), status: "info" } } : null,
         title(p.title, "sm"), text(p.price, { fontWeight: "bold" }), p.rating != null ? R.Rating(n, { value: p.rating }, ctx) : null]);
     },
     Gallery: function (n, p) {
-      return { type: "ResponsiveGrid", props: { columns: Number(p.columns) || 3, gap: 8 }, children: (p.images || []).map(function (src) { return { type: "Image", props: { src: str(src), fit: "cover", height: 120 } }; }) };
+      return { type: "ResponsiveGrid", props: { columns: Number(p.columns) || 3, gap: 8 }, children: (p.images || []).map(function (src) { return { type: "Image", props: { src: str(src), fit: "cover", style: { height: "120", borderRadius: "16" } } }; }) };
     },
     Carousel: function (n, p, ctx) {
       var slides = p.slides || n.children || [];
@@ -669,27 +766,36 @@
       var s = slides[i];
       var step = function (d) { return handler(child(ctx, d > 0 ? "n" : "p"), "slide", function () { state.slide = (i + d + slides.length) % slides.length; rerender(ctx); }); };
       return column([
-        typeof s === "string" ? { type: "Image", props: { src: s, fit: "cover", height: 200 } } : renderAt(s, ctx, "s" + i),
+        typeof s === "string" ? { type: "Image", props: { src: s, fit: "cover", style: { height: "200", borderRadius: "16" } } } : renderAt(s, ctx, "s" + i),
         slides.length > 1 ? { type: "Row", props: { style: { gap: "8", justifyContent: "center", alignItems: "center" } }, children: [
-          { type: "Button", props: { text: "‹", className: "ghost" }, events: ctx.app ? { tap: step(-1) } : undefined },
+          { type: "IconButton", props: { icon: "chevron_left", variant: "tonal", tooltip: "Previous" }, events: ctx.app ? { tap: step(-1) } : undefined },
           muted(i + 1 + " / " + slides.length),
-          { type: "Button", props: { text: "›", className: "ghost" }, events: ctx.app ? { tap: step(1) } : undefined },
+          { type: "IconButton", props: { icon: "chevron_right", variant: "tonal", tooltip: "Next" }, events: ctx.app ? { tap: step(1) } : undefined },
         ] } : null,
       ], "s");
     },
     Feed: function (n, p, ctx) { return column(itemsAs(p.items || n.children, "FeedItem", ctx), "s"); },
-    FeedItem: function (n, p) { return card([text(str(p.author) + (p.time ? " · " + p.time : ""), { fontWeight: "bold" }), text(p.body)]); },
+    FeedItem: function (n, p) {
+      return card([{ type: "ListTile", props: { title: str(p.author), leadingAvatar: str(p.author || "?"), trailingText: p.time || undefined } }, text(p.body, {}, "bodyMedium")]);
+    },
     Comment: function (n, p) { return column([text(str(p.author) + (p.time ? "  " + p.time : ""), { fontWeight: "bold", fontSize: "13" }), text(p.body)], "xs"); },
-    NotificationItem: function (n, p) { return card([text((p.unread ? "● " : "") + str(p.title), { fontWeight: "bold" }), p.body ? muted(p.body) : null]); },
-    FileRow: function (n, p) { return row([{ type: "Icon", props: { icon: "description", size: 18 } }, { type: "Expanded", children: [text(p.name)] }, p.meta ? muted(p.meta) : { type: "SizedBox" }]); },
+    NotificationItem: function (n, p) {
+      return { type: "ListTile", props: { title: str(p.title), subtitle: p.body || undefined, leading: p.unread ? "notifications_active" : "notifications_none", selected: !!p.unread, lines: p.body && String(p.body).length > 60 ? 3 : undefined } };
+    },
+    FileRow: function (n, p) { return { type: "ListTile", props: { title: str(p.name), leading: isIconName(p.icon) ? p.icon : "description", trailingText: p.meta || undefined } }; },
     CheckItem: function (n, p, ctx) { return toggle(ctx, { name: p.name || ("check_" + ctx.path), label: p.label, value: p.done }, "Checkbox"); },
     Checklist: function (n, p, ctx) { return column(itemsAs(p.items || n.children, "CheckItem", ctx), "xs"); },
     Kanban: function (n, p, ctx) {
       var cols = p.columns || n.children || [];
       return { type: "ResponsiveGrid", props: { minColumnWidth: 200, gap: 12 }, children: itemsAs(cols, "KanbanColumn", ctx) };
     },
-    KanbanColumn: function (n, p, ctx) { return column([title(p.title, "sm")].concat(itemsAs(n.children || p.cards, "KanbanCard", ctx)), "s", { padding: "8" }); },
-    KanbanCard: function (n, p) { return card([text(p.title, { fontWeight: "bold" }), p.meta ? muted(p.meta) : null]); },
+    KanbanColumn: function (n, p, ctx) {
+      var cards = itemsAs(n.children || p.cards, "KanbanCard", ctx);
+      return { type: "Container", props: { style: { padding: "12", borderRadius: "24", backgroundColor: color("surfaceContainer", "#f3edf7") } }, children: [column([
+        row([{ type: "Expanded", children: [title(p.title, "sm")] }, { type: "Tag", props: { text: String(cards.length) } }]),
+      ].concat(cards), "s")] };
+    },
+    KanbanCard: function (n, p) { return card([text(p.title, {}, "titleSmall"), p.meta ? muted(p.meta) : null], { padding: "12", gap: "4" }); },
     Tree: function (n, p) {
       var conv = function (it) {
         var x = normalize(it && (it.c || it.component) ? it : { c: "TreeItem", p: it, children: it && it.children });
@@ -706,7 +812,7 @@
         return { type: "Tag", props: { text: str(d), variant: hi[String(i)] || hi[String(d)] ? "filled" : "outline" } };
       }) }], "s");
     },
-    MapPlaceholder: function (n, p) { return card([title("📍 " + str(p.pin || "Map"), "sm"), p.subtitle ? muted(p.subtitle) : null]); },
+    MapPlaceholder: function (n, p) { return { type: "ListTile", props: { title: str(p.pin || "Map"), subtitle: p.subtitle || undefined, leading: "place" } }; },
     Compare: function (n, p) {
       var headers = p.headers || [];
       var columns = [{ field: "feature", label: "" }].concat(headers.map(function (h, i) { return { field: "v" + i, label: str(h) }; }));
@@ -851,7 +957,7 @@
     if (s.status === "loading") return card([head, R.Spinner(null, { label: opts.loadingText || "Working on it…" })]);
     if (s.status === "error") {
       var retry = app.handler(key + "_retry", function () { s.status = "idle"; if (opts.run) opts.run(); });
-      return card([head, { type: "Callout", props: { severity: "critical", text: s.error } }, { type: "Button", props: { text: "Try again", className: "secondary" }, events: { tap: retry } }]);
+      return card([head, { type: "Callout", props: { severity: "critical", text: s.error } }, { type: "Button", props: { text: "Try again", variant: "tonal", icon: "refresh" }, events: { tap: retry } }]);
     }
     if (s.status === "done") {
       var ctx = islandCtx(app, key, s, islandAction(app, key, s, agent));
@@ -875,7 +981,7 @@
     var body = islandBody(app, key, s, opts.agent, { title: opts.title, run: run, loadingText: opts.loadingText });
     if (body) return body;
     var start = app.handler(key + "_start", run);
-    return card([opts.title ? title(opts.title, "sm") : null, { type: "Button", props: { text: opts.label || "Ask " + opts.agent }, events: { tap: start } }]);
+    return card([opts.title ? title(opts.title, "sm") : null, { type: "Button", props: { text: opts.label || "Ask " + opts.agent, variant: "tonal", icon: "auto_awesome" }, events: { tap: start } }]);
   }
 
   // A button that asks an agent and shows its answer below it.
@@ -885,7 +991,7 @@
     var run = function () { return askInto(app, key, s, opts.agent, fill(opts.prompt, opts.vars), opts.values); };
     var tap = app.handler(key + "_run", run);
     var body = islandBody(app, key, s, opts.agent, { title: opts.title, run: run });
-    return column([{ type: "Button", props: { text: opts.label || "Ask " + opts.agent, className: opts.variant || "primary", disabled: s.status === "loading" }, events: { tap: tap } }, body], "s");
+    return column([{ type: "Button", props: { text: opts.label || "Ask " + opts.agent, variant: VARIANTS[opts.variant] || opts.variant || "tonal", icon: opts.icon || "auto_awesome", loading: s.status === "loading" }, events: { tap: tap } }, body], "s");
   }
 
   // A section filled by a space app's microtool (programmed data).
@@ -914,6 +1020,6 @@
     action: action,
     query: query,
     components: components,
-    version: "1.1.0-elpian",
+    version: "1.2.0-elpian",
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

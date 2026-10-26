@@ -60,7 +60,15 @@ function typed(value) {
 
 export const SAMPLE_ENV = {
   display: "full",
-  theme: { mode: "light", accent: "#6750A4", colors: { primary: "#6750A4", onPrimary: "#FFFFFF", primaryContainer: "#EADDFF", surface: "#FEF7FF", onSurface: "#1D1B20", onSurfaceVariant: "#49454F", surfaceContainerHighest: "#E6E0E9", outline: "#79747E" } },
+  theme: { mode: "light", accent: "#6750A4", colors: {
+    primary: "#6750A4", onPrimary: "#FFFFFF", primaryContainer: "#EADDFF", onPrimaryContainer: "#21005D",
+    secondary: "#625B71", onSecondary: "#FFFFFF", secondaryContainer: "#E8DEF8", onSecondaryContainer: "#1D192B",
+    tertiary: "#7D5260", onTertiary: "#FFFFFF", tertiaryContainer: "#FFD8E4", onTertiaryContainer: "#31111D",
+    surface: "#FEF7FF", onSurface: "#1D1B20", onSurfaceVariant: "#49454F",
+    surfaceContainerLowest: "#FFFFFF", surfaceContainerLow: "#F7F2FA", surfaceContainer: "#F3EDF7", surfaceContainerHigh: "#ECE6F0", surfaceContainerHighest: "#E6E0E9",
+    inverseSurface: "#322F35", onInverseSurface: "#F5EFF7", outline: "#79747E", outlineVariant: "#CAC4D0",
+    error: "#B3261E", onError: "#FFFFFF", errorContainer: "#F9DEDC", onErrorContainer: "#410E0B",
+  } },
   user: { id: "u-check", handle: "check" },
   space: "s-check",
   room: "r-check",
@@ -68,7 +76,7 @@ export const SAMPLE_ENV = {
 };
 
 // Nodes that do not belong on a glanceable phone widget.
-const NOT_IN_WIDGET = new Set(["DataGrid", "ListView", "GridView", "TextField", "Scaffold", "AppBar", "Drawer", "textarea", "input", "form", "table"]);
+const NOT_IN_WIDGET = new Set(["DataGrid", "ListView", "GridView", "TextField", "SearchBar", "NavigationBar", "SegmentedButton", "ListGroup", "Scaffold", "AppBar", "Drawer", "textarea", "input", "form", "table"]);
 const WIDGET_MAX_NODES = 80;
 
 // check runs the app as people use it (display "full") and, with

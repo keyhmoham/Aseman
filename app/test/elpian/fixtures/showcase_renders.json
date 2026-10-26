@@ -1,0 +1,577 @@
+{
+ "board": {
+  "type": "Scaffold",
+  "children": [
+   {
+    "type": "ListView",
+    "children": [
+     {
+      "type": "Column",
+      "props": {
+       "style": {
+        "padding": "16",
+        "gap": "24"
+       }
+      },
+      "children": [
+       {
+        "type": "Row",
+        "props": {
+         "style": {
+          "gap": "12",
+          "alignItems": "center"
+         }
+        },
+        "children": [
+         {
+          "type": "Expanded",
+          "children": [
+           {
+            "type": "Column",
+            "props": {
+             "style": {
+              "gap": "4"
+             }
+            },
+            "children": [
+             {
+              "type": "Text",
+              "props": {
+               "text": "Team tasks",
+               "variant": "headlineMediumEmphasized"
+              }
+             },
+             {
+              "type": "Text",
+              "props": {
+               "text": "1 open · 50% done",
+               "variant": "bodyMedium",
+               "color": "muted"
+              }
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "IconButton",
+          "props": {
+           "icon": "refresh",
+           "variant": "tonal",
+           "tooltip": "Refresh"
+          },
+          "events": {
+           "tap": "__app0_reload"
+          }
+         }
+        ]
+       },
+       {
+        "type": "Column",
+        "props": {
+         "style": {
+          "gap": "16"
+         }
+        },
+        "children": [
+         {
+          "type": "Card",
+          "props": {
+           "tone": "primary",
+           "style": {
+            "padding": "20",
+            "gap": "12"
+           }
+          },
+          "children": [
+           {
+            "type": "Stat",
+            "props": {
+             "label": "Sprint progress",
+             "value": 0.5,
+             "format": "percent",
+             "icon": "rocket_launch",
+             "size": "hero"
+            }
+           },
+           {
+            "type": "Progress",
+            "props": {
+             "value": 0.5,
+             "showValue": false,
+             "wavy": true
+            }
+           }
+          ]
+         },
+         {
+          "type": "SegmentedButton",
+          "key": "filter",
+          "props": {
+           "selected": "open",
+           "segments": [
+            {
+             "value": "open",
+             "label": "Open",
+             "icon": "inbox"
+            },
+            {
+             "value": "done",
+             "label": "Done",
+             "icon": "task_alt"
+            },
+            {
+             "value": "all",
+             "label": "All"
+            }
+           ]
+          },
+          "events": {
+           "change": "__app0_filter"
+          }
+         },
+         {
+          "type": "AnimatedSwitcher",
+          "children": [
+           {
+            "type": "ListGroup",
+            "key": "list_open",
+            "children": [
+             {
+              "type": "ListTile",
+              "key": "task_1",
+              "props": {
+               "title": "Ship the release",
+               "subtitle": "Ann · due today",
+               "leading": "priority_high",
+               "trailingText": "Urgent"
+              },
+              "events": {
+               "tap": "__app0_toggle_1"
+              }
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "NavigationBar",
+    "props": {
+     "selected": 0,
+     "items": [
+      {
+       "icon": "checklist",
+       "label": "Tasks",
+       "badge": 1
+      },
+      {
+       "icon": "add_task",
+       "label": "New"
+      },
+      {
+       "icon": "insights",
+       "label": "Insights"
+      }
+     ]
+    },
+    "events": {
+     "change": "__app0_tab"
+    }
+   }
+  ]
+ },
+ "tab1": {
+  "type": "Scaffold",
+  "children": [
+   {
+    "type": "ListView",
+    "children": [
+     {
+      "type": "Column",
+      "props": {
+       "style": {
+        "padding": "16",
+        "gap": "24"
+       }
+      },
+      "children": [
+       {
+        "type": "Row",
+        "props": {
+         "style": {
+          "gap": "12",
+          "alignItems": "center"
+         }
+        },
+        "children": [
+         {
+          "type": "Expanded",
+          "children": [
+           {
+            "type": "Column",
+            "props": {
+             "style": {
+              "gap": "4"
+             }
+            },
+            "children": [
+             {
+              "type": "Text",
+              "props": {
+               "text": "Team tasks",
+               "variant": "headlineMediumEmphasized"
+              }
+             },
+             {
+              "type": "Text",
+              "props": {
+               "text": "1 open · 50% done",
+               "variant": "bodyMedium",
+               "color": "muted"
+              }
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "IconButton",
+          "props": {
+           "icon": "refresh",
+           "variant": "tonal",
+           "tooltip": "Refresh"
+          },
+          "events": {
+           "tap": "__app0_reload"
+          }
+         }
+        ]
+       },
+       {
+        "type": "Card",
+        "props": {
+         "variant": "filled",
+         "style": {
+          "padding": "20",
+          "gap": "16"
+         }
+        },
+        "children": [
+         {
+          "type": "Text",
+          "props": {
+           "text": "New task",
+           "variant": "titleLargeEmphasized"
+          }
+         },
+         {
+          "type": "TextField",
+          "key": "draft",
+          "props": {
+           "label": "What needs doing?",
+           "icon": "edit",
+           "value": ""
+          },
+          "events": {
+           "input": "__app0_draft_input"
+          }
+         },
+         {
+          "type": "TextField",
+          "key": "owner",
+          "props": {
+           "label": "Owner",
+           "icon": "person",
+           "helper": "Who picks it up",
+           "value": ""
+          },
+          "events": {
+           "input": "__app0_owner_input"
+          }
+         },
+         {
+          "type": "Switch",
+          "key": "urgent",
+          "props": {
+           "value": false,
+           "label": "Urgent"
+          },
+          "events": {
+           "change": "__app0_urgent"
+          }
+         },
+         {
+          "type": "Row",
+          "props": {
+           "style": {
+            "gap": "8",
+            "justifyContent": "flex-end"
+           }
+          },
+          "children": [
+           {
+            "type": "Button",
+            "props": {
+             "text": "Clear",
+             "variant": "text"
+            },
+            "events": {
+             "tap": "__app0_clear"
+            }
+           },
+           {
+            "type": "Button",
+            "props": {
+             "text": "Add task",
+             "icon": "add",
+             "loading": false,
+             "disabled": true
+            },
+            "events": {
+             "tap": "__app0_add"
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "NavigationBar",
+    "props": {
+     "selected": 1,
+     "items": [
+      {
+       "icon": "checklist",
+       "label": "Tasks",
+       "badge": 1
+      },
+      {
+       "icon": "add_task",
+       "label": "New"
+      },
+      {
+       "icon": "insights",
+       "label": "Insights"
+      }
+     ]
+    },
+    "events": {
+     "change": "__app0_tab"
+    }
+   }
+  ]
+ },
+ "tab2": {
+  "type": "Scaffold",
+  "children": [
+   {
+    "type": "ListView",
+    "children": [
+     {
+      "type": "Column",
+      "props": {
+       "style": {
+        "padding": "16",
+        "gap": "24"
+       }
+      },
+      "children": [
+       {
+        "type": "Row",
+        "props": {
+         "style": {
+          "gap": "12",
+          "alignItems": "center"
+         }
+        },
+        "children": [
+         {
+          "type": "Expanded",
+          "children": [
+           {
+            "type": "Column",
+            "props": {
+             "style": {
+              "gap": "4"
+             }
+            },
+            "children": [
+             {
+              "type": "Text",
+              "props": {
+               "text": "Team tasks",
+               "variant": "headlineMediumEmphasized"
+              }
+             },
+             {
+              "type": "Text",
+              "props": {
+               "text": "1 open · 50% done",
+               "variant": "bodyMedium",
+               "color": "muted"
+              }
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "IconButton",
+          "props": {
+           "icon": "refresh",
+           "variant": "tonal",
+           "tooltip": "Refresh"
+          },
+          "events": {
+           "tap": "__app0_reload"
+          }
+         }
+        ]
+       },
+       {
+        "type": "Column",
+        "props": {
+         "style": {
+          "gap": "16"
+         }
+        },
+        "children": [
+         {
+          "type": "ResponsiveGrid",
+          "props": {
+           "minColumnWidth": 160,
+           "gap": 12
+          },
+          "children": [
+           {
+            "type": "Card",
+            "props": {
+             "variant": "filled",
+             "style": {
+              "padding": "16"
+             }
+            },
+            "children": [
+             {
+              "type": "Stat",
+              "props": {
+               "label": "Open",
+               "value": 1,
+               "icon": "inbox"
+              }
+             }
+            ]
+           },
+           {
+            "type": "Card",
+            "props": {
+             "variant": "filled",
+             "style": {
+              "padding": "16"
+             }
+            },
+            "children": [
+             {
+              "type": "Stat",
+              "props": {
+               "label": "Done",
+               "value": 1,
+               "icon": "task_alt"
+              }
+             }
+            ]
+           },
+           {
+            "type": "Card",
+            "props": {
+             "variant": "filled",
+             "style": {
+              "padding": "16"
+             }
+            },
+            "children": [
+             {
+              "type": "Stat",
+              "props": {
+               "label": "Urgent",
+               "value": 1,
+               "icon": "priority_high"
+              }
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "Card",
+          "props": {
+           "style": {
+            "padding": "16",
+            "gap": "10"
+           }
+          },
+          "children": [
+           {
+            "type": "Text",
+            "props": {
+             "text": "Where to focus",
+             "style": {},
+             "variant": "titleSmallEmphasized"
+            }
+           },
+           {
+            "type": "Button",
+            "props": {
+             "text": "Ask for a plan",
+             "variant": "tonal",
+             "icon": "auto_awesome"
+            },
+            "events": {
+             "tap": "__app0_advice_start"
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "NavigationBar",
+    "props": {
+     "selected": 2,
+     "items": [
+      {
+       "icon": "checklist",
+       "label": "Tasks",
+       "badge": 1
+      },
+      {
+       "icon": "add_task",
+       "label": "New"
+      },
+      {
+       "icon": "insights",
+       "label": "Insights"
+      }
+     ]
+    },
+    "events": {
+     "change": "__app0_tab"
+    }
+   }
+  ]
+ }
+}

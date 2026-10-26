@@ -212,3 +212,43 @@ test("every app ships a glanceable, live phone widget", async () => {
     widget: function () { return { type: "Text", props: { text: "w" } }; } });`);
   assert.equal(fullOnly.ok, true);
 });
+
+test("the Material 3 Expressive showcase passes the check, as an app and as a widget", async () => {
+  const tasks = [
+    { id: 1, title: "Ship", owner: "Ann", due: "today", done: false, priority: "high" },
+    { id: 2, title: "Write docs", owner: "Bo", due: "Fri", done: true, priority: "normal" },
+  ];
+  const srv = http.createServer((req, res) => {
+    req.resume();
+    req.on("end", () => {
+      res.writeHead(req.url.startsWith("/api/tasks") ? 200 : 404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ tasks }));
+    });
+  });
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  try {
+    const src = SDK + "\n;\n" + fs.readFileSync(path.join(kit, "examples", "showcase.js"), "utf8");
+    const report = await check(src, { server: `http://127.0.0.1:${srv.address().port}`, widget: true });
+    assert.equal(report.ok, true, report.errors.join("\n"));
+    assert.ok(report.widget.requests >= 1, "the widget loads live data");
+  } finally {
+    srv.close();
+  }
+});
+
+test("OpenUI draws M3E buttons and icons, not class names or glyph text", () => {
+  const { ctx } = sdk();
+  const app = { state: {}, render() {}, handler: (k) => "h_" + k };
+  const node = ctx.OpenUI.render({ c: "Stack", children: [
+    { c: "Button", p: { label: "Go", icon: "send" } },
+    { c: "Button", p: { label: "Later", variant: "secondary" } },
+    { c: "Pagination", p: { page: 2, pages: 3 } },
+    { c: "Tabs", p: { items: [{ c: "TabItem", p: { trigger: "One" } }, { c: "TabItem", p: { trigger: "Two" } }] } },
+    { c: "List", p: { items: [{ label: "Row", icon: "event" }] } },
+  ] }, { app });
+  const json = JSON.stringify(node);
+  assert.doesNotMatch(json, /className/);
+  assert.match(json, /"variant":"filled","icon":"send"/);
+  assert.match(json, /"variant":"tonal"/);
+  for (const t of ["IconButton", "SegmentedButton", "ListGroup", "ListTile"]) assert.ok(types(node).includes(t), `uses ${t}`);
+});

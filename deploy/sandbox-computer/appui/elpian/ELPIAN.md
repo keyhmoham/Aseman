@@ -40,7 +40,8 @@ Aseman client (Flutter)                     sandbox
 elpian/src/*.js          your frontend (shared global scope; main.js last)
 elpian/manifest.json     optional: {"files": ["src/state.js", "src/main.js"]} to fix the order
 elpian/app.js            the bundle (generated: never edit it)
-vendor/aseman-elpian/    this kit: SDK, OpenUI, bundle.mjs, check.mjs, nodes.json
+vendor/aseman-elpian/    this kit: SDK, OpenUI, bundle.mjs, check.mjs, nodes.json,
+                         examples/showcase.js (a reference app in M3 Expressive)
 server.* / src/…         your backend; it serves elpian/app.js and your API
 ```
 
@@ -76,12 +77,13 @@ before the app is shown; make it pass.
 var app = App.create({
   state: { items: [], draft: "", busy: false },
   view: function (s, app) {                       // returns the view tree
-    return { type: "Column", props: { style: { padding: "16", gap: "12" } }, children: [
-      { type: "Text", props: { text: "Orders", style: { fontSize: "22", fontWeight: "bold" } } },
-      app.input("draft", "draft", { hint: "New order" }),          // TextField bound to s.draft
-      { type: "Button", props: { text: s.busy ? "Saving…" : "Add", disabled: s.busy },
+    return { type: "Column", props: { style: { padding: "16", gap: "16" } }, children: [
+      { type: "Text", props: { text: "Orders", variant: "headlineMediumEmphasized" } },
+      app.input("draft", "draft", { label: "New order", icon: "edit" }),  // TextField bound to s.draft
+      { type: "Button", props: { text: "Add", icon: "add", loading: s.busy },
         events: { tap: app.handler("add", add) } },
-      { type: "DataGrid", props: { data: s.items, columns: [{ field: "title" }, { field: "total", type: "number", format: "currency:USD" }] } },
+      { type: "Card", props: { variant: "filled", style: { padding: "8" } }, children: [
+        { type: "DataGrid", props: { data: s.items, columns: [{ field: "title" }, { field: "total", type: "number", format: "currency:USD" }] } } ] },
     ] };
   },
   init: function (app) { load(); },               // after the first render
@@ -105,7 +107,7 @@ function add(event, app) {                         // event is plain JSON
 | `App.create({state, view(state, app), init(app)})` | renders `view` now and after every `app.set(patch)` |
 | `app.set(patch[, {silent}])`, `app.render()`, `app.fail(error)` | update and redraw; `fail` shows a dismissible error banner |
 | `app.handler(key, fn)` | a global handler name for `events` (stable per key; errors are shown, not lost); `fn(event, app)` |
-| `app.input(key, field, props)` | a `TextField` bound to `state[field]` |
+| `app.input(key, field, props)` | a `TextField` bound to `state[field]` (props: `label`, `hint`, `icon`, `helper`, …; `search: true` draws a `SearchBar`) |
 | `Aseman.fetch(path, {method, body, query, headers})` | your server: resolves `{status, ok, json, text}`; rejects on non-2xx (`{raw: true}` to get them) |
 | `Aseman.ask(agent, prompt, {history})` | a space agent: `{agent, reply}`. Every ask is a fresh, isolated conversation (a temporary room thread deleted after) |
 | `Aseman.askJSON(agent, prompt, data)` | asks for JSON and parses it |
@@ -136,11 +138,15 @@ CSS-like object (numbers as strings or numbers):
 **Theme:** the client draws the app with the person's Aseman theme (light or
 dark, and their accent) and redraws it when they change it. The UI kit and
 the Material widgets follow it by themselves; leave colors unset to get it.
-Where you set a color, take it from `Aseman.env().theme.colors` (`primary`,
-`onPrimary`, `primaryContainer`, `onPrimaryContainer`, `secondary`,
-`tertiary`, `surface`, `onSurface`, `onSurfaceVariant`,
-`surfaceContainer`, `surfaceContainerHighest`, `outline`, `error`) rather
-than hard-coding one, unless the brief asks for a dedicated brand palette.
+Where you set a color, take it from `Aseman.env().theme.colors` — the full
+set of Material 3 roles: `primary`, `onPrimary`, `primaryContainer`,
+`onPrimaryContainer`, the same four for `secondary`, `tertiary` and `error`,
+`surface`, `onSurface`, `onSurfaceVariant`, `surfaceContainerLowest` /
+`Low` / (plain) / `High` / `Highest`, `inverseSurface`, `onInverseSurface`,
+`outline`, `outlineVariant` — rather than hard-coding one, unless the brief
+asks for a dedicated brand palette. Most nodes take roles by name, so you
+rarely need hex at all (`Text` `color: "muted"`, `Card` `tone: "primary"`,
+`Tag` `status`). See **Design** below.
 
 ### Events
 
@@ -149,11 +155,14 @@ than hard-coding one, unless the brief asks for a dedicated brand palette.
 | `tap`, `doubletap`, `longpress` | any node (the engine adds the gesture), `Button`, `InkWell` | `{type}` |
 | `input` | `TextField` (each keystroke) | `{value}` |
 | `submit` | `TextField` (enter) | `{}` |
-| `change` | `Checkbox`, `Switch`, `Slider`, `Radio`, `Rating` | `{value}` |
+| `change` | `Checkbox`, `Switch`, `Slider`, `Radio`, `Rating`, `Chip` (with `selected`), `SegmentedButton`, `NavigationBar` (`value` = index) | `{value}` |
+| `input`, `submit` | `SearchBar` (like `TextField`) | `{value}` / `{}` |
+| `remove` | `Chip` (`variant: "input"`) | `{}` |
 | `select` | `Chart`, `DataGrid`, `Heatmap`, `Treemap`, `Graph`, `Timeline`, `TreeView` | `{data: {index, row, …}}` |
 
-Give interactive nodes (`TextField`, `Checkbox`, `Switch`, `Slider`) a stable
-`key` so they keep focus across renders.
+Give interactive nodes (`TextField`, `SearchBar`, `Checkbox`, `Switch`,
+`Slider`, `SegmentedButton`) a stable `key` so they keep focus across
+renders.
 
 ### Elpian nodes (Flutter widgets)
 
@@ -168,21 +177,29 @@ Give interactive nodes (`TextField`, `Checkbox`, `Switch`, `Slider`) a stable
 | `ListView` | `scrollDirection`, `scrollable`; scrolling lists |
 | `GridView` | `crossAxisCount` |
 | `IndexedStack` | `index`: shows one child |
-| `Text` | `text`, `maxLines`, `overflow`, `softWrap`, `textAlign` |
-| `Button` | `text`, `disabled`; `events.tap` |
-| `TextField` | `hint`, `value`, `obscureText`, `multiline`, `maxLines`, `keyboardType` (`text` `number` `email` `phone` `url` `date`), `min`/`max` (dates); events `input`, `submit` |
-| `Checkbox`, `Switch` | `value` (bool); `change` |
+| `Text` | `text`, **`variant`** (an M3 type role: `displayLarge` `displayMedium` `displaySmall` `headlineLarge` `headlineMedium` `headlineSmall` `titleLarge` `titleMedium` `titleSmall` `bodyLarge` `bodyMedium` `bodySmall` `labelLarge` `labelMedium` `labelSmall`; add `Emphasized` for the bolder expressive weight, e.g. `headlineMediumEmphasized`), `color` (a role: `primary` `secondary` `tertiary` `error` `muted`), `maxLines`, `overflow`, `softWrap`, `textAlign` |
+| `Button` | `text`, **`variant`** (`filled` default, `tonal`, `outlined`, `text`, `elevated`, `danger`), `icon` / `trailingIcon` (Material icon names), `size` (`xs` 32 · `s` 40 default · `m` 56 · `l` 96 · `xl` 136 high), `shape` (`round` / `square`), `selected` (a toggle button), `loading`, `fullWidth`, `tooltip`, `disabled`; events `tap`, `longpress`. Corners morph and the button springs when pressed |
+| `IconButton` | `icon`, `variant` (`standard` `filled` `tonal` `outlined`), `size`, `shape`, `selected` + `selectedIcon` (a toggle), `tooltip`, `disabled`; `tap` |
+| `FAB` (also `FloatingActionButton`) | `icon` (default `add`), `label` (extended FAB), `size` (`small` `medium` `large`), `variant` (`primary` `secondary` `tertiary` `surface`); `tap`. In a `Scaffold` it floats bottom-right |
+| `SegmentedButton` | `segments: [{value, label, icon}]` (or strings), `selected` (a value, or a list with `multi`), `multi`, `size` (`s`/`m`); `change` `{value}`. The connected button group: filters, view switches, 2–5 short options |
+| `TextField` | `hint`, `label` (floating label), `icon` / `trailingIcon`, `prefix` / `suffix` (`$`, `kg`), `helper`, `error`, `variant` (`filled` default / `outlined`), `value`, `obscureText`, `multiline`, `maxLines`, `keyboardType` (`text` `number` `email` `phone` `url` `date` `time`), `min`/`max` (dates), `disabled`; events `input`, `submit` |
+| `SearchBar` | `hint`, `value`, `icon`, `trailingIcon`; events `input`, `submit` (a pill search field) |
+| `Checkbox`, `Switch` | `value` (bool), `label` (tapping the label toggles too), `disabled`; `change` |
 | `Radio` | `value`, `groupValue`; `change` |
-| `Slider` | `value`, `min`, `max`; `change` |
-| `Image` | `src` (https URL, `/v1/files/<id>/content`, a project file path, data URI), `fit` (`cover` `contain` …), `alt` |
-| `Icon` | `icon` (a Material icon name: `home`, `search`, `add`, `delete`, `edit`, `settings`, `star`, …), `size`, `style.color` |
-| `Card` | `elevation`; a Material card around its children |
+| `Slider` | `value`, `min`, `max`, `step` or `divisions`, `label` (`true` or a suffix like `"%"`: a value bubble while dragging); `change` |
+| `Image` | `src` (https URL, `/v1/files/<id>/content`, a project file path, data URI), `fit` (`cover` `contain` …), `alt`; size it with `style.width` / `style.height`, round it inside a `ClipRRect` |
+| `Icon` | `icon` (a Material Symbols name, drawn rounded: `home`, `search`, `add`, `edit`, `delete`, `settings`, `insights`, `payments`, `event`, `auto_awesome`, `rocket_launch`, … ~650 names; also camelCase / kebab-case), `size`, `style.color` |
+| `Card` | `variant` (`filled` tonal, `elevated`, `outlined`; default the theme's card), `tone` (`primary` `secondary` `tertiary` `error` `inverse`: a highlighted card in that container color), `radius`, `elevation`; `style.padding` (inside) and `style.gap` (between children); with `events.tap` it ripples and springs |
+| `ListTile` | `title`, `subtitle`, `overline`, `leading` (an icon: drawn in a tonal rounded square), `leadingAvatar` (a name: initials), `leadingImage`, `trailing` (an icon), `trailingText` (a time, an amount), `selected`, `dense`, `lines` (3 wraps the subtitle), `disabled`; `tap`, `longpress` |
+| `ListGroup` | `title`, `variant` (`tonal` / `outlined`), `radius`, `innerRadius`, `gap`; children (`ListTile`s) become one segmented M3E group: tonal tiles 2px apart, large outer and small inner corners |
+| `NavigationBar` | `items: [{icon, selectedIcon, label, badge}]` (3–5), `selected` (index), `labels` (`always` `selected` `never`); `change` `{value: index}`. In a `Scaffold`, the bottom bar |
+| `LoadingIndicator` | `size` (48), `contained`: the M3E loading indicator, a soft shape morphing as it spins. For waits; `Progress` for measurable work |
 | `Divider`, `VerticalDivider` | separators |
-| `Chip` | `label` |
-| `Badge` | `label` |
+| `Chip` | `label`, `icon`, `selected` (a filter chip with a check; `change`), `variant` (`assist` `filter` `input` `suggestion`); `tap`, `remove` (input chips) |
+| `Badge` | `label` or `count` (`99+` past `max`); no label = a dot; around its child (an `Icon`) |
 | `Tooltip` | `message` |
 | `InkWell`, `GestureDetector` | make any child tappable (`events.tap`) |
-| `Scaffold`, `AppBar` (`title`), `Drawer` | app chrome for a full-screen layout |
+| `Scaffold`, `AppBar` (`title`), `Drawer` | app chrome for a full-screen layout: children go to slots by type (`AppBar`, `FAB`, `NavigationBar`, `Drawer`) or `props.slot`; the rest is the body |
 | `Dismissible`, `Draggable`, `DragTarget`, `Hero` | swipe, drag and drop, shared transitions |
 | `MathExpression`, `Math` | `latex` / `expression` |
 | `Canvas`, `CachedCanvas` | `commands`, `width`, `height`, `backgroundColor`: vector drawing (canvas commands) |
@@ -210,19 +227,163 @@ they are what the Aseman look is built from.
 | `TreeView` | `data: {label, value, icon, children}` (or a list), `expanded` |
 | `JsonView` | `value`, `expanded` |
 | `CodeBlock` | `code`, `language`, `lineNumbers`, `maxHeight` |
-| `Progress` | `value`, `max`, `variant` (`linear`/`circular`), `label`, `showValue`, `status`, `size` |
-| `Tag` | `text`, `status` (`good` `warning` `serious` `critical` `info`) or `color`, `variant` (`tonal` `filled` `outline`), `icon` |
+| `Progress` | `value`, `max`, `variant` (`linear`/`circular`), `wavy` (the expressive wavy bar, for work in progress), `label`, `showValue`, `status`, `size`, `thickness` |
+| `Tag` | `text`, `status` (`good` `warning` `serious` `critical` `info`) or `color` (default: the accent), `variant` (`tonal` `filled` `outline`), `icon`, `dot` |
 | `Rating` | `value`, `max`, `size`; `change` event |
 | `Callout` | `title`, `text`, `severity` (`info` `good` `warning` `critical`), `icon`; children below |
 | `Avatar` | `name`, `url`, `size` |
 | `ResponsiveGrid` | `columns` or `minColumnWidth` (+ `maxColumns`), `gap` |
 | `Section` | `title`, `subtitle`, `icon`; children |
-| `Expandable` | `title`, `subtitle`, `expanded`; children |
+| `Expandable` | `title`, `subtitle`, `icon`, `expanded`; children |
 | `Scroll` | `direction`, `maxHeight`; children |
 
 Formats: `number[:decimals]`, `integer`, `compact`, `percent[:decimals]`
 (fractions), `currency[:CODE[:decimals]]`, `date`, `time`, `datetime`; a
 leading `+` signs positives.
+
+## Design: Material 3 Expressive (required)
+
+Aseman apps are drawn in **Material 3 Expressive (M3E)**: Google's most
+recent Material language — bold, tonal, rounded, springy, and calm where it
+matters. The Elpian nodes above already *are* M3E (button shape morphing,
+spring motion, tonal containers, rounded Material Symbols, the 2024 slider
+and progress styles); your job is to compose them into screens that feel
+designed, not assembled. Aim for an app someone would screenshot.
+
+**Start from `vendor/aseman-elpian/examples/showcase.js`**: a complete app
+(header, hero stat, KPI cards, segmented filter, grouped list, form, agent
+island, navigation bar, loading / empty states, phone widget) that passes
+`check.mjs`. Borrow its structure and idioms; make the content yours.
+
+### Principles
+
+1. **One clear hierarchy per screen.** A header (an emphasized headline, one
+   supporting line, at most one primary action), then content in titled
+   groups. The eye should land on the single most important thing first —
+   make it big (`Stat` `size: "hero"`, `displaySmallEmphasized`), give it
+   the accent (`Card` `tone: "primary"`), and let everything else recede.
+2. **Tonal surfaces, not lines and shadows.** Layer `surface` →
+   `surfaceContainer*` roles: `Card` `variant: "filled"` for groups,
+   `ListGroup` for lists, `tone` cards to highlight. Avoid borders around
+   every box, drop shadows, and cards nested in cards.
+3. **Expressive shape.** Large corner radii on containers (20–28), fully
+   round controls, a tonal rounded square behind icons (`ListTile`
+   `leading`, `Stat` `icon`, `Section` `icon`). Contrast shapes: a square
+   `selected` button among round ones, a `FAB` `size: "large"` as the hero
+   action.
+4. **Type with contrast.** Use `Text` `variant` roles, never ad-hoc
+   `fontSize`/`fontWeight` for UI text: `display*`/`headline*`
+   `Emphasized` for the moment that matters, `title*` for group and card
+   titles, `body*` for reading, `label*` for meta. Big numbers + calm body
+   text = expressive; everything bold = noise. `color: "muted"` for
+   secondary text.
+5. **Color from the person's theme.** Leave colors unset; when you need
+   emphasis use roles (`tone`, `variant`, `status`, `color: "primary"`).
+   One accent moment per view. Status is never color alone: `Tag` /
+   `Callout` carry an icon or label.
+6. **Motion with purpose.** State changes animate: wrap swapped content in
+   `AnimatedSwitcher`, sizes in `AnimatedSize` / `AnimatedContainer`.
+   Waits show a `LoadingIndicator` (or `Shimmer` skeletons shaped like the
+   content), long work a `Progress` (`wavy: true` while active). Never a
+   frozen screen.
+7. **Rhythm.** An 8-pt grid: screen padding 16 (24 on wide windows), 12–16
+   between cards, 24–32 between sections, 8–12 inside groups. Tap targets
+   ≥ 40 high.
+8. **Responsive.** Desk windows are wide, phones narrow: lay out cards with
+   `ResponsiveGrid` (`minColumnWidth` 260–320), stats with `minColumnWidth`
+   160; multi-screen apps use `NavigationBar` (3–5 destinations) or a
+   `SegmentedButton`.
+
+### Which node for which need
+
+| Need | Use |
+|---|---|
+| The screen's main action | `Button` (`filled`, often `size: "m"` with an `icon`), or a `FAB` (extended with `label`) |
+| Secondary / tertiary actions | `Button` `tonal` / `outlined` / `text`; `IconButton` for icon-only (`tooltip`!) |
+| Switch views / filter by one option | `SegmentedButton` (2–5 short options); many options: `Chip`s with `selected` in a `Wrap` |
+| Destinations of a multi-screen app | `NavigationBar` in a `Scaffold`, keep the screen in state |
+| Lists of things (people, tasks, files, settings) | `ListGroup` of `ListTile`s (`leading` icon or `leadingAvatar`, `trailingText` meta, `tap`) |
+| Key numbers | `Stat` (`icon`, `format`, `delta`, `trend`) on filled cards in a `ResponsiveGrid` |
+| A highlighted fact / summary | `Card` `tone: "primary"` (or `tertiary`) with a `headline*Emphasized` text |
+| Search | `SearchBar` (or `app.input(key, field, {search: true, hint})`) |
+| Forms | `TextField` with `label`, `icon`, `helper` / `error`; `Switch` / `Checkbox` with `label`; `Slider` with `label`; group fields in a filled `Card`, primary `Button` at the end |
+| Tables, charts | the UI kit (`DataGrid`, `Chart`) inside a `Card` with a `title` text |
+
+### A screen, composed
+
+```js
+view: function (s, app) {
+  var c = Aseman.env().theme.colors;
+  return { type: "ListView", children: [{ type: "Column", props: { style: { padding: "16", gap: "24" } }, children: [
+    // Header: emphasized headline, supporting line, the one primary action.
+    { type: "Row", props: { style: { alignItems: "center", gap: "12" } }, children: [
+      { type: "Expanded", children: [{ type: "Column", props: { style: { gap: "4" } }, children: [
+        { type: "Text", props: { text: "Orders", variant: "headlineMediumEmphasized" } },
+        { type: "Text", props: { text: s.open + " open · updated " + s.updated, variant: "bodyMedium", color: "muted" } },
+      ] }] },
+      { type: "Button", props: { text: "New order", icon: "add", size: "m" }, events: { tap: app.handler("new", newOrder) } },
+    ] },
+    // The hero fact, on the accent container.
+    { type: "Card", props: { tone: "primary", style: { padding: "20", gap: "8" } }, children: [
+      { type: "Stat", props: { label: "Revenue today", value: s.revenue, format: "currency:USD:0",
+                               delta: s.delta, deltaFormat: "+percent", deltaLabel: "vs yesterday", trend: s.trend, size: "hero" } },
+    ] },
+    // Supporting numbers.
+    { type: "ResponsiveGrid", props: { minColumnWidth: 160, gap: 12 }, children: s.kpis.map(function (k) {
+      return { type: "Card", props: { variant: "filled", style: { padding: "16" } }, children: [
+        { type: "Stat", props: { label: k.label, value: k.value, icon: k.icon, format: k.format } } ] };
+    }) },
+    // A filter and a grouped list.
+    { type: "SegmentedButton", key: "filter", props: { selected: s.filter, segments: [
+      { value: "open", label: "Open", icon: "inbox" }, { value: "done", label: "Done", icon: "task_alt" }, { value: "all", label: "All" } ] },
+      events: { change: app.handler("filter", function (e, app) { app.set({ filter: e.value }); }) } },
+    { type: "AnimatedSwitcher", children: [ s.items.length ? { type: "ListGroup", key: s.filter, children: s.items.map(function (o) {
+      return { type: "ListTile", props: { title: o.customer, subtitle: o.summary, leading: "receipt_long",
+               trailingText: o.total }, events: { tap: app.handler("open_" + o.id, function () { openOrder(o.id); }) } };
+    }) } : emptyState("No orders yet", "New orders show up here as they come in.", "inbox") ] },
+  ] }] };
+}
+
+function emptyState(title, body, icon) {
+  return { type: "Column", props: { style: { gap: "12", padding: "32", alignItems: "center" } }, children: [
+    { type: "Container", props: { style: { width: "72", height: "72", borderRadius: "28",
+        backgroundColor: Aseman.env().theme.colors.secondaryContainer } },
+      children: [{ type: "Center", children: [{ type: "Icon", props: { icon: icon, size: 32 } }] }] },
+    { type: "Text", props: { text: title, variant: "titleLargeEmphasized", textAlign: "center" } },
+    { type: "Text", props: { text: body, variant: "bodyMedium", color: "muted", textAlign: "center" } },
+  ] };
+}
+```
+
+### Every state is designed
+
+* **Loading:** `Shimmer` around boxes shaped like the content
+  (`borderRadius` 8–16), or a `LoadingIndicator` with a short line of what
+  is happening. Keep the header visible.
+* **Empty:** an icon in a tonal rounded square, a `titleLarge` line, one
+  muted sentence, and the action that fills it (`tonal` button).
+* **Error:** `Callout` `severity: "critical"` with a human sentence (never
+  a stack trace) and a `tonal` "Try again" button with the `refresh` icon;
+  `app.fail(e)` does this for you.
+* **Busy actions:** `Button` `loading: true` (it spins and disables) rather
+  than replacing the label; confirm results inline (`Tag`, `Callout`
+  `good`), not with alerts.
+* **Agent islands** (`OpenUI.panel` / `action`) already draw M3E cards,
+  loading indicators and retry buttons: place them like any other card.
+
+### Don't
+
+* Hard-code hex colors, gray-on-gray text, or a private palette (unless the
+  brief asks for a brand look).
+* Use `fontSize` / `fontWeight: "bold"` for UI text instead of `variant`.
+* Put more than one `filled` button side by side; make the rest `tonal`,
+  `outlined` or `text`.
+* Use emoji or text characters as icons (`"+"`, `"›"`, `"⚙"`): use `icon`
+  names.
+* Wrap everything in outlined boxes or nest cards in cards; separate with
+  space and tonal surfaces instead.
+* Leave a screen a single long column of plain text, or center body text.
+* Use HTML nodes (`div`, `p`, `button`) for app UI.
 
 ## OpenUI (agent-generated UI) in Elpian (`openui-elpian.js`, always in the bundle)
 
@@ -353,7 +514,9 @@ names it: `"widget": "elpian/widget.js"`.
 
 ## Checklist
 
-1. `elpian/src/*.js` written against this file; no browser APIs.
+1. `elpian/src/*.js` written against this file; no browser APIs; designed
+   to **Design: Material 3 Expressive** (type roles, tonal surfaces, icons,
+   designed loading / empty / error states).
 2. Server serves `GET /elpian/app.js` and its API; `start` serves both.
 3. `node vendor/aseman-elpian/bundle.mjs .` then `check.mjs … --server …` pass.
 4. Tests for the server, and for the frontend's pure logic (state updates,

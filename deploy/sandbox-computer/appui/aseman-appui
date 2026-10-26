@@ -260,14 +260,27 @@ vendor/aseman-elpian/ (aseman-elpian.js SDK, openui-elpian.js, nodes.json).
 Write it in elpian/src/*.js with App.create + Aseman.* (no DOM, no fetch, no
 modules); use the UI kit nodes for data views; mix OpenUI agent islands
 (OpenUI.panel / action / query) with programmed UI where judgment helps.
+Design it in Material 3 Expressive, following ELPIAN.md's "Design" section:
+study vendor/aseman-elpian/examples/showcase.js (a complete reference app)
+first. Every screen gets a clear hierarchy (an emphasized headline, one
+primary action, the key fact made big on a tonal or accent card), Text
+type roles (variant) instead of ad-hoc font sizes, tonal surfaces
+(Card variant/tone, ListGroup + ListTile) instead of borders, Material icon
+names (never emoji or glyphs), M3E controls (Button variants and sizes,
+IconButton, SegmentedButton, Chip, SearchBar, NavigationBar, FAB), motion
+for state changes, and designed loading, empty and error states. Make it
+look like a polished, modern product someone would want to use daily — give
+it one distinctive idea of its own (a hero visual, a playful detail, a
+clever layout), not a generic form-and-table page.
 Give App.create its phone widget (ELPIAN.md, The phone widget): a glanceable,
 live view of the few facts that matter for this app's use case, refreshed on
 a timer, designed for small, medium and large tiles.
 Your server serves GET /elpian/app.js (the bundle) and its API. Bundle with
 node vendor/aseman-elpian/bundle.mjs . and check with
 node vendor/aseman-elpian/check.mjs elpian/app.js --apps APPS.json --server http://127.0.0.1:$port
-(with the server running) until it passes. AGENTS.md's web rules (M3E,
-web theming, the web OpenUI kit) do not apply.
+(with the server running) until it passes. AGENTS.md's web-only rules
+(@material/web, web theming, the web OpenUI kit) do not apply; its design
+bar does, met with Elpian nodes.
 FRONT
 )
   else
@@ -308,7 +321,10 @@ Work in this order:
    (billed to the person who asked for the app).
    Use only the apps, microtools, argument shapes and agents APPS.json lists.
    Decide what the phone widget shows: the live facts someone checks at a
-   glance for this app. Write the plan to PLAN.md.
+   glance for this app. Decide the design: the hero of each screen, the
+   layout on a phone and on a wide desk window, the components, the
+   loading / empty / error states, and one distinctive touch. Write the plan
+   to PLAN.md.
 2. Build the fullstack project (frontend + backend) as described above.
 3. Test: unit/API tests for your server, the theme applicator, parsing of
    microtool results (fixtures shaped like real replies) and the handling of
@@ -369,6 +385,10 @@ cmd_build() {
       [[ -f "$ROOT/elpian/$f" ]] && cp -f "$ROOT/elpian/$f" "$dir/vendor/aseman-elpian/$f"
     done
     [[ -f "$ROOT/elpian/ELPIAN.md" ]] && cp -f "$ROOT/elpian/ELPIAN.md" "$dir/ELPIAN.md"
+    if [[ -d "$ROOT/elpian/examples" ]]; then
+      mkdir -p "$dir/vendor/aseman-elpian/examples"
+      cp -a "$ROOT/elpian/examples/." "$dir/vendor/aseman-elpian/examples/"
+    fi
   fi
   if [[ -d "$ROOT/sdk" ]]; then
     mkdir -p "$dir/vendor/aseman-sdk"

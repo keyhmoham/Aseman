@@ -18,5 +18,15 @@
   },
   "permission": {
     "*": "allow"
+  },
+  "mcp": {
+    "elpian": {
+      "type": "local",
+      "command": [
+        "node",
+        "/opt/aseman-appui/elpian/validate-mcp.mjs"
+      ],
+      "enabled": true
+    }
   }
 }

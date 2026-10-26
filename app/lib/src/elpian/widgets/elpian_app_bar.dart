@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/elpian_node.dart';
+import 'elpian_expressive.dart';
 import 'elpian_scaffold.dart';
 
 /// `AppBar`, with its slots filled from children.
@@ -71,10 +72,10 @@ class ElpianAppBar {
       centerTitle: flag('centerTitle'),
       automaticallyImplyLeading: flag('automaticallyImplyLeading') ?? true,
       primary: flag('primary') ?? true,
-      elevation: (node.props['elevation'] as num?)?.toDouble(),
+      elevation: numProp(node, 'elevation')?.toDouble(),
       scrolledUnderElevation:
-          (node.props['scrolledUnderElevation'] as num?)?.toDouble(),
-      titleSpacing: (node.props['titleSpacing'] as num?)?.toDouble(),
+          numProp(node, 'scrolledUnderElevation')?.toDouble(),
+      titleSpacing: numProp(node, 'titleSpacing')?.toDouble(),
       toolbarHeight: style?.height,
       backgroundColor: style?.backgroundColor,
       foregroundColor: style?.color,

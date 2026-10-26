@@ -26,8 +26,11 @@ program's `widget`; with `ui: web` it is a small Elpian program of its own
 Before writing an Elpian frontend, read `ELPIAN.md` in full and look at
 `vendor/aseman-elpian/` (the SDK, the OpenUI renderer, `nodes.json` and
 `examples/showcase.js`, a complete reference app in Material 3 Expressive):
-use only the node types, props and host APIs they define. The backend is the
-same in both cases.
+use only the node types, props and host APIs they define. Validate the view
+trees you write with the **UI DSL validator**: your `elpian_*` tools
+(`elpian_describe`, `elpian_icons`, `elpian_validate`,
+`elpian_validate_program`) or `vendor/aseman-elpian/validate.mjs` (ELPIAN.md,
+Validating view trees). The backend is the same in both cases.
 
 ## Wiring to the space (read first)
 
@@ -232,9 +235,10 @@ same in both cases.
      a clever layout), never a generic form-and-table page or
      purple-gradient "AI slop". OpenUI islands included.
 7. **Tests**: write automated tests (unit and/or API), including theme
-   adaption and OpenUI helpers where used (web), or the frontend's logic and
-   `vendor/aseman-elpian/check.mjs` (Elpian). **Run them**. Do not claim ready
-   if tests fail.
+   adaption and OpenUI helpers where used (web), or the frontend's logic,
+   `vendor/aseman-elpian/check.mjs` and the UI DSL validator
+   (`elpian_validate_program`, no errors or warnings) for Elpian — a web app's
+   phone widget too. **Run them**. Do not claim ready if tests fail.
 8. **Listen**: bind `0.0.0.0` on the port in `JOB.json` (`port`).
 9. **READY.json**: only after tests pass, write this file in the project root:
 

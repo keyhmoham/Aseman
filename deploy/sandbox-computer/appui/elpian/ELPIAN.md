@@ -41,6 +41,7 @@ elpian/src/*.js          your frontend (shared global scope; main.js last)
 elpian/manifest.json     optional: {"files": ["src/state.js", "src/main.js"]} to fix the order
 elpian/app.js            the bundle (generated: never edit it)
 vendor/aseman-elpian/    this kit: SDK, OpenUI, bundle.mjs, check.mjs, nodes.json,
+                         validate.mjs + schema.mjs + icons.json (the UI DSL validator),
                          examples/showcase.js (a reference app in M3 Expressive)
 server.* / src/…         your backend; it serves elpian/app.js and your API
 ```
@@ -56,8 +57,71 @@ node vendor/aseman-elpian/check.mjs elpian/app.js --apps APPS.json \
 `check.mjs` runs the program on QuickJS (the engine the client uses), against
 a simulated Aseman host, and against your running server: it fails on
 exceptions, unknown node types, events naming missing functions, handlers
-that throw with a sample event, and server errors. The platform runs it too
-before the app is shown; make it pass.
+that throw with a sample event, server errors, and every error the **UI DSL
+validator** finds in what the program renders (below). The platform runs it
+too before the app is shown; make it pass.
+
+## Validating view trees (the UI DSL validator)
+
+`vendor/aseman-elpian/validate.mjs` checks Elpian view trees against the
+engine's own schema (`schema.mjs`, kept in sync with the Flutter builders and
+measured layout behaviour). Use it while you build, not only at the end. You
+have it two ways:
+
+| Your tools (MCP server `elpian`) | Command line |
+|---|---|
+| `elpian_validate {tree}` / `{file}` (`mode: "widget"`, `openui: true`) | `node vendor/aseman-elpian/validate.mjs tree.json [--widget] [--openui]` (`-` reads stdin) |
+| `elpian_validate_program {bundle, server, apps}` | `node vendor/aseman-elpian/validate.mjs --program elpian/app.js --server http://127.0.0.1:$PORT [--apps APPS.json]` |
+| `elpian_describe {types: ["ListTile"]}` (no types: every node) | `node vendor/aseman-elpian/validate.mjs --describe ListTile,Button` / `--list` |
+| `elpian_icons {query: "calendar"}` | `grep calendar vendor/aseman-elpian/icons.json` |
+
+The program mode runs your bundle like `check.mjs` (QuickJS, simulated host,
+your server), taps every handler with the event data the client really
+sends, and validates **every render**, as the app and as the phone widget.
+Options: `--json`, `--strict` (warnings fail too), `--no-design`, `--quiet`.
+The exit code is 1 when there are errors.
+
+What it checks, each finding with its path (`Scaffold > ListView > Column >
+Row > TextField#q`, `$.children[0]…`), why it matters and the fix:
+
+* **Shape:** `type` present and drawn; only `type`, `props`, `children`,
+  `events`, `key`, `style` on a node (`child`, `onTap`, props at the top
+  level are caught); children an array of nodes (a `null`, `false` or string
+  child throws: filter them out).
+* **Props:** unknown props (with "did you mean"), types — strict where the
+  builder casts (`Switch` `value: "true"`, `TextField` `hint: 42` throw),
+  enums, ranges (`opacity` 0..1, `flex` ≥ 1, `Slider` min < max), required
+  content, Material icon names, value formats, and **data fields** (`Chart`
+  `x`/`y`/`series`, `DataGrid` `columns[].field` must exist on the rows).
+* **Styles:** unknown keys, value types and units (`rem`, `"16 16 0 0"` as a
+  radius, CSS strings for `border`, negative padding), colors that do not
+  parse, hard-coded colors outside the person's theme (a design note).
+* **Events:** handlers must be names (strings); events a node never fires
+  (`Button` `press`); events on a widget.
+* **Keys:** string keys; unique among siblings (Flutter throws) and unique in
+  the tree when nodes have events (events are dispatched by key); interactive
+  inputs without a key lose focus.
+* **Parents and children:** `Expanded`/`Flexible`/`Spacer` directly in a
+  `Row`/`Column` (not a wrapping one, without events on them), `Positioned`
+  in a `Stack`; children a node ignores or drops (`Text` with children,
+  several children in `Center`); unknown slots; `ListGroup` children.
+* **Layout (measured):** nodes that throw without a width bound (`TextField`,
+  `SearchBar`, `ListTile`, `ListGroup`, `ListView`, `Chart`, `DataGrid`,
+  `Section`, `Callout`, … directly in a `Row`: wrap them in `Expanded`) or a
+  height bound (`Scaffold`, `Drawer` inside a scroll), and `Expanded` in a
+  `Column` inside a scrolling list.
+* **Phone widget:** no tables, lists, inputs or chrome, at most
+  80 nodes, no events.
+* **Design (notes):** M3E practice — type roles instead of font sizes, one
+  filled button per row, icons instead of emoji, no nested cards, tooltips
+  on icon buttons, alt text on images.
+
+```bash
+echo '{"type":"Row","children":[{"type":"TextField","props":{"hint":"Search"}}]}' | node vendor/aseman-elpian/validate.mjs -
+# ERROR [layout-unbounded-width] Row > TextField
+#   TextField has no width bound here (it is directly in a Row …) — Flutter throws …
+#   fix: Wrap it in Expanded (inside the Row), or give it/its parent a style.width.
+```
 
 ## Language rules (QuickJS)
 
@@ -177,6 +241,9 @@ renders.
 | `ListView` | `scrollDirection`, `scrollable`; scrolling lists |
 | `GridView` | `crossAxisCount` |
 | `IndexedStack` | `index`: shows one child |
+| `FractionallySizedBox` | `widthFactor`, `heightFactor` (0..1 of the space) |
+| `CircularProgressIndicator`, `LinearProgressIndicator` | `value` (0..1; omit to spin / sweep). Prefer `LoadingIndicator` and the kit's `Progress` |
+| `AnimatedDefaultTextStyle`, `TweenAnimationBuilder` (`tweenType`: `opacity` `scale` `rotation` `translateX` `translateY`) | text-style and value animations |
 | `Text` | `text`, **`variant`** (an M3 type role: `displayLarge` `displayMedium` `displaySmall` `headlineLarge` `headlineMedium` `headlineSmall` `titleLarge` `titleMedium` `titleSmall` `bodyLarge` `bodyMedium` `bodySmall` `labelLarge` `labelMedium` `labelSmall`; add `Emphasized` for the bolder expressive weight, e.g. `headlineMediumEmphasized`), `color` (a role: `primary` `secondary` `tertiary` `error` `muted`), `maxLines`, `overflow`, `softWrap`, `textAlign` |
 | `Button` | `text`, **`variant`** (`filled` default, `tonal`, `outlined`, `text`, `elevated`, `danger`), `icon` / `trailingIcon` (Material icon names), `size` (`xs` 32 · `s` 40 default · `m` 56 · `l` 96 · `xl` 136 high), `shape` (`round` / `square`), `selected` (a toggle button), `loading`, `fullWidth`, `tooltip`, `disabled`; events `tap`, `longpress`. Corners morph and the button springs when pressed |
 | `IconButton` | `icon`, `variant` (`standard` `filled` `tonal` `outlined`), `size`, `shape`, `selected` + `selectedIcon` (a toggle), `tooltip`, `disabled`; `tap` |
@@ -518,7 +585,9 @@ names it: `"widget": "elpian/widget.js"`.
    to **Design: Material 3 Expressive** (type roles, tonal surfaces, icons,
    designed loading / empty / error states).
 2. Server serves `GET /elpian/app.js` and its API; `start` serves both.
-3. `node vendor/aseman-elpian/bundle.mjs .` then `check.mjs … --server …` pass.
+3. `node vendor/aseman-elpian/bundle.mjs .` then `check.mjs … --server …`
+   pass, and `elpian_validate_program` (or `validate.mjs --program …`)
+   reports no errors or warnings for the app and the widget.
 4. Tests for the server, and for the frontend's pure logic (state updates,
    parsing microtool / agent replies) run with `node --test`.
 5. A `widget` that shows live, use-case-specific facts at a glance in every

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/node_events.dart';
 import '../models/elpian_node.dart';
+import 'elpian_expressive.dart';
 
 /// `Draggable`: drag the child (carrying `props.data`) onto a `DragTarget`.
 ///
@@ -80,7 +81,7 @@ class _ElpianDraggableState extends State<_ElpianDraggable> {
             ? content.first
             : Column(mainAxisSize: MainAxisSize.min, children: content);
 
-    final opacity = (node.props['feedbackOpacity'] as num?)?.toDouble() ?? 0.85;
+    final opacity = numProp(node, 'feedbackOpacity')?.toDouble() ?? 0.85;
     final feedback = Material(
       type: MaterialType.transparency,
       child: feedbackSlot ??
@@ -104,7 +105,7 @@ class _ElpianDraggableState extends State<_ElpianDraggable> {
       'vertical' => Axis.vertical,
       _ => null,
     };
-    final maxDrags = (node.props['maxSimultaneousDrags'] as num?)?.toInt();
+    final maxDrags = numProp(node, 'maxSimultaneousDrags')?.toInt();
     Map<String, dynamic> payload([Map<String, dynamic> extra = const {}]) =>
         {'data': data, ...extra};
 

@@ -251,7 +251,9 @@ class StatTile extends StatelessWidget {
       ),
     );
     final iconBox = compact ? 28.0 : 36.0;
-    return Column(
+    // Inside a Row (unbounded width) a flexible label would throw: there the
+    // tile takes its natural width.
+    return LayoutBuilder(builder: (context, box) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -273,7 +275,7 @@ class StatTile extends StatelessWidget {
               ),
               SizedBox(width: compact ? 8 : 10),
             ],
-            Expanded(child: label),
+            if (box.maxWidth.isFinite) Expanded(child: label) else label,
           ],
         ),
         SizedBox(height: compact ? 4 : 8),
@@ -339,7 +341,7 @@ class StatTile extends StatelessWidget {
             ),
           ),
       ],
-    );
+    ));
   }
 }
 
@@ -466,7 +468,10 @@ class ProgressView extends StatelessWidget {
         ],
       );
     }
-    return Column(
+    // In an unbounded row the bar takes a natural width rather than throwing.
+    return LayoutBuilder(builder: (context, box) => SizedBox(
+      width: box.maxWidth.isFinite ? null : 160,
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -507,7 +512,7 @@ class ProgressView extends StatelessWidget {
           wavy: wavy,
         ),
       ],
-    );
+    )));
   }
 }
 

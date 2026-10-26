@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/elpian_node.dart';
+import 'elpian_expressive.dart';
 import '../css/css_properties.dart';
 import 'svg_path.dart';
 
 class ElpianIcon {
   static Widget build(ElpianNode node, List<Widget> children) {
     final iconName = node.props['icon'] as String? ?? 'star';
-    final size = node.style?.fontSize ?? node.props['size'] as double? ?? 24.0;
+    final size = node.style?.fontSize ?? numProp(node, 'size') ?? 24.0;
     final color = node.style?.color;
 
     // `svgPath`: an SVG path in a 24x24 viewBox, painted directly — there is
@@ -682,6 +683,15 @@ class ElpianIcon {
     'lock_clock': Icons.lock_clock_rounded,
     'timelapse': Icons.timelapse_rounded,
     'av_timer': Icons.av_timer_rounded,
+    'add_task': Icons.add_task_rounded,
+    'playlist_add': Icons.playlist_add_rounded,
+    'post_add': Icons.post_add_rounded,
+    'library_add': Icons.library_add_rounded,
+    'add_shopping_cart': Icons.add_shopping_cart_rounded,
+    'add_location': Icons.add_location_rounded,
+    'add_reaction': Icons.add_reaction_rounded,
+    'person_search': Icons.person_search_rounded,
+    'manage_history': Icons.manage_history_rounded,
     // Short aliases.
     'table': Icons.table_chart_rounded,
     'bank': Icons.account_balance_rounded,

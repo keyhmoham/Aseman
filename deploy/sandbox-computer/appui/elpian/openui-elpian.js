@@ -496,7 +496,7 @@
       return { type: "Expandable", props: { title: str(p.title), expanded: !!p.defaultOpen }, children: propKids(p.content || n.children, ctx) };
     },
     Divider: function (n, p) { return p.label ? row([{ type: "Expanded", children: [{ type: "Divider" }] }, muted(p.label), { type: "Expanded", children: [{ type: "Divider" }] }]) : { type: "Divider" }; },
-    Spacer: function (n, p) { return p.grow ? { type: "Spacer" } : { type: "SizedBox", props: { height: Number(gap(p.size)) } }; },
+    Spacer: function (n, p) { return p.grow ? { type: "Spacer" } : { type: "SizedBox", props: { style: { height: gap(p.size) } } }; },
     ScrollArea: function (n, p, ctx) { return { type: "Scroll", props: { maxHeight: Number(p.maxHeight) || 320 }, children: kids(n, ctx) }; },
     Frame: function (n, p, ctx) { return card(kids(n, ctx)); },
     Overlay: function (n, p, ctx) { return column(kids(n, ctx), "m"); },

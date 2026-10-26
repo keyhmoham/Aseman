@@ -56,6 +56,8 @@ COPY appui/openui /opt/aseman-appui/openui
 COPY appui/ASEMAN_API.md /opt/aseman-appui/ASEMAN_API.md
 # Elpian App UI kit: App UIs default to an Elpian frontend (ELPIAN.md).
 COPY appui/elpian/aseman-elpian.js appui/elpian/openui-elpian.js appui/elpian/bundle.mjs appui/elpian/check.mjs appui/elpian/nodes.json appui/elpian/ELPIAN.md /opt/aseman-appui/elpian/
+# The UI DSL validator: a CLI, and an MCP server OpenCode loads (opencode.json "mcp").
+COPY appui/elpian/validate.mjs appui/elpian/validate-mcp.mjs appui/elpian/schema.mjs appui/elpian/icons.json /opt/aseman-appui/elpian/
 COPY appui/elpian/examples /opt/aseman-appui/elpian/examples
 COPY appui/sdk/aseman.js appui/sdk/server.cjs appui/sdk/server.mjs appui/sdk/aseman_server.py /opt/aseman-appui/sdk/
 COPY appui/aseman-appui /usr/local/bin/aseman-appui

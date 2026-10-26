@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/elpian_node.dart';
+import 'elpian_expressive.dart';
 
 class ElpianExpanded {
   static Widget build(ElpianNode node, List<Widget> children) {
     final child = children.isNotEmpty ? children.first : Container();
-    final flex = node.props['flex'] as int? ?? 1;
+    final flex = numProp(node, 'flex')?.toInt() ?? 1;
 
     return Expanded(
       flex: flex,

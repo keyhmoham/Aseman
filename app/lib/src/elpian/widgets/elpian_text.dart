@@ -12,8 +12,9 @@ import 'elpian_expressive.dart';
 /// `overflow`, `softWrap`, `textAlign`. `style` overrides the role.
 class ElpianText {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final text =
-        node.props['text'] as String? ?? node.props['data'] as String? ?? '';
+    // Any scalar shows as text (`text: 42` is common in generated trees).
+    final raw = node.props['text'] ?? node.props['data'];
+    final text = raw == null ? '' : '$raw';
     final variant = node.props['variant'];
     final role = node.props['color'];
 
@@ -28,10 +29,10 @@ class ElpianText {
     Widget text0(TextStyle? style) => Text(
       text,
       style: style,
-      textAlign: node.props['textAlign'] as TextAlign? ?? node.style?.textAlign,
-      maxLines: (node.props['maxLines'] as num?)?.toInt(),
+      textAlign: _align(node.props['textAlign']) ?? node.style?.textAlign,
+      maxLines: numProp(node, 'maxLines')?.toInt(),
       overflow:
-          node.props['overflow'] as TextOverflow? ?? node.style?.textOverflow,
+          _overflow(node.props['overflow']) ?? node.style?.textOverflow,
       softWrap: node.props['softWrap'] as bool?,
     );
 
@@ -72,3 +73,25 @@ class ElpianText {
     return result;
   }
 }
+
+TextAlign? _align(Object? v) => v is TextAlign
+    ? v
+    : switch (v) {
+        'left' => TextAlign.left,
+        'right' => TextAlign.right,
+        'center' => TextAlign.center,
+        'justify' => TextAlign.justify,
+        'start' => TextAlign.start,
+        'end' => TextAlign.end,
+        _ => null,
+      };
+
+TextOverflow? _overflow(Object? v) => v is TextOverflow
+    ? v
+    : switch (v) {
+        'ellipsis' => TextOverflow.ellipsis,
+        'clip' => TextOverflow.clip,
+        'fade' => TextOverflow.fade,
+        'visible' => TextOverflow.visible,
+        _ => null,
+      };

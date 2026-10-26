@@ -188,7 +188,7 @@ class ElpianDrawer {
     return Drawer(
       backgroundColor: node.style?.backgroundColor,
       width: node.style?.width,
-      elevation: (node.props['elevation'] as num?)?.toDouble(),
+      elevation: numProp(node, 'elevation')?.toDouble(),
       child: children.length == 1
           ? children.first
           : ListView(padding: EdgeInsets.zero, children: children),
@@ -212,7 +212,7 @@ class ElpianFloatingActionButton {
     final enabled = node.props['disabled'] != true;
     final onPressed = enabled ? e.activate : null;
     final tooltip = node.props['tooltip']?.toString();
-    final elevation = (node.props['elevation'] as num?)?.toDouble();
+    final elevation = numProp(node, 'elevation')?.toDouble();
     final heroTag = node.props['heroTag'] ?? 'fab:${e.id}';
     final size =
         '${node.props['size'] ?? (node.props['mini'] == true ? 'small' : 'medium')}';

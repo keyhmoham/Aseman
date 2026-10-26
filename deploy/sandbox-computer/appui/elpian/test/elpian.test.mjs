@@ -180,7 +180,7 @@ test("requests settle tasks, and failures reach catch", () => {
 test("nodes.json lists exactly what the engine and the UI kit draw", () => {
   const engine = fs.readFileSync(path.join(repo, "app/lib/src/elpian/core/elpian_engine.dart"), "utf8");
   const kitSrc = fs.readFileSync(path.join(repo, "app/lib/src/features/tools/ui_kit/kit.dart"), "utf8");
-  const registered = new Set([...engine.matchAll(/_registry\.register\('([^']+)'/g)].map((m) => m[1]));
+  const registered = new Set([...engine.matchAll(/_registry\.register\(\s*'([^']+)'/g)].map((m) => m[1]));
   const kitNodes = new Set([...kitSrc.matchAll(/^\s+'([A-Z][A-Za-z]+)':\s*\(/gm)].map((m) => m[1]));
   assert.deepEqual([...new Set([...NODES.elpian, ...NODES.html])].sort(), [...registered].sort());
   assert.deepEqual([...NODES.kit].sort(), [...kitNodes].sort());

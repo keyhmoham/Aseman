@@ -84,6 +84,12 @@ func (a *API) Register(net network.Network) error {
 	if err := net.Handle(network.MethodGet, "/v1/proxy/{id}", a.proxyServe); err != nil {
 		return err
 	}
+	// App servers in a sandbox use the space's agents and apps (app_api.go).
+	for _, method := range []network.Method{network.MethodGet, network.MethodPost} {
+		if err := net.Handle(method, "/appapi/v1/*", a.appAPI); err != nil {
+			return err
+		}
+	}
 	if err := net.Handle(network.MethodGet, "/healthz", a.health); err != nil {
 		return err
 	}
@@ -281,7 +287,11 @@ func (a *API) proxyServe(ctx context.Context, req *network.Request) (*network.Re
 		} else {
 			u.Scheme = "ws"
 		}
-		return &network.Response{Status: 101, Tunnel: &network.Tunnel{Protocol: "websocket", Target: u.String(), Header: map[string]string{"Authorization": "Bearer " + p.Token}}}, nil
+		tunnelHeader := map[string]string{"Authorization": "Bearer " + p.Token}
+		for k, v := range a.appHeaders(p, acc.ID, acc.Handle) {
+			tunnelHeader[k] = v
+		}
+		return &network.Response{Status: 101, Tunnel: &network.Tunnel{Protocol: "websocket", Target: u.String(), Header: tunnelHeader}}, nil
 	}
 	var payload io.Reader
 	if method != http.MethodGet && len(req.Body) > 0 {
@@ -298,6 +308,12 @@ func (a *API) proxyServe(ctx context.Context, req *network.Request) (*network.Re
 		}
 	}
 	upReq.Header.Set("X-Forwarded-Prefix", strings.TrimRight(p.GatewayPath(), "/"))
+	// Who is using the app, and the token its server uses the space's agents
+	// and apps for them with (billed to them; app_api.go). Never taken from
+	// the browser: these are set here only.
+	for k, v := range a.appHeaders(p, acc.ID, acc.Handle) {
+		upReq.Header.Set(k, v)
+	}
 	client := &http.Client{Timeout: 120 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	resp, err := client.Do(upReq)
 	if err != nil {

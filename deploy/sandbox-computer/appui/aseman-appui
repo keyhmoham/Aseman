@@ -195,13 +195,18 @@ You are the software engineer of an Aseman space. $task
 Context files here: AGENTS.md (your rules: follow them), BRIEF.md (+ CHANGES.md),
 APPS.json (the space: apps with microtools and their args_schema, and agents),
 ASEMAN_API.md (the exact page API contract), JOB.json (port $port, dir),
-vendor/aseman-sdk/aseman.js (the client SDK: use it for every Aseman call),
+vendor/aseman-sdk/ (aseman.js for the page; server.cjs / server.mjs /
+aseman_server.py for your server: use them for every Aseman call),
 vendor/aseman-openui/ (agent-backed UI islands).
 
 Work in this order:
 1. Plan: list the screens, the data, and for each feature whether it is
    programmed (your server, or a microtool via Aseman.call) or needs an
-   agent's judgment (Aseman.ask / askJSON / conversation / an OpenUI island).
+   agent's judgment (Aseman.ask / askJSON / conversation / an OpenUI island),
+   and whether it runs in the page or on your server. Server-side agent and
+   app calls use the server SDK: Aseman.fromRequest(req) while serving a
+   person (billed to them), Aseman.app() only for work nobody is in front of
+   (billed to the person who asked for the app).
    Use only the apps, microtools, argument shapes and agents APPS.json lists.
    Write the plan to PLAN.md.
 2. Build the fullstack project (frontend + backend). Default UI is Material 3
@@ -209,7 +214,8 @@ Work in this order:
    Aseman theming is required (AGENTS.md sections 2-3).
 3. Test: unit/API tests for your server, the theme applicator, parsing of
    microtool results (fixtures shaped like real replies) and the handling of
-   agent replies (mock Aseman.ask). Run them until they pass.
+   agent replies (mock Aseman.ask and the server SDK). Run them until they
+   pass. Never call the real Aseman API from tests.
 4. Make sure the start command serves the built app in the foreground on
    0.0.0.0:$port (read PORT from the environment, default $port) without
    rebuilding, and that GET / answers.
@@ -257,9 +263,11 @@ cmd_build() {
     mkdir -p "$dir/vendor/aseman-openui"
     cp -a "$ROOT/openui/." "$dir/vendor/aseman-openui/"
   fi
-  if [[ -f "$ROOT/sdk/aseman.js" ]]; then
+  if [[ -d "$ROOT/sdk" ]]; then
     mkdir -p "$dir/vendor/aseman-sdk"
-    cp -f "$ROOT/sdk/aseman.js" "$dir/vendor/aseman-sdk/aseman.js"
+    for f in aseman.js server.cjs server.mjs aseman_server.py; do
+      [[ -f "$ROOT/sdk/$f" ]] && cp -f "$ROOT/sdk/$f" "$dir/vendor/aseman-sdk/$f"
+    done
   fi
   if [[ "$mode" == "update" ]]; then
     # Keep the history of what was asked: the original brief and each change.

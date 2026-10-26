@@ -54,7 +54,7 @@ ENV OPENCODE_CONFIG=/etc/opencode/opencode.json
 COPY appui/AGENTS.md /opt/aseman-appui/AGENTS.md
 COPY appui/openui /opt/aseman-appui/openui
 COPY appui/ASEMAN_API.md /opt/aseman-appui/ASEMAN_API.md
-COPY appui/sdk/aseman.js /opt/aseman-appui/sdk/aseman.js
+COPY appui/sdk/aseman.js appui/sdk/server.cjs appui/sdk/server.mjs appui/sdk/aseman_server.py /opt/aseman-appui/sdk/
 COPY appui/aseman-appui /usr/local/bin/aseman-appui
 RUN chmod +x /usr/local/bin/aseman-appui \
  && mkdir -p /opt/aseman-appui \

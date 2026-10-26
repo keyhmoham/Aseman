@@ -180,6 +180,9 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		// temporary thread of the room, deleted when it is done, so apps never
 		// mix their calls with each other or with the room's chat.
 		askBody := map[string]any{"space": space, "bot": rec.ID, "body": body, "temp_thread": true}
+		if via := pageVia(ctx, p); via != "" {
+			askBody["via"] = via
+		}
 		if !p.RoomID.IsZero() {
 			askBody["room"] = p.RoomID.String()
 		}
@@ -233,7 +236,7 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 			Result any `json:"result"`
 		}
 		if err := a.pageDispatch(ctx, caller, "tools", "invoke", map[string]any{
-			"bot": t.ID, "space": space, "function": in.Microtool, "payload": in.Args,
+			"bot": t.ID, "space": space, "function": in.Microtool, "payload": in.Args, "via": pageVia(ctx, p),
 		}, &res); err != nil {
 			return nil, err
 		}
@@ -505,4 +508,16 @@ func first(v []string) string {
 		return ""
 	}
 	return v[0]
+}
+
+// pageVia names the app a page API call comes from, for the payer's usage
+// records: the app server's own label, else the page's app.
+func pageVia(ctx context.Context, p *proxy.Proxy) string {
+	if via := viaFrom(ctx); via != "" {
+		return via
+	}
+	if t := strings.TrimSpace(p.Title); t != "" {
+		return "app " + t
+	}
+	return "app"
 }

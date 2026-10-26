@@ -14,13 +14,16 @@ preview page API (not invented credentials).
 - `APPS.json` lists exactly what you may wire: `apps` (each microtool with
   its `args_schema`) and `agents` (name, description). Use those names and
   argument shapes; never invent apps, agents, endpoints or fields.
-- `ASEMAN_API.md` is the contract of the page API (`_aseman/api/*`), served
-  by the gateway to the **browser** as the viewing person. Your server cannot
-  call it: do app and agent calls from the page.
-- `vendor/aseman-sdk/aseman.js` wraps it — use it rather than raw `fetch`:
-  `Aseman.call(tool, microtool, args)`, `Aseman.ask(agent, prompt)`,
-  `Aseman.askJSON(...)`, `Aseman.conversation(agent)`. It resolves the
-  preview prefix from any route, times out and throws `Aseman.Error`.
+- `ASEMAN_API.md` is the contract of the Aseman API, open to the page
+  (`_aseman/api/*`, as the viewing person) and to your server
+  (`$ASEMAN_API_URL`, with the request's `X-Aseman-User-Token`, or
+  `ASEMAN_APP_KEY` for background work). Every call is billed to the person
+  it runs as: serving a request, always use that request's token.
+- `vendor/aseman-sdk/` wraps it — use it rather than raw HTTP: `aseman.js`
+  in the page (`Aseman.call`, `ask`, `askJSON`, `conversation`),
+  `server.cjs` / `server.mjs` (Node) or `aseman_server.py` (Python) on the
+  server (`Aseman.fromRequest(req)` / `Aseman.app()`). Never log or expose
+  the token or the app key, and never call the real API from tests.
 - Every agent ask is a fresh, isolated conversation (a temporary room thread
   deleted when the agent answers). Multi-turn features send `history` (the
   SDK's `conversation` does).

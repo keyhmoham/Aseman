@@ -160,7 +160,11 @@ Users create tools in the Tools panel from one form with a **backend** and a
   in the sandbox; Material 3 Expressive / `@material/web` by default; mix
   Aseman OpenUI agent islands with programmed UI; tools via
   `/_aseman/api/call`, agents via `/_aseman/api/ask`, each ask in a
-  temporary thread). OpenCode gets the space's apps (with microtool argument
+  temporary thread). App servers use agents and apps too: as the person
+  using the app (a token the gateway sends with each request) or, for
+  background work, as the person who asked for the app (the app's key);
+  either way it is charged to that person's wallet like their own ask.
+  OpenCode gets the space's apps (with microtool argument
   schemas) and agents, the page API contract and a client SDK; the platform
   then starts the app and checks it answers, sending failures back to
   OpenCode to repair. Passing an existing app's `dir` changes it in place.

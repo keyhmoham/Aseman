@@ -88,6 +88,25 @@ After OpenCode reports READY, `aseman-appui build` verifies the app itself:
 the port. Failures go back to OpenCode as repair rounds
 (`ASEMAN_APPUI_REPAIRS`, default 2) before `appui_create` reports an error.
 
+## App servers use the space too
+
+An app's backend uses the space's agents and apps through the same API as
+its pages, at `$ASEMAN_API_URL/<op>` (the node's `/appapi/v1`):
+
+- **Serving a person:** every request the gateway forwards carries
+  `X-Aseman-User-Token` (plus `X-Aseman-User`, `-Space`, `-Room`, `-Api`).
+  Calls with it run as that person and are billed to their wallet.
+- **Background work:** `ASEMAN_APP_KEY` (in `.aseman/server.env`, mode 600)
+  runs as, and bills, the person who asked for the app. It is stored hashed
+  on the node, rotates on every rebuild and stops working when the app's
+  preview is deleted.
+
+Both go through `spaces.ask` like a person's own ask: funds checked first,
+one charge per ask (the bot's time plus the agent turn's metered model
+usage), the project's budget applies, and usage reads "space ask via app
+<title>". SDKs: `vendor/aseman-sdk/server.cjs` / `server.mjs` (Node) and
+`aseman_server.py` (Python).
+
 ## Agents in generated apps
 
 `_aseman/api/ask` runs every ask in a **temporary room thread**: the agent

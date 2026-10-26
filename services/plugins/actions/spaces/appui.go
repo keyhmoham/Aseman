@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
@@ -270,6 +272,23 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	if err := s.ensureOpenCodeAuth(opCtx, spaceID); err != nil {
 		return "", err
 	}
+	// The app's server uses the space's agents and apps too: with the token
+	// of the person using it (sent with each request), or, for work nobody
+	// is in front of, with the app's key, which acts for and bills the person
+	// who asked for the app.
+	hasKey := false
+	if owner := appOwner(ctx); !owner.IsZero() {
+		key, kerr := s.IssueAppKey(opCtx, spaceID, target, owner, dir, title)
+		if kerr != nil {
+			return "", kerr
+		}
+		if err := s.writeAppServerEnv(opCtx, spaceID, dir, key); err != nil {
+			return "", err
+		}
+		hasKey = true
+	} else if err := s.writeAppServerEnv(opCtx, spaceID, dir, ""); err != nil {
+		return "", err
+	}
 
 	// A project that was built before is changed in place (a follow-up:
 	// "add a filter", "fix the chart"), not rebuilt from nothing.
@@ -311,6 +330,8 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	if !strings.Contains(start, dir) {
 		start = "cd " + shellQuote(dir) + " && " + start
 	}
+	// The server starts with its app API settings (URL and key).
+	start = appServerEnvPrefix(dir) + start
 
 	show := true
 	if in.Show != nil {
@@ -345,6 +366,14 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	if err != nil {
 		return "", err
 	}
+	// The key works while the app's preview exists.
+	if m := proxyPathID.FindStringSubmatch(proxyOut); hasKey && m != nil {
+		if pid, perr := identity.Parse(m[1]); perr == nil {
+			if err := s.BindAppKey(opCtx, spaceID, dir, pid); err != nil {
+				return "", err
+			}
+		}
+	}
 
 	// Optional desk placement after open.
 	if in.X != nil || in.Y != nil || in.W != nil || in.H != nil || in.Compact != nil {
@@ -363,6 +392,11 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 		"mode":    mode,
 		"next":    "To change this app later, call appui_create again with the same dir and a brief of the change.",
 		"proxy":   proxyOut,
+		"server_api": map[string]any{
+			"url":        sandboxAppAPIURL(),
+			"background": hasKey,
+			"billing":    "Calls with a request's X-Aseman-User-Token are billed to the person using the app; background calls with ASEMAN_APP_KEY to the person who asked for it.",
+		},
 	}
 	b, _ := json.Marshal(result)
 	return string(b), nil
@@ -567,4 +601,45 @@ func openCodeBuiltinApp() vmm.Tool {
 			{Name: "build", Description: "Build a tested fullstack App UI from a brief (platform: appui_create; M3 Expressive UI by default).", Schema: obj(map[string]any{"brief": str("What to build; omit UI framework to get Material 3 Expressive"), "title": str("Window title"), "apps": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "tool": str("Optional dock tool bot id"), "port": map[string]any{"type": "integer"}}, "brief")},
 		},
 	}
+}
+
+// proxyPathID finds a preview's id in proxy_create's output.
+var proxyPathID = regexp.MustCompile(`/v1/proxy/([0-9a-f]{32})/`)
+
+// appOwner is the person an app is built for: the person whose request the
+// building turn serves (never an agent).
+func appOwner(ctx context.Context) identity.ID {
+	if actor := vmm.ExecutionFrom(ctx).ActorID; actor != "" {
+		if id, err := identity.Parse(actor); err == nil {
+			return id
+		}
+	}
+	return helper.Actor(ctx)
+}
+
+// appServerEnvFile holds an app server's settings for the app API.
+func appServerEnvFile(dir string) string { return dir + "/.aseman/server.env" }
+
+// writeAppServerEnv gives the app its server API settings: the URL, and the
+// app's key when it has one. The file is the app's alone (mode 600).
+func (s *Service) writeAppServerEnv(ctx context.Context, spaceID identity.ID, dir, key string) error {
+	lines := []string{
+		"# Written by Aseman for this app's server (see ASEMAN_API.md). Do not commit.",
+		"ASEMAN_API_URL=" + sandboxAppAPIURL(),
+	}
+	if key != "" {
+		lines = append(lines, "ASEMAN_APP_KEY="+key)
+	}
+	path := appServerEnvFile(dir)
+	if err := s.sandboxWriteBytes(ctx, spaceID, path, []byte(strings.Join(lines, "\n")+"\n")); err != nil {
+		return err
+	}
+	_, err := s.SandboxExec(ctx, spaceID, "chmod 600 "+shellQuote(path)+"; printf '*\\n' > "+shellQuote(dir+"/.aseman/.gitignore"))
+	return err
+}
+
+// appServerEnvPrefix loads the app API settings into a start command.
+func appServerEnvPrefix(dir string) string {
+	f := shellQuote(appServerEnvFile(dir))
+	return "set -a; [ -f " + f + " ] && . " + f + "; set +a; "
 }

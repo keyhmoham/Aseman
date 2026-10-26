@@ -128,6 +128,9 @@ func (a *spaceAskAction) Handle(ctx context.Context, req *api.ActionRequest) (*a
 		// opened for it and deleted when the agent is done: a fresh, isolated
 		// conversation for each ask (how apps call agents).
 		TempThread bool `json:"temp_thread,omitempty"`
+		// Via names the app the ask comes from ("app Orders"), for the payer's
+		// usage records.
+		Via string `json:"via,omitempty"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
@@ -247,7 +250,11 @@ func (a *spaceAskAction) Handle(ctx context.Context, req *api.ActionRequest) (*a
 	if gerr == nil {
 		botName = rec.Name
 	}
-	_, err = a.s.Bots.BillAndRecordUsage(ctx, payer, botID, elapsedSeconds(startTime), "space ask",
+	desc := "space ask"
+	if via := strings.TrimSpace(in.Via); via != "" {
+		desc += " via " + clipTrace(via, 80)
+	}
+	_, err = a.s.Bots.BillAndRecordUsage(ctx, payer, botID, elapsedSeconds(startTime), desc,
 		usage.UsageCtx{SpaceID: spaceID, RoomID: roomID, BotName: botName, RequestID: usage.RequestIDFrom(ctx), Kind: usage.KindAsk})
 	if err != nil {
 		return nil, err

@@ -10,6 +10,7 @@ import (
 
 	"github.com/aseman/aseman/internal/plugins/entity"
 	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 )
 
 func (p *Proxy) PreservesPath() bool {
@@ -39,6 +40,18 @@ func (p *Proxy) GatewayPath() string {
 		return p.Path
 	}
 	return "/v1/proxy/" + p.ID.String() + "/"
+}
+
+// Access is who an app server's call to the node runs as (see
+// spaces/app_access.go).
+type Access struct {
+	// Proxy is the app's preview: its space and room scope the call.
+	Proxy *Proxy
+	// Payer is the person the call runs as and is billed to.
+	Payer *account.Account
+	// Via says how the app acts, for usage records: "app <title>" or
+	// "app <title> (background)".
+	Via string
 }
 
 // Keep the time import used even if JSON tags change.

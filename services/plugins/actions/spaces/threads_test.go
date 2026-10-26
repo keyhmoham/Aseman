@@ -136,7 +136,8 @@ func TestAnAppsAskRunsInATemporaryThreadDeletedAfter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.Bots = sandboxBots{mentionBots{BotPort: s.Bots}}
+	billed := &billLog{}
+	s.Bots = sandboxBots{mentionBots{BotPort: s.Bots, billed: billed}}
 	rt := bootRuntime(t, s, ctx)
 	helper := addAgent(t, s, ctx, sp.ID, "helper", "g-helper")
 	addSandbox(t, s, ctx, sp.ID)
@@ -189,6 +190,16 @@ func TestAnAppsAskRunsInATemporaryThreadDeletedAfter(t *testing.T) {
 	}
 	if got := listIn(t, s, ctx, owner, sp.ID, room.ID).Messages; len(got) != 0 {
 		t.Fatalf("an app's ask leaked into the room: %v", got)
+	}
+	// Each ask is charged once, to the person who asked, for the agent.
+	charges := billed.all()
+	if len(charges) != 2 {
+		t.Fatalf("two asks were charged %d times: %+v", len(charges), charges)
+	}
+	for _, c := range charges {
+		if c.payer != owner || c.bot != helper.ID {
+			t.Fatalf("charged %+v, want the asker for the agent", c)
+		}
 	}
 }
 

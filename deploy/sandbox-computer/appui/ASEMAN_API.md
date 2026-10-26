@@ -1,24 +1,81 @@
-# Aseman page API (the contract your app is wired with)
+# Aseman API (the contract your app is wired with)
 
 Your app is served to people through the Aseman preview gateway at
-`/v1/proxy/<id>/…`. Under that prefix the gateway itself answers
-`_aseman/…` — it never reaches your server. It runs **as the person viewing
-the page**, in this space, so the browser is where the app talks to Aseman:
+`/v1/proxy/<id>/…`. The same API is open to the page and to your server:
 
 ```
-browser ──► /v1/proxy/<id>/_aseman/api/*   (gateway: space apps + agents)
-browser ──► /v1/proxy/<id>/anything-else   (your server, prefix stripped)
+browser ──► /v1/proxy/<id>/_aseman/api/<op>   (gateway, as the person viewing)
+browser ──► /v1/proxy/<id>/anything-else      (your server, prefix stripped)
+server  ──► $ASEMAN_API_URL/<op>              (node, as a person: see below)
 ```
 
-Your server cannot call `_aseman/api` (it has no session). Keep the server
-for your own logic, storage and validation; do space-app and agent calls
-from the page (use `vendor/aseman-sdk/aseman.js`, which handles the prefix,
-errors and timeouts). Always use **relative** URLs (`_aseman/api/call`, not
-`/_aseman/api/call`) or the SDK.
+From the page, use **relative** URLs (`_aseman/api/call`, not
+`/_aseman/api/call`) or `vendor/aseman-sdk/aseman.js`. From your server, use
+the server SDK (below). Put agent and app calls wherever the feature belongs:
+the page for interactive work, the server for work that needs your data,
+secrets, validation, or runs without a person (schedules, webhooks, queues).
+
+## Who pays
+
+Every call runs as a person of the space and is charged to **that person's
+wallet**, exactly like their own ask (funds checked first, the project's
+budget applies, usage recorded as "via app <title>"):
+
+| Where the call comes from | Runs as / billed to |
+|---|---|
+| The page (`_aseman/api/*`) | the person viewing the page |
+| Your server, serving a request (`X-Aseman-User-Token`) | the person whose request it is |
+| Your server, background work (`ASEMAN_APP_KEY`) | the person who asked for the app |
+
+So: while serving a request, always use that request's token — never the
+app key — so the person using the app pays for what they asked for. Use the
+app key only for work nobody is in front of. Never call the API from tests.
+
+## From your server
+
+Every request the gateway forwards to your server carries:
+
+| Header | Value |
+|---|---|
+| `X-Aseman-User-Token` | the person's token (about 15 minutes; a fresh one comes with each request) |
+| `X-Aseman-User`, `X-Aseman-User-Handle` | who is using the app |
+| `X-Aseman-Space`, `X-Aseman-Room` | where |
+| `X-Aseman-Api` | the API URL (same as `ASEMAN_API_URL`) |
+
+Call `<ASEMAN_API_URL>/<op>` (the ops below) with
+`Authorization: Bearer <token>`: the request's `X-Aseman-User-Token`, or
+`ASEMAN_APP_KEY` for background work. `.aseman/server.env` (written by
+Aseman, loaded by the start command and the SDKs) holds `ASEMAN_API_URL` and
+`ASEMAN_APP_KEY`; never print, log, commit or send either to the browser.
+
+```js
+// Node (Express shown; any framework): vendor/aseman-sdk/server.cjs or server.mjs
+const { Aseman } = require("./vendor/aseman-sdk/server.cjs");
+app.use(Aseman.middleware());                       // req.aseman: the person using the app
+app.post("/api/summary", async (req, res) => {
+  const { reply } = await req.aseman.ask("research", "Summarise: " + req.body.text);
+  res.json({ reply });
+});
+setInterval(() => Aseman.app().ask("research", "Nightly digest"), 24 * 3600e3); // background
+```
+
+```python
+# Python: vendor/aseman-sdk/aseman_server.py (standard library only)
+from aseman_server import Aseman
+aseman = Aseman.from_headers(request.headers)       # FastAPI/Flask request
+reply = aseman.ask("research", "Summarise: " + text)["reply"]
+Aseman.app().call("weather", "forecast", {"city": "Oslo"})   # background
+```
+
+Server SDK methods match the page SDK: `context`, `tools`, `microtools`,
+`call`, `agents`, `ask` (with `history`), `askJSON` / `ask_json`. A request
+without `X-Aseman-User-Token` (a health check, a webhook) has no person:
+answer it without Aseman calls, or use the app key.
 
 ## Endpoints
 
-All responses are JSON. Errors are non-2xx with `{"error": "message"}`.
+Ops are the same from the page (`_aseman/api/<op>`) and the server
+(`$ASEMAN_API_URL/<op>`). All responses are JSON. Errors are non-2xx with `{"error": "message"}`.
 
 | Op | Method | Request | Response |
 |---|---|---|---|

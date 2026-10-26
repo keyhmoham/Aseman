@@ -43,6 +43,33 @@ type appuiReady struct {
 	Dir     string `json:"dir"`
 	Summary string `json:"summary"`
 	Error   string `json:"error"`
+	// UI is the frontend built: "elpian" (an Elpian program the client runs
+	// natively) or "web"; Elpian is that program's path in the app.
+	UI     string `json:"ui"`
+	Elpian string `json:"elpian"`
+}
+
+// App UI frontends. Elpian is the default; web only when the person asked
+// for web technology.
+const (
+	appuiElpian = "elpian"
+	appuiWeb    = "web"
+)
+
+// appuiFrontend picks an App UI's frontend: the one asked for, else what an
+// existing app was built with, else Elpian.
+func appuiFrontend(asked, existing string) (string, error) {
+	switch ui := strings.ToLower(strings.TrimSpace(asked)); ui {
+	case appuiElpian, appuiWeb:
+		return ui, nil
+	case "":
+		if existing == appuiWeb {
+			return appuiWeb, nil
+		}
+		return appuiElpian, nil
+	default:
+		return "", errs.InvalidArgument(`ui is "elpian" (the default: a native Elpian frontend) or "web" (only when the person asked for web technology)`)
+	}
 }
 
 func newAppUIID() string {
@@ -198,6 +225,7 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 		Title   string       `json:"title"`
 		Apps    []string     `json:"apps"`
 		Agents  []string     `json:"agents"`
+		UI      string       `json:"ui"`
 		Tool    string       `json:"tool"`
 		Dir     string       `json:"dir"`
 		Port    int          `json:"port"`
@@ -292,13 +320,26 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 
 	// A project that was built before is changed in place (a follow-up:
 	// "add a filter", "fix the chart"), not rebuilt from nothing.
-	mode := "new"
-	if out, _ := s.SandboxExec(opCtx, spaceID, "test -f "+shellQuote(dir+"/JOB.json")+" && echo existing"); strings.Contains(out, "existing") {
+	mode, existingUI := "new", ""
+	if job, jerr := s.sandboxReadText(opCtx, spaceID, dir+"/JOB.json"); jerr == nil && strings.TrimSpace(job) != "" {
 		mode = "update"
+		var j struct {
+			UI string `json:"ui"`
+		}
+		if json.Unmarshal([]byte(job), &j) == nil {
+			existingUI = j.UI
+		}
+		if existingUI == "" {
+			existingUI = appuiWeb // built before Elpian became the default
+		}
+	}
+	ui, err := appuiFrontend(in.UI, existingUI)
+	if err != nil {
+		return "", err
 	}
 	buildCmd := fmt.Sprintf(
-		`. /etc/opencode/env.sh 2>/dev/null || true; unset OPENCODE_API_KEY; export OPENCODE_MODEL=${OPENCODE_MODEL:-aseman/default}; aseman-appui build --dir %s --brief-file %s --apps-file %s --title %s --port %d --mode %s`,
-		shellQuote(dir), shellQuote(briefPath), shellQuote(appsPath), shellQuote(title), port, mode,
+		`. /etc/opencode/env.sh 2>/dev/null || true; unset OPENCODE_API_KEY; export OPENCODE_MODEL=${OPENCODE_MODEL:-aseman/default}; aseman-appui build --dir %s --brief-file %s --apps-file %s --title %s --port %d --mode %s --ui %s`,
+		shellQuote(dir), shellQuote(briefPath), shellQuote(appsPath), shellQuote(title), port, mode, ui,
 	)
 	out, err := s.SandboxExec(opCtx, spaceID, buildCmd)
 	// Prefer READY.json on disk; fall back to parsing build stdout (status prints it).
@@ -361,6 +402,18 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 		"tool":  strings.TrimSpace(in.Tool),
 		"room":  deskTarget,
 	}
+	// An Elpian app opens as itself: the client runs its program natively.
+	elpianEntry := ""
+	if ui == appuiElpian {
+		elpianEntry = strings.TrimPrefix(strings.TrimSpace(ready.Elpian), "./")
+		if elpianEntry == "" {
+			elpianEntry = "elpian/app.js"
+		}
+		if err := checkElpianEntry(elpianEntry); err != nil {
+			return "", err
+		}
+		proxyArgs["elpian"] = elpianEntry
+	}
 	rawArgs, _ := json.Marshal(proxyArgs)
 	proxyOut, err := s.proxyCreateTool(opCtx, spaceID, agentName, string(rawArgs))
 	if err != nil {
@@ -390,6 +443,7 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 		"summary": ready.Summary,
 		"tested":  true,
 		"mode":    mode,
+		"ui":      ui,
 		"next":    "To change this app later, call appui_create again with the same dir and a brief of the change.",
 		"proxy":   proxyOut,
 		"server_api": map[string]any{

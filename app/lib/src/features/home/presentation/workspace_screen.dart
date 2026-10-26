@@ -55,6 +55,7 @@ import '../../tools/connect/add_app.dart';
 import '../../tools/connect/mcp_connect_dialog.dart';
 import '../../tools/data/tools_api.dart';
 import '../../tools/domain/tool_models.dart';
+import '../../tools/elpian_app/elpian_app_view.dart';
 import '../../tools/presentation/app_frontend_screen.dart';
 import '../../tools/presentation/mcp_app_view.dart';
 import '../../tools/presentation/tool_frontend_view.dart';
@@ -2032,26 +2033,40 @@ class _CenterDesk extends StatelessWidget {
       shown: shown);
 
   /// A web page window: the page itself, or, as a phone-board widget, a
-  /// summary that opens it.
-  Widget _page(BuildContext context, String id, String page, String title) =>
+  /// summary that opens it. An Elpian app ([elpian], its program) runs
+  /// natively instead of as a web page.
+  Widget _page(BuildContext context, String id, String page, String title,
+          {String elpian = ''}) =>
       FrontendPresentation.isCompact(context)
           ? CompactSummaryView(
               summary: CompactSummary(
-                  title: title.isEmpty ? 'Web page' : title,
+                  title: title.isEmpty
+                      ? (elpian.isEmpty ? 'Web page' : 'App')
+                      : title,
                   caption: 'Tap to open',
-                  icon: 'language'))
+                  icon: elpian.isEmpty ? 'language' : 'apps'))
           // Woken and started when needed, then shown.
           : LivePreview(
-              key: ValueKey('web-$id-$page'),
+              key: ValueKey('web-$id-$page-$elpian'),
               service: dependencies.service,
               spaceId: spaceId,
               title: title,
-              page: page);
+              page: page,
+              content: elpian.isEmpty
+                  ? null
+                  : (_) => ElpianAppView(
+                      key: ValueKey('elpian-$id-$page-$elpian'),
+                      service: dependencies.service,
+                      page: page,
+                      entry: elpian,
+                      spaceId: spaceId,
+                      roomId: roomId,
+                      title: title));
 
   /// A window's frontend, whatever its kind; the enclosing
   /// [FrontendPresentation] says whether in full or as a compact widget.
   Widget _windowContent(BuildContext context, DeskWindow w) => w.isWeb
-      ? _page(context, w.id, w.page, w.label)
+      ? _page(context, w.id, w.page, w.label, elpian: w.elpian)
       : w.isAgui
       ? _aguiWindow(context, w)
       : w.isComputer

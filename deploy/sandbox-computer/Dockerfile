@@ -42,7 +42,7 @@ RUN chmod +x /usr/local/bin/aseman-desktop
 COPY --from=tool-runtime /opt/aseman-tool-runtime /opt/aseman-tool-runtime
 # OpenCode: baked into every space sandbox so agents can distribute coding
 # tasks and generate on-demand fullstack App UIs (appui_create) via the
-# Aseman metered LLM gateway (Material 3 Expressive UI by default).
+# Aseman metered LLM gateway (an Elpian frontend by default; web on request).
 RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path \
  && install -d /usr/local/bin \
  && if [ -x "$HOME/.opencode/bin/opencode" ]; then ln -sf "$HOME/.opencode/bin/opencode" /usr/local/bin/opencode; fi \
@@ -54,6 +54,8 @@ ENV OPENCODE_CONFIG=/etc/opencode/opencode.json
 COPY appui/AGENTS.md /opt/aseman-appui/AGENTS.md
 COPY appui/openui /opt/aseman-appui/openui
 COPY appui/ASEMAN_API.md /opt/aseman-appui/ASEMAN_API.md
+# Elpian App UI kit: App UIs default to an Elpian frontend (ELPIAN.md).
+COPY appui/elpian/aseman-elpian.js appui/elpian/openui-elpian.js appui/elpian/bundle.mjs appui/elpian/check.mjs appui/elpian/nodes.json appui/elpian/ELPIAN.md /opt/aseman-appui/elpian/
 COPY appui/sdk/aseman.js appui/sdk/server.cjs appui/sdk/server.mjs appui/sdk/aseman_server.py /opt/aseman-appui/sdk/
 COPY appui/aseman-appui /usr/local/bin/aseman-appui
 RUN chmod +x /usr/local/bin/aseman-appui \

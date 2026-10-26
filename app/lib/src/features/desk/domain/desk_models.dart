@@ -140,6 +140,10 @@ class DeskWindow {
   /// The gateway path a web page window shows.
   String get page => isWeb ? '${args['page'] ?? ''}' : '';
 
+  /// An Elpian app's program in its app (`elpian/app.js`): the window runs
+  /// it natively rather than showing a web page ('' for a web page).
+  String get elpian => isWeb ? '${args['elpian'] ?? ''}' : '';
+
   /// A workspace file rather than a tool's own frontend.
   bool get isFile => kind == fileKind;
 
@@ -266,6 +270,7 @@ class DeskPin {
   /// A web page (a preview of the space).
   bool get isWeb => kind == webKind;
   String get page => isWeb ? '${args['page'] ?? ''}' : '';
+  String get elpian => isWeb ? '${args['elpian'] ?? ''}' : '';
 
   /// A workspace file.
   bool get isFile => kind == fileKind;

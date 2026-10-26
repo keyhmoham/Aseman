@@ -47,7 +47,10 @@ const DeskAppFrontend = "app"
 // Web page windows: a page served from the space's sandbox through a preview
 // gateway (proxy_create). Its Args hold {"page": the gateway path,
 // "/v1/proxy/<id>/…"}; Tool is the tool it is a frontend of, or DeskWebTool
-// for a page of no tool (they share that dock entry).
+// for a page of no tool (they share that dock entry). An Elpian app (an App
+// UI whose frontend is an Elpian program) is such a window too: Args also
+// hold {"elpian": the program's path in the app, "elpian/app.js"}, and the
+// client runs that program natively instead of showing a web page.
 const (
 	DeskWeb         = "web"
 	DeskWebFrontend = "web"
@@ -137,6 +140,25 @@ func (w *DeskWindow) Page() string {
 	}
 	page, _ := w.Args["page"].(string)
 	return page
+}
+
+// Elpian is the program path of an Elpian app window ("" for a web page).
+func (w *DeskWindow) Elpian() string {
+	if w.Kind != DeskWeb {
+		return ""
+	}
+	entry, _ := w.Args["elpian"].(string)
+	return entry
+}
+
+// checkElpianEntry accepts an Elpian program's path inside its app: a
+// relative .js path, nothing that leaves the app.
+func checkElpianEntry(entry string) error {
+	if entry == "" || len(entry) > 200 || strings.HasPrefix(entry, "/") || !strings.HasSuffix(entry, ".js") ||
+		strings.Contains(entry, "..") || strings.Contains(entry, "://") || strings.ContainsAny(entry, " \\\n\r\t?#") {
+		return errs.InvalidArgument("an Elpian app's program is a relative .js path in the app, like elpian/app.js")
+	}
+	return nil
 }
 
 // checkAgUiArgs requires a surface object (or root) for an AG-UI desk window.
@@ -402,7 +424,14 @@ func (d *Desktop) Apply(op DeskOp, actor string, now time.Time) (string, error) 
 			if op.Tool == "" || op.Tool == DeskWebTool {
 				op.Tool, op.Name = DeskWebTool, "Web pages"
 			}
-			op.Frontend, op.Microtool, op.Args = DeskWebFrontend, "", map[string]any{"page": page}
+			args := map[string]any{"page": page}
+			if entry, _ := op.Args["elpian"].(string); entry != "" {
+				if err := checkElpianEntry(entry); err != nil {
+					return "", err
+				}
+				args["elpian"] = entry
+			}
+			op.Frontend, op.Microtool, op.Args = DeskWebFrontend, "", args
 		} else if op.Kind == DeskFile && op.Args["file_id"] != nil {
 			id, _ := op.Args["file_id"].(string)
 			if !isFileID(id) {
@@ -667,6 +696,9 @@ func (d *Desktop) Summary() string {
 			what := w.Microtool + args
 			if w.Kind == DeskWeb {
 				what = "web page " + w.Page()
+				if entry := w.Elpian(); entry != "" {
+					what = "Elpian app " + w.Page() + " (" + entry + ")"
+				}
 			}
 			if w.Kind == DeskFile {
 				what = "file " + w.FilePath()

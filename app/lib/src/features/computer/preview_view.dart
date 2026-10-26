@@ -115,6 +115,7 @@ class LivePreview extends StatefulWidget {
     this.title = '',
     this.embed = 'desk',
     this.onClose,
+    this.content,
   });
 
   final AsemanService service;
@@ -132,6 +133,10 @@ class LivePreview extends StatefulWidget {
 
   /// In a sheet: a header names the page and closes it.
   final VoidCallback? onClose;
+
+  /// What is shown once the service is up, instead of the web page (an
+  /// Elpian app's native view).
+  final WidgetBuilder? content;
 
   @override
   State<LivePreview> createState() => _LivePreviewState();
@@ -259,6 +264,10 @@ class _LivePreviewState extends State<LivePreview> {
   @override
   Widget build(BuildContext context) {
     final body = switch (_phase) {
+      _Phase.ready when widget.content != null => KeyedSubtree(
+        key: ValueKey('${widget.page}#$_generation'),
+        child: widget.content!(context),
+      ),
       _Phase.ready => WebPageView(
         key: ValueKey('${widget.page}#$_generation'),
         service: widget.service,

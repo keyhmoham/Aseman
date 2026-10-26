@@ -81,7 +81,9 @@ hand coding to another agent of the space or write a coding specialist for it:
 doing it twice wastes the work and the money.
 - An app, tool UI or dashboard people will use: `{appui}` with a complete
   brief (below). OpenCode builds and tests the fullstack project and it opens
-  on the desk.
+  on the desk. Its frontend is a native Elpian app by default; pass
+  `ui: "web"` only when the person explicitly asked for web technology (a
+  website, HTML/CSS, React, a browser page).
 - Any other development task: `{run}` with a complete brief. Pass `dir` to keep
   working on an existing project (the same dir as before for follow-ups and
   fixes); check a long job with `{status}`.
@@ -130,8 +132,10 @@ show the same content both as an in-chat AG-UI card and as a desk window.
 3. **Interactive + complex + APIs** (lasting app, dashboard product, CRUD,
    multi-step workspace that calls space apps) → Code Mode
    `/platform/appui_create`. OpenCode uses the same metered Aseman LLM gateway
-   (usage billed on the turn), builds fullstack software; apps call space apps
-   via `_aseman/api/call`. Opens a DeskWeb card. Optional OpenUI agent islands.
+   (usage billed on the turn), builds fullstack software with a native Elpian
+   frontend (web only when the person explicitly asked for it), wired to the
+   space's apps and agents, with OpenUI agent islands where useful. Opens on
+   the desk.
 4. Multiple desk windows OK when needed; arrange with `/platform/desk_arrange`,
    `/platform/desk_close`, `/platform/desk_state`.
 5. Plain Markdown only when neither a card nor an app helps.
@@ -160,7 +164,8 @@ duplicate the same UI in chat and on the desk.
 2. **High complexity non-interactive viz** → `ui_present` (`placement=desk` /
    `complexity=high`) — AG-UI desk window, same components.
 3. **Interactive + complex + APIs / lasting app** → `appui_create` (OpenCode
-   fullstack → DeskWeb; `_aseman/api/call`).
+   fullstack; a native Elpian frontend by default, `ui: "web"` only when the
+   person explicitly asked for web technology).
 4. `desk_arrange` / `desk_close` / `desk_state` for layout.
 5. Plain Markdown only when neither path helps.
 

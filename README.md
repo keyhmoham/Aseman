@@ -155,10 +155,15 @@ Users create tools in the Tools panel from one form with a **backend** and a
 - **Frontend:** *static* (an Elpian program on the Elpian VM or QuickJS) or
   empty (no dedicated frontend). Interactive UIs open as floating card
   windows on the room's desk, placed and arranged by agents and people.
-- **Interactive web frontends:** when people want an app, dashboard, landing
-  page or custom tool UI, agents brief OpenCode via `appui_create` (fullstack
-  in the sandbox; Material 3 Expressive / `@material/web` by default; mix
-  Aseman OpenUI agent islands with programmed UI; tools via
+- **On-demand apps:** when people want an app, dashboard or custom tool UI,
+  agents brief OpenCode via `appui_create` (fullstack in the sandbox). The
+  frontend is an **Elpian app** by default: JavaScript the client runs on
+  its Elpian QuickJS runtime and draws natively with the UI kit and the
+  person's theme, with the OpenUI collection and agent islands ported to
+  Elpian ([`appui/elpian`](deploy/sandbox-computer/appui/elpian)). A web
+  frontend (Material 3 Expressive / `@material/web`) is built only when the
+  person explicitly asks for web technology. Mix Aseman OpenUI agent islands
+  with programmed UI; tools via
   `/_aseman/api/call`, agents via `/_aseman/api/ask`, each ask in a
   temporary thread). App servers use agents and apps too: as the person
   using the app (a token the gateway sends with each request) or, for

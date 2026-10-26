@@ -73,6 +73,32 @@ theme. Islands render the full generative catalog (`catalog.js` /
 markdown otherwise. Preview APIs: `_aseman/api/agents`, `_aseman/api/ask`,
 plus existing `call` / `tools`.
 
+## Elpian frontends (the default)
+
+Every App UI's frontend is an **Elpian program** unless the person explicitly
+asked for web technology (`appui_create` `ui: "web"`). The program is plain
+JavaScript the Aseman client runs on its Elpian QuickJS runtime and draws
+with native widgets, the UI kit and the person's theme — on desktop and
+phones alike. Everything for it is in [`elpian/`](elpian):
+
+| File | What |
+|---|---|
+| [`ELPIAN.md`](elpian/ELPIAN.md) | The guide OpenCode follows: runtime rules, every node type and its props, events, styling and theme, the SDK, OpenUI, layout, checklist |
+| `aseman-elpian.js` | The SDK in every program: `App` (state, view, handlers), `Aseman.*` (agents, apps, the app's server, env, phone widget), Tasks |
+| `openui-elpian.js` | The OpenUI collection (all 137 components of the web kit) rendered as Elpian/UI-kit nodes, and agent-backed islands (`OpenUI.panel` / `action` / `query`) |
+| `bundle.mjs` | `elpian/src/*.js` → `elpian/app.js` (SDK + OpenUI + the app) |
+| `check.mjs` | Runs the program on QuickJS against a simulated host and the live server; fails on errors, unknown nodes, missing or throwing handlers |
+| `nodes.json` | The node types the engine and UI kit draw (a test keeps it equal to the engine source) |
+
+The app's server serves `GET /elpian/app.js`; `READY.json` says
+`"ui": "elpian", "elpian": "elpian/app.js"`. During verification the
+platform rebuilds the bundle, checks the server serves it, and runs
+`check.mjs` against the running server; failures go back to OpenCode. The
+desk window then runs the program natively (`ElpianAppView`), waking the
+sandbox and starting the server first like any preview. Test the kit with
+`node --test deploy/sandbox-computer/appui/elpian/test/elpian.test.mjs`
+(after `npm install` in `deploy/tool-runtime`, for QuickJS).
+
 ## What OpenCode is given (per build)
 
 | File | What |

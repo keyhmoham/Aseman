@@ -33,8 +33,10 @@ func rooms() database.Model {
 		Fields: []database.Field{
 			f("id", database.KindString), f("space_id", database.KindString),
 			f("name", database.KindString), f("topic", database.KindString),
-			f("metadata_id", database.KindString), f("created_at", database.KindTime),
-			f("updated_at", database.KindTime),
+			f("metadata_id", database.KindString),
+			f("parent_id", database.KindString), f("temporary", database.KindBool),
+			f("creator_id", database.KindString),
+			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		},
 	}
 }

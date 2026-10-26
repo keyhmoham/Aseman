@@ -99,6 +99,26 @@ Every agent runs on [LangChain Deep Agents](https://github.com/langchain-ai/deep
 - **Parallel work:** the lead runs plans across the team in parallel; independent tasks start at once (the decision model drops dependencies that are not needed), and several tasks for the same agent run as parallel instances of it.
 - **Self-improvement:** agents improve their own playbook as they work with [GEPA](https://github.com/gepa-ai/gepa): the moments of their turns that went wrong (or right) are replayed with candidate playbooks, without running anything again, and a playbook is adopted only when it does better on them. It is billed to the project like memory; `ASEMAN_IMPROVE=0` turns it off.
 
+## Room Threads
+
+A room's conversation can be split into **threads**. The chat header's
+threads button lists the room's main thread (the room itself) and its other
+threads, opens new ones, and renames or deletes them; switching thread
+switches the chat to that thread's own history.
+
+- **Isolation:** each thread has its own messages and its own context for
+  every agent (the agents' LangGraph conversations, catch-up and memory
+  sessions are per thread), so a thread starts clean of the room's history.
+- **Shared:** the room's desk, members, grants and files belong to all of its
+  threads. Threads never show up as rooms in listings.
+- **Temporary threads:** when a generated app asks an agent
+  (`_aseman/api/ask`), the agent works in a temporary thread opened for that
+  one ask and deleted as soon as it answers — its messages and the agents'
+  runtime checkpoints included. A sweep removes any left behind after an hour.
+- **API:** `spaces.thread_list`, `thread_create`, `thread_rename`,
+  `thread_delete`; message actions take a thread's id as `room`.
+  `spaces.ask` takes `thread` (run in a thread) or `temp_thread: true`.
+
 ## Agent Memory
 
 Agents remember through a self-hosted [OpenViking](https://openviking.ai) server (`deploy/openviking`), not files in the sandbox:
@@ -139,7 +159,17 @@ Users create tools in the Tools panel from one form with a **backend** and a
   page or custom tool UI, agents brief OpenCode via `appui_create` (fullstack
   in the sandbox; Material 3 Expressive / `@material/web` by default; mix
   Aseman OpenUI agent islands with programmed UI; tools via
-  `/_aseman/api/call`, agents via `/_aseman/api/ask`).
+  `/_aseman/api/call`, agents via `/_aseman/api/ask`, each ask in a
+  temporary thread). OpenCode gets the space's apps (with microtool argument
+  schemas) and agents, the page API contract and a client SDK; the platform
+  then starts the app and checks it answers, sending failures back to
+  OpenCode to repair. Passing an existing app's `dir` changes it in place.
+  See [`deploy/sandbox-computer/appui`](deploy/sandbox-computer/appui).
+- **Software development is OpenCode's:** every coding task (apps, scripts,
+  APIs, fixes, tests) goes to OpenCode (`appui_create` / `opencode_run`) in
+  one complete brief. Agents never write code themselves, never hand coding to
+  another agent, and the lead never staffs or writes a programming
+  specialist; agents supply what the brief needs and check the result.
   Use `proxy_create` to expose an already-running sandbox HTTP service as a
   DeskWeb card. Previews serve the page API at `/_aseman/api/` (context,
   tools, microtool calls).

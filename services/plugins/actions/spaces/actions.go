@@ -50,7 +50,7 @@ func BuildActions(s *Service) []api.Action {
 		&fileUploadAction{s: s}, &fileDownloadAction{s: s}, &fileGetAction{s: s},
 		&fileDeleteAction{s: s}, &fileListAction{s: s},
 		&kvSetAction{s: s}, &kvGetAction{s: s}, &kvListAction{s: s}, &kvDeleteAction{s: s},
-	}, append(append(clientActions(s), directActions(s)...), chatActions(s)...)...), agentActions(s)...)
+	}, append(append(clientActions(s), directActions(s)...), chatActions(s)...)...), append(agentActions(s), threadActions(s)...)...)
 }
 
 // --- spaces ---
@@ -549,7 +549,7 @@ func (a *roomListAction) Handle(ctx context.Context, req *api.ActionRequest) (*a
 	}, &rooms); err != nil {
 		return nil, err
 	}
-	return helper.JSON(map[string]any{"rooms": rooms})
+	return helper.JSON(map[string]any{"rooms": visibleRooms(rooms)})
 }
 
 type roomGetAction struct{ s *Service }
@@ -604,6 +604,19 @@ func (a *roomDeleteAction) Handle(ctx context.Context, req *api.ActionRequest) (
 	}
 	if err := a.s.Can(ctx, room.SpaceID, rid, req.Caller.ID, permission.RoomManage); err != nil {
 		return nil, err
+	}
+	if room.IsThread() {
+		if err := a.s.DeleteThread(ctx, room); err != nil {
+			return nil, err
+		}
+		return helper.JSON(map[string]any{"ok": true})
+	}
+	for _, temp := range []bool{false, true} {
+		if threads, err := a.s.RoomThreads(ctx, rid, temp); err == nil {
+			for i := range threads {
+				_ = a.s.DeleteThread(ctx, &threads[i])
+			}
+		}
 	}
 	_ = a.s.R.Delete(ctx, "rooms", rid)
 	return helper.JSON(map[string]any{"ok": true})
@@ -1152,6 +1165,7 @@ func (a *msgSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 		return nil, err
 	}
 	setTyping(roomID, req.Caller.ID, false) // the message is written
+	a.s.touchThread(ctx, roomID, in.Body)
 	a.s.notifyRoomMessage(msg)
 	// Deliver the message to the space's agents: mentioned agents are
 	// triggered to respond, others record it as conversation history.

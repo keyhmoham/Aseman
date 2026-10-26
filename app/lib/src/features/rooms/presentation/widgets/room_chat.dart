@@ -24,6 +24,7 @@ import '../room_work_controller.dart';
 import 'attachment_bubble.dart';
 import 'forward_message_sheet.dart';
 import 'message_edit_history.dart';
+import 'room_threads.dart';
 import 'room_work_view.dart';
 import 'workspace_links.dart';
 
@@ -66,6 +67,9 @@ class RoomChat extends StatefulWidget {
     this.loading = false,
     this.loadingOlder = false,
     this.onLoadOlder,
+    this.threadRoomId = '',
+    this.threadTitle = '',
+    this.onThread,
   });
   final String room;
   final List<RoomMessage> messages;
@@ -138,6 +142,17 @@ class RoomChat extends StatefulWidget {
   final bool loading;
   final bool loadingOlder;
   final VoidCallback? onLoadOlder;
+
+  /// The room whose threads the header's thread switcher lists (its main
+  /// thread's id); empty hides the switcher. [roomId] is then the thread
+  /// shown, which is this room itself for its main thread.
+  final String threadRoomId;
+
+  /// The open thread's title; empty for the main thread.
+  final String threadTitle;
+
+  /// Switches the chat to another thread of the room.
+  final void Function(RoomThread thread)? onThread;
   @override
   State<RoomChat> createState() => _RoomChatState();
 }
@@ -1301,14 +1316,44 @@ class _RoomChatState extends State<RoomChat> {
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 2),
-                Text(
-                    widget.subtitle ??
-                        (count == 0 ? 'Live room' : '$count messages'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 12, color: scheme.onSurfaceVariant)),
+                if (widget.threadTitle.isNotEmpty)
+                  Text('Thread · ${widget.threadTitle}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: scheme.primary))
+                else
+                  Text(
+                      widget.subtitle ??
+                          (count == 0 ? 'Live room' : '$count messages'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12, color: scheme.onSurfaceVariant)),
               ])),
+          if (widget.threadRoomId.isNotEmpty &&
+              widget.onThread != null &&
+              deps != null) ...[
+            IconButton.filledTonal(
+                tooltip: widget.threadTitle.isEmpty
+                    ? 'Threads'
+                    : 'Threads (in “${widget.threadTitle}”)',
+                visualDensity: VisualDensity.compact,
+                isSelected: widget.threadTitle.isNotEmpty,
+                onPressed: () async {
+                  final picked = await showRoomThreads(context,
+                      service: deps.service,
+                      spaceId: widget.spaceId,
+                      roomId: widget.threadRoomId,
+                      currentId: widget.roomId);
+                  if (picked != null && mounted) widget.onThread?.call(picked);
+                },
+                icon: const Icon(Icons.forum_outlined, size: 18),
+                selectedIcon: const Icon(Icons.forum_rounded, size: 18)),
+            const SizedBox(width: 4),
+          ],
           IconButton.filledTonal(
               tooltip: 'Work',
               visualDensity: VisualDensity.compact,

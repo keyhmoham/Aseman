@@ -19,7 +19,7 @@ FROM ${TOOL_RUNTIME_IMAGE} AS tool-runtime
 FROM public.ecr.aws/docker/library/node:22-bookworm
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      bash ca-certificates curl wget git jq less procps ripgrep fd-find tree \
+      bash ca-certificates curl wget git jq less procps psmisc ripgrep fd-find tree \
       python3 python3-pip python3-venv build-essential sqlite3 \
       zip unzip file tini \
  && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
@@ -53,6 +53,8 @@ ENV OPENCODE_CONFIG=/etc/opencode/opencode.json
 # App UI helper + agent instructions + OpenUI kit used by platform builtins.
 COPY appui/AGENTS.md /opt/aseman-appui/AGENTS.md
 COPY appui/openui /opt/aseman-appui/openui
+COPY appui/ASEMAN_API.md /opt/aseman-appui/ASEMAN_API.md
+COPY appui/sdk/aseman.js /opt/aseman-appui/sdk/aseman.js
 COPY appui/aseman-appui /usr/local/bin/aseman-appui
 RUN chmod +x /usr/local/bin/aseman-appui \
  && mkdir -p /opt/aseman-appui \

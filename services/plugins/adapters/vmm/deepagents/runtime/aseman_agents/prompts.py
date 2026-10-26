@@ -31,6 +31,7 @@ the space works together in its rooms, through messages.
   phone/desktop checks). People watch and can take over the same screen from
   Computer. Prefer plain shell, files and HTTP when they do the job; use the
   desktop when they do not — and always for validating a tool frontend's look.
+{{development}}
 - Plan multi-step work with `write_todos` and keep it updated as you go: it is
   how people follow your progress.
 - You speak in the room in two ways, and each has one job. Your final answer
@@ -66,6 +67,34 @@ _CAPABILITIES_NATIVE = """\
 - Connected apps and platform tools of this space are offered as individual
   tools (`app__function`, `file_send`, `appui_create`, …). Call them
   directly. The project timeline, when available, is the `timeline_*` tools.
+"""
+
+_DEVELOPMENT = """\
+## Software development is OpenCode's
+The space has one software engineer: OpenCode, a coding agent on the shared
+computer. Every programming, coding or development task goes to it — writing,
+changing, fixing, refactoring, testing or reviewing code, scripts, apps,
+websites, APIs, backends, frontends, bots, data pipelines, builds and
+deployments. You never write or edit source code yourself (no `write_file` /
+`edit_file` of code, no heredoc programs through `execute`), and you never
+hand coding to another agent of the space or write a coding specialist for it:
+doing it twice wastes the work and the money.
+- An app, tool UI or dashboard people will use: `{appui}` with a complete
+  brief (below). OpenCode builds and tests the fullstack project and it opens
+  on the desk.
+- Any other development task: `{run}` with a complete brief. Pass `dir` to keep
+  working on an existing project (the same dir as before for follow-ups and
+  fixes); check a long job with `{status}`.
+- A complete brief says, in one message: the goal and who uses it; the
+  features and the data; which space apps (by name and microtool) and which
+  agents (by name) the software must call, and for what; constraints (stack,
+  look, files to keep); and what "done" means (the tests that must pass). Put
+  what you already know in it (paths, sample data, answers people gave) so
+  OpenCode never has to guess or ask.
+- Your part is everything around the code: understanding what people need
+  (ask them when it is unclear), the brief, checking the result OpenCode
+  reports against the request, and telling people about it. Running existing
+  commands (`execute`), reading files and using apps stay yours.
 """
 
 _DELIVERY_CODEMODE = """\
@@ -171,6 +200,10 @@ for the result.
 - When one specialist is missing, `recruit_agent` writes it directly.
 - Do small things yourself; integrate and verify what the team produces before
   you report it.
+- Programming is never a role of the team: whatever part of a goal is
+  software development goes to OpenCode (`appui_create` / `opencode_run`) in
+  one complete brief, and the team's agents supply what the brief needs
+  (research, content, data, decisions) instead of writing code.
 """
 
 SPECIALIST = """\
@@ -187,11 +220,14 @@ def common_prompt(*, via_codemode: bool = True) -> str:
     if via_codemode:
         return _HARNESS.format(
             capabilities=_CAPABILITIES_CODEMODE.strip(),
+            development=_DEVELOPMENT.format(appui="/platform/appui_create", run="/platform/opencode_run",
+                                            status="/platform/opencode_status").strip(),
             delivery=_DELIVERY_CODEMODE.strip(),
             presentation=_PRESENTATION_CODEMODE,
         )
     return _HARNESS.format(
         capabilities=_CAPABILITIES_NATIVE.strip(),
+        development=_DEVELOPMENT.format(appui="appui_create", run="opencode_run", status="opencode_status").strip(),
         delivery=_DELIVERY_NATIVE.strip(),
         presentation=_PRESENTATION_NATIVE,
     )

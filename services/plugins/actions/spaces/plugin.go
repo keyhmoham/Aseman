@@ -40,6 +40,7 @@ func NewPlugin() api.Plugin {
 				return err
 			}
 			go s.sweepOrphanFiles(ctx)
+			go s.sweepTempThreads(context.WithoutCancel(ctx))
 			return nil
 		}, Service: s, Actions: BuildActions(s), Run: s.RunTurns, Close: func(ctx context.Context) error { s.StopAllSandboxes(ctx); return nil }}, nil
 	})

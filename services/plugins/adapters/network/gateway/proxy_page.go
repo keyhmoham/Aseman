@@ -8,7 +8,8 @@ package apihttp
 //     space's tools' microtools as the person viewing the page, in the
 //     preview's space, the way a frontend calls its backend:
 //     context, tools, microtools {tool}, call {tool, microtool, args},
-//     agents, and ask {agent, body} for OpenUI agent-backed islands.
+//     agents, and ask {agent, body} for OpenUI agent-backed islands (each
+//     ask runs in a temporary room thread of its own, deleted after).
 //   - _aseman/kit/openui/*: the OpenUI component kit (JS/CSS) OpenCode mixes
 //     into App UIs under the same Aseman theme tokens.
 //
@@ -175,7 +176,10 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		if err != nil {
 			return nil, err
 		}
-		askBody := map[string]any{"space": space, "bot": rec.ID, "body": body}
+		// Every ask from an app is its own conversation: the agent works in a
+		// temporary thread of the room, deleted when it is done, so apps never
+		// mix their calls with each other or with the room's chat.
+		askBody := map[string]any{"space": space, "bot": rec.ID, "body": body, "temp_thread": true}
 		if !p.RoomID.IsZero() {
 			askBody["room"] = p.RoomID.String()
 		}

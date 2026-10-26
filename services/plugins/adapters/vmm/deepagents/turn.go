@@ -346,3 +346,19 @@ func (a *Adapter) Questions(ctx context.Context, vmID, spaceID string) ([]vmm.Ag
 	}
 	return out.Questions, nil
 }
+
+// ForgetRoom implements vmm.RoomForgetter: every agent's conversation of a
+// room (a deleted room thread) is dropped from the runtime.
+func (a *Adapter) ForgetRoom(ctx context.Context, spaceID, roomID string) error {
+	if a.runtimeURL == "" {
+		a.runtimeMu.Lock()
+		started := a.runtimeVM != "" || time.Since(a.healthyAt) < healthTTL
+		a.runtimeMu.Unlock()
+		if !started && !a.healthy(ctx) {
+			return nil // nothing has run yet, so nothing to forget
+		}
+	}
+	fctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	return a.call(fctx, http.MethodPost, "/v1/rooms/forget", map[string]string{"space": spaceID, "room": roomID}, nil)
+}

@@ -9,6 +9,27 @@ Produce a **professional, modern fullstack web app** (frontend + backend) that
 satisfies `BRIEF.md`. Wire it to any space apps listed in `APPS.json` using the
 preview page API (not invented credentials).
 
+## Wiring to the space (read first)
+
+- `APPS.json` lists exactly what you may wire: `apps` (each microtool with
+  its `args_schema`) and `agents` (name, description). Use those names and
+  argument shapes; never invent apps, agents, endpoints or fields.
+- `ASEMAN_API.md` is the contract of the page API (`_aseman/api/*`), served
+  by the gateway to the **browser** as the viewing person. Your server cannot
+  call it: do app and agent calls from the page.
+- `vendor/aseman-sdk/aseman.js` wraps it — use it rather than raw `fetch`:
+  `Aseman.call(tool, microtool, args)`, `Aseman.ask(agent, prompt)`,
+  `Aseman.askJSON(...)`, `Aseman.conversation(agent)`. It resolves the
+  preview prefix from any route, times out and throws `Aseman.Error`.
+- Every agent ask is a fresh, isolated conversation (a temporary room thread
+  deleted when the agent answers). Multi-turn features send `history` (the
+  SDK's `conversation` does).
+- `PLAN.md` is yours: write the plan before coding. In update mode,
+  `CHANGES.md` holds the change requests (the last one is current).
+- After you write `READY.json`, the platform itself starts your `start`
+  command and requests `GET /` on the port; if that fails, you get the
+  failure back to fix. Make the app start reliably.
+
 ## Hard requirements
 
 1. **Fullstack**: real frontend + backend (Node/Express, Fastify, Next.js, or

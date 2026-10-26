@@ -119,8 +119,27 @@ ROLES_SYSTEM = (
     "You staff a team of AI agents for a goal. Answer only in JSON. Name the distinct specialist roles the goal "
     "needs (at most {max}): each a craft with its own method, not a step of the plan. Small goals need one or two "
     "roles; do not invent roles for coordination, which the lead does itself. `instances` is how many agents of "
-    "that role can usefully work in parallel on independent parts (1 unless the work splits cleanly)."
+    "that role can usefully work in parallel on independent parts (1 unless the work splits cleanly). "
+    "Never name a software development role (developer, engineer, programmer, coder, frontend, backend, "
+    "full-stack, devops, code tester or reviewer): all programming is done by OpenCode, which the lead briefs "
+    "directly, so staff only what the code needs from people's side (research, content, data, design decisions)."
 )
+
+# Development roles the model may still name: programming is OpenCode's alone
+# (see prompts._DEVELOPMENT), so they are never staffed with agents.
+_DEV_ROLE = re.compile(
+    r"\b(developers?|(software|game) development|programm(er|ing)|coder|coding|software|front[- ]?end|back[- ]?end|full[- ]?stack|"
+    r"devops|sre|web ?dev\w*|app ?dev\w*|(data|qa|ml|platform|cloud|site reliability) engineer)\b", re.I)
+_CODE = re.compile(r"\b(code|coding|program\w*|script\w*|software|api|app|website)\b", re.I)
+
+
+def development_role(title: str, needs: str = "") -> bool:
+    """Whether a role is software development (OpenCode's, never an agent's).
+    A bare "engineer" counts only when what it must deliver is code."""
+    if _DEV_ROLE.search(title):
+        return True
+    return bool(re.search(r"\bengineer", title, re.I) and _CODE.search(needs)) or \
+        bool(_DEV_ROLE.search(needs) and _CODE.search(needs) and re.search(r"\b(write|build|implement|fix)", needs, re.I))
 
 
 async def roles_for(ctx: TurnContext, goal: str, max_roles: int) -> list[Role]:
@@ -133,7 +152,7 @@ async def roles_for(ctx: TurnContext, goal: str, max_roles: int) -> list[Role]:
         if not isinstance(raw, dict) or not (raw.get("title") or raw.get("key")):
             continue
         key = _slug(str(raw.get("key") or raw.get("title")))
-        if key in seen:
+        if key in seen or development_role(str(raw.get("title") or key), str(raw.get("needs") or "")):
             continue
         seen.add(key)
         instances = raw.get("instances") or 1

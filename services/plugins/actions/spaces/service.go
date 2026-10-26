@@ -31,8 +31,10 @@ const zeroRoom = "00000000000000000000000000000000"
 
 // Service implements space operations and permission resolution.
 type Service struct {
-	teams           teamRuns
-	desks           deskStore
+	teams teamRuns
+	desks deskStore
+	// threadRooms caches which room each room id is a thread of (see threads.go).
+	threadRooms     sync.Map
 	botMembershipMu sync.Mutex
 	K               api.Kernel
 	R               *repo.Repo
@@ -51,7 +53,7 @@ type Service struct {
 	SandboxBackend   string
 	SandboxImage     string
 	SandboxResources bot.ResourceProfile
-	proxyCreateMu sync.Mutex
+	proxyCreateMu    sync.Mutex
 
 	// Routines is the per-room task scheduler (wired by the root); agents manage
 	// routines through the routine_create/list/delete tools.
@@ -321,6 +323,8 @@ func (s *Service) Can(ctx context.Context, spaceID, roomID identity.ID, caller i
 	if sm.IsOwner() {
 		return nil
 	}
+	// A thread is governed by its room's grants.
+	roomID = s.mainRoom(ctx, roomID)
 	// Merge room grants if the action is room-scoped.
 	role := string(sm.Role)
 	grants := sm.Permissions

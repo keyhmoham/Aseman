@@ -7,8 +7,8 @@ image. New spaces get them by default.
 
 | Platform builtin | Role |
 |---|---|
-| `appui_create` | Brief → OpenCode builds+tests fullstack UI → DeskWeb proxy card on hall |
-| `opencode_run` | Distribute a coding task to OpenCode |
+| `appui_create` | Brief → OpenCode plans, builds and tests a fullstack app → platform verifies it → DeskWeb card; pass an existing `dir` to change that app |
+| `opencode_run` | Every other coding task (agents never write code themselves) |
 | `opencode_status` | Job STATUS / READY |
 | `opencode_models` | Backbone / model selection |
 
@@ -72,6 +72,29 @@ theme. Islands render the full generative catalog (`catalog.js` /
 `catalog.spec.json`, ~137 components) when agents return OpenUI JSON trees;
 markdown otherwise. Preview APIs: `_aseman/api/agents`, `_aseman/api/ask`,
 plus existing `call` / `tools`.
+
+## What OpenCode is given (per build)
+
+| File | What |
+|---|---|
+| `BRIEF.md` / `CHANGES.md` | The request; follow-up changes append to `CHANGES.md` (`--mode update`) |
+| `APPS.json` | Space apps with microtools **and their argument schemas**, and space agents |
+| `ASEMAN_API.md` | The page API contract (`_aseman/api/*`) with exact request/response shapes |
+| `vendor/aseman-sdk/aseman.js` | Client SDK: `call`, `ask`, `askJSON`, `conversation`, `show` |
+| `vendor/aseman-openui/` | OpenUI kit for agent-backed islands |
+
+After OpenCode reports READY, `aseman-appui build` verifies the app itself:
+`READY.json` must be complete, and the `start` command must serve `GET /` on
+the port. Failures go back to OpenCode as repair rounds
+(`ASEMAN_APPUI_REPAIRS`, default 2) before `appui_create` reports an error.
+
+## Agents in generated apps
+
+`_aseman/api/ask` runs every ask in a **temporary room thread**: the agent
+starts a fresh conversation, nothing from the room or from other asks leaks
+in, and the thread (its messages and the agent's runtime checkpoints) is
+deleted as soon as the agent answers. Apps carry multi-turn context with
+`history`.
 
 ## Generated software → space apps
 

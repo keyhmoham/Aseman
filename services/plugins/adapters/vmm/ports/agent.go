@@ -83,6 +83,13 @@ type QuestionLister interface {
 	Questions(ctx context.Context, vmID, spaceID string) ([]AgentQuestion, error)
 }
 
+// RoomForgetter is implemented by agent runtimes that keep each agent's
+// conversation per room: ForgetRoom drops every agent's conversation of a
+// room (a room thread deleted with its messages).
+type RoomForgetter interface {
+	ForgetRoom(ctx context.Context, spaceID, roomID string) error
+}
+
 // MaxAgentAskDepth bounds chains of agents asking agents.
 const MaxAgentAskDepth = 4
 

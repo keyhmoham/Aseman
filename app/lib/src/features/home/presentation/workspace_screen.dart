@@ -101,6 +101,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   /// Whether older messages than what [roomMessages] holds still exist, by
   /// workspace/room scope.
   final Map<String, bool> roomHasMore = {};
+
+  /// The open thread of each room (by room id); a room not listed shows its
+  /// main thread.
+  final Map<String, RoomThread> _roomThreads = {};
   final Set<String> _loadingOlder = {};
 
   /// The desk of the room on screen: tools' card windows.
@@ -281,15 +285,17 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     if (r.isEmpty) return;
     final requestedWorkspace = workspace;
     final requestedScope = '$requestedWorkspace/$roomName';
-    final requestKey = '${sp.id}/${r.first.id}';
+    final thread = _messageRoom(r.first.id);
+    final requestKey = '${sp.id}/$thread';
     if (!_messageLoads.add(requestKey)) return;
     try {
       final res = await widget.dependencies.service
-          .fetchRoomMessages(sp.id, r.first.id);
+          .fetchRoomMessages(sp.id, thread);
       if (!mounted ||
           workspace != requestedWorkspace ||
           room != roomName ||
-          _currentRoomId != r.first.id) return;
+          _currentRoomId != r.first.id ||
+          _messageRoom(r.first.id) != thread) return;
       // Keep any older pages already loaded; only refresh the newest window
       // so scrolling back through history is not wiped every few seconds.
       final prev = roomMessages[requestedScope] ?? const <RoomMessage>[];
@@ -343,18 +349,20 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     if (!(roomHasMore[requestedScope] ?? false)) return;
     final prev = roomMessages[requestedScope] ?? const <RoomMessage>[];
     if (prev.isEmpty) return;
-    final requestKey = 'older:${sp.id}/${r.first.id}';
+    final thread = _messageRoom(r.first.id);
+    final requestKey = 'older:${sp.id}/$thread';
     if (!_loadingOlder.add(requestKey)) return;
     setState(() {});
     try {
       final oldest = prev.first;
       final res = await widget.dependencies.service.fetchRoomMessages(
-          sp.id, r.first.id,
+          sp.id, thread,
           before: oldest.createdAt);
       if (!mounted ||
           workspace != requestedWorkspace ||
           room != roomName ||
-          _currentRoomId != r.first.id) return;
+          _currentRoomId != r.first.id ||
+          _messageRoom(r.first.id) != thread) return;
       // Merge into whatever the poll may have refreshed while we waited.
       final current = roomMessages[requestedScope] ?? prev;
       final msgs = mergeOlderRoomMessages(current, res.messages);
@@ -379,7 +387,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         : currentRooms.where((x) => x.name == room).toList();
     if (sp == null || r == null || r.isEmpty) return;
     try {
-      await widget.dependencies.service.sendRoomMessage(sp.id, r.first.id, body,
+      await widget.dependencies.service.sendRoomMessage(
+          sp.id, _messageRoom(r.first.id), body,
           mentions: mentions, attachments: attachments, replyTo: replyTo);
       if (!mounted) return;
       // Bump so the left-panel file library (Docs/GIFs/Media/Audio) reloads and
@@ -502,12 +511,38 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   bool get chatLoadingOlder =>
       _currentRoomId.isNotEmpty &&
       _loadingOlder.contains(
-          'older:${_spaceFor(workspace)?.id ?? ''}/$_currentRoomId');
+          'older:${_spaceFor(workspace)?.id ?? ''}/$_chatRoomId');
 
   String get _currentRoomId {
     if (room == null) return '';
     final matches = currentRooms.where((r) => r.name == room).toList();
     return matches.isEmpty ? '' : matches.first.id;
+  }
+
+  /// Where a room's open conversation lives: its open thread, else the room.
+  String _messageRoom(String roomId) => _roomThreads[roomId]?.id ?? roomId;
+
+  /// The open room's conversation (its thread, else the room itself).
+  String get _chatRoomId =>
+      _currentRoomId.isEmpty ? '' : _messageRoom(_currentRoomId);
+
+  /// Switches the open room's chat to another of its threads, loaded fresh.
+  void _switchThread(RoomThread thread) {
+    final roomId = _currentRoomId;
+    final roomName = room;
+    if (roomId.isEmpty || roomName == null) return;
+    setState(() {
+      if (thread.isMain || thread.id == roomId) {
+        _roomThreads.remove(roomId);
+      } else {
+        _roomThreads[roomId] = thread;
+      }
+      roomMessages.remove('$workspace/$roomName');
+      roomHasMore.remove('$workspace/$roomName');
+      _workingAgent = '';
+      _workingDetail = '';
+    });
+    unawaited(_loadRoomMessages(roomName));
   }
 
   void openRoom(String value) {
@@ -743,7 +778,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                               spaceId: _spaceFor(workspace)
                                                       ?.id ??
                                                   '',
-                                              roomId: _currentRoomId,
+                                              roomId: _chatRoomId,
+                                              threadRoomId: _currentRoomId,
+                                              threadTitle: _roomThreads[
+                                                          _currentRoomId]
+                                                      ?.title ??
+                                                  '',
+                                              onThread: _switchThread,
                                               mentionable: spaceBots
                                                   .where((b) => b.isAgent)
                                                   .toList(),
@@ -803,7 +844,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                         '',
                     dependencies: widget.dependencies,
                     spaceId: _spaceFor(workspace)?.id ?? '',
-                    roomId: _currentRoomId,
+                    roomId: _chatRoomId,
+                    threadRoomId: _currentRoomId,
+                    threadTitle: _roomThreads[_currentRoomId]?.title ?? '',
+                    onThread: _switchThread,
                     mentionable: spaceBots.where((b) => b.isAgent).toList(),
                     onSend: _sendRoomMessage,
                     onEdit: _editRoomMessage,

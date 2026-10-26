@@ -48,6 +48,7 @@ func (s *Service) SpaceProfile(ctx context.Context, spaceID identity.ID) (map[st
 	}, &bots)
 	var rooms []space.Room
 	_ = s.R.List(ctx, "rooms", database.Filter{Equal: map[string]any{"space_id": spaceID.String()}, OrderBy: "created_at", Asc: true}, &rooms)
+	rooms = visibleRooms(rooms)
 	roomNames := make([]string, 0, len(rooms))
 	for i := range rooms {
 		roomNames = append(roomNames, rooms[i].Name)

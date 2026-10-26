@@ -48,6 +48,12 @@ func CheckSpaceAccess(ctx context.Context, r *repo.Repo, actor, spaceID, roomID 
 		if room.SpaceID != spaceID {
 			return errs.Permission("room belongs to another space")
 		}
+		// A thread is governed by its room's memberships.
+		if room.ParentID != "" {
+			if parent, err := identity.Parse(room.ParentID); err == nil {
+				roomID = parent
+			}
+		}
 	}
 	var memberships []membership.Membership
 	if err := r.List(ctx, "memberships", database.Filter{Equal: map[string]any{"space_id": spaceID.String(), "member_id": actor.String()}}, &memberships); err != nil {

@@ -170,6 +170,9 @@ func (s *Service) turnSubmit(ctx context.Context, req *api.ActionRequest) (*api.
 	if e != nil {
 		return nil, e
 	}
+	if !in.Silent {
+		s.touchThread(ctx, room, in.Body)
+	}
 	return helper.JSON(t)
 }
 func (s *Service) turnList(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {

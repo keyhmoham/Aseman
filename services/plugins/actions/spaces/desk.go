@@ -745,6 +745,7 @@ func (s *Service) saveDesktop(ctx context.Context, spaceID identity.ID, room str
 
 // Desk reads a room's desk.
 func (s *Service) Desk(ctx context.Context, spaceID, roomID identity.ID) (Desktop, error) {
+	roomID = s.mainRoom(ctx, roomID) // a thread shares its room's desk
 	s.desks.mu.Lock()
 	defer s.desks.mu.Unlock()
 	d, err := s.loadDesktop(ctx, spaceID, deskKey(roomID))
@@ -763,6 +764,7 @@ func (s *Service) UpdateDesk(ctx context.Context, spaceID, roomID identity.ID, a
 	if len(ops) == 0 || len(ops) > 100 {
 		return Desktop{}, nil, errs.InvalidArgument("1..100 desk ops")
 	}
+	roomID = s.mainRoom(ctx, roomID) // a thread shares its room's desk
 	s.desks.mu.Lock()
 	defer s.desks.mu.Unlock()
 	room := deskKey(roomID)

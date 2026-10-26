@@ -5,6 +5,7 @@
     POST /v1/answers                  answer a question  → {reply, status, answered, error}
     GET  /v1/questions?vm=&space=     open questions     → {questions: [...]}
     POST /v1/playbooks/reset          forget what agents learned → {reset: n}
+    POST /v1/rooms/forget             forget agents' conversations of a room thread → {forgotten: n}
 
 Every request carries the runtime secret the node started the runtime with
 (``X-Aseman-Runtime``). A turn's own access to the platform is the turn
@@ -114,6 +115,17 @@ def create_app(runner_factory: Any = None, *, secret: str | None = None, data_di
         body = await request.json()
         return {"reset": await asyncio.to_thread(improver.reset, str(body.get("space") or ""),
                                                  str(body.get("agent") or ""))}
+
+    @app.post("/v1/rooms/forget")
+    async def forget_room(request: Request) -> dict[str, Any]:
+        """Forget every agent's conversation of a room: {"space", "room"} (a
+        room thread deleted with its messages)."""
+        authorize(request)
+        body = await request.json()
+        space, room = str(body.get("space") or ""), str(body.get("room") or "")
+        if not space or not room:
+            raise HTTPException(status_code=400, detail="space and room are required")
+        return {"forgotten": await request.app.state.runner.forget_room(space, room)}
 
     @app.exception_handler(HTTPException)
     async def http_error(_: Request, exc: HTTPException) -> JSONResponse:

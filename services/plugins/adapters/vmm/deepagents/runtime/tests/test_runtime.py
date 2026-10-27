@@ -629,6 +629,19 @@ def test_with_opencode_off_the_agents_build_test_and_publish_apps_themselves() -
     assert "OpenCode" not in lead
 
 
+def test_work_reported_done_and_tested_is_not_checked_again() -> None:
+    from aseman_agents.context import AgentDef
+    from aseman_agents.prompts import system_prompt
+
+    for opencode in (True, False):
+        lead = system_prompt(AgentDef(name="a", bot_id="b", account_id="c", vm_id="d", role="lead"), "",
+                             opencode=opencode)
+        assert "Never\n  redo or re-check work reported done and tested" in lead
+        assert "`appui_status`" in lead and "integrate and verify" not in lead
+        specialist = system_prompt(AgentDef(name="a", bot_id="b", account_id="c", vm_id="d"), "", opencode=opencode)
+        assert "test and validate what you make yourself" in specialist and "how you verified it" in specialist
+
+
 async def test_a_developer_is_recruited_only_while_opencode_is_off(platform: Platform, tmp_path: Path) -> None:
     from aseman_agents.tools import recruit_tool
 

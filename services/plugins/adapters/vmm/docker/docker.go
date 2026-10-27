@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -348,6 +349,11 @@ func (a *Adapter) StartVM(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	if fresh, err := a.refreshImage(ctx, id, cid); err != nil {
+		a.Log.Warn("container kept on its old image", "vm", id, "error", err)
+	} else {
+		cid = fresh
+	}
 	if _, err := a.do(ctx, http.MethodPost, "/containers/"+cid+"/start", nil); err != nil {
 		// The container may have been removed (e.g. a manual prune). Recreate
 		// it from the stored spec and start it so the VM lifecycle survives.
@@ -363,6 +369,92 @@ func (a *Adapter) StartVM(ctx context.Context, id string) error {
 		return errs.Wrap(errs.CodeVMM, err, "start container "+cid)
 	}
 	return nil
+}
+
+// refreshImage recreates a stopped container whose image tag now names a
+// newer image (the sandbox image was rebuilt or pulled since), so a machine
+// that sleeps and wakes picks up the current tools instead of keeping the
+// image it was first created from forever. The new container has the same
+// name, labels (its aseman.vmid, so the VM id stays), settings and mounts:
+// the named /workspace and agent state volumes carry the work over; what was
+// installed outside them comes from the new image. A running container, an
+// up-to-date one, or ASEMAN_DOCKER_REFRESH_IMAGES=0 leaves it as it is.
+// Returns the container id to start.
+func (a *Adapter) refreshImage(ctx context.Context, vmID, cid string) (string, error) {
+	if os.Getenv("ASEMAN_DOCKER_REFRESH_IMAGES") == "0" {
+		return cid, nil
+	}
+	raw, err := a.do(ctx, http.MethodGet, "/containers/"+cid+"/json", nil)
+	if err != nil {
+		return cid, err
+	}
+	var c struct {
+		Name       string         `json:"Name"`
+		Image      string         `json:"Image"` // the image id it was created from
+		Config     map[string]any `json:"Config"`
+		HostConfig map[string]any `json:"HostConfig"`
+		State      struct {
+			Running bool `json:"Running"`
+			Paused  bool `json:"Paused"`
+		} `json:"State"`
+	}
+	if err := json.Unmarshal(raw, &c); err != nil {
+		return cid, err
+	}
+	ref, _ := c.Config["Image"].(string)
+	if c.State.Running || c.State.Paused || ref == "" || strings.HasPrefix(ref, "sha256:") {
+		return cid, nil
+	}
+	img, err := a.do(ctx, http.MethodGet, "/images/"+ref+"/json", nil)
+	if err != nil {
+		return cid, nil // the tag is gone: keep what the container has
+	}
+	var current struct {
+		ID string `json:"Id"`
+	}
+	if json.Unmarshal(img, &current) != nil || current.ID == "" || current.ID == c.Image {
+		return cid, nil
+	}
+	create := map[string]any{}
+	for k, v := range c.Config {
+		// The host name was the old container's id.
+		if k != "Hostname" {
+			create[k] = v
+		}
+	}
+	create["HostConfig"] = c.HostConfig
+	labels, _ := c.Config["Labels"].(map[string]any)
+	if alias, _ := labels[vmm.LabelNetworkAlias].(string); alias != "" {
+		if network, _ := c.HostConfig["NetworkMode"].(string); network != "" {
+			create["NetworkingConfig"] = map[string]any{"EndpointsConfig": map[string]any{network: map[string]any{"Aliases": []string{alias}}}}
+		}
+	}
+	// The old container steps aside until the new one exists, so a failure
+	// leaves the machine as it was.
+	name := strings.TrimPrefix(c.Name, "/")
+	if _, err := a.do(ctx, http.MethodPost, "/containers/"+cid+"/rename?name="+url.QueryEscape(name+"-old"), nil); err != nil {
+		return cid, err
+	}
+	b, err := a.do(ctx, http.MethodPost, "/containers/create?name="+url.QueryEscape(name), create)
+	var out struct {
+		ID string `json:"Id"`
+	}
+	if err == nil && (json.Unmarshal(b, &out) != nil || out.ID == "") {
+		err = errs.New(errs.CodeVMM, "no container id")
+	}
+	if err != nil {
+		_, _ = a.do(ctx, http.MethodPost, "/containers/"+cid+"/rename?name="+url.QueryEscape(name), nil)
+		return cid, errs.Wrap(errs.CodeVMM, err, "recreate container on the current image")
+	}
+	// Its anonymous volumes go with it; named volumes (the workspace) stay.
+	if _, err := a.do(ctx, http.MethodDelete, "/containers/"+cid+"?force=true", nil); err != nil {
+		a.Log.Warn("old container left behind", "container", cid, "error", err)
+	}
+	a.mu.Lock()
+	a.vms[vmID] = out.ID
+	a.mu.Unlock()
+	a.Log.Info("container recreated on its image's current version", "vm", vmID, "image", ref)
+	return out.ID, nil
 }
 
 // StopVM implements vmm.VMM.

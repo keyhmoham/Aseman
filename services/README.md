@@ -617,7 +617,13 @@ config variable, `sandbox.backend`: a **docker container** (VM type `container`,
 the default) or a **Modal remote sandbox** (VM type `modal`). Agents, apps
 and users all talk to it (and to each other) through `spaces.ask`. The sandbox
 is **started on agent activity** and **stopped after an idle window** (2
-minutes) — never deleted, restarted on the next activity.
+minutes) — never deleted, restarted on the next activity. A docker sandbox
+whose image tag was rebuilt or pulled since it was created is recreated on
+the current image when it next wakes (same name, VM id and named `/workspace`
+volume; what was installed outside the volumes comes from the new image), so
+upgrades reach existing projects; `ASEMAN_DOCKER_REFRESH_IMAGES=0` turns this
+off. An app tool that finds an awake sandbox still on an older image restarts
+it once.
 
 The default image (`deploy/sandbox-computer`) includes `aseman-appui`, the
 Elpian toolchain (`aseman-elpian`) and **OpenCode**, so every new space can

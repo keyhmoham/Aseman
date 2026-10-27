@@ -50,7 +50,8 @@ def brief(goal: str, task: Task, done: dict[str, Task], total: int) -> str:
     """What the agent is handed: its task, where it fits, and what it builds on."""
     parts = [task.task, "",
              f"(Task {task.id} of a team plan of {total} for: {goal[:600]}. Other agents work on other tasks at the "
-             "same time: do only this part, and answer with its result — what you found or made and where it is.)"]
+             "same time: do only this part, test and validate it yourself, and answer with its result — what you "
+             "found or made, where it is, and how you verified it. Nobody checks it again after you.)"]
     deps = [done[d] for d in task.depends_on if d in done]
     if deps:
         parts.append("\nResults of the tasks this one builds on:")
@@ -165,6 +166,10 @@ def graph(ctx: TurnContext, members: list[teamlib.Member], roster: dict[str, tea
         return {"tasks": tasks}
 
     async def prune_node(state: SwarmState) -> SwarmState:
+        rechecks = await planner.drop_rechecks(ctx, state["goal"], state["tasks"])
+        if rechecks and worklog is not None:
+            await worklog("Swarm · decision model: not running " + ", ".join(t.id for t in rechecks)
+                          + ": they only re-check work its own agent tests and validates")
         dropped = await planner.prune(ctx, state["goal"], state["tasks"])
         if dropped and worklog is not None:
             await worklog(f"Swarm · decision model: {dropped} dependencies are not needed; those tasks run in parallel")

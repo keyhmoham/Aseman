@@ -131,7 +131,8 @@ ROLES_OPENCODE = (
 ROLES_AGENTS = (
     " Software is built by the team's own agents: when the goal needs code, name one software developer role "
     "per project it builds (an app, a service, a script) — one owner per project, never two roles for the same "
-    "code — and staff what the code needs from people's side (research, content, data, design decisions) as "
+    "code, and never a separate tester, QA or code reviewer role: the developer tests and validates its own work "
+    "and the platform verifies every app — and staff what the code needs from people's side (research, content, data, design decisions) as "
     "roles of their own."
 )
 

@@ -9,6 +9,9 @@
 // With --server, the program's requests to its own server (Aseman.fetch) go
 // to the running server, so the frontend and backend are checked together.
 //
+// Every render is validated against the UI DSL schema (validate.mjs): prop
+// and style types, parent–child relations, layout constraints, keys.
+//
 // It also runs the program as its phone-board widget (display "compact"): the
 // app must declare one, keep it glanceable and fed with live data.
 //
@@ -18,6 +21,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { validateRenders } from "./validate.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const NODES = JSON.parse(fs.readFileSync(path.join(here, "nodes.json"), "utf8"));
@@ -60,7 +64,15 @@ function typed(value) {
 
 export const SAMPLE_ENV = {
   display: "full",
-  theme: { mode: "light", accent: "#6750A4", colors: { primary: "#6750A4", onPrimary: "#FFFFFF", primaryContainer: "#EADDFF", surface: "#FEF7FF", onSurface: "#1D1B20", onSurfaceVariant: "#49454F", surfaceContainerHighest: "#E6E0E9", outline: "#79747E" } },
+  theme: { mode: "light", accent: "#6750A4", colors: {
+    primary: "#6750A4", onPrimary: "#FFFFFF", primaryContainer: "#EADDFF", onPrimaryContainer: "#21005D",
+    secondary: "#625B71", onSecondary: "#FFFFFF", secondaryContainer: "#E8DEF8", onSecondaryContainer: "#1D192B",
+    tertiary: "#7D5260", onTertiary: "#FFFFFF", tertiaryContainer: "#FFD8E4", onTertiaryContainer: "#31111D",
+    surface: "#FEF7FF", onSurface: "#1D1B20", onSurfaceVariant: "#49454F",
+    surfaceContainerLowest: "#FFFFFF", surfaceContainerLow: "#F7F2FA", surfaceContainer: "#F3EDF7", surfaceContainerHigh: "#ECE6F0", surfaceContainerHighest: "#E6E0E9",
+    inverseSurface: "#322F35", onInverseSurface: "#F5EFF7", outline: "#79747E", outlineVariant: "#CAC4D0",
+    error: "#B3261E", onError: "#FFFFFF", errorContainer: "#F9DEDC", onErrorContainer: "#410E0B",
+  } },
   user: { id: "u-check", handle: "check" },
   space: "s-check",
   room: "r-check",
@@ -68,7 +80,7 @@ export const SAMPLE_ENV = {
 };
 
 // Nodes that do not belong on a glanceable phone widget.
-const NOT_IN_WIDGET = new Set(["DataGrid", "ListView", "GridView", "TextField", "Scaffold", "AppBar", "Drawer", "textarea", "input", "form", "table"]);
+const NOT_IN_WIDGET = new Set(["DataGrid", "ListView", "GridView", "TextField", "SearchBar", "NavigationBar", "SegmentedButton", "ListGroup", "Scaffold", "AppBar", "Drawer", "textarea", "input", "form", "table"]);
 const WIDGET_MAX_NODES = 80;
 
 // check runs the app as people use it (display "full") and, with
@@ -93,7 +105,43 @@ export async function check(source, opts = {}) {
   };
 }
 
-async function run(source, { server = "", apps = null, maxHandlers = 40, millis = 10000, display = "full" } = {}) {
+// The value a node's `change` event carries, as the client sends it.
+function sampleChange(node) {
+  const p = (node && node.props) || {};
+  switch (node && node.type) {
+    case "NavigationBar": return Math.min(1, ((p.items || p.destinations || []).length || 1) - 1);
+    case "SegmentedButton": {
+      const segs = (p.segments || p.items || []).map((x) => (x && typeof x === "object" ? (x.value !== undefined ? x.value : x.label) : x));
+      const v = segs.length > 1 ? String(segs[1]) : segs.length ? String(segs[0]) : "";
+      return p.multi ? [v] : v;
+    }
+    case "Slider": return typeof p.max === "number" ? p.max : 1;
+    case "Rating": return 3;
+    case "Radio": return p.value;
+    case "Chip": return !p.selected;
+    default: return true;
+  }
+}
+
+// Folds the validator's findings on every render into the check's errors and
+// warnings (the checks this file makes itself are left to it).
+const OWN = new Set(["type-unknown", "type-missing", "widget-node", "widget-size", "event-handler"]);
+function addValidation(renders, compact, errors, warnings, opts) {
+  if (opts.validate === false || !renders.length) return;
+  const report = validateRenders(renders, { mode: compact ? "widget" : "app", theme: SAMPLE_ENV.theme });
+  let notes = 0;
+  for (const i of report.issues) {
+    if (OWN.has(i.code)) continue;
+    const line = `${i.at || i.path}: ${i.message}${i.fix ? ` Fix: ${i.fix}` : ""} [${i.code}]`;
+    if (i.severity === "error" && i.code !== "widget-events") errors.push(line);
+    else if (i.severity === "info") notes++;
+    else warnings.push(line);
+  }
+  if (notes) warnings.push(`${notes} design note(s) on the view trees: run node vendor/aseman-elpian/validate.mjs --program <bundle> to see them`);
+}
+
+async function run(source, { server = "", apps = null, maxHandlers = 40, millis = 10000, display = "full", validate: doValidate, collect = false } = {}) {
+  const vopts = { validate: doValidate };
   const compact = display === "compact";
   const env = { ...SAMPLE_ENV, display, widget: compact ? { size: "medium", shape: "card" } : undefined };
   const intervals = [];
@@ -251,7 +299,7 @@ async function run(source, { server = "", apps = null, maxHandlers = 40, millis 
     const type = node.type;
     if (!type) errors.push(`${at}: a node without type`);
     else if (!KNOWN.has(type)) errors.push(`${at}: node type "${type}" is not drawn by the Elpian engine (see ELPIAN.md / nodes.json)`);
-    for (const [ev, name] of Object.entries(node.events || {})) found.push({ at: `${at}.${type}`, event: ev, name });
+    for (const [ev, name] of Object.entries(node.events || {})) found.push({ at: `${at}.${type}`, event: ev, name, node });
     (node.children || []).forEach((c, i) => walk(c, `${at}.${type || "?"}[${i}]`, found));
   };
 
@@ -295,8 +343,11 @@ async function run(source, { server = "", apps = null, maxHandlers = 40, millis 
     walk(tree, "widget", walked);
     vm.dispose();
     runtime.dispose();
+    addValidation(renders.slice(-6), true, errors, warnings, vopts);
     report.ok = errors.length === 0;
     report.errors = [...new Set(errors)];
+    report.warnings = [...new Set(warnings)];
+    if (collect) Object.assign(report, { trees: renders, theme: SAMPLE_ENV.theme });
     return report;
   }
 
@@ -322,7 +373,7 @@ async function run(source, { server = "", apps = null, maxHandlers = 40, millis 
         continue;
       }
       const sample = { type: h.event, eventType: h.event, data: h.event === "select" ? { index: 0, row: {} } : null,
-        value: h.event === "input" ? "sample" : h.event === "change" ? true : undefined };
+        value: h.event === "input" ? "sample" : h.event === "change" ? sampleChange(h.node) : undefined };
       running = `${h.at}: handler ${h.name} (${h.event})`;
       const r = evaluate(`globalThis[${JSON.stringify(h.name)}](${JSON.stringify(typed(sample))})`, "event.js");
       if (r.error) errors.push(`${h.at}: handler ${h.name} (${h.event}) threw: ${r.error}`);
@@ -334,7 +385,10 @@ async function run(source, { server = "", apps = null, maxHandlers = 40, millis 
   for (const api of unknownApis) warnings.push(`askHost("${api}") is not an Aseman host API: use the SDK (Aseman.*)`);
   vm.dispose();
   runtime.dispose();
-  return { ok: errors.length === 0, errors: [...new Set(errors)], warnings, renders: renders.length, handlers: tried.size };
+  addValidation(renders, false, errors, warnings, vopts);
+  const out = { ok: errors.length === 0, errors: [...new Set(errors)], warnings: [...new Set(warnings)], renders: renders.length, handlers: tried.size };
+  if (collect) Object.assign(out, { trees: renders, theme: SAMPLE_ENV.theme });
+  return out;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

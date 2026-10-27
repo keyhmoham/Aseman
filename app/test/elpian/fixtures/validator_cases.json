@@ -1,0 +1,671 @@
+{
+ "comment": "Trees with the validator's verdict and what Flutter does with them: deploy/sandbox-computer/appui/elpian/test/validate.test.mjs checks the first, app/test/elpian/dsl_layout_test.dart the second.",
+ "cases": [
+  {
+   "name": "Switch value as a string",
+   "tree": {
+    "type": "Switch",
+    "key": "s",
+    "props": {
+     "value": "true"
+    }
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "TextField hint as a number",
+   "tree": {
+    "type": "TextField",
+    "props": {
+     "hint": 42,
+     "style": {
+      "width": 200
+     }
+    }
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "Expanded flex 0",
+   "tree": {
+    "type": "Row",
+    "children": [
+     {
+      "type": "Expanded",
+      "props": {
+       "flex": 0
+      },
+      "children": [
+       {
+        "type": "Text",
+        "props": {
+         "text": "x"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "validator": "warning",
+   "flutter": "renders"
+  },
+  {
+   "name": "Expanded flex negative",
+   "tree": {
+    "type": "Row",
+    "children": [
+     {
+      "type": "Expanded",
+      "props": {
+       "flex": -1
+      },
+      "children": [
+       {
+        "type": "Text",
+        "props": {
+         "text": "x"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "validator": "warning",
+   "flutter": "renders"
+  },
+  {
+   "name": "TextField maxLines as a string",
+   "tree": {
+    "type": "TextField",
+    "props": {
+     "maxLines": "3",
+     "style": {
+      "width": 200
+     }
+    }
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "Expanded flex as a numeric string",
+   "tree": {
+    "type": "Row",
+    "children": [
+     {
+      "type": "Expanded",
+      "props": {
+       "flex": "2"
+      },
+      "children": [
+       {
+        "type": "Text",
+        "props": {
+         "text": "x"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "validator": "clean",
+   "flutter": "renders"
+  },
+  {
+   "name": "AnimatedSwitcher transitionType as a number",
+   "tree": {
+    "type": "AnimatedSwitcher",
+    "props": {
+     "transitionType": 1
+    },
+    "children": [
+     {
+      "type": "Text",
+      "props": {
+       "text": "x"
+      }
+     }
+    ]
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "a numeric key",
+   "tree": {
+    "type": "Text",
+    "key": 3,
+    "props": {
+     "text": "x"
+    }
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "a null child",
+   "tree": {
+    "type": "Column",
+    "children": [
+     {
+      "type": "Text",
+      "props": {
+       "text": "a"
+      }
+     },
+     null
+    ]
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "a TextField directly in a Row",
+   "tree": {
+    "type": "Row",
+    "children": [
+     {
+      "type": "TextField"
+     }
+    ]
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "Expanded in a Column in a ListView",
+   "tree": {
+    "type": "ListView",
+    "children": [
+     {
+      "type": "Column",
+      "children": [
+       {
+        "type": "Expanded",
+        "children": [
+         {
+          "type": "Text",
+          "props": {
+           "text": "x"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "Expanded in a Card",
+   "tree": {
+    "type": "Card",
+    "children": [
+     {
+      "type": "Expanded",
+      "children": [
+       {
+        "type": "Text",
+        "props": {
+         "text": "x"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "Positioned in a Column",
+   "tree": {
+    "type": "Column",
+    "children": [
+     {
+      "type": "Positioned",
+      "children": [
+       {
+        "type": "Text",
+        "props": {
+         "text": "x"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "Expanded with events",
+   "tree": {
+    "type": "Row",
+    "children": [
+     {
+      "type": "Expanded",
+      "events": {
+       "tap": "go"
+      },
+      "children": [
+       {
+        "type": "Text",
+        "props": {
+         "text": "x"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "duplicate sibling keys",
+   "tree": {
+    "type": "Column",
+    "children": [
+     {
+      "type": "Text",
+      "key": "k",
+      "props": {
+       "text": "a"
+      }
+     },
+     {
+      "type": "Text",
+      "key": "k",
+      "props": {
+       "text": "b"
+      }
+     }
+    ]
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "negative padding",
+   "tree": {
+    "type": "Container",
+    "props": {
+     "style": {
+      "padding": -4
+     }
+    },
+    "children": [
+     {
+      "type": "Text",
+      "props": {
+       "text": "x"
+      }
+     }
+    ]
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "justifyContent as a number",
+   "tree": {
+    "type": "Column",
+    "props": {
+     "style": {
+      "justifyContent": 1
+     }
+    },
+    "children": [
+     {
+      "type": "Text",
+      "props": {
+       "text": "x"
+      }
+     }
+    ]
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "style as a CSS string",
+   "tree": {
+    "type": "Text",
+    "props": {
+     "text": "x",
+     "style": "padding: 4px"
+    }
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "opacity out of range",
+   "tree": {
+    "type": "Opacity",
+    "props": {
+     "opacity": 2
+    },
+    "children": [
+     {
+      "type": "Text",
+      "props": {
+       "text": "x"
+      }
+     }
+    ]
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "a Scaffold in a ListView",
+   "tree": {
+    "type": "ListView",
+    "children": [
+     {
+      "type": "Scaffold",
+      "children": [
+       {
+        "type": "Text",
+        "props": {
+         "text": "x"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "ListTile in a Row",
+   "tree": {
+    "type": "Row",
+    "children": [
+     {
+      "type": "ListTile",
+      "props": {
+       "title": "t"
+      }
+     }
+    ]
+   },
+   "validator": "error",
+   "flutter": "throws"
+  },
+  {
+   "name": "Chart in a Row (fallback width)",
+   "tree": {
+    "type": "Row",
+    "children": [
+     {
+      "type": "Chart",
+      "props": {
+       "data": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ]
+   },
+   "validator": "warning",
+   "flutter": "renders"
+  },
+  {
+   "name": "several corner radii",
+   "tree": {
+    "type": "Container",
+    "props": {
+     "style": {
+      "borderRadius": "16 16 0 0",
+      "width": 40,
+      "height": 40,
+      "backgroundColor": "#888"
+     }
+    }
+   },
+   "validator": "error",
+   "flutter": "renders"
+  },
+  {
+   "name": "a misspelled prop",
+   "tree": {
+    "type": "Button",
+    "props": {
+     "text": "Go",
+     "varient": "tonal"
+    }
+   },
+   "validator": "warning",
+   "flutter": "renders"
+  },
+  {
+   "name": "an unknown icon",
+   "tree": {
+    "type": "Icon",
+    "props": {
+     "icon": "hom"
+    }
+   },
+   "validator": "warning",
+   "flutter": "renders"
+  },
+  {
+   "name": "a Dart-only Container prop",
+   "tree": {
+    "type": "Container",
+    "props": {
+     "padding": "16"
+    },
+    "children": [
+     {
+      "type": "Text",
+      "props": {
+       "text": "x"
+      }
+     }
+    ]
+   },
+   "validator": "warning",
+   "flutter": "renders"
+  },
+  {
+   "name": "an unknown style key",
+   "tree": {
+    "type": "Container",
+    "props": {
+     "style": {
+      "colour": "red"
+     }
+    },
+    "children": [
+     {
+      "type": "Text",
+      "props": {
+       "text": "x"
+      }
+     }
+    ]
+   },
+   "validator": "warning",
+   "flutter": "renders"
+  },
+  {
+   "name": "a missing data field",
+   "tree": {
+    "type": "Chart",
+    "props": {
+     "data": [
+      {
+       "m": 1
+      }
+     ],
+     "x": "month",
+     "y": "m"
+    }
+   },
+   "validator": "warning",
+   "flutter": "renders"
+  },
+  {
+   "name": "a number as text",
+   "tree": {
+    "type": "Text",
+    "props": {
+     "text": 42
+    }
+   },
+   "validator": "clean",
+   "flutter": "renders"
+  },
+  {
+   "name": "an icon size as a whole number",
+   "tree": {
+    "type": "Icon",
+    "props": {
+     "icon": "home",
+     "size": 24
+    }
+   },
+   "validator": "clean",
+   "flutter": "renders"
+  },
+  {
+   "name": "a canvas color string",
+   "tree": {
+    "type": "Canvas",
+    "props": {
+     "backgroundColor": "#ffffff",
+     "width": 40,
+     "height": 40,
+     "commands": []
+    }
+   },
+   "validator": "clean",
+   "flutter": "renders"
+  },
+  {
+   "name": "textAlign and overflow as strings",
+   "tree": {
+    "type": "Text",
+    "props": {
+     "text": "x",
+     "textAlign": "center",
+     "overflow": "ellipsis"
+    }
+   },
+   "validator": "clean",
+   "flutter": "renders"
+  },
+  {
+   "name": "a Stat and a Progress in a Row",
+   "tree": {
+    "type": "Row",
+    "children": [
+     {
+      "type": "Stat",
+      "props": {
+       "label": "L",
+       "value": 3
+      }
+     },
+     {
+      "type": "Progress",
+      "props": {
+       "value": 0.4
+      }
+     }
+    ]
+   },
+   "validator": "clean",
+   "flutter": "renders"
+  },
+  {
+   "name": "a TextField in Expanded in a Row",
+   "tree": {
+    "type": "Row",
+    "children": [
+     {
+      "type": "Expanded",
+      "children": [
+       {
+        "type": "TextField",
+        "key": "q",
+        "props": {
+         "label": "Search"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "validator": "clean",
+   "flutter": "renders"
+  },
+  {
+   "name": "Expanded in a Column with a height in a ListView",
+   "tree": {
+    "type": "ListView",
+    "children": [
+     {
+      "type": "Column",
+      "props": {
+       "style": {
+        "height": 200
+       }
+      },
+      "children": [
+       {
+        "type": "Expanded",
+        "children": [
+         {
+          "type": "Text",
+          "props": {
+           "text": "x"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "validator": "clean",
+   "flutter": "renders"
+  },
+  {
+   "name": "a Leaderboard in a Row (fallback width)",
+   "tree": {
+    "type": "Row",
+    "children": [
+     {
+      "type": "Leaderboard",
+      "props": {
+       "data": [
+        {
+         "name": "Ann",
+         "value": 3
+        },
+        {
+         "name": "Bo",
+         "value": 2
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "validator": "warning",
+   "flutter": "renders"
+  }
+ ]
+}

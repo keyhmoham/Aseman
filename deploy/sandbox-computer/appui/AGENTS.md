@@ -14,7 +14,7 @@ Aseman API (not invented credentials).
 
 | `ui` | Frontend | Rules |
 |---|---|---|
-| **`elpian`** (default) | An **Elpian program**: JavaScript on the Elpian QuickJS runtime inside the Aseman client, drawing native Flutter UI from JSON view trees | **`ELPIAN.md`** (and `vendor/aseman-elpian/`). Requirements 2–4 and 6 below are web rules: skip them; ELPIAN.md replaces them. |
+| **`elpian`** (default) | An **Elpian program**: JavaScript on the Elpian QuickJS runtime inside the Aseman client, drawing native Flutter UI from JSON view trees | **`ELPIAN.md`** (and `vendor/aseman-elpian/`). Requirements 2–4 below are web rules: skip them; ELPIAN.md replaces them. Requirement 6 (design) applies, met with Elpian's Material 3 Expressive nodes (ELPIAN.md, Design). |
 | `web` | A web frontend (HTML/CSS/JS in a webview) | Only when the person explicitly asked for web technology. Requirements 2–6 below apply. |
 
 Every app, whatever its `ui`, also has a **phone widget**: a native Elpian
@@ -24,9 +24,13 @@ program's `widget`; with `ui: web` it is a small Elpian program of its own
 (`elpian/widget/`, `"widget": "elpian/widget.js"` in `READY.json`).
 
 Before writing an Elpian frontend, read `ELPIAN.md` in full and look at
-`vendor/aseman-elpian/` (the SDK, the OpenUI renderer and `nodes.json`):
-use only the node types, props and host APIs they define. The backend is the
-same in both cases.
+`vendor/aseman-elpian/` (the SDK, the OpenUI renderer, `nodes.json` and
+`examples/showcase.js`, a complete reference app in Material 3 Expressive):
+use only the node types, props and host APIs they define. Validate the view
+trees you write with the **UI DSL validator**: your `elpian_*` tools
+(`elpian_describe`, `elpian_icons`, `elpian_validate`,
+`elpian_validate_program`) or `vendor/aseman-elpian/validate.mjs` (ELPIAN.md,
+Validating view trees). The backend is the same in both cases.
 
 ## Wiring to the space (read first)
 
@@ -205,12 +209,36 @@ same in both cases.
      replies (see microtool descriptions: “clean text”, “markdown”), not
      invented REST payloads. Empty UI after a successful call usually means
      the parser expected the wrong shape.
-6. **Design**: polished UI (M3E by default — §2). Responsive for desk card +
-   phone widths. One clear visual direction. OpenUI islands included.
+6. **Design (every app)**: **Material 3 Expressive** — with `@material/web`
+   on the web (§2), with Elpian's M3E nodes in an Elpian app (ELPIAN.md,
+   Design). The bar is a polished, modern product, not a demo:
+
+   - **Hierarchy**: each screen leads with one thing — an emphasized
+     headline, the key number or result made big, one primary action.
+     Everything else is grouped under clear titles and recedes.
+   - **Tonal, rounded, roomy**: layered surface-container tones instead of
+     borders and shadows; large corners (20–28) on containers, round
+     controls; an 8-pt rhythm with generous space between groups.
+   - **Type roles** (display / headline / title / body / label, emphasized
+     for the moments that matter), never one size and bold everywhere.
+   - **The person's theme**: colors from M3 roles and the accent, one accent
+     moment per view; status always with an icon or label.
+   - **Real components**: icon buttons, segmented buttons, chips, search
+     bars, list groups, navigation bars, FABs, loading indicators —
+     Material icons, never emoji or text glyphs as icons.
+   - **Motion and states**: spring/emphasized motion on state changes; a
+     designed loading (skeleton or loading indicator), empty (icon,
+     headline, one line, the action that fills it) and error state (human
+     message + retry) for every view that loads.
+   - **Responsive** for desk windows and phone widths; **one distinctive
+     touch** that makes the app memorable (a hero visual, a playful detail,
+     a clever layout), never a generic form-and-table page or
+     purple-gradient "AI slop". OpenUI islands included.
 7. **Tests**: write automated tests (unit and/or API), including theme
-   adaption and OpenUI helpers where used (web), or the frontend's logic and
-   `vendor/aseman-elpian/check.mjs` (Elpian). **Run them**. Do not claim ready
-   if tests fail.
+   adaption and OpenUI helpers where used (web), or the frontend's logic,
+   `vendor/aseman-elpian/check.mjs` and the UI DSL validator
+   (`elpian_validate_program`, no errors or warnings) for Elpian — a web app's
+   phone widget too. **Run them**. Do not claim ready if tests fail.
 8. **Listen**: bind `0.0.0.0` on the port in `JOB.json` (`port`).
 9. **READY.json**: only after tests pass, write this file in the project root:
 

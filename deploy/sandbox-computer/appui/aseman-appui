@@ -258,16 +258,46 @@ JavaScript on the Elpian QuickJS runtime inside the Aseman client, drawing
 native UI from JSON view trees. Read ELPIAN.md in full first and study
 vendor/aseman-elpian/ (aseman-elpian.js SDK, openui-elpian.js, nodes.json).
 Write it in elpian/src/*.js with App.create + Aseman.* (no DOM, no fetch, no
-modules); use the UI kit nodes for data views; mix OpenUI agent islands
+modules); use the UI kit nodes for data views and app pieces — charts
+(Chart, Funnel, Waterfall, Sankey, Gantt, BoxPlot, Sunburst,
+CalendarHeatmap, …), tables (DataGrid, PivotTable, Leaderboard) and widgets
+(Tabs, Calendar, Kanban, Chat, Carousel, Stepper, Markdown, Countdown,
+QRCode, EmptyState, …) rather than hand-building them from boxes; mix OpenUI agent islands
 (OpenUI.panel / action / query) with programmed UI where judgment helps.
+Design it in Material 3 Expressive, following ELPIAN.md's "Design" section:
+study vendor/aseman-elpian/examples/showcase.js (a complete reference app)
+first. Every screen gets a clear hierarchy (an emphasized headline, one
+primary action, the key fact made big on a tonal or accent card), Text
+type roles (variant) instead of ad-hoc font sizes, tonal surfaces
+(Card variant/tone, ListGroup + ListTile) instead of borders, Material icon
+names (never emoji or glyphs), M3E controls (Button variants and sizes,
+IconButton, SegmentedButton, Chip, SearchBar, NavigationBar, FAB), motion
+for state changes, and designed loading, empty and error states. Make it
+look like a polished, modern product someone would want to use daily — give
+it one distinctive idea of its own (a hero visual, a playful detail, a
+clever layout), not a generic form-and-table page.
 Give App.create its phone widget (ELPIAN.md, The phone widget): a glanceable,
 live view of the few facts that matter for this app's use case, refreshed on
 a timer, designed for small, medium and large tiles.
+Validate every view tree you write with the Elpian UI DSL validator — your
+elpian_* tools (an MCP server), or the same thing on the command line:
+  elpian_describe / node vendor/aseman-elpian/validate.mjs --describe Button,ListTile
+    before using a node: its props, events, children, parents, layout needs;
+  elpian_icons / grep icons.json to pick icon names;
+  elpian_validate / node vendor/aseman-elpian/validate.mjs tree.json
+    on any tree or component you are unsure of (props, styles, events, keys,
+    parent-child relations, layout constraints, widget rules, design);
+  elpian_validate_program / node vendor/aseman-elpian/validate.mjs --program elpian/app.js --server http://127.0.0.1:$port
+    on the bundle, which runs it, taps its handlers and validates every
+    render as the app and as the phone widget.
+Fix every error (each is a crash, a blank or a wrong render on people's
+phones) and the warnings; act on the design notes.
 Your server serves GET /elpian/app.js (the bundle) and its API. Bundle with
 node vendor/aseman-elpian/bundle.mjs . and check with
 node vendor/aseman-elpian/check.mjs elpian/app.js --apps APPS.json --server http://127.0.0.1:$port
-(with the server running) until it passes. AGENTS.md's web rules (M3E,
-web theming, the web OpenUI kit) do not apply.
+(with the server running) until it passes (it includes the validator). AGENTS.md's web-only rules
+(@material/web, web theming, the web OpenUI kit) do not apply; its design
+bar does, met with Elpian nodes.
 FRONT
 )
   else
@@ -282,6 +312,8 @@ widget) showing the few live facts that matter for this app's use case.
 Your server serves GET /elpian/widget.js; bundle it with
 node vendor/aseman-elpian/bundle.mjs . --widget and check it with
 node vendor/aseman-elpian/check.mjs elpian/widget.js --widget-only --apps APPS.json --server http://127.0.0.1:$port
+(validate its trees with your elpian_validate_program tool, widgetOnly: true,
+or node vendor/aseman-elpian/validate.mjs --program elpian/widget.js --widget-only).
 FRONT
 )
   fi
@@ -308,7 +340,10 @@ Work in this order:
    (billed to the person who asked for the app).
    Use only the apps, microtools, argument shapes and agents APPS.json lists.
    Decide what the phone widget shows: the live facts someone checks at a
-   glance for this app. Write the plan to PLAN.md.
+   glance for this app. Decide the design: the hero of each screen, the
+   layout on a phone and on a wide desk window, the components, the
+   loading / empty / error states, and one distinctive touch. Write the plan
+   to PLAN.md.
 2. Build the fullstack project (frontend + backend) as described above.
 3. Test: unit/API tests for your server, the theme applicator, parsing of
    microtool results (fixtures shaped like real replies) and the handling of
@@ -331,7 +366,10 @@ The app in this directory is not ready. The platform checked it and found:
 $problem
 
 Find the root cause and fix it (AGENTS.md, ELPIAN.md for an Elpian frontend,
-BRIEF.md, CHANGES.md and PLAN.md describe the app). Run the tests again, make sure the start command serves on
+BRIEF.md, CHANGES.md and PLAN.md describe the app). For an Elpian frontend,
+the elpian_validate_program tool (or node vendor/aseman-elpian/validate.mjs
+--program elpian/app.js --server http://127.0.0.1:$port) shows each problem in
+the view trees with where it is and how to fix it. Run the tests again, make sure the start command serves on
 0.0.0.0:$port and GET / answers, then rewrite READY.json.
 PROMPT
 }
@@ -365,10 +403,14 @@ cmd_build() {
   fi
   if [[ -d "$ROOT/elpian" ]]; then
     mkdir -p "$dir/vendor/aseman-elpian"
-    for f in aseman-elpian.js openui-elpian.js bundle.mjs check.mjs nodes.json ELPIAN.md; do
+    for f in aseman-elpian.js openui-elpian.js bundle.mjs check.mjs nodes.json ELPIAN.md validate.mjs validate-mcp.mjs schema.mjs icons.json; do
       [[ -f "$ROOT/elpian/$f" ]] && cp -f "$ROOT/elpian/$f" "$dir/vendor/aseman-elpian/$f"
     done
     [[ -f "$ROOT/elpian/ELPIAN.md" ]] && cp -f "$ROOT/elpian/ELPIAN.md" "$dir/ELPIAN.md"
+    if [[ -d "$ROOT/elpian/examples" ]]; then
+      mkdir -p "$dir/vendor/aseman-elpian/examples"
+      cp -a "$ROOT/elpian/examples/." "$dir/vendor/aseman-elpian/examples/"
+    fi
   fi
   if [[ -d "$ROOT/sdk" ]]; then
     mkdir -p "$dir/vendor/aseman-sdk"

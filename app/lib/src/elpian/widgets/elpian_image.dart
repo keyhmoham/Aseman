@@ -7,7 +7,7 @@ class ElpianImage {
   static Widget build(ElpianNode node, List<Widget> children) {
     final src = node.props['src'] as String? ?? '';
     final fit = parseBoxFit(node.props['fit']) ?? BoxFit.contain;
-    final alt = node.props['alt'] as String?;
+    final alt = node.props['alt'] == null ? null : '${node.props['alt']}';
 
     // Any source the engine or its host loads (network with the host's
     // credentials, the host's own files, data: URIs, SVG, assets).

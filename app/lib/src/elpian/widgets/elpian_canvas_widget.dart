@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../css/css_parser.dart';
 
 import '../canvas/canvas_widget.dart';
 import '../models/elpian_node.dart';
@@ -7,7 +8,9 @@ class ElpianCanvasWidget {
   static Widget build(ElpianNode node, List<Widget> children) {
     final width = _toDouble(node.props['width']);
     final height = _toDouble(node.props['height']);
-    final backgroundColor = node.props['backgroundColor'] as Color?;
+    final bg = node.props['backgroundColor'];
+    // A Color from Dart callers, a CSS color string from JSON.
+    final backgroundColor = bg is Color ? bg : CSSParser.parseColor(bg);
 
     final commands = _normalizeCommands(node.props['commands']);
 

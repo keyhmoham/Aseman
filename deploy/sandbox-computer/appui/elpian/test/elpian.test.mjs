@@ -161,7 +161,8 @@ test("agent replies become OpenUI or markdown nodes", () => {
   const card = ctx.OpenUI.fromReply('Here:\n```openui\n{"c":"Stat","p":{"label":"Users","value":"42"}}\n```');
   assert.equal(card.type, "Stat");
   const md = ctx.OpenUI.fromReply("# Plan\n\n1. one\n2. two\n\nDone **now**.");
-  assert.deepEqual(types(md).filter((t) => t === "Text").length >= 4, true);
+  assert.equal(md.type, "Markdown");
+  assert.match(md.props.text, /Done \*\*now\*\*/);
   assert.equal(ctx.OpenUI.tryParse("no json"), null);
 });
 
@@ -180,7 +181,7 @@ test("requests settle tasks, and failures reach catch", () => {
 test("nodes.json lists exactly what the engine and the UI kit draw", () => {
   const engine = fs.readFileSync(path.join(repo, "app/lib/src/elpian/core/elpian_engine.dart"), "utf8");
   const kitSrc = fs.readFileSync(path.join(repo, "app/lib/src/features/tools/ui_kit/kit.dart"), "utf8");
-  const registered = new Set([...engine.matchAll(/_registry\.register\('([^']+)'/g)].map((m) => m[1]));
+  const registered = new Set([...engine.matchAll(/_registry\.register\(\s*'([^']+)'/g)].map((m) => m[1]));
   const kitNodes = new Set([...kitSrc.matchAll(/^\s+'([A-Z][A-Za-z]+)':\s*\(/gm)].map((m) => m[1]));
   assert.deepEqual([...new Set([...NODES.elpian, ...NODES.html])].sort(), [...registered].sort());
   assert.deepEqual([...NODES.kit].sort(), [...kitNodes].sort());
@@ -211,4 +212,44 @@ test("every app ships a glanceable, live phone widget", async () => {
   const fullOnly = await check(SDK + `App.create({ view: function () { return { type: "Text", props: { text: "full" } }; },
     widget: function () { return { type: "Text", props: { text: "w" } }; } });`);
   assert.equal(fullOnly.ok, true);
+});
+
+test("the Material 3 Expressive showcase passes the check, as an app and as a widget", async () => {
+  const tasks = [
+    { id: 1, title: "Ship", owner: "Ann", due: "today", done: false, priority: "high" },
+    { id: 2, title: "Write docs", owner: "Bo", due: "Fri", done: true, priority: "normal" },
+  ];
+  const srv = http.createServer((req, res) => {
+    req.resume();
+    req.on("end", () => {
+      res.writeHead(req.url.startsWith("/api/tasks") ? 200 : 404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ tasks }));
+    });
+  });
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  try {
+    const src = SDK + "\n;\n" + fs.readFileSync(path.join(kit, "examples", "showcase.js"), "utf8");
+    const report = await check(src, { server: `http://127.0.0.1:${srv.address().port}`, widget: true });
+    assert.equal(report.ok, true, report.errors.join("\n"));
+    assert.ok(report.widget.requests >= 1, "the widget loads live data");
+  } finally {
+    srv.close();
+  }
+});
+
+test("OpenUI draws M3E buttons and icons, not class names or glyph text", () => {
+  const { ctx } = sdk();
+  const app = { state: {}, render() {}, handler: (k) => "h_" + k };
+  const node = ctx.OpenUI.render({ c: "Stack", children: [
+    { c: "Button", p: { label: "Go", icon: "send" } },
+    { c: "Button", p: { label: "Later", variant: "secondary" } },
+    { c: "Pagination", p: { page: 2, pages: 3 } },
+    { c: "Tabs", p: { items: [{ c: "TabItem", p: { trigger: "One" } }, { c: "TabItem", p: { trigger: "Two" } }] } },
+    { c: "List", p: { items: [{ label: "Row", icon: "event" }] } },
+  ] }, { app });
+  const json = JSON.stringify(node);
+  assert.doesNotMatch(json, /className/);
+  assert.match(json, /"variant":"filled","icon":"send"/);
+  assert.match(json, /"variant":"tonal"/);
+  for (const t of ["Pagination", "Tabs", "ListGroup", "ListTile"]) assert.ok(types(node).includes(t), `uses ${t}`);
 });

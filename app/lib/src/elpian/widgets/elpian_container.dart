@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/elpian_node.dart';
+import 'elpian_expressive.dart';
 import '../css/css_properties.dart';
 
 class ElpianContainer {
@@ -16,12 +17,12 @@ class ElpianContainer {
     }
 
     Widget result = Container(
-      width: node.props['width'] as double?,
-      height: node.props['height'] as double?,
-      padding: node.props['padding'] as EdgeInsets?,
-      margin: node.props['margin'] as EdgeInsets?,
-      alignment: node.props['alignment'] as Alignment?,
-      decoration: node.props['decoration'] as BoxDecoration?,
+      width: numProp(node, 'width'),
+      height: numProp(node, 'height'),
+      padding: _as<EdgeInsets>(node.props['padding']),
+      margin: _as<EdgeInsets>(node.props['margin']),
+      alignment: _as<Alignment>(node.props['alignment']),
+      decoration: _as<BoxDecoration>(node.props['decoration']),
       child: child,
     );
 
@@ -32,3 +33,6 @@ class ElpianContainer {
     return result;
   }
 }
+
+/// Dart-typed props (from Dart callers); JSON trees set these through style.
+T? _as<T>(Object? v) => v is T ? v : null;

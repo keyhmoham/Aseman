@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../core/event_enabled_widget.dart';
 import '../core/node_events.dart';
 import '../models/elpian_node.dart';
+import 'elpian_expressive.dart';
+import 'elpian_icon.dart';
 
 /// `Scaffold`: the Material page structure, with every slot filled from
 /// children.
@@ -58,6 +60,7 @@ class ElpianScaffold {
           break;
         case 'floatingActionButton':
         case 'FloatingActionButton':
+        case 'FAB':
           fab = widget;
           break;
         case 'bottomNavigationBar':
@@ -185,7 +188,7 @@ class ElpianDrawer {
     return Drawer(
       backgroundColor: node.style?.backgroundColor,
       width: node.style?.width,
-      elevation: (node.props['elevation'] as num?)?.toDouble(),
+      elevation: numProp(node, 'elevation')?.toDouble(),
       child: children.length == 1
           ? children.first
           : ListView(padding: EdgeInsets.zero, children: children),
@@ -193,50 +196,109 @@ class ElpianDrawer {
   }
 }
 
-/// `FloatingActionButton`: dispatches `tap`/`click` when pressed.
+/// `FloatingActionButton` (also `FAB`): dispatches `tap`/`click` when
+/// pressed.
 ///
-/// Content: the children, else `props.text`/`label`. With both an icon child
-/// (or `props.icon` text) and a label it is the extended form. Props:
-/// `tooltip`, `mini`, `elevation`, `heroTag`; `style.backgroundColor` and
-/// `style.color` colour it.
+/// Content: the children, else `props.icon` (a Material icon name, default
+/// `add`) and `props.text`/`label` (with a label it is the extended FAB).
+/// Props: `size` — `small`, `medium` (default), `large`; `variant` —
+/// `primary` (default: primary container), `secondary`, `tertiary`,
+/// `surface`; `tooltip`, `elevation`, `heroTag`, `disabled`.
+/// `style.backgroundColor` and `style.color` colour it.
 class ElpianFloatingActionButton {
   static Widget build(ElpianNode node, List<Widget> children) {
     final e = NodeEvents(node);
     final label = (node.props['label'] ?? node.props['text'])?.toString();
     final enabled = node.props['disabled'] != true;
     final onPressed = enabled ? e.activate : null;
-    final bg = node.style?.backgroundColor;
-    final fg = node.style?.color;
     final tooltip = node.props['tooltip']?.toString();
-    final elevation = (node.props['elevation'] as num?)?.toDouble();
+    final elevation = numProp(node, 'elevation')?.toDouble();
     final heroTag = node.props['heroTag'] ?? 'fab:${e.id}';
+    final size =
+        '${node.props['size'] ?? (node.props['mini'] == true ? 'small' : 'medium')}';
 
-    if (label != null && label.isNotEmpty) {
-      return FloatingActionButton.extended(
-        onPressed: onPressed,
-        backgroundColor: bg,
-        foregroundColor: fg,
-        tooltip: tooltip,
-        elevation: elevation,
-        heroTag: heroTag,
-        icon: children.isNotEmpty ? children.first : null,
-        label: Text(label),
-      );
-    }
-    final child = children.isEmpty
-        ? const Icon(Icons.add)
-        : children.length == 1
-            ? children.first
-            : Row(mainAxisSize: MainAxisSize.min, children: children);
-    return FloatingActionButton(
-      onPressed: onPressed,
-      backgroundColor: bg,
-      foregroundColor: fg,
-      tooltip: tooltip,
-      elevation: elevation,
-      heroTag: heroTag,
-      mini: node.props['mini'] == true,
-      child: child,
+    return Builder(
+      builder: (context) {
+        final scheme = Theme.of(context).colorScheme;
+        final (Color bg, Color fg) = switch (node.props['variant']) {
+          'secondary' => (
+            scheme.secondaryContainer,
+            scheme.onSecondaryContainer,
+          ),
+          'tertiary' => (scheme.tertiaryContainer, scheme.onTertiaryContainer),
+          'surface' => (scheme.surfaceContainerHigh, scheme.primary),
+          'filled' => (scheme.primary, scheme.onPrimary),
+          _ => (scheme.primaryContainer, scheme.onPrimaryContainer),
+        };
+        final background = node.style?.backgroundColor ?? bg;
+        final foreground = node.style?.color ?? fg;
+        final iconSize = switch (size) {
+          'large' => 36.0,
+          'small' => 20.0,
+          _ => 24.0,
+        };
+        final icon = children.isNotEmpty
+            ? (children.length == 1
+                  ? children.first
+                  : Row(mainAxisSize: MainAxisSize.min, children: children))
+            : Icon(
+                ElpianIcon.iconData('${node.props['icon'] ?? 'add'}') ??
+                    Icons.add,
+                size: iconSize,
+              );
+
+        if (label != null && label.isNotEmpty) {
+          return ExpressivePress(
+            enabled: enabled,
+            child: FloatingActionButton.extended(
+              onPressed: onPressed,
+              backgroundColor: background,
+              foregroundColor: foreground,
+              tooltip: tooltip,
+              elevation: elevation,
+              heroTag: heroTag,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              icon: icon,
+              label: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          );
+        }
+        final Widget fab = switch (size) {
+          'large' => FloatingActionButton.large(
+            onPressed: onPressed,
+            backgroundColor: background,
+            foregroundColor: foreground,
+            tooltip: tooltip,
+            elevation: elevation,
+            heroTag: heroTag,
+            child: icon,
+          ),
+          'small' => FloatingActionButton.small(
+            onPressed: onPressed,
+            backgroundColor: background,
+            foregroundColor: foreground,
+            tooltip: tooltip,
+            elevation: elevation,
+            heroTag: heroTag,
+            child: icon,
+          ),
+          _ => FloatingActionButton(
+            onPressed: onPressed,
+            backgroundColor: background,
+            foregroundColor: foreground,
+            tooltip: tooltip,
+            elevation: elevation,
+            heroTag: heroTag,
+            child: icon,
+          ),
+        };
+        return ExpressivePress(enabled: enabled, child: fab);
+      },
     );
   }
 }

@@ -335,7 +335,7 @@ class _KitLogViewState extends State<KitLogView> {
         ),
       if (shown.isEmpty) Padding(padding: const EdgeInsets.all(12), child: Text(asText(widget.props['emptyText'] ?? 'No log lines'), style: mono.copyWith(color: p.textMuted))),
     ]);
-    final maxH = asDouble(widget.props['maxHeight'], 320);
+    final maxH = asSize(widget.props['maxHeight'], 320);
     return Container(
       decoration: BoxDecoration(color: s.surfaceContainerHighest.withValues(alpha: .6), borderRadius: BorderRadius.circular(16)),
       clipBehavior: Clip.antiAlias,
@@ -532,7 +532,7 @@ class _KitDiffViewState extends State<KitDiffView> {
           ]),
         ),
         ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: asDouble(widget.props['maxHeight'], 480)),
+          constraints: BoxConstraints(maxHeight: asSize(widget.props['maxHeight'], 480)),
           child: SingleChildScrollView(padding: const EdgeInsets.symmetric(vertical: 4), child: body),
         ),
       ]),

@@ -37,10 +37,9 @@ class ElpianCanvasWidget {
     return const [];
   }
 
+  /// A size: a finite, non-negative number, else null.
   static double? _toDouble(dynamic value) {
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.tryParse(value);
-    return null;
+    final v = value is num ? value.toDouble() : (value is String ? double.tryParse(value) : null);
+    return v == null || v < 0 || !v.isFinite ? null : v;
   }
 }

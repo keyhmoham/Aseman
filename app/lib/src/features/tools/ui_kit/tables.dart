@@ -3,6 +3,7 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:aseman/src/elpian/core/lenient.dart';
 import 'package:flutter/material.dart';
 
 import 'charts/cartesian_chart.dart' show ChartSelect;
@@ -63,7 +64,7 @@ class PivotTable extends StatelessWidget {
       rowKeys.sort();
       colKeys.sort();
     }
-    if (rowKeys.isEmpty) return ChartFrame(title: props['title'] as String?, child: const NoData());
+    if (rowKeys.isEmpty) return ChartFrame(title: looseStr(props['title']), child: const NoData());
     final values = {for (final e in cells.entries) e.key: _aggregate(e.value, how)};
     final finite = values.values.whereType<double>();
     final lo = finite.isEmpty ? 0.0 : finite.reduce(math.min), hi = finite.isEmpty ? 1.0 : finite.reduce(math.max);
@@ -121,8 +122,8 @@ class PivotTable extends StatelessWidget {
       ],
     );
     return ChartFrame(
-      title: props['title'] as String?,
-      subtitle: props['subtitle'] as String?,
+      title: looseStr(props['title']),
+      subtitle: looseStr(props['subtitle']),
       child: LayoutBuilder(builder: (context, box) {
         Widget out = ClipRRect(
           borderRadius: BorderRadius.circular(16),
@@ -134,7 +135,7 @@ class PivotTable extends StatelessWidget {
         if (box.maxWidth.isFinite) {
           out = SingleChildScrollView(scrollDirection: Axis.horizontal, child: ConstrainedBox(constraints: BoxConstraints(minWidth: box.maxWidth), child: out));
         }
-        final maxH = asNum(props['maxHeight'])?.toDouble();
+        final maxH = asSizeOrNull(props['maxHeight']);
         if (maxH != null) out = ConstrainedBox(constraints: BoxConstraints(maxHeight: maxH), child: SingleChildScrollView(child: out));
         return out;
       }),
@@ -158,15 +159,15 @@ class Leaderboard extends StatelessWidget {
     final nf = '${props['label'] ?? props['name'] ?? 'name'}', vf = '${props['value'] ?? 'value'}';
     final rows = asRows(props['data']).indexed.toList()
       ..sort((a, b) => (asNum(field(b.$2, vf)) ?? 0).compareTo(asNum(field(a.$2, vf)) ?? 0));
-    final shown = rows.take(asInt(props['max'], 10)).toList();
-    final format = props['format'] as String?;
-    if (shown.isEmpty) return ChartFrame(title: props['title'] as String?, child: const NoData());
+    final shown = rows.take(asCount(props['max'], 10)).toList();
+    final format = looseStr(props['format']);
+    if (shown.isEmpty) return ChartFrame(title: looseStr(props['title']), child: const NoData());
     final top = (asNum(field(shown.first.$2, vf)) ?? 0).toDouble();
     final highlight = props['highlight'] == null ? null : asText(props['highlight']);
     final bar = asBool(props['showBar'], true);
     return ChartFrame(
-      title: props['title'] as String?,
-      subtitle: props['subtitle'] as String?,
+      title: looseStr(props['title']),
+      subtitle: looseStr(props['subtitle']),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
         for (final (rank, (i, r)) in shown.indexed)
           () {
@@ -197,7 +198,7 @@ class Leaderboard extends StatelessWidget {
                             style: VizText.value(p).copyWith(fontWeight: FontWeight.w800, color: rank < 3 ? p.onTonal(_medals[rank]) : p.textSecondary)),
                       ),
                       const SizedBox(width: 10),
-                      KitAvatar(name: name, url: (r['avatar'] ?? r['image'] ?? r['url']) as String?, size: 36),
+                      KitAvatar(name: name, url: looseStr(r['avatar'] ?? r['image'] ?? r['url']), size: 36),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [

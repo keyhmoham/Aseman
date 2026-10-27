@@ -4,7 +4,7 @@ import 'elpian_expressive.dart';
 
 class ElpianSpacer {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final flex = numProp(node, 'flex')?.toInt() ?? 1;
+    final flex = flexProp(node);
 
     return Spacer(flex: flex);
   }

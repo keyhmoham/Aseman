@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import '../models/elpian_node.dart';
+
+import '../core/lenient.dart';
 import '../css/css_properties.dart';
 import '../models/css_style.dart';
+import '../models/elpian_node.dart';
 
 class HtmlP {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final text = node.props['text'] as String? ?? '';
+    final text = looseStr(node.props['text']) ?? '';
 
     final mergedStyle = CSSStyle(
       margin: node.style?.margin ?? const EdgeInsets.symmetric(vertical: 8.0),

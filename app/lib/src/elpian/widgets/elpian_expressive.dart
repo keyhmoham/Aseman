@@ -224,6 +224,19 @@ double? numProp(ElpianNode node, String key) {
   return null;
 }
 
+/// A prop as a size: a finite, non-negative double, else null (Flutter
+/// asserts on negative sizes and factors).
+double? sizeProp(ElpianNode node, String key) {
+  final v = numProp(node, key);
+  return v == null || v < 0 || !v.isFinite ? null : v;
+}
+
+/// A `flex` prop: a positive int, else [fallback].
+int flexProp(ElpianNode node, [int fallback = 1]) {
+  final v = numProp(node, 'flex');
+  return v == null || !v.isFinite || v < 1 ? fallback : v.round();
+}
+
 /// A prop as a bool (`true`, `"true"`), or null when absent.
 bool? boolProp(ElpianNode node, String key) {
   final v = node.props[key];

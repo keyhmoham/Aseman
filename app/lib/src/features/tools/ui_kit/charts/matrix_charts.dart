@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../elpian/core/lenient.dart';
 import '../palette.dart';
 import '../values.dart';
 import 'cartesian_chart.dart' show ChartSelect;
@@ -30,7 +31,7 @@ class _HeatmapState extends State<Heatmap> {
   Widget build(BuildContext context) {
     final p = VizPalette.of(context);
     final props = widget.props;
-    final format = props['format'] as String?;
+    final format = looseStr(props['format']);
     // Either a matrix (rows × columns labels + values[r][c]) or long rows of
     // {x, y, value}.
     var rowLabels = [
@@ -67,8 +68,8 @@ class _HeatmapState extends State<Heatmap> {
       final vf = '${props['value'] ?? 'value'}';
       final xs = <String>[], ys = <String>[];
       for (final row in asRows(props['data'])) {
-        final x = formatValue(field(row, xf), props['xFormat'] as String?);
-        final y = formatValue(field(row, yf), props['yFormat'] as String?);
+        final x = formatValue(field(row, xf), looseStr(props['xFormat']));
+        final y = formatValue(field(row, yf), looseStr(props['yFormat']));
         if (!xs.contains(x)) xs.add(x);
         if (!ys.contains(y)) ys.add(y);
         final v = asNum(field(row, vf))?.toDouble();
@@ -79,7 +80,7 @@ class _HeatmapState extends State<Heatmap> {
     }
     if (cells.isEmpty) {
       return ChartFrame(
-          title: props['title'] as String?, child: const NoData());
+          title: looseStr(props['title']), child: const NoData());
     }
     final lo = cells.values.reduce(math.min),
         hi = cells.values.reduce(math.max);
@@ -99,8 +100,8 @@ class _HeatmapState extends State<Heatmap> {
     final height = rowLabels.length * cellH + 22;
 
     return ChartFrame(
-      title: props['title'] as String?,
-      subtitle: props['subtitle'] as String?,
+      title: looseStr(props['title']),
+      subtitle: looseStr(props['subtitle']),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -170,7 +171,7 @@ class _HeatmapState extends State<Heatmap> {
                                 '${rowLabels[hover.$1]} · ${colLabels[hover.$2]}',
                             items: [
                               LegendItem(
-                                  props['valueLabel'] as String? ?? 'Value',
+                                  looseStr(props['valueLabel']) ?? 'Value',
                                   colorOf(cells[hover]!),
                                   value: formatValue(cells[hover], format)),
                             ],
@@ -329,10 +330,10 @@ class _TreemapState extends State<Treemap> {
     final rows = asRows(props['data']);
     final lf = '${props['label'] ?? 'label'}',
         vf = '${props['value'] ?? 'value'}';
-    final gf = props['group'] as String?;
-    final cf = props['colorBy'] as String?;
-    final format = props['format'] as String?;
-    final colorFormat = props['colorFormat'] as String?;
+    final gf = looseStr(props['group']);
+    final cf = looseStr(props['colorBy']);
+    final format = looseStr(props['format']);
+    final colorFormat = looseStr(props['colorFormat']);
     final height = asDouble(props['height'], 260).clamp(100, 900).toDouble();
 
     final groups = <String>[];
@@ -361,13 +362,13 @@ class _TreemapState extends State<Treemap> {
     }
     if (tiles.isEmpty) {
       return ChartFrame(
-          title: props['title'] as String?, child: NoData(height: height));
+          title: looseStr(props['title']), child: NoData(height: height));
     }
     tiles.sort((a, b) => b.value.compareTo(a.value));
 
     return ChartFrame(
-      title: props['title'] as String?,
-      subtitle: props['subtitle'] as String?,
+      title: looseStr(props['title']),
+      subtitle: looseStr(props['subtitle']),
       legend: groups.length > 1
           ? [
               for (var i = 0; i < groups.length; i++)
@@ -424,11 +425,11 @@ class _TreemapState extends State<Treemap> {
                     child: CustomSingleChildLayout(
                       delegate: TooltipLayout(_pointer!),
                       child: ChartTooltip(header: tiles[hover].label, items: [
-                        LegendItem(props['valueLabel'] as String? ?? 'Value',
+                        LegendItem(looseStr(props['valueLabel']) ?? 'Value',
                             tiles[hover].color,
                             value: formatValue(tiles[hover].value, format)),
                         if (cf != null)
-                          LegendItem(props['colorLabel'] as String? ?? cf,
+                          LegendItem(looseStr(props['colorLabel']) ?? cf,
                               tiles[hover].color,
                               value: formatValue(
                                   field(rows[tiles[hover].index], cf),

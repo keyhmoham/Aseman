@@ -20,6 +20,7 @@ library;
 import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
 
+import 'package:aseman/src/elpian/core/lenient.dart';
 import 'package:flutter/widgets.dart';
 
 /// The platform view type registered for a Godot surface.
@@ -41,7 +42,7 @@ void _register() {
   ui_web.platformViewRegistry.registerViewFactory(
     godotWebViewType,
     (int viewId, {Object? params}) {
-      final surfaceId = params is Map ? (params['surfaceId'] as int? ?? 0) : 0;
+      final surfaceId = params is Map ? (looseInt(params['surfaceId']) ?? 0) : 0;
       final element = _surfaceFactory?.callAsFunction(null, surfaceId.toJS);
       // No glue on the page: an empty box, so the tree still builds. Not
       // normally reached — `Scene3D` only asks for a viewport once the binding

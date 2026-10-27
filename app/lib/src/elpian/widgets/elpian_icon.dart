@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
+
+import '../core/lenient.dart';
+import '../css/css_properties.dart';
 import '../models/elpian_node.dart';
 import 'elpian_expressive.dart';
-import '../css/css_properties.dart';
 import 'svg_path.dart';
 
 class ElpianIcon {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final iconName = node.props['icon'] as String? ?? 'star';
-    final size = node.style?.fontSize ?? numProp(node, 'size') ?? 24.0;
+    final iconName = looseStr(node.props['icon']) ?? 'star';
+    final size = node.style?.fontSize ?? sizeProp(node, 'size') ?? 24.0;
     final color = node.style?.color;
 
     // `svgPath`: an SVG path in a 24x24 viewBox, painted directly — there is
     // no SVG decoder to hand it to.
     final svgPath = node.props['svgPath'];
     if (svgPath is String && svgPath.isNotEmpty) {
-      final label = node.props['semanticLabel'] as String?;
+      final label = looseStr(node.props['semanticLabel']);
       Widget icon = SvgPathIcon(
         path: svgPath,
         size: size,

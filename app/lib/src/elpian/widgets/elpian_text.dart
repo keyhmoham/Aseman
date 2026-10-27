@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../models/elpian_node.dart';
+
+import '../core/lenient.dart';
 import '../css/css_properties.dart';
+import '../models/elpian_node.dart';
 import 'elpian_expressive.dart';
 
 /// Text.
@@ -30,10 +32,10 @@ class ElpianText {
       text,
       style: style,
       textAlign: _align(node.props['textAlign']) ?? node.style?.textAlign,
-      maxLines: numProp(node, 'maxLines')?.toInt(),
+      maxLines: _maxLines(numProp(node, 'maxLines')),
       overflow:
           _overflow(node.props['overflow']) ?? node.style?.textOverflow,
-      softWrap: node.props['softWrap'] as bool?,
+      softWrap: looseBool(node.props['softWrap']),
     );
 
     Widget result;
@@ -95,3 +97,6 @@ TextOverflow? _overflow(Object? v) => v is TextOverflow
         'visible' => TextOverflow.visible,
         _ => null,
       };
+
+/// A line limit: a positive whole number, else none.
+int? _maxLines(double? v) => v == null || !v.isFinite || v < 1 ? null : v.round();

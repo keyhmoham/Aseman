@@ -4,6 +4,7 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:aseman/src/elpian/core/lenient.dart';
 import 'package:flutter/material.dart';
 
 import 'charts/polar_charts.dart';
@@ -163,8 +164,8 @@ class KitAvatar extends StatelessWidget {
   static Widget fromProps(Map<String, dynamic> props, VizPalette p) =>
       KitAvatar(
         name: asText(props['name'] ?? props['label']),
-        url: props['url'] as String? ?? props['image'] as String?,
-        size: asDouble(props['size'], 36),
+        url: looseStr(props['url']) ?? looseStr(props['image']),
+        size: asSize(props['size'], 36),
         color: p.parse(props['color']),
       );
 
@@ -225,14 +226,14 @@ class StatTile extends StatelessWidget {
     final hero = size == 'hero';
     final compact = size == 'compact';
     final raw = props['value'];
-    final format = props['format'] as String?;
+    final format = looseStr(props['format']);
     final value = format == null && raw is num && raw.abs() >= 10000
         ? formatCompact(raw)
         : formatValue(raw, format);
     final delta = asNum(props['delta']);
     final trend = asList(props['trend']);
     final icon = iconFor(props['icon']);
-    final status = props['status'] as String?;
+    final status = looseStr(props['status']);
     final accent =
         p.parse(props['color']) ??
         (status != null ? p.status(status) : p.accent);
@@ -315,7 +316,7 @@ class StatTile extends StatelessWidget {
                 if (delta != null)
                   _DeltaChip(
                     delta: delta,
-                    format: props['deltaFormat'] as String?,
+                    format: looseStr(props['deltaFormat']),
                     goodDown: goodDown,
                   ),
                 if (props['deltaLabel'] != null || props['caption'] != null)
@@ -428,7 +429,7 @@ class ProgressView extends StatelessWidget {
               : '${formatValue(v, null)} / ${formatValue(max, null)}')
         : null;
     if (props['variant'] == 'circular') {
-      final size = asDouble(props['size'], 56);
+      final size = asSize(props['size'], 56);
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -508,7 +509,7 @@ class ProgressView extends StatelessWidget {
           value: t,
           color: color,
           track: track,
-          thickness: asDouble(props['thickness'], wavy ? 6 : 8),
+          thickness: asSize(props['thickness'], wavy ? 6 : 8).clamp(1, 48),
           wavy: wavy,
         ),
       ],
@@ -698,7 +699,7 @@ class RatingView extends StatelessWidget {
     final p = VizPalette.of(context);
     final v = asDouble(props['value'], 0);
     final max = asInt(props['max'], 5).clamp(1, 10);
-    final size = asDouble(props['size'], 20);
+    final size = asSize(props['size'], 20).clamp(8, 96).toDouble();
     final color = p.parse(props['color']) ?? VizPalette.warning;
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -760,7 +761,7 @@ class KeyValueList extends StatelessWidget {
         final m = asMap(item);
         items.add((
           asText(m['label'] ?? m['key']),
-          valueOf(m['value'], m['format'] as String?, m['type'] as String?)
+          valueOf(m['value'], looseStr(m['format']), looseStr(m['type']))
         ));
       }
     } else {
@@ -770,7 +771,7 @@ class KeyValueList extends StatelessWidget {
         if (e.value is Map) continue;
         items.add((
           asText(asMap(props['labels'])[e.key] ?? _humanize(e.key)),
-          valueOf(e.value, formats[e.key] as String?, null)
+          valueOf(e.value, looseStr(formats[e.key]), null)
         ));
       }
     }
@@ -843,7 +844,7 @@ class TimelineView extends StatelessWidget {
     final tf = '${props['titleField'] ?? 'title'}';
     final sf = '${props['descriptionField'] ?? 'description'}';
     final timeField = '${props['timeField'] ?? 'time'}';
-    final timeFormat = props['timeFormat'] as String?;
+    final timeFormat = looseStr(props['timeFormat']);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -932,7 +933,7 @@ class TimelineView extends StatelessWidget {
   }
 
   Widget _dot(Map<String, dynamic> row, VizPalette p) {
-    final status = row['status'] as String?;
+    final status = looseStr(row['status']);
     final color =
         p.parse(row['color']) ?? (status != null ? p.status(status) : p.accent);
     final icon = iconFor(row['icon']);

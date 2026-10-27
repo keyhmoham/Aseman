@@ -105,7 +105,8 @@ class _ElpianDraggableState extends State<_ElpianDraggable> {
       'vertical' => Axis.vertical,
       _ => null,
     };
-    final maxDrags = numProp(node, 'maxSimultaneousDrags')?.toInt();
+    final drags = numProp(node, 'maxSimultaneousDrags');
+    final maxDrags = drags == null || !drags.isFinite || drags < 0 ? null : drags.round();
     Map<String, dynamic> payload([Map<String, dynamic> extra = const {}]) =>
         {'data': data, ...extra};
 

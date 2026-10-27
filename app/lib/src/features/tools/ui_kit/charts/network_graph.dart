@@ -7,6 +7,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../elpian/core/lenient.dart';
 import '../palette.dart';
 import '../values.dart';
 import 'cartesian_chart.dart' show ChartSelect;
@@ -63,7 +64,7 @@ class _NetworkGraphState extends State<NetworkGraph> {
     final nodes = <_GNode>[];
     final index = <String, int>{};
     final groups = <String>[];
-    final sizeField = props['size'] as String?;
+    final sizeField = looseStr(props['size']);
     var maxSize = 0.0;
     for (final r in asRows(props['nodes'])) {
       final id = asText(r['id'] ?? r['name'] ?? r['label']);
@@ -220,13 +221,13 @@ class _NetworkGraphState extends State<NetworkGraph> {
     final height = asDouble(props['height'], 320).clamp(140, 1000).toDouble();
     if (_nodes.isEmpty) {
       return ChartFrame(
-          title: props['title'] as String?, child: NoData(height: height));
+          title: looseStr(props['title']), child: NoData(height: height));
     }
     final directed = asBool(props['directed'], true);
     final maxSize = _nodes.map((n) => n.size).reduce(math.max);
     return ChartFrame(
-      title: props['title'] as String?,
-      subtitle: props['subtitle'] as String?,
+      title: looseStr(props['title']),
+      subtitle: looseStr(props['subtitle']),
       legend: _groups.length > 1
           ? [
               for (var i = 0; i < _groups.length; i++)

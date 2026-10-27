@@ -20,6 +20,25 @@ double asDouble(Object? v, double fallback) => asNum(v)?.toDouble() ?? fallback;
 
 int asInt(Object? v, int fallback) => asNum(v)?.round() ?? fallback;
 
+/// A size: a non-negative number, else [fallback] (Flutter asserts on
+/// negative sizes).
+double asSize(Object? v, double fallback) {
+  final n = asNum(v);
+  return n == null || n < 0 ? fallback : n.toDouble();
+}
+
+/// A size, or null when absent or negative.
+double? asSizeOrNull(Object? v) {
+  final n = asNum(v);
+  return n == null || n < 0 ? null : n.toDouble();
+}
+
+/// A count: a non-negative whole number, else [fallback].
+int asCount(Object? v, int fallback) {
+  final n = asNum(v);
+  return n == null || n < 0 ? fallback : n.round();
+}
+
 bool asBool(Object? v, [bool fallback = false]) {
   if (v is bool) return v;
   if (v is num) return v != 0;

@@ -199,7 +199,7 @@ final Map<String, KitBuilder> kitBuilders = {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: children);
-    final maxHeight = asNum(props['maxHeight'])?.toDouble();
+    final maxHeight = asSizeOrNull(props['maxHeight']);
     Widget out = SingleChildScrollView(
         scrollDirection: horizontal ? Axis.horizontal : Axis.vertical,
         child: child);

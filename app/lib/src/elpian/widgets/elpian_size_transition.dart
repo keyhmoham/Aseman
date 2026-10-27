@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/lenient.dart';
 import '../models/elpian_node.dart';
 
 class ElpianSizeTransition {
@@ -70,7 +71,7 @@ class _ElpianSizeTransitionWidgetState
   Widget build(BuildContext context) {
     final child =
         widget.children.isNotEmpty ? widget.children.first : const SizedBox();
-    final axis = widget.node.props['axis'] as String?;
+    final axis = looseStr(widget.node.props['axis']);
 
     return SizeTransition(
       sizeFactor: _animation,

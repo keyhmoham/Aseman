@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import '../models/elpian_node.dart';
+
+import '../core/lenient.dart';
 import '../css/css_properties.dart';
+import '../models/elpian_node.dart';
 
 class HtmlOptgroup {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final label = node.props['label'] as String? ?? '';
+    final label = looseStr(node.props['label']) ?? '';
 
     Widget result = Column(
       crossAxisAlignment: CrossAxisAlignment.start,

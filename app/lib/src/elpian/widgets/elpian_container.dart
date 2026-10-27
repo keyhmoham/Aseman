@@ -17,8 +17,8 @@ class ElpianContainer {
     }
 
     Widget result = Container(
-      width: numProp(node, 'width'),
-      height: numProp(node, 'height'),
+      width: sizeProp(node, 'width'),
+      height: sizeProp(node, 'height'),
       padding: _as<EdgeInsets>(node.props['padding']),
       margin: _as<EdgeInsets>(node.props['margin']),
       alignment: _as<Alignment>(node.props['alignment']),

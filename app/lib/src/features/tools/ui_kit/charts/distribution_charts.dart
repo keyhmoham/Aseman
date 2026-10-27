@@ -253,7 +253,7 @@ class SegmentedBar extends StatelessWidget {
       parts.add((i, formatValue(field(rows[i], lf) ?? '${i + 1}', null), v, p.parse(rows[i]['color'] ?? rows[i]['status']) ?? p.series(parts.length)));
     }
     final total = parts.fold<double>(0, (s, x) => s + x.$3);
-    final thickness = asDouble(props['thickness'], 14);
+    final thickness = asSize(props['thickness'], 14);
     if (total <= 0) return ChartFrame(title: _s(props['title']), child: const NoData(height: 40));
     return ChartFrame(
       title: _s(props['title']),
@@ -687,7 +687,7 @@ class WordCloud extends StatelessWidget {
       words.add(_Word(t, asDouble(field(rows[i], vf) ?? rows[i]['weight'], 1), rows[i], i));
     }
     words.sort((a, b) => b.value.compareTo(a.value));
-    final shown = words.take(asInt(props['max'], 60)).toList();
+    final shown = words.take(asCount(props['max'], 60)).toList();
     if (shown.isEmpty) return ChartFrame(title: _s(props['title']), child: NoData(height: height));
     final hi = shown.first.value, lo = shown.last.value;
     final colorful = asBool(props['colorful'], true);

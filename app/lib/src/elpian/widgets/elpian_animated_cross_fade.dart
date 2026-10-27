@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import '../core/lenient.dart';
 import '../models/elpian_node.dart';
 
 class ElpianAnimatedCrossFade {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final showFirst = node.props['showFirst'] as bool? ?? true;
+    final showFirst = looseBool(node.props['showFirst']) ?? true;
     final duration =
         node.style?.transitionDuration ?? const Duration(milliseconds: 300);
     final curve = node.style?.transitionCurve ?? Curves.linear;

@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../models/elpian_node.dart';
+
+import '../core/lenient.dart';
 import '../css/css_properties.dart';
 import '../models/css_style.dart';
+import '../models/elpian_node.dart';
 
 class HtmlA {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final text = node.props['text'] as String? ?? '';
-    final href = node.props['href'] as String? ?? '#';
+    final text = looseStr(node.props['text']) ?? '';
+    final href = looseStr(node.props['href']) ?? '#';
 
     // Merge defaults with custom style
     final mergedStyle = CSSStyle(

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import '../models/elpian_node.dart';
+
+import '../core/lenient.dart';
 import '../css/css_properties.dart';
+import '../models/elpian_node.dart';
 
 class HtmlLegend {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final text = node.props['text'] as String? ?? '';
+    final text = looseStr(node.props['text']) ?? '';
 
     Widget result = Text(
       text,

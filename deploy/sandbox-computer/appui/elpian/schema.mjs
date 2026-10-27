@@ -433,7 +433,7 @@ export const TYPES = {
   // ── UI kit: app widgets ───────────────────────────────────────────────────
   Tabs: {
     category: "kit", children: "many", selfEvents: ["change"], needsKey: true, summary: "an M3 tab bar over panels (the children, one per tab)",
-    props: { tabs: { type: "array", of: { label: "text", icon: "icon", badge: "any" }, scalars: true, doc: "[{label, icon, badge}] or strings" }, items: { type: "array", of: { label: "text", icon: "icon", badge: "any" }, scalars: true, doc: "alias of tabs" },
+    props: { tabs: { type: "array", of: { label: "text", icon: "icon", badge: "any" }, scalars: true, min: 1, doc: "[{label, icon, badge}] or strings" }, items: { type: "array", of: { label: "text", icon: "icon", badge: "any" }, scalars: true, doc: "alias of tabs" },
       selected: t("number", "index (set from the program)"), variant: e("primary|secondary"), scrollable: t("flag"), gap: t("number") },
     requires: ["tabs|items"],
   },

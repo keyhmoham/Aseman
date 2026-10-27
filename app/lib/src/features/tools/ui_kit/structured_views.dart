@@ -2,6 +2,7 @@
 /// a code block.
 library;
 
+import 'package:aseman/src/elpian/core/lenient.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -30,7 +31,7 @@ class _TreeViewState extends State<TreeView> {
     final depth = asInt(widget.props['expanded'], 1);
     final labelField = '${widget.props['labelField'] ?? 'label'}';
     final childrenField = '${widget.props['childrenField'] ?? 'children'}';
-    final format = widget.props['format'] as String?;
+    final format = looseStr(widget.props['format']);
     final rows = <Widget>[];
 
     void walk(Object? node, String path, int level) {
@@ -206,7 +207,7 @@ class CodeBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = VizPalette.of(context);
     final code = asText(props['code'] ?? props['text']);
-    final language = props['language'] as String?;
+    final language = looseStr(props['language']);
     final lines = code.split('\n');
     final numbers = asBool(props['lineNumbers']);
     final mono = TextStyle(
@@ -233,7 +234,7 @@ class CodeBlock extends StatelessWidget {
         ],
       ),
     );
-    final maxHeight = asNum(props['maxHeight'])?.toDouble();
+    final maxHeight = asSizeOrNull(props['maxHeight']);
     if (maxHeight != null) {
       body = ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight),

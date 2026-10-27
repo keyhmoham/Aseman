@@ -95,7 +95,7 @@ class ElpianCard {
         final elevation =
             style?.boxShadow != null && style!.boxShadow!.isNotEmpty
             ? style.boxShadow!.first.blurRadius / 2
-            : numProp(node, 'elevation') ??
+            : sizeProp(node, 'elevation') ??
                   (variant == 'elevated' ? 1.0 : null);
         Widget body = cardChild;
         if (tappable) {

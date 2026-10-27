@@ -14,9 +14,10 @@ class ElpianSlider {
     // run later, outside it.
     final dispatcher = ElpianServices.current.events;
     final min = numProp(node, 'min') ?? 0.0;
-    final max = numProp(node, 'max') ?? 1.0;
+    final rawMax = numProp(node, 'max') ?? 1.0;
+    final max = rawMax > min ? rawMax : min + 1;
     final value = (numProp(node, 'value') ?? (min + max) / 2)
-        .clamp(min, max < min ? min : max)
+        .clamp(min, max)
         .toDouble();
     final elementId = node.key ?? 'element_${node.hashCode}';
     final step = numProp(node, 'step');

@@ -28,7 +28,7 @@ class ResponsiveGrid extends StatelessWidget {
         columns: asNum(props['columns'])?.toInt(),
         minColumnWidth: asDouble(props['minColumnWidth'], 220),
         maxColumns: asInt(props['maxColumns'], 6),
-        gap: asDouble(props['gap'], 12),
+        gap: asSize(props['gap'], 12),
         runGap: asNum(props['runGap'])?.toDouble(),
         children: children,
       );
@@ -119,7 +119,7 @@ class KitSection extends StatelessWidget {
                   style: VizText.subtitle(p)
                       .copyWith(fontWeight: FontWeight.w600)),
           ]),
-        SizedBox(height: asDouble(props['gap'], 12)),
+        SizedBox(height: asSize(props['gap'], 12)),
         ...children,
       ],
     );

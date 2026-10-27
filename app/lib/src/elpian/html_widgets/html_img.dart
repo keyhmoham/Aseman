@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../core/elpian_services.dart';
 import '../core/event_dispatcher.dart';
+import '../core/lenient.dart';
+import '../core/media.dart';
 import '../core/node_events.dart';
 import '../core/resources.dart';
-import '../models/elpian_node.dart';
-import '../core/media.dart';
 import '../css/css_properties.dart';
+import '../models/elpian_node.dart';
 import '../widgets/elpian_image.dart' show parseBoxFit;
 
 class HtmlImg {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final rawSrc = node.props['src'] as String? ?? '';
-    final alt = node.props['alt'] as String? ?? '';
+    final rawSrc = looseStr(node.props['src']) ?? '';
+    final alt = looseStr(node.props['alt']) ?? '';
 
     // Server-driven UIs reference images root-relatively ("/icons/x.png"):
     // resolve against the server origin (ElpianResources.baseUrl / the page

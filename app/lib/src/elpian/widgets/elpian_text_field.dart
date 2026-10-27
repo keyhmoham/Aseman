@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../models/elpian_node.dart';
+
 import '../core/elpian_services.dart';
 import '../core/event_dispatcher.dart';
+import '../core/lenient.dart';
 import '../css/css_properties.dart';
+import '../models/elpian_node.dart';
 import 'elpian_expressive.dart';
 
 /// A text input.
@@ -158,12 +160,11 @@ class _ElpianTextFieldViewState extends State<_ElpianTextFieldView> {
 
   @override
   Widget build(BuildContext context) {
-    final hint = _props['hint'] as String? ?? '';
+    final hint = looseStr(_props['hint']) ?? '';
     final obscure = _props['obscureText'] == true;
     final multiline = _props['multiline'] == true;
-    final maxLines = obscure
-        ? 1
-        : (_props['maxLines'] as num?)?.toInt() ?? (multiline ? null : 1);
+    final lines = looseInt(_props['maxLines']);
+    final maxLines = obscure ? 1 : (lines != null && lines >= 1 ? lines : (multiline ? null : 1));
     String? text(String key) {
       final v = _props[key];
       return v == null || '$v'.isEmpty ? null : '$v';

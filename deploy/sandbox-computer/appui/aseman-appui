@@ -258,7 +258,11 @@ JavaScript on the Elpian QuickJS runtime inside the Aseman client, drawing
 native UI from JSON view trees. Read ELPIAN.md in full first and study
 vendor/aseman-elpian/ (aseman-elpian.js SDK, openui-elpian.js, nodes.json).
 Write it in elpian/src/*.js with App.create + Aseman.* (no DOM, no fetch, no
-modules); use the UI kit nodes for data views; mix OpenUI agent islands
+modules); use the UI kit nodes for data views and app pieces — charts
+(Chart, Funnel, Waterfall, Sankey, Gantt, BoxPlot, Sunburst,
+CalendarHeatmap, …), tables (DataGrid, PivotTable, Leaderboard) and widgets
+(Tabs, Calendar, Kanban, Chat, Carousel, Stepper, Markdown, Countdown,
+QRCode, EmptyState, …) rather than hand-building them from boxes; mix OpenUI agent islands
 (OpenUI.panel / action / query) with programmed UI where judgment helps.
 Design it in Material 3 Expressive, following ELPIAN.md's "Design" section:
 study vendor/aseman-elpian/examples/showcase.js (a complete reference app)

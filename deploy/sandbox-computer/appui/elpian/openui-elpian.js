@@ -339,84 +339,12 @@
 
   // ── markdown ─────────────────────────────────────────────────────────────
 
-  function inline(s) {
-    return str(s)
-      .replace(/\*\*([^*]+)\*\*/g, "$1")
-      .replace(/__([^_]+)__/g, "$1")
-      .replace(/\*([^*]+)\*/g, "$1")
-      .replace(/`([^`]+)`/g, "$1")
-      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "$1 ($2)");
+  // Markdown: drawn natively (headings, lists, tasks, quotes, code, tables,
+  // links) by the Markdown node.
+  function markdown(src) {
+    return { type: "Markdown", props: { text: str(src) } };
   }
 
-  function markdown(src) {
-    var lines = str(src).replace(/\r\n/g, "\n").split("\n");
-    var out = [];
-    var para = [];
-    var list = [];
-    var flushPara = function () {
-      if (para.length) out.push(text(inline(para.join(" ")), { fontSize: "14" }));
-      para = [];
-    };
-    var flushList = function () {
-      if (!list.length) return;
-      var items = [];
-      for (var i = 0; i < list.length; i++) {
-        items.push({ type: "Row", props: { style: { gap: "8", alignItems: "flex-start" } }, children: [
-          text(list[i].mark, { fontSize: "14" }),
-          { type: "Expanded", children: [text(inline(list[i].text), { fontSize: "14" })] },
-        ] });
-      }
-      out.push(column(items, "xs"));
-      list = [];
-    };
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i];
-      var fence = /^```\s*([\w-]*)\s*$/.exec(line);
-      if (fence) {
-        flushPara();
-        flushList();
-        var code = [];
-        for (i++; i < lines.length && !/^```\s*$/.test(lines[i]); i++) code.push(lines[i]);
-        out.push({ type: "CodeBlock", props: { code: code.join("\n"), language: fence[1] || undefined } });
-        continue;
-      }
-      var h = /^(#{1,6})\s+(.*)$/.exec(line);
-      if (h) {
-        flushPara();
-        flushList();
-        out.push(title(inline(h[2]), h[1].length === 1 ? "lg" : h[1].length === 2 ? "md" : "sm"));
-        continue;
-      }
-      var li = /^\s*(?:[-*+]|(\d+)[.)])\s+(.*)$/.exec(line);
-      if (li) {
-        flushPara();
-        list.push({ mark: li[1] ? li[1] + "." : "•", text: li[2] });
-        continue;
-      }
-      if (/^\s*(?:---|\*\*\*)\s*$/.test(line)) {
-        flushPara();
-        flushList();
-        out.push({ type: "Divider" });
-        continue;
-      }
-      if (/^>\s?/.test(line)) {
-        flushPara();
-        flushList();
-        out.push({ type: "Callout", props: { severity: "info", text: inline(line.replace(/^>\s?/, "")) } });
-        continue;
-      }
-      if (!line.trim()) {
-        flushPara();
-        flushList();
-        continue;
-      }
-      flushList();
-      para.push(line.trim());
-    }
-    flushPara();
-    flushList();
-    return column(out, "s");
-  }
 
   // ── the catalog ──────────────────────────────────────────────────────────
 
@@ -464,23 +392,16 @@
       var tabs = [];
       for (var i = 0; i < items.length; i++) {
         var x = normalize(items[i]) || { p: {} };
-        tabs.push({ value: str(x.p.value || i), label: str(x.p.trigger || x.p.label || x.p.value || "Tab " + (i + 1)), node: x });
+        tabs.push({ value: str(x.p.value || i), label: str(x.p.trigger || x.p.label || x.p.value || "Tab " + (i + 1)), icon: isIconName(x.p.icon) ? x.p.icon : undefined, node: x });
       }
       if (!tabs.length) return null;
-      var active = state.tab !== undefined ? state.tab : str(p.defaultValue || tabs[0].value);
-      var triggers = [];
-      var panel = null;
-      var seg = segmented(ctx, tabs, active, function (v) { state.tab = str(v); rerender(ctx); });
-      for (var t = 0; t < tabs.length; t++) {
-        (function (tab, idx) {
-          var tap = handler(child(ctx, "t" + idx), "tab", function () { state.tab = tab.value; rerender(ctx); });
-          var chip = { type: "Chip", props: { label: tab.label, selected: tab.value === active } };
-          if (tap) chip.events = { change: tap };
-          triggers.push(chip);
-          if (tab.value === active) panel = column(propKids(tab.node.p.content || tab.node.children, child(ctx, "p" + idx)), "m");
-        })(tabs[t], t);
-      }
-      return column([seg || wrap(triggers, "s"), panel], "m");
+      var active = state.tab !== undefined ? state.tab : Math.max(0, tabs.map(function (t) { return t.value; }).indexOf(str(p.defaultValue)));
+      // The native Tabs node: an M3 tab bar over one panel per tab.
+      var change = handler(ctx, "tabs", function (e) { state.tab = Number(e && e.value !== undefined ? e.value : (e && e.data)) || 0; });
+      var node = { type: "Tabs", key: ctx.key + "_" + ctx.path + "_tabs", props: { selected: active, tabs: tabs.map(function (t) { return { label: t.label, icon: t.icon }; }) },
+        children: tabs.map(function (t, idx) { return column(propKids(t.node.p.content || t.node.children, child(ctx, "p" + idx)), "m"); }) };
+      if (change) node.events = { change: change };
+      return node;
     },
     TabItem: function (n, p, ctx) { return column(propKids(p.content || n.children, ctx), "m"); },
     Accordion: function (n, p, ctx) {
@@ -538,13 +459,11 @@
     },
     Dock: function (n, p, ctx) { return wrap([p.note ? muted(p.note) : null].concat(kids(n, ctx)), "s"); },
     Breadcrumb: function (n, p, ctx) {
-      var items = itemsAs(p.items || n.children, "BreadcrumbItem", ctx);
-      var out = [];
-      for (var i = 0; i < items.length; i++) {
-        if (i) out.push(muted("/"));
-        out.push(items[i]);
-      }
-      return wrap(out, "xs");
+      var items = (p.items || n.children || []).map(function (it) { var x = normalize(it && (it.c || it.component) ? it : { c: "BreadcrumbItem", p: it }); return (x && x.p) || {}; });
+      var select = handler(ctx, "crumb", function (e) { var it = items[Number(e && e.index)] || {}; if (it.action !== undefined) act(ctx, it.action, it.label); });
+      var node = { type: "Breadcrumbs", props: { items: items.map(function (it) { return { label: str(it.label), icon: isIconName(it.icon) ? it.icon : undefined }; }) } };
+      if (select) node.events = { select: select };
+      return node;
     },
     BreadcrumbItem: function (n, p) { return text(p.label); },
     Segmented: function (n, p, ctx) {
@@ -558,19 +477,16 @@
     CommandBar: function (n, p, ctx) { return wrap([p.label ? muted(p.label) : null].concat(kids(n, ctx)), "s"); },
     StatusBar: function (n, p, ctx) { return row([{ type: "Expanded", children: [muted(p.text)] }].concat(kids(n, ctx))); },
     Pagination: function (n, p, ctx) {
-      var page = Number(valueOf(ctx, p.name || "page", p.page || 1));
-      var pages = Number(p.pages) || 1;
-      var go = function (d) {
-        return handler(child(ctx, d > 0 ? "n" : "p"), "page", function () {
-          setValue(ctx, p.name || "page", Math.max(1, Math.min(pages, page + d)), true);
-          act(ctx, { type: "page", page: Math.max(1, Math.min(pages, page + d)) }, "page");
-        });
-      };
-      return row([
-        { type: "IconButton", props: { icon: "chevron_left", variant: "tonal", tooltip: "Previous", disabled: page <= 1 }, events: ctx.app ? { tap: go(-1) } : undefined },
-        text(page + " / " + pages, {}, "labelLarge"),
-        { type: "IconButton", props: { icon: "chevron_right", variant: "tonal", tooltip: "Next", disabled: page >= pages }, events: ctx.app ? { tap: go(1) } : undefined },
-      ], "s", { justifyContent: "center" });
+      var name = p.name || "page";
+      var page = Number(valueOf(ctx, name, p.page || 1));
+      var change = handler(ctx, "page", function (e) {
+        var to = Number(e && e.value !== undefined ? e.value : (e && e.data)) || 1;
+        setValue(ctx, name, to, true);
+        act(ctx, { type: "page", page: to }, "page");
+      });
+      var node = { type: "Pagination", props: { page: page, pages: Number(p.pages) || 1 } };
+      if (change) node.events = { change: change };
+      return node;
     },
     Fab: function (n, p, ctx) {
       var name = handler(ctx, "tap", function () { act(ctx, p.action, p.label || p.icon); });
@@ -611,13 +527,7 @@
     Callout: function (n, p, ctx) { return { type: "Callout", props: { severity: severity(p.tone), title: str(p.title), text: p.body || undefined }, children: kids(n, ctx) }; },
     Badge: function (n, p) { return { type: "Tag", props: { text: str(p.label), status: status(p.tone) || undefined, variant: "tonal" } }; },
     Avatar: function (n, p) { return { type: "Avatar", props: { name: str(p.name || "?"), url: p.src || undefined, size: { sm: 28, md: 36, lg: 48 }[p.size || "md"] || 36 } }; },
-    AvatarGroup: function (n, p) {
-      var names = p.names || [];
-      var max = p.max || names.length;
-      var out = names.slice(0, max).map(function (name) { return { type: "Avatar", props: { name: str(name), size: 28 } }; });
-      if (names.length > max) out.push({ type: "Tag", props: { text: "+" + (names.length - max) } });
-      return wrap(out, "xs");
-    },
+    AvatarGroup: function (n, p) { return { type: "AvatarGroup", props: { names: (p.names || []).map(str), max: p.max || 4 } }; },
     Image: function (n, p) { return { type: "Image", props: { src: str(p.src), fit: "contain" } }; },
     CodeBlock: function (n, p) { return { type: "CodeBlock", props: { code: str(p.code), language: p.language || undefined } }; },
     JsonBlock: function (n, p) {
@@ -627,12 +537,11 @@
       }
       return column([p.title ? muted(p.title) : null, { type: "JsonView", props: { value: v, expanded: 1 } }], "xs");
     },
-    EmptyState: function (n, p) {
-      return { type: "Center", children: [column([
-        { type: "Container", props: { style: { width: "72", height: "72", borderRadius: "28", backgroundColor: color("secondaryContainer", color("primaryContainer", "#e8def8")) } },
-          children: [{ type: "Center", children: [{ type: "Icon", props: { icon: isIconName(p.icon) ? p.icon : "inbox", size: 32 } }] }] },
-        title(p.title, "md"), p.description ? muted(p.description) : null,
-      ], "s", { padding: "24", alignItems: "center" })] };
+    EmptyState: function (n, p, ctx) {
+      var node = { type: "EmptyState", props: { icon: isIconName(p.icon) ? p.icon : "inbox", title: str(p.title || "Nothing here yet"), text: p.description || p.body || undefined, action: p.action ? str(p.actionLabel || p.label || "Get started") : undefined } };
+      var go = p.action ? handler(ctx, "empty", function () { act(ctx, p.action, p.actionLabel || p.label); }) : null;
+      if (go) node.events = { action: go };
+      return node;
     },
     Skeleton: function () { return { type: "Shimmer", children: [{ type: "Container", props: { style: { height: "16", borderRadius: "8", backgroundColor: color("surfaceContainerHighest", "#e3e3e8") } } }] }; },
     Stat: function (n, p) {
@@ -730,11 +639,7 @@
     PieChart: function (n, p) { return chart("PieChart", p); },
     DonutChart: function (n, p) { return chart("DonutChart", p); },
     MessageBubble: function (n, p) {
-      var mine = p.role === "user";
-      return row([{ type: "Container", props: { style: {
-        padding: "12", borderRadius: "20", maxWidth: "520",
-        backgroundColor: mine ? color("primaryContainer", "#dfe3ff") : color("surfaceContainerHighest", "#ececf1"),
-      } }, children: [text(p.text)] }], "s", { justifyContent: mine ? "flex-end" : "flex-start" });
+      return { type: "Chat", props: { messages: [{ role: p.role === "user" ? "user" : (p.role || "assistant"), text: str(p.text), name: p.name || undefined, time: p.time || undefined }], showAvatars: p.role !== "user" } };
     },
     FollowUpChips: function (n, p, ctx) {
       return wrap((p.suggestions || []).map(function (s, i) { return button(child(ctx, i), s, { type: "ask", prompt: s }, "secondary"); }), "s");
@@ -745,7 +650,12 @@
         { type: "Expanded", children: [column([text(p.title, { fontWeight: "bold" }), p.description ? muted(p.description) : null], "xs")] },
       ]);
     },
-    StepList: function (n, p, ctx) { return column(itemsAs(p.steps || n.children, "Step", ctx), "s"); },
+    StepList: function (n, p, ctx) {
+      var steps = (p.steps || n.children || []).map(function (it) { var x = normalize(it && (it.c || it.component) ? it : { c: "Step", p: it }); return (x && x.p) || {}; });
+      return { type: "Stepper", props: { orientation: "vertical", steps: steps.map(function (st) {
+        return { title: str(st.title), subtitle: st.description || undefined, state: { done: "done", active: "current", error: "error" }[st.status] || "todo" };
+      }) } };
+    },
     ChatCard: function (n, p, ctx) { return card([p.title ? title(p.title, "sm") : null].concat(kids(n, ctx))); },
     Rating: function (n, p) { return row(compact([{ type: "Rating", props: { value: Number(p.value) || 0, max: 5 } }, p.count != null ? muted("(" + p.count + ")") : null])); },
     Price: function (n, p) {
@@ -761,18 +671,13 @@
     },
     Carousel: function (n, p, ctx) {
       var slides = p.slides || n.children || [];
-      var state = local(ctx);
-      var i = Math.min(state.slide || 0, Math.max(0, slides.length - 1));
-      var s = slides[i];
-      var step = function (d) { return handler(child(ctx, d > 0 ? "n" : "p"), "slide", function () { state.slide = (i + d + slides.length) % slides.length; rerender(ctx); }); };
-      return column([
-        typeof s === "string" ? { type: "Image", props: { src: s, fit: "cover", style: { height: "200", borderRadius: "16" } } } : renderAt(s, ctx, "s" + i),
-        slides.length > 1 ? { type: "Row", props: { style: { gap: "8", justifyContent: "center", alignItems: "center" } }, children: [
-          { type: "IconButton", props: { icon: "chevron_left", variant: "tonal", tooltip: "Previous" }, events: ctx.app ? { tap: step(-1) } : undefined },
-          muted(i + 1 + " / " + slides.length),
-          { type: "IconButton", props: { icon: "chevron_right", variant: "tonal", tooltip: "Next" }, events: ctx.app ? { tap: step(1) } : undefined },
-        ] } : null,
-      ], "s");
+      var change = handler(ctx, "slide", function (e) { local(ctx).slide = Number(e && e.value) || 0; });
+      var images = slides.every(function (s) { return typeof s === "string"; });
+      var node = images
+        ? { type: "Carousel", props: { items: slides.map(function (src) { return { image: str(src) }; }), height: Number(p.height) || 200 } }
+        : { type: "Carousel", props: { height: Number(p.height) || 220 }, children: slides.map(function (s, i) { return { type: "Card", props: { variant: "filled", style: { padding: "16" } }, children: compact([renderAt(s, ctx, "s" + i)]) }; }) };
+      if (change) node.events = { change: change };
+      return node;
     },
     Feed: function (n, p, ctx) { return column(itemsAs(p.items || n.children, "FeedItem", ctx), "s"); },
     FeedItem: function (n, p) {
@@ -786,8 +691,15 @@
     CheckItem: function (n, p, ctx) { return toggle(ctx, { name: p.name || ("check_" + ctx.path), label: p.label, value: p.done }, "Checkbox"); },
     Checklist: function (n, p, ctx) { return column(itemsAs(p.items || n.children, "CheckItem", ctx), "xs"); },
     Kanban: function (n, p, ctx) {
-      var cols = p.columns || n.children || [];
-      return { type: "ResponsiveGrid", props: { minColumnWidth: 200, gap: 12 }, children: itemsAs(cols, "KanbanColumn", ctx) };
+      var cols = (p.columns || n.children || []).map(function (c) { var x = normalize(c && (c.c || c.component) ? c : { c: "KanbanColumn", p: c, children: c && c.cards }); return x || { p: {} }; });
+      var columns = cols.map(function (x) {
+        var cards = (x.children || x.p.cards || []).map(function (k) { var y = normalize(k && (k.c || k.component) ? k : { c: "KanbanCard", p: k }); return (y && y.p) || {}; });
+        return { title: str(x.p.title), cards: cards.map(function (k) { return { title: str(k.title), subtitle: k.meta || k.subtitle || undefined, tags: k.tags || undefined }; }) };
+      });
+      var select = handler(ctx, "card", function (e) { var t = e && e.card && e.card.title; if (t) act(ctx, { type: "ask", prompt: "Tell me more about \"" + t + "\"" }, t); });
+      var node = { type: "Kanban", props: { columns: columns } };
+      if (select) node.events = { select: select };
+      return node;
     },
     KanbanColumn: function (n, p, ctx) {
       var cards = itemsAs(n.children || p.cards, "KanbanCard", ctx);
@@ -1020,6 +932,6 @@
     action: action,
     query: query,
     components: components,
-    version: "1.2.0-elpian",
+    version: "1.3.0-elpian",
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

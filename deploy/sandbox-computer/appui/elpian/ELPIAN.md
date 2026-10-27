@@ -281,7 +281,7 @@ they are what the Aseman look is built from.
 
 | Node | Props |
 |---|---|
-| `Chart` | `type`: `line` `area` `bar` `scatter` `bubble` `candlestick` `histogram` `pie` `donut` `radar` `heatmap` `treemap`; `data` (rows), `x`, `series` (`[field]` or `[{field, label, color}]`) or `y`; `title`, `stacked`, `horizontal`, `smooth`, `legend`, `xFormat`, `yFormat`, `height`; pie/donut: `label`, `value`; `select` event |
+| `Chart` | `type`: `line` `area` `bar` `scatter` `bubble` `candlestick` `histogram` `pie` `donut` `radar` `heatmap` `treemap` (and every chart below by name: `funnel` `waterfall` `sankey` `gantt` `boxplot` `sunburst` `bullet` `segmented` `radialbar` `calendar` `wordcloud`, with that node's props); `data` (rows), `x`, `series` (`[field]` or `[{field, label, color}]`) or `y`; `title`, `stacked`, `horizontal`, `smooth`, `legend`, `xFormat`, `yFormat`, `height`; pie/donut: `label`, `value`; `select` event |
 | `Sparkline` | `values`, `type` (`line`/`bar`/`area`), `height`, `width` |
 | `Gauge` | `value`, `min`, `max`, `label`, `format`, `thresholds: [{value, status}]` |
 | `Heatmap` | `data` of `{x, y, value}` or `rows`/`columns`/`values`; `format`, `diverging` |
@@ -303,6 +303,59 @@ they are what the Aseman look is built from.
 | `Section` | `title`, `subtitle`, `icon`; children |
 | `Expandable` | `title`, `subtitle`, `icon`, `expanded`; children |
 | `Scroll` | `direction`, `maxHeight`; children |
+
+**More charts** (all themed, with hover tooltips; `select` sends the mark tapped):
+
+| Node | Props |
+|---|---|
+| `Funnel` | `data: [{label, value}]` (`label`/`value` rename the fields), `format`, `color`, `title`: stages as centered bars with share of the first stage and step conversion |
+| `Waterfall` | `data: [{label, value}]` (a row with `total: true` draws the running total), `start`, `startLabel`, `showTotal` (default true), `totalLabel`, `format`, `height`, `upColor`/`downColor` |
+| `Sankey` | `links: [{from, to, value}]`, `nodes: [{id, label, color}]` (optional), `format`, `height`: flows between nodes in layers |
+| `Gantt` | `data: [{label, start, end, progress, group, status, color}]` (ISO dates), `timeFormat`: tasks on a time axis, today marked; `start == end` is a milestone |
+| `BoxPlot` | `data: [{label, values: [...]}]` (raw samples: outliers shown) or `[{label, min, q1, median, q3, max}]`, `format`, `colorful` |
+| `BulletChart` | `items: [{label, value, target, ranges: [a, b, c], max, format}]` (or one bullet's props): progress against a target over qualitative bands |
+| `SegmentedBar` | `data: [{label, value, color}]`, `format`, `thickness`, `showPercent`, `legend`: one bar split into parts (storage, budget, status mix) |
+| `RadialBars` | `data: [{label, value, max, color}]` (≤ 6), `size`, `centerLabel`, `centerCaption`, `legend`: activity rings |
+| `Sunburst` | `data: {label, children: [{label, value, children}]}` (or a list), `size`, `format`: a hierarchy as rings |
+| `CalendarHeatmap` | `data: [{date, value}]`, `weeks` (26), `end`, `format`, `color`: a contribution graph, one cell a day |
+| `WordCloud` | `data: [{text, value}]`, `max` (60), `colorful`, `height` |
+
+**Tables:**
+
+| Node | Props |
+|---|---|
+| `PivotTable` | `data` (rows), `rows` (a field or list), `columns` (a field or list), `value`, `aggregate` (`sum` `count` `avg` `min` `max`), `format`, `totals` (default true), `heat` (default true), `sort`, `maxHeight`; `select` `{row, column, value}` |
+| `Leaderboard` | `data: [{name, value, subtitle, avatar, change, id}]`, `max` (10), `format`, `highlight` (a name or id: "you"), `showBar`; ranked with medals for the top three |
+
+**App widgets** (interactive, drawn natively):
+
+| Node | Props · events |
+|---|---|
+| `Tabs` | `tabs: [{label, icon, badge}]` (or strings), children = one panel per tab, `selected`, `variant` (`primary`/`secondary`) · `change` `{value}` |
+| `Calendar` | `month` (`yyyy-MM`), `selected` (`yyyy-MM-dd`), `events: [{date, title, time, color, status}]`, `firstDay` (`monday`/`sunday`), `showEvents` · `select` `{date, events}`, `change` `{month}` |
+| `Kanban` | `columns: [{id, title, color, cards: [{title, subtitle, tags, assignee, due, priority}]}]`, `columnWidth` · `select` `{column, index, card}`, `move` `{card, from, to, fromId, toId}` (long-press drag; update your state to move it) |
+| `Carousel` | children (slides) or `items: [{image, title, subtitle}]`, `height` (200), `autoplay` (ms), `viewportFraction`, `dots` · `change` `{value}` |
+| `Stepper` | `steps: [{title, subtitle, state}]` (or strings; `state` `done` `current` `error`), `current`, `orientation` · `select` `{index}` |
+| `Chat` | `messages: [{role: user\|assistant\|system, text, name, time, avatar}]` (light markdown), `typing`, `suggestions`, `showAvatars` · `select` `{text}` (a suggestion) |
+| `Countdown` | `to` (ISO time) or `seconds`, `label`, `size` (`compact` `default` `hero`) · `done` |
+| `Clock` | `mode` (`analog`/`digital`), `utcOffset` (hours), `label`, `size`, `seconds`, `hour24` |
+| `EmptyState` | `icon`, `title`, `text`, `action` (button label), `actionIcon`, `size` · `action` |
+| `AvatarGroup` | `names` or `items: [{name, url}]`, `max` (4), `size` |
+| `Pagination` | `page` (1-based), `pages`, `siblings` · `change` `{value}` |
+| `Breadcrumbs` | `items: [{label, icon}]` (or strings) · `select` `{index, label}` |
+
+**Text and data views:**
+
+| Node | Props · events |
+|---|---|
+| `Markdown` | `text` (headings, lists, task lists, quotes, fenced code with highlighting, tables, images, links, **bold** / *italic* / `code` / ~~strike~~), `size` · `link` `{href}` (without a handler, links open in the browser) |
+| `LogView` | `lines` (strings like `"10:01 ERROR failed"`, or `[{time, level, message, source}]`), `title`, `filter`, `wrap`, `lineNumbers`, `follow` (keeps the end in view), `maxHeight` |
+| `DiffView` | `before` + `after` (or a unified `diff`), `title`, `context` (3), `maxHeight`: changed lines on green/red, unchanged runs folded |
+| `QRCode` | `data` (a URL or text), `size` (160), `ecc` (`L` `M` `Q` `H`), `label`, `rounded`: scannable in light and dark |
+
+In a `Row` without a width bound, these views take a natural fallback
+width rather than throwing; wrap them in `Expanded` to fill the row (the
+validator warns: `layout-fallback-width`).
 
 Formats: `number[:decimals]`, `integer`, `compact`, `percent[:decimals]`
 (fractions), `currency[:CODE[:decimals]]`, `date`, `time`, `datetime`; a
@@ -374,7 +427,13 @@ island, navigation bar, loading / empty states, phone widget) that passes
 | A highlighted fact / summary | `Card` `tone: "primary"` (or `tertiary`) with a `headline*Emphasized` text |
 | Search | `SearchBar` (or `app.input(key, field, {search: true, hint})`) |
 | Forms | `TextField` with `label`, `icon`, `helper` / `error`; `Switch` / `Checkbox` with `label`; `Slider` with `label`; group fields in a filled `Card`, primary `Button` at the end |
-| Tables, charts | the UI kit (`DataGrid`, `Chart`) inside a `Card` with a `title` text |
+| Tables | `DataGrid` (records), `PivotTable` (totals by group), `Leaderboard` (rankings), `KeyValue` (one record) |
+| Charts | `Chart` (trends, comparisons, parts), `Funnel` (conversion), `Waterfall` (how a total moved), `Sankey` (flows), `Gantt` (schedules), `BoxPlot` (spread), `BulletChart` (against a target), `SegmentedBar` (a mix), `RadialBars` (goals), `Sunburst` (hierarchies), `CalendarHeatmap` (activity by day), `WordCloud` (themes) — inside a filled `Card` |
+| Sections of a screen | `Tabs` (panels), `Stepper` (a process), `Carousel` (featured items), `Breadcrumbs` + `Pagination` (navigation) |
+| Planning and time | `Calendar` (events by day), `Kanban` (work by stage), `Gantt`, `Countdown`, `Clock` |
+| Conversation and text | `Chat` (a thread with an agent), `Markdown` (agent answers, docs), `LogView`, `DiffView`, `CodeBlock` |
+| Sharing | `QRCode` (a link to open on a phone), `AvatarGroup` (who is in) |
+| Nothing to show yet | `EmptyState` with the action that fills it |
 
 ### A screen, composed
 
@@ -407,18 +466,10 @@ view: function (s, app) {
     { type: "AnimatedSwitcher", children: [ s.items.length ? { type: "ListGroup", key: s.filter, children: s.items.map(function (o) {
       return { type: "ListTile", props: { title: o.customer, subtitle: o.summary, leading: "receipt_long",
                trailingText: o.total }, events: { tap: app.handler("open_" + o.id, function () { openOrder(o.id); }) } };
-    }) } : emptyState("No orders yet", "New orders show up here as they come in.", "inbox") ] },
+    }) } : { type: "EmptyState", key: "empty", props: { icon: "inbox", title: "No orders yet",
+             text: "New orders show up here as they come in.", action: "New order" },
+             events: { action: app.handler("new_empty", newOrder) } } ] },
   ] }] };
-}
-
-function emptyState(title, body, icon) {
-  return { type: "Column", props: { style: { gap: "12", padding: "32", alignItems: "center" } }, children: [
-    { type: "Container", props: { style: { width: "72", height: "72", borderRadius: "28",
-        backgroundColor: Aseman.env().theme.colors.secondaryContainer } },
-      children: [{ type: "Center", children: [{ type: "Icon", props: { icon: icon, size: 32 } }] }] },
-    { type: "Text", props: { text: title, variant: "titleLargeEmphasized", textAlign: "center" } },
-    { type: "Text", props: { text: body, variant: "bodyMedium", color: "muted", textAlign: "center" } },
-  ] };
 }
 ```
 
@@ -427,8 +478,8 @@ function emptyState(title, body, icon) {
 * **Loading:** `Shimmer` around boxes shaped like the content
   (`borderRadius` 8–16), or a `LoadingIndicator` with a short line of what
   is happening. Keep the header visible.
-* **Empty:** an icon in a tonal rounded square, a `titleLarge` line, one
-  muted sentence, and the action that fills it (`tonal` button).
+* **Empty:** an `EmptyState` — an icon in a tonal rounded square, a title,
+  one muted sentence, and the action that fills it.
 * **Error:** `Callout` `severity: "critical"` with a human sentence (never
   a stack trace) and a `tonal` "Try again" button with the `refresh` icon;
   `app.fail(e)` does this for you.
@@ -539,6 +590,9 @@ Make it good:
   `Chart` in `large`). No tables, lists, inputs or app chrome
   (`DataGrid`, `ListView`, `TextField`, `AppBar` are refused); at most
   80 nodes.
+* **Glanceable nodes**: `Stat`, `Tag`, `Sparkline`, `Progress`, `Gauge`,
+  `RadialBars` (goals), `SegmentedBar` (a mix), `CalendarHeatmap` (a streak),
+  `Countdown`, `Clock`, `QRCode`, `AvatarGroup`, a tiny `Chart`.
 * **Fit every size**: read `Aseman.env().widget.size` — `small` shows one
   value, `medium` a value and a fact or trend, `large` a small chart or
   three facts. Keep text short; no scrolling.

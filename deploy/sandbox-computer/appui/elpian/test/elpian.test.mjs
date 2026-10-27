@@ -161,7 +161,8 @@ test("agent replies become OpenUI or markdown nodes", () => {
   const card = ctx.OpenUI.fromReply('Here:\n```openui\n{"c":"Stat","p":{"label":"Users","value":"42"}}\n```');
   assert.equal(card.type, "Stat");
   const md = ctx.OpenUI.fromReply("# Plan\n\n1. one\n2. two\n\nDone **now**.");
-  assert.deepEqual(types(md).filter((t) => t === "Text").length >= 4, true);
+  assert.equal(md.type, "Markdown");
+  assert.match(md.props.text, /Done \*\*now\*\*/);
   assert.equal(ctx.OpenUI.tryParse("no json"), null);
 });
 
@@ -250,5 +251,5 @@ test("OpenUI draws M3E buttons and icons, not class names or glyph text", () => 
   assert.doesNotMatch(json, /className/);
   assert.match(json, /"variant":"filled","icon":"send"/);
   assert.match(json, /"variant":"tonal"/);
-  for (const t of ["IconButton", "SegmentedButton", "ListGroup", "ListTile"]) assert.ok(types(node).includes(t), `uses ${t}`);
+  for (const t of ["Pagination", "Tabs", "ListGroup", "ListTile"]) assert.ok(types(node).includes(t), `uses ${t}`);
 });

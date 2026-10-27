@@ -117,11 +117,30 @@ function insights(s, app) {
     { type: "ResponsiveGrid", props: { minColumnWidth: 160, gap: 12 }, children: [
       kpi("Open", openCount(s), "inbox"),
       kpi("Done", (s.tasks || []).length - openCount(s), "task_alt"),
-      kpi("Urgent", (s.tasks || []).filter(function (t) { return !t.done && t.priority === "high"; }).length, "priority_high"),
+      kpi("Urgent", urgent(s), "priority_high"),
+    ] },
+    { type: "Card", props: { variant: "filled", style: { padding: "16", gap: "12" } }, children: [
+      { type: "Text", props: { text: "Where the work is", variant: "titleMediumEmphasized" } },
+      { type: "SegmentedBar", props: { data: [
+        { label: "Done", value: (s.tasks || []).length - openCount(s), status: "good" },
+        { label: "Open", value: openCount(s) - urgent(s) },
+        { label: "Urgent", value: urgent(s), status: "warning" },
+      ] } },
+    ] },
+    { type: "Card", props: { variant: "filled", style: { padding: "16" } }, children: [
+      { type: "Leaderboard", props: { title: "Most done", data: byOwner(s), max: 5, format: "integer" } },
     ] },
     OpenUI.panel(app, "advice", { agent: "assistant", title: "Where to focus", auto: false, label: "Ask for a plan",
       prompt: "Suggest what the team should focus on next given these tasks: {{tasks}}", vars: { tasks: JSON.stringify(s.tasks || []) } }),
   ] };
+}
+
+function urgent(s) { return (s.tasks || []).filter(function (t) { return !t.done && t.priority === "high"; }).length; }
+
+function byOwner(s) {
+  var done = {};
+  (s.tasks || []).forEach(function (t) { done[t.owner] = (done[t.owner] || 0) + (t.done ? 1 : 0); });
+  return Object.keys(done).map(function (name) { return { name: name, value: done[name] }; });
 }
 
 function kpi(label, value, icon) {
@@ -136,12 +155,8 @@ function skeleton() {
 }
 
 function empty() {
-  return { type: "Column", key: "empty", props: { style: { gap: "12", padding: "32", alignItems: "center" } }, children: [
-    { type: "Container", props: { style: { width: "72", height: "72", borderRadius: "28", backgroundColor: Aseman.env().theme.colors.secondaryContainer } },
-      children: [{ type: "Center", children: [{ type: "Icon", props: { icon: "celebration", size: 32 } }] }] },
-    { type: "Text", props: { text: "Nothing here", variant: "titleLargeEmphasized", textAlign: "center" } },
-    { type: "Text", props: { text: "Tasks in this view show up here.", variant: "bodyMedium", color: "muted", textAlign: "center" } },
-  ] };
+  return { type: "EmptyState", key: "empty", props: { icon: "celebration", title: "Nothing here", text: "Tasks in this view show up here.", action: "Add a task", actionIcon: "add_task" },
+    events: { action: app.handler("empty_add", function (e, app) { app.set({ tab: 1 }); }) } };
 }
 
 function add(e, app) {

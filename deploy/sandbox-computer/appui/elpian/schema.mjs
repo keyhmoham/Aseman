@@ -314,7 +314,7 @@ export const TYPES = {
   Chart: {
     category: "kit", children: "none", selfEvents: ["select"], summary: "line, area, bar, scatter, bubble, candlestick, histogram, pie, donut, radar, heatmap, treemap",
     props: {
-      type: e("line|area|bar|scatter|bubble|candlestick|histogram|pie|donut|radar|heatmap|treemap"), data: t("rows"), x: t("field"), y: t("field"),
+      type: e("line|area|bar|scatter|bubble|candlestick|histogram|pie|donut|radar|heatmap|treemap|funnel|waterfall|sankey|gantt|boxplot|box|sunburst|bullet|segmented|stackedbar|radialbar|rings|calendar|wordcloud"), data: t("rows"), x: t("field"), y: t("field"),
       series: { type: "array", of: { field: "field", label: "text", color: "color" }, scalars: true, doc: "[field] or [{field, label, color}]" },
       title: t("text"), subtitle: t("text"), stacked: t("flag"), horizontal: t("flag"), smooth: t("flag"), points: t("flag"), zero: t("flag"), valueLabels: t("flag"), legend: t("any"),
       xFormat: t("format"), yFormat: t("format"), xLabel: t("text"), yLabel: t("text"), xTitle: t("text", "alias of xLabel"), yTitle: t("text", "alias of yLabel"), donut: t("flag", "pie as a donut"), min: t("number"), max: t("number"), height: t("number"),
@@ -356,22 +356,190 @@ export const TYPES = {
   Section: { category: "kit", children: "many", summary: "a titled group", props: { title: t("text"), subtitle: t("text"), icon: t("icon"), trailing: t("text"), gap: t("number") } },
   Expandable: { category: "kit", children: "many", summary: "a panel that opens on tap", props: { title: t("text"), subtitle: t("text"), icon: t("icon"), expanded: t("flag") }, requires: ["title"] },
   Scroll: { category: "kit", children: "many", scroll: "dynamic", summary: "a scroll area", props: { direction: e("vertical|horizontal"), maxHeight: t("number") } },
+
+  // ── UI kit: flows, distributions, calendars ──────────────────────────────
+  Funnel: {
+    category: "kit", children: "none", selfEvents: ["select"], summary: "stages narrowing to an outcome, with shares and step conversion",
+    props: { data: t("rows", "[{label, value}]"), values: t("rows"), label: t("field"), value: t("field"), format: t("format"), color: t("color"), title: t("text"), subtitle: t("text") },
+    requires: ["data|values"],
+  },
+  Waterfall: {
+    category: "kit", children: "none", selfEvents: ["select"], summary: "a start value moved by increases and decreases to a total",
+    props: { data: t("rows", "[{label, value}] (rows with total: true draw the running total)"), values: t("rows"), label: t("field"), value: t("field"), x: t("field"), y: t("field"), start: t("number"), startLabel: t("text"),
+      showTotal: t("flag"), totalLabel: t("text"), format: t("format"), yFormat: t("format"), height: t("number"), upColor: t("color"), downColor: t("color"), color: t("color"), title: t("text"), subtitle: t("text") },
+    requires: ["data|values"],
+  },
+  Sankey: {
+    category: "kit", children: "none", selfEvents: ["select"], summary: "flows between nodes in layers, ribbons as thick as their value",
+    props: { links: t("rows", "[{from, to, value}]"), data: t("rows"), edges: t("rows"), nodes: { type: "array", of: { id: "text", label: "text", color: "color" } }, source: t("field"), target: t("field"), value: t("field"),
+      format: t("format"), height: t("number"), title: t("text"), subtitle: t("text") },
+    requires: ["links|data|edges"],
+  },
+  Gantt: {
+    category: "kit", children: "none", selfEvents: ["select"], summary: "tasks on a time axis with progress, groups, milestones and today",
+    props: { data: t("rows", "[{label, start, end, progress, group, status, color}]"), tasks: t("rows"), label: t("field"), start: t("field"), end: t("field"), timeFormat: t("format"), title: t("text"), subtitle: t("text") },
+    requires: ["data|tasks"],
+  },
+  BoxPlot: {
+    category: "kit", children: "none", selfEvents: ["select"], summary: "distributions: quartiles, whiskers, outliers",
+    props: { data: t("rows", "[{label, values: [...]}] or [{label, min, q1, median, q3, max}]"), label: t("field"), x: t("field"), format: t("format"), yFormat: t("format"), height: t("number"), colorful: t("flag"), title: t("text"), subtitle: t("text") },
+    requires: ["data"],
+  },
+  BulletChart: {
+    category: "kit", children: "none", summary: "values against targets over qualitative ranges",
+    props: { items: { type: "array", of: { label: "text", value: "number", target: "number", ranges: "array", max: "number", format: "format", color: "color", status: "string" } }, label: t("text"), value: t("number"), target: t("number"), ranges: t("array"), max: t("number"),
+      format: t("format"), color: t("color"), status: t("string"), title: t("text"), subtitle: t("text") },
+    requires: ["items|value"],
+  },
+  SegmentedBar: {
+    category: "kit", children: "none", selfEvents: ["select"], summary: "one bar split into parts, with a legend of shares",
+    props: { data: t("rows", "[{label, value, color}]"), values: t("rows"), label: t("field"), value: t("field"), format: t("format"), thickness: t("number"), legend: t("flag"), showPercent: t("flag"), title: t("text"), subtitle: t("text") },
+    requires: ["data|values"],
+  },
+  RadialBars: {
+    category: "kit", children: "none", summary: "concentric progress rings (activity rings)",
+    props: { data: t("rows", "[{label, value, max, color}]"), values: t("rows"), max: t("number"), size: t("number"), format: t("format"), centerLabel: t("text"), centerCaption: t("text"), legend: t("flag"), title: t("text"), subtitle: t("text") },
+    requires: ["data|values"],
+  },
+  Sunburst: {
+    category: "kit", children: "none", selfEvents: ["select"], summary: "a hierarchy as rings, arcs sized by value",
+    props: { data: t("any", "{label, value, children} or a list of them"), size: t("number"), height: t("number"), format: t("format"), centerCaption: t("text"), title: t("text"), subtitle: t("text") },
+    requires: ["data"],
+  },
+  CalendarHeatmap: {
+    category: "kit", children: "none", selfEvents: ["select"], summary: "a contribution graph: one cell per day, darker for more",
+    props: { data: t("rows", "[{date, value}]"), date: t("field"), value: t("field"), end: t("string", "yyyy-MM-dd (default the last date)"), weeks: t("number"), format: t("format"), color: t("color"), title: t("text"), subtitle: t("text") },
+    requires: ["data"],
+  },
+  WordCloud: {
+    category: "kit", children: "none", selfEvents: ["select"], summary: "words sized by weight",
+    props: { data: t("rows", "[{text, value}]"), words: t("rows"), label: t("field"), text: t("field"), value: t("field"), max: t("number"), minSize: t("number"), maxSize: t("number"), colorful: t("flag"), height: t("number"), title: t("text"), subtitle: t("text") },
+    requires: ["data|words"],
+  },
+
+  // ── UI kit: tables ────────────────────────────────────────────────────────
+  PivotTable: {
+    category: "kit", children: "none", selfEvents: ["select"], notInWidget: true, summary: "rows × columns of an aggregated value, with totals and heat shading",
+    props: { data: t("rows"), rows: t("any", "a field or a list of fields"), columns: t("any", "a field or a list of fields"), value: t("field"), aggregate: e("sum|count|avg|mean|average|min|max"),
+      format: t("format"), totals: t("flag"), heat: t("flag"), sort: t("flag"), color: t("color"), maxHeight: t("number"), title: t("text"), subtitle: t("text") },
+    requires: ["data"],
+  },
+  Leaderboard: {
+    category: "kit", children: "none", selfEvents: ["select"], summary: "a ranked list with medals, avatars, bars and rank changes",
+    props: { data: t("rows", "[{name, value, subtitle, avatar, change, id}]"), label: t("field"), name: t("field"), value: t("field"), max: t("number"), format: t("format"), highlight: t("text"), showBar: t("flag"), title: t("text"), subtitle: t("text") },
+    requires: ["data"],
+  },
+
+  // ── UI kit: app widgets ───────────────────────────────────────────────────
+  Tabs: {
+    category: "kit", children: "many", selfEvents: ["change"], needsKey: true, summary: "an M3 tab bar over panels (the children, one per tab)",
+    props: { tabs: { type: "array", of: { label: "text", icon: "icon", badge: "any" }, scalars: true, doc: "[{label, icon, badge}] or strings" }, items: { type: "array", of: { label: "text", icon: "icon", badge: "any" }, scalars: true, doc: "alias of tabs" },
+      selected: t("number", "index (set from the program)"), variant: e("primary|secondary"), scrollable: t("flag"), gap: t("number") },
+    requires: ["tabs|items"],
+  },
+  Calendar: {
+    category: "kit", children: "none", selfEvents: ["select", "change"], notInWidget: true, summary: "a month calendar with events; the selected day's events below",
+    props: { month: t("string", "yyyy-MM"), selected: t("string", "yyyy-MM-dd"), events: { type: "array", of: { date: "string", start: "string", title: "text", label: "text", time: "text", subtitle: "text", color: "color", status: "string" } },
+      firstDay: e("monday|sunday"), showEvents: t("flag") },
+  },
+  Kanban: {
+    category: "kit", children: "none", selfEvents: ["select", "move"], notInWidget: true, summary: "columns of cards; long-press to drag a card to another column",
+    props: { columns: { type: "array", of: { id: "any", title: "text", label: "text", color: "color", cards: "array", items: "array" }, doc: "[{id, title, color, cards: [{title, subtitle, description, tags, assignee, avatar, due, priority, status, color}]}]" },
+      columnWidth: t("number"), draggable: t("flag"), emptyText: t("text") },
+    requires: ["columns"],
+  },
+  Carousel: {
+    category: "kit", children: "many", selfEvents: ["change"], summary: "swipeable slides (the children, or items) with peeking neighbours and dots",
+    props: { items: { type: "array", of: { image: "string", src: "string", url: "string", title: "text", subtitle: "text" }, scalars: true }, images: t("array"), height: t("number"), autoplay: t("number", "ms between slides (≥ 1000)"), viewportFraction: t("number"), dots: t("flag") },
+  },
+  Stepper: {
+    category: "kit", children: "none", selfEvents: ["select"], summary: "progress through steps (done, current, error, to do)",
+    props: { steps: { type: "array", of: { title: "text", label: "text", subtitle: "text", description: "text", state: "string", status: "string" }, scalars: true }, items: t("array"), current: t("number"), orientation: e("vertical|horizontal") },
+    requires: ["steps|items"],
+  },
+  Chat: {
+    category: "kit", children: "none", selfEvents: ["select"], notInWidget: true, summary: "a chat thread: bubbles, avatars, grouping, typing indicator, suggestions",
+    props: { messages: { type: "array", of: { role: "string", from: "string", text: "text", name: "text", time: "text", avatar: "string" } }, me: t("text", "the role that is the person (default user)"), showAvatars: t("flag"), typing: t("flag"), suggestions: t("array") },
+    requires: ["messages"],
+  },
+  Countdown: {
+    category: "kit", children: "none", selfEvents: ["done"], summary: "a live countdown on tonal tiles",
+    props: { to: t("string", "an ISO date/time"), until: t("string"), seconds: t("number"), label: t("text"), size: e("compact|default|hero"), showDays: t("flag"), showSeconds: t("flag") },
+    requires: ["to|until|seconds"],
+  },
+  Clock: {
+    category: "kit", children: "none", summary: "a live analog or digital clock",
+    props: { mode: e("analog|digital"), size: t("number"), utcOffset: t("number", "hours"), label: t("text"), seconds: t("flag"), hour24: t("flag") },
+  },
+  EmptyState: {
+    category: "kit", children: "none", selfEvents: ["action"], summary: "an icon, a title, a line and the action that fills the view",
+    props: { icon: t("icon"), title: t("text"), text: t("text"), action: t("text", "the button label"), actionIcon: t("icon"), size: e("compact|default") },
+    requires: ["title"],
+  },
+  AvatarGroup: {
+    category: "kit", children: "none", summary: "overlapping avatars with a +N",
+    props: { names: t("array"), items: { type: "array", of: { name: "text", label: "text", url: "string", image: "string" }, scalars: true }, people: t("array"), max: t("number"), size: t("number") },
+    requires: ["names|items|people"],
+  },
+  Pagination: {
+    category: "kit", children: "none", selfEvents: ["change"], summary: "page numbers with prev/next",
+    props: { page: t("number", "1-based"), value: t("number"), pages: t("number"), total: t("number"), siblings: t("number") },
+    requires: ["pages|total"],
+  },
+  Breadcrumbs: {
+    category: "kit", children: "none", selfEvents: ["select"], summary: "where the person is; earlier crumbs are tappable",
+    props: { items: { type: "array", of: { label: "text", icon: "icon" }, scalars: true } },
+    requires: ["items"],
+  },
+
+  // ── UI kit: text views ────────────────────────────────────────────────────
+  Markdown: {
+    category: "kit", children: "none", selfEvents: ["link"], summary: "markdown: headings, lists, tasks, quotes, code, tables, images, links",
+    props: { text: t("text"), content: t("text"), markdown: t("text"), size: e("compact|default") },
+    requires: ["text|content|markdown"],
+  },
+  LogView: {
+    category: "kit", children: "none", notInWidget: true, summary: "log lines with levels in a monospace panel that follows the end",
+    props: { lines: t("array", "strings or [{time, level, message, source}]"), data: t("array"), title: t("text"), filter: t("text"), wrap: t("flag"), showTime: t("flag"), lineNumbers: t("flag"), follow: t("flag"), fontSize: t("number"), maxHeight: t("number"), emptyText: t("text") },
+    requires: ["lines|data"],
+  },
+  DiffView: {
+    category: "kit", children: "none", notInWidget: true, summary: "the line difference between two texts (or a unified diff)",
+    props: { before: t("text"), after: t("text"), old: t("text"), new: t("text"), diff: t("text", "a unified diff"), title: t("text"), file: t("text"), context: t("number"), maxHeight: t("number") },
+    requires: ["before|after|old|new|diff"],
+  },
+  QRCode: {
+    category: "kit", children: "none", summary: "a QR code of a URL or text",
+    props: { data: t("text"), value: t("text"), text: t("text"), url: t("text"), size: t("number"), ecc: e("L|M|Q|H"), color: t("color"), background: t("color"), rounded: t("flag"), label: t("text") },
+    requires: ["data|value|text|url"],
+  },
 };
+
+// Chart routes these types to their own nodes, so it takes their props too.
+export const CHART_ROUTES = { funnel: "Funnel", waterfall: "Waterfall", sankey: "Sankey", gantt: "Gantt", boxplot: "BoxPlot", box: "BoxPlot", sunburst: "Sunburst",
+  bullet: "BulletChart", segmented: "SegmentedBar", stackedbar: "SegmentedBar", radialbar: "RadialBars", rings: "RadialBars", calendar: "CalendarHeatmap", wordcloud: "WordCloud" };
+for (const t of new Set(Object.values(CHART_ROUTES))) TYPES.Chart.props = { ...TYPES[t].props, ...TYPES.Chart.props };
+TYPES.Chart.requires = ["data|values|rows|links|items|edges|tasks|words"];
 
 // Layout facts, measured: app/test/elpian/dsl_layout_test.dart renders every
 // node directly in a Row, in a vertical and in a horizontal scroll, and checks
 // these lists are exactly the nodes that throw there.
 export const LAYOUT = {
   // Throw without a width bound (directly in a Row, in a horizontal scroll).
-  needsWidth: ["AppBar", "Callout", "Chart", "CodeBlock", "DataGrid", "Expandable", "Graph", "GridView", "Heatmap", "KeyValue", "LinearProgressIndicator", "ListGroup",
-    "ListTile", "ListView", "NavigationBar", "OverflowBox", "Scaffold", "SearchBar", "Section", "TextField", "Timeline", "TreeView", "Treemap"],
+  needsWidth: ["AppBar", "GridView", "LinearProgressIndicator", "ListGroup", "ListTile", "ListView", "NavigationBar", "OverflowBox", "Scaffold", "SearchBar", "TextField"],
   // Throw without a height bound (inside a vertical scroll).
   needsHeight: ["Drawer", "OverflowBox", "Scaffold"],
+  // UI kit views that take a fixed fallback width there instead of throwing
+  // (WidthFallback in kit.dart): fine, but they do not fill the space.
+  fallbackWidth: ["Chart", "DataGrid", "Heatmap", "Treemap", "Graph", "Timeline", "TreeView", "KeyValue", "CodeBlock", "Section", "Expandable", "Callout",
+    "Funnel", "Waterfall", "Sankey", "Gantt", "BoxPlot", "BulletChart", "SegmentedBar", "Sunburst", "CalendarHeatmap", "WordCloud", "PivotTable", "Leaderboard",
+    "Tabs", "Calendar", "Carousel", "Stepper", "Chat", "Markdown", "LogView", "DiffView"],
   // Must be the direct child of one of these.
   parents: { Expanded: ["Row", "Column"], Flexible: ["Row", "Column"], Spacer: ["Row", "Column"], Positioned: ["Stack"], AnimatedPositioned: ["Stack"] },
 };
 for (const t of LAYOUT.needsWidth) TYPES[t].needsWidth = true;
 for (const t of LAYOUT.needsHeight) TYPES[t].needsHeight = true;
+for (const t of LAYOUT.fallbackWidth) TYPES[t].fallbackWidth = true;
 for (const [t, parents] of Object.entries(LAYOUT.parents)) TYPES[t].parents = parents;
 
 // HTML-named nodes render too, but app UI should use the Flutter and kit
@@ -379,7 +547,7 @@ for (const [t, parents] of Object.entries(LAYOUT.parents)) TYPES[t].parents = pa
 export const HTML_DOC = "an HTML-named element (renders, but prefer the Flutter/M3E nodes)";
 
 // Nodes that do not belong on a glanceable phone widget.
-export const NOT_IN_WIDGET = ["DataGrid", "ListView", "GridView", "TextField", "SearchBar", "NavigationBar", "SegmentedButton", "ListGroup",
+export const NOT_IN_WIDGET = ["DataGrid", "PivotTable", "Calendar", "Kanban", "Chat", "LogView", "DiffView", "Tabs", "Pagination", "Breadcrumbs", "ListView", "GridView", "TextField", "SearchBar", "NavigationBar", "SegmentedButton", "ListGroup",
   "Scaffold", "AppBar", "Drawer", "textarea", "input", "form", "table"];
 export const WIDGET_MAX_NODES = 80;
 

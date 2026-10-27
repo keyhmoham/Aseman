@@ -401,7 +401,7 @@
    "flutter": "throws"
   },
   {
-   "name": "Chart in a Row",
+   "name": "Chart in a Row (fallback width)",
    "tree": {
     "type": "Row",
     "children": [
@@ -417,8 +417,8 @@
      }
     ]
    },
-   "validator": "error",
-   "flutter": "throws"
+   "validator": "warning",
+   "flutter": "renders"
   },
   {
    "name": "several corner radii",
@@ -640,6 +640,31 @@
     ]
    },
    "validator": "clean",
+   "flutter": "renders"
+  },
+  {
+   "name": "a Leaderboard in a Row (fallback width)",
+   "tree": {
+    "type": "Row",
+    "children": [
+     {
+      "type": "Leaderboard",
+      "props": {
+       "data": [
+        {
+         "name": "Ann",
+         "value": 3
+        },
+        {
+         "name": "Bo",
+         "value": 2
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "validator": "warning",
    "flutter": "renders"
   }
  ]

@@ -515,6 +515,75 @@
          {
           "type": "Card",
           "props": {
+           "variant": "filled",
+           "style": {
+            "padding": "16",
+            "gap": "12"
+           }
+          },
+          "children": [
+           {
+            "type": "Text",
+            "props": {
+             "text": "Where the work is",
+             "variant": "titleMediumEmphasized"
+            }
+           },
+           {
+            "type": "SegmentedBar",
+            "props": {
+             "data": [
+              {
+               "label": "Done",
+               "value": 1,
+               "status": "good"
+              },
+              {
+               "label": "Open",
+               "value": 0
+              },
+              {
+               "label": "Urgent",
+               "value": 1,
+               "status": "warning"
+              }
+             ]
+            }
+           }
+          ]
+         },
+         {
+          "type": "Card",
+          "props": {
+           "variant": "filled",
+           "style": {
+            "padding": "16"
+           }
+          },
+          "children": [
+           {
+            "type": "Leaderboard",
+            "props": {
+             "title": "Most done",
+             "data": [
+              {
+               "name": "Ann",
+               "value": 0
+              },
+              {
+               "name": "Bo",
+               "value": 1
+              }
+             ],
+             "max": 5,
+             "format": "integer"
+            }
+           }
+          ]
+         },
+         {
+          "type": "Card",
+          "props": {
            "style": {
             "padding": "16",
             "gap": "10"

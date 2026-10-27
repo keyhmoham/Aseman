@@ -64,6 +64,73 @@ const Map<String, Map<String, dynamic>> _sample = {
   'Badge': {'label': '1'},
   'Tooltip': {'message': 'm'},
   'IndexedStack': {'index': 0},
+  'Funnel': {'data': _rows},
+  'Waterfall': {'data': _rows, 'start': 2},
+  'Sankey': {
+    'links': [
+      {'from': 'a', 'to': 'b', 'value': 3},
+      {'from': 'b', 'to': 'c', 'value': 2}
+    ]
+  },
+  'Gantt': {
+    'data': [
+      {'label': 't', 'start': '2026-01-01', 'end': '2026-01-09', 'progress': 0.5}
+    ]
+  },
+  'BoxPlot': {
+    'data': [
+      {'label': 'a', 'values': [1, 2, 3, 4, 9]}
+    ]
+  },
+  'BulletChart': {'label': 'L', 'value': 3, 'target': 4, 'ranges': [2, 4, 6]},
+  'SegmentedBar': {'data': _rows},
+  'RadialBars': {'data': _rows},
+  'Sunburst': {
+    'data': [
+      {'label': 'a', 'children': [{'label': 'b', 'value': 2}]},
+      {'label': 'c', 'value': 1}
+    ]
+  },
+  'CalendarHeatmap': {
+    'data': [
+      {'date': '2026-01-05', 'value': 3}
+    ],
+    'weeks': 8
+  },
+  'WordCloud': {
+    'data': [
+      {'text': 'alpha', 'value': 3},
+      {'text': 'beta', 'value': 1}
+    ]
+  },
+  'PivotTable': {'data': _rows, 'rows': 'label', 'columns': 'x', 'value': 'value'},
+  'Leaderboard': {'data': [{'name': 'A', 'value': 3}, {'name': 'B', 'value': 2}]},
+  'Tabs': {'tabs': ['One', 'Two']},
+  'Calendar': {'month': '2026-01', 'selected': '2026-01-05', 'events': [{'date': '2026-01-05', 'title': 'x'}]},
+  'Kanban': {
+    'columns': [
+      {'title': 'A', 'cards': [{'title': 'c'}]}
+    ]
+  },
+  'Carousel': {'height': 120},
+  'Stepper': {'steps': ['a', 'b'], 'current': 0},
+  'Chat': {
+    'messages': [
+      {'role': 'user', 'text': 'hi'},
+      {'role': 'assistant', 'text': 'hello'}
+    ],
+    'suggestions': ['more']
+  },
+  'Countdown': {'seconds': 90},
+  'Clock': {'label': 'Here'},
+  'EmptyState': {'title': 'Nothing', 'action': 'Add'},
+  'AvatarGroup': {'names': ['A B', 'C D']},
+  'Pagination': {'page': 2, 'pages': 5},
+  'Breadcrumbs': {'items': ['Home', 'Here']},
+  'Markdown': {'text': '# Hi\n\n- a\n\n| a | b |\n|---|---|\n| 1 | 2 |'},
+  'LogView': {'lines': ['INFO ok', 'ERROR bad']},
+  'DiffView': {'before': 'a\nb', 'after': 'a\nc'},
+  'QRCode': {'data': 'https://aseman.app'},
 };
 
 // Not measurable here: platform views, drag-and-drop and route transitions.

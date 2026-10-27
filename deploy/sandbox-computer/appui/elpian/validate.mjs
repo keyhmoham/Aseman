@@ -349,6 +349,13 @@ export function validate(tree, opts = {}) {
       check(props.value || "value", "props.value");
     }
     if (Array.isArray(props.series)) props.series.forEach((s, i) => check(typeof s === "string" ? s : s && s.field, `props.series[${i}]`));
+    // The newer charts and tables: the fields they are told to read.
+    const FIELD_PROPS = {
+      Funnel: ["label", "value"], Waterfall: ["label", "value"], SegmentedBar: ["label", "value"], Gantt: ["label", "start", "end"], BoxPlot: ["label"],
+      CalendarHeatmap: ["date", "value"], WordCloud: ["text", "label", "value"], Leaderboard: ["name", "label", "value"], PivotTable: ["value"],
+    };
+    for (const f of FIELD_PROPS[type] || []) if (typeof props[f] === "string") check(props[f], `props.${f}`);
+    if (type === "PivotTable") for (const k of ["rows", "columns"]) for (const f of [].concat(props[k] || [])) check(String(f), `props.${k}`);
     if (type === "DataGrid" && Array.isArray(props.columns)) props.columns.forEach((c, i) => isObj(c) && check(c.field, `props.columns[${i}].field`));
   }
 
@@ -469,6 +476,10 @@ export function validate(tree, opts = {}) {
     if (!html && spec.needsWidth && box.w === false && !own(style.width) && !own(style.maxWidth)) {
       add("error", "layout-unbounded-width", ctx, `${type} has no width bound here (${ctx.whyW}) — Flutter throws ("${type === "TextField" ? "InputDecorator cannot have an unbounded width" : "BoxConstraints forces an infinite width"}").`,
         `Wrap it in Expanded (inside the Row), or give it/its parent a style.width.`);
+    }
+    if (!html && spec.fallbackWidth && box.w === false && !own(style.width) && !own(style.maxWidth)) {
+      add("warning", "layout-fallback-width", ctx, `${type} has no width bound here (${ctx.whyW}), so it draws at a fixed fallback width instead of filling the space.`,
+        "Wrap it in Expanded (inside the Row), or give it a style.width.");
     }
     if (!html && spec.needsHeight && box.h === false && !own(style.height) && !own(style.maxHeight)) {
       add("error", "layout-unbounded-height", ctx, `${type} has no height bound here (${ctx.whyH}) — Flutter throws.`, `Do not put a ${type} inside a scrolling list${type === "Scaffold" ? "; make the Scaffold the screen's root" : ", or give it a style.height"}.`);
@@ -729,7 +740,7 @@ export function describe(type) {
   const lines = [`${type} — ${spec.summary || ""} [${spec.category}]`];
   lines.push(`  children: ${spec.children}${spec.slots ? ` (slots: ${spec.slots.join(", ")})` : ""}${spec.childTypes ? ` (made for ${spec.childTypes.join("/")})` : ""}`);
   if (spec.parents) lines.push(`  must be a direct child of: ${spec.parents.join(" or ")}`);
-  const layout = [spec.needsWidth && "needs a bounded width (wrap in Expanded inside a Row)", spec.needsHeight && "needs a bounded height (not inside a scroll)"].filter(Boolean);
+  const layout = [spec.needsWidth && "needs a bounded width (wrap in Expanded inside a Row)", spec.fallbackWidth && "without a width bound (in a Row) it takes a fixed width: wrap in Expanded to fill", spec.needsHeight && "needs a bounded height (not inside a scroll)"].filter(Boolean);
   if (layout.length) lines.push(`  layout: ${layout.join("; ")}`);
   const props = spec.props || {};
   if (Object.keys(props).length) {

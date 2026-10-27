@@ -168,6 +168,8 @@ test("data fields named by charts and grids exist on the rows", () => {
   assert.deepEqual(codes(validate({ type: "Chart", props: { data: rows, x: "month", y: "revenue" } })), []);
   assert.deepEqual(codes(validate({ type: "Chart", props: { data: rows, x: "date", series: ["revenue", "cost"] } })), ["field-missing", "field-missing"]);
   assert.deepEqual(codes(validate({ type: "DataGrid", props: { data: rows, columns: [{ field: "month" }, { field: "revnue" }] } })), ["field-missing"]);
+  assert.deepEqual(codes(validate({ type: "PivotTable", props: { data: rows, rows: "month", columns: "region", value: "revenue" } })), ["field-missing"]);
+  assert.deepEqual(codes(validate({ type: "Gantt", props: { data: [{ task: "a", from: "2026-01-01" }], start: "begin" } })), ["field-missing"]);
 });
 
 test("styles: keys, units, radii, colors, cast strings", () => {
@@ -212,7 +214,10 @@ test("parents and parent data", () => {
 test("layout: what throws without a bound", () => {
   assert.deepEqual(errorsOf({ type: "Row", children: [{ type: "TextField" }] }), ["layout-unbounded-width"]);
   assert.deepEqual(errorsOf({ type: "Row", children: [{ type: "Column", children: [{ type: "ListTile", props: { title: "t" } }] }] }), ["layout-unbounded-width"]);
-  assert.deepEqual(errorsOf({ type: "ListView", props: { scrollDirection: "horizontal" }, children: [{ type: "Chart", props: { data: [1, 2] } }] }), ["layout-unbounded-width"]);
+  assert.deepEqual(errorsOf({ type: "ListView", props: { scrollDirection: "horizontal" }, children: [{ type: "TextField" }] }), ["layout-unbounded-width"]);
+  // UI kit views take a fallback width there: a warning, not an error.
+  assert.deepEqual(codes(validate({ type: "Row", children: [{ type: "Chart", props: { data: [1, 2] } }] }, { design: false })), ["layout-fallback-width"]);
+  assert.deepEqual(codes(validate({ type: "Row", children: [{ type: "Expanded", children: [{ type: "Chart", props: { data: [1, 2] } }] }] }, { design: false })), []);
   assert.deepEqual(errorsOf({ type: "Row", children: [{ type: "TextField", props: { style: { width: 200 } } }] }), []);
   assert.deepEqual(errorsOf({ type: "ListView", children: [{ type: "Column", children: [{ type: "Expanded", children: [T("x")] }] }] }), ["layout-flex-unbounded"]);
   assert.deepEqual(errorsOf({ type: "Row", children: [{ type: "Row", children: [{ type: "Expanded", children: [T("x")] }] }] }), ["layout-flex-unbounded"]);
@@ -229,6 +234,8 @@ test("the phone widget is glanceable", () => {
   assert.deepEqual(w({ type: "Column", children: [{ type: "DataGrid", props: { data: [] } }] }), ["widget-node"]);
   assert.deepEqual(w({ type: "Button", props: { text: "x" }, events: { tap: "go" } }), ["widget-events"]);
   assert.deepEqual(w({ type: "Column", children: Array.from({ length: 90 }, () => T("x")) }), ["widget-size"]);
+  assert.deepEqual(w({ type: "Kanban", props: { columns: [] } }), ["widget-node"]);
+  assert.deepEqual(w({ type: "Row", children: [{ type: "RadialBars", props: { data: [{ label: "Move", value: 3 }] } }, { type: "Countdown", props: { seconds: 60 } }] }), []);
 });
 
 test("design notes: M3 Expressive practice", () => {

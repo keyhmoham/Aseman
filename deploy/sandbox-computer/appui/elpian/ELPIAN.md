@@ -42,7 +42,8 @@ elpian/manifest.json     optional: {"files": ["src/state.js", "src/main.js"]} to
 elpian/app.js            the bundle (generated: never edit it)
 vendor/aseman-elpian/    this kit: SDK, OpenUI, bundle.mjs, check.mjs, nodes.json,
                          validate.mjs + schema.mjs + icons.json (the UI DSL validator),
-                         examples/showcase.js (a reference app in M3 Expressive)
+                         examples/showcase.js (a reference app in M3 Expressive: scrolling pages),
+                         examples/whiteboard.js (a reference app with a fixed, touch-driven screen)
 server.* / src/…         your backend; it serves elpian/app.js and your API
 ```
 
@@ -55,11 +56,16 @@ node vendor/aseman-elpian/check.mjs elpian/app.js --apps APPS.json \
 ```
 
 `check.mjs` runs the program on QuickJS (the engine the client uses), against
-a simulated Aseman host, and against your running server: it fails on
-exceptions, unknown node types, events naming missing functions, handlers
-that throw with a sample event, server errors, and every error the **UI DSL
-validator** finds in what the program renders (below). The platform runs it
-too before the app is shown; make it pass.
+a simulated Aseman host (a small phone, 360×640, then a 1280×800 desk window),
+and against your running server: it fails on exceptions, unknown node types,
+events naming missing functions, handlers that throw with the event data the
+client sends (gestures as the finger makes them: start, moves, end), server
+errors, every error the **UI DSL validator** finds in what the program
+renders (below), and the validator's findings that break the app for the
+person using it: a drawing surface inside a scroll, handlers inside a control,
+an overlay that swallows taps, a touch target with no size, sizes larger than
+a phone, a fixed screen taller than a phone. The platform runs it too before
+the app is shown; make it pass.
 
 ## Validating view trees (the UI DSL validator)
 
@@ -120,6 +126,18 @@ Row > TextField#q`, `$.children[0]…`), why it matters and the fix:
   `Section`, `Callout`, … directly in a `Row`: wrap them in `Expanded`) or a
   height bound (`Scaffold`, `Drawer` inside a scroll), and `Expanded` in a
   `Column` inside a scrolling list.
+* **Touch:** a node that follows the finger (`drag*`, `pointermove`,
+  `scale*`) inside a scroll (`gesture-in-scroll`: make the screen fixed);
+  swipes on the axis of the scroll around them; handlers inside a control
+  that is tapped as a whole (`Icon` with `tap` inside a `Button`); events
+  under `pointerEvents: "none"`; empty boxes with events and no size; a
+  painted `Positioned` overlay that covers interactive siblings in a
+  `Stack` (give it `pointerEvents: "none"`).
+* **Fits a phone:** sizes wider or taller than a small phone (360×640)
+  where nothing scrolls them; a screen that does not scroll but needs more
+  height than a phone gives it (`layout-screen-overflow`); `Row`s that need
+  more width than they get (`layout-row-overflow`). Sizes are lower bounds
+  from the M3 specs, so a finding is a real overflow.
 * **Phone widget:** no tables, lists, inputs or chrome, at most
   80 nodes, no events.
 * **Design (notes):** M3E practice — type roles instead of font sizes, one
@@ -188,7 +206,8 @@ function add(event, app) {                         // event is plain JSON
 | `Aseman.conversation(agent)` | `.send(text)` keeps the history in the program |
 | `Aseman.call(tool, microtool, args)` | a space app's microtool: its unwrapped result (often a markdown string) |
 | `Aseman.agents()`, `Aseman.tools()`, `Aseman.microtools(tool)`, `Aseman.context()` | discovery |
-| `Aseman.env()` | `{display: full\|compact\|sheet, widget: {size, shape} (compact), theme: {mode, accent, colors}, user, space, room, title}`; `Aseman.onEnv(fn)` on change (the app re-renders by itself) |
+| `Aseman.env()` | `{display: full\|compact\|sheet, widget: {size, shape} (compact), theme: {mode, accent, colors}, viewport, user, space, room, title}`; `Aseman.onEnv(fn)` on change (the app re-renders by itself) |
+| `Aseman.viewport()` | `{width, height, sizeClass: compact\|medium\|expanded, orientation}`: the space the app is drawn in (phones are `compact`, < 600 wide; desk windows usually `expanded`, ≥ 840). The app re-renders when it changes: pick the layout from it (see Screen layout) |
 | `App.create({…, widget: {view, refresh, size, shape, refreshMs, static}})` | the phone widget (required; see The phone widget) |
 | `app.every(key, ms, fn)`, `app.isWidget()` | a timer (min 5 s); whether it is drawn as the widget now |
 | `Aseman.compact(summary)`, `Aseman.expand()` | a published summary instead of a drawn widget; open in full |
@@ -222,21 +241,113 @@ asks for a dedicated brand palette. Most nodes take roles by name, so you
 rarely need hex at all (`Text` `color: "muted"`, `Card` `tone: "primary"`,
 `Tag` `status`). See **Design** below.
 
+### Screen layout: a scrolling page or a fixed screen
+
+Apps open on phones (360–430 wide, 640–930 tall) as often as in desk
+windows, and the window can be any size. Decide for **each screen** which
+of two layouts it is — do not make every screen one long scroll:
+
+| Kind | For | Shape |
+|---|---|---|
+| **Scrolling page** | content that grows: feeds, lists, forms, dashboards, settings, articles | `Scaffold` > `ListView` > `Column` (padding 16, gap 16–24) — `examples/showcase.js` |
+| **Fixed screen** | the screen *is* the tool and fills the window exactly: whiteboards and drawing, canvases and games, maps, 3D scenes, chats (messages scroll, the composer stays), calculators, players, editors, anything you drag, pinch or swipe on | `Scaffold` > `Column` (`alignItems: "stretch"`): fixed parts (a header `Row`, a toolbar) take their height, the main part takes the rest in an `Expanded`; a part of it that grows scrolls inside its own `Expanded` > `ListView` — `examples/whiteboard.js` |
+
+```js
+// A fixed screen: fits any window, nothing scrolls around the surface.
+{ type: "Scaffold", children: [
+  { type: "Column", props: { style: { alignItems: "stretch" } }, children: [
+    { type: "Row", props: { style: { padding: "12 16", gap: "8", alignItems: "center" } }, children: [
+      { type: "Expanded", children: [{ type: "Text", props: { text: "Sketch", variant: "headlineSmallEmphasized" } }] },
+      { type: "IconButton", key: "undo", props: { icon: "undo", tooltip: "Undo" }, events: { tap: app.handler("undo", undo) } },
+    ] },
+    { type: "Expanded", children: [                       // all the free height
+      { type: "Canvas", key: "board", props: { commands: s.commands },
+        events: { dragstart: app.handler("down", down), drag: app.handler("move", move), dragend: app.handler("up", up) } },
+    ] },
+  ] },
+  { type: "NavigationBar", props: { selected: s.tab, items: [/* … */] }, events: { change: app.handler("tab", tab) } },
+] }
+```
+
+Rules that make both kinds fit every screen:
+
+* **Never** put a drawing surface, a map, a 3D scene or anything that
+  follows the finger inside a `ListView` / `Scroll`: the page would scroll
+  instead (older clients) or could only be scrolled around it, and the
+  surface scrolls out of view. The check fails on it (`gesture-in-scroll`).
+* A fixed screen must fit a **360×640 phone** (less the app bar and
+  navigation bar): only the `Expanded` parts stretch; when the fixed parts
+  are too tall, move what grows into an `Expanded` > `ListView`, or show less
+  on small screens. The check fails on overflow (`layout-screen-overflow`).
+* No fixed `width` above 360 or `height` above 640 where nothing scrolls
+  them: leave sizes unset so nodes fill the space, cap them with `maxWidth`,
+  use percentages, or size from `Aseman.viewport()`. A `Canvas` without
+  `width`/`height` fills its box (in an `Expanded`: the free space).
+* `Row`s must fit 360 px: put texts in `Expanded` (with `maxLines` /
+  `overflow: "ellipsis"`), let chips and buttons wrap (`Wrap`), use
+  `IconButton`s for secondary actions on phones.
+* **Adapt to the window**: `Aseman.viewport().sizeClass` is `compact` on
+  phones, `medium` on small tablets, `expanded` on desk windows — e.g. a
+  `NavigationBar` and one column on `compact`, two panes side by side
+  (a `Row` of `Expanded`s) on `expanded`; a toolbar `Row` on wide screens,
+  stacked rows on phones. The app re-renders when the window changes.
+
 ### Events
 
-| Event | From | Event data (the handler's argument) |
+Every handler gets the event as plain JSON: its `type`, `target` (the node's
+key), the fields below, and `data`. Read `e.value` for every `change` and
+`input`, whichever node sent it (`data`'s fields are also at the top level).
+Positions are `{x, y}` in logical px: **`localPosition`** on the node itself
+(a canvas's own coordinates: draw at them), `position` on the screen, and
+`delta` since the last move.
+
+| Event | From | Event data (besides `type`, `target`) |
 |---|---|---|
-| `tap`, `doubletap`, `longpress` | any node (the engine adds the gesture), `Button`, `InkWell` | `{type}` |
-| `input` | `TextField` (each keystroke) | `{value}` |
-| `submit` | `TextField` (enter) | `{}` |
-| `change` | `Checkbox`, `Switch`, `Slider`, `Radio`, `Rating`, `Chip` (with `selected`), `SegmentedButton`, `NavigationBar` (`value` = index) | `{value}` |
-| `input`, `submit` | `SearchBar` (like `TextField`) | `{value}` / `{}` |
-| `remove` | `Chip` (`variant: "input"`) | `{}` |
-| `select` | `Chart`, `DataGrid`, `Heatmap`, `Treemap`, `Graph`, `Timeline`, `TreeView` | `{data: {index, row, …}}` |
+| `tap`, `doubletap`, `longpress` | any node (the engine adds the gesture), `Button`, `InkWell` | — |
+| `tapdown`, `tapup`, `longpressstart` / `longpressmove` / `longpressend`, `secondarytap` | any node | `localPosition`, `position` |
+| `dragstart`, `drag`, `dragend` | any node (`Canvas`, a `Container`, a `Card`, …): one finger (or the mouse) moving on it | `localPosition`, `position`, `delta`; `dragend` also `velocity` |
+| `pointerdown`, `pointermove`, `pointerup`, `pointercancel` | any node: raw touches, every finger (`pointerId`) | `localPosition`, `position`, `delta`, `pointerId`, `pressure` |
+| `scalestart`, `scaleupdate`, `scaleend` (`pinch*`, `rotate*`: only with two fingers) | any node: pinch-zoom, rotate, two-finger pan | `scale` (1 at the start), `rotation` (radians), `focalPoint`, `localFocalPoint` |
+| `swipeleft`, `swiperight`, `swipeup`, `swipedown` | any node: a fling | `velocity` |
+| `resize` | `Canvas`, when it is laid out at a new size | `width`, `height` |
+| `input` | `TextField` (each keystroke) | `value` |
+| `submit` | `TextField` (enter) | — |
+| `change` | `Checkbox`, `Switch`, `Slider`, `Radio`, `Rating`, `Chip` (with `selected`), `SegmentedButton`, `NavigationBar` (`value` = index), `Tabs`, `Carousel`, `Pagination` | `value` |
+| `input`, `submit` | `SearchBar` (like `TextField`) | `value` / — |
+| `remove` | `Chip` (`variant: "input"`) | — |
+| `select` | `Chart`, `DataGrid`, `Heatmap`, `Treemap`, `Graph`, `Timeline`, `TreeView` | `index`, `row`, … (also under `data`) |
 
 Give interactive nodes (`TextField`, `SearchBar`, `Checkbox`, `Switch`,
 `Slider`, `SegmentedButton`) a stable `key` so they keep focus across
 renders.
+
+### Touch and nested gestures
+
+* **The innermost node wins.** A tap on a `Button` inside a tappable `Card`
+  runs only the button's handler; a tap elsewhere on the card runs the
+  card's. So never put handlers *inside* a control that is tapped as a whole
+  (`Button`, `IconButton`, `FAB`, `Chip`, `SegmentedButton`,
+  `NavigationBar`, `Switch`, `Checkbox`, `Slider`, `TextField`): put the
+  event on the control itself.
+* **A node that follows the finger owns the touches that start on it.**
+  With `drag*`, `pointermove` or `scale*`, a stroke that starts on it is its
+  own as soon as it moves — the scroll, drawer or page view around it does
+  not get it — while taps on buttons over it (a toolbar on a canvas) still
+  work. Handlers fire in order: `dragstart`, then `drag` for each move,
+  then `dragend` (also when the touch is cancelled); keep the stroke being
+  drawn in state from `dragstart` and finish it in `dragend`.
+* **Swipes** only take their own axis: `swipeleft` / `swiperight` on rows of
+  a vertical list are fine; `swipeup` / `swipedown` there steal the list's
+  scrolling (and sideways swipes inside a `Carousel` or horizontal list
+  steal its paging).
+* **Overlays**: anything with a background on top of a `Stack` (a scrim, a
+  HUD backdrop) takes the touches of what is under it. Give it
+  `style.pointerEvents: "none"` to let touches through; events inside
+  such a node never fire.
+* **Something to touch**: a node with events needs a size — an empty
+  `Container` in a `Column` is 0 px tall; give it a height or padding, or
+  put it in an `Expanded`.
+* Keep keys unique: events are dispatched by key.
 
 ### Elpian nodes (Flutter widgets)
 
@@ -279,7 +390,7 @@ renders.
 | `Scaffold`, `AppBar` (`title`), `Drawer` | app chrome for a full-screen layout: children go to slots by type (`AppBar`, `FAB`, `NavigationBar`, `Drawer`) or `props.slot`; the rest is the body |
 | `Dismissible`, `Draggable`, `DragTarget`, `Hero` | swipe, drag and drop, shared transitions |
 | `MathExpression`, `Math` | `latex` / `expression` |
-| `Canvas`, `CachedCanvas` | `commands`, `width`, `height`, `backgroundColor`: vector drawing (canvas commands) |
+| `Canvas`, `CachedCanvas` | `commands` (`{type, params}`: `beginPath`, `moveTo`/`lineTo` `{x, y}`, `setStrokeStyle` `{color}`, `setLineWidth` `{width}`, `setLineCap` `{cap}`, `stroke`, `fillRect`, `fillCircle`, `fillText`, …), `width`, `height` (`Canvas` without them fills its box: put it in an `Expanded`), `backgroundColor`: vector drawing, clipped to the canvas. `resize` `{width, height}`; draw with `drag*` / `pointer*` events at `e.localPosition` (see Touch) |
 | `Scene3D` (also `scene3d`) | an embedded 3D scene (Godot) |
 | `AnimatedContainer`, `AnimatedOpacity`, `AnimatedCrossFade` (`showFirst`), `AnimatedSwitcher` (`transitionType`), `AnimatedAlign`, `AnimatedPadding`, `AnimatedPositioned`, `AnimatedScale`, `AnimatedRotation`, `AnimatedSlide`, `AnimatedSize`, `FadeTransition`, `SlideTransition`, `ScaleTransition`, `RotationTransition`, `SizeTransition` (`axis`), `StaggeredAnimation`, `Shimmer`, `Pulse`, `AnimatedGradient` | motion: animate when their style changes between renders (`transitionDuration`, `animationName`, …) |
 
@@ -383,7 +494,11 @@ designed, not assembled. Aim for an app someone would screenshot.
 **Start from `vendor/aseman-elpian/examples/showcase.js`**: a complete app
 (header, hero stat, KPI cards, segmented filter, grouped list, form, agent
 island, navigation bar, loading / empty states, phone widget) that passes
-`check.mjs`. Borrow its structure and idioms; make the content yours.
+`check.mjs`. Borrow its structure and idioms; make the content yours. Its
+screens are scrolling pages; for a screen that is a tool (drawing, a game, a
+map, a chat, a player), start from **`examples/whiteboard.js`**: a fixed
+screen with a toolbar and a drawing surface that fills the window, strokes
+from drag events, and an adaptive layout from `Aseman.viewport()`.
 
 ### Principles
 
@@ -419,9 +534,11 @@ island, navigation bar, loading / empty states, phone widget) that passes
 7. **Rhythm.** An 8-pt grid: screen padding 16 (24 on wide windows), 12–16
    between cards, 24–32 between sections, 8–12 inside groups. Tap targets
    ≥ 40 high.
-8. **Responsive.** Desk windows are wide, phones narrow: lay out cards with
-   `ResponsiveGrid` (`minColumnWidth` 260–320), stats with `minColumnWidth`
-   160; multi-screen apps use `NavigationBar` (3–5 destinations) or a
+8. **Responsive.** Desk windows are wide, phones narrow (down to 360×640):
+   lay out cards with `ResponsiveGrid` (`minColumnWidth` 260–320), stats
+   with `minColumnWidth` 160; switch layouts on `Aseman.viewport().sizeClass`;
+   pick a scrolling page or a fixed screen per screen (see Screen layout);
+   multi-screen apps use `NavigationBar` (3–5 destinations) or a
    `SegmentedButton`.
 
 ### Which node for which need
@@ -448,6 +565,7 @@ island, navigation bar, loading / empty states, phone widget) that passes
 ### A screen, composed
 
 ```js
+// A scrolling page (see Screen layout for fixed screens).
 view: function (s, app) {
   var c = Aseman.env().theme.colors;
   return { type: "ListView", children: [{ type: "Column", props: { style: { padding: "16", gap: "24" } }, children: [
@@ -648,12 +766,15 @@ names it: `"widget": "elpian/widget.js"`.
 1. `elpian/src/*.js` written against this file; no browser APIs; designed
    to **Design: Material 3 Expressive** (type roles, tonal surfaces, icons,
    designed loading / empty / error states).
-2. Server serves `GET /elpian/app.js` and its API; `start` serves both.
-3. `node vendor/aseman-elpian/bundle.mjs .` then `check.mjs … --server …`
+2. Each screen is a scrolling page or a fixed screen (Screen layout); it
+   fits a 360×640 phone and a desk window; nothing that follows the finger
+   is inside a scroll; handlers read `e.value` / `e.localPosition`.
+3. Server serves `GET /elpian/app.js` and its API; `start` serves both.
+4. `node vendor/aseman-elpian/bundle.mjs .` then `check.mjs … --server …`
    pass, and `elpian_validate_program` (or `validate.mjs --program …`)
    reports no errors or warnings for the app and the widget.
-4. Tests for the server, and for the frontend's pure logic (state updates,
+5. Tests for the server, and for the frontend's pure logic (state updates,
    parsing microtool / agent replies) run with `node --test`.
-5. A `widget` that shows live, use-case-specific facts at a glance in every
+6. A `widget` that shows live, use-case-specific facts at a glance in every
    size (see The phone widget); `check.mjs` passes for it too.
-6. `READY.json` has `"ui": "elpian"` and `"elpian": "elpian/app.js"`.
+7. `READY.json` has `"ui": "elpian"` and `"elpian": "elpian/app.js"`.

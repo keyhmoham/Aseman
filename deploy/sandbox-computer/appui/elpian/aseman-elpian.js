@@ -20,7 +20,7 @@
  *   askHost('aseman.request', requestJSON)       -> {accepted}; later the host
  *     calls __asemanSettle({id, ok, status, data, error})
  *   askHost('aseman.compact', summaryJSON) / askHost('aseman.expand', '')
- *   host -> __asemanEnv(env) when the theme or display changes
+ *   host -> __asemanEnv(env) when the theme, display or viewport changes
  */
 (function (root) {
   "use strict";
@@ -261,13 +261,32 @@
     Error: AsemanError,
     Task: Task,
     plain: plain,
+    event: eventOf,
     parseJSON: parseJSON,
     log: log,
 
     // How the app is shown and themed: {display: full|compact|sheet,
     // theme: {mode, accent, colors: {primary, onPrimary, surface, …}},
+    // viewport: {width, height, sizeClass, orientation},
     // user: {id, handle}, space, room, title}.
     env: currentEnv,
+
+    // The space the app is drawn in (logical px) and its Material window
+    // size class: compact (phones, < 600 wide), medium (< 840), expanded
+    // (tablets landscape, desk windows); orientation portrait|landscape.
+    // The app re-renders when it changes. A client too old to say is taken
+    // for a phone.
+    viewport: function () {
+      var v = currentEnv().viewport || {};
+      var w = typeof v.width === "number" && v.width > 0 ? v.width : 390;
+      var h = typeof v.height === "number" && v.height > 0 ? v.height : 780;
+      return {
+        width: w,
+        height: h,
+        sizeClass: v.sizeClass || (w < 600 ? "compact" : w < 840 ? "medium" : "expanded"),
+        orientation: v.orientation || (w > h ? "landscape" : "portrait"),
+      };
+    },
     onEnv: function (fn) {
       envListeners.push(fn);
     },
@@ -383,6 +402,23 @@
     Aseman.onEnv(function () { app.render(); });
   }
 
+  // An event as handlers read it: plain JSON with its `data` fields also at
+  // the top level (`e.value` of a NavigationBar, SegmentedButton or Tabs,
+  // `e.index`, `e.width` …), whichever widget sent it; a field the event
+  // has is never replaced. Positions are {x, y}: `localPosition` on the
+  // node, `position` on the screen, `delta` since the last move.
+  function eventOf(raw) {
+    var e = plain(raw);
+    if (!e || typeof e !== "object" || Array.isArray(e)) return e === undefined || e === null ? {} : { value: e };
+    var d = e.data;
+    if (d && typeof d === "object" && !Array.isArray(d)) {
+      for (var k in d) {
+        if (Object.prototype.hasOwnProperty.call(d, k) && e[k] === undefined) e[k] = d[k];
+      }
+    }
+    return e;
+  }
+
   // A function the view can name in `events`: stable for the same key, so
   // re-renders do not pile up handlers. Errors in it are shown, not lost.
   App.prototype.handler = function (key, fn) {
@@ -390,7 +426,7 @@
     var name = this.prefix + safeKey(key);
     root[name] = function (event) {
       try {
-        return fn(plain(event), app);
+        return fn(eventOf(event), app);
       } catch (e) {
         app.fail(e);
       }
@@ -539,7 +575,12 @@
       props: { severity: "critical", title: "Something went wrong", text: app.error },
       children: [{ type: "Button", props: { text: "Dismiss", variant: "tonal", size: "xs", icon: "close" }, events: { tap: dismiss } }],
     };
-    return { type: "Column", props: { style: { gap: "12", padding: "16" } }, children: tree ? [banner, tree] : [banner] };
+    // The app's own tree keeps the space below the banner (Expanded): a
+    // full-screen layout (a Scaffold, an Expanded canvas, a ListView) needs
+    // a bounded height and throws in a plain Column.
+    var top = { type: "Padding", props: { style: { padding: "16 16 4 16" } }, children: [banner] };
+    if (!tree) return { type: "Column", children: [top] };
+    return { type: "Column", props: { style: { alignItems: "stretch" } }, children: [top, { type: "Expanded", children: [tree] }] };
   }
 
   // Snapshot and restore of the first app's state (JSON): check.mjs uses them

@@ -230,7 +230,12 @@ Validating view trees). The backend is the same in both cases.
      designed loading (skeleton or loading indicator), empty (icon,
      headline, one line, the action that fills it) and error state (human
      message + retry) for every view that loads.
-   - **Responsive** for desk windows and phone widths; **one distinctive
+   - **Responsive** for desk windows and phones down to 360×640: each
+     screen is either a scrolling page (content that grows) or a fixed
+     screen that fills the window exactly (drawing, games, maps, chats,
+     players — anything you drag or pinch on, never inside a scroll), and
+     every interaction responds to touch (ELPIAN.md, Screen layout and
+     Touch). **One distinctive
      touch** that makes the app memorable (a hero visual, a playful detail,
      a clever layout), never a generic form-and-table page or
      purple-gradient "AI slop". OpenUI islands included.

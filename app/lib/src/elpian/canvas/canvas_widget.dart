@@ -4,12 +4,25 @@ import 'package:flutter/material.dart';
 import 'canvas_api.dart';
 
 /// Canvas widget that renders drawing commands
+/// Draws canvas [commands].
+///
+/// Without a [width] / [height] it fills the space it is given (a canvas in
+/// an `Expanded` is the whole free area of a fixed screen); where that space
+/// is unbounded (in a scroll, a Row) it takes [fallbackSize]. Drawing is
+/// clipped to the canvas, so a stroke past its edge never paints over the
+/// UI around it. [onResize] hears the size it was laid out at, after the
+/// frame, whenever it changes — so a program can fit its drawing to any
+/// screen.
 class ElpianCanvas extends StatefulWidget {
   final List<Map<String, dynamic>> commands;
   final double? width;
   final double? height;
   final Color? backgroundColor;
   final Function(CanvasAPIExecutor)? onReady;
+  final ValueChanged<Size>? onResize;
+
+  /// The side a canvas takes in a direction with no bound and no size.
+  static const double fallbackSize = 300;
 
   const ElpianCanvas({
     Key? key,
@@ -18,6 +31,7 @@ class ElpianCanvas extends StatefulWidget {
     this.height,
     this.backgroundColor,
     this.onReady,
+    this.onResize,
   }) : super(key: key);
 
   @override
@@ -26,6 +40,7 @@ class ElpianCanvas extends StatefulWidget {
 
 class _ElpianCanvasState extends State<ElpianCanvas> {
   late CanvasAPIExecutor executor;
+  Size? _reported;
 
   @override
   void initState() {
@@ -54,22 +69,36 @@ class _ElpianCanvasState extends State<ElpianCanvas> {
     widget.onReady?.call(executor);
   }
 
+  void _report(Size size) {
+    if (widget.onResize == null || size == _reported) return;
+    _reported = size;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _reported == size) widget.onResize?.call(size);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: widget.width,
-      height: widget.height,
-      color: widget.backgroundColor,
-      child: RepaintBoundary(
-        child: CustomPaint(
-          painter: CanvasPainter(executor),
-          size: Size(
-            widget.width ?? double.infinity,
-            widget.height ?? double.infinity,
+    return LayoutBuilder(builder: (context, c) {
+      final size = c.constrain(Size(
+        widget.width ??
+            (c.hasBoundedWidth ? c.maxWidth : ElpianCanvas.fallbackSize),
+        widget.height ??
+            (c.hasBoundedHeight ? c.maxHeight : ElpianCanvas.fallbackSize),
+      ));
+      _report(size);
+      return SizedBox.fromSize(
+        size: size,
+        child: ClipRect(
+          child: ColoredBox(
+            color: widget.backgroundColor ?? const Color(0x00000000),
+            child: RepaintBoundary(
+              child: CustomPaint(painter: CanvasPainter(executor), size: size),
+            ),
           ),
         ),
-      ),
-    );
+      );
+    });
   }
 }
 

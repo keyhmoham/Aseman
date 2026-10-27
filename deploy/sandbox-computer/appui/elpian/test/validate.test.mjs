@@ -9,7 +9,8 @@ import vm from "node:vm";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { validate, describe } from "../validate.mjs";
-import { TYPES, STYLE, COMMON_PROPS } from "../schema.mjs";
+import { BLOCKING } from "../check.mjs";
+import { TYPES, STYLE, COMMON_PROPS, GESTURE_EVENTS, PHONE, SELF_GESTURING } from "../schema.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const kit = path.resolve(here, "..");
@@ -104,7 +105,8 @@ test("every OpenUI component renders to valid Elpian (no errors)", () => {
   for (const c of ctx.OpenUI.components()) {
     const node = JSON.parse(JSON.stringify(ctx.OpenUI.render({ c, p: sample, children: [T("child")] }, { app })));
     const r = validate({ type: "ListView", children: [{ type: "Column", children: [node] }] }, { design: false });
-    for (const i of r.issues) if (i.severity === "error") bad.push(`${c}: ${i.message}`);
+    // Islands sit in apps: nothing that breaks touches or phones either.
+    for (const i of r.issues) if (i.severity === "error" || BLOCKING.has(i.code)) bad.push(`${c}: [${i.code}] ${i.message}`);
   }
   assert.deepEqual(bad, []);
 });
@@ -127,6 +129,104 @@ test("correct layouts are not flagged", () => {
 });
 
 // ── right about what breaks ─────────────────────────────────────────────────
+
+test("every gesture event the schema promises is one the engine's wrapper dispatches", () => {
+  const detector = dart("elpian/core/node_events.dart");
+  const wrapper = dart("elpian/core/event_enabled_widget.dart");
+  const list = (name) => {
+    const m = new RegExp(`static const ${name} = \\[([^\\]]*)\\]`).exec(detector);
+    assert.ok(m, `NodeEvents.${name}`);
+    return [...m[1].matchAll(/'(\w+)'/g)].map((x) => x[1]);
+  };
+  const dispatched = new Set([...list("tapEvents"), ...list("panEvents"), ...list("scaleEvents"), ...list("swipeEvents"),
+    ...[...wrapper.matchAll(/'(pointer\w+|focus|blur)'/g)].map((x) => x[1])]);
+  assert.deepEqual([...GESTURE_EVENTS].sort(), [...dispatched].sort());
+  const engine = dart("elpian/core/elpian_engine.dart");
+  const own = /selfGesturingTypes = \{([^}]*)\}/.exec(engine);
+  assert.ok(own, "ElpianEngine.selfGesturingTypes");
+  assert.deepEqual([...own[1].matchAll(/'(\w+)'/g)].map((x) => x[1]).sort(), [...SELF_GESTURING].sort());
+});
+
+test("touch: what the finger does reaches the node it starts on", () => {
+  const warns = (tree, opts) => codes(validate(tree, { design: false, ...opts }), "warning");
+  const canvas = (extra = {}) => ({ type: "Canvas", key: "board", events: { dragstart: "down", drag: "move", dragend: "up" }, ...extra });
+  const screen = (body) => ({ type: "Scaffold", children: [body] });
+
+  // A drawing surface in a scrolling page: flagged, with the fixed-screen fix.
+  const scrolled = validate(screen({ type: "ListView", children: [canvas()] }), { design: false });
+  const finding = scrolled.issues.find((i) => i.code === "gesture-in-scroll");
+  assert.ok(finding, codes(scrolled).join(", "));
+  assert.match(finding.fix, /Expanded > Canvas/);
+  assert.ok(codes(scrolled).includes("layout-fallback-height"));
+  // The same surface on a fixed screen (Expanded in a Column): clean.
+  assert.deepEqual(warns(screen({ type: "Column", children: [T("Board"), { type: "Expanded", children: [canvas()] }] })), []);
+  // A small drag control inside a long form is fine.
+  assert.deepEqual(warns({ type: "ListView", children: [{ type: "Container", key: "knob", props: { style: { height: 120 } }, events: { drag: "turn" } }] }), []);
+  // Raw pointer moves and pinches count as following the finger.
+  assert.ok(warns({ type: "ListView", children: [{ type: "Canvas", key: "c", props: { height: 400 }, events: { pointermove: "m" } }] }).includes("gesture-in-scroll"));
+  assert.ok(warns({ type: "ListView", children: [{ type: "Container", key: "map", events: { scaleupdate: "z" } }] }).includes("gesture-in-scroll"));
+
+  // Swipes on the axis of the scroll around them steal its drags.
+  assert.ok(warns({ type: "ListView", children: [{ type: "Card", key: "c", events: { swipeup: "x" }, children: [T("a")] }] }).includes("gesture-swipe-in-scroll"));
+  assert.deepEqual(warns({ type: "ListView", children: [{ type: "Card", key: "c", events: { swipeleft: "x" }, children: [T("a")] }] }), []);
+  assert.ok(warns({ type: "Carousel", children: [{ type: "Card", key: "c", events: { swiperight: "x" }, children: [T("a")] }] }).includes("gesture-swipe-in-scroll"));
+
+  // A handler inside a control that is tapped as a whole.
+  assert.ok(warns({ type: "Button", props: { text: "Go" }, events: { tap: "go" }, children: [{ type: "Icon", key: "i", props: { icon: "add" }, events: { tap: "other" } }] }).includes("gesture-in-control"));
+  // A button inside a tappable card is how cards work: clean.
+  assert.deepEqual(warns({ type: "Card", key: "card", events: { tap: "open" }, children: [{ type: "IconButton", key: "more", props: { icon: "more_vert", tooltip: "More" }, events: { tap: "menu" } }] }), []);
+
+  // Events under pointerEvents: "none" never fire.
+  assert.ok(errorsOf({ type: "Container", props: { style: { pointerEvents: "none" } }, children: [{ type: "Button", props: { text: "Go" }, events: { tap: "go" } }] }).includes("events-no-pointer"));
+
+  // An empty box with no size has nothing to touch.
+  assert.ok(warns({ type: "Column", children: [{ type: "Container", key: "pad", events: { tap: "t" } }] }).includes("gesture-no-area"));
+  assert.deepEqual(warns({ type: "Column", children: [{ type: "Container", key: "pad", props: { style: { height: 80 } }, events: { tap: "t" } }] }), []);
+  assert.deepEqual(warns({ type: "Column", children: [{ type: "Expanded", children: [{ type: "Container", key: "pad", events: { tap: "t" } }] }] }), []);
+
+  // A painted overlay on top of a Stack takes the touches of what is under it.
+  const stack = (overlayStyle) => ({ type: "Stack", children: [
+    { type: "Canvas", key: "c", props: { width: 300, height: 300 }, events: { drag: "d" } },
+    { type: "Positioned", props: { style: { top: 0, left: 0, right: 0, bottom: 0, ...overlayStyle } }, children: [{ type: "Container", props: { style: { backgroundColor: "#00000022" } } }] },
+  ] });
+  assert.ok(warns(stack({})).includes("stack-overlay-blocks"));
+  assert.deepEqual(warns(stack({ pointerEvents: "none" })), []);
+});
+
+test("screens fit a phone: fixed sizes, fixed screens, rows", () => {
+  const warns = (tree, opts) => codes(validate(tree, { design: false, ...opts }), "warning");
+  // Sizes wider or taller than a phone, where nothing scrolls them.
+  assert.ok(warns({ type: "Container", props: { style: { width: 600, height: 40 } } }).includes("layout-wider-than-screen"));
+  assert.deepEqual(warns({ type: "ListView", props: { scrollDirection: "horizontal" }, children: [{ type: "Container", props: { style: { width: 600, height: 40 } } }] }), []);
+  assert.deepEqual(warns({ type: "Container", props: { style: { width: 600, height: 40 } } }, { viewport: { width: 1280, height: 800 } }), []);
+  assert.ok(warns({ type: "Canvas", props: { width: 300, height: 900 } }).includes("layout-taller-than-screen"));
+  assert.deepEqual(warns({ type: "ListView", children: [{ type: "Canvas", props: { width: 300, height: 900 } }] }), []);
+
+  // A fixed screen taller than a phone: its bottom is cut off.
+  const tiles = (n) => Array.from({ length: n }, (_, i) => ({ type: "ListTile", props: { title: `Row ${i}` } }));
+  const nav = { type: "NavigationBar", props: { items: [{ icon: "home", label: "a" }, { icon: "add", label: "b" }] }, events: { change: "tab" } };
+  const fixed = validate({ type: "Scaffold", children: [{ type: "Column", children: tiles(12) }, nav] }, { design: false });
+  const over = fixed.issues.find((i) => i.code === "layout-screen-overflow");
+  assert.ok(over, codes(fixed).join(", "));
+  assert.match(over.message, /672 px.*560 px/);
+  // The same content scrolling, or short enough, or with the list in an Expanded: clean.
+  assert.deepEqual(warns({ type: "Scaffold", children: [{ type: "ListView", children: tiles(12) }, nav] }), []);
+  assert.deepEqual(warns({ type: "Scaffold", children: [{ type: "Column", children: tiles(4) }, nav] }), []);
+  assert.deepEqual(warns({ type: "Scaffold", children: [{ type: "Column", children: [T("Head"), { type: "Expanded", children: [{ type: "ListView", children: tiles(30) }] }] }, nav] }), []);
+  // A Canvas that is not in an Expanded takes 300 px of a fixed screen.
+  assert.ok(warns({ type: "Column", children: [...tiles(7), { type: "Canvas", key: "c" }] }).includes("layout-screen-overflow"));
+  assert.deepEqual(warns({ type: "Column", children: [...tiles(7), { type: "Expanded", children: [{ type: "Canvas", key: "c" }] }] }), []);
+
+  // Rows that need more width than a phone gives them.
+  const buttons = (n) => Array.from({ length: n }, (_, i) => ({ type: "Button", props: { text: `Download ${i}`, icon: "download" }, events: { tap: `b${i}` } }));
+  assert.ok(warns({ type: "Column", props: { style: { padding: 16 } }, children: [{ type: "Row", props: { style: { gap: 8 } }, children: buttons(4) }] }).includes("layout-row-overflow"));
+  assert.deepEqual(warns({ type: "Row", props: { style: { gap: 8 } }, children: buttons(2) }), []);
+  assert.deepEqual(warns({ type: "Wrap", props: { style: { gap: 8 } }, children: buttons(6) }), []);
+  assert.deepEqual(warns({ type: "Row", props: { style: { gap: 8, flexWrap: "wrap" } }, children: buttons(6) }), []);
+  assert.deepEqual(warns({ type: "Row", children: [{ type: "Expanded", children: [T("A very long title that would never fit a phone in one line at all")] }, { type: "IconButton", key: "x", props: { icon: "close", tooltip: "Close" }, events: { tap: "c" } }] }), []);
+  // The default screen is a small phone.
+  assert.deepEqual(PHONE, { width: 360, height: 640 });
+});
 
 test("node shape: types, top-level keys, children", () => {
   assert.deepEqual(errorsOf({ type: "Fancy" }), ["type-unknown"]);

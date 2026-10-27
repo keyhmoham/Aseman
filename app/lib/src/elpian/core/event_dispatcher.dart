@@ -26,8 +26,15 @@ class EventDispatcher {
     _parentRegistry[id] = parentId;
   }
 
-  /// Unregister a node
-  void unregisterNode(String id) {
+  /// Unregister a node.
+  ///
+  /// With [node], only while [id] is still registered to that node: when a
+  /// keyed node moves (its parent changed type, a screen swapped), Flutter
+  /// mounts the new widget — which registers the key — before it disposes
+  /// the old one, and the old one must not take the new one's registration
+  /// with it (its events would silently stop).
+  void unregisterNode(String id, [ElpianNode? node]) {
+    if (node != null && !identical(_nodeRegistry[id], node)) return;
     _nodeRegistry.remove(id);
     _parentRegistry.remove(id);
   }

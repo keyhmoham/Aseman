@@ -27,7 +27,7 @@ Use elpian_validate on any tree you write or generate (a single screen, a compon
 const TOOLS = [
   {
     name: "elpian_validate",
-    description: "Validate an Elpian UI DSL view tree. Pass the tree as JSON (`tree`) or a path to a JSON file (`file`). Reports errors (things that throw or never render), warnings (ignored or misread values) and design notes, each with its location in the tree and a fix. Set mode \"widget\" to check it as the phone widget, and openui: true for an OpenUI tree ({c, p, children}).",
+    description: "Validate an Elpian UI DSL view tree. Pass the tree as JSON (`tree`) or a path to a JSON file (`file`). Reports errors (things that throw or never render), warnings (ignored or misread values, touches that never arrive, layouts that do not fit a phone) and design notes, each with its location in the tree and a fix. Set mode \"widget\" to check it as the phone widget, and openui: true for an OpenUI tree ({c, p, children}).",
     inputSchema: {
       type: "object",
       properties: {
@@ -37,6 +37,7 @@ const TOOLS = [
         openui: { type: "boolean", description: "The tree is an OpenUI tree: render it to Elpian first." },
         design: { type: "boolean", description: "Include Material 3 Expressive design notes (default true)." },
         root: { type: "string", enum: ["screen", "scroll"], description: "What the root sits in: the screen (default, bounded) or a scroll." },
+        viewport: { type: "object", properties: { width: { type: "number" }, height: { type: "number" } }, description: "The screen fixed layouts must fit (default a small phone, 360×640)." },
         json: { type: "boolean", description: "Return the full JSON report instead of text." },
       },
     },
@@ -80,7 +81,7 @@ async function call(name, args = {}) {
       if (tree === undefined) return text("Pass `tree` (the view tree JSON) or `file` (a path to it).", true);
       if (tree && !Array.isArray(tree) && typeof tree === "object" && !tree.type && (tree.view || tree.tree)) tree = tree.view || tree.tree;
       if (args.openui) tree = await fromOpenUI(tree);
-      const report = validate(tree, { mode: args.mode || "app", design: args.design !== false, root: args.root });
+      const report = validate(tree, { mode: args.mode || "app", design: args.design !== false, root: args.root, viewport: args.viewport });
       return text(args.json ? JSON.stringify(report, null, 1) : format(report), false);
     }
     case "elpian_validate_program": {

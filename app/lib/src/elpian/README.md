@@ -23,7 +23,17 @@ Changes made to the copy, so a refresh can repeat them:
 * asset and font paths point at the app's own (`assets/elpian/…`,
   families `serif` / `monospace`);
 * `ElpianEngine.selfDispatchingTypes` is extensible, for host widgets that
-  dispatch their own events;
+  dispatch their own events (their taps; `selfGesturingTypes` for ones
+  that recognise every gesture of theirs);
+* every gesture a node declares goes through `NodeEvents.detector`, and
+  drags, scales and `pointermove` claim the touches that start on the node
+  (before the scroll around it can);
+* `EventDispatcher.unregisterNode` takes the node, so a keyed node that
+  moved keeps the registration its new widget made;
+* VM event JSON carries `data`'s fields at the top level too
+  (`elpianEventJson`);
+* `Canvas` fills its box when unsized (300 px where unbounded), clips its
+  drawing and reports `resize`;
 
 Aseman's code imports it only through `elpian.dart`. Elpian's own tests for
 it run from `test/elpian`. Analysis follows Elpian's settings

@@ -48,6 +48,9 @@ class _ElpianAppViewState extends State<ElpianAppView> {
   String _envSent = '';
   Map<String, dynamic> _env = const {};
 
+  /// The size the program is drawn at (logical px), from layout.
+  Size _viewport = Size.zero;
+
   @override
   void initState() {
     super.initState();
@@ -64,7 +67,12 @@ class _ElpianAppViewState extends State<ElpianAppView> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _env = _environment(context);
-    // The program redraws in the new theme or display without restarting.
+    _sendEnv();
+  }
+
+  /// The program redraws in the new theme, display or size without
+  /// restarting.
+  void _sendEnv() {
     final encoded = jsonEncode(_env);
     if (_code != null && _envSent.isNotEmpty && encoded != _envSent) {
       _envSent = encoded;
@@ -72,9 +80,36 @@ class _ElpianAppViewState extends State<ElpianAppView> {
     }
   }
 
+  /// Called from layout with the space the program gets: a new size reaches
+  /// the program after the frame (it lays itself out for phones, tablets
+  /// and desk windows from `Aseman.env().viewport`).
+  void _layoutAt(Size size) {
+    if (!size.width.isFinite || !size.height.isFinite) return;
+    final rounded = Size(size.width.roundToDouble(), size.height.roundToDouble());
+    if (rounded == _viewport) return;
+    _viewport = rounded;
+    _env = {..._env, 'viewport': _viewportJson()};
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _sendEnv();
+    });
+  }
+
+  /// The viewport and its Material 3 window size class (compact < 600 ≤
+  /// medium < 840 ≤ expanded).
+  Map<String, dynamic> _viewportJson() {
+    final w = _viewport.width, h = _viewport.height;
+    return {
+      'width': w,
+      'height': h,
+      'sizeClass': w < 600 ? 'compact' : (w < 840 ? 'medium' : 'expanded'),
+      'orientation': w > h ? 'landscape' : 'portrait',
+    };
+  }
+
   @override
   void dispose() {
     _host?.dispose();
+    _engine.services.dispose();
     super.dispose();
   }
 
@@ -177,11 +212,17 @@ class _ElpianAppViewState extends State<ElpianAppView> {
       'space': widget.spaceId,
       'room': widget.roomId,
       'title': widget.title,
+      if (_viewport != Size.zero) 'viewport': _viewportJson(),
     };
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) {
+        _layoutAt(c.biggest);
+        return _content(context);
+      });
+
+  Widget _content(BuildContext context) {
     final compact = FrontendPresentation.isCompact(context);
     final error = _error;
     if (error != null) {

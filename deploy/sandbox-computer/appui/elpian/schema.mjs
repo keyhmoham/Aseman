@@ -32,14 +32,54 @@
 // (app/test/elpian/dsl_layout_test.dart keeps them true): see LAYOUT.
 
 // Events every node gets from the engine's gesture wrapper, unless the node
-// handles its own (selfEvents).
+// handles its own (selfEvents). Kept equal to what EventEnabledWidget and
+// NodeEvents.detector dispatch (test/validate.test.mjs checks).
 export const GESTURE_EVENTS = [
-  "tap", "click", "doubletap", "longpress", "tapdown", "tapup", "tapcancel",
+  "tap", "click", "doubletap", "longpress", "longpressstart", "longpressmove", "longpressend",
+  "tapdown", "tapup", "tapcancel", "secondarytap", "contextmenu",
   "dragstart", "drag", "dragend", "swipeleft", "swiperight", "swipeup", "swipedown",
+  "pointerdown", "pointermove", "pointerup", "pointercancel",
   "pointerenter", "pointerexit", "pointerhover",
   "scalestart", "scaleupdate", "scaleend", "pinchstart", "pinchupdate", "pinchend",
   "rotatestart", "rotateupdate", "rotateend", "focus", "blur",
 ];
+
+// Gestures that follow a finger (drawing, dragging, panning, zooming). A
+// node with one of them owns the touches that start on it: the engine
+// claims them before the scroll, drawer or page view around it can, so
+// they draw instead of scrolling the page (NodeEvents.claimSettings).
+export const CONTINUOUS_EVENTS = [
+  "dragstart", "drag", "dragend", "pointermove",
+  "scalestart", "scaleupdate", "scaleend", "pinchstart", "pinchupdate", "pinchend",
+  "rotatestart", "rotateupdate", "rotateend",
+];
+// Gesture sequences, fired in this order (by check.mjs too).
+export const GESTURE_SEQUENCES = [
+  ["dragstart", "drag", "dragend"],
+  ["pointerdown", "pointermove", "pointerup"],
+  ["scalestart", "scaleupdate", "scaleend"],
+  ["pinchstart", "pinchupdate", "pinchend"],
+  ["rotatestart", "rotateupdate", "rotateend"],
+  ["longpressstart", "longpressmove", "longpressend"],
+];
+// Nodes whose builders recognise every gesture of theirs: the engine adds no
+// recognisers to them (ElpianEngine.selfGesturingTypes). Every other node
+// with its own taps (selfEvents) still gets the engine's drags, swipes and
+// scales; every node gets pointer, hover and focus events.
+export const SELF_GESTURING = ["GestureDetector", "Draggable", "DragTarget", "Dismissible"];
+export const WRAPPER_EVENTS = ["pointerdown", "pointermove", "pointerup", "pointercancel", "pointerenter", "pointerexit", "pointerhover", "focus", "blur"];
+export const MOTION_EVENTS = ["dragstart", "drag", "dragend", "swipeleft", "swiperight", "swipeup", "swipedown",
+  "scalestart", "scaleupdate", "scaleend", "pinchstart", "pinchupdate", "pinchend", "rotatestart", "rotateupdate", "rotateend"];
+export const SWIPE_X = ["swipeleft", "swiperight"];
+export const SWIPE_Y = ["swipeup", "swipedown"];
+// Controls that are tapped as a whole: their children are their label, and
+// a tap handler inside one takes the taps from the control.
+export const TAP_CONTROLS = ["Button", "IconButton", "FAB", "FloatingActionButton", "Chip", "SegmentedButton", "NavigationBar",
+  "Switch", "Checkbox", "Radio", "Slider", "TextField", "SearchBar"];
+
+// The smallest screen an app must fit (a small phone, logical px): fixed
+// screens and fixed sizes are checked against it.
+export const PHONE = { width: 360, height: 640 };
 
 // Props every node takes.
 export const COMMON_PROPS = {
@@ -187,7 +227,7 @@ export const TYPES = {
   CircularProgressIndicator: { category: "content", children: "none", summary: "a spinner or ring (value 0..1)", props: { value: t("number", "0..1; omit to spin") } },
   LinearProgressIndicator: { category: "content", children: "none", summary: "a bar (value 0..1)", props: { value: t("number", "0..1; omit to sweep") } },
   LoadingIndicator: { category: "content", children: "none", summary: "the M3E morphing loading indicator", props: { size: t("number", "default 48"), contained: t("flag", "on a tonal circle") } },
-  Canvas: { category: "content", children: "none", summary: "vector drawing by canvas commands", props: { commands: t("array"), width: t("number"), height: t("number"), backgroundColor: t("color") } },
+  Canvas: { category: "content", children: "none", events: ["resize"], surface: true, summary: "vector drawing by canvas commands; without width/height it fills its space (300 where unbounded); `resize` {width, height}", props: { commands: t("array"), width: t("number"), height: t("number"), backgroundColor: t("color") } },
   CachedCanvas: { category: "content", children: "none", summary: "a canvas that keeps its drawing across renders", props: { commands: t("array"), width: t("number"), height: t("number"), backgroundColor: t("color"), contextId: t("string"), id: t("string") } },
   Scene3D: { category: "content", children: "many", summary: "an embedded 3D scene (Godot)", props: { scene: t("any"), world: t("any"), initialScene: t("any"), width: t("num"), height: t("num"), clickable: t("flag") } },
 
@@ -449,7 +489,7 @@ export const TYPES = {
     requires: ["columns"],
   },
   Carousel: {
-    category: "kit", children: "many", selfEvents: ["change"], summary: "swipeable slides (the children, or items) with peeking neighbours and dots",
+    category: "kit", children: "many", scroll: "horizontal", selfEvents: ["change"], summary: "swipeable slides (the children, or items) with peeking neighbours and dots",
     props: { items: { type: "array", of: { image: "string", src: "string", url: "string", title: "text", subtitle: "text" }, scalars: true }, images: t("array"), height: t("number"), autoplay: t("number", "ms between slides (≥ 1000)"), viewportFraction: t("number"), dots: t("flag") },
   },
   Stepper: {
@@ -529,9 +569,12 @@ export const LAYOUT = {
   needsWidth: ["AppBar", "GridView", "LinearProgressIndicator", "ListGroup", "ListTile", "ListView", "NavigationBar", "OverflowBox", "Scaffold", "SearchBar", "TextField"],
   // Throw without a height bound (inside a vertical scroll).
   needsHeight: ["Drawer", "OverflowBox", "Scaffold"],
+  // Take a fixed 300 px height there instead of filling (ElpianCanvas).
+  fallbackHeight: ["Canvas"],
   // UI kit views that take a fixed fallback width there instead of throwing
-  // (WidthFallback in kit.dart): fine, but they do not fill the space.
-  fallbackWidth: ["Chart", "DataGrid", "Heatmap", "Treemap", "Graph", "Timeline", "TreeView", "KeyValue", "CodeBlock", "Section", "Expandable", "Callout",
+  // (WidthFallback in kit.dart; ElpianCanvas): fine, but they do not fill
+  // the space.
+  fallbackWidth: ["Canvas", "Chart", "DataGrid", "Heatmap", "Treemap", "Graph", "Timeline", "TreeView", "KeyValue", "CodeBlock", "Section", "Expandable", "Callout",
     "Funnel", "Waterfall", "Sankey", "Gantt", "BoxPlot", "BulletChart", "SegmentedBar", "Sunburst", "CalendarHeatmap", "WordCloud", "PivotTable", "Leaderboard",
     "Tabs", "Calendar", "Carousel", "Stepper", "Chat", "Markdown", "LogView", "DiffView"],
   // Must be the direct child of one of these.
@@ -540,6 +583,7 @@ export const LAYOUT = {
 for (const t of LAYOUT.needsWidth) TYPES[t].needsWidth = true;
 for (const t of LAYOUT.needsHeight) TYPES[t].needsHeight = true;
 for (const t of LAYOUT.fallbackWidth) TYPES[t].fallbackWidth = true;
+for (const t of LAYOUT.fallbackHeight) TYPES[t].fallbackHeight = true;
 for (const [t, parents] of Object.entries(LAYOUT.parents)) TYPES[t].parents = parents;
 
 // HTML-named nodes render too, but app UI should use the Flutter and kit

@@ -15,14 +15,16 @@
 //            --no-design (skip design lint), --quiet (errors only)
 //
 // As a library: import { validate } from "./validate.mjs";
-//   validate(tree, {mode: "app" | "widget", design: true, theme: {colors}}) -> report
+//   validate(tree, {mode: "app" | "widget", design: true, theme: {colors},
+//                   viewport: {width, height}}) -> report
+//   (viewport: the screen fixed layouts must fit; default a small phone, PHONE)
 
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   TYPES, STYLE, COMMON_PROPS, GESTURE_EVENTS, CURVES, CSS_COLOR_NAMES, KIT_COLOR_NAMES,
-  NOT_IN_WIDGET, WIDGET_MAX_NODES, HTML_DOC,
+  NOT_IN_WIDGET, WIDGET_MAX_NODES, HTML_DOC, CONTINUOUS_EVENTS, SWIPE_X, SWIPE_Y, TAP_CONTROLS, PHONE, SELF_GESTURING, WRAPPER_EVENTS, MOTION_EVENTS,
 } from "./schema.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -104,6 +106,9 @@ function kitColor(v) {
   const s = v.trim();
   return HEX.test(s) || KIT_COLOR_NAMES.includes(s) || /^(series-)?\d+$/.test(s);
 }
+
+const CONTINUOUS = new Set(CONTINUOUS_EVENTS);
+const TAPS = new Set(["tap", "click", "doubletap", "longpress", "longpressstart", "tapdown", "tapup", "secondarytap", "contextmenu"]);
 
 // ── the validator ────────────────────────────────────────────────────────────
 
@@ -462,7 +467,7 @@ export function validate(tree, opts = {}) {
     if (node.events !== undefined && node.events !== null) {
       if (!isObj(node.events)) add("warning", "events-not-object", ctx, `events must be an object of {event: "handlerName"}; ${show(node.events)} is ignored, so nothing responds.`);
       else {
-        const allowed = html ? null : new Set(spec.selfEvents || [...(spec.events || []), ...GESTURE_EVENTS]);
+        const allowed = html ? null : allowedEvents(type, spec);
         for (const [ev, h] of Object.entries(node.events)) {
           if (typeof h !== "string" || !h) add("error", "event-handler", ctx, `events.${ev} must name a global function (a string); got ${show(h)}. Functions do not cross into the view tree.`, `Write events: { ${ev}: app.handler("${ev}", fn) }.`);
           else {
@@ -500,6 +505,9 @@ export function validate(tree, opts = {}) {
       add("info", "child-type", ctx, `${parentType} is made for ${ctx.parentSpec.childTypes.join("/")} children; a ${type} there loses the grouped look.`);
     }
 
+    checkInteraction(type, spec, props, style, node, ctx);
+    if (!html) checkFixedSize(type, props, style, ctx);
+
     // Layout: what throws in an unbounded box.
     const box = ctx.box;
     const own = (v) => v !== undefined && v !== null && v !== "" && v !== "auto";
@@ -507,9 +515,13 @@ export function validate(tree, opts = {}) {
       add("error", "layout-unbounded-width", ctx, `${type} has no width bound here (${ctx.whyW}) — Flutter throws ("${type === "TextField" ? "InputDecorator cannot have an unbounded width" : "BoxConstraints forces an infinite width"}").`,
         `Wrap it in Expanded (inside the Row), or give it/its parent a style.width.`);
     }
-    if (!html && spec.fallbackWidth && box.w === false && !own(style.width) && !own(style.maxWidth)) {
+    if (!html && spec.fallbackWidth && box.w === false && !own(style.width) && !own(style.maxWidth) && !own(props.width)) {
       add("warning", "layout-fallback-width", ctx, `${type} has no width bound here (${ctx.whyW}), so it draws at a fixed fallback width instead of filling the space.`,
         "Wrap it in Expanded (inside the Row), or give it a style.width.");
+    }
+    if (!html && spec.fallbackHeight && box.h === false && !own(style.height) && !own(style.maxHeight) && !own(props.height)) {
+      add("warning", "layout-fallback-height", ctx, `${type} has no height bound here (${ctx.whyH}), so it draws at a fixed ${type === "Canvas" ? 300 : ""} px height instead of filling the screen.`,
+        `To fill the free space, put it in an Expanded of a non-scrolling Column (Scaffold > Column > Expanded > ${type}); otherwise give it a height.`);
     }
     if (!html && spec.needsHeight && box.h === false && !own(style.height) && !own(style.maxHeight)) {
       add("error", "layout-unbounded-height", ctx, `${type} has no height bound here (${ctx.whyH}) — Flutter throws.`, `Do not put a ${type} inside a scrolling list${type === "Scaffold" ? "; make the Scaffold the screen's root" : ", or give it a style.height"}.`);
@@ -548,6 +560,7 @@ export function validate(tree, opts = {}) {
         else seen.set(c.key, i);
       }
     });
+    if (type === "Stack") checkStackOverlays(list, ctx);
     if (design) designLint(type, spec, props, style, node, list, ctx);
     if (list.length > 400) add("warning", "perf-many-children", ctx, `${list.length} children drawn at once: slow on phones.`, "Page or virtualize long lists (show the first 50–100, load more on demand).");
 
@@ -556,6 +569,9 @@ export function validate(tree, opts = {}) {
       const childType = isObj(c) ? c.type : undefined;
       const cb = childBox(type, spec, style, props, box, ctx, childType, wraps);
       const label = isObj(c) && typeof c.type === "string" ? c.type + (typeof c.key === "string" ? `#${c.key}` : "") : "?";
+      const here = `${ctx.at.split(" > ").pop()}`;
+      const scrolls = html ? null : scrollAxis(type, spec, props);
+      const evs = isObj(node.events) ? Object.keys(node.events) : [];
       walk(c, {
         path: `${ctx.path}.children[${i}]`,
         at: `${ctx.at} > ${label}`,
@@ -571,8 +587,311 @@ export function validate(tree, opts = {}) {
         whyH: cb.whyH,
         inScaffold: ctx.inScaffold || type === "Scaffold",
         inCard: ctx.inCard || type === "Card",
+        scrollV: scrolls === "vertical" ? here : ctx.scrollV,
+        scrollH: scrolls === "horizontal" ? here : ctx.scrollH,
+        follows: evs.some((e) => CONTINUOUS.has(e)) ? here : ctx.follows,
+        tapControl: TAP_CONTROLS.includes(type) ? here : ctx.tapControl,
+        noPointer: style.pointerEvents === "none" ? here : ctx.noPointer,
+        fitted: ctx.fitted || type === "FittedBox",
       });
     });
+  }
+
+  // The events a node fires: its own, and what the engine's wrapper adds
+  // (all gestures; to a node with its own taps, the drags, swipes and
+  // scales; to one with all its own gestures, none) — plus pointer, hover
+  // and focus events, which every node gets.
+  function allowedEvents(type, spec) {
+    if (!spec.selfEvents) return new Set([...(spec.events || []), ...GESTURE_EVENTS]);
+    if (SELF_GESTURING.includes(type)) return new Set([...spec.selfEvents, ...WRAPPER_EVENTS]);
+    return new Set([...spec.selfEvents, ...MOTION_EVENTS, ...WRAPPER_EVENTS]);
+  }
+
+  // The axis [type] scrolls its children on (null: it does not).
+  function scrollAxis(type, spec, props) {
+    if (!spec || !spec.scroll) return null;
+    if (type === "ListView") return props.scrollable === false ? null : props.scrollDirection === "horizontal" ? "horizontal" : "vertical";
+    if (spec.scroll === "dynamic") return props.direction === "horizontal" ? "horizontal" : "vertical";
+    return spec.scroll;
+  }
+
+  // --- touch -----------------------------------------------------------------
+  // How touches reach the node: a gesture that follows the finger inside a
+  // scroll, swipes the scroll around it takes, handlers inside a control
+  // that is tapped as a whole, nodes that can never be touched.
+  function checkInteraction(type, spec, props, style, node, ctx) {
+    if (mode === "widget") return;
+    const evs = isObj(node.events) ? Object.keys(node.events).filter((e) => typeof node.events[e] === "string") : [];
+    if (!evs.length) return;
+    const follows = evs.filter((e) => CONTINUOUS.has(e));
+    const taps = evs.filter((e) => TAPS.has(e));
+    const num = (v) => (typeof v === "number" ? v : typeof v === "string" && /^\s*\d+(\.\d+)?(px)?\s*$/.test(v) ? parseFloat(v) : null);
+    const height = num(style.height) ?? num(props.height);
+
+    if (ctx.noPointer) {
+      add("error", "events-no-pointer", ctx, `${type} has events (${evs.join(", ")}) inside ${ctx.noPointer}, whose style.pointerEvents is "none": no touch ever reaches it.`,
+        `Remove pointerEvents: "none" from ${ctx.noPointer}, or move the interactive node out of it.`);
+      return;
+    }
+    // A big surface that follows the finger, in a scroll: the page cannot
+    // be scrolled from it and the surface scrolls out of view.
+    const scroll = ctx.scrollV || ctx.scrollH;
+    if (follows.length && scroll && (spec && spec.surface || height === null || height >= 200)) {
+      add("warning", "gesture-in-scroll", ctx, `${type} follows the finger (${follows.join(", ")}) inside a scrolling ${scroll}: a touch that starts on it ${type === "Canvas" ? "draws" : "drags"} instead of scrolling, so on a phone the page can only be scrolled from around it, and the ${type === "Canvas" ? "drawing surface" : "surface"} scrolls partly out of view (older clients scroll the page instead).`,
+        `Make this screen fixed, not scrolling: Scaffold (or a Column) > Expanded > ${type}, with the controls in a Row above or below it; if the screen also has long content, give that its own Expanded > ListView.`);
+    }
+    const swipesX = evs.filter((e) => SWIPE_X.includes(e));
+    const swipesY = evs.filter((e) => SWIPE_Y.includes(e));
+    if (swipesX.length && ctx.scrollH) {
+      add("warning", "gesture-swipe-in-scroll", ctx, `${type} has ${swipesX.join("/")} inside the horizontally scrolling ${ctx.scrollH}: the swipe takes the horizontal drags, so ${ctx.scrollH} cannot be scrolled from it.`,
+        `Use the scroll's own paging (Carousel change, Tabs), or swipe vertically here.`);
+    }
+    if (swipesY.length && ctx.scrollV) {
+      add("warning", "gesture-swipe-in-scroll", ctx, `${type} has ${swipesY.join("/")} inside the vertically scrolling ${ctx.scrollV}: the swipe takes the vertical drags, so the page cannot be scrolled from it.`,
+        `Swipe sideways (swipeleft/swiperight) on items of a vertical list, or use buttons.`);
+    }
+    if (follows.length && ctx.follows) {
+      add("info", "gesture-nested", ctx, `${type} follows the finger inside ${ctx.follows}, which does too: drags that start on ${type} are its own and never reach ${ctx.follows}.`,
+        "Fine for a draggable item on a board; otherwise put the gesture on one of them only.");
+    }
+    if ((taps.length || follows.length) && ctx.tapControl) {
+      add("warning", "gesture-in-control", ctx, `${type} has its own ${[...taps, ...follows].join(", ")} inside the ${ctx.tapControl}, which is tapped as a whole: touches on ${type} run its handler only, never the ${ctx.tapControl}'s, so part of the control stops working.`,
+        `Put the events on the ${ctx.tapControl} itself (its children are its label), or move ${type} out of it, beside it in a Row.`);
+    }
+    // Nothing to touch: an empty box with no size along an axis its parent
+    // leaves unbounded.
+    const AREA = ["Container", "SizedBox", "GestureDetector", "InkWell", "Padding", "Center", "Align", "DecoratedBox", "ClipRRect"];
+    const kids = Array.isArray(node.children) ? node.children.filter((c) => isObj(c)) : [];
+    if ((taps.length || follows.length) && !kids.length && AREA.includes(type)) {
+      const set = (v) => v !== undefined && v !== null && v !== "" && v !== "auto" && v !== 0 && v !== "0";
+      const pad = set(style.padding);
+      const noH = ctx.box.h === false && !set(style.height) && !set(style.minHeight) && !set(props.height) && !pad;
+      const noW = ctx.box.w === false && !set(style.width) && !set(style.minWidth) && !set(props.width) && !pad;
+      if (noH || noW) {
+        add("warning", "gesture-no-area", ctx, `${type} has ${evs.join(", ")} but no children and no ${noH ? "height" : "width"} here (${noH ? ctx.whyH : ctx.whyW}): it is drawn ${noH ? "0 px tall" : "0 px wide"}, so there is nothing to touch.`,
+          `Give it a style.${noH ? "height" : "width"} (or padding and a child), or put it in an Expanded to fill the space.`);
+      }
+    }
+  }
+
+  // --- fitting the screen ------------------------------------------------------
+  // Apps run on phones as well as desk windows: nothing may be wider or
+  // taller than a small phone (PHONE) unless it scrolls on that axis.
+  const vp = { width: (opts.viewport && opts.viewport.width) || PHONE.width, height: (opts.viewport && opts.viewport.height) || PHONE.height };
+  const px = (v) => (typeof v === "number" ? v : typeof v === "string" && /^\s*\d+(\.\d+)?(px)?\s*$/.test(v) ? parseFloat(v) : null);
+
+  function checkFixedSize(type, props, style, ctx) {
+    if (mode === "widget" || ctx.fitted) return;
+    const sized = ["Canvas", "Container", "SizedBox", "Scene3D", "CachedCanvas"].includes(type);
+    const w = Math.max(px(style.width) ?? 0, px(style.minWidth) ?? 0, sized ? px(props.width) ?? 0 : 0);
+    const h = Math.max(px(style.height) ?? 0, px(style.minHeight) ?? 0, sized ? px(props.height) ?? 0 : 0);
+    if (w > vp.width && !ctx.scrollH) {
+      add("warning", "layout-wider-than-screen", ctx, `${type} is ${w} px wide, wider than a phone (${vp.width} px): on a phone it is cut off at the edge.`,
+        "Leave the width unset so it fills the space (cap it with style.maxWidth), use a percentage, or size it from Aseman.viewport().width.");
+    }
+    if (h > vp.height && !ctx.scrollV) {
+      add("warning", "layout-taller-than-screen", ctx, `${type} is ${h} px tall on a screen that does not scroll, taller than a phone (${vp.height} px): its bottom is cut off.`,
+        "Leave the height unset and put it in an Expanded so it takes the free height, or size it from Aseman.viewport().height.");
+    }
+  }
+
+  // Line heights and font sizes of the M3 type roles (the engine's theme).
+  const ROLE = {
+    displayLarge: [64, 57], displayMedium: [52, 45], displaySmall: [44, 36], headlineLarge: [40, 32], headlineMedium: [36, 28], headlineSmall: [32, 24],
+    titleLarge: [28, 22], titleMedium: [24, 16], titleSmall: [20, 14], bodyLarge: [24, 16], bodyMedium: [20, 14], bodySmall: [16, 12],
+    labelLarge: [20, 14], labelMedium: [16, 12], labelSmall: [16, 11],
+  };
+  const role = (props) => ROLE[String(props.variant || "").replace(/Emphasized$/, "")] || ROLE.bodyMedium;
+  const SIZE_H = { xs: 32, s: 40, m: 56, l: 96, xl: 136, small: 40, medium: 56, large: 96, sm: 40, md: 56, lg: 96 };
+  const kidsOf = (n) => (Array.isArray(n.children) ? n.children.filter(isObj) : []);
+  const stOf = (n) => (isObj(n.props) && isObj(n.props.style) ? n.props.style : isObj(n.style) ? n.style : {});
+  const pOf = (n) => (isObj(n.props) ? n.props : {});
+  function edges(v) {
+    if (isObj(v)) return { t: px(v.top) || 0, r: px(v.right) || 0, b: px(v.bottom) || 0, l: px(v.left) || 0 };
+    const parts = typeof v === "number" ? [v] : typeof v === "string" ? v.trim().split(/\s+/).map((x) => parseFloat(x) || 0) : [];
+    const [a = 0, b = a, c = a, d = b] = parts;
+    return { t: a, r: b, b: c, l: d };
+  }
+  const padOf = (st) => {
+    const e = edges(st.padding);
+    return { x: e.l + e.r + (px(st.paddingX) || 0) * 2 + (px(st.paddingLeft) || 0) + (px(st.paddingRight) || 0),
+      y: e.t + e.b + (px(st.paddingY) || 0) * 2 + (px(st.paddingTop) || 0) + (px(st.paddingBottom) || 0) };
+  };
+  const marOf = (st) => {
+    const e = edges(st.margin);
+    return { x: e.l + e.r, y: e.t + e.b };
+  };
+  const scrollsV = (n) => {
+    const spec = resolveType(n.type);
+    return !!spec && scrollAxis(n.type, spec, pOf(n)) === "vertical";
+  };
+
+  // The least height [n] takes (a lower bound: only what is certain).
+  // [bounded]: its parent gives it a height (an Expanded, a sized box), so a
+  // scroll in it scrolls instead of growing.
+  function minH(n, bounded, depth = 0) {
+    if (!isObj(n) || depth > 40 || HTML.has(n.type)) return 0;
+    const t = n.type, p = pOf(n), st = stOf(n), kids = kidsOf(n);
+    const own = px(st.height) ?? (["Canvas", "SizedBox", "Container", "Scene3D", "CachedCanvas"].includes(t) ? px(p.height) : null);
+    const mar = marOf(st).y;
+    if (own !== null) return own + mar;
+    const pad = padOf(st).y;
+    const gap = px(st.gap) || 0;
+    const sum = (list, b) => list.reduce((a, c) => a + minH(c, b, depth + 1), 0) + gap * Math.max(0, list.length - 1);
+    const max = (list, b) => list.reduce((a, c) => Math.max(a, minH(c, b, depth + 1)), 0);
+    let h;
+    switch (t) {
+      case "Text": h = role(p)[0]; break;
+      case "Icon": h = px(p.size) || 24; break;
+      case "Button": h = SIZE_H[p.size] || 40; break;
+      case "IconButton": h = SIZE_H[p.size] || 40; break;
+      case "FAB": case "FloatingActionButton": h = p.size === "small" ? 40 : p.size === "large" ? 96 : 56; break;
+      case "TextField": case "SearchBar": h = 56; break;
+      case "ListTile": h = (p.lines === 3 ? 88 : p.subtitle ? 72 : 56) - (p.dense === true ? 8 : 0); break;
+      case "SegmentedButton": h = p.size === "m" ? 56 : 40; break;
+      case "Chip": h = 32; break;
+      case "Switch": case "Checkbox": case "Slider": case "Radio": h = 40; break;
+      case "Divider": h = 16; break;
+      case "AppBar": h = 64; break;
+      case "NavigationBar": h = 80; break;
+      case "LoadingIndicator": h = px(p.size) || 48; break;
+      case "Avatar": h = px(p.size) || 40; break;
+      case "Canvas": h = bounded ? 0 : 300; break;
+      case "Spacer": h = 0; break;
+      case "Column": case "Card": case "Section": case "Callout": h = sum(kids, false); break;
+      case "ListGroup": h = kids.reduce((a, c) => a + minH(c, false, depth + 1), 0) + 2 * Math.max(0, kids.length - 1) + (p.title ? 28 : 0); break;
+      case "Expandable": h = 56; break;
+      case "Row": case "Wrap": case "Stack": case "IndexedStack": h = max(kids.filter((c) => c.type !== "Positioned"), bounded && t === "Stack"); break;
+      case "Expanded": case "Flexible": h = max(kids, true); break;
+      case "Tabs": h = 48 + minH(kids[Math.min(kids.length - 1, Math.max(0, Number(p.selected) || 0))], bounded, depth + 1); break;
+      default:
+        if (scrollsV(n)) h = bounded ? 0 : sum(kids, false);
+        else if (t === "Scroll") h = 0;
+        else h = max(kids, bounded);
+    }
+    return h + pad + mar;
+  }
+
+  // The least width [n] takes where nothing bounds it (in a Row): texts do
+  // not wrap there.
+  function minW(n, depth = 0) {
+    if (!isObj(n) || depth > 40 || HTML.has(n.type)) return 0;
+    const t = n.type, p = pOf(n), st = stOf(n), kids = kidsOf(n);
+    const own = px(st.width) ?? (["Canvas", "SizedBox", "Container", "Scene3D"].includes(t) ? px(p.width) : null);
+    const mar = marOf(st).x;
+    if (own !== null) return own + mar;
+    const pad = padOf(st).x;
+    const gap = px(st.gap) || 0;
+    const chars = (v) => (v === undefined || v === null ? 0 : String(v).length);
+    let w;
+    switch (t) {
+      case "Text": w = chars(p.text ?? p.data) * role(p)[1] * 0.42; break;
+      case "Icon": w = px(p.size) || 24; break;
+      case "Button": {
+        const label = chars(p.text ?? p.label) * 14 * 0.42;
+        w = (label ? 32 + label : 0) + (p.icon ? 26 : 0) + (p.trailingIcon ? 26 : 0);
+        w = Math.max(w, SIZE_H[p.size] || 40);
+        break;
+      }
+      case "IconButton": w = SIZE_H[p.size] || 40; break;
+      case "FAB": case "FloatingActionButton": w = p.label || p.text ? 80 + chars(p.label ?? p.text) * 14 * 0.42 : p.size === "small" ? 40 : p.size === "large" ? 96 : 56; break;
+      case "Chip": w = 32 + chars(p.label) * 14 * 0.42 + (p.icon ? 26 : 0); break;
+      case "Avatar": w = px(p.size) || 40; break;
+      case "Switch": w = 52; break;
+      case "Checkbox": case "Radio": w = 40; break;
+      case "SegmentedButton": {
+        const segs = Array.isArray(p.segments) ? p.segments : Array.isArray(p.items) ? p.items : [];
+        w = segs.reduce((a, sg) => a + 24 + chars(isObj(sg) ? (sg.label ?? (sg.icon ? "" : sg.value)) : sg) * 14 * 0.42 + (isObj(sg) && sg.icon ? 26 : 0), 0);
+        break;
+      }
+      case "Row": w = kids.reduce((a, c) => a + minW(c, depth + 1), 0) + gap * Math.max(0, kids.length - 1); break;
+      case "Expanded": case "Flexible": case "Spacer": w = 0; break;
+      case "Column": case "Card": case "Stack": case "Center": case "Align": case "Padding": case "Container": case "ClipRRect": case "DecoratedBox": case "Tooltip": case "Badge":
+      case "AnimatedSwitcher": case "AnimatedContainer": case "AnimatedOpacity": case "AnimatedScale": case "Opacity": case "InkWell": case "GestureDetector":
+        w = kids.reduce((a, c) => Math.max(a, minW(c, depth + 1)), 0); break;
+      default: w = 0;
+    }
+    return w + pad + mar;
+  }
+
+  // Rows that need more width than the phone gives them, wherever the
+  // width they get is known (from the screen, less the paddings around).
+  function checkRows(n, availW, ctxPath, at, depth = 0) {
+    if (!isObj(n) || depth > 60 || availW === null || HTML.has(n.type)) return;
+    const t = n.type, p = pOf(n), st = stOf(n), kids = kidsOf(n);
+    const spec = resolveType(t);
+    if (!spec) return;
+    if (t === "Row" && !(typeof st.flexWrap === "string" && st.flexWrap.startsWith("wrap"))) {
+      const need = minW(n);
+      if (need > availW + 1) {
+        add("warning", "layout-row-overflow", { path: ctxPath, at, type: t }, `this Row needs at least ${Math.round(need)} px of width, but on a phone (${vp.width} px wide) it gets about ${Math.round(availW)} px: it overflows and its end is cut off.`,
+          'Let it fit any width: wrap the texts in Expanded/Flexible (with maxLines and overflow: "ellipsis"), let the items wrap (a Wrap, or style.flexWrap: "wrap"), use icon-only IconButtons, or show fewer items when Aseman.viewport().sizeClass is "compact".');
+        return;
+      }
+    }
+    const padX = padOf(st).x + marOf(st).x;
+    const own = px(st.width) ?? (["Container", "SizedBox"].includes(t) ? px(p.width) : null);
+    let inner = own !== null ? Math.min(own, availW) - padX : availW - padX;
+    const axis = scrollAxis(t, spec, p);
+    if (axis === "horizontal" || t === "FittedBox" || t === "OverflowBox" || t === "Positioned" || t === "Wrap") return;
+    kids.forEach((c, i) => {
+      // A Row's children get no width bound (an Expanded's share is unknown).
+      const childAvail = t === "Row" ? null : inner;
+      const label = `${at} > ${c.type || "?"}${typeof c.key === "string" ? "#" + c.key : ""}`;
+      checkRows(c, childAvail, `${ctxPath}.children[${i}]`, label, depth + 1);
+    });
+  }
+
+  // A screen that does not scroll must fit a phone's height: its content's
+  // least height against the height a phone gives it.
+  function checkScreen(root, path, at) {
+    if (!isObj(root) || mode === "widget" || opts.root === "scroll") return;
+    let body = root, avail = vp.height, bodyAt = at, bodyPath = path;
+    if (root.type === "Scaffold") {
+      const kids = kidsOf(root);
+      const slot = (c) => (isObj(c.props) && c.props.slot) || c.type;
+      const chrome = { AppBar: 64, appBar: 64, NavigationBar: 80, bottomNavigationBar: 80, BottomNavigationBar: 80, bottomBar: 80 };
+      for (const c of kids) avail -= chrome[slot(c)] || 0;
+      const bodies = kids.filter((c) => !["AppBar", "appBar", "NavigationBar", "bottomNavigationBar", "BottomNavigationBar", "bottomBar", "Drawer", "drawer", "endDrawer",
+        "FAB", "FloatingActionButton", "floatingActionButton", "bottomSheet", "persistentFooterButtons", "persistentFooterButton"].includes(slot(c)));
+      if (bodies.length !== 1) return;
+      const i = kids.indexOf(bodies[0]);
+      body = bodies[0];
+      bodyPath = `${path}.children[${i}]`;
+      bodyAt = `${at} > ${body.type}`;
+    }
+    if (scrollsV(body)) return;
+    const need = minH(body, true);
+    if (need > avail + 1) {
+      add("warning", "layout-screen-overflow", { path: bodyPath, at: bodyAt, type: body.type }, `this screen does not scroll, and its content needs at least ${Math.round(need)} px of height, but a phone (${vp.width}×${vp.height}) gives it about ${Math.round(avail)} px: the bottom is cut off on phones.`,
+        "Let the part that grows scroll (Expanded > ListView inside the screen's Column), make the whole page a ListView if nothing on it needs a fixed screen, or show less when Aseman.viewport().height is small.");
+    }
+  }
+
+  // A painted overlay on top in a Stack takes the touches of what it covers.
+  function checkStackOverlays(list, ctx) {
+    const edges = (n) => {
+      const st = isObj(n.props) && isObj(n.props.style) ? n.props.style : isObj(n.style) ? n.style : {};
+      return ["top", "left", "right", "bottom"].every((k) => st[k] !== undefined && st[k] !== null && st[k] !== "");
+    };
+    const styleOf = (n) => (isObj(n) && isObj(n.props) && isObj(n.props.style) ? n.props.style : isObj(n) && isObj(n.style) ? n.style : {});
+    const paints = (n) => {
+      const st = styleOf(n);
+      return st.backgroundColor !== undefined || st.gradient !== undefined || st.background !== undefined || st.backgroundImage !== undefined;
+    };
+    const interactive = (n) => isObj(n) && ((isObj(n.events) && Object.keys(n.events).length > 0) || (Array.isArray(n.children) && n.children.some(interactive)));
+    for (let j = 1; j < list.length; j++) {
+      const o = list[j];
+      if (!isObj(o) || o.type !== "Positioned" || !edges(o) || interactive(o)) continue;
+      const inner = Array.isArray(o.children) && isObj(o.children[0]) ? o.children[0] : null;
+      if (styleOf(o).pointerEvents === "none" || (inner && styleOf(inner).pointerEvents === "none")) continue;
+      if (!(paints(o) || (inner && paints(inner)))) continue;
+      const under = list.slice(0, j).find(interactive);
+      if (!under) continue;
+      add("warning", "stack-overlay-blocks", { ...ctx, path: `${ctx.path}.children[${j}]`, at: `${ctx.at} > Positioned` },
+        `a painted overlay (Positioned on all four edges, with a background) lies over the Stack's ${under.type}${typeof under.key === "string" ? "#" + under.key : ""} and takes every touch on it: a painted box is hit by taps, so the ${under.type} below never responds.`,
+        `Give the overlay style.pointerEvents: "none" (touches pass through it), or place it under the interactive child.`);
+    }
   }
 
   // The constraints a child of [type] gets.
@@ -714,7 +1033,12 @@ export function validate(tree, opts = {}) {
       whyH: opts.root === "scroll" ? "the root scrolls" : "",
       inScaffold: false,
       inCard: false,
+      scrollV: opts.root === "scroll" ? "page" : null,
     });
+    if (mode !== "widget") {
+      checkScreen(root, roots.length > 1 ? `$[${i}]` : "$", label);
+      checkRows(root, vp.width, roots.length > 1 ? `$[${i}]` : "$", label);
+    }
   });
 
   // Keys across the tree: events are dispatched by key.
@@ -753,17 +1077,18 @@ export function validate(tree, opts = {}) {
 // Validates every render a program made (check.mjs collects them).
 // [paths] (optional) are the steps that led to each render: a finding first
 // seen after some steps says so.
-export function validateRenders(renders, opts = {}, paths = null) {
+export function validateRenders(renders, opts = {}, paths = null, viewports = null) {
   const seen = new Set();
   const seenTrees = new Set();
   const issues = [];
   let nodes = 0;
   for (let k = 0; k < renders.length && seenTrees.size < 800; k++) {
     const tree = renders[k];
-    const key = JSON.stringify(tree);
+    const viewport = (viewports && viewports[k]) || opts.viewport;
+    const key = JSON.stringify(tree) + JSON.stringify(viewport || null);
     if (seenTrees.has(key)) continue;
     seenTrees.add(key);
-    const r = validate(tree, opts);
+    const r = validate(tree, { ...opts, viewport });
     nodes = Math.max(nodes, r.stats.nodes);
     for (const i of r.issues) {
       const id = `${i.code}|${i.path}|${i.message}`;
@@ -850,7 +1175,7 @@ export async function validateProgram(source, opts = {}) {
   const out = [];
   for (const display of opts.widgetOnly ? ["compact"] : ["full", "compact"]) {
     const run = await check(source, { ...opts, widget: false, widgetOnly: display === "compact", collect: true, validate: false });
-    const report = validateRenders(run.trees || [], { mode: display === "compact" ? "widget" : "app", design: opts.design, theme: run.theme }, run.paths);
+    const report = validateRenders(run.trees || [], { mode: display === "compact" ? "widget" : "app", design: opts.design, theme: run.theme }, run.paths, run.viewports);
     // Runtime problems (a view or handler that throws, server errors) first.
     const runtime = (run.errors || []).map((message) => ({ severity: "error", code: "runtime", path: "$", at: "", message }));
     report.issues.unshift(...runtime);

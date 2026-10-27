@@ -27,6 +27,14 @@
         "/opt/aseman-appui/elpian/validate-mcp.mjs"
       ],
       "enabled": true
+    },
+    "elpian-driver": {
+      "type": "local",
+      "command": [
+        "node",
+        "/opt/aseman-appui/elpian/drive-mcp.mjs"
+      ],
+      "enabled": true
     }
   }
 }

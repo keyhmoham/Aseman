@@ -40,8 +40,10 @@ Aseman client (Flutter)                     sandbox
 elpian/src/*.js          your frontend (shared global scope; main.js last)
 elpian/manifest.json     optional: {"files": ["src/state.js", "src/main.js"]} to fix the order
 elpian/app.js            the bundle (generated: never edit it)
+elpian/e2e/*.json        end-to-end scenarios: journeys through the app (the driver saves and replays them)
 vendor/aseman-elpian/    this kit: SDK, OpenUI, bundle.mjs, check.mjs, nodes.json,
                          validate.mjs + schema.mjs + icons.json (the UI DSL validator),
+                         drive.mjs (the headless driver, for end-to-end tests),
                          examples/showcase.js (a reference app in M3 Expressive: scrolling pages),
                          examples/whiteboard.js (a reference app with a fixed, touch-driven screen)
 server.* / src/…         your backend; it serves elpian/app.js and your API
@@ -151,6 +153,134 @@ echo '{"type":"Row","children":[{"type":"TextField","props":{"hint":"Search"}}]}
 #   fix: Wrap it in Expanded (inside the Row), or give it/its parent a style.width.
 ```
 
+## Testing end to end (the headless driver)
+
+`check.mjs` and the validator prove the program runs and renders. They do
+not prove the app *works*: that adding an order shows it in the list, that
+the filter filters, that the save button is enabled once the form is
+filled. Prove that by **using the app as a person does, headlessly**, with
+the Elpian driver — like a headless browser, but for Elpian: no
+screenshots, the screen is a text outline. Your `elpian_*` driver tools
+(an MCP server) keep a session open across calls:
+
+| Tool | |
+|---|---|
+| `elpian_open` | run the bundle against your running server (`server`, default the `JOB.json` port; or `start: "node server.js"`); answers with the first screen |
+| `elpian_snapshot` | the screen now: one line per text, control and data view |
+| `elpian_tap`, `elpian_type`, `elpian_select`, `elpian_toggle`, `elpian_gesture`, `elpian_fire` | use a control |
+| `elpian_wait` | let held requests through (`release`), pass time (`ms`: timers and `app.every` fire), or wait `until` an expectation holds |
+| `elpian_expect` | assert the screen, a control, the app's state, the request the last action made |
+| `elpian_mock` | answers for the space's agents and apps (and your server's paths): replies, failures, held requests |
+| `elpian_env` | the viewport (`phone`, `desk`, `"WxH"`), the theme (`light`, `dark`), `display: "widget"` |
+| `elpian_state`, `elpian_network`, `elpian_logs`, `elpian_coverage`, `elpian_reload`, `elpian_close` | look inside, start over |
+| `elpian_save_scenario`, `elpian_run_scenarios` | save the session as `elpian/e2e/<name>.json`; replay them all |
+
+A screen reads like this (refs `e1`, `e2` … stay the same for the same
+control across renders):
+
+```
+Screen 360×640 (compact, light) · render 4
+- Scaffold
+  - Text "Team tasks"
+  - IconButton [e1] "Refresh" icon=refresh (on: tap)
+  - SegmentedButton [e4] options: Open* | Done | All (on: change)
+  - ListGroup [e5]
+    - ListTile [e6] "Write spec" — "ana · due today" trailing="Urgent" (on: tap)
+  - TextField [e8] "What needs doing?" value="" icon=edit (on: input)
+  - Button [e12] "Add task" icon=add disabled (on: tap)
+  - NavigationBar [e7] items: Tasks* (1) | New | Insights (on: change)
+```
+
+Target a control by its ref (`"e12"`), by `{key}`, or by the text it shows
+(`"Add task"`, `{type: "Button", text: "Delete", nth: 1}`,
+`{text: "Delete", within: "e6"}`); tapping an option's label (`"Insights"`)
+picks it. Each action runs the handler the client runs, with the event data
+the client sends, settles the requests it makes (your server for real), and
+answers with the screen's changes, the requests and the **PROBLEMS** it
+found:
+
+```
+✓ tap Button "Add task"
+requests: POST /api/tasks → 201 · GET /api/tasks → 200
+screen changes:
+- - TextField [e8] "What needs doing?" value="Buy milk" icon=edit (on: input)
++ - ListTile [e13] "Buy milk" — "me · due today" (on: tap)
+problems: none
+```
+
+It behaves like the phone: a **disabled** control, a control under
+`pointerEvents: "none"` or a handler inside a `Button` does nothing (and it
+says why); a tap on a label reaches the control around it; a text field
+shows what was typed; `Tabs` and `Expandable` switch by themselves; time
+only passes when you `elpian_wait` (`ms`). Problems are exceptions (a
+handler or the view throws, a `TypeError` that `app.fail` turned into a
+banner), error banners nobody expected, server 5xx or no answer, renders
+that break (the validator's errors), and dead controls (a button without a
+handler).
+
+**How to test an app**, after it builds and `check.mjs` passes, with the
+server running:
+
+1. `elpian_open`; read the first screen.
+2. Go section by section (each destination, tab, dialog, form, list) and
+   use **every control** on it: type real values, pick every option, tap
+   every action, swipe and drag what follows the finger. After each step
+   that should change something, `elpian_expect` it: the text a person now
+   sees (`text`, `noText`), the control (`target` + `value`, `on`,
+   `selected`, `disabled`, `rows`), the state (`state: {"items.length": 3}`),
+   the request it made (`request: {method: "POST", path: "api/orders",
+   body: {…}}`).
+3. Mock the space realistically (`elpian_mock`): agent replies shaped like
+   real ones (`{op: "ask", agent, reply}`), microtool results as the text
+   they really are (`{op: "call", tool, microtool, result}`). Then the
+   unhappy paths: a failing agent or server path (`error`, `status`) must
+   show a human error state (`elpian_expect {errorBanner: …}` or your own
+   error view), and a held request (`hold: true`) must show a loading
+   state before `elpian_wait {release: true}`.
+4. Check the layout on a phone and a desk window, light and dark
+   (`elpian_env`), and the phone widget (`display: "widget"`).
+5. Every PROBLEM is a bug: fix the code, rebuild, `elpian_reload`, repeat
+   the step. `elpian_coverage` lists the controls no step has used yet:
+   continue until it lists none.
+6. Save each user journey (`elpian_save_scenario`, one session per journey:
+   `elpian_open` again for the next) and replay them all with
+   `elpian_run_scenarios`. The platform replays `elpian/e2e/*.json` against
+   your server before the app is shown — an app without passing scenarios
+   is not ready.
+
+A scenario is plain JSON you can also write or edit by hand:
+
+```json
+{ "name": "add a task", "viewport": "phone",
+  "mocks": [{ "op": "ask", "agent": "planner", "reply": "Start with the spec." }],
+  "steps": [
+    { "do": "tap", "target": "New" },
+    { "do": "type", "target": { "key": "draft" }, "text": "Buy milk" },
+    { "do": "tap", "target": { "type": "Button", "text": "Add task" } },
+    { "expect": { "text": "Buy milk", "request": { "method": "POST", "path": "api/tasks" } } },
+    { "do": "select", "target": { "key": "filter" }, "value": "Done" },
+    { "expect": { "noText": "Buy milk" } }
+  ] }
+```
+
+Steps: `tap`, `double_tap`, `long_press`, `type` (`text`, `clear`,
+`submit`, `keystrokes`), `clear`, `submit`, `select` (`value`), `toggle`
+(`on`), `swipe` (`direction`), `drag` (`from`, `to`, `steps`; or `to` a
+drop target), `pinch` (`scale`, `rotation`), `hover`, `move` (a Kanban
+`card` `to` a column), `link` (`href`), `remove`, `fire` (`event`,
+`data`), `wait` (`release`, `ms`, `until`), `env`, `mock`, `setState`,
+`reload` — or `{ "expect": {…} }`. A scenario fails when a step cannot be
+done, an expectation fails, or a problem is left at the end (expect an
+error banner you meant to show). Scenarios run one after another against
+the same server, so do not depend on the data an earlier run left behind:
+create what a journey needs in the journey, and assert on what it created.
+On the command line:
+
+```bash
+node vendor/aseman-elpian/drive.mjs run elpian/e2e --server http://127.0.0.1:$PORT   # replay; exit 1 on failure
+node vendor/aseman-elpian/drive.mjs snapshot --server http://127.0.0.1:$PORT         # the first screen
+```
+
 ## Language rules (QuickJS)
 
 * ES2020 JavaScript: `let`/`const`, arrow functions, classes, template
@@ -199,7 +329,7 @@ function add(event, app) {                         // event is plain JSON
 | `App.create({state, view(state, app), init(app)})` | renders `view` now and after every `app.set(patch)` |
 | `app.set(patch[, {silent}])`, `app.render()`, `app.fail(error)` | update and redraw; `fail` shows a dismissible error banner |
 | `app.handler(key, fn)` | a global handler name for `events` (stable per key, any characters: `app.handler("key_" + label, …)` for each key of a keypad; errors are shown, not lost); `fn(event, app)` |
-| `app.input(key, field, props)` | a `TextField` bound to `state[field]` (props: `label`, `hint`, `icon`, `helper`, …; `search: true` draws a `SearchBar`) |
+| `app.input(key, field, props)` | a `TextField` bound to `state[field]` (props: `label`, `hint`, `icon`, `helper`, …; `search: true` draws a `SearchBar`; `live: true` redraws on every keystroke — needed when the view depends on what is typed, like a button enabled once there is text: otherwise it redraws only on the next `set`) |
 | `Aseman.fetch(path, {method, body, query, headers})` | your server: resolves `{status, ok, json, text}`; rejects on non-2xx (`{raw: true}` to get them) |
 | `Aseman.ask(agent, prompt, {history})` | a space agent: `{agent, reply}`. Every ask is a fresh, isolated conversation (a temporary room thread deleted after) |
 | `Aseman.askJSON(agent, prompt, data)` | asks for JSON and parses it |
@@ -777,4 +907,8 @@ names it: `"widget": "elpian/widget.js"`.
    parsing microtool / agent replies) run with `node --test`.
 6. A `widget` that shows live, use-case-specific facts at a glance in every
    size (see The phone widget); `check.mjs` passes for it too.
-7. `READY.json` has `"ui": "elpian"` and `"elpian": "elpian/app.js"`.
+7. Driven end to end with the Elpian driver: every screen and every
+   control used, expectations after each step, no PROBLEM left,
+   `elpian_coverage` empty; each journey saved in `elpian/e2e/*.json` and
+   `elpian_run_scenarios` (`drive.mjs run elpian/e2e`) passing.
+8. `READY.json` has `"ui": "elpian"` and `"elpian": "elpian/app.js"`.

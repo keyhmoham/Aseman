@@ -35,7 +35,7 @@ const KNOWN = new Set([...NODES.elpian, ...NODES.html, ...NODES.kit]);
 const HOST_APIS = new Set(["render", "aseman.env", "aseman.request", "aseman.compact", "aseman.expand", "println", "env.get",
   "setTimeout", "setInterval", "clearTimeout", "clearInterval"]);
 
-async function loadQuickJS() {
+export async function loadQuickJS() {
   const candidates = [
     process.env.ASEMAN_QUICKJS_MODULE,
     "/opt/aseman-tool-runtime/node_modules/quickjs-emscripten",
@@ -57,7 +57,7 @@ async function loadQuickJS() {
   }
 }
 
-function typed(value) {
+export function typed(value) {
   if (value === null || value === undefined) return { type: "null", data: { value: null } };
   if (typeof value === "boolean") return { type: "bool", data: { value } };
   if (typeof value === "number") return { type: Number.isInteger(value) ? "i64" : "f64", data: { value } };

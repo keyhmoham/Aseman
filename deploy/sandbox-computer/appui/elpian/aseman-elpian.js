@@ -436,12 +436,16 @@
 
   // A TextField-style input bound to state[field]: {value, events.input}.
   // props are TextField props (label, hint, icon, helper, …); search: true
-  // draws the M3 SearchBar instead.
+  // draws the M3 SearchBar instead. Typing updates the state without a
+  // redraw; live: true redraws on every keystroke, for views that depend
+  // on what is typed (a button enabled once there is text, a live filter).
   App.prototype.input = function (key, field, props) {
     var app = this;
     var p = merge(props, { value: app.state[field] == null ? "" : String(app.state[field]) });
     var search = !!p.search;
+    var live = !!p.live;
     delete p.search;
+    delete p.live;
     return {
       type: search ? "SearchBar" : "TextField",
       key: key,
@@ -450,7 +454,7 @@
         input: this.handler(key + "_input", function (e) {
           var patch = {};
           patch[field] = e && e.value !== undefined ? e.value : (e && e.data && e.data.value);
-          app.set(patch, { silent: true });
+          app.set(patch, { silent: !live });
         }),
       },
     };
@@ -463,6 +467,11 @@
 
   App.prototype.fail = function (e) {
     this.error = (e && e.message) || String(e);
+    // A bug in the program (not a failed request): say so, for the check
+    // and the headless driver.
+    if (e && /^(TypeError|ReferenceError|RangeError|SyntaxError|InternalError)$/.test(e.name)) {
+      log("app threw:", e.name + ": " + e.message + (e.stack ? "\n" + String(e.stack).split("\n").slice(0, 3).join("\n") : ""));
+    }
     log("app error:", this.error);
     this.render();
   };

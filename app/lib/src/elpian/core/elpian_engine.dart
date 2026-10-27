@@ -327,7 +327,9 @@ class ElpianEngine {
       );
     }
 
-    final inlineMap = node.props['style'] as Map<String, dynamic>?;
+    // A style that is not an object (a CSS string) is ignored, not fatal.
+    final rawStyle = node.props['style'];
+    final inlineMap = rawStyle is Map ? ElpianNode.stringKeyed(rawStyle) : null;
 
     // Resolve the full cascade in ONE place when the element carries an id or
     // classes, so `getComputedStyleMap` can apply CSS `!important` priority
@@ -338,9 +340,10 @@ class ElpianEngine {
     // dropped most fields) and cheap (single memoized parse).
     CSSStyle? mergedStyle;
     if (node.key != null || node.props['className'] != null) {
-      final classes = node.props['className'] is String
-          ? (node.props['className'] as String).split(' ')
-          : (node.props['className'] as List?)?.cast<String>();
+      final rawClass = node.props['className'];
+      final classes = rawClass is String
+          ? rawClass.split(' ')
+          : (rawClass is List ? [for (final c in rawClass) '$c'] : null);
 
       final computed = _stylesheetManager.getComputedStyleMap(
         tagName: node.type,
@@ -380,7 +383,15 @@ class ElpianEngine {
     _currentParentId = previousParentId;
 
     // Build the widget
-    Widget result = builder(nodeWithStyle, children);
+    // An error boundary per node: a builder that throws on odd props draws a
+    // small inline error in its place; the rest of the screen still renders.
+    Widget result;
+    try {
+      result = builder(nodeWithStyle, children);
+    } catch (e, stack) {
+      debugPrint('Elpian: ${node.type} failed to build: $e\n$stack');
+      result = NodeErrorBox(type: node.type, error: e);
+    }
 
     final key = nodeWithStyle.key;
 
@@ -500,5 +511,31 @@ class ElpianEngine {
       Map<String, Widget Function(ElpianNode node, List<Widget> children)>
           builders) {
     _registry.registerAll(builders);
+  }
+}
+
+/// What a node that failed to build draws instead (see [ElpianEngine]):
+/// its type and the error, small, in the error colors.
+class NodeErrorBox extends StatelessWidget {
+  const NodeErrorBox({super.key, required this.type, required this.error});
+  final String type;
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(color: s.errorContainer, borderRadius: BorderRadius.circular(10)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.error_outline_rounded, size: 16, color: s.onErrorContainer),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text('$type: $error',
+              maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: s.onErrorContainer)),
+        ),
+      ]),
+    );
   }
 }

@@ -10,7 +10,12 @@
 // to the running server, so the frontend and backend are checked together.
 //
 // Every render is validated against the UI DSL schema (validate.mjs): prop
-// and style types, parent–child relations, layout constraints, keys.
+// and style types, parent–child relations, layout constraints, keys. To reach
+// the screens people reach, it explores the app's states: from every distinct
+// state (snapshotted through the SDK) it fires every handler with realistic
+// event data, breadth first, within a budget; each finding names the steps
+// that lead to it. While exploring, writes to the app's server are answered
+// from what it answered before, so the server is never flooded.
 //
 // It also runs the program as its phone-board widget (display "compact"): the
 // app must declare one, keep it glanceable and fed with live data.
@@ -21,7 +26,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { validateRenders } from "./validate.mjs";
+import { validate as validateTree } from "./validate.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const NODES = JSON.parse(fs.readFileSync(path.join(here, "nodes.json"), "utf8"));
@@ -123,16 +128,41 @@ function sampleChange(node) {
   }
 }
 
-// Folds the validator's findings on every render into the check's errors and
-// warnings (the checks this file makes itself are left to it).
+// Messages, each kept once: the same finding reached by different steps
+// keeps the first (shortest) steps.
+function dedupeSteps(list) {
+  const out = new Map();
+  for (const m of list) {
+    const base = m.replace(/ \(reached after: .*\)$/s, "").split("\n")[0];
+    if (!out.has(base)) out.set(base, m);
+  }
+  return [...out.values()];
+}
+
+// The steps that led somewhere, for a message.
+const stepsText = (path) => (path && path.length ? ` (reached after: ${path.join(" → ")})` : "");
+
+// Folds the validator's findings on every distinct render into the check's
+// errors and warnings, each with the steps that first reached it (the checks
+// this file makes itself are left to it).
 const OWN = new Set(["type-unknown", "type-missing", "widget-node", "widget-size", "event-handler"]);
-function addValidation(renders, compact, errors, warnings, opts) {
+function addValidation(renders, paths, compact, errors, warnings, opts) {
   if (opts.validate === false || !renders.length) return;
-  const report = validateRenders(renders, { mode: compact ? "widget" : "app", theme: SAMPLE_ENV.theme });
+  const seenTrees = new Set();
+  const seenIssues = new Map();
+  for (let r = 0; r < renders.length && seenTrees.size < 800; r++) {
+    const key = JSON.stringify(renders[r]);
+    if (seenTrees.has(key)) continue;
+    seenTrees.add(key);
+    for (const i of validateTree(renders[r], { mode: compact ? "widget" : "app", theme: SAMPLE_ENV.theme }).issues) {
+      const id = `${i.code}|${i.path}|${i.message}`;
+      if (!seenIssues.has(id)) seenIssues.set(id, { ...i, steps: (paths && paths[r]) || [] });
+    }
+  }
   let notes = 0;
-  for (const i of report.issues) {
+  for (const i of seenIssues.values()) {
     if (OWN.has(i.code)) continue;
-    const line = `${i.at || i.path}: ${i.message}${i.fix ? ` Fix: ${i.fix}` : ""} [${i.code}]`;
+    const line = `${i.at || i.path}: ${i.message}${i.fix ? ` Fix: ${i.fix}` : ""} [${i.code}]${stepsText(i.steps)}`;
     if (i.severity === "error" && i.code !== "widget-events") errors.push(line);
     else if (i.severity === "info") notes++;
     else warnings.push(line);
@@ -140,7 +170,8 @@ function addValidation(renders, compact, errors, warnings, opts) {
   if (notes) warnings.push(`${notes} design note(s) on the view trees: run node vendor/aseman-elpian/validate.mjs --program <bundle> to see them`);
 }
 
-async function run(source, { server = "", apps = null, maxHandlers = 40, millis = 10000, display = "full", validate: doValidate, collect = false } = {}) {
+async function run(source, { server = "", apps = null, maxHandlers = 60, millis = 10000, display = "full", validate: doValidate, collect = false,
+  explore = true, exploreMs = 8000, maxTransitions = 2500 } = {}) {
   const vopts = { validate: doValidate };
   const compact = display === "compact";
   const env = { ...SAMPLE_ENV, display, widget: compact ? { size: "medium", shape: "card" } : undefined };
@@ -150,6 +181,13 @@ async function run(source, { server = "", apps = null, maxHandlers = 40, millis 
   const errors = [];
   const warnings = [];
   const renders = [];
+  // The steps (handler labels) that led to each render.
+  const renderPaths = [];
+  let currentPath = [];
+  // While exploring, writes to the app's server are answered from cache.
+  let exploring = false;
+  let synthetic = false;
+  const responses = new Map();
   const queue = [];
   const unknownApis = new Set();
   // What is running, to name it when the SDK reports an error it caught.
@@ -178,6 +216,7 @@ async function run(source, { server = "", apps = null, maxHandlers = 40, millis 
     switch (api) {
       case "render":
         renders.push(parsed);
+        renderPaths.push(currentPath.slice());
         break;
       case "aseman.env":
       case "env.get":
@@ -191,7 +230,13 @@ async function run(source, { server = "", apps = null, maxHandlers = 40, millis 
         reply = intervals.length;
         break;
       case "println":
-        if (typeof parsed === "string" && parsed.startsWith("app error:")) errors.push(`${running}: ${parsed.slice(11).trim()}`);
+        if (typeof parsed === "string" && parsed.startsWith("app error:") && !synthetic) errors.push(`${running}: ${parsed.slice(11).trim()}${stepsText(currentPath)}`);
+        if (typeof parsed === "string" && parsed.startsWith("view error:")) {
+          // The error and where in the program's view it happened.
+          const [first, ...frames] = parsed.slice(12).trim().split("\n");
+          const at = frames.map((f) => f.trim()).find((f) => f.startsWith("at ")) || "";
+          errors.push(`the view threw: ${first}${at ? ` (${at})` : ""}${stepsText(currentPath)}`);
+        }
         break;
       case "aseman.request":
         if (!parsed || !parsed.id || !(parsed.op || parsed.path !== undefined)) errors.push(`aseman.request without id and op/path: ${JSON.stringify(parsed)}`);
@@ -228,6 +273,12 @@ async function run(source, { server = "", apps = null, maxHandlers = 40, millis 
   const answer = async (req) => {
     if (req.target === "app") {
       if (!server) return { ok: true, status: 200, data: { status: 200, ok: true, json: {}, text: "{}", contentType: "application/json" } };
+      const cacheKey = `${req.method || "GET"} ${req.path}`;
+      if (exploring && (responses.has(cacheKey) || (req.method && req.method !== "GET"))) {
+        if (responses.has(cacheKey)) return responses.get(cacheKey);
+        synthetic = true;
+        return { ok: true, status: 200, data: { status: 200, ok: true, json: {}, text: "{}", contentType: "application/json" } };
+      }
       try {
         const url = new URL(String(req.path || ""), server.replace(/\/?$/, "/"));
         for (const [k, v] of Object.entries(req.query || {})) url.searchParams.set(k, typeof v === "string" ? v : JSON.stringify(v));
@@ -243,8 +294,10 @@ async function run(source, { server = "", apps = null, maxHandlers = 40, millis 
         } catch {
           json = null;
         }
-        if (res.status >= 500) errors.push(`the app's server answered ${req.method || "GET"} /${req.path} with HTTP ${res.status}: ${text.slice(0, 300)}`);
-        return { ok: true, status: 200, data: { status: res.status, ok: res.ok, json, text, contentType: res.headers.get("content-type") || "" } };
+        if (res.status >= 500) errors.push(`the app's server answered ${req.method || "GET"} /${req.path} with HTTP ${res.status}: ${text.slice(0, 300)}${stepsText(currentPath)}`);
+        const out = { ok: true, status: 200, data: { status: res.status, ok: res.ok, json, text, contentType: res.headers.get("content-type") || "" } };
+        responses.set(cacheKey, out);
+        return out;
       } catch (e) {
         errors.push(`the app's server did not answer ${req.method || "GET"} /${req.path}: ${e.message}`);
         return { ok: false, status: 0, error: e.message };
@@ -285,7 +338,8 @@ async function run(source, { server = "", apps = null, maxHandlers = 40, millis 
         const result = { id: req.id, ...(await answer(req)) };
         running = `after the host answered ${req.op || "/" + req.path}`;
         const r = evaluate(`__asemanSettle(${JSON.stringify(JSON.stringify(result))})`, "settle.js");
-        if (r.error) errors.push(`after the host answered ${req.op || "/" + req.path}: ${r.error}`);
+        if (r.error && !synthetic) errors.push(`after the host answered ${req.op || "/" + req.path}: ${r.error}${stepsText(currentPath)}`);
+        synthetic = false;
       }
     }
   };
@@ -343,12 +397,102 @@ async function run(source, { server = "", apps = null, maxHandlers = 40, millis 
     walk(tree, "widget", walked);
     vm.dispose();
     runtime.dispose();
-    addValidation(renders.slice(-6), true, errors, warnings, vopts);
+    addValidation(renders.slice(-6), renderPaths.slice(-6), true, errors, warnings, vopts);
     report.ok = errors.length === 0;
     report.errors = [...new Set(errors)];
     report.warnings = [...new Set(warnings)];
-    if (collect) Object.assign(report, { trees: renders, theme: SAMPLE_ENV.theme });
+    if (collect) Object.assign(report, { trees: renders, paths: renderPaths, theme: SAMPLE_ENV.theme });
     return report;
+  }
+
+  // A handler's label for the steps: what the person sees on the control.
+  const labelOf = (h, value) => {
+    const p = (h.node && h.node.props) || {};
+    const what = p.text ?? p.label ?? p.title ?? p.tooltip ?? p.icon ?? h.node.key ?? h.name;
+    return `${h.event} "${String(what).slice(0, 24)}"${value !== undefined && value !== null && h.event !== "tap" ? ` = ${JSON.stringify(value)}` : ""}`;
+  };
+  // The event data the client sends, several realistic values per event.
+  const samplesFor = (h) => {
+    const base = { type: h.event, eventType: h.event };
+    switch (h.event) {
+      case "input":
+        return ["sample", "", "0", "-1", "12.5", "abc"].map((value) => ({ ...base, value }));
+      case "change": {
+        const v = sampleChange(h.node);
+        const alt = typeof v === "boolean" ? !v : h.node && h.node.type === "Slider" ? (h.node.props || {}).min ?? 0 : undefined;
+        return [v, ...(alt !== undefined ? [alt] : [])].map((value) => ({ ...base, value }));
+      }
+      case "select":
+        return [{ ...base, data: { index: 0, row: {} }, index: 0, row: {} }];
+      case "submit":
+        return [base];
+      default:
+        return [base];
+    }
+  };
+  const handlersOf = (tree) => {
+    const found = [];
+    walk(tree, "root", found);
+    const seen = new Set();
+    return found.filter((h) => typeof h.name === "string" && h.name && !seen.has(h.name + ":" + h.event) && seen.add(h.name + ":" + h.event));
+  };
+  const snapshot = () => {
+    const r = vm.evalCode("typeof __asemanSnapshot === 'function' ? __asemanSnapshot() : null");
+    if (r.error) {
+      r.error.dispose();
+      return null;
+    }
+    const v = vm.dump(r.value);
+    r.value.dispose();
+    return typeof v === "string" ? v : null;
+  };
+  const explored = { states: 0, transitions: 0 };
+  const errorBases = new Set();
+  // Breadth-first over distinct app states, within a time and step budget.
+  async function exploreStates() {
+    const start = snapshot();
+    if (!start) return;
+    exploring = true;
+    const end = Date.now() + exploreMs;
+    const seen = new Set([start]);
+    const frontier = [{ state: start, path: [] }];
+    try {
+      while (frontier.length && explored.transitions < maxTransitions && Date.now() < end) {
+        const { state, path } = frontier.shift();
+        explored.states++;
+        currentPath = path;
+        evaluate(`__asemanRestore(${JSON.stringify(state)})`, "restore.js");
+        await drain();
+        const hs = handlersOf(latest()).slice(0, 60);
+        for (const h of hs) {
+          for (const sample of samplesFor(h)) {
+            if (explored.transitions >= maxTransitions || Date.now() >= end) break;
+            explored.transitions++;
+            evaluate(`__asemanRestore(${JSON.stringify(state)})`, "restore.js");
+            const value = sample.value;
+            currentPath = path.concat(labelOf(h, value));
+            running = `${h.at}: handler ${h.name} (${h.event})`;
+            const r = evaluate(`globalThis[${JSON.stringify(h.name)}](${JSON.stringify(typed(sample))})`, "event.js");
+            if (r.error) {
+              const base = `${h.at}: handler ${h.name} (${h.event}) threw: ${r.error.split("\n")[0]}`;
+              if (!errorBases.has(base)) {
+                errorBases.add(base);
+                errors.push(`${base}${stepsText(currentPath)}`);
+              }
+            }
+            await drain();
+            const next = snapshot();
+            if (next && !seen.has(next) && seen.size < 4000) {
+              seen.add(next);
+              frontier.push({ state: next, path: currentPath });
+            }
+          }
+        }
+      }
+    } finally {
+      exploring = false;
+      currentPath = [];
+    }
   }
 
   // Every handler the screens name exists and works with a sample event.
@@ -380,14 +524,15 @@ async function run(source, { server = "", apps = null, maxHandlers = 40, millis 
       await drain();
     }
   }
+  if (explore) await exploreStates();
   const final = [];
   for (const tree of renders.slice(-3)) walk(tree, "root", final);
   for (const api of unknownApis) warnings.push(`askHost("${api}") is not an Aseman host API: use the SDK (Aseman.*)`);
   vm.dispose();
   runtime.dispose();
-  addValidation(renders, false, errors, warnings, vopts);
-  const out = { ok: errors.length === 0, errors: [...new Set(errors)], warnings: [...new Set(warnings)], renders: renders.length, handlers: tried.size };
-  if (collect) Object.assign(out, { trees: renders, theme: SAMPLE_ENV.theme });
+  addValidation(renders, renderPaths, false, errors, warnings, vopts);
+  const out = { ok: errors.length === 0, errors: dedupeSteps(errors), warnings: dedupeSteps(warnings), renders: renders.length, handlers: tried.size, states: explored.states, transitions: explored.transitions };
+  if (collect) Object.assign(out, { trees: renders, paths: renderPaths, theme: SAMPLE_ENV.theme });
   return out;
 }
 

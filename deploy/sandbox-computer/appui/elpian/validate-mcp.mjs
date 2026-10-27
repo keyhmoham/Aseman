@@ -93,8 +93,9 @@ async function call(name, args = {}) {
       let ok = true;
       for (const { display, run, report } of results) {
         const where = display === "compact" ? "as the phone widget" : "as the app";
-        const runtime = (run.errors || []).map((e) => `RUNTIME ERROR ${e}`).concat((run.warnings || []).map((w) => `RUNTIME WARNING ${w}`));
-        ok = ok && report.ok && !(run.errors || []).length;
+        // Runtime errors are already in the report (validateProgram); add the warnings.
+        const runtime = (run.warnings || []).map((w) => `RUNTIME WARNING ${w}`);
+        ok = ok && report.ok;
         parts.push(`── ${where} ──\n${runtime.length ? runtime.join("\n") + "\n" : ""}${format(report)}`);
       }
       parts.push(ok ? "Program VALID." : "Program INVALID: fix the errors above and run again.");

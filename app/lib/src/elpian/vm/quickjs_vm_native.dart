@@ -165,9 +165,17 @@ class QuickJsVm implements VmRuntimeClient {
     return runCode(code);
   }
 
+  /// The callee expression of a handler name: identifiers and dotted paths
+  /// as written, anything else (a name with spaces or symbols) looked up on
+  /// globalThis, so it is still found instead of being a syntax error.
+  static String callee(String funcName) =>
+      RegExp(r'^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$').hasMatch(funcName)
+          ? funcName
+          : 'globalThis[${jsonEncode(funcName)}]';
+
   @override
   Future<String> callFunction(String funcName) async {
-    final result = _runtime.evaluate('$funcName();');
+    final result = _runtime.evaluate('${callee(funcName)}();');
     return result.stringResult;
   }
 
@@ -175,7 +183,8 @@ class QuickJsVm implements VmRuntimeClient {
   Future<String> callFunctionWithInput(
       String funcName, String inputJson) async {
     final escaped = jsonEncode(inputJson);
-    final result = _runtime.evaluate('$funcName(JSON.parse($escaped));');
+    final result =
+        _runtime.evaluate('${callee(funcName)}(JSON.parse($escaped));');
     return result.stringResult;
   }
 

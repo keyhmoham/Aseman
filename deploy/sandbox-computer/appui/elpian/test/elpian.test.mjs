@@ -253,3 +253,67 @@ test("OpenUI draws M3E buttons and icons, not class names or glyph text", () => 
   assert.match(json, /"variant":"tonal"/);
   for (const t of ["Pagination", "Tabs", "ListGroup", "ListTile"]) assert.ok(types(node).includes(t), `uses ${t}`);
 });
+
+test("handler keys never share a name, and trees reach the host without holes", () => {
+  const { ctx, renders } = sdk();
+  const names = [];
+  ctx.App.create({
+    view: function (s, app) {
+      names.length = 0;
+      return { type: "Row", children: ["÷", "×", "−", "+", "=", "a b"].map(function (k) {
+        const name = app.handler("key_" + k, function () {});
+        names.push(name);
+        return { type: "Button", props: { text: k }, events: { tap: name } };
+      }).concat([null, undefined, false, "plain", [{ type: "Text", props: { text: "nested" } }]]) };
+    },
+  });
+  assert.equal(new Set(names).size, names.length, `distinct handler names: ${names.join(", ")}`);
+  for (const n of names) assert.match(n, /^[A-Za-z_$][\w$]*$/, "a JS identifier");
+  assert.equal(ctx.App.prototype.handler.call({ prefix: "p_" }, "save", () => {}), "p_save", "plain keys keep their names");
+  const tree = renders[renders.length - 1];
+  assert.deepEqual(tree.children.slice(-2), [{ type: "Text", props: { text: "plain" } }, { type: "Text", props: { text: "nested" } }]);
+  assert.ok(tree.children.every((c) => c && typeof c === "object"));
+});
+
+test("the check explores states and names the steps to a defect", async () => {
+  const src = SDK + "\n;\n" + fs.readFileSync(path.join(here, "fixtures", "calculator.js"), "utf8");
+  const report = await check(src, { widget: false });
+  assert.equal(report.ok, false);
+  const all = report.errors.join("\n");
+  assert.match(all, /the view threw: cannot read property 'toFixed' of null.*reached after: tap "÷" → tap "="/);
+  assert.match(all, /TextField has no width bound.*\[layout-unbounded-width\].*reached after: tap "÷" → tap "="/);
+  assert.ok(report.states > 20, `explored ${report.states} states`);
+});
+
+test("exploring never floods the app's server with writes", async () => {
+  let posts = 0;
+  const items = [];
+  const srv = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      if (req.method === "POST") {
+        posts++;
+        items.push(JSON.parse(body || "{}"));
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ items }));
+    });
+  });
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  try {
+    const report = await check(SDK + `
+      var app = App.create({ state: { items: [], n: 0 }, view: function (s, app) { return { type: "Column", children: [
+        { type: "Text", props: { text: "Items " + s.items.length + " · " + s.n } },
+        { type: "Button", props: { text: "Add" }, events: { tap: app.handler("add", function () {
+          Aseman.fetch("api/items", { method: "POST", body: { n: app.state.n } }).then(function (r) { app.set({ items: r.json.items || [] }); });
+        }) } },
+        { type: "Button", props: { text: "More" }, events: { tap: app.handler("more", function () { app.set({ n: app.state.n + 1 }); }) } },
+      ] }; } });`, { server: `http://127.0.0.1:${srv.address().port}`, widget: false });
+    assert.equal(report.ok, true, report.errors.join("\n"));
+    assert.ok(report.transitions > 10, "it explored");
+    assert.ok(posts <= 1, `the server got ${posts} POSTs`);
+  } finally {
+    srv.close();
+  }
+});

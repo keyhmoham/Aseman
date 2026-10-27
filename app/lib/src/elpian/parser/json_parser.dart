@@ -8,10 +8,8 @@ class JsonParser {
   }
 
   static List<ElpianNode> parseList(String jsonString) {
-    final List<dynamic> jsonList = jsonDecode(jsonString);
-    return jsonList
-        .map((json) => ElpianNode.fromJson(json as Map<String, dynamic>))
-        .toList();
+    // Lenient like children: null entries skipped, strings become Text.
+    return ElpianNode.childrenOf(jsonDecode(jsonString));
   }
 
   static String stringify(ElpianNode node) {

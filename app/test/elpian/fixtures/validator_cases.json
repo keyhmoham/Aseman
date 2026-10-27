@@ -1,5 +1,5 @@
 {
- "comment": "Trees with the validator's verdict and what Flutter does with them: deploy/sandbox-computer/appui/elpian/test/validate.test.mjs checks the first, app/test/elpian/dsl_layout_test.dart the second.",
+ "comment": "Trees with the validator's verdict and what Flutter does with them ('breaks': throws, or the node draws its inline error box): deploy/sandbox-computer/appui/elpian/test/validate.test.mjs checks the first, app/test/elpian/dsl_layout_test.dart the second.",
  "cases": [
   {
    "name": "Switch value as a string",
@@ -11,7 +11,7 @@
     }
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
    "name": "TextField hint as a number",
@@ -25,7 +25,7 @@
     }
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
    "name": "Expanded flex 0",
@@ -87,7 +87,7 @@
     }
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
    "name": "Expanded flex as a numeric string",
@@ -130,7 +130,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
    "name": "a numeric key",
@@ -141,11 +141,11 @@
      "text": "x"
     }
    },
-   "validator": "error",
-   "flutter": "throws"
+   "validator": "warning",
+   "flutter": "renders"
   },
   {
-   "name": "a null child",
+   "name": "a null child (skipped)",
    "tree": {
     "type": "Column",
     "children": [
@@ -158,8 +158,8 @@
      null
     ]
    },
-   "validator": "error",
-   "flutter": "throws"
+   "validator": "clean",
+   "flutter": "renders"
   },
   {
    "name": "a TextField directly in a Row",
@@ -172,7 +172,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
    "name": "Expanded in a Column in a ListView",
@@ -198,7 +198,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
    "name": "Expanded in a Card",
@@ -219,7 +219,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
    "name": "Positioned in a Column",
@@ -240,7 +240,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
    "name": "Expanded with events",
@@ -264,7 +264,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
    "name": "duplicate sibling keys",
@@ -288,7 +288,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
    "name": "negative padding",
@@ -309,7 +309,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
    "name": "justifyContent as a number",
@@ -330,10 +330,10 @@
     ]
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
-   "name": "style as a CSS string",
+   "name": "style as a CSS string (ignored)",
    "tree": {
     "type": "Text",
     "props": {
@@ -341,8 +341,8 @@
      "style": "padding: 4px"
     }
    },
-   "validator": "error",
-   "flutter": "throws"
+   "validator": "warning",
+   "flutter": "renders"
   },
   {
    "name": "opacity out of range",
@@ -361,7 +361,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
    "name": "a Scaffold in a ListView",
@@ -382,7 +382,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
    "name": "ListTile in a Row",
@@ -398,7 +398,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "throws"
+   "flutter": "breaks"
   },
   {
    "name": "Chart in a Row (fallback width)",
@@ -663,6 +663,40 @@
       }
      }
     ]
+   },
+   "validator": "warning",
+   "flutter": "renders"
+  },
+  {
+   "name": "false, nested arrays and strings among children",
+   "tree": {
+    "type": "Column",
+    "children": [
+     false,
+     [
+      {
+       "type": "Text",
+       "props": {
+        "text": "a"
+       }
+      }
+     ],
+     "plain text",
+     null
+    ]
+   },
+   "validator": "warning",
+   "flutter": "renders"
+  },
+  {
+   "name": "props as a list and events as a string",
+   "tree": {
+    "type": "Text",
+    "props": [
+     1,
+     2
+    ],
+    "events": "tap"
    },
    "validator": "warning",
    "flutter": "renders"

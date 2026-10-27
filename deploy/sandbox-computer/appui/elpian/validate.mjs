@@ -86,7 +86,9 @@ const HEX = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const RGB = /^rgba?\(\s*\d+(\.\d+)?\s*,\s*\d+(\.\d+)?\s*,\s*\d+(\.\d+)?\s*(,\s*\d*(\.\d+)?\s*)?\)$/i;
 const FORMAT = /^\+?(text|number(:\d+)?|integer|compact|percent(:\d+)?|currency(:[A-Za-z]{3}(:\d+)?)?|date|time|datetime)$/;
 const EMOJI = /\p{Extended_Pictographic}/u;
-const GLYPH_ONLY = /^\s*[+\-×✕✖✓✔›‹»«→←↑↓⋯…•·◀▶▲▼★☆⚙♥❤]\s*$/u;
+// Glyphs standing in for an icon (operators such as + − × ÷ = on a keypad
+// are labels, not icons).
+const GLYPH_ONLY = /^\s*[✕✖✓✔›‹»«→←↑↓⋯…•·◀▶▲▼★☆⚙♥❤]\s*$/u;
 
 function cssColor(v) {
   if (typeof v !== "string") return false;
@@ -108,6 +110,7 @@ export function validate(tree, opts = {}) {
   const issues = [];
   const stats = { nodes: 0, depth: 0, types: {} };
   const keys = new Map(); // key -> [{at, events}]
+  const tapHandlers = new Map(); // handler name -> label -> ctx
 
   function add(severity, code, ctx, message, fix) {
     issues.push({ severity, code, path: ctx.path, at: ctx.at, type: ctx.type, message, fix });
@@ -117,7 +120,7 @@ export function validate(tree, opts = {}) {
   function checkStyle(style, ctx, where = "style") {
     if (style === undefined || style === null) return;
     if (!isObj(style)) {
-      add("error", "style-not-object", ctx, `${where} must be an object of style keys, not ${show(style)} (a CSS string is not parsed; the builder casts it and throws).`,
+      add("warning", "style-not-object", ctx, `${where} must be an object of style keys; ${show(style)} (a CSS string) is ignored.`,
         `Write ${where}: { padding: "16", gap: "8" }.`);
       return;
     }
@@ -364,9 +367,19 @@ export function validate(tree, opts = {}) {
   // (false) or unknown (null: under nodes whose layout is not modelled).
   function walk(node, ctx) {
     const { parentType } = ctx;
-    if (node === null || node === undefined || node === false || typeof node !== "object" || Array.isArray(node)) {
-      add("error", "child-not-node", ctx, `${ctx.path} is ${show(node)}, not a node object: the engine throws on it.`,
-        Array.isArray(node) ? "Spread nested arrays into children." : "Filter null/false/strings out of children (a string must be a Text node).");
+    // Holes the SDK and the engine skip (`cond && node`, `cond ? node : null`),
+    // nested arrays they flatten, scalars they draw as plain Text.
+    if (node === null || node === undefined || typeof node === "boolean") {
+      add("info", "child-skipped", ctx, `${ctx.path} is ${show(node)}: skipped.`, "Fine for conditional children; filter them out to keep trees tidy.");
+      return;
+    }
+    if (Array.isArray(node)) {
+      add("info", "child-nested-array", ctx, `${ctx.path} is a nested array: its items are flattened into the parent's children.`);
+      node.forEach((c, i) => walk(c, { ...ctx, path: `${ctx.path}[${i}]` }));
+      return;
+    }
+    if (typeof node !== "object") {
+      add("warning", "child-not-node", ctx, `${ctx.path} is ${show(node)}: drawn as plain Text with no type role.`, `Write { type: "Text", props: { text: ${show(String(node))}, variant: "bodyMedium" } }.`);
       return;
     }
     stats.nodes++;
@@ -393,12 +406,12 @@ export function validate(tree, opts = {}) {
       else if (spec && (spec.props || {})[k] !== undefined) add("error", "shape-prop", ctx, `\`${k}\` must be inside props.`, `Write props: { ${k}: ${show(node[k])} }.`);
       else add("warning", "shape-unknown", ctx, `top-level \`${k}\` is not read.`, "Only type, props, children, events, key and style belong on a node.");
     }
-    if (node.props !== undefined && !isObj(node.props)) add("error", "props-not-object", ctx, `props must be an object, not ${show(node.props)}.`);
+    if (node.props !== undefined && node.props !== null && !isObj(node.props)) add("warning", "props-not-object", ctx, `props must be an object; ${show(node.props)} is ignored, so the node draws with no props.`);
     const props = isObj(node.props) ? node.props : {};
 
     // Keys: event dispatch is by key, siblings must differ.
     if (node.key !== undefined && node.key !== null) {
-      if (typeof node.key !== "string") add("error", "key-type", ctx, `key must be a string (the engine casts it); got ${show(node.key)}.`, `Write key: "${node.key}".`);
+      if (typeof node.key !== "string") add("warning", "key-type", ctx, `key should be a string; ${show(node.key)} is used as "${node.key}".`, `Write key: "${node.key}".`);
       else {
         if (!keys.has(node.key)) keys.set(node.key, []);
         keys.get(node.key).push({ ctx: { ...ctx }, events: isObj(node.events) && Object.keys(node.events).length > 0 });
@@ -437,11 +450,18 @@ export function validate(tree, opts = {}) {
 
     // Events.
     if (node.events !== undefined && node.events !== null) {
-      if (!isObj(node.events)) add("error", "events-not-object", ctx, `events must be an object of {event: "handlerName"}, not ${show(node.events)}.`);
+      if (!isObj(node.events)) add("warning", "events-not-object", ctx, `events must be an object of {event: "handlerName"}; ${show(node.events)} is ignored, so nothing responds.`);
       else {
         const allowed = html ? null : new Set(spec.selfEvents || [...(spec.events || []), ...GESTURE_EVENTS]);
         for (const [ev, h] of Object.entries(node.events)) {
           if (typeof h !== "string" || !h) add("error", "event-handler", ctx, `events.${ev} must name a global function (a string); got ${show(h)}. Functions do not cross into the view tree.`, `Write events: { ${ev}: app.handler("${ev}", fn) }.`);
+          else {
+            if (!/^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/.test(h)) add("warning", "event-handler-name", ctx, `events.${ev} = ${show(h)} is not a JS identifier: older clients call handlers as code, so the tap does nothing there.`, "Use app.handler(key, fn), which makes a safe name, or a name of letters, digits, _ and $.");
+            if (["tap", "click"].includes(ev)) {
+              const label = String(props.text ?? props.label ?? props.title ?? props.icon ?? props.tooltip ?? "");
+              if (label) (tapHandlers.get(h) || tapHandlers.set(h, new Map()).get(h)).set(label, { ...ctx });
+            }
+          }
           if (allowed && !allowed.has(ev)) add("warning", "event-unknown", ctx, `${type} never fires "${ev}".${didYouMean(ev, [...allowed])}`, `${type} fires: ${[...allowed].slice(0, 10).join(", ")}${allowed.size > 10 ? ", …" : ""}.`);
         }
         if (mode === "widget" && Object.keys(node.events).length) add("error", "widget-events", ctx, "the phone widget takes no interaction: a tap opens the app.", "Remove events from the widget view.");
@@ -689,6 +709,16 @@ export function validate(tree, opts = {}) {
     else add("warning", "key-duplicate", ctx, `key "${key}" is used by ${uses.length} nodes: state (focus, scroll, animations) may jump between them.`, "Give every node a unique key.");
   }
 
+  // One tap handler on controls with different labels: a tap carries no data
+  // about which was tapped, so they all do the same thing (often a handler
+  // key collision, or one shared function meant to tell them apart).
+  for (const [name, labels] of tapHandlers) {
+    if (labels.size < 2) continue;
+    const list = [...labels.keys()];
+    add("warning", "handler-shared", [...labels.values()][1], `${labels.size} controls with different labels (${list.slice(0, 6).map((l) => `"${l}"`).join(", ")}${list.length > 6 ? ", …" : ""}) share the tap handler ${name}: a tap event carries no data about which was tapped, so they all do the same thing.`,
+      "Give each control its own handler: app.handler(\"key_\" + label, function () { press(label); }).");
+  }
+
   // Phone widget.
   if (mode === "widget") {
     for (const [t, n] of Object.entries(stats.types)) {
@@ -704,18 +734,26 @@ export function validate(tree, opts = {}) {
 }
 
 // Validates every render a program made (check.mjs collects them).
-export function validateRenders(renders, opts = {}) {
+// [paths] (optional) are the steps that led to each render: a finding first
+// seen after some steps says so.
+export function validateRenders(renders, opts = {}, paths = null) {
   const seen = new Set();
+  const seenTrees = new Set();
   const issues = [];
   let nodes = 0;
-  for (const tree of renders) {
+  for (let k = 0; k < renders.length && seenTrees.size < 800; k++) {
+    const tree = renders[k];
+    const key = JSON.stringify(tree);
+    if (seenTrees.has(key)) continue;
+    seenTrees.add(key);
     const r = validate(tree, opts);
     nodes = Math.max(nodes, r.stats.nodes);
     for (const i of r.issues) {
       const id = `${i.code}|${i.path}|${i.message}`;
       if (seen.has(id)) continue;
       seen.add(id);
-      issues.push(i);
+      const steps = paths && paths[k];
+      issues.push(steps && steps.length ? { ...i, steps, message: `${i.message} (reached after: ${steps.join(" → ")})` } : i);
     }
   }
   const count = (s) => issues.filter((i) => i.severity === s).length;
@@ -795,7 +833,12 @@ export async function validateProgram(source, opts = {}) {
   const out = [];
   for (const display of opts.widgetOnly ? ["compact"] : ["full", "compact"]) {
     const run = await check(source, { ...opts, widget: false, widgetOnly: display === "compact", collect: true, validate: false });
-    const report = validateRenders(run.trees || [], { mode: display === "compact" ? "widget" : "app", design: opts.design, theme: run.theme });
+    const report = validateRenders(run.trees || [], { mode: display === "compact" ? "widget" : "app", design: opts.design, theme: run.theme }, run.paths);
+    // Runtime problems (a view or handler that throws, server errors) first.
+    const runtime = (run.errors || []).map((message) => ({ severity: "error", code: "runtime", path: "$", at: "", message }));
+    report.issues.unshift(...runtime);
+    report.errors += runtime.length;
+    report.ok = report.errors === 0;
     out.push({ display, run, report });
   }
   return out;

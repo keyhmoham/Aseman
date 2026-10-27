@@ -76,8 +76,13 @@ have it two ways:
 | `elpian_icons {query: "calendar"}` | `grep calendar vendor/aseman-elpian/icons.json` |
 
 The program mode runs your bundle like `check.mjs` (QuickJS, simulated host,
-your server), taps every handler with the event data the client really
-sends, and validates **every render**, as the app and as the phone widget.
+your server) and **explores its states**: from every distinct state it fires
+every handler with the event data the client really sends (several values
+per input), breadth first, and validates **every screen it reaches**, as the
+app and as the phone widget. A finding that only shows after some taps says
+how to get there — `(reached after: tap "÷" → tap "=")` — and so does a
+`view` that throws in some state. While exploring, writes to your server are
+answered from its earlier answers, so it is not flooded.
 Options: `--json`, `--strict` (warnings fail too), `--no-design`, `--quiet`.
 The exit code is 1 when there are errors.
 
@@ -86,8 +91,10 @@ Row > TextField#q`, `$.children[0]…`), why it matters and the fix:
 
 * **Shape:** `type` present and drawn; only `type`, `props`, `children`,
   `events`, `key`, `style` on a node (`child`, `onTap`, props at the top
-  level are caught); children an array of nodes (a `null`, `false` or string
-  child throws: filter them out).
+  level are caught). Conditional children are fine — `null`, `undefined`
+  and `false` entries are dropped (`cond ? node : null` works) and nested
+  arrays flatten — but a bare string child is drawn as plain Text with no
+  type role (a warning).
 * **Props:** unknown props (with "did you mean"), types — strict where the
   builder casts (`Switch` `value: "true"`, `TextField` `hint: 42` throw),
   enums, ranges (`opacity` 0..1, `flex` ≥ 1, `Slider` min < max), required
@@ -96,8 +103,11 @@ Row > TextField#q`, `$.children[0]…`), why it matters and the fix:
 * **Styles:** unknown keys, value types and units (`rem`, `"16 16 0 0"` as a
   radius, CSS strings for `border`, negative padding), colors that do not
   parse, hard-coded colors outside the person's theme (a design note).
-* **Events:** handlers must be names (strings); events a node never fires
-  (`Button` `press`); events on a widget.
+* **Events:** handlers must be names (strings) and JS identifiers; events a
+  node never fires (`Button` `press`); events on a widget; **one tap handler
+  on differently labelled controls** (a tap carries no data about which was
+  tapped, so they all do the same thing — give each its own
+  `app.handler(key, fn)`).
 * **Keys:** string keys; unique among siblings (Flutter throws) and unique in
   the tree when nodes have events (events are dispatched by key); interactive
   inputs without a key lose focus.
@@ -170,7 +180,7 @@ function add(event, app) {                         // event is plain JSON
 |---|---|
 | `App.create({state, view(state, app), init(app)})` | renders `view` now and after every `app.set(patch)` |
 | `app.set(patch[, {silent}])`, `app.render()`, `app.fail(error)` | update and redraw; `fail` shows a dismissible error banner |
-| `app.handler(key, fn)` | a global handler name for `events` (stable per key; errors are shown, not lost); `fn(event, app)` |
+| `app.handler(key, fn)` | a global handler name for `events` (stable per key, any characters: `app.handler("key_" + label, …)` for each key of a keypad; errors are shown, not lost); `fn(event, app)` |
 | `app.input(key, field, props)` | a `TextField` bound to `state[field]` (props: `label`, `hint`, `icon`, `helper`, …; `search: true` draws a `SearchBar`) |
 | `Aseman.fetch(path, {method, body, query, headers})` | your server: resolves `{status, ok, json, text}`; rejects on non-2xx (`{raw: true}` to get them) |
 | `Aseman.ask(agent, prompt, {history})` | a space agent: `{agent, reply}`. Every ask is a fresh, isolated conversation (a temporary room thread deleted after) |

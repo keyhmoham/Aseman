@@ -17,25 +17,54 @@ class ElpianNode {
     this.events,
   });
 
+  /// A node from its JSON form, read leniently: view trees come from
+  /// generated programs, and one odd entry must not take the screen down.
+  /// `null` / `false` / `true` children are skipped (JS `cond && node`,
+  /// `cond ? node : null`, `undefined` in arrays), nested arrays flatten,
+  /// strings and numbers become Text nodes, maps with non-string keys are
+  /// keyed by their string form, and non-object props/events are ignored.
   factory ElpianNode.fromJson(Map<String, dynamic> json) {
-    final props = Map<String, dynamic>.from(
-      json['props'] as Map<String, dynamic>? ?? {},
-    );
+    final rawProps = json['props'];
+    final props = rawProps is Map ? stringKeyed(rawProps) : <String, dynamic>{};
     // Include top-level style in props so the engine can parse it
     if (json['style'] != null && !props.containsKey('style')) {
       props['style'] = json['style'];
     }
+    final type = json['type'];
+    final key = json['key'];
+    final events = json['events'];
     return ElpianNode(
-      type: json['type'] as String,
+      type: type is String && type.isNotEmpty ? type : 'Unknown',
       props: props,
-      children: (json['children'] as List<dynamic>?)
-              ?.map(
-                  (child) => ElpianNode.fromJson(child as Map<String, dynamic>))
-              .toList() ??
-          [],
-      key: json['key'] as String?,
-      events: json['events'] as Map<String, dynamic>?,
+      children: childrenOf(json['children']),
+      key: key == null ? null : (key is String ? key : '$key'),
+      events: events is Map ? stringKeyed(events) : null,
     );
+  }
+
+  /// [m] with string keys (a map decoded elsewhere may be `Map<dynamic,
+  /// dynamic>`).
+  static Map<String, dynamic> stringKeyed(Map<dynamic, dynamic> m) =>
+      m is Map<String, dynamic> ? Map<String, dynamic>.of(m) : {for (final e in m.entries) '${e.key}': e.value};
+
+  /// The nodes of a `children` value (see [ElpianNode.fromJson]).
+  static List<ElpianNode> childrenOf(Object? raw) {
+    final out = <ElpianNode>[];
+    void add(Object? c) {
+      if (c == null || c is bool) return;
+      if (c is List) {
+        for (final x in c) {
+          add(x);
+        }
+      } else if (c is Map) {
+        out.add(ElpianNode.fromJson(stringKeyed(c)));
+      } else if (c is String || c is num) {
+        out.add(ElpianNode(type: 'Text', props: {'text': '$c'}));
+      }
+    }
+
+    add(raw);
+    return out;
   }
 
   Map<String, dynamic> toJson() {

@@ -12,7 +12,8 @@ from typing import Any
 import httpx
 
 # Sandbox commands, App UI builds (OpenCode), and agent hand-offs can take long.
-CALL_TIMEOUT = httpx.Timeout(connect=10.0, read=960.0, write=60.0, pool=30.0)
+# Default 2h: shorter budgets (e.g. 15–16 min) surfaced as VMM_ERROR: ReadTimeout mid-work.
+CALL_TIMEOUT = httpx.Timeout(connect=10.0, read=7200.0, write=60.0, pool=30.0)
 
 
 class GatewayError(Exception):
@@ -38,8 +39,8 @@ TIMELINE_TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=5.0)
 
 # Code Mode may compose several app calls inside one sandboxed script.
 # Platform tools like appui_create (OpenCode fullstack build + tests) need a
-# long read budget — previously 180s produced VMM_ERROR: ReadTimeout mid-build.
-CODEMODE_TIMEOUT = httpx.Timeout(connect=10.0, read=900.0, write=60.0, pool=30.0)
+# long read budget — previously 180s / 900s produced VMM_ERROR: ReadTimeout mid-build.
+CODEMODE_TIMEOUT = httpx.Timeout(connect=10.0, read=7200.0, write=60.0, pool=30.0)
 
 
 class Gateway:

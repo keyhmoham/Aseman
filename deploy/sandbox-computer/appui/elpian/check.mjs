@@ -27,6 +27,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { validate as validateTree } from "./validate.mjs";
+import { GESTURE_SEQUENCES, PHONE } from "./schema.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const NODES = JSON.parse(fs.readFileSync(path.join(here, "nodes.json"), "utf8"));
@@ -78,6 +79,9 @@ export const SAMPLE_ENV = {
     inverseSurface: "#322F35", onInverseSurface: "#F5EFF7", outline: "#79747E", outlineVariant: "#CAC4D0",
     error: "#B3261E", onError: "#FFFFFF", errorContainer: "#F9DEDC", onErrorContainer: "#410E0B",
   } },
+  // A small phone: the size fixed screens must fit (validate.mjs checks the
+  // renders against the same size).
+  viewport: { width: PHONE.width, height: PHONE.height, sizeClass: "compact", orientation: "portrait" },
   user: { id: "u-check", handle: "check" },
   space: "s-check",
   room: "r-check",
@@ -146,15 +150,21 @@ const stepsText = (path) => (path && path.length ? ` (reached after: ${path.join
 // errors and warnings, each with the steps that first reached it (the checks
 // this file makes itself are left to it).
 const OWN = new Set(["type-unknown", "type-missing", "widget-node", "widget-size", "event-handler"]);
-function addValidation(renders, paths, compact, errors, warnings, opts) {
+// Validator warnings that mean the app does not work for the person using it
+// — touches that never arrive, a screen cut off on phones — fail the check
+// (the validator keeps them warnings: its errors are what makes Flutter
+// throw). Not row overflow: it estimates text widths.
+export const BLOCKING = new Set(["gesture-in-scroll", "gesture-in-control", "gesture-no-area", "stack-overlay-blocks",
+  "layout-wider-than-screen", "layout-taller-than-screen", "layout-screen-overflow"]);
+function addValidation(renders, paths, compact, errors, warnings, opts, viewports = []) {
   if (opts.validate === false || !renders.length) return;
   const seenTrees = new Set();
   const seenIssues = new Map();
   for (let r = 0; r < renders.length && seenTrees.size < 800; r++) {
-    const key = JSON.stringify(renders[r]);
+    const key = JSON.stringify(renders[r]) + JSON.stringify(viewports[r] || null);
     if (seenTrees.has(key)) continue;
     seenTrees.add(key);
-    for (const i of validateTree(renders[r], { mode: compact ? "widget" : "app", theme: SAMPLE_ENV.theme }).issues) {
+    for (const i of validateTree(renders[r], { mode: compact ? "widget" : "app", theme: SAMPLE_ENV.theme, viewport: viewports[r] }).issues) {
       const id = `${i.code}|${i.path}|${i.message}`;
       if (!seenIssues.has(id)) seenIssues.set(id, { ...i, steps: (paths && paths[r]) || [] });
     }
@@ -163,7 +173,7 @@ function addValidation(renders, paths, compact, errors, warnings, opts) {
   for (const i of seenIssues.values()) {
     if (OWN.has(i.code)) continue;
     const line = `${i.at || i.path}: ${i.message}${i.fix ? ` Fix: ${i.fix}` : ""} [${i.code}]${stepsText(i.steps)}`;
-    if (i.severity === "error" && i.code !== "widget-events") errors.push(line);
+    if ((i.severity === "error" && i.code !== "widget-events") || BLOCKING.has(i.code)) errors.push(line);
     else if (i.severity === "info") notes++;
     else warnings.push(line);
   }
@@ -181,8 +191,10 @@ async function run(source, { server = "", apps = null, maxHandlers = 60, millis 
   const errors = [];
   const warnings = [];
   const renders = [];
-  // The steps (handler labels) that led to each render.
+  // The steps (handler labels) that led to each render, and the viewport it
+  // was drawn for.
   const renderPaths = [];
+  const renderViewports = [];
   let currentPath = [];
   // While exploring, writes to the app's server are answered from cache.
   let exploring = false;
@@ -217,6 +229,7 @@ async function run(source, { server = "", apps = null, maxHandlers = 60, millis 
       case "render":
         renders.push(parsed);
         renderPaths.push(currentPath.slice());
+        renderViewports.push(env.viewport);
         break;
       case "aseman.env":
       case "env.get":
@@ -397,11 +410,11 @@ async function run(source, { server = "", apps = null, maxHandlers = 60, millis 
     walk(tree, "widget", walked);
     vm.dispose();
     runtime.dispose();
-    addValidation(renders.slice(-6), renderPaths.slice(-6), true, errors, warnings, vopts);
+    addValidation(renders.slice(-6), renderPaths.slice(-6), true, errors, warnings, vopts, renderViewports.slice(-6));
     report.ok = errors.length === 0;
     report.errors = [...new Set(errors)];
     report.warnings = [...new Set(warnings)];
-    if (collect) Object.assign(report, { trees: renders, paths: renderPaths, theme: SAMPLE_ENV.theme });
+    if (collect) Object.assign(report, { trees: renders, paths: renderPaths, viewports: renderViewports, theme: SAMPLE_ENV.theme });
     return report;
   }
 
@@ -411,24 +424,80 @@ async function run(source, { server = "", apps = null, maxHandlers = 60, millis 
     const what = p.text ?? p.label ?? p.title ?? p.tooltip ?? p.icon ?? h.node.key ?? h.name;
     return `${h.event} "${String(what).slice(0, 24)}"${value !== undefined && value !== null && h.event !== "tap" ? ` = ${JSON.stringify(value)}` : ""}`;
   };
+  // An event as the client sends it (ElpianVmWidget, elpianEventJson): type,
+  // target and phase, `data`, the fields of its kind, and `data`'s fields at
+  // the top level too.
+  const clientEvent = (h, fields = {}, data = {}) => {
+    const id = (h.node && typeof h.node.key === "string" && h.node.key) || "element_1";
+    return { ...data, type: h.event, eventType: h.event, target: id, currentTarget: id, timestamp: "2026-01-01T09:00:00.000", phase: "atTarget", data, ...fields };
+  };
+  const pt = (x, y) => ({ x, y });
+  // A finger on the node: where (on it and on the screen) and how far it
+  // moved since the last event.
+  const pointerAt = (h, x, y, dx = 0, dy = 0, data = {}) => clientEvent(h, {
+    position: pt(16 + x, 120 + y), localPosition: pt(x, y), delta: pt(dx, dy), buttons: 1, pressure: 1, distance: 0, pointerId: 1,
+  }, data);
+  const gestureAt = (h, scale, rotation, data = {}) => clientEvent(h, { velocity: pt(0, 0), scale, rotation, focalPoint: pt(180, 260) }, { localFocalPoint: pt(164, 140), ...data });
   // The event data the client sends, several realistic values per event.
   const samplesFor = (h) => {
-    const base = { type: h.event, eventType: h.event };
     switch (h.event) {
       case "input":
-        return ["sample", "", "0", "-1", "12.5", "abc"].map((value) => ({ ...base, value }));
+        return ["sample", "", "0", "-1", "12.5", "abc"].map((value) => clientEvent(h, { value, inputType: "text" }));
       case "change": {
         const v = sampleChange(h.node);
         const alt = typeof v === "boolean" ? !v : h.node && h.node.type === "Slider" ? (h.node.props || {}).min ?? 0 : undefined;
-        return [v, ...(alt !== undefined ? [alt] : [])].map((value) => ({ ...base, value }));
+        return [v, ...(alt !== undefined ? [alt] : [])].map((value) => clientEvent(h, {}, { value }));
       }
       case "select":
-        return [{ ...base, data: { index: 0, row: {} }, index: 0, row: {} }];
-      case "submit":
-        return [base];
+        return [clientEvent(h, {}, { index: 0, row: {} })];
+      case "resize":
+        return [clientEvent(h, {}, { width: PHONE.width - 32, height: 420 }), clientEvent(h, {}, { width: 1200, height: 700 })];
+      case "swipeleft": case "swiperight": case "swipeup": case "swipedown": {
+        const v = { swipeleft: pt(-900, 0), swiperight: pt(900, 0), swipeup: pt(0, -900), swipedown: pt(0, 900) }[h.event];
+        return [clientEvent(h, { velocity: v, scale: 1, rotation: 0, focalPoint: pt(0, 0) })];
+      }
+      case "tapdown": case "tapup": case "secondarytap": case "contextmenu": case "pointerenter": case "pointerexit": case "pointerhover":
+        return [pointerAt(h, 24, 32)];
       default:
-        return [base];
+        return [clientEvent(h)];
     }
+  };
+  // One step of a gesture sequence: the i-th event of n.
+  const sequenceStep = (h, i, n) => {
+    const x = 20 + i * 18, y = 30 + i * 12;
+    if (/^(scale|pinch|rotate)/.test(h.event)) {
+      const end = /end$/.test(h.event);
+      return end ? clientEvent(h, { velocity: pt(0, 0), scale: 1, rotation: 0, focalPoint: pt(0, 0) }) : gestureAt(h, 1 + i * 0.15, i * 0.05);
+    }
+    if (h.event === "dragend") return pointerAt(h, x, y, 0, 0, { velocity: pt(120, 80) });
+    return pointerAt(h, x, y, i ? 18 : 0, i ? 12 : 0);
+  };
+  // What the person does, as handler calls: one call per sample, but the
+  // events of a gesture fire as the sequence the finger makes (start, two
+  // moves, end) — a move handler is never called without its start.
+  const actionsOf = (hs) => {
+    const actions = [];
+    const inSequence = new Set();
+    for (const seq of GESTURE_SEQUENCES) {
+      const byNode = new Map();
+      for (const h of hs) if (seq.includes(h.event)) (byNode.get(h.node) || byNode.set(h.node, []).get(h.node)).push(h);
+      for (const list of byNode.values()) {
+        const steps = [];
+        for (const ev of seq) {
+          const h = list.find((x) => x.event === ev);
+          if (!h) continue;
+          inSequence.add(h);
+          const times = ev === seq[1] ? 2 : 1;
+          for (let k = 0; k < times; k++) steps.push({ h, sample: sequenceStep(h, steps.length, 4) });
+        }
+        if (steps.length) actions.push({ steps, label: `${seq[0].replace(/start|down$/, "")} on ${labelOf(steps[0].h).split(" ").slice(1).join(" ")}` });
+      }
+    }
+    for (const h of hs) {
+      if (inSequence.has(h)) continue;
+      for (const sample of samplesFor(h)) actions.push({ steps: [{ h, sample }], label: labelOf(h, sample.value) });
+    }
+    return actions;
   };
   const handlersOf = (tree) => {
     const found = [];
@@ -464,13 +533,12 @@ async function run(source, { server = "", apps = null, maxHandlers = 60, millis 
         evaluate(`__asemanRestore(${JSON.stringify(state)})`, "restore.js");
         await drain();
         const hs = handlersOf(latest()).slice(0, 60);
-        for (const h of hs) {
-          for (const sample of samplesFor(h)) {
-            if (explored.transitions >= maxTransitions || Date.now() >= end) break;
-            explored.transitions++;
-            evaluate(`__asemanRestore(${JSON.stringify(state)})`, "restore.js");
-            const value = sample.value;
-            currentPath = path.concat(labelOf(h, value));
+        for (const action of actionsOf(hs)) {
+          if (explored.transitions >= maxTransitions || Date.now() >= end) break;
+          explored.transitions++;
+          evaluate(`__asemanRestore(${JSON.stringify(state)})`, "restore.js");
+          currentPath = path.concat(action.label);
+          for (const { h, sample } of action.steps) {
             running = `${h.at}: handler ${h.name} (${h.event})`;
             const r = evaluate(`globalThis[${JSON.stringify(h.name)}](${JSON.stringify(typed(sample))})`, "event.js");
             if (r.error) {
@@ -479,13 +547,14 @@ async function run(source, { server = "", apps = null, maxHandlers = 60, millis 
                 errorBases.add(base);
                 errors.push(`${base}${stepsText(currentPath)}`);
               }
+              break;
             }
             await drain();
-            const next = snapshot();
-            if (next && !seen.has(next) && seen.size < 4000) {
-              seen.add(next);
-              frontier.push({ state: next, path: currentPath });
-            }
+          }
+          const next = snapshot();
+          if (next && !seen.has(next) && seen.size < 4000) {
+            seen.add(next);
+            frontier.push({ state: next, path: currentPath });
           }
         }
       }
@@ -495,11 +564,13 @@ async function run(source, { server = "", apps = null, maxHandlers = 60, millis 
     }
   }
 
-  // Every handler the screens name exists and works with a sample event.
+  // Every handler the screens name exists and works with a sample event (a
+  // gesture's handlers as the sequence the finger makes).
   const tried = new Set();
   for (let pass = 0; pass < 3 && tried.size < maxHandlers; pass++) {
     const found = [];
     walk(latest(), "root", found);
+    const fresh = [];
     for (const h of found) {
       if (tried.size >= maxHandlers) break;
       const key = `${h.name}:${h.event}`;
@@ -516,23 +587,44 @@ async function run(source, { server = "", apps = null, maxHandlers = 60, millis 
         errors.push(`${h.at}: events.${h.event} names "${h.name}", which is not a global function`);
         continue;
       }
-      const sample = { type: h.event, eventType: h.event, data: h.event === "select" ? { index: 0, row: {} } : null,
-        value: h.event === "input" ? "sample" : h.event === "change" ? sampleChange(h.node) : undefined };
-      running = `${h.at}: handler ${h.name} (${h.event})`;
-      const r = evaluate(`globalThis[${JSON.stringify(h.name)}](${JSON.stringify(typed(sample))})`, "event.js");
-      if (r.error) errors.push(`${h.at}: handler ${h.name} (${h.event}) threw: ${r.error}`);
-      await drain();
+      fresh.push(h);
+    }
+    const once = new Set();
+    for (const action of actionsOf(fresh)) {
+      if (action.steps.length === 1 && once.has(action.steps[0].h)) continue;
+      once.add(action.steps[0].h);
+      for (const { h, sample } of action.steps) {
+        running = `${h.at}: handler ${h.name} (${h.event})`;
+        const r = evaluate(`globalThis[${JSON.stringify(h.name)}](${JSON.stringify(typed(sample))})`, "event.js");
+        if (r.error) {
+          errors.push(`${h.at}: handler ${h.name} (${h.event}) threw: ${r.error}`);
+          break;
+        }
+        await drain();
+      }
     }
   }
   if (explore) await exploreStates();
+  // The same program in a desk window: the layout it picks for wide screens
+  // renders and validates too.
+  if (renders.length) {
+    const desk = { width: 1280, height: 800, sizeClass: "expanded", orientation: "landscape" };
+    env.viewport = desk;
+    currentPath = [`a desk window ${desk.width}×${desk.height}`];
+    running = "the app in a desk window";
+    const r = evaluate(`typeof __asemanEnv === "function" && __asemanEnv(${JSON.stringify(JSON.stringify(typed(env)))})`, "env.js");
+    if (r.error) errors.push(`the app in a desk window (${desk.width}×${desk.height}) threw: ${r.error}`);
+    await drain();
+    currentPath = [];
+  }
   const final = [];
   for (const tree of renders.slice(-3)) walk(tree, "root", final);
   for (const api of unknownApis) warnings.push(`askHost("${api}") is not an Aseman host API: use the SDK (Aseman.*)`);
   vm.dispose();
   runtime.dispose();
-  addValidation(renders, renderPaths, false, errors, warnings, vopts);
+  addValidation(renders, renderPaths, false, errors, warnings, vopts, renderViewports);
   const out = { ok: errors.length === 0, errors: dedupeSteps(errors), warnings: dedupeSteps(warnings), renders: renders.length, handlers: tried.size, states: explored.states, transitions: explored.transitions };
-  if (collect) Object.assign(out, { trees: renders, paths: renderPaths, theme: SAMPLE_ENV.theme });
+  if (collect) Object.assign(out, { trees: renders, paths: renderPaths, viewports: renderViewports, theme: SAMPLE_ENV.theme });
   return out;
 }
 

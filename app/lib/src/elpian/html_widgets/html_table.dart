@@ -149,6 +149,8 @@ double? _px(Object? v) {
             node: events.node,
             parentId: events.parentId,
             handleGestures: events.handleGestures,
+            handleTaps: events.handleTaps,
+            dispatcher: events.dispatcher,
             child: w,
           );
       rewrap = outer == null ? wrap : (w) => outer(wrap(w));

@@ -87,10 +87,11 @@ phones alike. Everything for it is in [`elpian/`](elpian):
 | `aseman-elpian.js` | The SDK in every program: `App` (state, view, handlers), `Aseman.*` (agents, apps, the app's server, env, phone widget), Tasks |
 | `openui-elpian.js` | The OpenUI collection (all 137 components of the web kit) rendered as Elpian/UI-kit nodes, and agent-backed islands (`OpenUI.panel` / `action` / `query`) |
 | `bundle.mjs` | `elpian/src/*.js` → `elpian/app.js` (SDK + OpenUI + the app) |
-| `check.mjs` | Runs the program on QuickJS against a simulated host and the live server; fails on errors, unknown nodes, missing or throwing handlers, and the validator's errors on every render |
-| `validate.mjs`, `schema.mjs`, `icons.json` | The UI DSL validator: checks view trees (props, styles, events, keys, parent–child relations, measured layout constraints, widget rules, M3E design lint) against the engine's schema; CLI (`validate.mjs tree.json`, `--program app.js`, `--describe Type`) |
+| `check.mjs` | Runs the program on QuickJS against a simulated host (a 360×640 phone, then a desk window) and the live server; fails on errors, unknown nodes, missing or throwing handlers (gestures fired as the finger makes them), the validator's errors on every render, and its findings that break touch or phones (a surface in a scroll, an overlay over taps, a screen taller than a phone, …) |
+| `validate.mjs`, `schema.mjs`, `icons.json` | The UI DSL validator: checks view trees (props, styles, events, keys, parent–child relations, measured layout constraints, touch and nested gestures, fitting a phone, widget rules, M3E design lint) against the engine's schema; CLI (`validate.mjs tree.json`, `--program app.js`, `--describe Type`) |
 | `validate-mcp.mjs` | The validator as an MCP server (`elpian_validate`, `elpian_validate_program`, `elpian_describe`, `elpian_icons`), registered for OpenCode in `opencode/opencode.json` |
-| `examples/showcase.js` | A reference app in Material 3 Expressive that passes the check and the validator |
+| `examples/showcase.js` | A reference app in Material 3 Expressive that passes the check and the validator (scrolling pages) |
+| `examples/whiteboard.js` | A reference app with a fixed, touch-driven screen (a drawing surface that fills any window, an adaptive toolbar) that passes them too |
 | `nodes.json` | The node types the engine and UI kit draw (a test keeps it equal to the engine source) |
 
 The app's server serves `GET /elpian/app.js`; `READY.json` says

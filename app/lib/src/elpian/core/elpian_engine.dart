@@ -57,7 +57,10 @@ class ElpianEngine {
 
   /// Load JSON stylesheet
   void loadStylesheet(Map<String, dynamic> stylesheetJson) {
-    final stylesheet = JsonStylesheetParser.parseJsonStylesheet(stylesheetJson);
+    // In this engine's scope: the parser files media queries under
+    // ElpianServices.current.
+    final stylesheet = services.runScoped(
+        () => JsonStylesheetParser.parseJsonStylesheet(stylesheetJson));
 
     // Copy all rules to global stylesheet
     for (final rule in stylesheet.rules) {
@@ -288,13 +291,24 @@ class ElpianEngine {
         return _render(node, parentId: parentId);
       });
 
-  /// Widgets whose builders recognise their own gestures and dispatch the
-  /// node's events themselves (`InkWell`, `GestureDetector`, drag and drop,
-  /// `Dismissible`, `FloatingActionButton`). The generic event wrapper still
-  /// registers these nodes for dispatch, but must not add a competing
-  /// GestureDetector around them — it would fight theirs in the gesture
-  /// arena and report taps twice. Embedders add the types of their own
-  /// widgets that dispatch their events themselves.
+  /// Widgets whose builders recognise every gesture of theirs and dispatch
+  /// the node's events themselves (`GestureDetector`, drag and drop,
+  /// `Dismissible`): the generic event wrapper registers them for dispatch
+  /// and adds no recognisers of its own.
+  static final Set<String> selfGesturingTypes = {
+    'GestureDetector',
+    'Draggable',
+    'DragTarget',
+    'Dismissible',
+  };
+
+  /// Widgets whose builders recognise their own taps and dispatch the node's
+  /// tap events themselves (`InkWell`, buttons, cards, list tiles, …). The
+  /// generic event wrapper still registers these nodes for dispatch, but
+  /// must not add a competing tap recogniser around them — it would fight
+  /// theirs in the gesture arena and report taps twice. It still adds the
+  /// drags, swipes and scales they declare. Embedders add the types of their
+  /// own widgets that dispatch their events themselves.
   static final Set<String> selfDispatchingTypes = {
     'InkWell',
     'GestureDetector',
@@ -409,7 +423,8 @@ class ElpianEngine {
         key: key == null ? null : ValueKey<String>(key),
         node: nodeWithStyle,
         parentId: parentId,
-        handleGestures: !selfDispatchingTypes.contains(nodeWithStyle.type),
+        handleGestures: !selfGesturingTypes.contains(nodeWithStyle.type),
+        handleTaps: !selfDispatchingTypes.contains(nodeWithStyle.type),
         child: result,
       );
     } else if (key != null && key.isNotEmpty) {

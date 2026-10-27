@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/document_index.dart';
 import '../core/elpian_services.dart';
+import '../core/event_dispatcher.dart';
 import '../core/lenient.dart';
 import '../css/css_properties.dart';
 import '../models/elpian_node.dart';
@@ -27,6 +28,7 @@ class HtmlInput extends StatefulWidget {
     required this.node,
     required this.children,
     this.document,
+    this.dispatcher,
   });
 
   final ElpianNode node;
@@ -35,11 +37,16 @@ class HtmlInput extends StatefulWidget {
   /// The rendering mini app's document index, for `list` → `<datalist>`.
   final DocumentIndex? document;
 
+  /// The rendering mini app's dispatcher, captured at build (see
+  /// ElpianServices): the state builds and dispatches outside the render.
+  final EventDispatcher? dispatcher;
+
   static Widget build(ElpianNode node, List<Widget> children) {
     return HtmlInput(
       key: node.key != null ? ValueKey<String>('input_${node.key}') : null,
       node: node,
       document: ElpianServices.current.document,
+      dispatcher: ElpianServices.current.events,
       children: children,
     );
   }
@@ -66,6 +73,8 @@ class _HtmlInputState extends State<HtmlInput> {
 
   String get _elementId => widget.node.key ?? 'element_${widget.node.hashCode}';
   String get _type => looseStr(widget.node.props['type']) ?? 'text';
+  EventDispatcher get _events =>
+      widget.dispatcher ?? ElpianServices.current.events;
 
   @override
   void initState() {
@@ -112,7 +121,7 @@ class _HtmlInputState extends State<HtmlInput> {
         value: _checked,
         onChanged: (newValue) {
           setState(() => _checked = newValue ?? false);
-          ElpianServices.current.events.dispatchChange(_elementId, _checked);
+          _events.dispatchChange(_elementId, _checked);
         },
       );
     } else if (_type == 'radio') {
@@ -122,7 +131,7 @@ class _HtmlInputState extends State<HtmlInput> {
       result = RadioGroup<Object?>(
         groupValue: groupValue,
         onChanged: (newValue) {
-          ElpianServices.current.events.dispatchChange(_elementId, newValue);
+          _events.dispatchChange(_elementId, newValue);
         },
         child: Radio<Object?>(value: value),
       );
@@ -155,9 +164,9 @@ class _HtmlInputState extends State<HtmlInput> {
           ),
         ),
         onChanged: (value) =>
-            ElpianServices.current.events.dispatchInput(_elementId, value),
+            _events.dispatchInput(_elementId, value),
         onSubmitted: (value) =>
-            ElpianServices.current.events.dispatchSubmit(_elementId),
+            _events.dispatchSubmit(_elementId),
       );
       if (_suggestions != null) {
         result = _withSuggestions(result as TextField);
@@ -172,7 +181,7 @@ class _HtmlInputState extends State<HtmlInput> {
 
   /// Wrap [field] in an autocomplete fed by the input's datalist.
   Widget _withSuggestions(TextField field) {
-    final events = ElpianServices.current.events;
+    final events = _events;
     final controller = _controller!;
     final focusNode = _focusNode ??= FocusNode();
     return RawAutocomplete<DatalistOption>(

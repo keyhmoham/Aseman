@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/elpian_node.dart';
 import '../core/elpian_services.dart';
+import '../core/event_dispatcher.dart';
 import '../css/css_properties.dart';
 
 /// A `<select>` dropdown.
@@ -14,10 +15,15 @@ import '../css/css_properties.dart';
 /// button reflects the selection immediately, without the page needing to
 /// re-render the whole form on every change.
 class HtmlSelect extends StatefulWidget {
-  const HtmlSelect({super.key, required this.node, required this.children});
+  const HtmlSelect(
+      {super.key, required this.node, required this.children, this.dispatcher});
 
   final ElpianNode node;
   final List<Widget> children;
+
+  /// The rendering mini app's dispatcher, captured at build (see
+  /// ElpianServices): the state dispatches outside the render.
+  final EventDispatcher? dispatcher;
 
   /// Registry adapter (every html widget is built as `build(node, children)`).
   static Widget build(ElpianNode node, List<Widget> children) {
@@ -25,6 +31,7 @@ class HtmlSelect extends StatefulWidget {
       key: node.key != null ? ValueKey<String>('select_${node.key}') : null,
       node: node,
       children: children,
+      dispatcher: ElpianServices.current.events,
     );
   }
 
@@ -119,7 +126,7 @@ class _HtmlSelectState extends State<HtmlSelect> {
       onChanged: (newValue) {
         if (newValue == null) return;
         setState(() => _value = newValue);
-        ElpianServices.current.events.dispatchChange(_elementId, newValue);
+        (widget.dispatcher ?? ElpianServices.current.events).dispatchChange(_elementId, newValue);
       },
     );
 

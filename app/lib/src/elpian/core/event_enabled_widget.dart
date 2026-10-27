@@ -4,6 +4,7 @@ import '../models/elpian_node.dart';
 import 'event_system.dart';
 import 'event_dispatcher.dart';
 import 'elpian_services.dart';
+import 'node_events.dart';
 
 /// Wrapper widget that adds event handling capabilities to any widget
 class EventEnabledWidget extends StatefulWidget {
@@ -11,11 +12,19 @@ class EventEnabledWidget extends StatefulWidget {
   final ElpianNode node;
   final String? parentId;
 
-  /// Whether to recognise tap / drag / swipe gestures for the node's events.
-  /// `false` for widgets that recognise and dispatch their own (see
-  /// `ElpianEngine.selfDispatchingTypes`); the node is still registered for
-  /// dispatch, and pointer, hover and keyboard events are still wired.
+  /// Whether to recognise gestures (taps, drags, swipes, scales) for the
+  /// node's events. `false` for widgets that recognise and dispatch all of
+  /// their own (see `ElpianEngine.selfGesturingTypes`); the node is still
+  /// registered for dispatch, and pointer, hover and keyboard events are
+  /// still wired.
   final bool handleGestures;
+
+  /// Whether to recognise taps (tap, double, long press, tap down/up,
+  /// secondary). `false` for widgets that recognise their own taps (see
+  /// `ElpianEngine.selfDispatchingTypes`) — a second tap recogniser would
+  /// fight theirs and report taps twice — while their drags, swipes and
+  /// scales still come from here.
+  final bool handleTaps;
 
   /// The dispatcher of the mini app being rendered. Captured when the widget
   /// is built — inside the engine's service scope — because the state mounts
@@ -28,6 +37,7 @@ class EventEnabledWidget extends StatefulWidget {
     required this.node,
     this.parentId,
     this.handleGestures = true,
+    this.handleTaps = true,
     EventDispatcher? dispatcher,
   })  : dispatcher = dispatcher ?? ElpianServices.current.events,
         super(key: key);
@@ -70,7 +80,7 @@ class _EventEnabledWidgetState extends State<EventEnabledWidget> {
     if (oldId != newId ||
         oldWidget.parentId != widget.parentId ||
         oldWidget.node != widget.node) {
-      _dispatcher.unregisterNode(oldId);
+      _dispatcher.unregisterNode(oldId, oldWidget.node);
       _dispatcher.registerNode(newId, widget.node, parentId: widget.parentId);
       _elementId = newId;
     }
@@ -80,7 +90,7 @@ class _EventEnabledWidgetState extends State<EventEnabledWidget> {
   void dispose() {
     _focusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
-    _dispatcher.unregisterNode(_elementId);
+    _dispatcher.unregisterNode(_elementId, widget.node);
     super.dispose();
   }
 
@@ -103,184 +113,12 @@ class _EventEnabledWidgetState extends State<EventEnabledWidget> {
 
     final events = widget.node.events!;
 
-    // Wrap with GestureDetector for tap/click events
-    if (widget.handleGestures &&
-        _hasAnyEvent(events, [
-          'click',
-          'tap',
-          'doubletap',
-          'longpress',
-          'tapdown',
-          'tapup',
-          'tapcancel',
-          'drag',
-          'dragstart',
-          'dragend',
-          'swipeleft',
-          'swiperight',
-          'swipeup',
-          'swipedown',
-        ])) {
-      result = GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: events.containsKey('click') || events.containsKey('tap')
-            ? () {
-                if (events.containsKey('tap')) {
-                  _dispatcher.dispatchEvent(
-                    ElpianEvent(
-                      type: 'tap',
-                      eventType: ElpianEventType.tap,
-                      target: _elementId,
-                    ),
-                    _elementId,
-                  );
-                }
-                if (events.containsKey('click')) {
-                  _dispatcher.dispatchClick(_elementId);
-                }
-              }
-            : null,
-        onDoubleTap: events.containsKey('doubletap')
-            ? () => _dispatcher.dispatchEvent(
-                  ElpianEvent(
-                    type: 'doubletap',
-                    eventType: ElpianEventType.doubleClick,
-                    target: _elementId,
-                  ),
-                  _elementId,
-                )
-            : null,
-        onLongPress: events.containsKey('longpress')
-            ? () => _dispatcher.dispatchEvent(
-                  ElpianEvent(
-                    type: 'longpress',
-                    eventType: ElpianEventType.longPress,
-                    target: _elementId,
-                  ),
-                  _elementId,
-                )
-            : null,
-        onTapDown: events.containsKey('tapdown')
-            ? (details) => _dispatcher.dispatchEvent(
-                  ElpianPointerEvent(
-                    type: 'tapdown',
-                    eventType: ElpianEventType.tapDown,
-                    target: _elementId,
-                    position: details.globalPosition,
-                    localPosition: details.localPosition,
-                  ),
-                  _elementId,
-                )
-            : null,
-        onTapUp: events.containsKey('tapup')
-            ? (details) => _dispatcher.dispatchEvent(
-                  ElpianPointerEvent(
-                    type: 'tapup',
-                    eventType: ElpianEventType.tapUp,
-                    target: _elementId,
-                    position: details.globalPosition,
-                    localPosition: details.localPosition,
-                  ),
-                  _elementId,
-                )
-            : null,
-        onTapCancel: events.containsKey('tapcancel')
-            ? () => _dispatcher.dispatchEvent(
-                  ElpianEvent(
-                    type: 'tapcancel',
-                    eventType: ElpianEventType.tapCancel,
-                    target: _elementId,
-                  ),
-                  _elementId,
-                )
-            : null,
-        onPanStart: events.containsKey('dragstart')
-            ? (details) => _dispatcher.dispatchDragStart(
-                  _elementId,
-                  details.globalPosition,
-                  localPosition: details.localPosition,
-                )
-            : null,
-        onPanUpdate: events.containsKey('drag')
-            ? (details) => _dispatcher.dispatchDrag(
-                  _elementId,
-                  details.globalPosition,
-                  details.delta,
-                  localPosition: details.localPosition,
-                )
-            : null,
-        onPanEnd: events.containsKey('dragend')
-            ? (details) => _dispatcher.dispatchDragEnd(
-                  _elementId,
-                  Offset.zero,
-                  localPosition: Offset.zero,
-                )
-            : null,
-        // A pan can be *cancelled* (lost in the gesture arena, pointer removed,
-        // or the active recognizer disposed during a rebuild) instead of
-        // ending cleanly. Flutter only fires `onPanEnd` on a clean lift, so
-        // without this a cancelled drag would never notify the consumer — e.g.
-        // an on-screen joystick would stay "held" and the character would keep
-        // moving forever. Surface a drag-end so the consumer always resets.
-        onPanCancel: events.containsKey('dragend')
-            ? () => _dispatcher.dispatchDragEnd(
-                  _elementId,
-                  Offset.zero,
-                  localPosition: Offset.zero,
-                )
-            : null,
-        onHorizontalDragEnd: _hasAnyEvent(events, ['swipeleft', 'swiperight'])
-            ? (details) {
-                if (details.primaryVelocity! < 0) {
-                  _dispatcher.dispatchEvent(
-                    ElpianGestureEvent(
-                      type: 'swipeleft',
-                      eventType: ElpianEventType.swipeLeft,
-                      target: _elementId,
-                      velocity: Offset(details.primaryVelocity!, 0),
-                    ),
-                    _elementId,
-                  );
-                } else {
-                  _dispatcher.dispatchEvent(
-                    ElpianGestureEvent(
-                      type: 'swiperight',
-                      eventType: ElpianEventType.swipeRight,
-                      target: _elementId,
-                      velocity: Offset(details.primaryVelocity!, 0),
-                    ),
-                    _elementId,
-                  );
-                }
-              }
-            : null,
-        onVerticalDragEnd: _hasAnyEvent(events, ['swipeup', 'swipedown'])
-            ? (details) {
-                if (details.primaryVelocity! < 0) {
-                  _dispatcher.dispatchEvent(
-                    ElpianGestureEvent(
-                      type: 'swipeup',
-                      eventType: ElpianEventType.swipeUp,
-                      target: _elementId,
-                      velocity: Offset(0, details.primaryVelocity!),
-                    ),
-                    _elementId,
-                  );
-                } else {
-                  _dispatcher.dispatchEvent(
-                    ElpianGestureEvent(
-                      type: 'swipedown',
-                      eventType: ElpianEventType.swipeDown,
-                      target: _elementId,
-                      velocity: Offset(0, details.primaryVelocity!),
-                    ),
-                    _elementId,
-                  );
-                }
-              }
-            : null,
-        child: result,
-      );
+    // Gestures: taps (unless the widget recognises its own), drags, swipes
+    // and scales, through the same detector a GestureDetector node uses.
+    final gestures =
+        NodeEvents.forDispatcher(widget.node, _dispatcher, _elementId);
+    if (widget.handleGestures && gestures.hasGestures) {
+      result = gestures.detector(result, taps: widget.handleTaps);
     }
 
     // Wrap with Listener for pointer events
@@ -322,6 +160,13 @@ class _EventEnabledWidgetState extends State<EventEnabledWidget> {
             : null,
         child: result,
       );
+      // Following a pointer's moves: keep the page around from scrolling
+      // under it (a drag or scale recogniser already does).
+      if (events.containsKey('pointermove') &&
+          !gestures.hasAny(NodeEvents.panEvents) &&
+          !gestures.hasAny(NodeEvents.scaleEvents)) {
+        result = NodeEvents.claim(result);
+      }
     }
 
     // Wrap with MouseRegion for hover events

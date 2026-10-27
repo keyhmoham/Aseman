@@ -317,3 +317,126 @@ test("exploring never floods the app's server with writes", async () => {
     srv.close();
   }
 });
+
+// A value as the client passes it to a handler (ElpianVmWidget: typed JSON).
+function typedValue(value) {
+  if (value === null || value === undefined) return { type: "null", data: { value: null } };
+  if (typeof value === "boolean") return { type: "bool", data: { value } };
+  if (typeof value === "number") return { type: Number.isInteger(value) ? "i64" : "f64", data: { value } };
+  if (typeof value === "string") return { type: "string", data: { value } };
+  if (Array.isArray(value)) return { type: "array", data: { value: value.map(typedValue) } };
+  const out = {};
+  for (const [k, v] of Object.entries(value)) out[k] = typedValue(v);
+  return { type: "object", data: { value: out } };
+}
+
+test("handlers read e.value whichever widget sent the change", () => {
+  const { ctx } = sdk();
+  const seen = [];
+  const app = ctx.App.create({ state: {}, view: () => ({ type: "Text", props: { text: "x" } }) });
+  const name = app.handler("tab", (e) => seen.push(e));
+  // A NavigationBar / SegmentedButton / Tabs change as older clients send it:
+  // the value only under data.
+  ctx[name](typedValue({ type: "change", eventType: "change", target: "nav", currentTarget: "nav", phase: "atTarget", data: { value: 2 } }));
+  // A Switch: the value at the top level, data empty.
+  ctx[name](typedValue({ type: "change", eventType: "change", value: true, data: {} }));
+  // A drag: positions as {x, y}; a field of the event is never replaced by data's.
+  ctx[name](typedValue({ type: "drag", localPosition: { x: 4, y: 5 }, delta: { x: 1, y: 0 }, data: { type: "not this", velocity: 3 } }));
+  assert.equal(seen[0].value, 2);
+  assert.equal(seen[1].value, true);
+  assert.deepEqual(seen[2].localPosition, { x: 4, y: 5 });
+  assert.equal(seen[2].type, "drag");
+  assert.equal(seen[2].velocity, 3);
+});
+
+test("an error banner keeps a full-screen app's layout bounded", () => {
+  const { ctx, renders } = sdk();
+  const app = ctx.App.create({ state: {}, view: () => ({ type: "Scaffold", children: [{ type: "Text", props: { text: "body" } }] }) });
+  app.fail(new Error("offline"));
+  const tree = renders[renders.length - 1];
+  assert.equal(tree.type, "Column");
+  const [banner, rest] = tree.children;
+  assert.match(JSON.stringify(banner), /Callout/);
+  assert.equal(rest.type, "Expanded");
+  assert.equal(rest.children[0].type, "Scaffold");
+  // The validator agrees: no unbounded Scaffold.
+  return import("../validate.mjs").then(({ validate }) => {
+    assert.deepEqual(validate(tree, { design: false }).issues.filter((i) => i.severity === "error"), []);
+  });
+});
+
+test("the viewport says how big the screen is, a phone when the client cannot tell", () => {
+  const { ctx } = sdk();
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.Aseman.viewport())), { width: 390, height: 780, sizeClass: "compact", orientation: "portrait" });
+  ctx.__asemanEnv(JSON.stringify({ display: "full", viewport: { width: 1280, height: 800 } }));
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.Aseman.viewport())), { width: 1280, height: 800, sizeClass: "expanded", orientation: "landscape" });
+  ctx.__asemanEnv(JSON.stringify({ display: "full", viewport: { width: 700, height: 1000, sizeClass: "medium", orientation: "portrait" } }));
+  assert.equal(ctx.Aseman.viewport().sizeClass, "medium");
+});
+
+// A whiteboard's server: GET api/boards, POST api/boards.
+async function boardsServer(fn) {
+  const boards = [{ id: 1, title: "Plan", strokes: [{ color: 0, width: 4, points: [[1, 2], [3, 4]] }], updated: "9:00" }];
+  const srv = http.createServer((req, res) => {
+    req.resume();
+    req.on("end", () => {
+      res.writeHead(req.url.startsWith("/api/boards") ? 200 : 404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ boards, board: boards[0] }));
+    });
+  });
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  try {
+    return await fn(`http://127.0.0.1:${srv.address().port}`);
+  } finally {
+    srv.close();
+  }
+}
+
+test("the fixed-screen whiteboard passes the check, as an app and as a widget", async () => {
+  const src = SDK + "\n;\n" + fs.readFileSync(path.join(kit, "examples", "whiteboard.js"), "utf8");
+  await boardsServer(async (server) => {
+    const report = await check(src, { server, widget: true });
+    assert.equal(report.ok, true, report.errors.join("\n"));
+    assert.deepEqual(report.warnings, []);
+    assert.ok(report.widget.requests >= 1, "the widget loads live data");
+  });
+});
+
+test("a whiteboard in a scrolling page is caught: draw on a fixed screen", async () => {
+  const src = SDK + "\n;\n" + fs.readFileSync(path.join(kit, "examples", "whiteboard.js"), "utf8")
+    // What generated apps did: the whole screen in a ListView.
+    .replace('s.tab === 0 ? board(s, app) : saved(s, app),', 's.tab === 0 ? { type: "ListView", children: [board(s, app)] } : saved(s, app),');
+  await boardsServer(async (server) => {
+    const report = await check(src, { server, widget: false });
+    // It fails the check (the platform sends it back to be fixed).
+    assert.equal(report.ok, false);
+    assert.match(report.errors.join("\n"), /Canvas follows the finger.*\[gesture-in-scroll\]/);
+  });
+});
+
+test("the check draws strokes as the finger does: start, moves, end, with positions", async () => {
+  const report = await check(SDK + `
+    var app = App.create({
+      state: { strokes: [], current: null },
+      view: function (s, app) {
+        return { type: "Column", children: [
+          { type: "Text", props: { text: s.strokes.length + " strokes" } },
+          { type: "Expanded", children: [{ type: "Canvas", key: "pad", events: {
+            dragstart: app.handler("down", function (e, app) { app.set({ current: [[e.localPosition.x, e.localPosition.y]] }); }),
+            // Throws if ever called without its start, or without a position.
+            drag: app.handler("move", function (e, app) { app.state.current.push([e.localPosition.x + e.delta.x, e.localPosition.y]); }),
+            dragend: app.handler("up", function (e, app) {
+              if (app.state.current.length < 3) throw new Error("a stroke without moves");
+              app.set({ strokes: app.state.strokes.concat([app.state.current]), current: null });
+            }),
+            scalestart: app.handler("zs", function (e, app) { app.state.z = e.scale; }),
+            scaleupdate: app.handler("z", function (e, app) { if (typeof e.scale !== "number" || !e.focalPoint) throw new Error("no scale"); }),
+          } }] },
+        ] };
+      },
+      widget: { static: true, view: function () { return { type: "Text", props: { text: "Pad" } }; } },
+    });
+  `, { widget: false });
+  assert.equal(report.ok, true, report.errors.join("\n"));
+  assert.ok(report.transitions >= 2);
+});

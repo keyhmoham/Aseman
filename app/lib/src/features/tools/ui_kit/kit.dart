@@ -13,6 +13,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../../elpian/core/elpian_engine.dart';
+import '../../../elpian/core/elpian_services.dart';
 import '../../../elpian/core/node_events.dart';
 import '../../../elpian/css/css_properties.dart';
 import '../../../elpian/models/elpian_node.dart';
@@ -271,9 +272,18 @@ void registerUiKit(ElpianEngine engine) {
   });
 }
 
-/// An engine with the kit registered (what static tool frontends render with).
+int _kitEngines = 0;
+
+/// An engine with the kit registered (what static tool frontends and Elpian
+/// apps render with).
+///
+/// Each engine owns its services (see [ElpianServices]): several apps run at
+/// once (desk windows, a phone board's widgets beside the open app), often
+/// the same program with the same handler names and keys, and on a shared
+/// dispatcher a tap reached whichever app started last.
 ElpianEngine kitEngine() {
-  final engine = ElpianEngine();
+  final engine =
+      ElpianEngine(services: ElpianServices(appId: 'kit-${_kitEngines++}'));
   registerUiKit(engine);
   return engine;
 }

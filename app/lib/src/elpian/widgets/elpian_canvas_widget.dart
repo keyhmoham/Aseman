@@ -2,10 +2,16 @@ import 'package:flutter/material.dart';
 import '../css/css_parser.dart';
 
 import '../canvas/canvas_widget.dart';
+import '../core/node_events.dart';
 import '../models/elpian_node.dart';
 
+/// `Canvas`: vector drawing by canvas `commands`, `width` / `height` (else
+/// it fills the space it is given), `backgroundColor`. Event `resize` with
+/// `{width, height}` when it is laid out at a new size; gestures (`drag*`,
+/// `pointer*`, `scale*`) come from the engine, in the canvas's coordinates.
 class ElpianCanvasWidget {
   static Widget build(ElpianNode node, List<Widget> children) {
+    final e = NodeEvents(node);
     final width = _toDouble(node.props['width']);
     final height = _toDouble(node.props['height']);
     final bg = node.props['backgroundColor'];
@@ -19,6 +25,10 @@ class ElpianCanvasWidget {
       width: width ?? node.style?.width,
       height: height ?? node.style?.height,
       backgroundColor: backgroundColor ?? node.style?.backgroundColor,
+      onResize: e.has('resize')
+          ? (size) => e.emit('resize',
+              data: {'width': size.width, 'height': size.height})
+          : null,
     );
   }
 

@@ -498,55 +498,8 @@ class _ElpianVmWidgetState extends State<ElpianVmWidget>
     }
   }
 
-  Map<String, dynamic> _eventToJson(ElpianEvent event) {
-    final base = <String, dynamic>{
-      'type': event.type,
-      'eventType': event.eventType.name,
-      'target': event.target?.toString(),
-      'currentTarget': event.currentTarget?.toString(),
-      'timestamp': event.timestamp.toIso8601String(),
-      'phase': event.phase.name,
-      'data': event.data,
-    };
-
-    if (event is ElpianPointerEvent) {
-      base.addAll({
-        'position': {'x': event.position.dx, 'y': event.position.dy},
-        'localPosition': {
-          'x': event.localPosition.dx,
-          'y': event.localPosition.dy,
-        },
-        'delta': {'x': event.delta.dx, 'y': event.delta.dy},
-        'buttons': event.buttons,
-        'pressure': event.pressure,
-        'distance': event.distance,
-        'pointerId': event.pointerId,
-      });
-    } else if (event is ElpianKeyboardEvent) {
-      base.addAll({
-        'key': event.key,
-        'keyCode': event.keyCode,
-        'altKey': event.altKey,
-        'ctrlKey': event.ctrlKey,
-        'shiftKey': event.shiftKey,
-        'metaKey': event.metaKey,
-      });
-    } else if (event is ElpianInputEvent) {
-      base.addAll({
-        'value': event.value,
-        'inputType': event.inputType,
-      });
-    } else if (event is ElpianGestureEvent) {
-      base.addAll({
-        'velocity': {'x': event.velocity.dx, 'y': event.velocity.dy},
-        'scale': event.scale,
-        'rotation': event.rotation,
-        'focalPoint': {'x': event.focalPoint.dx, 'y': event.focalPoint.dy},
-      });
-    }
-
-    return base;
-  }
+  Map<String, dynamic> _eventToJson(ElpianEvent event) =>
+      elpianEventJson(event);
 
   Map<String, dynamic> _toTypedVmValue(dynamic value) {
     if (value == null) {
@@ -808,4 +761,63 @@ class _ElpianVmScopeState extends State<ElpianVmScope> {
       runtime: widget.runtime,
     );
   }
+}
+
+/// An event as a VM handler receives it (before typing): its type, target
+/// and phase, `data`, the pointer / keyboard / input / gesture fields of its
+/// kind — and `data`'s own fields at the top level too, so a handler reads
+/// `e.value` (a NavigationBar's index, a SegmentedButton's value, a Tabs'
+/// tab), `e.index`, `e.width`, … whichever builder dispatched it. A field
+/// the event already has is never replaced.
+Map<String, dynamic> elpianEventJson(ElpianEvent event) {
+  final base = <String, dynamic>{
+    'type': event.type,
+    'eventType': event.eventType.name,
+    'target': event.target?.toString(),
+    'currentTarget': event.currentTarget?.toString(),
+    'timestamp': event.timestamp.toIso8601String(),
+    'phase': event.phase.name,
+    'data': event.data,
+  };
+
+  if (event is ElpianPointerEvent) {
+    base.addAll({
+      'position': {'x': event.position.dx, 'y': event.position.dy},
+      'localPosition': {
+        'x': event.localPosition.dx,
+        'y': event.localPosition.dy,
+      },
+      'delta': {'x': event.delta.dx, 'y': event.delta.dy},
+      'buttons': event.buttons,
+      'pressure': event.pressure,
+      'distance': event.distance,
+      'pointerId': event.pointerId,
+    });
+  } else if (event is ElpianKeyboardEvent) {
+    base.addAll({
+      'key': event.key,
+      'keyCode': event.keyCode,
+      'altKey': event.altKey,
+      'ctrlKey': event.ctrlKey,
+      'shiftKey': event.shiftKey,
+      'metaKey': event.metaKey,
+    });
+  } else if (event is ElpianInputEvent) {
+    base.addAll({
+      'value': event.value,
+      'inputType': event.inputType,
+    });
+  } else if (event is ElpianGestureEvent) {
+    base.addAll({
+      'velocity': {'x': event.velocity.dx, 'y': event.velocity.dy},
+      'scale': event.scale,
+      'rotation': event.rotation,
+      'focalPoint': {'x': event.focalPoint.dx, 'y': event.focalPoint.dy},
+    });
+  }
+
+  for (final entry in event.data.entries) {
+    base.putIfAbsent(entry.key, () => entry.value);
+  }
+  return base;
 }

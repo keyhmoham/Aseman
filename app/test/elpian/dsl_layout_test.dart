@@ -134,8 +134,9 @@ const Map<String, Map<String, dynamic>> _sample = {
   'QRCode': {'data': 'https://aseman.app'},
 };
 
-// Not measurable here: platform views, drag-and-drop and route transitions.
-const _skip = {'Scene3D', 'scene3d', 'Canvas', 'CachedCanvas', 'Hero', 'Draggable', 'DragTarget', 'Dismissible'};
+// Not measurable here: platform views, drag-and-drop and route transitions
+// (and CachedCanvas, which draws a host-side context only).
+const _skip = {'Scene3D', 'scene3d', 'CachedCanvas', 'Hero', 'Draggable', 'DragTarget', 'Dismissible'};
 
 List<String> _list(String src, String name) {
   final m = RegExp('$name: \\[([^\\]]*)\\]').firstMatch(src)!;

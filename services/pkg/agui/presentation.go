@@ -17,7 +17,7 @@ const (
 // Medium is how the UI is authored.
 const (
 	MediumAgui  = "agui"  // generative AG-UI surface (chat or desk)
-	MediumAppui = "appui" // OpenCode fullstack App UI window
+	MediumAppui = "appui" // fullstack App UI window (appui_create)
 	MediumText  = "text"
 )
 

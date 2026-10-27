@@ -1,21 +1,44 @@
-# Aseman App UI (OpenCode)
+# Aseman App UI
 
-OpenCode and `aseman-appui` are baked into every `aseman/sandbox-computer`
-image. New spaces get them by default.
+`aseman-appui`, the Elpian toolchain (`aseman-elpian`) and OpenCode are baked
+into every `aseman/sandbox-computer` image. New spaces get them by default.
+
+## Two builders, one app system
+
+The node's **OpenCode switch** (Admin → AI → OpenCode, `spaces.opencode_set`)
+picks who builds on-demand apps. It is **off by default**.
+
+| | OpenCode off (default) | OpenCode on |
+|---|---|---|
+| Builder | the space's agents (or a developer specialist the lead staffs) | OpenCode, briefed by the agents |
+| `appui_create` | `aseman-appui prepare`: the project and the build task (`TASK.md`) | `aseman-appui build`: OpenCode builds, the platform verifies, repair rounds, opens |
+| Validator / driver | `aseman-elpian <tool> '{json}'` on the shell (driver sessions persist between commands) | the same tools as MCP servers (`opencode/opencode.json`) |
+| Verify and open | `appui_publish {dir}` → `aseman-appui verify`; not ready → the problem and `REPAIR.md`, fix and publish again | inside `appui_create` |
+| Other coding | the agents, directly in the sandbox | `opencode_run` |
+
+Both get the same project (guides, SDKs, `APPS.json`, `JOB.json`, the app's
+server key), the same plan/build/test/end-to-end steps, the same platform
+checks before an app opens, and the same update flow (`appui_create` with an
+existing `dir`, `CHANGES.md`). `appui_status` reads `STATUS.json` /
+`READY.json` in either mode.
 
 ## What agents call
 
 | Platform builtin | Role |
 |---|---|
-| `appui_create` | Brief → OpenCode plans, builds and tests a fullstack app → platform verifies it → DeskWeb card; pass an existing `dir` to change that app |
-| `opencode_run` | Every other coding task (agents never write code themselves) |
-| `opencode_status` | Job STATUS / READY |
-| `opencode_models` | Backbone / model selection |
+| `appui_create` | Brief → the project is laid out; OpenCode on: it plans, builds and tests a fullstack app → platform verifies it → DeskWeb card; off: the agent gets the build task. Pass an existing `dir` to change that app |
+| `appui_publish` | The platform verifies an app (READY.json, start and answer, Elpian bundle, QuickJS check against the live server, end-to-end scenarios) and opens it; also re-verifies and reopens any app |
+| `appui_status` | Job STATUS / READY |
+| `opencode_run` | OpenCode on: every other coding task (agents never write code themselves) |
+| `opencode_status` | OpenCode on: same as `appui_status` |
+| `opencode_models` | OpenCode on: backbone / model selection |
 
-OpenCode is also listed in `spaces.tools_list` as a builtin app with microtools
-`run`, `status`, `models`, `build` (mapped to the builtins above).
+While it is on, OpenCode is also listed in `spaces.tools_list` as a builtin
+app with microtools `run`, `status`, `models`, `build` (mapped to the builtins
+above). While it is off, the `opencode_*` tools and that app are not listed,
+calling them fails, and the sandbox's OpenCode is never configured or run.
 
-## LLM backbone + billing
+## LLM backbone + billing (OpenCode on)
 
 OpenCode does **not** use OpenCode Zen free models. During `appui_create` /
 `opencode_run`, the platform injects the **current agent turn's** metered LLM
@@ -83,7 +106,7 @@ phones alike. Everything for it is in [`elpian/`](elpian):
 
 | File | What |
 |---|---|
-| [`ELPIAN.md`](elpian/ELPIAN.md) | The guide OpenCode follows: runtime rules, every node type and its props, events, styling and theme, the SDK, OpenUI, layout, checklist |
+| [`ELPIAN.md`](elpian/ELPIAN.md) | The guide every builder follows: runtime rules, every node type and its props, events, styling and theme, the SDK, OpenUI, layout, checklist |
 | `aseman-elpian.js` | The SDK in every program: `App` (state, view, handlers), `Aseman.*` (agents, apps, the app's server, env, phone widget), Tasks |
 | `openui-elpian.js` | The OpenUI collection (all 137 components of the web kit) rendered as Elpian/UI-kit nodes, and agent-backed islands (`OpenUI.panel` / `action` / `query`) |
 | `bundle.mjs` | `elpian/src/*.js` → `elpian/app.js` (SDK + OpenUI + the app) |
@@ -93,6 +116,7 @@ phones alike. Everything for it is in [`elpian/`](elpian):
 | `drive.mjs` | The **headless driver**: uses the app as a person does, without a screen (a headless browser for Elpian). A session runs the bundle on QuickJS against the live server, reads the screen as a text outline with stable refs, and taps, types, selects, toggles, swipes, drags and pinches controls with the event data the client sends (disabled and unreachable controls do nothing). Each step reports the screen's changes, the requests and the problems (exceptions, unexpected error banners, server failures, broken renders, dead controls). It also asserts the screen, state and requests, mocks the space's agents and apps (replies, failures, held requests), passes time, and changes the viewport and theme. Sessions save as scenarios (`elpian/e2e/*.json`); `drive.mjs run` replays them, and coverage names the controls no step used |
 | `drive-mcp.mjs` | The driver as a stateful MCP server for OpenCode (`elpian_open`, `elpian_snapshot`, `elpian_tap`, `elpian_type`, `elpian_select`, `elpian_toggle`, `elpian_gesture`, `elpian_fire`, `elpian_wait`, `elpian_expect`, `elpian_state`, `elpian_env`, `elpian_mock`, `elpian_network`, `elpian_logs`, `elpian_coverage`, `elpian_reload`, `elpian_save_scenario`, `elpian_run_scenarios`, `elpian_close`), registered as `elpian-driver` in `opencode/opencode.json` |
 | `mcp-stdio.mjs` | The small stdio MCP server both servers use |
+| `elpian-cli.mjs` | `aseman-elpian`: every tool of both servers on the shell, for the space's agents (`aseman-elpian tools`, `aseman-elpian elpian_open '{"server":"http://127.0.0.1:8787"}'`, …). The validator runs in the command; driver tools go to a per-project driver process on a unix socket, so sessions persist between commands (`aseman-elpian stop` ends it; it also exits after `ASEMAN_ELPIAN_IDLE_SECS`, default 1800, unused) |
 | `examples/showcase.js` | A reference app in Material 3 Expressive that passes the check and the validator (scrolling pages) |
 | `examples/whiteboard.js` | A reference app with a fixed, touch-driven screen (a drawing surface that fills any window, an adaptive toolbar) that passes them too |
 | `nodes.json` | The node types the engine and UI kit draw (a test keeps it equal to the engine source) |
@@ -101,15 +125,16 @@ The app's server serves `GET /elpian/app.js`; `READY.json` says
 `"ui": "elpian", "elpian": "elpian/app.js"`. During verification the
 platform rebuilds the bundle, checks the server serves it, and runs
 `check.mjs` against the running server, then replays the app's end-to-end
-scenarios (`drive.mjs run elpian/e2e`, which OpenCode wrote while driving the
-app headlessly through every screen and control; an Elpian app without them
-is not ready; `ASEMAN_APPUI_E2E=0` skips this); failures go back to OpenCode. The
+scenarios (`drive.mjs run elpian/e2e`, which the builder wrote while driving
+the app headlessly through every screen and control; an Elpian app without
+them is not ready; `ASEMAN_APPUI_E2E=0` skips this); failures go back to the
+builder (OpenCode's repair rounds, or `appui_publish`'s answer). The
 desk window then runs the program natively (`ElpianAppView`), waking the
 sandbox and starting the server first like any preview. Test the kit with
 `node --test deploy/sandbox-computer/appui/elpian/test/*.test.mjs`
 (after `npm install` in `deploy/tool-runtime`, for QuickJS).
 
-## What OpenCode is given (per build)
+## What the builder is given (per build)
 
 | File | What |
 |---|---|
@@ -119,10 +144,15 @@ sandbox and starting the server first like any preview. Test the kit with
 | `vendor/aseman-sdk/aseman.js` | Client SDK: `call`, `ask`, `askJSON`, `conversation`, `show` |
 | `vendor/aseman-openui/` | OpenUI kit for agent-backed islands |
 
-After OpenCode reports READY, `aseman-appui build` verifies the app itself:
-`READY.json` must be complete, and the `start` command must serve `GET /` on
-the port. Failures go back to OpenCode as repair rounds
-(`ASEMAN_APPUI_REPAIRS`, default 2) before `appui_create` reports an error.
+After the builder reports READY, the platform verifies the app itself
+(`aseman-appui build` after OpenCode, `aseman-appui verify` through
+`appui_publish` after the agents): `READY.json` must be complete, and the
+`start` command must serve `GET /` on the port (and, for Elpian, the checks
+above). OpenCode gets the failures as repair rounds (`ASEMAN_APPUI_REPAIRS`,
+default 2) before `appui_create` reports an error; an agent gets them as
+`appui_publish`'s answer and `REPAIR.md`, and publishes again once fixed.
+The agents' task (`TASK.md`) is OpenCode's build prompt with the agents'
+own tools.
 
 ## App servers use the space too
 

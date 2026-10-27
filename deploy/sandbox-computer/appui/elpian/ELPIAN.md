@@ -69,6 +69,24 @@ an overlay that swallows taps, a touch target with no size, sizes larger than
 a phone, a fixed screen taller than a phone. The platform runs it too before
 the app is shown; make it pass.
 
+## Your `elpian_*` tools
+
+Every builder of an app has the same `elpian_*` tools (the validator and the
+headless driver below), reached one of two ways:
+
+* **OpenCode** has them as MCP servers (`elpian`, `elpian-driver`): call them
+  as tools.
+* **An Aseman agent** has them as the `aseman-elpian` command on the sandbox
+  shell, with the same names and arguments (a JSON object), run from the
+  project directory (or with `--dir`):
+  `aseman-elpian elpian_open '{"server":"http://127.0.0.1:8787"}'`,
+  `aseman-elpian elpian_tap '{"target":"Add task"}'`,
+  `aseman-elpian elpian_validate @tree.json` (arguments from a file; `-` reads
+  stdin). Driver sessions stay open between commands, exactly as across MCP
+  calls; `aseman-elpian tools [name]` lists the tools and their arguments and
+  `aseman-elpian stop` ends the project's sessions. Start your server in the
+  background while you test (`nohup … > server.log 2>&1 &`).
+
 ## Validating view trees (the UI DSL validator)
 
 `vendor/aseman-elpian/validate.mjs` checks Elpian view trees against the
@@ -76,7 +94,7 @@ engine's own schema (`schema.mjs`, kept in sync with the Flutter builders and
 measured layout behaviour). Use it while you build, not only at the end. You
 have it two ways:
 
-| Your tools (MCP server `elpian`) | Command line |
+| Your tools (`elpian_*`, see below) | Command line |
 |---|---|
 | `elpian_validate {tree}` / `{file}` (`mode: "widget"`, `openui: true`) | `node vendor/aseman-elpian/validate.mjs tree.json [--widget] [--openui]` (`-` reads stdin) |
 | `elpian_validate_program {bundle, server, apps}` | `node vendor/aseman-elpian/validate.mjs --program elpian/app.js --server http://127.0.0.1:$PORT [--apps APPS.json]` |
@@ -161,7 +179,8 @@ the filter filters, that the save button is enabled once the form is
 filled. Prove that by **using the app as a person does, headlessly**, with
 the Elpian driver — like a headless browser, but for Elpian: no
 screenshots, the screen is a text outline. Your `elpian_*` driver tools
-(an MCP server) keep a session open across calls:
+(an MCP server for OpenCode, `aseman-elpian` for an agent: Your `elpian_*`
+tools, above) keep a session open across calls:
 
 | Tool | |
 |---|---|

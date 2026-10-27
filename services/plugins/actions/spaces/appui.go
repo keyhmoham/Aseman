@@ -1,8 +1,11 @@
 package spaces
 
-// App UI generation: agents brief OpenCode in the space sandbox; OpenCode
-// builds a tested fullstack web app that calls space apps via the preview
-// `_aseman/api/call` API; the platform opens it as a DeskWeb card window.
+// App UI generation: on-demand fullstack apps built in the space sandbox,
+// calling space apps and agents via the preview `_aseman/api/*` API, opened
+// as desk card windows. The node's OpenCode switch (opencode.go) picks the
+// builder: OpenCode, briefed by the agents, or the space's agents themselves.
+// Both share the project layout, guides and toolchain (aseman-appui), and
+// the platform verifies every app the same way before it opens.
 
 import (
 	"context"
@@ -30,7 +33,8 @@ const (
 	appuiRoot        = "/workspace/appui"
 	appuiDefaultPort = 8787
 	// OpenCode fullstack builds can take several minutes, and a build that
-	// fails its checks gets repair rounds (aseman-appui build).
+	// fails its checks gets repair rounds (aseman-appui build); verifying an
+	// app (aseman-appui verify) replays its end-to-end scenarios.
 	appuiBuildWait = 30 * time.Minute
 )
 
@@ -221,7 +225,59 @@ func (s *Service) appuiCatalog(ctx context.Context, spaceID, roomID identity.ID,
 	}, "", "  ")
 }
 
-// appuiCreateTool implements appui_create: brief → OpenCode build+test → proxy DeskWeb card.
+// appuiPlace is where and how a built app opens: on whose desk, its dock
+// tool, and its window.
+type appuiPlace struct {
+	Tool string `json:"tool,omitempty"`
+	// Room is the desk the app opens on ("home" for the hall) and
+	// ArrangeRoom the room whose desk windows are arranged.
+	Room        string   `json:"room"`
+	ArrangeRoom string   `json:"arrange_room,omitempty"`
+	Show        *bool    `json:"show,omitempty"`
+	X           *float64 `json:"x,omitempty"`
+	Y           *float64 `json:"y,omitempty"`
+	W           *float64 `json:"w,omitempty"`
+	H           *float64 `json:"h,omitempty"`
+	Compact     bool     `json:"compact,omitempty"`
+}
+
+// appuiJob is an app being built: what appui_create prepared, and what
+// appui_publish needs to open it (kept in .aseman/publish.json when the
+// space's agents build it).
+type appuiJob struct {
+	ID     string     `json:"id"`
+	Dir    string     `json:"dir"`
+	Title  string     `json:"title"`
+	Port   int        `json:"port"`
+	Mode   string     `json:"mode"`
+	UI     string     `json:"ui"`
+	HasKey bool       `json:"has_key"`
+	Place  appuiPlace `json:"place"`
+}
+
+func appuiPublishFile(dir string) string { return dir + "/.aseman/publish.json" }
+
+// appuiDeskPlace resolves where an app opens: on the desk of the room where
+// the person asked; room=home targets the hall ("My trading desk"); an
+// explicit room id uses that room.
+func appuiDeskPlace(roomID, target identity.ID, room string) (desk string, arrange identity.ID) {
+	switch r := strings.TrimSpace(room); {
+	case r == "home":
+		return "home", identity.ID{}
+	case !target.IsZero():
+		return target.String(), target
+	case !roomID.IsZero():
+		return roomID.String(), roomID
+	default:
+		return "home", identity.ID{}
+	}
+}
+
+// appuiCreateTool implements appui_create. It prepares the project (brief,
+// the space's apps and agents, the app's server API settings), then the
+// node's builder builds it: OpenCode when it is on (build, test, repair,
+// then the platform verifies and opens it, all in this call), else the
+// space's agents, who get their task back and finish with appui_publish.
 func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.ID, agentName, argsJSON string) (string, error) {
 	var in struct {
 		Brief   string       `json:"brief"`
@@ -252,27 +308,30 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	if err != nil {
 		return "", err
 	}
-	id := strings.TrimSpace(in.ID)
-	if id == "" {
-		id = newAppUIID()
+	job := appuiJob{ID: strings.TrimSpace(in.ID), Dir: strings.TrimSpace(in.Dir), Port: in.Port, Title: strings.TrimSpace(in.Title)}
+	if job.ID == "" {
+		job.ID = newAppUIID()
 	}
-	dir := strings.TrimSpace(in.Dir)
-	if dir == "" {
-		dir = appuiRoot + "/" + id
+	if job.Dir == "" {
+		job.Dir = appuiRoot + "/" + job.ID
 	}
-	if !strings.HasPrefix(dir, "/workspace/") {
+	if !strings.HasPrefix(job.Dir, "/workspace/") {
 		return "", errs.InvalidArgument("dir must be under /workspace/")
 	}
-	port := in.Port
-	if port == 0 {
-		port = appuiPortFor(id)
+	if job.Port == 0 {
+		job.Port = appuiPortFor(job.ID)
 	}
-	if port < 1 || port > 65535 {
+	if job.Port < 1 || job.Port > 65535 {
 		return "", errs.InvalidArgument("port must be in 1..65535")
 	}
-	title := strings.TrimSpace(in.Title)
-	if title == "" {
-		title = "App"
+	if job.Title == "" {
+		job.Title = "App"
+	}
+	desk, arrange := appuiDeskPlace(roomID, target, in.Room)
+	job.Place = appuiPlace{Tool: strings.TrimSpace(in.Tool), Room: desk, Show: in.Show,
+		X: in.X, Y: in.Y, W: in.W, H: in.H, Compact: in.Compact != nil}
+	if !arrange.IsZero() {
+		job.Place.ArrangeRoom = arrange.String()
 	}
 
 	// App UI builds routinely exceed the short deadlines that wrap agent / Code
@@ -290,6 +349,7 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 		return "", err
 	}
 
+	dir := job.Dir
 	briefPath := dir + "/.aseman-brief.md"
 	appsPath := dir + "/.aseman-apps.json"
 	if err := s.sandboxWriteBytes(opCtx, spaceID, briefPath, []byte(brief+"\n")); err != nil {
@@ -298,53 +358,57 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	if err := s.sandboxWriteBytes(opCtx, spaceID, appsPath, catalog); err != nil {
 		return "", err
 	}
-	// Point OpenCode at this turn's metered LLM gateway (same backbone + billing
-	// as the agent). CreateBot Env alone cannot carry the turn token.
-	if err := s.ensureOpenCodeAuth(opCtx, spaceID); err != nil {
-		return "", err
+	openCode := s.openCodeOn(ctx)
+	if openCode {
+		// Point OpenCode at this turn's metered LLM gateway (same backbone +
+		// billing as the agent). CreateBot Env alone cannot carry the turn token.
+		if err := s.ensureOpenCodeAuth(opCtx, spaceID); err != nil {
+			return "", err
+		}
 	}
 	// The app's server uses the space's agents and apps too: with the token
 	// of the person using it (sent with each request), or, for work nobody
 	// is in front of, with the app's key, which acts for and bills the person
 	// who asked for the app.
-	hasKey := false
 	if owner := appOwner(ctx); !owner.IsZero() {
-		key, kerr := s.IssueAppKey(opCtx, spaceID, target, owner, dir, title)
+		key, kerr := s.IssueAppKey(opCtx, spaceID, target, owner, dir, job.Title)
 		if kerr != nil {
 			return "", kerr
 		}
 		if err := s.writeAppServerEnv(opCtx, spaceID, dir, key); err != nil {
 			return "", err
 		}
-		hasKey = true
+		job.HasKey = true
 	} else if err := s.writeAppServerEnv(opCtx, spaceID, dir, ""); err != nil {
 		return "", err
 	}
 
 	// A project that was built before is changed in place (a follow-up:
 	// "add a filter", "fix the chart"), not rebuilt from nothing.
-	mode, existingUI := "new", ""
-	if job, jerr := s.sandboxReadText(opCtx, spaceID, dir+"/JOB.json"); jerr == nil && strings.TrimSpace(job) != "" {
-		mode = "update"
+	job.Mode = "new"
+	existingUI := ""
+	if raw, jerr := s.sandboxReadText(opCtx, spaceID, dir+"/JOB.json"); jerr == nil && strings.TrimSpace(raw) != "" {
+		job.Mode = "update"
 		var j struct {
 			UI string `json:"ui"`
 		}
-		if json.Unmarshal([]byte(job), &j) == nil {
+		if json.Unmarshal([]byte(raw), &j) == nil {
 			existingUI = j.UI
 		}
 		if existingUI == "" {
 			existingUI = appuiWeb // built before Elpian became the default
 		}
 	}
-	ui, err := appuiFrontend(in.UI, existingUI)
-	if err != nil {
+	if job.UI, err = appuiFrontend(in.UI, existingUI); err != nil {
 		return "", err
 	}
-	buildCmd := fmt.Sprintf(
-		`. /etc/opencode/env.sh 2>/dev/null || true; unset OPENCODE_API_KEY; export OPENCODE_MODEL=${OPENCODE_MODEL:-aseman/default}; aseman-appui build --dir %s --brief-file %s --apps-file %s --title %s --port %d --mode %s --ui %s`,
-		shellQuote(dir), shellQuote(briefPath), shellQuote(appsPath), shellQuote(title), port, mode, ui,
-	)
-	out, err := s.SandboxExec(opCtx, spaceID, buildCmd)
+	flags := fmt.Sprintf(`--dir %s --brief-file %s --apps-file %s --title %s --port %d --mode %s --ui %s`,
+		shellQuote(dir), shellQuote(briefPath), shellQuote(appsPath), shellQuote(job.Title), job.Port, job.Mode, job.UI)
+	if !openCode {
+		return s.appuiAgentsBuild(opCtx, spaceID, job, flags)
+	}
+	out, err := s.SandboxExec(opCtx, spaceID,
+		`. /etc/opencode/env.sh 2>/dev/null || true; unset OPENCODE_API_KEY; export OPENCODE_MODEL=${OPENCODE_MODEL:-aseman/default}; aseman-appui build `+flags)
 	// Prefer READY.json on disk; fall back to parsing build stdout (status prints it).
 	readyRaw, readErr := s.sandboxReadText(opCtx, spaceID, dir+"/READY.json")
 	ready, ok := parseAppuiReadyJSON(readyRaw)
@@ -363,6 +427,159 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 		}
 		return "", errs.Conflict("appui not ready: " + msg + "\n" + clipTrace(out, 2000))
 	}
+	return s.appuiOpen(opCtx, ctx, spaceID, agentName, job, ready, "opencode")
+}
+
+// appuiAgentsBuild hands an app to the space's agents (OpenCode off): the
+// sandbox lays the project out exactly as for OpenCode, and the calling
+// agent gets the same build task (TASK.md) with its own tools. It builds,
+// tests and drives the app, then calls appui_publish.
+func (s *Service) appuiAgentsBuild(ctx context.Context, spaceID identity.ID, job appuiJob, flags string) (string, error) {
+	out, err := s.SandboxExec(ctx, spaceID, "aseman-appui prepare "+flags)
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasPrefix(out, "exit=0\n") {
+		return "", errs.New(errs.CodeUnavailable, "appui prepare failed (is the sandbox image current?): "+clipTrace(out, 2000))
+	}
+	raw, _ := json.Marshal(job)
+	if err := s.sandboxWriteBytes(ctx, spaceID, appuiPublishFile(job.Dir), raw); err != nil {
+		return "", err
+	}
+	task, terr := s.sandboxReadText(ctx, spaceID, job.Dir+"/TASK.md")
+	if terr != nil || strings.TrimSpace(task) == "" {
+		task = strings.TrimPrefix(out, "exit=0\n")
+	}
+	next := "Build the app now, exactly as the task says (or hand the whole task to a developer agent of the space with this dir and TASK.md): plan, build, test, drive it end to end with aseman-elpian, write READY.json. Then call appui_publish {\"dir\": \"" + job.Dir + "\"}: the platform verifies it and opens it on the desk, or answers with what to fix."
+	b, _ := json.Marshal(map[string]any{
+		"state":   "building",
+		"builder": "agents",
+		"id":      job.ID,
+		"dir":     job.Dir,
+		"title":   job.Title,
+		"port":    job.Port,
+		"mode":    job.Mode,
+		"ui":      job.UI,
+		"task":    clipTrace(task, 12000),
+		"next":    next,
+		"server_api": map[string]any{
+			"url":        sandboxAppAPIURL(),
+			"background": job.HasKey,
+			"billing":    "Calls with a request's X-Aseman-User-Token are billed to the person using the app; background calls with ASEMAN_APP_KEY to the person who asked for it.",
+		},
+	})
+	return string(b), nil
+}
+
+// appuiPublishTool implements appui_publish: the platform's checks of an app
+// the space's agents built (READY.json, the app starting and answering, an
+// Elpian frontend bundled, run on QuickJS against its server and its
+// end-to-end scenarios replayed), then the app opens on the desk. A failed
+// check answers with the problem and how to repair it; fix and call again.
+// It also re-verifies and reopens an app OpenCode built.
+func (s *Service) appuiPublishTool(ctx context.Context, spaceID, roomID identity.ID, agentName, argsJSON string) (string, error) {
+	var in struct {
+		Dir   string   `json:"dir"`
+		Title string   `json:"title"`
+		Tool  string   `json:"tool"`
+		Room  string   `json:"room"`
+		Show  *bool    `json:"show"`
+		X     *float64 `json:"x"`
+		Y     *float64 `json:"y"`
+		W     *float64 `json:"w"`
+		H     *float64 `json:"h"`
+	}
+	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
+		return "", errs.InvalidArgument("appui_publish arguments must be a JSON object: {\"dir\": \"/workspace/appui/<id>\"}")
+	}
+	dir := strings.TrimRight(strings.TrimSpace(in.Dir), "/")
+	if !strings.HasPrefix(dir, "/workspace/") || strings.Contains(dir, "..") {
+		return "", errs.InvalidArgument("appui_publish needs dir: the app's project directory under /workspace/ (from appui_create)")
+	}
+	opCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), appuiBuildWait)
+	defer cancel()
+
+	var job appuiJob
+	if raw, err := s.sandboxReadText(opCtx, spaceID, appuiPublishFile(dir)); err == nil {
+		_ = json.Unmarshal([]byte(raw), &job)
+	}
+	if job.Dir == "" {
+		// Not prepared by appui_create in this node version: read the project.
+		raw, err := s.sandboxReadText(opCtx, spaceID, dir+"/JOB.json")
+		if err != nil {
+			return "", errs.NotFound("no app project at " + dir + ": start one with appui_create")
+		}
+		var j struct {
+			Title string `json:"title"`
+			Port  int    `json:"port"`
+			Mode  string `json:"mode"`
+			UI    string `json:"ui"`
+		}
+		_ = json.Unmarshal([]byte(raw), &j)
+		desk, arrange := appuiDeskPlace(roomID, roomID, "")
+		job = appuiJob{ID: path.Base(dir), Title: j.Title, Port: j.Port, Mode: j.Mode, UI: j.UI, Place: appuiPlace{Room: desk}}
+		if !arrange.IsZero() {
+			job.Place.ArrangeRoom = arrange.String()
+		}
+		if env, err := s.sandboxReadText(opCtx, spaceID, appServerEnvFile(dir)); err == nil {
+			job.HasKey = strings.Contains(env, "ASEMAN_APP_KEY=")
+		}
+	}
+	job.Dir = dir
+	if t := strings.TrimSpace(in.Title); t != "" {
+		job.Title = t
+	}
+	if t := strings.TrimSpace(in.Tool); t != "" {
+		job.Place.Tool = t
+	}
+	if r := strings.TrimSpace(in.Room); r != "" {
+		target, err := deskRoom(roomID, r)
+		if err != nil {
+			return "", err
+		}
+		desk, arrange := appuiDeskPlace(roomID, target, r)
+		job.Place.Room, job.Place.ArrangeRoom = desk, ""
+		if !arrange.IsZero() {
+			job.Place.ArrangeRoom = arrange.String()
+		}
+	}
+	if in.Show != nil {
+		job.Place.Show = in.Show
+	}
+	for _, v := range []struct {
+		to   **float64
+		from *float64
+	}{{&job.Place.X, in.X}, {&job.Place.Y, in.Y}, {&job.Place.W, in.W}, {&job.Place.H, in.H}} {
+		if v.from != nil {
+			*v.to = v.from
+		}
+	}
+
+	out, err := s.SandboxExec(opCtx, spaceID, "aseman-appui verify --dir "+shellQuote(dir))
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasPrefix(out, "exit=0\n") {
+		return "", errs.Conflict("appui not ready: the platform checked the app and it is not ready yet. Fix the root cause, run your tests again, rewrite READY.json and call appui_publish again.\n" + clipTrace(out, 6000))
+	}
+	readyRaw, _ := s.sandboxReadText(opCtx, spaceID, dir+"/READY.json")
+	ready, ok := parseAppuiReadyJSON(readyRaw)
+	if !ok {
+		return "", errs.Conflict("appui not ready: READY.json needs ok, tested, start and port")
+	}
+	if job.UI == "" {
+		job.UI = ready.UI
+	}
+	if job.UI != appuiWeb {
+		job.UI = appuiElpian
+	}
+	return s.appuiOpen(opCtx, ctx, spaceID, agentName, job, ready, "agents")
+}
+
+// appuiOpen serves a verified app on the room's desk (the preview gateway
+// runs its start command) and binds the app's key to that preview.
+func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, agentName string, job appuiJob, ready appuiReady, builder string) (string, error) {
+	dir, port, title := job.Dir, job.Port, job.Title
 	if ready.Port > 0 {
 		port = ready.Port
 	}
@@ -378,37 +595,20 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	start = appServerEnvPrefix(dir) + start
 
 	show := true
-	if in.Show != nil {
-		show = *in.Show
-	}
-	// Open on the desk of the room where the person asked. Explicit room=home
-	// targets the hall ("My trading desk"); an explicit room id uses that room.
-	deskTarget := ""
-	arrangeRoom := identity.ID{}
-	switch r := strings.TrimSpace(in.Room); {
-	case r == "home":
-		deskTarget = "home"
-	case !target.IsZero():
-		deskTarget = target.String()
-		arrangeRoom = target
-	case !roomID.IsZero():
-		deskTarget = roomID.String()
-		arrangeRoom = roomID
-	default:
-		deskTarget = "home"
+	if job.Place.Show != nil {
+		show = *job.Place.Show
 	}
 	proxyArgs := map[string]any{
 		"port":  port,
 		"title": title,
 		"start": start,
 		"show":  show,
-		"tool":  strings.TrimSpace(in.Tool),
-		"room":  deskTarget,
+		"tool":  job.Place.Tool,
+		"room":  job.Place.Room,
 	}
 	// An Elpian app opens as itself: the client runs its program natively.
-	elpianEntry := ""
-	if ui == appuiElpian {
-		elpianEntry = strings.TrimPrefix(strings.TrimSpace(ready.Elpian), "./")
+	if job.UI == appuiElpian {
+		elpianEntry := strings.TrimPrefix(strings.TrimSpace(ready.Elpian), "./")
 		if elpianEntry == "" {
 			elpianEntry = "elpian/app.js"
 		}
@@ -428,7 +628,7 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 		return "", err
 	}
 	// The key works while the app's preview exists.
-	if m := proxyPathID.FindStringSubmatch(proxyOut); hasKey && m != nil {
+	if m := proxyPathID.FindStringSubmatch(proxyOut); job.HasKey && m != nil {
 		if pid, perr := identity.Parse(m[1]); perr == nil {
 			if err := s.BindAppKey(opCtx, spaceID, dir, pid); err != nil {
 				return "", err
@@ -437,26 +637,33 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	}
 
 	// Optional desk placement after open.
-	if in.X != nil || in.Y != nil || in.W != nil || in.H != nil || in.Compact != nil {
+	p := job.Place
+	if p.X != nil || p.Y != nil || p.W != nil || p.H != nil || p.Compact {
+		arrangeRoom, _ := identity.Parse(p.ArrangeRoom)
 		// Best-effort: arrange the most recently opened matching title window.
-		_ = s.appuiArrangeHint(ctx, spaceID, arrangeRoom, agentName, in.X, in.Y, in.W, in.H)
+		_ = s.appuiArrangeHint(ctx, spaceID, arrangeRoom, agentName, p.X, p.Y, p.W, p.H)
 	}
 
+	next := "To change this app later, call appui_create again with the same dir and a brief of the change."
+	if builder == "agents" {
+		next += " Build the change as its task says, then call appui_publish with the dir again."
+	}
 	result := map[string]any{
-		"id":      id,
+		"id":      job.ID,
 		"dir":     dir,
 		"title":   title,
 		"port":    port,
 		"start":   start,
 		"summary": ready.Summary,
 		"tested":  true,
-		"mode":    mode,
-		"ui":      ui,
-		"next":    "To change this app later, call appui_create again with the same dir and a brief of the change.",
+		"mode":    job.Mode,
+		"ui":      job.UI,
+		"builder": builder,
+		"next":    next,
 		"proxy":   proxyOut,
 		"server_api": map[string]any{
 			"url":        sandboxAppAPIURL(),
-			"background": hasKey,
+			"background": job.HasKey,
 			"billing":    "Calls with a request's X-Aseman-User-Token are billed to the person using the app; background calls with ASEMAN_APP_KEY to the person who asked for it.",
 		},
 	}
@@ -617,7 +824,9 @@ func (s *Service) opencodeRunTool(ctx context.Context, spaceID identity.ID, args
 	return string(b), nil
 }
 
-func (s *Service) opencodeStatusTool(ctx context.Context, spaceID identity.ID, argsJSON string) (string, error) {
+// appuiStatusTool reads a project's STATUS.json / READY.json (whoever builds
+// it): appui_status, and opencode_status while OpenCode is on.
+func (s *Service) appuiStatusTool(ctx context.Context, spaceID identity.ID, argsJSON string) (string, error) {
 	var in struct {
 		Dir string `json:"dir"`
 	}

@@ -239,6 +239,7 @@ class Runner:
         ctx.memory = memlib.Memory.for_turn(ctx, self.memory_settings)
         ctx.timeline = bool(req.get("timeline")) and not turn.no_memory
         ctx.codemode = bool(req.get("codemode"))
+        ctx.opencode = bool(req.get("opencode"))
         models = req.get("memory")
         if ctx.memory is not None and isinstance(models, dict):
             ctx.memory.recall_enabled = bool(models.get("recall"))
@@ -306,7 +307,7 @@ class Runner:
 
         own = f"{WORKSPACE}/.aseman/agents/{slug(agent.name)}"
         restricted = ctx.turn.no_sandbox or ctx.turn.no_memory
-        system = prompts.system_prompt(agent, ctx.turn.context, via_codemode=via_codemode)
+        system = prompts.system_prompt(agent, ctx.turn.context, via_codemode=via_codemode, opencode=ctx.opencode)
         if ctx.turn.no_sandbox:
             system += "\n\nFor this request, sandbox access is disabled. Answer and collaborate using the available platform tools. Do not wake, use or request access to a computer or sandbox."
         if ctx.turn.no_memory:

@@ -420,6 +420,9 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('model_id'),
     _FieldTemplate('auto_approve', type: BackendFieldType.boolean),
   ],
+  'spaces.opencode_set': [
+    _FieldTemplate('enabled', type: BackendFieldType.boolean, required: true),
+  ],
   'llm.llm_memory_set': [
     _FieldTemplate('chat_provider_id'),
     _FieldTemplate('chat_model_id'),

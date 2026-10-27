@@ -71,7 +71,7 @@ const TOOLS = [
 
 const resolve = (p) => path.resolve(process.cwd(), p);
 
-async function call(name, args = {}) {
+export async function call(name, args = {}) {
   switch (name) {
     case "elpian_validate": {
       let tree = args.tree;
@@ -114,6 +114,8 @@ async function call(name, args = {}) {
       return null;
   }
 }
+
+export { TOOLS, INSTRUCTIONS };
 
 export function serve(input = process.stdin, output = process.stdout) {
   return serveTools({ name: "aseman-elpian", version: VERSION, instructions: INSTRUCTIONS, tools: TOOLS, call, failure: "The validator failed" }, input, output);

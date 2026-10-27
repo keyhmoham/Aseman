@@ -3,7 +3,7 @@
 #
 #   backend   managed, QuickJS — backend.js run by the node as a Nomad service
 #             of the tool runtime image (Open-Meteo data, no API key)
-#   frontend  none — agents brief OpenCode via appui_create for interactive UIs
+#   frontend  none — agents build interactive UIs with appui_create
 #
 # A tool named "weather" that you own is updated in place (new program);
 # one deployed some other way (not managed QuickJS) is replaced;

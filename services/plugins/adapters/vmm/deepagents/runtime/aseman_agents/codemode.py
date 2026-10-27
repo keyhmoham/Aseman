@@ -58,7 +58,7 @@ returns only the final result — intermediates stay out of context.
    `codemode.request({method:"POST", path:"…", body:{…}})`:
    - `/apps/{slug}/{function}` — connected app microtools
    - `/platform/{tool}` — e.g. `file_send`, `ui_present`, `proxy_create`, `appui_create`,
-     `desk_*`, `routine_*`, `db_*`
+     `appui_publish`, `desk_*`, `routine_*`, `db_*`
    - `/timeline/{tool}` — e.g. `find_entities`, `timeline`, `changes`
 
 Do not invent direct `app__function`, `file_send`, `appui_create` or

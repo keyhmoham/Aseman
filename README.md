@@ -156,7 +156,8 @@ Users create tools in the Tools panel from one form with a **backend** and a
   empty (no dedicated frontend). Interactive UIs open as floating card
   windows on the room's desk, placed and arranged by agents and people.
 - **On-demand apps:** when people want an app, dashboard or custom tool UI,
-  agents brief OpenCode via `appui_create` (fullstack in the sandbox). The
+  agents start it with `appui_create` (fullstack in the sandbox), and the
+  node's builder builds it (see *Who builds: the OpenCode switch* below). The
   frontend is an **Elpian app** by default: JavaScript the client runs on
   its Elpian QuickJS runtime and draws natively with the UI kit and the
   person's theme, with the OpenUI collection and agent islands ported to
@@ -169,16 +170,32 @@ Users create tools in the Tools panel from one form with a **backend** and a
   using the app (a token the gateway sends with each request) or, for
   background work, as the person who asked for the app (the app's key);
   either way it is charged to that person's wallet like their own ask.
-  OpenCode gets the space's apps (with microtool argument
+  The builder gets the space's apps (with microtool argument
   schemas) and agents, the page API contract and a client SDK; the platform
-  then starts the app and checks it answers, sending failures back to
-  OpenCode to repair. Passing an existing app's `dir` changes it in place.
+  then starts the app and checks it (an Elpian frontend on QuickJS against
+  the live server, its end-to-end scenarios replayed) before it opens.
+  Passing an existing app's `dir` changes it in place.
   See [`deploy/sandbox-computer/appui`](deploy/sandbox-computer/appui).
-- **Software development is OpenCode's:** every coding task (apps, scripts,
-  APIs, fixes, tests) goes to OpenCode (`appui_create` / `opencode_run`) in
-  one complete brief. Agents never write code themselves, never hand coding to
-  another agent, and the lead never staffs or writes a programming
-  specialist; agents supply what the brief needs and check the result.
+- **Who builds: the OpenCode switch** (Admin → AI → OpenCode,
+  `spaces.opencode_get` / `opencode_set`; **off by default**):
+  - *Off:* OpenCode is out of the loop — not offered, not configured, not
+    run. The space's own agents build apps and write code themselves:
+    `appui_create` lays the project out and answers with the build task
+    (`TASK.md`); the agent (or a developer specialist the lead staffs)
+    plans, builds, tests, validates the Elpian views and drives the app end
+    to end with `aseman-elpian` (the same Elpian validator and headless
+    driver OpenCode gets as MCP tools, sessions kept between commands), then
+    calls `appui_publish`: the platform verifies it and opens it, or answers
+    with what to repair. Other coding happens directly in the sandbox, and
+    teams may staff developer roles.
+  - *On:* every coding task (apps, scripts, APIs, fixes, tests) goes to
+    OpenCode (`appui_create` / `opencode_run`) in one complete brief, on the
+    turn's metered gateway; the platform verifies its apps and sends failures
+    back to it to repair. Agents never write code themselves and the lead
+    never staffs a programming specialist; agents supply what the brief needs
+    and check the result.
+  Both modes share the project layout, guides, toolchain, checks, update
+  flow and app features. `appui_status` reads a project's state in either.
   Use `proxy_create` to expose an already-running sandbox HTTP service as a
   DeskWeb card. Previews serve the page API at `/_aseman/api/` (context,
   tools, microtool calls).

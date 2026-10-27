@@ -23,6 +23,7 @@ const pages = [
   'Models',
   'Decision model',
   'Memory models',
+  'OpenCode',
   'Health',
   'Node · Host',
   'Node · Modules',

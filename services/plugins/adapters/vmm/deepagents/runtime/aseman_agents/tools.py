@@ -45,9 +45,12 @@ PLATFORM_TOOLS = {
     "routine_get": "routine_get",
     "routine_update": "routine_update",
     "routine_delete": "routine_delete",
-    # In-chat AG-UI + interactive App UIs (OpenCode) + desk layout.
+    # In-chat AG-UI + interactive App UIs + desk layout. The opencode_* tools
+    # are listed only while the node's OpenCode is on.
     "ui_present": "ui_present",
     "appui_create": "appui_create",
+    "appui_publish": "appui_publish",
+    "appui_status": "appui_status",
     "opencode_run": "opencode_run",
     "opencode_status": "opencode_status",
     "opencode_models": "opencode_models",
@@ -217,11 +220,12 @@ def recruit_tool(ctx: TurnContext) -> BaseTool:
         of working and standards. skills: optional [{name, description,
         instructions}] professional skills it loads when relevant.
         The new agent works in the same sandbox and room; give it work with
-        run_swarm (or the task tool from your next turn). Never a programmer:
-        software development goes to OpenCode (appui_create / opencode_run).
+        run_swarm (or the task tool from your next turn). While the node's
+        OpenCode is on, never a programmer: software development goes to
+        OpenCode (appui_create / opencode_run).
         """
         from .swarm.team_setup import development_role
-        if development_role(f"{name} {description}"):
+        if ctx.opencode and development_role(f"{name} {description}"):
             return ("error: software development is OpenCode's, not an agent's. Brief OpenCode with "
                     "appui_create (an app people use) or opencode_run (any other coding task) instead.")
         try:

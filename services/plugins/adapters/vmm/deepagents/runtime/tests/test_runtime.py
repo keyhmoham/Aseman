@@ -482,10 +482,11 @@ def test_agents_build_interactive_pages_for_tools() -> None:
     from aseman_agents.prompts import system_prompt
     from aseman_agents.tools import presentation_hint
 
-    prompt = system_prompt(AgentDef(name="a", bot_id="b", account_id="c", vm_id="d"), "")
-    rule = prompt[prompt.index("## Presenting tools and structured data"):prompt.index("## The desk")]
-    for words in ("appui_create", "/platform/appui_create", "/platform/proxy_create", "OpenCode"):
-        assert words in rule, words
+    for opencode, builder in ((True, "OpenCode"), (False, "/platform/appui_publish")):
+        prompt = system_prompt(AgentDef(name="a", bot_id="b", account_id="c", vm_id="d"), "", opencode=opencode)
+        rule = prompt[prompt.index("## Presenting tools and structured data"):prompt.index("## The desk")]
+        for words in ("appui_create", "/platform/appui_create", "/platform/proxy_create", builder):
+            assert words in rule, words
     hint = presentation_hint({"bot_id": "bot-wx", "frontend": "", "commands": [{"name": "forecast"}]}, "forecast")
     assert "/platform/appui_create" in hint and "tool='bot-wx'" in hint
     assert "/platform/proxy_create" in hint and "tool='bot-wx'" in hint
@@ -599,12 +600,47 @@ async def test_files_go_through_the_computer_when_not_stored(platform: Platform,
     assert [body for name, body in platform.calls if name == "spaces.ask"]
 
 
-def test_every_agent_hands_development_to_opencode() -> None:
-    from aseman_agents.prompts import LEAD as LEAD_PROMPT, common_prompt
+def test_with_opencode_on_every_agent_hands_development_to_it() -> None:
+    from aseman_agents.context import AgentDef
+    from aseman_agents.prompts import common_prompt, system_prompt
 
     for via_codemode, appui, run in ((True, "/platform/appui_create", "/platform/opencode_run"),
                                      (False, "appui_create", "opencode_run")):
-        prompt = common_prompt(via_codemode=via_codemode)
+        prompt = common_prompt(via_codemode=via_codemode, opencode=True)
         rule = prompt[prompt.index("## Software development is OpenCode's"):prompt.index("## Presenting")]
         assert appui in rule and run in rule and "never write or edit source code yourself" in rule
-    assert "Programming is never a role of the team" in LEAD_PROMPT
+    lead = system_prompt(AgentDef(name="a", bot_id="b", account_id="c", vm_id="d", role="lead"), "", opencode=True)
+    assert "Programming is never a role of the team" in lead
+
+
+def test_with_opencode_off_the_agents_build_test_and_publish_apps_themselves() -> None:
+    from aseman_agents.context import AgentDef
+    from aseman_agents.prompts import common_prompt, system_prompt
+
+    for via_codemode, prefix in ((True, "/platform/"), (False, "")):
+        prompt = common_prompt(via_codemode=via_codemode)
+        assert "OpenCode" not in prompt and "opencode_" not in prompt
+        rule = prompt[prompt.index("## Software development is the space's own"):prompt.index("## Presenting")]
+        for words in (f"{prefix}appui_create", f"{prefix}appui_publish", f"{prefix}appui_status", "TASK.md",
+                      "aseman-elpian", "elpian/e2e", "READY.json", "QuickJS", "publish again", 'ui: "web"'):
+            assert words in rule, words
+    lead = system_prompt(AgentDef(name="a", bot_id="b", account_id="c", vm_id="d", role="lead"), "")
+    assert "Software development is the team's own" in lead and "Programming is never a role" not in lead
+    assert "OpenCode" not in lead
+
+
+async def test_a_developer_is_recruited_only_while_opencode_is_off(platform: Platform, tmp_path: Path) -> None:
+    from aseman_agents.tools import recruit_tool
+
+    r = Runner(Store(str(tmp_path / "rt.db")), InMemorySaver(), model_factory=lambda a, g: ScriptedModel(script=[]),
+               gateway_factory=platform.gateway)
+    for opencode in (True, False):
+        ctx = r._context(turn_request(LEAD, "build it", token="tok-lead", role="lead", opencode=opencode))
+        assert ctx.opencode is opencode
+        out = await recruit_tool(ctx).ainvoke({"name": "frontend-developer", "description": "Builds web frontends.",
+                                               "instructions": "Write clean, tested code."})
+        if opencode:
+            assert out.startswith("error: software development is OpenCode's")
+        else:
+            assert out.startswith("recruited frontend-developer")
+    assert sum(b["name"].startswith("frontend-developer") for b in platform.bots) == 1

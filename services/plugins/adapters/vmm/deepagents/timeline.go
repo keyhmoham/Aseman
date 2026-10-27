@@ -30,6 +30,12 @@ func (p kernelPlatform) TimelineMCP(ctx context.Context, spaceID string, body []
 	return out, err
 }
 
+func (p kernelPlatform) OpenCodeEnabled(ctx context.Context) (bool, error) {
+	var on bool
+	err := bridge.Invoke(ctx, p.K, "spaces", "OpenCodeEnabled", []any{ctx}, &on)
+	return on, err
+}
+
 // timelineOn reports whether turns get the timeline (an error means the
 // timeline namespace is not loaded: off).
 func (a *Adapter) timelineOn(ctx context.Context) bool {

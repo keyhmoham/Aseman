@@ -137,6 +137,7 @@ String adminActionDone(String namespace, String action) =>
       'llm.llm_decision_set': 'Decision model saved',
       'llm.llm_memory_set': 'Memory models saved',
       'llm.llm_image_set': 'Image model saved',
+      'spaces.opencode_set': 'OpenCode setting saved',
       'admin.plugins_load': 'Module loaded',
       'admin.plugins_unload': 'Module unloaded',
       'admin.plugins_stop': 'Module stopped',

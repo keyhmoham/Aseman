@@ -211,6 +211,7 @@ class _AppPageContentState extends State<AdminPageContent> {
         'Decision model' => _decision(),
         'Image model' => _imageModel(),
         'Memory models' => _memoryModels(),
+        'OpenCode' => _openCode(),
         'Health' => _health(),
         'Node · Host' => _node(),
         'Node · Modules' => _nodePlugins(),
@@ -2899,6 +2900,68 @@ class _AppPageContentState extends State<AdminPageContent> {
           value: setting['auto_approve'] == true,
           onChanged: (value) => widget.onDirectAction('llm', 'llm_decision_set',
               _decisionBody(setting, autoApprove: value)),
+        ),
+      ]),
+    );
+  }
+
+  /// The node's OpenCode switch: on, OpenCode builds, tests and repairs the
+  /// on-demand apps and does the spaces' coding, briefed by the agents; off
+  /// (the default), the agents do all of it themselves. Either way apps get
+  /// the same toolchain and the platform verifies each one before it opens.
+  Widget _openCode() {
+    final setting = _map(widget.results['spaces.opencode_get']);
+    final enabled = setting['enabled'] == true;
+    const shared = [
+      'Fullstack Elpian apps (native frontend, phone widget) and web apps',
+      'OpenUI agent islands wired to the project\'s apps and agents',
+      'Elpian UI validation and headless end-to-end testing',
+      'Platform checks before an app opens: it starts, runs on QuickJS, its scenarios pass',
+      'Changes to existing apps in place, with their history',
+    ];
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Both builders are complete: whichever is chosen is in effect.
+        _settingStatus({...setting, 'active': setting.isNotEmpty}),
+        const SizedBox(height: 16),
+        AdminSectionCard(
+          title: 'App builder',
+          icon: Icons.construction_rounded,
+          subtitle:
+              'Who builds, tests and repairs on-demand apps and writes code in projects.',
+          child: AppSwitchCard(
+            icon: Icons.terminal_rounded,
+            title: enabled ? 'OpenCode on' : 'OpenCode off',
+            subtitle: enabled
+                ? 'Agents brief OpenCode, which plans, builds, tests and repairs apps and does every coding task in the project\'s computer, on the agents\' metered model gateway.'
+                : 'The project\'s own agents build, test and repair apps and write code themselves. OpenCode is not used.',
+            value: enabled,
+            onChanged: setting.isEmpty
+                ? null
+                : (value) => widget.onDirectAction(
+                    'spaces', 'opencode_set', {'enabled': value}),
+          ),
+        ),
+        const SizedBox(height: 16),
+        AdminSectionCard(
+          title: 'The same in both modes',
+          icon: Icons.verified_outlined,
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final line in shared)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.check_rounded, size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(child: Text(line)),
+                        ]),
+                  ),
+              ]),
         ),
       ]),
     );

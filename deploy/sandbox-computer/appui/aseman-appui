@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# Aseman App UI helper: drive OpenCode in the space sandbox against Aseman's
-# metered LLM gateway (same backbone agents use). Writes READY.json after tests.
+# Aseman App UI helper. Two builders share one app system: OpenCode (when the
+# node's OpenCode is on: `build` drives it against Aseman's metered LLM
+# gateway, the same backbone agents use), or the space's own agents (OpenCode
+# off: `prepare` lays out the project and their task, they build it, `verify`
+# checks it). Either way the project, the guides, the toolchain and the
+# platform's checks are the same, and READY.json follows passing tests.
 set -euo pipefail
 
 ROOT="${ASEMAN_APPUI_ROOT:-/opt/aseman-appui}"
@@ -258,7 +262,7 @@ check_ready() {
 }
 
 build_prompt() {
-  local dir="$1" port="$2" mode="$3" ui="${4:-elpian}" task frontend
+  local dir="$1" port="$2" mode="$3" ui="${4:-elpian}" engine="${5:-opencode}" task frontend tools="" finish=""
   if [[ "$mode" == "update" ]]; then
     task="This is an existing app (BRIEF.md is what it was built for). Make the change requested last in CHANGES.md and keep everything else working. Read the project before editing; change only what the request needs. With an Elpian frontend, replay the existing end-to-end scenarios (elpian/e2e) first, then drive the changed and new parts headlessly step by step, and update or add scenarios so they cover them."
   else
@@ -346,10 +350,38 @@ or node vendor/aseman-elpian/validate.mjs --program elpian/widget.js --widget-on
 FRONT
 )
   fi
+  if [[ "$engine" == "agents" ]]; then
+    tools=$(cat <<TOOLS
+
+You are building this yourself, with your own tools on the space's sandbox:
+the shell (execute) and the file tools, in $dir. Your elpian_* tools (the
+validator and the headless driver named above) are the aseman-elpian command,
+with the same names and JSON arguments, run in $dir:
+  aseman-elpian tools [name]       the tools and their arguments
+  aseman-elpian elpian_open '{"server":"http://127.0.0.1:$port"}'
+  aseman-elpian elpian_tap '{"target":"Add task"}'   (sessions stay open between commands)
+  aseman-elpian elpian_validate @tree.json            (arguments from a file)
+  aseman-elpian stop                                  (end the driver sessions)
+While you test, run your server in the background
+(cd $dir && nohup <start command> > server.log 2>&1 &) and stop it when done.
+TOOLS
+)
+    finish=$(cat <<FINISH
+
+6. Call appui_publish with dir $dir. The platform verifies the app itself
+   (READY.json, the start command answering on the port$( [[ "$ui" == "elpian" ]] && printf '%s' ', the bundle, the
+   program on QuickJS against your server, your end-to-end scenarios') and
+   opens it on the desk. If it reports a problem, find the root cause, fix it,
+   run your tests again, rewrite READY.json and call appui_publish again
+   (REPAIR.md holds the last problem) until it opens.
+FINISH
+)
+  fi
   cat <<PROMPT
 You are the software engineer of an Aseman space. $task
 
 $frontend
+$tools
 
 Context files here: AGENTS.md (your rules: follow them), ELPIAN.md (the Elpian
 frontend guide and reference), BRIEF.md (+ CHANGES.md),
@@ -382,14 +414,19 @@ Work in this order:
 4. Make sure the start command serves the built app in the foreground on
    0.0.0.0:$port (read PORT from the environment, default $port) without
    rebuilding, and that GET / answers.
-5. Only then write READY.json as AGENTS.md specifies (with "ui": "$ui"$( [[ "$ui" == "elpian" ]] && printf '%s' ' and "elpian": "elpian/app.js"' || printf '%s' ' and "widget": "elpian/widget.js"')).
+5. Only then write READY.json as AGENTS.md specifies (with "ui": "$ui"$( [[ "$ui" == "elpian" ]] && printf '%s' ' and "elpian": "elpian/app.js"' || printf '%s' ' and "widget": "elpian/widget.js"')).$finish
 Keep everything inside $dir. Do not ask questions: decide sensibly and note
 assumptions in PLAN.md.
 PROMPT
 }
 
 repair_prompt() {
-  local port="$1" problem="$2"
+  local port="$1" problem="$2" engine="${3:-opencode}" after=""
+  if [[ "$engine" == "agents" ]]; then
+    after="
+Your elpian_* tools are the aseman-elpian command (aseman-elpian tools lists
+them). When it is fixed, call appui_publish with this dir again."
+  fi
   cat <<PROMPT
 The app in this directory is not ready. The platform checked it and found:
 
@@ -404,29 +441,37 @@ the view trees with where it is and how to fix it, and the Elpian driver
 end) reproduces a failing scenario step by step: replay it by hand, read the
 screen and the PROBLEMS at the failing step, fix the app (or the scenario, if
 it expects the wrong thing), and run every scenario again. Run the tests again, make sure the start command serves on
-0.0.0.0:$port and GET / answers, then rewrite READY.json.
+0.0.0.0:$port and GET / answers, then rewrite READY.json.$after
 PROMPT
 }
 
-cmd_build() {
-  local dir="" brief="" apps="" title="App" port=8787 mode="new" ui="elpian"
+# parse_job reads the flags of build / prepare into the job_* variables.
+parse_job() {
+  job_dir="" job_brief="" job_apps="" job_title="App" job_port=8787 job_mode="new" job_ui="elpian"
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --dir) dir="$2"; shift 2 ;;
-      --brief-file) brief="$2"; shift 2 ;;
-      --apps-file) apps="$2"; shift 2 ;;
-      --title) title="$2"; shift 2 ;;
-      --port) port="$2"; shift 2 ;;
-      --mode) mode="$2"; shift 2 ;;
-      --ui) ui="$2"; shift 2 ;;
-      *) die "unknown build flag $1" ;;
+      --dir) job_dir="$2"; shift 2 ;;
+      --brief-file) job_brief="$2"; shift 2 ;;
+      --apps-file) job_apps="$2"; shift 2 ;;
+      --title) job_title="$2"; shift 2 ;;
+      --port) job_port="$2"; shift 2 ;;
+      --mode) job_mode="$2"; shift 2 ;;
+      --ui) job_ui="$2"; shift 2 ;;
+      *) die "unknown flag $1" ;;
     esac
   done
-  [[ -n "$dir" ]] || die "build needs --dir"
-  [[ -n "$brief" && -f "$brief" ]] || die "build needs --brief-file"
-  [[ "$mode" == "new" || "$mode" == "update" ]] || die "--mode is new or update"
-  [[ "$ui" == "elpian" || "$ui" == "web" ]] || die "--ui is elpian or web"
-  dir=$(mkdir -p "$dir" && cd "$dir" && pwd)
+  [[ -n "$job_dir" ]] || die "needs --dir"
+  [[ -n "$job_brief" && -f "$job_brief" ]] || die "needs --brief-file"
+  [[ "$job_mode" == "new" || "$job_mode" == "update" ]] || die "--mode is new or update"
+  [[ "$job_ui" == "elpian" || "$job_ui" == "web" ]] || die "--ui is elpian or web"
+  job_dir=$(mkdir -p "$job_dir" && cd "$job_dir" && pwd)
+}
+
+# prepare_project lays out the project for its builder (opencode or agents):
+# the guides, the SDKs and the Elpian toolchain, BRIEF.md (+ CHANGES.md for
+# an update), APPS.json and JOB.json.
+prepare_project() {
+  local engine="$1" dir="$job_dir" brief="$job_brief" apps="$job_apps"
   cp -f "$ROOT/AGENTS.md" "$dir/AGENTS.md"
   if [[ -f "$ROOT/ASEMAN_API.md" ]]; then
     cp -f "$ROOT/ASEMAN_API.md" "$dir/ASEMAN_API.md"
@@ -437,7 +482,7 @@ cmd_build() {
   fi
   if [[ -d "$ROOT/elpian" ]]; then
     mkdir -p "$dir/vendor/aseman-elpian"
-    for f in aseman-elpian.js openui-elpian.js bundle.mjs check.mjs nodes.json ELPIAN.md validate.mjs validate-mcp.mjs schema.mjs icons.json drive.mjs drive-mcp.mjs mcp-stdio.mjs; do
+    for f in aseman-elpian.js openui-elpian.js bundle.mjs check.mjs nodes.json ELPIAN.md validate.mjs validate-mcp.mjs schema.mjs icons.json drive.mjs drive-mcp.mjs mcp-stdio.mjs elpian-cli.mjs; do
       [[ -f "$ROOT/elpian/$f" ]] && cp -f "$ROOT/elpian/$f" "$dir/vendor/aseman-elpian/$f"
     done
     [[ -f "$ROOT/elpian/ELPIAN.md" ]] && cp -f "$ROOT/elpian/ELPIAN.md" "$dir/ELPIAN.md"
@@ -452,7 +497,7 @@ cmd_build() {
       [[ -f "$ROOT/sdk/$f" ]] && cp -f "$ROOT/sdk/$f" "$dir/vendor/aseman-sdk/$f"
     done
   fi
-  if [[ "$mode" == "update" ]]; then
+  if [[ "$job_mode" == "update" ]]; then
     # Keep the history of what was asked: the original brief and each change.
     { echo; echo "## Change requested $(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo; cat "$brief"; } >>"$dir/CHANGES.md"
     [[ -f "$dir/BRIEF.md" ]] || cp -f "$brief" "$dir/BRIEF.md"
@@ -466,24 +511,41 @@ cmd_build() {
   else
     echo '{"apps":[],"agents":[]}' >"$dir/APPS.json"
   fi
-  write_file "$dir/JOB.json" <<EOF
-{"title":$(jq -Rn --arg t "$title" '$t'),"port":$port,"dir":"$dir","mode":"$mode","ui":"$ui"}
-EOF
-  rm -f "$dir/READY.json"
+  jq -n --arg t "$job_title" --argjson p "$job_port" --arg d "$dir" --arg m "$job_mode" --arg u "$job_ui" --arg e "$engine" \
+    '{title:$t, port:$p, dir:$d, mode:$m, ui:$u, engine:$e}' >"$dir/JOB.json"
+  rm -f "$dir/READY.json" "$dir/REPAIR.md"
+}
+
+# check_app prints why the app is not ready (nothing when it is): what
+# READY.json says, then the app itself, started and checked the way the
+# gateway and the client will use it.
+check_app() {
+  local dir="$1" problem
+  problem=$(check_ready "$dir") || true
+  if [[ -z "$problem" ]]; then
+    problem=$(verify_app "$dir") || true
+  fi
+  if [[ -n "$problem" ]]; then
+    echo "$problem"
+    return 1
+  fi
+}
+
+cmd_build() {
+  parse_job "$@"
+  local dir="$job_dir" port="$job_port"
+  prepare_project opencode
 
   # OpenCode builds; the platform then checks the result itself (READY.json,
   # and that the app really starts and answers) and sends what it found back
   # to OpenCode for up to ASEMAN_APPUI_REPAIRS rounds.
   local rounds="${ASEMAN_APPUI_REPAIRS:-2}" round=0 problem=""
-  if ! run_opencode "$dir" "$(build_prompt "$dir" "$port" "$mode" "$ui")"; then
+  if ! run_opencode "$dir" "$(build_prompt "$dir" "$port" "$job_mode" "$job_ui" opencode)"; then
     problem="the OpenCode session failed or timed out (see opencode.log); finish the work"
   fi
   while true; do
     if [[ -z "$problem" ]]; then
-      problem=$(check_ready "$dir") || true
-    fi
-    if [[ -z "$problem" ]]; then
-      problem=$(verify_app "$dir") || true
+      problem=$(check_app "$dir") || true
     fi
     if [[ -z "$problem" ]]; then
       echo "aseman-appui: verified: the app starts and answers on port $port"
@@ -504,10 +566,55 @@ EOF
   cmd_status "$dir"
 }
 
+# cmd_prepare lays out a project for the space's agents to build (OpenCode
+# off) and prints their task (TASK.md): the same plan, build, test and
+# end-to-end steps OpenCode is given, with the agents' own tools.
+cmd_prepare() {
+  parse_job "$@"
+  local dir="$job_dir"
+  prepare_project agents
+  build_prompt "$dir" "$job_port" "$job_mode" "$job_ui" agents >"$dir/TASK.md"
+  jq -n --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{state:"building", engine:"agents", started_at:$at}' >"$dir/STATUS.json"
+  cat "$dir/TASK.md"
+}
+
+# cmd_verify runs the platform's checks on an app the agents built (the same
+# ones `build` runs after OpenCode): ready, or the problem and how to repair
+# it (also in REPAIR.md) with exit 1.
+cmd_verify() {
+  local dir="."
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dir) dir="$2"; shift 2 ;;
+      -*) die "unknown flag $1" ;;
+      *) dir="$1"; shift ;;
+    esac
+  done
+  [[ -d "$dir" ]] || die "no project at $dir"
+  dir=$(cd "$dir" && pwd)
+  local port problem
+  port=$(jq -r '.port // 8787' "$dir/JOB.json" 2>/dev/null || echo 8787)
+  if problem=$(check_app "$dir"); then
+    rm -f "$dir/REPAIR.md"
+    jq -n --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{state:"completed", engine:"agents", finished_at:$at}' >"$dir/STATUS.json"
+    echo "aseman-appui: verified: the app starts and answers on port $port"
+    cmd_status "$dir"
+    return 0
+  fi
+  repair_prompt "$port" "$problem" agents >"$dir/REPAIR.md"
+  jq -n --arg e "$problem" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{state:"needs_repair", engine:"agents", problem:$e, checked_at:$at}' >"$dir/STATUS.json"
+  echo "aseman-appui: not ready" >&2
+  cat "$dir/REPAIR.md"
+  return 1
+}
+
 usage() {
   cat <<EOF
 Usage: aseman-appui <command> [flags]
 
+Apps are built by OpenCode (build, run) or by the space's agents (prepare,
+then verify); both get the same project, guides, toolchain and checks.
 OpenCode uses Aseman's metered LLM gateway (ASEMAN_LLM_*), the same backbone
 as space agents. Token usage is billed on the agent turn.
 
@@ -522,6 +629,12 @@ Commands:
                          update changes an existing app in place (CHANGES.md).
                          --ui elpian (default: an Elpian program, ELPIAN.md) or web
                          (only when the person asked for web technology).
+  prepare (the flags of build)
+                         Lay out the project for an agent to build and print its
+                         task (TASK.md); OpenCode is not involved.
+  verify [--dir] DIR     The platform's checks of a built app (READY.json, start
+                         and answer, Elpian bundle, QuickJS, end-to-end
+                         scenarios); exit 1 with the problem (REPAIR.md).
   status [--dir DIR]     Show STATUS.json / READY.json
 EOF
 }
@@ -533,6 +646,8 @@ main() {
     models) cmd_models "$@" ;;
     run) cmd_run "$@" ;;
     build) cmd_build "$@" ;;
+    prepare) cmd_prepare "$@" ;;
+    verify) cmd_verify "$@" ;;
     status) cmd_status "${1:-.}" ;;
     -h|--help|help|"") usage ;;
     *) die "unknown command $cmd" ;;

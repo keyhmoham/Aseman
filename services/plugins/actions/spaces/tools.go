@@ -52,6 +52,10 @@ func toolDetail(toolName string) string {
 		return "opening a gateway proxy…"
 	case "appui_create":
 		return "building an interactive UI…"
+	case "appui_publish":
+		return "verifying and opening an app…"
+	case "appui_status":
+		return "checking an app…"
 	case "opencode_run":
 		return "running OpenCode…"
 	case "opencode_status", "opencode_models":
@@ -93,6 +97,11 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 		used[t.Name] = true
 	}
 	sandboxID, hasSandbox := s.sandboxBotID(ctx, spaceID)
+	openCode := s.openCodeOn(ctx)
+	builder := "OpenCode builds"
+	if !openCode {
+		builder = "you build"
+	}
 	for i := range mems {
 		rec, err := s.botForMember(ctx, mems[i].MemberID)
 		if err != nil {
@@ -122,7 +131,7 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 		if rec.IsToolBackend() {
 			tool.Commands = s.appCommands(ctx, spaceID, rec)
 			tool.Frontend = s.toolFrontend(ctx, rec)
-			show := " When the person asks for a UI, interface, dashboard or similar, use appui_create with a brief (OpenCode builds fullstack software that calls space apps via preview `_aseman/api/call`; tool: \"" + rec.ID.String() + "\" for dock association). For unsolicited structured data prefer plain chat text"
+			show := " When the person asks for a UI, interface, dashboard or similar, use appui_create with a brief (" + builder + " fullstack software that calls space apps via preview `_aseman/api/call`; tool: \"" + rec.ID.String() + "\" for dock association). For unsolicited structured data prefer plain chat text"
 			switch tool.Frontend {
 			case "static":
 				tool.Description += " It has a static frontend (people can open it from the dock)." + show + "."
@@ -142,13 +151,14 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 		}
 		tools = append(tools, tool)
 	}
-	// OpenCode is listed like the sandbox: a builtin app with microtool-style
-	// commands; agents call the platform builtins (appui_create / opencode_*).
-	if !used["opencode"] {
+	// While it is on, OpenCode is listed like the sandbox: a builtin app with
+	// microtool-style commands; agents call the platform builtins
+	// (appui_create / opencode_*). Off, it is not offered at all.
+	if openCode && !used["opencode"] {
 		used["opencode"] = true
 		tools = append(tools, openCodeBuiltinApp())
 	}
-	for _, t := range vmm.Builtins() {
+	for _, t := range vmm.BuiltinsFor(openCode) {
 		if strings.HasPrefix(t.Name, "routine_") && s.Routines == nil {
 			continue
 		}
@@ -239,7 +249,7 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 	if vmm.ExecutionFrom(ctx).NoSandbox {
 		switch toolName {
 		case "sandbox_exec", "file_send", "file_upload", "file_edit", "proxy_create", "proxy_list", "proxy_get", "proxy_delete",
-			"appui_create", "opencode_run", "opencode_status", "opencode_models":
+			"appui_create", "appui_publish", "appui_status", "opencode_run", "opencode_status", "opencode_models":
 			return "", errs.Permission("sandbox access is disabled for this request")
 		}
 	}
@@ -254,7 +264,8 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 	if !helper.InternalAccess(ctx) && policy.ActorID != "" && policy.ActorID != helper.Actor(ctx).String() {
 		return "", errs.Permission("execution actor mismatch")
 	}
-	if !policy.Allows(toolName) {
+	// An app's follow-up steps come with appui_create.
+	if !policy.Allows(toolName) && !((toolName == "appui_publish" || toolName == "appui_status") && policy.Allows("appui_create")) {
 		return "", errs.Permission("tool capability not granted")
 	}
 	roomID := identity.ID{}
@@ -381,10 +392,16 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 		result, terr = s.proxyCreateTool(ctx, id, agentName, argsJSON)
 	case toolName == "appui_create":
 		result, terr = s.appuiCreateTool(ctx, id, roomID, agentName, argsJSON)
+	case toolName == "appui_publish":
+		result, terr = s.appuiPublishTool(ctx, id, roomID, agentName, argsJSON)
+	case toolName == "appui_status":
+		result, terr = s.appuiStatusTool(ctx, id, argsJSON)
+	case vmm.OpenCodeOnly(toolName) && !s.openCodeOn(ctx):
+		terr = errOpenCodeOff(toolName)
 	case toolName == "opencode_run":
 		result, terr = s.opencodeRunTool(ctx, id, argsJSON)
 	case toolName == "opencode_status":
-		result, terr = s.opencodeStatusTool(ctx, id, argsJSON)
+		result, terr = s.appuiStatusTool(ctx, id, argsJSON)
 	case toolName == "opencode_models":
 		result, terr = s.opencodeModelsTool(ctx, id)
 	case toolName == "desk_state":

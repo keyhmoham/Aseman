@@ -54,7 +54,7 @@ var codeModeSlug = regexp.MustCompile(`[^a-z0-9_]+`)
 var codeModePlatform = map[string]bool{
 	"file_send": true, "file_upload": true, "image_generate": true,
 	"proxy_create": true, "proxy_list": true, "proxy_get": true, "proxy_delete": true,
-	"appui_create": true, "opencode_run": true, "opencode_status": true, "opencode_models": true,
+	"appui_create": true, "appui_publish": true, "appui_status": true, "opencode_run": true, "opencode_status": true, "opencode_models": true,
 	"routine_create": true, "routine_list": true, "routine_get": true, "routine_update": true, "routine_delete": true,
 	"desk_state": true, "desk_arrange": true, "desk_close": true,
 	"db_tables": true, "db_read": true,
@@ -216,7 +216,10 @@ func codeModePlatformTools(ctx context.Context, s *Service, spaceID string) []vm
 		// Fall back to the static builtin schemas when SpaceTools is unavailable.
 		log.Printf("codemode: SpaceTools unavailable for %s (%v); using Builtins schemas", spaceID, err)
 		out := make([]vmm.Tool, 0, len(codeModePlatform))
-		for _, t := range vmm.Builtins() {
+		// The OpenCode tools only while the node's OpenCode is on (unknown: off).
+		var openCode bool
+		_ = bridge.Invoke(ctx, s.K, "spaces", "OpenCodeEnabled", []any{ctx}, &openCode)
+		for _, t := range vmm.BuiltinsFor(openCode) {
 			if codeModePlatform[t.Name] {
 				out = append(out, t)
 			}

@@ -336,6 +336,13 @@ Map<String, dynamic> adminFixtures() {
       'status': 'Partly in effect: memories are learned but not recalled.',
       'providers': [providers.first],
     },
+    'spaces.opencode_get': {
+      'enabled': false,
+      'builder': 'agents',
+      'status':
+          'Off: the spaces\' own agents build, test and repair on-demand apps (and write any other code) with the same project layout, guides, Elpian validator and headless driver; the platform verifies each app before it opens. OpenCode is not used.',
+      'updated_at': '0001-01-01T00:00:00Z',
+    },
     'admin.plugins_list': {
       'plugins': [
         {

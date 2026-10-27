@@ -4,8 +4,9 @@
 # deep agents runtime runs their shell commands and file tools here (through
 # spaces.ask), so the lead and every specialist work on the same files under
 # /workspace. The deep agents file tools run python3 in the sandbox.
-# OpenCode + aseman-appui are baked in so every new space can generate
-# on-demand fullstack App UIs (appui_create) on the Aseman LLM backbone.
+# aseman-appui and the Elpian toolchain are baked in so every new space can
+# generate on-demand fullstack App UIs (appui_create): built by the space's
+# agents, or by OpenCode (also baked in) when the admin turns it on.
 # Default UI for those apps is Material 3 Expressive (@material/web).
 #
 #   docker build -t aseman/tool-runtime:v1 deploy/tool-runtime
@@ -40,9 +41,10 @@ RUN chmod +x /usr/local/bin/aseman-desktop
 # The tool runtime: tools installed into a space run here, one process per
 # tool, started by the node.
 COPY --from=tool-runtime /opt/aseman-tool-runtime /opt/aseman-tool-runtime
-# OpenCode: baked into every space sandbox so agents can distribute coding
-# tasks and generate on-demand fullstack App UIs (appui_create) via the
-# Aseman metered LLM gateway (an Elpian frontend by default; web on request).
+# OpenCode: baked into every space sandbox, used only while the admin has it
+# on (Admin → OpenCode): agents then hand coding tasks and App UI builds
+# (appui_create) to it, on the Aseman metered LLM gateway. Off (the default),
+# the agents build apps themselves with the same toolchain below.
 RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path \
  && install -d /usr/local/bin \
  && if [ -x "$HOME/.opencode/bin/opencode" ]; then ln -sf "$HOME/.opencode/bin/opencode" /usr/local/bin/opencode; fi \
@@ -60,11 +62,14 @@ COPY appui/elpian/aseman-elpian.js appui/elpian/openui-elpian.js appui/elpian/bu
 COPY appui/elpian/validate.mjs appui/elpian/validate-mcp.mjs appui/elpian/schema.mjs appui/elpian/icons.json /opt/aseman-appui/elpian/
 # The headless driver: uses an Elpian app like a person, for end-to-end tests;
 # a CLI (drive.mjs run elpian/e2e) and an MCP server OpenCode loads.
-COPY appui/elpian/drive.mjs appui/elpian/drive-mcp.mjs appui/elpian/mcp-stdio.mjs /opt/aseman-appui/elpian/
+# aseman-elpian serves both (validator and driver) to the space's agents on
+# the shell, with driver sessions that persist between commands.
+COPY appui/elpian/drive.mjs appui/elpian/drive-mcp.mjs appui/elpian/mcp-stdio.mjs appui/elpian/elpian-cli.mjs /opt/aseman-appui/elpian/
 COPY appui/elpian/examples /opt/aseman-appui/elpian/examples
 COPY appui/sdk/aseman.js appui/sdk/server.cjs appui/sdk/server.mjs appui/sdk/aseman_server.py /opt/aseman-appui/sdk/
 COPY appui/aseman-appui /usr/local/bin/aseman-appui
-RUN chmod +x /usr/local/bin/aseman-appui \
+RUN chmod +x /usr/local/bin/aseman-appui /opt/aseman-appui/elpian/elpian-cli.mjs \
+ && ln -sf /opt/aseman-appui/elpian/elpian-cli.mjs /usr/local/bin/aseman-elpian \
  && mkdir -p /opt/aseman-appui \
  && ln -sf /usr/local/bin/aseman-appui /opt/aseman-appui/aseman-appui
 # /workspace is the space's shared working tree.

@@ -38,7 +38,8 @@ def last_request(messages: list[Any]) -> str:
 
 #: Native delivery tools (Code Mode-off fallback) and the Code Mode paths that
 #: put a result in front of the person (file/image in chat, or desk card/page).
-DELIVERY_TOOLS = {"image_generate", "file_send", "file_upload", "ui_present", "appui_create", "proxy_create"}
+DELIVERY_TOOLS = {"image_generate", "file_send", "file_upload", "ui_present", "appui_create", "appui_publish",
+                  "proxy_create"}
 DELIVERY_PLATFORM_PATHS = tuple(f"/platform/{name}" for name in sorted(DELIVERY_TOOLS))
 
 

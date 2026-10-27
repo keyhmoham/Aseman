@@ -87,6 +87,9 @@ type platform interface {
 	TimelineMCP(ctx context.Context, spaceID string, body []byte) ([]byte, error)
 	// CodeModeMCP is Cloudflare Code Mode over the space's connected apps.
 	CodeModeMCP(ctx context.Context, spaceID string, body []byte) ([]byte, error)
+	// OpenCodeEnabled is the node's OpenCode switch (Admin → OpenCode): on,
+	// OpenCode builds apps and writes code; off, the agents do it themselves.
+	OpenCodeEnabled(ctx context.Context) (bool, error)
 }
 
 type kernelPlatform struct{ K api.Kernel }

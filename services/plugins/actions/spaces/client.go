@@ -52,7 +52,7 @@ func clientActions(s *Service) []api.Action {
 		helper.Action{Namespace: "spaces", Name: "admin_terminate_sandbox", Summary: "Admin: end a running machine that no project uses", Handler: s.adminTerminateSandbox},
 		helper.Action{Namespace: "spaces", Name: "admin_sandboxes", Summary: "Admin: the machines the sandbox provider is running now", Handler: s.adminSandboxes},
 		helper.Action{Namespace: "spaces", Name: "admin_storage", Summary: "Admin: the volumes the sandbox provider stores", Handler: s.adminStorage},
-	}, append(append(append(append(append(turnActions(s), computerActions(s)...), updatesActions(s)...), seenActions(s)...), adminsSpaceActions(s)...), dbActions(s)...)...)
+	}, append(append(append(append(append(append(turnActions(s), computerActions(s)...), updatesActions(s)...), seenActions(s)...), adminsSpaceActions(s)...), dbActions(s)...), openCodeActions(s)...)...)
 }
 func (s *Service) roomUpdate(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireUser(req); err != nil {

@@ -1,5 +1,5 @@
 // Package asemanopenui is the App UI OpenUI kit: agent-backed UI islands that
-// OpenCode mixes with programmed components under the same Aseman theme.
+// app builders mix with programmed components under the same Aseman theme.
 package asemanopenui
 
 import (

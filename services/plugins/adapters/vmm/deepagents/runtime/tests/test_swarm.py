@@ -35,11 +35,12 @@ def platform(tmp_path: Path) -> Platform:
     return p
 
 
-def context(platform: Platform, tmp_path: Path, script: list[Any], *, decision: bool = True) -> tuple[Any, Store]:
+def context(platform: Platform, tmp_path: Path, script: list[Any], *, decision: bool = True,
+            opencode: bool = True) -> tuple[Any, Store]:
     model = ScriptedModel(script=script)
     store = Store(str(tmp_path / "rt.db"))
     r = Runner(store, InMemorySaver(), model_factory=lambda a, g: model, gateway_factory=platform.gateway)
-    ctx = r._context(turn_request(LEAD, "build it", token="tok-lead", role="lead"))
+    ctx = r._context(turn_request(LEAD, "build it", token="tok-lead", role="lead", opencode=opencode))
     ctx.llm = model
     ctx.decision = DecisionClient(ctx.gateway, "jev") if decision else None
     return ctx, store
@@ -108,6 +109,23 @@ async def test_a_team_reuses_the_space_and_the_market_and_writes_only_what_is_mi
     # One decision request scored every shortlisted pair at once.
     team_scoring = [d for d in platform.decisions if any(k.startswith("r") for k in d["questions"])]
     assert len(team_scoring) == 1
+
+
+async def test_without_opencode_the_team_staffs_its_own_developer(platform: Platform, tmp_path: Path) -> None:
+    ctx, _ = context(platform, tmp_path, [js(ROLES)], opencode=False)
+    roles = await team_setup.roles_for(ctx, "Ship the sales dashboard app", 5)
+    assert "engineer" in {r.key for r in roles}
+    asked = platform_prompts(ctx)
+    assert "one owner per project" in asked and "OpenCode" not in asked
+    ctx, _ = context(platform, tmp_path, [js(ROLES)], opencode=True)
+    roles = await team_setup.roles_for(ctx, "Ship the sales dashboard app", 5)
+    assert "engineer" not in {r.key for r in roles}
+    assert "done by OpenCode" in platform_prompts(ctx)
+
+
+def platform_prompts(ctx: Any) -> str:
+    """The system prompts the turn's model was asked with, joined."""
+    return "\n".join(str(m.content) for seen in ctx.llm.seen for m in seen if getattr(m, "type", "") == "system")
 
 
 def test_development_roles_are_opencodes() -> None:

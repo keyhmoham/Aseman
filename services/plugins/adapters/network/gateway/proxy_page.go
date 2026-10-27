@@ -10,14 +10,14 @@ package apihttp
 //     context, tools, microtools {tool}, call {tool, microtool, args},
 //     agents, and ask {agent, body} for OpenUI agent-backed islands (each
 //     ask runs in a temporary room thread of its own, deleted after).
-//   - _aseman/kit/openui/*: the OpenUI component kit (JS/CSS) OpenCode mixes
+//   - _aseman/kit/openui/*: the OpenUI component kit (JS/CSS) app builders mix
 //     into App UIs under the same Aseman theme tokens.
 //
 // Authorized like the rest of the preview: the person's session (the preview
 // cookie after the first load) and membership of its space; requests that
 // change something come from the preview's own page only.
 //
-// Interactive tool UIs use appui_create (OpenCode fullstack) shown as DeskWeb.
+// Interactive tool UIs use appui_create (fullstack apps) shown as DeskWeb.
 
 import (
 	"context"

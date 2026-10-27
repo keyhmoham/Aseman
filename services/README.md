@@ -395,9 +395,11 @@ the same UI in chat and on the desk.
 - **Desk AG-UI window** (`ui_present`, `placement=desk` / `complexity=high`):
   large or multi-panel **non-interactive** visualizations using the same AG-UI
   components on the room desk.
-- **DeskWeb App UI** (`appui_create`): interactive + complex + live APIs /
-  lasting apps. OpenCode builds fullstack software (Material 3 Expressive by
-  default; optional OpenUI agent islands via `_aseman/kit/openui`).
+- **DeskWeb App UI** (`appui_create`, then `appui_publish` when the agents
+  build): interactive + complex + live APIs / lasting apps. The node's builder
+  (the agents, or OpenCode when the admin turned it on) builds fullstack
+  software (an Elpian frontend by default; optional OpenUI agent islands via
+  `_aseman/kit/openui`).
 - **`proxy_create`**: only to expose an already-running sandbox HTTP service.
 
 Agents get every tool's microtools as tools (`spaces.tools_list`, through
@@ -617,23 +619,37 @@ and users all talk to it (and to each other) through `spaces.ask`. The sandbox
 is **started on agent activity** and **stopped after an idle window** (2
 minutes) — never deleted, restarted on the next activity.
 
-The default image (`deploy/sandbox-computer`) includes **OpenCode** and
-`aseman-appui` so every new space can generate on-demand fullstack App UIs
-(Material 3 Expressive by default). Agents brief OpenCode with `appui_create` /
-`opencode_run` on the metered Aseman LLM gateway. OpenCode is also listed in
-`spaces.tools_list` as a builtin app with microtools `run`, `status`, `models`,
-`build`.
+The default image (`deploy/sandbox-computer`) includes `aseman-appui`, the
+Elpian toolchain (`aseman-elpian`) and **OpenCode**, so every new space can
+generate on-demand fullstack App UIs. Who builds them is the node's **OpenCode
+switch** (`spaces.opencode_get` / `spaces.opencode_set`, Admin → AI →
+OpenCode, stored in `spaces_opencode`, **off by default**; each turn reads it,
+and the runtime gets it as `opencode` in the turn request):
+
+- **Off:** the agents build. `appui_create` runs `aseman-appui prepare` and
+  answers with the build task; the agent builds, tests and drives the app
+  (`aseman-elpian`), then `appui_publish` runs `aseman-appui verify` (READY.json,
+  start, Elpian bundle, QuickJS check, end-to-end scenarios) and opens it, or
+  answers with the problem (`REPAIR.md`). The `opencode_*` tools and the
+  OpenCode builtin app are not listed, calling them fails, OpenCode is never
+  configured, and the prompts and team staffing let agents write code.
+- **On:** agents brief OpenCode with `appui_create` / `opencode_run` on the
+  metered Aseman LLM gateway; `aseman-appui build` runs it with repair rounds
+  and the same checks. OpenCode is also listed in `spaces.tools_list` as a
+  builtin app with microtools `run`, `status`, `models`, `build`.
+
+`appui_status` (and `appui_publish`, to re-verify and reopen) work in both.
 
 When an agent takes a turn in a space, the runtime reads the space's tools
 (`spaces.tools_list`) — every app installed in the space **plus the
-sandbox and OpenCode** — and exposes them to the model. Calling any of them
+sandbox (and OpenCode while it is on)** — and exposes them to the model. Calling any of them
 routes back through `spaces.ask`:
 
 | tool | backend | routing |
 |---|---|---|
 | `execute` and the file tools | shared docker/container or modal sandbox VM | `spaces.ask` (`raw`) → docker/modal exec (`Send`) |
 | `ask_<app>` | wasm app VM | `spaces.ask` → wasm `ask` host fn |
-| platform tools (`file_send`, `image_generate`, `proxy_*`, `appui_create`, `opencode_*`, `routine_*`) | the spaces namespace | `spaces.ask` (`tool` + `args`) |
+| platform tools (`file_send`, `image_generate`, `proxy_*`, `appui_*`, `opencode_*` while OpenCode is on, `routine_*`) | the spaces namespace | `spaces.ask` (`tool` + `args`) |
 
 ```bash
 # list the tools an agent sees in a space

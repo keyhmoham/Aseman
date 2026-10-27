@@ -34,6 +34,7 @@ _CODEMODE_STATUS = {
     "/platform/image_generate": "generating an image",
     "/platform/ui_present": "showing an in-chat UI",
     "/platform/appui_create": "building an interactive UI",
+    "/platform/appui_publish": "verifying and opening an app",
     "/platform/proxy_create": "exposing a preview",
     "/timeline/": "reading the project timeline",
     "/apps/": "calling a connected app",

@@ -32,8 +32,8 @@ func TestOpenCodeBuiltinApp(t *testing.T) {
 
 func TestAppUIBuiltinsPresent(t *testing.T) {
 	want := map[string]bool{
-		"ui_present": false, "appui_create": false, "opencode_run": false,
-		"opencode_status": false, "opencode_models": false,
+		"ui_present": false, "appui_create": false, "appui_publish": false, "appui_status": false,
+		"opencode_run": false, "opencode_status": false, "opencode_models": false,
 	}
 	for _, tool := range vmm.Builtins() {
 		if _, ok := want[tool.Name]; ok {

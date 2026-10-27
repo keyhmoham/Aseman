@@ -19,28 +19,34 @@ func TestSpaceToolContractsMatchPromptCatalog(t *testing.T) {
 	ctx = helper.WithInternalAccess(ctx)
 	spaceID := idFromHex(t, "00000000000000010000000000000001")
 	s.Routines = routine.NewService(s.K, s.R, logger.Global())
-	tools, err := s.SpaceTools(ctx, spaceID, spaceID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	actual := map[string]vmm.Tool{}
-	for _, tool := range tools {
-		if _, ok := actual[tool.Name]; ok {
-			t.Fatalf("duplicate tool %s", tool.Name)
+	// The catalog of a node with OpenCode off (the default), then on.
+	for _, openCode := range []bool{false, true} {
+		if _, err := s.SetOpenCode(ctx, openCode); err != nil {
+			t.Fatal(err)
 		}
-		actual[tool.Name] = tool
-	}
-	for _, contract := range vmm.Builtins() {
-		if strings.HasPrefix(contract.Name, "memory_") {
-			continue
-		} // manager is intentionally absent in this fixture
-		tool, ok := actual[contract.Name]
-		if !ok || !reflect.DeepEqual(tool.Parameters, contract.Parameters) {
-			t.Fatalf("schema drift for %s", contract.Name)
+		tools, err := s.SpaceTools(ctx, spaceID, spaceID)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	if _, ok := actual["memory_set"]; ok {
-		t.Fatal("advertised unwired memory manager")
+		actual := map[string]vmm.Tool{}
+		for _, tool := range tools {
+			if _, ok := actual[tool.Name]; ok {
+				t.Fatalf("duplicate tool %s", tool.Name)
+			}
+			actual[tool.Name] = tool
+		}
+		for _, contract := range vmm.BuiltinsFor(openCode) {
+			if strings.HasPrefix(contract.Name, "memory_") {
+				continue
+			} // manager is intentionally absent in this fixture
+			tool, ok := actual[contract.Name]
+			if !ok || !reflect.DeepEqual(tool.Parameters, contract.Parameters) || tool.Usage != contract.Usage {
+				t.Fatalf("schema drift for %s (opencode %v)", contract.Name, openCode)
+			}
+		}
+		if _, ok := actual["memory_set"]; ok {
+			t.Fatal("advertised unwired memory manager")
+		}
 	}
 }
 

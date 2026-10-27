@@ -230,6 +230,8 @@ abstract final class BackendCapabilities {
       'metadata_patch',
       'metadata_public',
       'metadata_view',
+      'opencode_get',
+      'opencode_set',
       'pins_get',
       'pins_set',
       'proxy_create',

@@ -215,6 +215,10 @@ class _AppScreenState extends State<AdminScreen> {
           Icons.psychology_outlined, Icons.psychology_rounded,
           calls: [_Call('llm', 'llm_memory_get')],
           actions: [_Call('llm', 'llm_memory_set')]),
+      _Page('OpenCode', 'Who builds on-demand apps', Icons.terminal_outlined,
+          Icons.terminal_rounded,
+          calls: [_Call('spaces', 'opencode_get')],
+          actions: [_Call('spaces', 'opencode_set')]),
     ]),
     _Section('System', [
       _Page('Health', 'Deployment checklist', Icons.monitor_heart_outlined,
@@ -480,6 +484,7 @@ class _AppScreenState extends State<AdminScreen> {
         'llm_decision_set',
         'llm_memory_set',
         'llm_image_set',
+        'opencode_set',
         'plugins_load',
         'plugins_unload',
         'plugins_stop',

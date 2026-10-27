@@ -116,6 +116,9 @@ type turnRequest struct {
 	// through Cloudflare Code Mode search/execute ({gateway}/codemode/mcp)
 	// instead of one LLM tool per function.
 	CodeMode bool `json:"codemode"`
+	// OpenCode: the node's OpenCode builds apps and does the coding (agents
+	// brief it); off, the agents build and code themselves.
+	OpenCode bool `json:"opencode"`
 }
 
 // turnResult is what the runtime answers a turn with.
@@ -205,6 +208,9 @@ func (a *Adapter) open(ctx context.Context, vmID string, turn vmm.AgentTurn) (*s
 		// call apps, platform tools and the timeline by writing JS against
 		// one OpenAPI surface (search + execute).
 		req.CodeMode = true
+		// Off (or unknown), the agents build and code themselves.
+		on, err := a.platform.OpenCodeEnabled(ctx)
+		req.OpenCode = err == nil && on
 	}
 	return s, req, nil
 }

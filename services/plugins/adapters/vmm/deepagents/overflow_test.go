@@ -22,6 +22,8 @@ type fakePlatform struct {
 	memoryChat, memoryEmbedding *vmm.ProviderConfig
 	// timeline answers the spaces' timeline MCP; nil means it is off.
 	timeline func(spaceID string, body []byte) ([]byte, error)
+	// openCode is the node's OpenCode switch.
+	openCode bool
 }
 
 func (p fakePlatform) ResolveMemoryChat(context.Context) (vmm.ProviderConfig, error) {
@@ -39,6 +41,8 @@ func (p fakePlatform) ResolveMemoryEmbedding(context.Context) (vmm.ProviderConfi
 }
 
 func (p fakePlatform) TimelineEnabled(context.Context) (bool, error) { return p.timeline != nil, nil }
+
+func (p fakePlatform) OpenCodeEnabled(context.Context) (bool, error) { return p.openCode, nil }
 
 func (p fakePlatform) TimelineMCP(_ context.Context, spaceID string, body []byte) ([]byte, error) {
 	if p.timeline == nil {

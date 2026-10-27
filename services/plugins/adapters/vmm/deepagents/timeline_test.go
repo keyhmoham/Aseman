@@ -65,3 +65,18 @@ func TestATurnSaysWhetherItHasATimeline(t *testing.T) {
 		}
 	}
 }
+
+func TestATurnSaysWhetherOpenCodeBuildsApps(t *testing.T) {
+	for _, on := range []bool{true, false} {
+		a, rt, _ := newTestAdapter(t)
+		a.platform = fakePlatform{provider: vmm.ProviderConfig{Model: "m1"}, openCode: on}
+		turn := testTurn()
+		turn.Agent.AccountID = mustID(t)
+		if _, err := a.Prompt(context.Background(), onlyVM(t, a), turn); err != nil {
+			t.Fatal(err)
+		}
+		if got := rt.turns[0].OpenCode; got != on {
+			t.Fatalf("opencode sent to the runtime = %v, want %v", got, on)
+		}
+	}
+}

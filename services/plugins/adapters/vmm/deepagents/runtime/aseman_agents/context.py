@@ -130,6 +130,9 @@ class TurnContext:
     timeline: bool = False
     # Whether the node serves Cloudflare Code Mode over space apps (codemode.py).
     codemode: bool = False
+    # The node's OpenCode switch: on, OpenCode builds apps and writes code,
+    # briefed by the agents; off, the agents build and code themselves.
+    opencode: bool = False
     # The agent's own chat model for side calls (the swarm's planning and team
     # setup): a LangChain chat model behind the turn's metered LLM endpoint.
     llm: Any = None

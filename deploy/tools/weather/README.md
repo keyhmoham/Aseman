@@ -5,7 +5,7 @@ A ready-made Aseman tool, deployed with one script:
 | | |
 |---|---|
 | **Backend** | managed, QuickJS — [`backend.js`](backend.js), run by the node as a Nomad service of the tool runtime image. Weather from [Open-Meteo](https://open-meteo.com) (free, no API key), reached through the runtime's `aseman.fetch`. |
-| **Frontend** | none dedicated — agents brief OpenCode via `appui_create` for interactive UIs; people can also call microtools from chat. |
+| **Frontend** | none dedicated — agents build interactive UIs with `appui_create`; people can also call microtools from chat. |
 
 Microtools (agents get them as tools too): `weather_report`, `current_weather`,
 `daily_forecast`, `hourly_forecast`, `search_places`. Each takes a `city` (or

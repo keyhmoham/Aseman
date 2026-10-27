@@ -37,7 +37,9 @@ const defaultSandboxImage = "aseman/sandbox-computer:latest"
 
 // sandboxOpenCodeEnv points new sandboxes at the node's metered LLM gateway.
 // The per-turn bearer (ASEMAN_LLM_API_KEY) is injected by ensureOpenCodeAuth
-// during appui_create / opencode_run so usage bills with the agent turn.
+// during appui_create / opencode_run so usage bills with the agent turn. A
+// sandbox outlives the OpenCode switch, so it always carries these; they are
+// inert while OpenCode is off (nothing runs or configures OpenCode then).
 func sandboxOpenCodeEnv() map[string]string {
 	env := map[string]string{
 		"OPENCODE_MODEL":      "aseman/default",

@@ -349,7 +349,7 @@ export function serve(input = process.stdin, output = process.stdout) {
   return serveTools({ name: "aseman-elpian-driver", version: VERSION, instructions: INSTRUCTIONS, tools: TOOLS, call, failure: "The driver failed" }, input, output);
 }
 
-export { TOOLS };
+export { TOOLS, INSTRUCTIONS };
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const stop = () => closeAll().finally(() => process.exit(0));

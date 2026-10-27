@@ -8,7 +8,7 @@ import (
 func f(name string, k database.Kind) database.Field { return database.Field{Name: name, Kind: k} }
 
 func Models() []database.Model {
-	return append(shared.Models(), []database.Model{spaces(), rooms(), memberships(), files(), proxies(), invitations(), turns(), executionEvents(), executionArtifacts(), chatReports(), appKeys()}...)
+	return append(shared.Models(), []database.Model{spaces(), rooms(), memberships(), files(), proxies(), invitations(), turns(), executionEvents(), executionArtifacts(), chatReports(), appKeys(), openCode()}...)
 }
 
 func spaces() database.Model {
@@ -161,6 +161,18 @@ func appKeys() database.Model {
 			f("proxy_id", database.KindString), f("owner_id", database.KindString),
 			f("title", database.KindString), f("hash", database.KindString),
 			f("created_at", database.KindTime), f("updated_at", database.KindTime),
+		},
+	}
+}
+
+// openCode is the node's OpenCode switch (spaces.opencode_get / opencode_set).
+func openCode() database.Model {
+	return database.Model{
+		Name:  "spaces_opencode",
+		Table: "spaces_opencode",
+		Fields: []database.Field{
+			f("id", database.KindString), f("enabled", database.KindBool),
+			f("updated_at", database.KindTime),
 		},
 	}
 }

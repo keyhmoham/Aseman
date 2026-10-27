@@ -362,8 +362,14 @@
 
   var handlerCount = 0;
 
+  // A handler key as part of a global function name: letters, digits and _
+  // as they are; every other character as $<hex>$, so different keys never
+  // share a name ("key_÷" and "key_×" used to both become "key__") and the
+  // name stays a JS identifier (the client calls it as code).
   function safeKey(key) {
-    return String(key).replace(/[^A-Za-z0-9_]/g, "_");
+    return String(key).replace(/[^A-Za-z0-9_]/g, function (c) {
+      return "$" + c.charCodeAt(0).toString(16) + "$";
+    });
   }
 
   function App(spec) {
@@ -484,15 +490,44 @@
           tree = w ? w.view(this.state, this) : this.spec.view(this.state, this);
         } catch (e) {
           this.error = (e && e.message) || String(e);
+          log("view error:", this.error + (e && e.stack ? "\n" + String(e.stack).split("\n").slice(0, 3).join("\n") : ""));
           tree = null;
         }
         if (this.error) tree = errorView(this, tree);
-        root.askHost("render", JSON.stringify(tree || { type: "SizedBox" }));
+        root.askHost("render", JSON.stringify(cleanNode(tree) || { type: "SizedBox" }));
       } while (this.dirty);
     } finally {
       this.rendering = false;
     }
   };
+
+  // A view tree as the engine wants it: JS idioms that leave holes in a
+  // children list (`cond && node`, `cond ? node : null`, `undefined`) are
+  // dropped, nested arrays flatten, and bare strings or numbers become Text.
+  function cleanList(list, out) {
+    out = out || [];
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      if (Array.isArray(c)) cleanList(c, out);
+      else {
+        var n = cleanNode(c);
+        if (n) out.push(n);
+      }
+    }
+    return out;
+  }
+
+  function cleanNode(node) {
+    if (node === null || node === undefined || typeof node === "boolean") return null;
+    if (typeof node === "string" || typeof node === "number") return { type: "Text", props: { text: String(node) } };
+    if (Array.isArray(node)) return { type: "Column", children: cleanList(node) };
+    if (typeof node !== "object") return null;
+    if (node.children === undefined || node.children === null) return node;
+    var out = {};
+    for (var k in node) out[k] = node[k];
+    out.children = cleanList(Array.isArray(node.children) ? node.children : [node.children]);
+    return out;
+  }
 
   function errorView(app, tree) {
     var dismiss = app.handler("__dismiss_error", function () {
@@ -507,9 +542,30 @@
     return { type: "Column", props: { style: { gap: "12", padding: "16" } }, children: tree ? [banner, tree] : [banner] };
   }
 
+  // Snapshot and restore of the first app's state (JSON): check.mjs uses them
+  // to explore the app's states (fire every handler from every state).
+  root.__asemanSnapshot = function () {
+    var a = (root.__asemanApps || [])[0];
+    if (!a) return null;
+    try {
+      return JSON.stringify({ s: a.state, e: a.error || null });
+    } catch (e) {
+      return null;
+    }
+  };
+  root.__asemanRestore = function (json) {
+    var a = (root.__asemanApps || [])[0];
+    if (!a) return;
+    var v = JSON.parse(json);
+    a.state = v.s;
+    a.error = v.e;
+    a.render();
+  };
+
   App.create = function (spec) {
     if (!spec || typeof spec.view !== "function") throw new Error("App.create needs view(state, app)");
     var app = new App(spec);
+    (root.__asemanApps || (root.__asemanApps = [])).push(app);
     app.render();
     app.startWidget();
     Aseman.onEnv(function () { app.startWidget(); });

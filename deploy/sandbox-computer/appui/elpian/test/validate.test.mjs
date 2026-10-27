@@ -135,7 +135,9 @@ test("node shape: types, top-level keys, children", () => {
   assert.deepEqual(errorsOf({ type: "Card", child: T("x") }), ["shape-child"]);
   assert.deepEqual(errorsOf({ type: "Button", onTap: "go", props: { text: "Go" } }), ["shape-handler"]);
   assert.deepEqual(errorsOf({ type: "Text", text: "hi" }), ["shape-prop"]);
-  assert.deepEqual(errorsOf({ type: "Column", children: [T("a"), null, "b", false] }), ["child-not-node", "child-not-node", "child-not-node"]);
+  // Holes are skipped and scalars drawn as Text, as the SDK and the engine do.
+  assert.deepEqual(errorsOf({ type: "Column", children: [T("a"), null, "b", false] }), []);
+  assert.deepEqual(codes(validate({ type: "Column", children: [T("a"), null, "b", false, [T("c")]] })), ["child-skipped", "child-not-node", "child-skipped", "child-nested-array"]);
   assert.deepEqual(errorsOf({ type: "Column", children: T("a") }), ["children-not-array"]);
   assert.deepEqual(codes(validate({ type: "Text", props: { text: "a" }, children: [T("b")] }), "warning"), ["children-ignored"]);
   assert.deepEqual(codes(validate({ type: "Center", children: [T("a"), T("b")] }), "warning"), ["children-dropped"]);
@@ -185,7 +187,7 @@ test("styles: keys, units, radii, colors, cast strings", () => {
   assert.deepEqual(codes(s({ color: "bluish" }), "warning"), ["style-value"]);
   assert.deepEqual(codes(s({ border: "1px solid #ccc" }), "warning"), ["style-value"]);
   assert.deepEqual(codes(s({ "background-color": "#000" })), []);
-  assert.deepEqual(errorsOf({ type: "Text", props: { text: "x", style: "padding: 4px" } }), ["style-not-object"]);
+  assert.deepEqual(codes(validate({ type: "Text", props: { text: "x", style: "padding: 4px" } })), ["style-not-object"]);
   const theme = { colors: { primary: "#6750A4" } };
   assert.deepEqual(codes(validate({ type: "Container", props: { style: { backgroundColor: "#6750a4" } } }, { theme })), []);
   assert.deepEqual(codes(validate({ type: "Container", props: { style: { backgroundColor: "#123456" } } }, { theme })), ["design-hardcoded-color"]);
@@ -193,10 +195,15 @@ test("styles: keys, units, radii, colors, cast strings", () => {
 
 test("events and keys", () => {
   assert.deepEqual(errorsOf({ type: "Button", props: { text: "x" }, events: { tap: 3 } }), ["event-handler"]);
-  assert.deepEqual(errorsOf({ type: "Button", props: { text: "x" }, events: "tap" }), ["events-not-object"]);
+  assert.deepEqual(codes(validate({ type: "Button", props: { text: "x" }, events: "tap" })), ["events-not-object"]);
   assert.deepEqual(codes(validate({ type: "Button", props: { text: "x" }, events: { press: "go" } })), ["event-unknown"]);
   assert.deepEqual(codes(validate({ type: "Text", props: { text: "x" }, events: { tap: "go", swipeleft: "back" } })), []);
-  assert.deepEqual(errorsOf({ type: "Text", key: 3, props: { text: "x" } }), ["key-type"]);
+  assert.deepEqual(codes(validate({ type: "Text", key: 3, props: { text: "x" } })), ["key-type"]);
+  assert.deepEqual(codes(validate({ type: "Button", props: { text: "x" }, events: { tap: "on press" } })), ["event-handler-name"]);
+  // Differently labelled buttons on one tap handler cannot be told apart.
+  const shared = validate({ type: "Row", children: ["÷", "×", "="].map((k) => ({ type: "Expanded", children: [{ type: "Button", props: { text: k }, events: { tap: "__app0_key__" } }] })) });
+  assert.deepEqual(codes(shared, "warning"), ["handler-shared"]);
+  assert.match(shared.issues.find((i) => i.code === "handler-shared").message, /"÷", "×", "="/);
   assert.deepEqual(errorsOf({ type: "Column", children: [{ ...T("a"), key: "k" }, { ...T("b"), key: "k" }] }), ["key-duplicate-sibling"]);
   assert.deepEqual(errorsOf({ type: "Column", children: [{ type: "Card", children: [{ type: "Button", key: "go", props: { text: "a" }, events: { tap: "a" } }] }, { type: "Button", key: "go", props: { text: "b" }, events: { tap: "b" } }] }), ["key-duplicate"]);
   assert.deepEqual(codes(validate({ type: "TextField", props: { label: "n" }, events: { input: "n" } })), ["key-missing"]);

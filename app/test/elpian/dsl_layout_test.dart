@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:aseman/src/core/theme/app_theme.dart';
+import 'package:aseman/src/elpian/core/elpian_engine.dart' show NodeErrorBox;
 import 'package:aseman/src/features/tools/ui_kit/kit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -224,10 +225,14 @@ void main() {
       }
       final e = tester.takeException();
       if (e != null) errors.add('$e');
-      if (c['flutter'] == 'throws') {
-        expect(errors, isNotEmpty, reason: 'the validator calls this an error, but it rendered');
+      // A node whose builder threw draws its inline error box instead.
+      // (Only looked for when layout succeeded: a broken tree is not walkable.)
+      final boxed = errors.isEmpty && find.byType(NodeErrorBox).evaluate().isNotEmpty;
+      if (c['flutter'] == 'breaks') {
+        expect(errors.isNotEmpty || boxed, isTrue, reason: 'the validator calls this an error, but it rendered');
       } else {
         expect(errors, isEmpty, reason: 'the validator lets this through, but it threw: ${errors.isEmpty ? '' : errors.first.split('\n').first}');
+        expect(boxed, isFalse, reason: 'the validator lets this through, but a node failed to build');
       }
     });
   }

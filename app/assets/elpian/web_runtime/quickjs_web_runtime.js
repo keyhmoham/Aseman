@@ -143,13 +143,20 @@ function evalCode(machineId, code) {
   return typeof value === 'string' ? value : JSON.stringify(value ?? '');
 }
 
+// The callee expression of a handler name: identifiers and dotted paths as
+// written, anything else (a name with spaces or symbols) looked up on
+// globalThis, so it is still found instead of being a syntax error.
+function callee(funcName) {
+  return /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/.test(funcName) ? funcName : `globalThis[${JSON.stringify(funcName)}]`;
+}
+
 function callFunction(machineId, funcName) {
-  return evalCode(machineId, `${funcName}();`);
+  return evalCode(machineId, `${callee(funcName)}();`);
 }
 
 function callFunctionWithInput(machineId, funcName, inputJson) {
   const escaped = JSON.stringify(inputJson);
-  return evalCode(machineId, `${funcName}(JSON.parse(${escaped}));`);
+  return evalCode(machineId, `${callee(funcName)}(JSON.parse(${escaped}));`);
 }
 
 function disposeMachine(machineId) {

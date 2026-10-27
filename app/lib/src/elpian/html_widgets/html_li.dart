@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import '../models/elpian_node.dart';
+
+import '../core/lenient.dart';
 import '../css/css_properties.dart';
+import '../models/elpian_node.dart';
 
 class HtmlLi {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final text = node.props['text'] as String? ?? '';
+    final text = looseStr(node.props['text']) ?? '';
     final child = children.isNotEmpty ? children.first : Text(text);
 
     final bulletStyle =

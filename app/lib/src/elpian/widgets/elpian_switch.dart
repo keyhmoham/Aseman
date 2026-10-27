@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../models/elpian_node.dart';
+
 import '../core/elpian_services.dart';
+import '../core/lenient.dart';
+import '../models/elpian_node.dart';
 import 'elpian_expressive.dart';
 
 /// A Material 3 switch: its thumb grows and shows a check when on.
@@ -13,7 +15,7 @@ class ElpianSwitch {
     // Captured while the engine's service scope is active: the handlers
     // run later, outside it.
     final dispatcher = ElpianServices.current.events;
-    final value = node.props['value'] as bool? ?? false;
+    final value = looseBool(node.props['value']) ?? false;
     final elementId = node.key ?? 'element_${node.hashCode}';
     final disabled = boolProp(node, 'disabled') == true;
     final icons = boolProp(node, 'icons') ?? true;

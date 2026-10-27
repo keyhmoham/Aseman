@@ -1,5 +1,5 @@
 {
- "comment": "Trees with the validator's verdict and what Flutter does with them ('breaks': throws, or the node draws its inline error box): deploy/sandbox-computer/appui/elpian/test/validate.test.mjs checks the first, app/test/elpian/dsl_layout_test.dart the second.",
+ "comment": "Trees with the validator's verdict and what Flutter does with them ('breaks': throws, or the node draws its inline error box; 'lenient': the current engine reads the odd value leniently and renders, but older clients throw, so the validator still calls it an error): deploy/sandbox-computer/appui/elpian/test/validate.test.mjs checks the first, app/test/elpian/dsl_layout_test.dart the second.",
  "cases": [
   {
    "name": "Switch value as a string",
@@ -11,7 +11,7 @@
     }
    },
    "validator": "error",
-   "flutter": "breaks"
+   "flutter": "lenient"
   },
   {
    "name": "TextField hint as a number",
@@ -25,7 +25,7 @@
     }
    },
    "validator": "error",
-   "flutter": "breaks"
+   "flutter": "lenient"
   },
   {
    "name": "Expanded flex 0",
@@ -87,7 +87,7 @@
     }
    },
    "validator": "error",
-   "flutter": "breaks"
+   "flutter": "lenient"
   },
   {
    "name": "Expanded flex as a numeric string",
@@ -130,7 +130,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "breaks"
+   "flutter": "lenient"
   },
   {
    "name": "a numeric key",
@@ -309,7 +309,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "breaks"
+   "flutter": "lenient"
   },
   {
    "name": "justifyContent as a number",
@@ -330,7 +330,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "breaks"
+   "flutter": "lenient"
   },
   {
    "name": "style as a CSS string (ignored)",
@@ -361,7 +361,7 @@
     ]
    },
    "validator": "error",
-   "flutter": "breaks"
+   "flutter": "lenient"
   },
   {
    "name": "a Scaffold in a ListView",

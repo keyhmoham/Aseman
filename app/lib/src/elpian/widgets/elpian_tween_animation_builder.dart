@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/lenient.dart';
 import '../models/elpian_node.dart';
 
 class ElpianTweenAnimationBuilder {
@@ -10,7 +11,7 @@ class ElpianTweenAnimationBuilder {
     final curve = node.style?.transitionCurve ?? Curves.linear;
     final begin = node.style?.animationFrom ?? 0.0;
     final end = node.style?.animationTo ?? 1.0;
-    final tweenType = node.props['tweenType'] as String? ?? 'opacity';
+    final tweenType = looseStr(node.props['tweenType']) ?? 'opacity';
 
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: begin, end: end),

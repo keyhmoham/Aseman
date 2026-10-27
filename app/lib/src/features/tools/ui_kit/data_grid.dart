@@ -4,6 +4,7 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:aseman/src/elpian/core/lenient.dart';
 import 'package:flutter/material.dart';
 
 import 'charts/cartesian_chart.dart' show ChartSelect;
@@ -33,13 +34,13 @@ class GridColumn {
       field: f,
       label: '${m['label'] ?? m['title'] ?? _title(f)}',
       type: '${m['type'] ?? 'text'}',
-      format: m['format'] as String?,
-      align: m['align'] as String?,
+      format: looseStr(m['format']),
+      align: looseStr(m['align']),
       width: asNum(m['width'])?.toDouble(),
       sortable: asBool(m['sortable'], true),
       max: asNum(m['max'])?.toDouble(),
       colors: asMap(m['colors']),
-      color: m['color'] as String?,
+      color: looseStr(m['color']),
     );
   }
 
@@ -113,7 +114,7 @@ class _DataGridState extends State<DataGrid> {
   @override
   void initState() {
     super.initState();
-    _sortField = widget.props['sortBy'] as String?;
+    _sortField = looseStr(widget.props['sortBy']);
     _ascending = widget.props['sortDirection'] != 'desc';
   }
 
@@ -152,7 +153,7 @@ class _DataGridState extends State<DataGrid> {
     final searchable = asBool(props['search']);
     final sortable = asBool(props['sortable'], true);
     final pageSize = asInt(props['pageSize'], 0);
-    final maxHeight = asNum(props['maxHeight'])?.toDouble();
+    final maxHeight = asSizeOrNull(props['maxHeight']);
     final rowHeight = dense ? 36.0 : 44.0;
 
     // Filter, then sort (stable, by original index), then page.

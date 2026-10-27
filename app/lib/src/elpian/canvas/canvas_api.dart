@@ -1,10 +1,11 @@
-import 'dart:ui' as ui;
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../core/lenient.dart';
 import '../css/css_parser.dart';
 import '../css/css_properties.dart';
 import 'canvas_image_cache.dart';
@@ -106,7 +107,7 @@ class CanvasCommand {
   });
 
   factory CanvasCommand.fromJson(Map<String, dynamic> json) {
-    final typeStr = json['type'] as String;
+    final typeStr = looseStr(json['type']);
     final type = CanvasCommandType.values.firstWhere(
       (e) => e.name == typeStr,
       orElse: () => CanvasCommandType.custom,
@@ -114,10 +115,8 @@ class CanvasCommand {
 
     return CanvasCommand(
       type: type,
-      params: json['params'] != null
-          ? Map<String, dynamic>.from(json['params'] as Map)
-          : {},
-      id: json['id'] as String?,
+      params: json['params'] is Map ? Map<String, dynamic>.from(json['params'] as Map) : {},
+      id: looseStr(json['id']),
     );
   }
 
@@ -749,11 +748,11 @@ class CanvasAPIExecutor {
         break;
 
       case CanvasCommandType.setLineCap:
-        currentState.lineCap = _parseLineCap(params['cap'] as String?);
+        currentState.lineCap = _parseLineCap(looseStr(params['cap']));
         break;
 
       case CanvasCommandType.setLineJoin:
-        currentState.lineJoin = _parseLineJoin(params['join'] as String?);
+        currentState.lineJoin = _parseLineJoin(looseStr(params['join']));
         break;
 
       case CanvasCommandType.setGlobalAlpha:
@@ -803,20 +802,20 @@ class CanvasAPIExecutor {
 
       case CanvasCommandType.setGlobalCompositeOperation:
         currentState.blendMode =
-            _parseBlendMode(params['operation'] as String?);
+            _parseBlendMode(looseStr(params['operation']));
         break;
 
       case CanvasCommandType.setFont:
-        currentState.font = params['font'] as String? ?? currentState.font;
+        currentState.font = looseStr(params['font']) ?? currentState.font;
         break;
 
       case CanvasCommandType.setTextAlign:
         currentState.textAlign =
-            _parseTextAlignName(params['align'] as String?);
+            _parseTextAlignName(looseStr(params['align']));
         break;
 
       case CanvasCommandType.setTextBaseline:
-        final name = params['baseline'] as String?;
+        final name = looseStr(params['baseline']);
         currentState.textBaselineName =
             _baselineNames.contains(name) ? name! : 'alphabetic';
         currentState.textBaseline = _parseTextBaselineName(name);

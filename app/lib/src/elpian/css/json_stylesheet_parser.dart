@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../css/stylesheet.dart';
+
 import '../core/elpian_services.dart';
+import '../core/lenient.dart';
+import '../css/stylesheet.dart';
 
 /// JSON-based CSS stylesheet parser
 /// Allows defining stylesheets in JSON format
@@ -81,7 +83,7 @@ class JsonStylesheetParser {
 
   /// Parse a single rule
   static void _parseRule(Map<String, dynamic> rule, CSSStylesheet stylesheet) {
-    final selector = rule['selector'] as String?;
+    final selector = looseStr(rule['selector']);
     if (selector == null) return;
 
     final styles = rule['styles'] as Map<String, dynamic>?;
@@ -93,7 +95,7 @@ class JsonStylesheetParser {
   /// Parse media query
   static void _parseMediaQuery(
       Map<String, dynamic> mq, CSSStylesheet stylesheet) {
-    final query = mq['query'] as String?;
+    final query = looseStr(mq['query']);
     if (query == null) return;
 
     final mqStylesheet = CSSStylesheet();
@@ -125,7 +127,7 @@ class JsonStylesheetParser {
   /// Parse keyframes for animations
   static void _parseKeyframe(
       Map<String, dynamic> keyframe, CSSStylesheet stylesheet) {
-    final name = keyframe['name'] as String?;
+    final name = looseStr(keyframe['name']);
     if (name == null) return;
 
     final frames = keyframe['frames'] as List?;
@@ -133,7 +135,7 @@ class JsonStylesheetParser {
       final keyframeFrames = <KeyframeFrame>[];
       for (final frame in frames) {
         if (frame is Map<String, dynamic>) {
-          final offset = frame['offset'] as num?;
+          final offset = looseNum(frame['offset']);
           final styles = frame['styles'] as Map<String, dynamic>?;
 
           if (offset != null && styles != null) {

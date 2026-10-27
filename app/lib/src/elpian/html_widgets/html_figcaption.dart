@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import '../models/elpian_node.dart';
+
+import '../core/lenient.dart';
 import '../css/css_properties.dart';
 import '../models/css_style.dart';
+import '../models/elpian_node.dart';
 
 class HtmlFigcaption {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final text = node.props['text'] as String? ?? '';
+    final text = looseStr(node.props['text']) ?? '';
 
     const defaultStyle = CSSStyle(
       fontStyle: FontStyle.italic,

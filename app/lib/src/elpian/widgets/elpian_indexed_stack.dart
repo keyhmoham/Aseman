@@ -4,7 +4,7 @@ import 'elpian_expressive.dart';
 
 class ElpianIndexedStack {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final index = numProp(node, 'index')?.toInt() ?? 0;
+    final index = children.isEmpty ? null : (numProp(node, 'index')?.toInt() ?? 0).clamp(0, children.length - 1);
 
     return IndexedStack(
       index: index,

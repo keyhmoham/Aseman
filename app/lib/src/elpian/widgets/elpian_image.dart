@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import '../models/elpian_node.dart';
+
+import '../core/lenient.dart';
 import '../core/media.dart';
 import '../css/css_properties.dart';
+import '../models/elpian_node.dart';
 
 class ElpianImage {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final src = node.props['src'] as String? ?? '';
+    final src = looseStr(node.props['src']) ?? '';
     final fit = parseBoxFit(node.props['fit']) ?? BoxFit.contain;
     final alt = node.props['alt'] == null ? null : '${node.props['alt']}';
 

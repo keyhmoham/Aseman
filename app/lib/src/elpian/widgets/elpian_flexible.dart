@@ -5,7 +5,7 @@ import 'elpian_expressive.dart';
 class ElpianFlexible {
   static Widget build(ElpianNode node, List<Widget> children) {
     final child = children.isNotEmpty ? children.first : Container();
-    final flex = numProp(node, 'flex')?.toInt() ?? 1;
+    final flex = flexProp(node);
 
     return Flexible(
       flex: flex,

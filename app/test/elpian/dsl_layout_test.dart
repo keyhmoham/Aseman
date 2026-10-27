@@ -203,8 +203,9 @@ void main() {
     expect(parent, parents, reason: 'schema.mjs LAYOUT.parents');
   });
 
-  // What the validator calls an error really breaks; what it lets through
-  // really renders (the same cases validate.test.mjs checks the verdicts of).
+  // What the validator calls an error really breaks (or, marked 'lenient',
+  // broke on older clients and renders now); what it lets through really
+  // renders (the same cases validate.test.mjs checks the verdicts of).
   final cases = (jsonDecode(File('test/elpian/fixtures/validator_cases.json').readAsStringSync())['cases'] as List).cast<Map<String, dynamic>>();
   for (final c in cases) {
     testWidgets('validator case: ${c['name']} ${c['flutter']}', (tester) async {

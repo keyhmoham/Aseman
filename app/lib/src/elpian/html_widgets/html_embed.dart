@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../models/elpian_node.dart';
+
+import '../core/lenient.dart';
 import '../css/css_properties.dart';
+import '../models/elpian_node.dart';
 import 'html_audio.dart';
 import 'html_embedded_content.dart';
 import 'html_img.dart';
@@ -8,7 +10,7 @@ import 'html_video.dart';
 
 class HtmlEmbed {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final src = node.props['src'] as String? ?? '';
+    final src = looseStr(node.props['src']) ?? '';
 
     Widget result = _buildTypedEmbeddedWidget(node, src);
 
@@ -20,7 +22,7 @@ class HtmlEmbed {
   }
 
   static Widget _buildTypedEmbeddedWidget(ElpianNode node, String src) {
-    final type = (node.props['type'] as String? ?? '').toLowerCase();
+    final type = (looseStr(node.props['type']) ?? '').toLowerCase();
 
     if (looksLikeImage(type, src)) {
       return HtmlImg.build(node, const []);

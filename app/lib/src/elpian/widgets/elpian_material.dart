@@ -205,7 +205,7 @@ class ElpianListTile {
           final scheme = theme.colorScheme;
           Widget? leading = slots['leading'];
           final avatar = textProp(node, 'leadingAvatar');
-          final image = textProp(node, 'leadingImage');
+          final image = _imageUrl(textProp(node, 'leadingImage'));
           if (leading == null && image != null) {
             leading = CircleAvatar(
               radius: 20,
@@ -527,7 +527,7 @@ class _SearchBarViewState extends State<_SearchBarView> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final props = widget.node.props;
-    final elevation = numProp(widget.node, 'elevation') ?? 0;
+    final elevation = sizeProp(widget.node, 'elevation') ?? 0;
     final trailing = iconWidget(props['trailingIcon']);
     return SearchBar(
       controller: _controller,
@@ -559,7 +559,7 @@ class ElpianLoadingIndicator {
     return _styled(
       node,
       ExpressiveLoadingIndicator(
-        size: numProp(node, 'size') ?? 48,
+        size: sizeProp(node, 'size') ?? 48,
         contained: boolProp(node, 'contained') == true,
         color: node.style?.color,
       ),
@@ -676,4 +676,10 @@ class _MorphPainter extends CustomPainter {
   @override
   bool shouldRepaint(_MorphPainter old) =>
       old.color != color || old.scale != scale;
+}
+
+/// [url] when it is one an image can load from (http(s) or data), else null.
+String? _imageUrl(String? url) {
+  final uri = url == null ? null : Uri.tryParse(url);
+  return uri != null && (uri.isScheme('http') || uri.isScheme('https') || uri.isScheme('data')) ? url : null;
 }

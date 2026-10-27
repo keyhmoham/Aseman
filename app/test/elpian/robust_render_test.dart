@@ -56,16 +56,21 @@ void main() {
   });
 
   testWidgets('a node that fails to build shows its error; siblings still draw', (tester) async {
-    await pump(tester, {
-      'type': 'Column',
-      'children': [
-        {'type': 'Switch', 'props': {'value': 'true'}},
-        {'type': 'Text', 'props': {'text': 'still here'}},
-      ],
-    });
+    final engine = kitEngine()..registerWidget('Boom', (node, children) => throw StateError('boom'));
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: engine.renderFromJson({
+          'type': 'Column',
+          'children': [
+            {'type': 'Boom'},
+            {'type': 'Text', 'props': {'text': 'still here'}},
+          ],
+        }),
+      ),
+    ));
     expect(tester.takeException(), isNull);
     expect(find.byType(NodeErrorBox), findsOneWidget);
-    expect(find.textContaining('Switch:'), findsOneWidget);
+    expect(find.textContaining('Boom:'), findsOneWidget);
     expect(find.text('still here'), findsOneWidget);
   });
 

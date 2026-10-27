@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
+import '../core/lenient.dart';
 import '../models/css_style.dart';
 
 class CSSParser {
@@ -53,36 +54,40 @@ class CSSParser {
 
   static CSSStyle _parseUncached(Map<String, dynamic> styleMap) {
     return CSSStyle(
-      width: parseDimension(styleMap['width'], isWidth: true),
-      height: parseDimension(styleMap['height'], isWidth: false),
+      width: _nonNegative(parseDimension(styleMap['width'], isWidth: true)),
+      height: _nonNegative(parseDimension(styleMap['height'], isWidth: false)),
       widthFactor: _percentFactor(styleMap['width']),
       heightFactor: _percentFactor(styleMap['height']),
       aspectRatio:
           parseAspectRatio(styleMap['aspectRatio'] ?? styleMap['aspect-ratio']),
-      minWidth: parseDimension(styleMap['minWidth'] ?? styleMap['min-width'],
-          isWidth: true),
-      maxWidth: parseDimension(styleMap['maxWidth'] ?? styleMap['max-width'],
-          isWidth: true),
-      minHeight: parseDimension(styleMap['minHeight'] ?? styleMap['min-height'],
-          isWidth: false),
-      maxHeight: parseDimension(styleMap['maxHeight'] ?? styleMap['max-height'],
-          isWidth: false),
-      padding: _parseEdgeInsetsFor(styleMap, 'padding'),
-      margin: _parseEdgeInsetsFor(styleMap, 'margin'),
+      minWidth: _nonNegative(parseDimension(
+          styleMap['minWidth'] ?? styleMap['min-width'],
+          isWidth: true)),
+      maxWidth: _nonNegative(parseDimension(
+          styleMap['maxWidth'] ?? styleMap['max-width'],
+          isWidth: true)),
+      minHeight: _nonNegative(parseDimension(
+          styleMap['minHeight'] ?? styleMap['min-height'],
+          isWidth: false)),
+      maxHeight: _nonNegative(parseDimension(
+          styleMap['maxHeight'] ?? styleMap['max-height'],
+          isWidth: false)),
+      padding: _nonNegativeInsets(_parseEdgeInsetsFor(styleMap, 'padding')),
+      margin: _nonNegativeInsets(_parseEdgeInsetsFor(styleMap, 'margin')),
       alignment: parseAlignment(styleMap['alignment']),
-      position: styleMap['position'] as String?,
+      position: looseStr(styleMap['position']),
       top: parseDimension(styleMap['top'], isWidth: false),
       right: parseDimension(styleMap['right'], isWidth: true),
       bottom: parseDimension(styleMap['bottom'], isWidth: false),
       left: parseDimension(styleMap['left'], isWidth: true),
       zIndex: parseDouble(styleMap['zIndex'] ?? styleMap['z-index']),
-      display: styleMap['display'] as String?,
+      display: looseStr(styleMap['display']),
       flexDirection:
-          styleMap['flexDirection'] ?? styleMap['flex-direction'] as String?,
+          looseStr(styleMap['flexDirection'] ?? styleMap['flex-direction']),
       justifyContent:
-          styleMap['justifyContent'] ?? styleMap['justify-content'] as String?,
-      alignItems: styleMap['alignItems'] ?? styleMap['align-items'] as String?,
-      flex: parseInt(styleMap['flex']),
+          looseStr(styleMap['justifyContent'] ?? styleMap['justify-content']),
+      alignItems: looseStr(styleMap['alignItems'] ?? styleMap['align-items']),
+      flex: _nonNegativeInt(parseInt(styleMap['flex'])),
       flexGrow: parseInt(styleMap['flexGrow'] ?? styleMap['flex-grow']),
       flexShrink: parseInt(styleMap['flexShrink'] ?? styleMap['flex-shrink']),
       flexBasis: (styleMap['flexBasis'] ?? styleMap['flex-basis'])?.toString(),
@@ -101,8 +106,7 @@ class CSSParser {
           (_isGradientValue(styleMap['background'])
               ? null
               : parseColor(styleMap['background'])),
-      backgroundImage: styleMap['backgroundImage'] ??
-          styleMap['background-image'] as String?,
+      backgroundImage: looseStr(styleMap['backgroundImage'] ?? styleMap['background-image']),
       backgroundSize: _parseBoxFit(
           styleMap['backgroundSize'] ?? styleMap['background-size']),
       backgroundPosition: parseAlignment(
@@ -119,14 +123,14 @@ class CSSParser {
       borderWidth:
           parseDouble(styleMap['borderWidth'] ?? styleMap['border-width']),
       borderStyle:
-          styleMap['borderStyle'] ?? styleMap['border-style'] as String?,
+          looseStr(styleMap['borderStyle'] ?? styleMap['border-style']),
       color: parseColor(styleMap['color']),
       fontSize: parseDouble(styleMap['fontSize'] ?? styleMap['font-size']),
       fontWeight:
           _parseFontWeight(styleMap['fontWeight'] ?? styleMap['font-weight']),
       fontStyle:
           _parseFontStyle(styleMap['fontStyle'] ?? styleMap['font-style']),
-      fontFamily: styleMap['fontFamily'] ?? styleMap['font-family'] as String?,
+      fontFamily: looseStr(styleMap['fontFamily'] ?? styleMap['font-family']),
       letterSpacing:
           parseDouble(styleMap['letterSpacing'] ?? styleMap['letter-spacing']),
       wordSpacing:
@@ -140,7 +144,7 @@ class CSSParser {
       textOverflow: _parseTextOverflow(
           styleMap['textOverflow'] ?? styleMap['text-overflow']),
       textTransform:
-          styleMap['textTransform'] ?? styleMap['text-transform'] as String?,
+          looseStr(styleMap['textTransform'] ?? styleMap['text-transform']),
       boxShadow:
           _parseBoxShadow(styleMap['boxShadow'] ?? styleMap['box-shadow']),
       textShadow:
@@ -149,31 +153,27 @@ class CSSParser {
       rotate: parseDouble(styleMap['rotate']),
       scale: parseDouble(styleMap['scale']),
       translate: parseOffset(styleMap['translate']),
-      opacity: parseDouble(styleMap['opacity']),
-      visible: styleMap['visible'] as bool?,
-      cursor: styleMap['cursor'] as String?,
+      opacity: parseDouble(styleMap['opacity'])?.clamp(0.0, 1.0),
+      visible: looseBool(styleMap['visible']),
+      cursor: looseStr(styleMap['cursor']),
       pointerEvents:
-          styleMap['pointerEvents'] ?? styleMap['pointer-events'] as String?,
+          looseStr(styleMap['pointerEvents'] ?? styleMap['pointer-events']),
       gap: parseDouble(styleMap['gap']),
       rowGap: parseDouble(styleMap['rowGap'] ?? styleMap['row-gap']),
       columnGap: parseDouble(styleMap['columnGap'] ?? styleMap['column-gap']),
-      flexWrap: styleMap['flexWrap'] ?? styleMap['flex-wrap'] as String?,
+      flexWrap: looseStr(styleMap['flexWrap'] ?? styleMap['flex-wrap']),
       // CSS grid track definitions. The fields existed on CSSStyle but were
       // never read here, so every `display:grid` container fell through to a
       // plain vertical stack (finding #6). HtmlDiv now maps these to a
       // responsive Wrap.
-      gridTemplateColumns: styleMap['gridTemplateColumns'] ??
-          styleMap['grid-template-columns'] as String?,
-      gridTemplateRows: styleMap['gridTemplateRows'] ??
-          styleMap['grid-template-rows'] as String?,
-      gridTemplateAreas: styleMap['gridTemplateAreas'] ??
-          styleMap['grid-template-areas'] as String?,
-      gridAutoColumns: styleMap['gridAutoColumns'] ??
-          styleMap['grid-auto-columns'] as String?,
+      gridTemplateColumns: looseStr(styleMap['gridTemplateColumns'] ?? styleMap['grid-template-columns']),
+      gridTemplateRows: looseStr(styleMap['gridTemplateRows'] ?? styleMap['grid-template-rows']),
+      gridTemplateAreas: looseStr(styleMap['gridTemplateAreas'] ?? styleMap['grid-template-areas']),
+      gridAutoColumns: looseStr(styleMap['gridAutoColumns'] ?? styleMap['grid-auto-columns']),
       gridAutoRows:
-          styleMap['gridAutoRows'] ?? styleMap['grid-auto-rows'] as String?,
+          looseStr(styleMap['gridAutoRows'] ?? styleMap['grid-auto-rows']),
       gridAutoFlow:
-          styleMap['gridAutoFlow'] ?? styleMap['grid-auto-flow'] as String?,
+          looseStr(styleMap['gridAutoFlow'] ?? styleMap['grid-auto-flow']),
       gridColumnGap: parseDouble(styleMap['gridColumnGap'] ??
           styleMap['grid-column-gap'] ??
           styleMap['columnGap'] ??
@@ -187,28 +187,23 @@ class CSSParser {
           styleMap['transitionDuration'] ?? styleMap['transition-duration']),
       transitionCurve: parseCurve(
           styleMap['transitionCurve'] ?? styleMap['transition-curve']),
-      transitionProperty: styleMap['transitionProperty'] ??
-          styleMap['transition-property'] as String?,
+      transitionProperty: looseStr(styleMap['transitionProperty'] ?? styleMap['transition-property']),
       transitionDelay: parseDuration(
           styleMap['transitionDelay'] ?? styleMap['transition-delay']),
       animationName:
-          styleMap['animationName'] ?? styleMap['animation-name'] as String?,
+          looseStr(styleMap['animationName'] ?? styleMap['animation-name']),
       animationDuration: parseDuration(
           styleMap['animationDuration'] ?? styleMap['animation-duration']),
-      animationTimingFunction: styleMap['animationTimingFunction'] ??
-          styleMap['animation-timing-function'] as String?,
+      animationTimingFunction: looseStr(styleMap['animationTimingFunction'] ?? styleMap['animation-timing-function']),
       animationDelay: parseDuration(
           styleMap['animationDelay'] ?? styleMap['animation-delay']),
       animationIterationCount: parseInt(styleMap['animationIterationCount'] ??
           styleMap['animation-iteration-count']),
-      animationDirection: styleMap['animationDirection'] ??
-          styleMap['animation-direction'] as String?,
-      animationFillMode: styleMap['animationFillMode'] ??
-          styleMap['animation-fill-mode'] as String?,
-      animationPlayState: styleMap['animationPlayState'] ??
-          styleMap['animation-play-state'] as String?,
+      animationDirection: looseStr(styleMap['animationDirection'] ?? styleMap['animation-direction']),
+      animationFillMode: looseStr(styleMap['animationFillMode'] ?? styleMap['animation-fill-mode']),
+      animationPlayState: looseStr(styleMap['animationPlayState'] ?? styleMap['animation-play-state']),
       animateOnBuild:
-          styleMap['animateOnBuild'] ?? styleMap['animate-on-build'] as bool?,
+          looseBool(styleMap['animateOnBuild'] ?? styleMap['animate-on-build']),
       staggerDelay:
           parseDuration(styleMap['staggerDelay'] ?? styleMap['stagger-delay']),
       staggerChildren:
@@ -243,10 +238,9 @@ class CSSParser {
           styleMap['shimmerBaseColor'] ?? styleMap['shimmer-base-color']),
       shimmerHighlightColor: parseColor(styleMap['shimmerHighlightColor'] ??
           styleMap['shimmer-highlight-color']),
-      animationAutoReverse: styleMap['animationAutoReverse'] ??
-          styleMap['animation-auto-reverse'] as bool?,
+      animationAutoReverse: looseBool(styleMap['animationAutoReverse'] ?? styleMap['animation-auto-reverse']),
       animationRepeat:
-          styleMap['animationRepeat'] ?? styleMap['animation-repeat'] as bool?,
+          looseBool(styleMap['animationRepeat'] ?? styleMap['animation-repeat']),
       keyframes: _parseKeyframes(styleMap['keyframes']),
       // Tables.
       verticalAlign:
@@ -646,6 +640,23 @@ class CSSParser {
       left: left ?? x ?? b.left,
     );
   }
+
+  /// Sizes, padding, margins and flex below zero assert in Flutter's layout;
+  /// read a negative size as absent and a negative side as zero.
+  static double? _nonNegative(double? v) =>
+      v == null || v < 0 || v.isNaN ? null : v;
+
+  static int? _nonNegativeInt(int? v) => v == null || v < 0 ? null : v;
+
+  static EdgeInsets? _nonNegativeInsets(EdgeInsets? e) =>
+      e == null || e.isNonNegative
+          ? e
+          : EdgeInsets.fromLTRB(
+              e.left < 0 ? 0 : e.left,
+              e.top < 0 ? 0 : e.top,
+              e.right < 0 ? 0 : e.right,
+              e.bottom < 0 ? 0 : e.bottom,
+            );
 
   static EdgeInsets? _parseEdgeInsets(dynamic value) {
     if (value == null) return null;
@@ -1085,7 +1096,7 @@ class CSSParser {
     // CSS string form, e.g. `linear-gradient(135deg, #F4C95B, #E0902F)`.
     if (value is String) return _parseCssGradientString(value);
     if (value is Map) {
-      final type = value['type'] as String?;
+      final type = looseStr(value['type']);
       final colors = (value['colors'] as List?)
           ?.map((c) => parseColor(c) ?? Colors.transparent)
           .toList();

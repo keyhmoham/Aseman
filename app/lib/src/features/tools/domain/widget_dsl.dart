@@ -6,6 +6,8 @@
 /// app's backend VM.
 library;
 
+import 'package:aseman/src/elpian/core/lenient.dart';
+
 class DeskWidgetDsl {
   const DeskWidgetDsl({
     required this.botId,
@@ -31,13 +33,13 @@ class DeskWidgetDsl {
     final dsl = entry['dsl'];
     final d = dsl is Map<String, dynamic> ? dsl : <String, dynamic>{};
     return DeskWidgetDsl(
-      botId: (entry['bot_id'] as String?) ?? (d['bot_id'] as String?) ?? '',
-      name: (entry['name'] as String?) ?? '',
-      kind: (entry['kind'] as String?) ?? 'tool',
-      status: (entry['status'] as String?) ?? '',
-      title: (d['title'] as String?) ?? (entry['name'] as String?) ?? 'Widget',
-      version: (d['version'] as num?)?.toInt() ?? 1,
-      refreshSec: (d['refresh_sec'] as num?)?.toInt() ?? 10,
+      botId: (looseStr(entry['bot_id'])) ?? (looseStr(d['bot_id'])) ?? '',
+      name: (looseStr(entry['name'])) ?? '',
+      kind: (looseStr(entry['kind'])) ?? 'tool',
+      status: (looseStr(entry['status'])) ?? '',
+      title: (looseStr(d['title'])) ?? (looseStr(entry['name'])) ?? 'Widget',
+      version: (looseNum(d['version']))?.toInt() ?? 1,
+      refreshSec: (looseNum(d['refresh_sec']))?.toInt() ?? 10,
       rows: DslRow.listFrom(d['rows']),
     );
   }
@@ -78,13 +80,13 @@ class DslRow {
   final DslAction? submit;
 
   factory DslRow.fromJson(Map<String, dynamic> json) => DslRow(
-        type: json['type'] as String? ?? 'label',
-        label: json['label'] as String? ?? '',
-        text: json['text'] as String? ?? '',
+        type: looseStr(json['type']) ?? 'label',
+        label: looseStr(json['label']) ?? '',
+        text: looseStr(json['text']) ?? '',
         value: json['value'],
-        delta: json['delta'] as String? ?? '',
-        color: json['color'] as String? ?? '',
-        icon: json['icon'] as String? ?? '',
+        delta: looseStr(json['delta']) ?? '',
+        color: looseStr(json['color']) ?? '',
+        icon: looseStr(json['icon']) ?? '',
         data: (json['data'] as List?)
                 ?.whereType<num>()
                 .map((e) => e.toDouble())
@@ -95,9 +97,9 @@ class DslRow {
                 .map((e) => DslRow.fromJson(e.cast<String, dynamic>()))
                 .toList() ??
             const [],
-        min: (json['min'] as num?)?.toDouble() ?? 0,
-        max: (json['max'] as num?)?.toDouble() ?? 0,
-        toggle: json['toggle'] as bool? ?? false,
+        min: (looseNum(json['min']))?.toDouble() ?? 0,
+        max: (looseNum(json['max']))?.toDouble() ?? 0,
+        toggle: looseBool(json['toggle']) ?? false,
         action: _action(json['action']),
         submit: _action(json['submit']),
       );
@@ -130,10 +132,10 @@ class DslAction {
   final String confirm;
 
   factory DslAction.fromJson(Map<String, dynamic> json) => DslAction(
-        op: json['op'] as String? ?? '',
+        op: looseStr(json['op']) ?? '',
         args: (json['args'] as Map?)?.cast<String, dynamic>() ?? const {},
-        label: json['label'] as String? ?? '',
-        confirm: json['confirm'] as String? ?? '',
+        label: looseStr(json['label']) ?? '',
+        confirm: looseStr(json['confirm']) ?? '',
       );
 
   /// Renders a copy of this action with `{{placeholder}}` values substituted

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import '../models/elpian_node.dart';
+
 import '../core/document_index.dart';
 import '../core/elpian_services.dart';
+import '../core/lenient.dart';
 import '../css/css_properties.dart';
+import '../models/elpian_node.dart';
 
 /// An `<input>` element (text / number / password / checkbox / radio).
 ///
@@ -63,13 +65,13 @@ class _HtmlInputState extends State<HtmlInput> {
   bool _checked = false;
 
   String get _elementId => widget.node.key ?? 'element_${widget.node.hashCode}';
-  String get _type => widget.node.props['type'] as String? ?? 'text';
+  String get _type => looseStr(widget.node.props['type']) ?? 'text';
 
   @override
   void initState() {
     super.initState();
     if (_type == 'checkbox') {
-      _checked = widget.node.props['checked'] as bool? ?? false;
+      _checked = looseBool(widget.node.props['checked']) ?? false;
     } else if (_type != 'radio') {
       _controller = TextEditingController(
         text: widget.node.props['value']?.toString() ?? '',
@@ -102,7 +104,7 @@ class _HtmlInputState extends State<HtmlInput> {
   @override
   Widget build(BuildContext context) {
     final node = widget.node;
-    final placeholder = node.props['placeholder'] as String? ?? '';
+    final placeholder = looseStr(node.props['placeholder']) ?? '';
     Widget result;
 
     if (_type == 'checkbox') {

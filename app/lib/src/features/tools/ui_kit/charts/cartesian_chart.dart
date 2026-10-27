@@ -7,6 +7,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../elpian/core/lenient.dart';
 import '../palette.dart';
 import '../values.dart';
 import 'chart_frame.dart';
@@ -92,7 +93,7 @@ class ChartSpec {
           if (asNum(field(r, f)) != null) asNum(field(r, f))!.toDouble()
       ];
       rows =
-          _bins(values, asInt(props['bins'], 0), props['xFormat'] as String?);
+          _bins(values, asInt(props['bins'], 0), looseStr(props['xFormat']));
       x = 'label';
       props = {
         ...props,
@@ -161,8 +162,8 @@ class ChartSpec {
       rows: rows,
       xField: x,
       series: series,
-      title: props['title'] as String?,
-      subtitle: props['subtitle'] as String?,
+      title: looseStr(props['title']),
+      subtitle: looseStr(props['subtitle']),
       stacked: asBool(props['stacked']),
       horizontal: asBool(props['horizontal']) || props['type'] == 'hbar',
       smooth: asBool(props['smooth']),
@@ -171,10 +172,10 @@ class ChartSpec {
           props['zero'], type == 'bar' || type == 'area' || type == 'column'),
       valueLabels: asBool(props['valueLabels']),
       legend: props['legend'] is bool ? props['legend'] as bool : null,
-      xFormat: props['xFormat'] as String?,
-      yFormat: (props['yFormat'] ?? props['format']) as String?,
-      xTitle: props['xLabel'] as String? ?? props['xTitle'] as String?,
-      yTitle: props['yLabel'] as String? ?? props['yTitle'] as String?,
+      xFormat: looseStr(props['xFormat']),
+      yFormat: looseStr(props['yFormat'] ?? props['format']),
+      xTitle: looseStr(props['xLabel']) ?? looseStr(props['xTitle']),
+      yTitle: looseStr(props['yLabel']) ?? looseStr(props['yTitle']),
       min: asNum(props['min'])?.toDouble(),
       max: asNum(props['max'])?.toDouble(),
       height: asDouble(props['height'], 240).clamp(80, 1200),

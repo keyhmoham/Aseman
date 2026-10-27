@@ -24,6 +24,7 @@
 /// costs a single crossing.
 library;
 
+import 'package:aseman/src/elpian/core/lenient.dart';
 import 'godot_controller.dart';
 import 'godot_object.dart';
 import 'godot_values.dart';
@@ -124,11 +125,11 @@ class SceneDsl {
       controller.g3.environment(
         bg: parseColor(spec['bg']),
         ambient: parseColor(spec['ambient']),
-        ambientEnergy: spec['ambientEnergy'] as num? ?? 0.6,
+        ambientEnergy: looseNum(spec['ambientEnergy']) ?? 0.6,
       );
 
   GodotObject _camera(Map<String, Object?> spec) => controller.g3.camera(
-        fov: spec['fov'] as num?,
+        fov: looseNum(spec['fov']),
         current: spec['current'] != false,
         position: spec['position'],
         rotation: spec['rotation'],
@@ -141,23 +142,23 @@ class SceneDsl {
       case 'point':
         return g3.omniLight(
           color: parseColor(spec['color']),
-          energy: spec['energy'] as num? ?? 1.0,
-          range: spec['range'] as num?,
+          energy: looseNum(spec['energy']) ?? 1.0,
+          range: looseNum(spec['range']),
           position: spec['position'],
         );
       case 'spot':
         return g3.spotLight(
           color: parseColor(spec['color']),
-          energy: spec['energy'] as num? ?? 1.0,
-          range: spec['range'] as num?,
-          angle: spec['angle'] as num?,
+          energy: looseNum(spec['energy']) ?? 1.0,
+          range: looseNum(spec['range']),
+          angle: looseNum(spec['angle']),
           position: spec['position'],
           rotation: spec['rotation'],
         );
       default:
         return g3.dirLight(
           color: parseColor(spec['color']),
-          energy: spec['energy'] as num? ?? 1.0,
+          energy: looseNum(spec['energy']) ?? 1.0,
           shadow: spec['shadow'] == true,
           position: spec['position'],
           rotation: spec['rotation'],
@@ -168,13 +169,13 @@ class SceneDsl {
   /// Build one node and its subtree. Returns null for a spec that names no
   /// buildable type, so one bad entry does not abort the whole scene.
   GodotObject? _node(Map<String, Object?> spec, Map<String, GodotObject> byId) {
-    final type = spec['type'] as String? ?? 'node';
+    final type = looseStr(spec['type']) ?? 'node';
     GodotObject node;
 
     switch (type) {
       case 'mesh':
         node = controller.g3.mesh(
-          spec['shape'] as String? ?? 'box',
+          looseStr(spec['shape']) ?? 'box',
           options: {
             ...spec,
             if (spec['color'] != null) 'color': parseColor(spec['color']),
@@ -188,7 +189,7 @@ class SceneDsl {
           position: spec['position'],
           rotation: spec['rotation'],
           scale: spec['scale'],
-          visible: spec['visible'] as bool?,
+          visible: looseBool(spec['visible']),
         );
       case 'camera':
         node = _camera(spec);
@@ -203,7 +204,7 @@ class SceneDsl {
           position: spec['position'],
           rotation: spec['rotation'],
           scale: spec['scale'],
-          visible: spec['visible'] as bool?,
+          visible: looseBool(spec['visible']),
         );
     }
 

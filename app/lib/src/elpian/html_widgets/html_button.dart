@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
-import '../models/elpian_node.dart';
+
 import '../core/elpian_services.dart';
 import '../core/event_system.dart';
+import '../core/lenient.dart';
+import '../models/elpian_node.dart';
 
 class HtmlButton {
   static Widget build(ElpianNode node, List<Widget> children) {
     // Captured while the engine's service scope is active: the handlers
     // run later, outside it.
     final dispatcher = ElpianServices.current.events;
-    final text = node.props['text'] as String? ?? 'Button';
+    final text = looseStr(node.props['text']) ?? 'Button';
     final textColor = node.style?.color ?? Colors.white;
     final child = children.isNotEmpty
         ? children.first

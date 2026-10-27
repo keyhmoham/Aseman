@@ -81,6 +81,10 @@ function resolveType(type) {
 }
 
 const NUMERIC = /^\s*-?\d+(\.\d+)?\s*$/;
+// Number props that are sizes (never negative) and list nodes whose `max` is
+// how many rows to show.
+const SIZE_PROPS = new Set(["width", "height", "size", "minHeight", "maxHeight", "minWidth", "maxWidth", "thickness", "elevation", "gap", "aspectRatio", "strokeWidth"]);
+const COUNT_MAX = new Set(["Leaderboard", "WordCloud", "AvatarGroup", "Rating"]);
 const LENGTH = /^\s*-?\d+(\.\d+)?\s*(px|%|vw|vh|vmin|vmax)?\s*$/;
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const RGB = /^rgba?\(\s*\d+(\.\d+)?\s*,\s*\d+(\.\d+)?\s*,\s*\d+(\.\d+)?\s*(,\s*\d*(\.\d+)?\s*)?\)$/i;
@@ -148,19 +152,22 @@ export function validate(tree, opts = {}) {
     if (kind === "any") return;
     if (kind.startsWith("enum:")) {
       const values = kind.slice(5).split("|");
-      if (typeof v !== "string") return bad(`must be a string (the engine casts it; anything else throws).`, `One of ${values.join(", ")}.`, "error");
+      if (typeof v !== "string") return bad(`must be a string (the current engine ignores anything else; older clients throw on it).`, `One of ${values.join(", ")}.`, "error");
       const norm = (s) => s.toLowerCase().replace(/-/g, "");
       if (!values.some((x) => norm(x) === norm(v))) bad(`not a value the engine knows, so it falls back to its default.${didYouMean(v, values)}`, `One of ${values.join(", ")}.`);
       return;
     }
     switch (kind) {
       case "string":
-        if (typeof v !== "string") bad("must be a string (the engine casts it; anything else throws).", undefined, "error");
+        if (typeof v !== "string") bad("must be a string (the current engine ignores anything else; older clients throw on it).", undefined, "error");
         return;
       case "bool":
-        if (typeof v !== "boolean") bad("must be true or false (the engine casts it; anything else throws).", undefined, "error");
+        if (typeof v !== "boolean") bad("must be true or false (the current engine ignores anything else; older clients throw on it).", undefined, "error");
         return;
       case "length":
+        if ((typeof v === "number" || (typeof v === "string" && /^\s*-\d/.test(v))) && parseFloat(v) < 0 && SIZE_PROPS.has(key)) {
+          return bad("a size cannot be negative (the engine ignores it; older clients throw).", "Use 0 or more.", "error");
+        }
         if (typeof v === "number") return;
         if (typeof v !== "string") return bad("must be a number or a length string.", 'e.g. 120, "120", "50%", "100vw"');
         if (v.trim() === "auto" || v.includes("calc(") || v.trim().startsWith("env(")) return;
@@ -170,7 +177,7 @@ export function validate(tree, opts = {}) {
       case "int":
         if (typeof v === "number") {
           if (kind === "int" && !Number.isInteger(v)) bad("must be a whole number (it is truncated).");
-          if (key === "opacity" && (v < 0 || v > 1)) bad("opacity must be between 0 and 1 (out of range throws).", undefined, "error");
+          if (key === "opacity" && (v < 0 || v > 1)) bad("opacity must be between 0 and 1 (the engine clamps it; older clients throw).", undefined, "error");
           if ((key === "fontSize" || key === "borderWidth") && v < 0) bad("must not be negative.", undefined, "error");
           return;
         }
@@ -203,18 +210,18 @@ export function validate(tree, opts = {}) {
           for (const [side, n] of Object.entries(v)) {
             if (!["top", "right", "bottom", "left"].includes(side)) bad(`unknown side "${side}".`, "Use top, right, bottom, left.");
             else if (!(typeof n === "number" || (typeof n === "string" && NUMERIC.test(n.replace(/px$/, ""))))) bad(`side ${side} must be a number.`);
-            else if (Number(String(n).replace(/px$/, "")) < 0) bad("negative padding/margin throws.", "Use 0 or more.", "error");
+            else if (Number(String(n).replace(/px$/, "")) < 0) bad("negative padding/margin is read as 0 (older clients throw).", "Use 0 or more.", "error");
           }
           return;
         }
         if (typeof v === "number") {
-          if (v < 0) bad("negative padding/margin throws.", "Use 0 or more.", "error");
+          if (v < 0) bad("negative padding/margin is read as 0 (older clients throw).", "Use 0 or more.", "error");
           return;
         }
         if (typeof v !== "string") return bad("must be a number, a string of 1–4 numbers, or {top, right, bottom, left}.");
         const parts = v.trim().split(/\s+/);
         if (parts.length > 4 || parts.some((p) => !/^-?\d+(\.\d+)?(px)?$/.test(p))) bad("must be 1–4 numbers (\"8\", \"8 16\", \"8 16 8 16\").", "Use plain numbers; units other than px are not read.");
-        else if (parts.some((p) => parseFloat(p) < 0)) bad("negative padding/margin throws.", "Use 0 or more.", "error");
+        else if (parts.some((p) => parseFloat(p) < 0)) bad("negative padding/margin is read as 0 (older clients throw).", "Use 0 or more.", "error");
         return;
       }
       case "duration":
@@ -249,7 +256,7 @@ export function validate(tree, opts = {}) {
         if (!isScalar(v)) warn("should be text (a string or number); objects show as their JSON.");
         return;
       case "string":
-        if (typeof v !== "string") err("must be a string (the builder casts it; anything else throws).", `Write ${at}: ${show(String(v))}.`);
+        if (typeof v !== "string") err("must be a string (the current engine ignores anything else; older clients throw on it).", `Write ${at}: ${show(String(v))}.`);
         return;
       case "number":
         if (typeof v === "number") return checkRange(s, v, ctx, at, type);
@@ -259,20 +266,20 @@ export function validate(tree, opts = {}) {
       case "num":
       case "int":
         if (typeof v !== "number") {
-          err(`must be a JSON number${typeof v === "string" ? " (a numeric string throws: the builder casts it)" : ""}.`, `Write ${at}: ${NUMERIC.test(String(v)) ? Number(v) : 1}.`);
+          err(`must be a JSON number${typeof v === "string" ? " (older clients throw on a numeric string)" : ""}.`, `Write ${at}: ${NUMERIC.test(String(v)) ? Number(v) : 1}.`);
           return;
         }
         if (s.type === "int" && !Number.isInteger(v)) warn("must be a whole number (it is truncated).");
         return checkRange(s, v, ctx, at, type);
       case "bool":
-        if (typeof v !== "boolean") err("must be true or false (the builder casts it; \"true\" or 1 throws).", `Write ${at}: ${v === "true" || v === 1}.`);
+        if (typeof v !== "boolean") err("must be true or false (\"true\" or 1 is read leniently now, but older clients throw on it).", `Write ${at}: ${v === "true" || v === 1}.`);
         return;
       case "flag":
         if (typeof v !== "boolean" && v !== "true" && v !== "false") warn("should be true or false; other values are ignored.");
         return;
       case "enum":
         if (typeof v !== "string") {
-          if (s.strict) err(`must be a string (the builder casts it; anything else throws). One of ${s.values.join(", ")}.`);
+          if (s.strict) err(`must be a string (the current engine ignores anything else; older clients throw on it). One of ${s.values.join(", ")}.`);
           else warn(`must be one of ${s.values.join(", ")}.`);
           return;
         }
@@ -322,10 +329,13 @@ export function validate(tree, opts = {}) {
 
   function checkRange(s, v, ctx, at, type) {
     const prop = at.split(".").pop();
-    if (type === "Opacity" && prop === "opacity" && (v < 0 || v > 1)) add("error", "prop-range", ctx, `${at} = ${v}: opacity must be 0..1 (out of range throws).`);
+    if (type === "Opacity" && prop === "opacity" && (v < 0 || v > 1)) add("error", "prop-range", ctx, `${at} = ${v}: opacity must be 0..1 (the engine clamps it; older clients throw).`);
     if (["Expanded", "Flexible", "Spacer"].includes(type) && prop === "flex" && v < 1) add("warning", "prop-range", ctx, `${at} = ${v}: with a flex below 1 the ${type} does not fill anything.`, "Use flex ≥ 1, or drop the wrapper.");
     if (type === "AspectRatio" && prop === "aspectRatio" && v <= 0) add("error", "prop-range", ctx, `${at} = ${v}: the aspect ratio must be positive.`);
     if (type === "GridView" && prop === "crossAxisCount" && v < 1) add("error", "prop-range", ctx, `${at} = ${v}: needs at least one column.`);
+    if (SIZE_PROPS.has(prop) && v < 0) add("error", "prop-range", ctx, `${at} = ${v}: a size cannot be negative (the engine ignores it; older clients throw).`, "Use 0 or more, or leave it out for the default.");
+    if (prop === "maxLines" && v < 1) add("warning", "prop-range", ctx, `${at} = ${v}: a line limit below 1 is ignored.`, "Use 1 or more, or leave it out.");
+    if (prop === "max" && COUNT_MAX.has(type) && v < 0) add("warning", "prop-range", ctx, `${at} = ${v}: how many to show cannot be negative; the default is used.`);
   }
 
   function iconKnown(name) {
@@ -644,6 +654,13 @@ export function validate(tree, opts = {}) {
     if (type === "IndexedStack") {
       const n = Array.isArray(node.children) ? node.children.length : 0;
       if (typeof props.index === "number" && (props.index < 0 || props.index >= n)) add("warning", "prop-value", ctx, `index ${props.index} is out of range (${n} children): nothing shows.`);
+    }
+    if (type === "Tabs") {
+      const tabs = props.tabs ?? props.items;
+      const sel = Number(props.selected);
+      if (Array.isArray(tabs) && tabs.length && props.selected !== undefined && Number.isFinite(sel) && (sel < 0 || sel >= tabs.length)) {
+        add("warning", "prop-value", ctx, `selected ${props.selected} is out of range (${tabs.length} tabs): the nearest tab is selected.`);
+      }
     }
     if (type === "Slider") {
       const min = Number(props.min ?? 0), max = Number(props.max ?? 1), v = Number(props.value ?? min);

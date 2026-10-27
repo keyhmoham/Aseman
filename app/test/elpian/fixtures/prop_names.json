@@ -1,0 +1,1053 @@
+{
+ "comment": "Every prop and style key the validator knows (from deploy/sandbox-computer/appui/elpian/schema.mjs; test/validate.test.mjs keeps it in sync). odd_values_test.dart feeds each one values of the wrong type.",
+ "types": {
+  "Column": [],
+  "Row": [],
+  "Wrap": [],
+  "Stack": [],
+  "Positioned": [],
+  "Expanded": [
+   "flex"
+  ],
+  "Flexible": [
+   "flex"
+  ],
+  "Spacer": [
+   "flex"
+  ],
+  "Container": [
+   "width",
+   "height",
+   "padding",
+   "margin",
+   "alignment",
+   "decoration"
+  ],
+  "Padding": [],
+  "Center": [],
+  "Align": [],
+  "SizedBox": [],
+  "ConstrainedBox": [],
+  "LimitedBox": [],
+  "OverflowBox": [],
+  "FittedBox": [],
+  "FractionallySizedBox": [
+   "widthFactor",
+   "heightFactor"
+  ],
+  "AspectRatio": [
+   "aspectRatio"
+  ],
+  "DecoratedBox": [],
+  "ClipRRect": [],
+  "Baseline": [
+   "baseline"
+  ],
+  "RotatedBox": [
+   "quarterTurns"
+  ],
+  "Transform": [],
+  "Opacity": [
+   "opacity"
+  ],
+  "IndexedStack": [
+   "index"
+  ],
+  "ListView": [
+   "scrollDirection",
+   "scrollable"
+  ],
+  "GridView": [
+   "crossAxisCount"
+  ],
+  "Divider": [],
+  "VerticalDivider": [],
+  "Hero": [
+   "tag"
+  ],
+  "Text": [
+   "text",
+   "data",
+   "variant",
+   "color",
+   "maxLines",
+   "overflow",
+   "softWrap",
+   "textAlign"
+  ],
+  "Icon": [
+   "icon",
+   "size",
+   "svgPath",
+   "semanticLabel"
+  ],
+  "Image": [
+   "src",
+   "fit",
+   "alt"
+  ],
+  "Badge": [
+   "label",
+   "count",
+   "max",
+   "show"
+  ],
+  "Tooltip": [
+   "message"
+  ],
+  "MathExpression": [
+   "latex",
+   "expression",
+   "text",
+   "data"
+  ],
+  "Math": [
+   "latex",
+   "expression",
+   "text",
+   "data"
+  ],
+  "CircularProgressIndicator": [
+   "value"
+  ],
+  "LinearProgressIndicator": [
+   "value"
+  ],
+  "LoadingIndicator": [
+   "size",
+   "contained"
+  ],
+  "Canvas": [
+   "commands",
+   "width",
+   "height",
+   "backgroundColor"
+  ],
+  "CachedCanvas": [
+   "commands",
+   "width",
+   "height",
+   "backgroundColor",
+   "contextId",
+   "id"
+  ],
+  "Scene3D": [
+   "scene",
+   "world",
+   "initialScene",
+   "width",
+   "height",
+   "clickable"
+  ],
+  "Button": [
+   "text",
+   "label",
+   "variant",
+   "icon",
+   "trailingIcon",
+   "size",
+   "shape",
+   "selected",
+   "loading",
+   "fullWidth",
+   "tooltip",
+   "disabled"
+  ],
+  "IconButton": [
+   "icon",
+   "selectedIcon",
+   "variant",
+   "size",
+   "shape",
+   "selected",
+   "tooltip",
+   "disabled"
+  ],
+  "FAB": [
+   "icon",
+   "label",
+   "text",
+   "size",
+   "variant",
+   "mini",
+   "tooltip",
+   "elevation",
+   "heroTag",
+   "disabled"
+  ],
+  "FloatingActionButton": [
+   "icon",
+   "label",
+   "text",
+   "size",
+   "variant",
+   "mini",
+   "tooltip",
+   "elevation",
+   "heroTag",
+   "disabled"
+  ],
+  "SegmentedButton": [
+   "segments",
+   "items",
+   "selected",
+   "value",
+   "multi",
+   "emptyAllowed",
+   "showIcon",
+   "size",
+   "disabled"
+  ],
+  "Chip": [
+   "label",
+   "text",
+   "icon",
+   "selected",
+   "variant",
+   "disabled"
+  ],
+  "ListTile": [
+   "title",
+   "subtitle",
+   "overline",
+   "leading",
+   "leadingAvatar",
+   "leadingImage",
+   "trailing",
+   "trailingText",
+   "selected",
+   "dense",
+   "disabled",
+   "lines"
+  ],
+  "ListGroup": [
+   "title",
+   "variant",
+   "radius",
+   "innerRadius",
+   "gap"
+  ],
+  "NavigationBar": [
+   "items",
+   "destinations",
+   "selected",
+   "value",
+   "labels"
+  ],
+  "SearchBar": [
+   "hint",
+   "value",
+   "icon",
+   "trailingIcon",
+   "elevation"
+  ],
+  "TextField": [
+   "hint",
+   "label",
+   "value",
+   "icon",
+   "prefixIcon",
+   "trailingIcon",
+   "suffixIcon",
+   "prefix",
+   "suffix",
+   "helper",
+   "error",
+   "counter",
+   "variant",
+   "obscureText",
+   "multiline",
+   "maxLines",
+   "disabled",
+   "keyboardType",
+   "min",
+   "max"
+  ],
+  "Checkbox": [
+   "value",
+   "label",
+   "labelPosition",
+   "disabled"
+  ],
+  "Switch": [
+   "value",
+   "label",
+   "labelPosition",
+   "icons",
+   "disabled"
+  ],
+  "Radio": [
+   "value",
+   "groupValue"
+  ],
+  "Slider": [
+   "value",
+   "min",
+   "max",
+   "step",
+   "divisions",
+   "label",
+   "disabled"
+  ],
+  "Card": [
+   "variant",
+   "tone",
+   "radius",
+   "elevation"
+  ],
+  "InkWell": [
+   "disabled",
+   "splashColor",
+   "highlightColor",
+   "hoverColor",
+   "focusColor"
+  ],
+  "GestureDetector": [
+   "behavior"
+  ],
+  "Dismissible": [
+   "direction",
+   "threshold",
+   "movementDuration",
+   "resizeDuration"
+  ],
+  "Draggable": [
+   "data",
+   "axis",
+   "longPress",
+   "feedbackOpacity",
+   "fadeWhileDragging",
+   "maxSimultaneousDrags"
+  ],
+  "DragTarget": [
+   "accept",
+   "accepts",
+   "activeStyle",
+   "rejectStyle"
+  ],
+  "Scaffold": [
+   "floatingActionButtonLocation",
+   "extendBody",
+   "extendBodyBehindAppBar",
+   "resizeToAvoidBottomInset",
+   "primary",
+   "drawerEnableOpenDragGesture",
+   "endDrawerEnableOpenDragGesture"
+  ],
+  "AppBar": [
+   "title",
+   "centerTitle",
+   "elevation",
+   "scrolledUnderElevation",
+   "automaticallyImplyLeading",
+   "primary",
+   "titleSpacing"
+  ],
+  "Drawer": [
+   "elevation"
+  ],
+  "AnimatedContainer": [],
+  "AnimatedOpacity": [],
+  "AnimatedCrossFade": [
+   "showFirst"
+  ],
+  "AnimatedSwitcher": [
+   "transitionType"
+  ],
+  "AnimatedAlign": [],
+  "AnimatedPadding": [],
+  "AnimatedPositioned": [],
+  "AnimatedScale": [],
+  "AnimatedRotation": [],
+  "AnimatedSlide": [],
+  "AnimatedSize": [],
+  "AnimatedDefaultTextStyle": [],
+  "FadeTransition": [],
+  "SlideTransition": [],
+  "ScaleTransition": [],
+  "RotationTransition": [],
+  "SizeTransition": [
+   "axis"
+  ],
+  "TweenAnimationBuilder": [
+   "tweenType"
+  ],
+  "StaggeredAnimation": [],
+  "Shimmer": [],
+  "Pulse": [],
+  "AnimatedGradient": [],
+  "Chart": [
+   "data",
+   "words",
+   "label",
+   "text",
+   "value",
+   "max",
+   "minSize",
+   "maxSize",
+   "colorful",
+   "height",
+   "title",
+   "subtitle",
+   "date",
+   "end",
+   "weeks",
+   "format",
+   "color",
+   "values",
+   "size",
+   "centerLabel",
+   "centerCaption",
+   "legend",
+   "thickness",
+   "showPercent",
+   "items",
+   "target",
+   "ranges",
+   "status",
+   "x",
+   "yFormat",
+   "tasks",
+   "start",
+   "timeFormat",
+   "links",
+   "edges",
+   "nodes",
+   "source",
+   "y",
+   "startLabel",
+   "showTotal",
+   "totalLabel",
+   "upColor",
+   "downColor",
+   "type",
+   "series",
+   "stacked",
+   "horizontal",
+   "smooth",
+   "points",
+   "zero",
+   "valueLabels",
+   "xFormat",
+   "xLabel",
+   "yLabel",
+   "xTitle",
+   "yTitle",
+   "donut",
+   "min",
+   "open",
+   "high",
+   "low",
+   "close",
+   "field",
+   "bins",
+   "rows",
+   "columns",
+   "kind"
+  ],
+  "Sparkline": [
+   "values",
+   "field",
+   "type",
+   "area",
+   "color",
+   "height",
+   "width"
+  ],
+  "Gauge": [
+   "value",
+   "min",
+   "max",
+   "label",
+   "format",
+   "color",
+   "size",
+   "thresholds"
+  ],
+  "Heatmap": [
+   "data",
+   "rows",
+   "columns",
+   "values",
+   "x",
+   "y",
+   "value",
+   "format",
+   "diverging",
+   "showValues",
+   "cellHeight",
+   "valueLabel"
+  ],
+  "Treemap": [
+   "data",
+   "label",
+   "value",
+   "group",
+   "colorBy",
+   "format",
+   "colorFormat",
+   "height",
+   "valueLabel",
+   "colorLabel"
+  ],
+  "Graph": [
+   "nodes",
+   "edges",
+   "links",
+   "layout",
+   "directed",
+   "size",
+   "height"
+  ],
+  "DataGrid": [
+   "data",
+   "columns",
+   "search",
+   "searchHint",
+   "pageSize",
+   "sortable",
+   "sortBy",
+   "sortDirection",
+   "striped",
+   "dense",
+   "maxHeight",
+   "title",
+   "emptyText"
+  ],
+  "Stat": [
+   "label",
+   "value",
+   "format",
+   "delta",
+   "deltaFormat",
+   "deltaLabel",
+   "caption",
+   "goodDirection",
+   "trend",
+   "icon",
+   "status",
+   "color",
+   "size"
+  ],
+  "KeyValue": [
+   "items",
+   "data",
+   "labels",
+   "formats",
+   "columns",
+   "layout"
+  ],
+  "Timeline": [
+   "data",
+   "items",
+   "titleField",
+   "descriptionField",
+   "timeField",
+   "timeFormat"
+  ],
+  "TreeView": [
+   "data",
+   "labelField",
+   "childrenField",
+   "expanded",
+   "format"
+  ],
+  "JsonView": [
+   "value",
+   "data",
+   "expanded"
+  ],
+  "CodeBlock": [
+   "code",
+   "language",
+   "lineNumbers",
+   "maxHeight"
+  ],
+  "Progress": [
+   "value",
+   "max",
+   "variant",
+   "wavy",
+   "label",
+   "showValue",
+   "format",
+   "color",
+   "status",
+   "size",
+   "thickness"
+  ],
+  "Tag": [
+   "text",
+   "label",
+   "value",
+   "status",
+   "color",
+   "variant",
+   "icon",
+   "dot"
+  ],
+  "Rating": [
+   "value",
+   "max",
+   "size",
+   "color",
+   "showValue"
+  ],
+  "Callout": [
+   "title",
+   "text",
+   "severity",
+   "status",
+   "icon",
+   "color"
+  ],
+  "Avatar": [
+   "name",
+   "label",
+   "url",
+   "image",
+   "size",
+   "color"
+  ],
+  "ResponsiveGrid": [
+   "columns",
+   "minColumnWidth",
+   "maxColumns",
+   "gap",
+   "runGap"
+  ],
+  "Section": [
+   "title",
+   "subtitle",
+   "icon",
+   "trailing",
+   "gap"
+  ],
+  "Expandable": [
+   "title",
+   "subtitle",
+   "icon",
+   "expanded"
+  ],
+  "Scroll": [
+   "direction",
+   "maxHeight"
+  ],
+  "Funnel": [
+   "data",
+   "values",
+   "label",
+   "value",
+   "format",
+   "color",
+   "title",
+   "subtitle"
+  ],
+  "Waterfall": [
+   "data",
+   "values",
+   "label",
+   "value",
+   "x",
+   "y",
+   "start",
+   "startLabel",
+   "showTotal",
+   "totalLabel",
+   "format",
+   "yFormat",
+   "height",
+   "upColor",
+   "downColor",
+   "color",
+   "title",
+   "subtitle"
+  ],
+  "Sankey": [
+   "links",
+   "data",
+   "edges",
+   "nodes",
+   "source",
+   "target",
+   "value",
+   "format",
+   "height",
+   "title",
+   "subtitle"
+  ],
+  "Gantt": [
+   "data",
+   "tasks",
+   "label",
+   "start",
+   "end",
+   "timeFormat",
+   "title",
+   "subtitle"
+  ],
+  "BoxPlot": [
+   "data",
+   "label",
+   "x",
+   "format",
+   "yFormat",
+   "height",
+   "colorful",
+   "title",
+   "subtitle"
+  ],
+  "BulletChart": [
+   "items",
+   "label",
+   "value",
+   "target",
+   "ranges",
+   "max",
+   "format",
+   "color",
+   "status",
+   "title",
+   "subtitle"
+  ],
+  "SegmentedBar": [
+   "data",
+   "values",
+   "label",
+   "value",
+   "format",
+   "thickness",
+   "legend",
+   "showPercent",
+   "title",
+   "subtitle"
+  ],
+  "RadialBars": [
+   "data",
+   "values",
+   "max",
+   "size",
+   "format",
+   "centerLabel",
+   "centerCaption",
+   "legend",
+   "title",
+   "subtitle"
+  ],
+  "Sunburst": [
+   "data",
+   "size",
+   "height",
+   "format",
+   "centerCaption",
+   "title",
+   "subtitle"
+  ],
+  "CalendarHeatmap": [
+   "data",
+   "date",
+   "value",
+   "end",
+   "weeks",
+   "format",
+   "color",
+   "title",
+   "subtitle"
+  ],
+  "WordCloud": [
+   "data",
+   "words",
+   "label",
+   "text",
+   "value",
+   "max",
+   "minSize",
+   "maxSize",
+   "colorful",
+   "height",
+   "title",
+   "subtitle"
+  ],
+  "PivotTable": [
+   "data",
+   "rows",
+   "columns",
+   "value",
+   "aggregate",
+   "format",
+   "totals",
+   "heat",
+   "sort",
+   "color",
+   "maxHeight",
+   "title",
+   "subtitle"
+  ],
+  "Leaderboard": [
+   "data",
+   "label",
+   "name",
+   "value",
+   "max",
+   "format",
+   "highlight",
+   "showBar",
+   "title",
+   "subtitle"
+  ],
+  "Tabs": [
+   "tabs",
+   "items",
+   "selected",
+   "variant",
+   "scrollable",
+   "gap"
+  ],
+  "Calendar": [
+   "month",
+   "selected",
+   "events",
+   "firstDay",
+   "showEvents"
+  ],
+  "Kanban": [
+   "columns",
+   "columnWidth",
+   "draggable",
+   "emptyText"
+  ],
+  "Carousel": [
+   "items",
+   "images",
+   "height",
+   "autoplay",
+   "viewportFraction",
+   "dots"
+  ],
+  "Stepper": [
+   "steps",
+   "items",
+   "current",
+   "orientation"
+  ],
+  "Chat": [
+   "messages",
+   "me",
+   "showAvatars",
+   "typing",
+   "suggestions"
+  ],
+  "Countdown": [
+   "to",
+   "until",
+   "seconds",
+   "label",
+   "size",
+   "showDays",
+   "showSeconds"
+  ],
+  "Clock": [
+   "mode",
+   "size",
+   "utcOffset",
+   "label",
+   "seconds",
+   "hour24"
+  ],
+  "EmptyState": [
+   "icon",
+   "title",
+   "text",
+   "action",
+   "actionIcon",
+   "size"
+  ],
+  "AvatarGroup": [
+   "names",
+   "items",
+   "people",
+   "max",
+   "size"
+  ],
+  "Pagination": [
+   "page",
+   "value",
+   "pages",
+   "total",
+   "siblings"
+  ],
+  "Breadcrumbs": [
+   "items"
+  ],
+  "Markdown": [
+   "text",
+   "content",
+   "markdown",
+   "size"
+  ],
+  "LogView": [
+   "lines",
+   "data",
+   "title",
+   "filter",
+   "wrap",
+   "showTime",
+   "lineNumbers",
+   "follow",
+   "fontSize",
+   "maxHeight",
+   "emptyText"
+  ],
+  "DiffView": [
+   "before",
+   "after",
+   "old",
+   "new",
+   "diff",
+   "title",
+   "file",
+   "context",
+   "maxHeight"
+  ],
+  "QRCode": [
+   "data",
+   "value",
+   "text",
+   "url",
+   "size",
+   "ecc",
+   "color",
+   "background",
+   "rounded",
+   "label"
+  ]
+ },
+ "style": [
+  "width",
+  "height",
+  "minWidth",
+  "maxWidth",
+  "minHeight",
+  "maxHeight",
+  "aspectRatio",
+  "padding",
+  "paddingTop",
+  "paddingRight",
+  "paddingBottom",
+  "paddingLeft",
+  "paddingX",
+  "paddingY",
+  "margin",
+  "marginTop",
+  "marginRight",
+  "marginBottom",
+  "marginLeft",
+  "marginX",
+  "marginY",
+  "alignment",
+  "position",
+  "top",
+  "right",
+  "bottom",
+  "left",
+  "zIndex",
+  "display",
+  "flexDirection",
+  "justifyContent",
+  "alignItems",
+  "flex",
+  "flexGrow",
+  "flexShrink",
+  "flexBasis",
+  "flexWrap",
+  "overflow",
+  "overflowX",
+  "overflowY",
+  "backgroundColor",
+  "background",
+  "backgroundImage",
+  "backgroundSize",
+  "backgroundPosition",
+  "gradient",
+  "border",
+  "borderRadius",
+  "borderColor",
+  "borderWidth",
+  "borderStyle",
+  "color",
+  "fontSize",
+  "fontWeight",
+  "fontStyle",
+  "fontFamily",
+  "letterSpacing",
+  "wordSpacing",
+  "lineHeight",
+  "textAlign",
+  "textDecoration",
+  "textOverflow",
+  "textTransform",
+  "boxShadow",
+  "textShadow",
+  "transform",
+  "rotate",
+  "scale",
+  "translate",
+  "opacity",
+  "visible",
+  "cursor",
+  "pointerEvents",
+  "gap",
+  "rowGap",
+  "columnGap",
+  "gridTemplateColumns",
+  "gridTemplateRows",
+  "gridTemplateAreas",
+  "gridAutoColumns",
+  "gridAutoRows",
+  "gridAutoFlow",
+  "gridColumnGap",
+  "gridRowGap",
+  "gridGap",
+  "transitionDuration",
+  "transitionCurve",
+  "transitionProperty",
+  "transitionDelay",
+  "animationName",
+  "animationDuration",
+  "animationTimingFunction",
+  "animationDelay",
+  "animationIterationCount",
+  "animationDirection",
+  "animationFillMode",
+  "animationPlayState",
+  "animateOnBuild",
+  "staggerDelay",
+  "staggerChildren",
+  "animationFrom",
+  "animationTo",
+  "slideBegin",
+  "slideEnd",
+  "scaleBegin",
+  "scaleEnd",
+  "rotationBegin",
+  "rotationEnd",
+  "fadeBegin",
+  "fadeEnd",
+  "colorBegin",
+  "colorEnd",
+  "paddingBegin",
+  "paddingEnd",
+  "alignmentBegin",
+  "alignmentEnd",
+  "shimmerBaseColor",
+  "shimmerHighlightColor",
+  "gradientColors",
+  "animationAutoReverse",
+  "animationRepeat",
+  "keyframes",
+  "verticalAlign",
+  "borderCollapse",
+  "borderSpacing",
+  "captionSide"
+ ]
+}

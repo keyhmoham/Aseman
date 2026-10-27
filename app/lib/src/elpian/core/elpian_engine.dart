@@ -1,10 +1,5 @@
 import 'package:flutter/material.dart';
 
-// Explicit relative imports rather than the package's own public barrel.
-// `elpian_engine.dart` used to `import 'package:elpian_ui/elpian_ui.dart'`,
-// i.e. a file inside `src/` reaching back through the library's public
-// entrypoint — a cycle that defeats tree-shaking and makes the dependency
-// graph unreadable.
 import '../css/css_parser.dart';
 import '../css/json_stylesheet_parser.dart';
 import '../css/stylesheet.dart';
@@ -12,12 +7,18 @@ import '../godot/scene3d_widget.dart';
 import '../html_widgets/html_widgets.dart';
 import '../models/css_style.dart';
 import '../models/elpian_node.dart';
-import '../widgets/widgets.dart';
 import '../scope/scope_contract.dart';
+import '../widgets/widgets.dart';
 import 'elpian_services.dart';
 import 'event_dispatcher.dart';
 import 'event_enabled_widget.dart';
 import 'event_system.dart';
+// Explicit relative imports rather than the package's own public barrel.
+// `elpian_engine.dart` used to `import 'package:elpian_ui/elpian_ui.dart'`,
+// i.e. a file inside `src/` reaching back through the library's public
+// entrypoint — a cycle that defeats tree-shaking and makes the dependency
+// graph unreadable.
+import 'lenient.dart';
 import 'widget_registry.dart';
 
 // HTML Widgets
@@ -338,22 +339,29 @@ class ElpianEngine {
     // full-screen override beats the window's inline drag offset). Merging the
     // raw maps and parsing once is also lossless (the old CSSStyle round-trip
     // dropped most fields) and cheap (single memoized parse).
+    // A style the parser cannot read is dropped for this node, never fatal:
+    // the style is resolved outside the builder's error boundary below.
     CSSStyle? mergedStyle;
-    if (node.key != null || node.props['className'] != null) {
-      final rawClass = node.props['className'];
-      final classes = rawClass is String
-          ? rawClass.split(' ')
-          : (rawClass is List ? [for (final c in rawClass) '$c'] : null);
+    try {
+      if (node.key != null || node.props['className'] != null) {
+        final rawClass = node.props['className'];
+        final classes = rawClass is String
+            ? rawClass.split(' ')
+            : (rawClass is List ? [for (final c in rawClass) '$c'] : null);
 
-      final computed = _stylesheetManager.getComputedStyleMap(
-        tagName: node.type,
-        id: node.key,
-        classes: classes,
-        inlineStyles: inlineMap,
-      );
-      if (computed.isNotEmpty) mergedStyle = CSSParser.parse(computed);
-    } else if (inlineMap != null) {
-      mergedStyle = CSSParser.parse(inlineMap);
+        final computed = _stylesheetManager.getComputedStyleMap(
+          tagName: node.type,
+          id: node.key,
+          classes: classes,
+          inlineStyles: inlineMap,
+        );
+        if (computed.isNotEmpty) mergedStyle = CSSParser.parse(computed);
+      } else if (inlineMap != null) {
+        mergedStyle = CSSParser.parse(inlineMap);
+      }
+    } catch (e) {
+      debugPrint('Elpian: ignored the style of ${node.type}: $e');
+      mergedStyle = null;
     }
 
     // Create node with merged style
@@ -470,8 +478,8 @@ class ElpianEngine {
         : (className is List ? className.cast<String>() : null);
     final inline = root['style'] ?? propsMap['style'];
     final raw = _stylesheetManager.getComputedStyleMap(
-      tagName: root['type'] as String? ?? 'div',
-      id: root['key'] as String?,
+      tagName: looseStr(root['type']) ?? 'div',
+      id: looseStr(root['key']),
       classes: classes,
       inlineStyles: inline is Map<String, dynamic> ? inline : null,
     );

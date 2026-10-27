@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/lenient.dart';
 import '../models/elpian_node.dart';
 
 class ElpianAnimatedSwitcher {
@@ -6,7 +7,7 @@ class ElpianAnimatedSwitcher {
     final child = children.isNotEmpty ? children.first : null;
     final duration =
         node.style?.transitionDuration ?? const Duration(milliseconds: 300);
-    final transitionType = node.props['transitionType'] as String? ?? 'fade';
+    final transitionType = looseStr(node.props['transitionType']) ?? 'fade';
 
     return AnimatedSwitcher(
       duration: duration,

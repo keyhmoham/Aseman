@@ -345,3 +345,12 @@ test("errors mean the tree breaks: shared cases with the Flutter test", () => {
   }
   assert.deepEqual(wrong, []);
 });
+
+test("the Flutter odd-values test sees every prop and style key", () => {
+  // app/test/elpian/odd_values_test.dart renders each of these with values
+  // of the wrong type; regenerate the fixture when the schema changes.
+  const fixture = JSON.parse(fs.readFileSync(path.join(repo, "app/test/elpian/fixtures/prop_names.json"), "utf8"));
+  const types = Object.fromEntries(Object.entries(TYPES).map(([k, v]) => [k, Object.keys(v.props || {})]));
+  assert.deepEqual(fixture.types, types, "app/test/elpian/fixtures/prop_names.json is stale: regenerate it from schema.mjs");
+  assert.deepEqual(fixture.style, Object.keys(STYLE), "app/test/elpian/fixtures/prop_names.json is stale: regenerate it from schema.mjs");
+});

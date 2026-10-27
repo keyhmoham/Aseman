@@ -72,7 +72,7 @@ class ElpianAppBar {
       centerTitle: flag('centerTitle'),
       automaticallyImplyLeading: flag('automaticallyImplyLeading') ?? true,
       primary: flag('primary') ?? true,
-      elevation: numProp(node, 'elevation')?.toDouble(),
+      elevation: sizeProp(node, 'elevation')?.toDouble(),
       scrolledUnderElevation:
           numProp(node, 'scrolledUnderElevation')?.toDouble(),
       titleSpacing: numProp(node, 'titleSpacing')?.toDouble(),

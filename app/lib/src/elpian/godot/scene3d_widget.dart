@@ -38,17 +38,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/lenient.dart';
 import '../models/elpian_node.dart';
 import 'godot_binding.dart';
 import 'godot_controller.dart';
 import 'godot_object.dart';
-import 'scene_dsl.dart';
-import 'scene_taps.dart';
-
 // The web viewport is selected at compile time; off the web the stub compiles
 // instead, so `dart:ui_web` never reaches a native build.
 import 'godot_web_surface.dart'
     if (dart.library.ui_web) 'godot_web_surface_web.dart';
+import 'scene_dsl.dart';
+import 'scene_taps.dart';
 
 /// Owns a scene's engine controller and its built nodes across rebuilds.
 ///
@@ -147,8 +147,8 @@ class Scene3D extends StatefulWidget {
       initialScene: scene is Map
           ? scene.map((k, v) => MapEntry('$k', v))
           : (scene is List ? {'nodes': scene} : null),
-      width: (props['width'] as num?)?.toDouble() ?? node.style?.width,
-      height: (props['height'] as num?)?.toDouble() ?? node.style?.height,
+      width: _size(props['width']) ?? node.style?.width,
+      height: _size(props['height']) ?? node.style?.height,
       clickable: props['clickable'] == true,
       tapProps: props,
       placeholder: children.isNotEmpty ? children.first : null,
@@ -324,4 +324,10 @@ class _Scene3DPlaceholder extends StatelessWidget {
           ),
         ),
       );
+}
+
+/// A size: a finite, non-negative number, else null.
+double? _size(Object? v) {
+  final n = looseDouble(v);
+  return n == null || n < 0 || !n.isFinite ? null : n;
 }

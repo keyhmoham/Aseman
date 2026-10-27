@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../elpian/core/lenient.dart';
 import '../palette.dart';
 import '../values.dart';
 import 'cartesian_chart.dart' show ChartSelect;
@@ -42,7 +43,7 @@ class _PieChartState extends State<PieChart> {
     final rows = asRows(props['data'] ?? props['values']);
     final labelField = '${props['label'] ?? props['x'] ?? 'label'}';
     final valueField = '${props['value'] ?? props['y'] ?? 'value'}';
-    final format = (props['format'] ?? props['yFormat']) as String?;
+    final format = looseStr(props['format'] ?? props['yFormat']);
     final donut = props['type'] == 'donut' || asBool(props['donut']);
     final height = asDouble(props['height'], 220).clamp(120, 800).toDouble();
 
@@ -66,8 +67,8 @@ class _PieChartState extends State<PieChart> {
     final total = slices.fold<double>(0, (s, x) => s + x.value);
     if (slices.isEmpty || total <= 0) {
       return ChartFrame(
-          title: props['title'] as String?,
-          subtitle: props['subtitle'] as String?,
+          title: looseStr(props['title']),
+          subtitle: looseStr(props['subtitle']),
           child: NoData(height: height));
     }
     String share(double v) =>
@@ -120,11 +121,11 @@ class _PieChartState extends State<PieChart> {
                 child: CustomPaint(
                   painter: _PiePainter(slices, total, donut, hover, p,
                       center: donut
-                          ? (props['centerLabel'] as String? ??
+                          ? (looseStr(props['centerLabel']) ??
                               formatValue(total, format))
                           : null,
                       centerCaption: donut
-                          ? (props['centerCaption'] as String? ?? 'Total')
+                          ? (looseStr(props['centerCaption']) ?? 'Total')
                           : null),
                 ),
               ),
@@ -145,8 +146,8 @@ class _PieChartState extends State<PieChart> {
       }),
     );
     return ChartFrame(
-      title: props['title'] as String?,
-      subtitle: props['subtitle'] as String?,
+      title: looseStr(props['title']),
+      subtitle: looseStr(props['subtitle']),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -273,7 +274,7 @@ class _RadarChartState extends State<RadarChart> {
     final height = asDouble(props['height'], 260).clamp(140, 800).toDouble();
     if (rows.length < 3 || series.isEmpty) {
       return ChartFrame(
-          title: props['title'] as String?,
+          title: looseStr(props['title']),
           child:
               NoData(height: height, text: 'A radar needs three or more axes'));
     }
@@ -287,8 +288,8 @@ class _RadarChartState extends State<RadarChart> {
       max = niceTicks(0, max).last;
     }
     return ChartFrame(
-      title: props['title'] as String?,
-      subtitle: props['subtitle'] as String?,
+      title: looseStr(props['title']),
+      subtitle: looseStr(props['subtitle']),
       legend: series.length > 1
           ? [for (final s in series) LegendItem(s.$2, s.$3, line: true)]
           : const [],
@@ -382,7 +383,7 @@ class Sparkline extends StatelessWidget {
   });
 
   factory Sparkline.fromProps(Map<String, dynamic> props, VizPalette p) {
-    final f = props['field'] as String?;
+    final f = looseStr(props['field']);
     final values = [
       for (final v in asList(props['values'] ?? props['data']))
         asNum(f != null ? field(v, f) : (v is Map ? (v['value'] ?? v['y']) : v))
@@ -391,8 +392,8 @@ class Sparkline extends StatelessWidget {
     return Sparkline(
       values: values,
       color: p.parse(props['color']),
-      height: asDouble(props['height'], 32),
-      width: asNum(props['width'])?.toDouble(),
+      height: asSize(props['height'], 32),
+      width: asSizeOrNull(props['width']),
       bars: props['type'] == 'bar',
       area: props['type'] == 'area' || asBool(props['area']),
     );
@@ -509,7 +510,7 @@ class Gauge extends StatelessWidget {
     final value = asNum(props['value'])?.toDouble() ?? 0;
     final min = asNum(props['min'])?.toDouble() ?? 0;
     final max = asNum(props['max'])?.toDouble() ?? 100;
-    final format = props['format'] as String?;
+    final format = looseStr(props['format']);
     // Thresholds: [{value, status|color}] — the fill takes the color of the
     // highest threshold the value reaches.
     Color fill = p.parse(props['color']) ?? p.accent;

@@ -6,6 +6,7 @@ library;
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:aseman/src/elpian/core/lenient.dart';
 import 'package:flutter/material.dart';
 
 import 'charts/viz_canvas.dart';
@@ -80,8 +81,11 @@ class _KitTabsState extends State<KitTabs> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    _sync();
     final tabs = _tabs;
+    // No tabs to show: draw the first panel rather than a bar out of step
+    // with its controller.
+    if (tabs.isEmpty) return widget.children.isEmpty ? const SizedBox.shrink() : widget.children.first;
+    _sync();
     final secondary = widget.props['variant'] == 'secondary';
     return LayoutBuilder(builder: (context, box) {
       final scrollable = !box.maxWidth.isFinite || tabs.length > 4 || asBool(widget.props['scrollable']);
@@ -106,7 +110,7 @@ class _KitTabsState extends State<KitTabs> with TickerProviderStateMixin {
       final panel = _index < widget.children.length ? widget.children[_index] : const SizedBox.shrink();
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
         if (box.maxWidth.isFinite) bar else SizedBox(width: 360, child: bar),
-        SizedBox(height: asDouble(widget.props['gap'], 16)),
+        SizedBox(height: asSize(widget.props['gap'], 16)),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 260),
           switchInCurve: Curves.easeOutCubic,
@@ -354,7 +358,7 @@ class _KitKanbanState extends State<KitKanban> {
                 Text(asText(m['due']), style: theme.textTheme.labelSmall?.copyWith(color: s.onSurfaceVariant)),
               ],
               const Spacer(),
-              if (m['assignee'] != null) KitAvatar(name: asText(m['assignee']), url: m['avatar'] as String?, size: 24),
+              if (m['assignee'] != null) KitAvatar(name: asText(m['assignee']), url: looseStr(m['avatar']), size: 24),
             ]),
           ],
         ]),
@@ -508,7 +512,7 @@ class _KitCarouselState extends State<KitCarousel> {
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
-    final height = asDouble(widget.props['height'], 200);
+    final height = asSize(widget.props['height'], 200);
     final items = _items(widget.props['items'] ?? widget.props['images'], 'image');
     final n = _count;
     if (n == 0) return SizedBox(height: height);
@@ -720,7 +724,7 @@ class KitChat extends StatelessWidget {
                 child: Column(crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start, children: [
                   Row(mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start, crossAxisAlignment: CrossAxisAlignment.end, children: [
                     if (!mine && avatars) ...[
-                      nextSame ? const SizedBox(width: 32) : KitAvatar(name: asText(m['name'] ?? role), url: m['avatar'] as String?, size: 32),
+                      nextSame ? const SizedBox(width: 32) : KitAvatar(name: asText(m['name'] ?? role), url: looseStr(m['avatar']), size: 32),
                       const SizedBox(width: 8),
                     ],
                     bubble,
@@ -1026,8 +1030,8 @@ class KitAvatarGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
     final items = _items(props['items'] ?? props['names'] ?? props['people'], 'name');
-    final size = asDouble(props['size'], 32);
-    final max = asInt(props['max'], 4);
+    final size = asSize(props['size'], 32);
+    final max = asCount(props['max'], 4);
     final shown = items.take(max).toList();
     final more = items.length - shown.length;
     final step = size * 0.68;
@@ -1039,7 +1043,7 @@ class KitAvatarGroup extends StatelessWidget {
       height: size + 4,
       child: Stack(children: [
         for (var i = 0; i < shown.length; i++)
-          Positioned(left: step * i, child: ring(KitAvatar(name: asText(shown[i]['name'] ?? shown[i]['label']), url: shown[i]['url'] as String? ?? shown[i]['image'] as String?, size: size))),
+          Positioned(left: step * i, child: ring(KitAvatar(name: asText(shown[i]['name'] ?? shown[i]['label']), url: looseStr(shown[i]['url']) ?? looseStr(shown[i]['image']), size: size))),
         if (more > 0)
           Positioned(
             left: step * shown.length,

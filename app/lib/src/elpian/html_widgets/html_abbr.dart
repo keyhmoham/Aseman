@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import '../models/elpian_node.dart';
+
+import '../core/lenient.dart';
 import '../css/css_properties.dart';
+import '../models/elpian_node.dart';
 
 class HtmlAbbr {
   static Widget build(ElpianNode node, List<Widget> children) {
-    final text = node.props['text'] as String? ?? '';
-    final title = node.props['title'] as String? ?? '';
+    final text = looseStr(node.props['text']) ?? '';
+    final title = looseStr(node.props['title']) ?? '';
 
     Widget result = Tooltip(
       message: title,

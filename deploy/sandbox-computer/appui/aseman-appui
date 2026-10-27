@@ -161,7 +161,9 @@ verify_app() {
   # A previous version may still serve the port: the new build is what is
   # checked and then served.
   fuser -k "$port/tcp" >/dev/null 2>&1 || true
-  (cd "$dir" && PORT="$port" HOST=0.0.0.0 exec setsid bash -c "$start") >"$dir/verify.log" 2>&1 &
+  # Started as the preview will start it: from the project, with its server
+  # settings (.aseman/server.env), PORT and HOST, under bash.
+  (cd "$dir" && set -a && { [ ! -f .aseman/server.env ] || . .aseman/server.env; } && set +a && PORT="$port" HOST=0.0.0.0 exec setsid bash -c "$start") >"$dir/verify.log" 2>&1 &
   pid=$!
   code=000
   for _ in $(seq 1 "${ASEMAN_APPUI_VERIFY_SECS:-60}"); do

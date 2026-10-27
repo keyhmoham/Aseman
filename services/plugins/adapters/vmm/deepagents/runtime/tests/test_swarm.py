@@ -194,6 +194,39 @@ async def test_the_decision_model_drops_dependencies_that_are_not_needed(platfor
     assert by["b"].depends_on == [] and by["c"].depends_on == ["a"]
 
 
+async def test_a_task_that_only_rechecks_another_is_not_run(platform: Platform, tmp_path: Path) -> None:
+    """The agent who builds something tests and validates it (and the platform
+    verifies apps): a planned second check by another agent is dropped, and
+    what waited on it waits on the work it would have checked."""
+    platform.workers[CODER["account_id"]] = (0.05, lambda body: "built and tested: 12 tests pass, appui_publish verified")
+
+    def decide(state: dict[str, Any], questions: dict[str, Any]) -> dict[str, Any]:
+        out = {}
+        for qid, q in questions.items():
+            recheck = qid.startswith("r") and "\nB: test and validate the app" in q["instructions"]
+            out[qid] = {"probability": 0.95 if recheck else (0.9 if qid.startswith("e") else 0.05)}
+        return out
+
+    platform.decide = decide
+    ctx, store = context(platform, tmp_path, [])
+    [_, run] = swarm_tools(ctx, store)
+    report = await run.ainvoke({"goal": "a tasks app", "tasks": [
+        {"id": "build", "agent": "coder", "task": "build the tasks app"},
+        {"id": "qa", "agent": "coder", "task": "test and validate the app", "depends_on": ["build"]},
+        {"id": "docs", "agent": "coder", "task": "write the user guide", "depends_on": ["qa"]},
+    ]})
+    assert "2 done" in report and "1 skipped" in report
+    assert "only re-checks build" in report
+    handoffs = [m["body"] for m in platform.messages if m["mentions"] == [CODER["account_id"]]]
+    assert len(handoffs) == 2 and not any("test and validate the app" in b for b in handoffs)
+    docs = next(b for b in handoffs if "write the user guide" in b)
+    assert "[build by coder]" in docs, "the guide waits on the build the check would have looked at"
+    assert all("test and validate it yourself" in b and "how you verified it" in b for b in handoffs)
+    assert any("only re-check work" in e.get("text", "") for e in platform.logs)
+    # Without a decision model the plan runs as written (the prompts carry the rule).
+    assert "never plan a task that only tests" in planner.PLAN_SYSTEM
+
+
 async def test_tasks_run_in_parallel_and_wait_only_for_what_they_need(platform: Platform, tmp_path: Path) -> None:
     platform.workers[CODER["account_id"]] = (0.4, lambda body: "coder did: " + body.split("]", 1)[1].split("\n")[0].strip())
     ctx, store = context(platform, tmp_path, [], decision=False)

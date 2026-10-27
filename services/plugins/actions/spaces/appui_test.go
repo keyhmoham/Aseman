@@ -2,6 +2,8 @@ package spaces
 
 import (
 	"encoding/json"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -110,5 +112,32 @@ func TestOpenCodeAsemanConfig(t *testing.T) {
 	}
 	if opts["apiKey"] != "{env:ASEMAN_LLM_API_KEY}" {
 		t.Fatalf("apiKey=%v", opts["apiKey"])
+	}
+}
+
+// The preview runs an app's start command with sh from /workspace; it must
+// start the app as aseman-appui verify did: from its directory, under bash,
+// with PORT, HOST and the app's server settings.
+func TestAppuiStartCommandRunsTheAppAsVerified(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(dir+"/.aseman", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(appServerEnvFile(dir), []byte("ASEMAN_API_URL=http://node/appapi/v1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A bash-only start that names its own dir and reads files relative to it.
+	start := `[[ -n "$BASH_VERSION" ]] && echo "$PWD|$PORT|$HOST|$ASEMAN_API_URL" > seen.txt`
+	cmd := exec.Command("sh", "-c", appuiStartCommand(dir, 8911, "  "+start+" "))
+	cmd.Dir = os.TempDir()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	seen, err := os.ReadFile(dir + "/seen.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := dir + "|8911|0.0.0.0|http://node/appapi/v1\n"; string(seen) != want {
+		t.Fatalf("seen %q, want %q", seen, want)
 	}
 }

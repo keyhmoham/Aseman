@@ -17,6 +17,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -435,7 +436,7 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 // agent gets the same build task (TASK.md) with its own tools. It builds,
 // tests and drives the app, then calls appui_publish.
 func (s *Service) appuiAgentsBuild(ctx context.Context, spaceID identity.ID, job appuiJob, flags string) (string, error) {
-	out, err := s.SandboxExec(ctx, spaceID, "aseman-appui prepare "+flags)
+	out, err := s.appuiExec(ctx, spaceID, "aseman-appui prepare "+flags)
 	if err != nil {
 		return "", err
 	}
@@ -469,6 +470,22 @@ func (s *Service) appuiAgentsBuild(ctx context.Context, spaceID identity.ID, job
 		},
 	})
 	return string(b), nil
+}
+
+// appuiExec runs an aseman-appui command for the agents' builds. A machine
+// still awake on an image older than those commands (the node was upgraded
+// while it ran) is restarted once, which brings it onto the current image
+// (its /workspace stays), and the command runs again.
+func (s *Service) appuiExec(ctx context.Context, spaceID identity.ID, cmd string) (string, error) {
+	out, err := s.SandboxExec(ctx, spaceID, cmd)
+	if err != nil || !strings.Contains(out, "aseman-appui: unknown command") {
+		return out, err
+	}
+	s.L.Info("sandbox tools are older than the node: restarting the machine on the current image", "space", spaceID.String())
+	if _, err := s.SandboxStop(ctx, spaceID); err != nil {
+		return "", errs.New(errs.CodeUnavailable, "the project's computer runs an older image without the app tools, and it could not be restarted now ("+err.Error()+"); try again in a moment")
+	}
+	return s.SandboxExec(ctx, spaceID, cmd)
 }
 
 // appuiPublishTool implements appui_publish: the platform's checks of an app
@@ -555,7 +572,7 @@ func (s *Service) appuiPublishTool(ctx context.Context, spaceID, roomID identity
 		}
 	}
 
-	out, err := s.SandboxExec(opCtx, spaceID, "aseman-appui verify --dir "+shellQuote(dir))
+	out, err := s.appuiExec(opCtx, spaceID, "aseman-appui verify --dir "+shellQuote(dir))
 	if err != nil {
 		return "", err
 	}
@@ -586,13 +603,7 @@ func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, age
 	if ready.Title != "" {
 		title = ready.Title
 	}
-	start := strings.TrimSpace(ready.Start)
-	// Ensure start runs from the project directory.
-	if !strings.Contains(start, dir) {
-		start = "cd " + shellQuote(dir) + " && " + start
-	}
-	// The server starts with its app API settings (URL and key).
-	start = appServerEnvPrefix(dir) + start
+	start := appuiStartCommand(dir, port, ready.Start)
 
 	show := true
 	if job.Place.Show != nil {
@@ -626,6 +637,14 @@ func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, age
 	proxyOut, err := s.proxyCreateTool(opCtx, spaceID, agentName, string(rawArgs))
 	if err != nil {
 		return "", err
+	}
+	if strings.Contains(proxyOut, "did not answer within") {
+		next := "Fix it and call appui_create again with the same dir."
+		if builder == "agents" {
+			next = "Fix it and call appui_publish again."
+		}
+		return "", errs.Conflict("the app passed its checks but did not start on the desk (its start command, run as the preview runs it, did not answer on port " +
+			strconv.Itoa(port) + "). " + next + "\n" + clipTrace(proxyOut, 3000))
 	}
 	// The key works while the app's preview exists.
 	if m := proxyPathID.FindStringSubmatch(proxyOut); job.HasKey && m != nil {
@@ -907,6 +926,15 @@ func (s *Service) writeAppServerEnv(ctx context.Context, spaceID identity.ID, di
 	}
 	_, err := s.SandboxExec(ctx, spaceID, "chmod 600 "+shellQuote(path)+"; printf '*\\n' > "+shellQuote(dir+"/.aseman/.gitignore"))
 	return err
+}
+
+// appuiStartCommand is how the preview starts a verified app: as
+// aseman-appui verify ran it (from the project directory, under bash, with
+// PORT and HOST), with the app's server API settings loaded. The preview
+// itself runs commands with sh from /workspace.
+func appuiStartCommand(dir string, port int, start string) string {
+	return appServerEnvPrefix(dir) + "cd " + shellQuote(dir) + " && export PORT=" + strconv.Itoa(port) +
+		" HOST=0.0.0.0 && exec bash -c " + shellQuote(strings.TrimSpace(start))
 }
 
 // appServerEnvPrefix loads the app API settings into a start command.

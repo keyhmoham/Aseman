@@ -120,7 +120,10 @@ PLAN_SYSTEM = (
     "tasks, each self-contained (goal, inputs under /workspace, expected result and where to put it) and for one "
     "agent of the team. Make independent work separate tasks so it runs at the same time; split a large uniform "
     "job into several tasks for the same agent (they run as parallel instances). Add a dependency only when a "
-    "task needs another's result to start. Do not plan the final integration: the lead does it."
+    "task needs another's result to start. Each task owns its deliverable end to end, testing and validating it "
+    "included: never plan a task that only tests, validates, verifies, reviews or QAs another task's result (the "
+    "agent who makes it does that, and the platform verifies every app), unless the goal asks for an independent "
+    "review. Do not plan the final integration: the lead does it."
 )
 
 
@@ -135,6 +138,65 @@ async def plan(ctx: TurnContext, goal: str, members: list[teamlib.Member], roste
     return from_raw(raw or [])
 
 
+#: A task the decision model gives at least this of only re-checking the work
+#: of a task it depends on is not run.
+RECHECK_ABOVE = 0.8
+
+
+async def drop_rechecks(ctx: TurnContext, goal: str, tasks: list[Task]) -> list[Task]:
+    """Drop the tasks that only re-check another task's work (test, validate,
+    verify, review or QA what it delivers): the agent who makes something tests
+    and validates it itself, and the platform verifies apps, so a second check
+    by another agent does the same work twice. Returns the tasks dropped (left
+    in the plan as skipped, with why); tasks that waited on one wait on what it
+    would have checked instead."""
+    if ctx.decision is None:
+        return []
+    by_id = {t.id: t for t in tasks}
+    questions: dict[str, Any] = {}
+    asked: dict[str, Task] = {}
+    for t in tasks:
+        if not t.depends_on:
+            continue
+        before = "\n".join(f"A ({d}): {by_id[d].task[:600]}" for d in t.depends_on)
+        qid = f"r{len(asked)}"
+        asked[qid] = t
+        questions[qid] = {
+            "type": "boolean",
+            "instructions": (f"Task B comes after the task(s) A below. Is B only a second check of A's own "
+                             f"deliverable rather than work of its own?\n{before}\nB: {t.task[:800]}"),
+            "criteria": {"true": "B only tests, validates, verifies, reviews or QAs what A makes — which the "
+                                 "agent doing A must do itself as part of A",
+                         "false": "B makes, decides or delivers something new (it uses A's result as an input, "
+                                  "adds content, deploys, integrates), or the goal explicitly asks for an "
+                                  "independent review by someone else"}}
+    if not questions:
+        return []
+    answers = await ctx.decision.evaluate({"goal": goal[-3000:]}, questions)
+    dropped: list[Task] = []
+    for qid, t in asked.items():
+        p = probability(answers, qid)
+        if p is not None and p >= RECHECK_ABOVE:
+            dropped.append(t)
+    gone = {t.id: t for t in dropped}
+
+    def through(dep: str, seen: frozenset[str] = frozenset()) -> list[str]:
+        # What a dropped task would have checked stands in for it.
+        if dep not in gone or dep in seen:
+            return [dep]
+        return [x for d in gone[dep].depends_on for x in through(d, seen | {dep})]
+
+    for t in tasks:
+        if t.id in gone:
+            continue
+        t.depends_on = list(dict.fromkeys(x for d in t.depends_on for x in through(d) if x not in gone))
+    for t in dropped:
+        t.status = "skipped"
+        t.result = ("not run: it only re-checks " + ", ".join(t.depends_on) + ", whose agent tests and validates "
+                    "its own work (and the platform verifies apps)")
+    return dropped
+
+
 async def prune(ctx: TurnContext, goal: str, tasks: list[Task]) -> int:
     """Drop the dependencies the decision model is confident are not needed;
     returns how many were dropped."""
@@ -144,6 +206,8 @@ async def prune(ctx: TurnContext, goal: str, tasks: list[Task]) -> int:
     questions: dict[str, Any] = {}
     edges: dict[str, tuple[str, str]] = {}
     for t in tasks:
+        if t.status != "pending":
+            continue
         for dep in t.depends_on:
             qid = f"e{len(edges)}"
             edges[qid] = (t.id, dep)

@@ -59,7 +59,10 @@ def swarm_tools(ctx: TurnContext, store: Store) -> list[BaseTool]:
         several tasks for the same agent run as parallel instances of it; a
         task starts once the tasks in its depends_on are done, with their
         results. Leave tasks out to have the plan written from the goal and
-        the team. Integrate and check the results yourself before you answer.
+        the team. Each agent tests and validates its own task: do not plan
+        tasks that only re-check another task's work (they are not run).
+        Integrate the results and check them against the request before you
+        answer.
         """
         members = await teamlib.team(ctx)
         roster, roster_text = _roster(ctx, store, members)

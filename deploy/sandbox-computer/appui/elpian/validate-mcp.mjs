@@ -13,8 +13,8 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import readline from "node:readline";
 import { fileURLToPath } from "node:url";
+import { serveTools, text } from "./mcp-stdio.mjs";
 import { validate, validateProgram, describe, listTypes, format, fromOpenUI } from "./validate.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -69,7 +69,6 @@ const TOOLS = [
   },
 ];
 
-const text = (t, isError = false) => ({ content: [{ type: "text", text: t }], isError });
 const resolve = (p) => path.resolve(process.cwd(), p);
 
 async function call(name, args = {}) {
@@ -116,57 +115,8 @@ async function call(name, args = {}) {
   }
 }
 
-async function handle(msg) {
-  const { id, method, params } = msg;
-  const reply = (result) => ({ jsonrpc: "2.0", id, result });
-  const fail = (code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
-  switch (method) {
-    case "initialize":
-      return reply({
-        protocolVersion: (params && params.protocolVersion) || "2025-06-18",
-        capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: "aseman-elpian", version: VERSION },
-        instructions: INSTRUCTIONS,
-      });
-    case "ping":
-      return reply({});
-    case "tools/list":
-      return reply({ tools: TOOLS });
-    case "tools/call": {
-      try {
-        const out = await call(params && params.name, (params && params.arguments) || {});
-        if (!out) return fail(-32602, `Unknown tool: ${params && params.name}`);
-        return reply(out);
-      } catch (e) {
-        return reply(text(`The validator failed: ${e && e.message ? e.message : e}`, true));
-      }
-    }
-    default:
-      if (id === undefined || id === null) return null; // a notification
-      return fail(-32601, `Method not found: ${method}`);
-  }
-}
-
-export async function serve(input = process.stdin, output = process.stdout) {
-  const rl = readline.createInterface({ input, crlfDelay: Infinity });
-  const pending = [];
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    let msg;
-    try {
-      msg = JSON.parse(line);
-    } catch {
-      output.write(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }) + "\n");
-      continue;
-    }
-    const batch = Array.isArray(msg) ? msg : [msg];
-    const p = Promise.all(batch.map(handle)).then((replies) => {
-      const out = replies.filter(Boolean);
-      if (out.length) output.write(JSON.stringify(Array.isArray(msg) ? out : out[0]) + "\n");
-    });
-    pending.push(p);
-  }
-  await Promise.all(pending);
+export function serve(input = process.stdin, output = process.stdout) {
+  return serveTools({ name: "aseman-elpian", version: VERSION, instructions: INSTRUCTIONS, tools: TOOLS, call, failure: "The validator failed" }, input, output);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -100,7 +100,7 @@ function board(s, app) {
 function addForm(s, app) {
   return { type: "Card", props: { variant: "filled", style: { padding: "20", gap: "16" } }, children: [
     { type: "Text", props: { text: "New task", variant: "titleLargeEmphasized" } },
-    app.input("draft", "draft", { label: "What needs doing?", icon: "edit" }),
+    app.input("draft", "draft", { label: "What needs doing?", icon: "edit", live: true }), // "Add task" is enabled once there is text
     app.input("owner", "owner", { label: "Owner", icon: "person", helper: "Who picks it up" }),
     { type: "Switch", key: "urgent", props: { value: s.urgent, label: "Urgent" },
       events: { change: app.handler("urgent", function (e, app) { app.set({ urgent: !!e.value }); }) } },

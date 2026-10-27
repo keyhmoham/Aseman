@@ -90,6 +90,9 @@ phones alike. Everything for it is in [`elpian/`](elpian):
 | `check.mjs` | Runs the program on QuickJS against a simulated host (a 360×640 phone, then a desk window) and the live server; fails on errors, unknown nodes, missing or throwing handlers (gestures fired as the finger makes them), the validator's errors on every render, and its findings that break touch or phones (a surface in a scroll, an overlay over taps, a screen taller than a phone, …) |
 | `validate.mjs`, `schema.mjs`, `icons.json` | The UI DSL validator: checks view trees (props, styles, events, keys, parent–child relations, measured layout constraints, touch and nested gestures, fitting a phone, widget rules, M3E design lint) against the engine's schema; CLI (`validate.mjs tree.json`, `--program app.js`, `--describe Type`) |
 | `validate-mcp.mjs` | The validator as an MCP server (`elpian_validate`, `elpian_validate_program`, `elpian_describe`, `elpian_icons`), registered for OpenCode in `opencode/opencode.json` |
+| `drive.mjs` | The **headless driver**: uses the app as a person does, without a screen (a headless browser for Elpian). A session runs the bundle on QuickJS against the live server, reads the screen as a text outline with stable refs, and taps, types, selects, toggles, swipes, drags and pinches controls with the event data the client sends (disabled and unreachable controls do nothing). Each step reports the screen's changes, the requests and the problems (exceptions, unexpected error banners, server failures, broken renders, dead controls). It also asserts the screen, state and requests, mocks the space's agents and apps (replies, failures, held requests), passes time, and changes the viewport and theme. Sessions save as scenarios (`elpian/e2e/*.json`); `drive.mjs run` replays them, and coverage names the controls no step used |
+| `drive-mcp.mjs` | The driver as a stateful MCP server for OpenCode (`elpian_open`, `elpian_snapshot`, `elpian_tap`, `elpian_type`, `elpian_select`, `elpian_toggle`, `elpian_gesture`, `elpian_fire`, `elpian_wait`, `elpian_expect`, `elpian_state`, `elpian_env`, `elpian_mock`, `elpian_network`, `elpian_logs`, `elpian_coverage`, `elpian_reload`, `elpian_save_scenario`, `elpian_run_scenarios`, `elpian_close`), registered as `elpian-driver` in `opencode/opencode.json` |
+| `mcp-stdio.mjs` | The small stdio MCP server both servers use |
 | `examples/showcase.js` | A reference app in Material 3 Expressive that passes the check and the validator (scrolling pages) |
 | `examples/whiteboard.js` | A reference app with a fixed, touch-driven screen (a drawing surface that fills any window, an adaptive toolbar) that passes them too |
 | `nodes.json` | The node types the engine and UI kit draw (a test keeps it equal to the engine source) |
@@ -97,10 +100,13 @@ phones alike. Everything for it is in [`elpian/`](elpian):
 The app's server serves `GET /elpian/app.js`; `READY.json` says
 `"ui": "elpian", "elpian": "elpian/app.js"`. During verification the
 platform rebuilds the bundle, checks the server serves it, and runs
-`check.mjs` against the running server; failures go back to OpenCode. The
+`check.mjs` against the running server, then replays the app's end-to-end
+scenarios (`drive.mjs run elpian/e2e`, which OpenCode wrote while driving the
+app headlessly through every screen and control; an Elpian app without them
+is not ready; `ASEMAN_APPUI_E2E=0` skips this); failures go back to OpenCode. The
 desk window then runs the program natively (`ElpianAppView`), waking the
 sandbox and starting the server first like any preview. Test the kit with
-`node --test deploy/sandbox-computer/appui/elpian/test/elpian.test.mjs`
+`node --test deploy/sandbox-computer/appui/elpian/test/*.test.mjs`
 (after `npm install` in `deploy/tool-runtime`, for QuickJS).
 
 ## What OpenCode is given (per build)

@@ -195,7 +195,9 @@ verify_app() {
 }
 
 # check_elpian checks an Elpian frontend against the running server: the
-# server serves the bundle, and the program runs on QuickJS (check.mjs).
+# server serves the bundle, the program runs on QuickJS (check.mjs), and
+# (for the app itself) the end-to-end scenarios OpenCode wrote while driving
+# it headlessly replay (drive.mjs run elpian/e2e).
 check_elpian() {
   local dir="$1" port="$2" entry="$3" mode="$4" code out
   code=$(curl -s -o "$dir/.elpian-served.js" -w '%{http_code}' --max-time 5 "http://127.0.0.1:$port/$entry" 2>/dev/null || echo 000)
@@ -212,6 +214,17 @@ check_elpian() {
     echo "The Elpian program $entry fails on QuickJS (vendor/aseman-elpian/check.mjs):"
     echo "$out" | tail -n 40
     return 1
+  fi
+  if [[ -z "$mode" && "${ASEMAN_APPUI_E2E:-1}" != "0" ]]; then
+    if ! compgen -G "$dir/elpian/e2e/*.json" >/dev/null; then
+      echo "The app has no end-to-end scenarios: drive it headlessly with the elpian_* driver tools (elpian_open, then elpian_tap / elpian_type / elpian_select … and elpian_expect) through every screen and control, and save each journey with elpian_save_scenario to elpian/e2e/*.json (ELPIAN.md, Testing end to end)."
+      return 1
+    fi
+    if ! out=$(node "$dir/vendor/aseman-elpian/drive.mjs" run "$dir/elpian/e2e" --dir "$dir" --bundle "$entry" --apps "$dir/APPS.json" --server "http://127.0.0.1:$port" 2>&1); then
+      echo "The app's end-to-end scenarios fail (node vendor/aseman-elpian/drive.mjs run elpian/e2e): fix the app (or a scenario that expects the wrong thing):"
+      echo "$out" | tail -n 80
+      return 1
+    fi
   fi
   return 0
 }
@@ -247,7 +260,7 @@ check_ready() {
 build_prompt() {
   local dir="$1" port="$2" mode="$3" ui="${4:-elpian}" task frontend
   if [[ "$mode" == "update" ]]; then
-    task="This is an existing app (BRIEF.md is what it was built for). Make the change requested last in CHANGES.md and keep everything else working. Read the project before editing; change only what the request needs."
+    task="This is an existing app (BRIEF.md is what it was built for). Make the change requested last in CHANGES.md and keep everything else working. Read the project before editing; change only what the request needs. With an Elpian frontend, replay the existing end-to-end scenarios (elpian/e2e) first, then drive the changed and new parts headlessly step by step, and update or add scenarios so they cover them."
   else
     task="Build a new app for BRIEF.md in this directory."
   fi
@@ -292,6 +305,22 @@ elpian_* tools (an MCP server), or the same thing on the command line:
     render as the app and as the phone widget.
 Fix every error (each is a crash, a blank or a wrong render on people's
 phones) and the warnings; act on the design notes.
+Then prove the app works END TO END by using it headlessly, as a person would,
+with the Elpian driver — your elpian_open / elpian_snapshot / elpian_tap /
+elpian_type / elpian_select / elpian_toggle / elpian_gesture / elpian_wait /
+elpian_expect / elpian_mock / elpian_coverage tools (ELPIAN.md, Testing end to
+end). With your server running, open a session, read the screen outline, and
+go section by section through EVERY screen and EVERY control: use it, check
+with elpian_expect what a person should then see (and the state and the
+request it made), with realistic mocks for the space's agents and apps (also
+their failures, and held requests for loading states), on a phone and a desk
+window. Every PROBLEM a step reports is a bug: fix it, rebuild, elpian_reload,
+go on. Keep going until elpian_coverage lists no unused control. Save each
+user journey with elpian_save_scenario (one session per journey) to
+elpian/e2e/*.json and run them all with elpian_run_scenarios (or
+node vendor/aseman-elpian/drive.mjs run elpian/e2e --server http://127.0.0.1:$port):
+the platform replays them against your server before the app is ready, so
+they must pass, and must not depend on data a previous run left behind.
 Your server serves GET /elpian/app.js (the bundle) and its API. Bundle with
 node vendor/aseman-elpian/bundle.mjs . and check with
 node vendor/aseman-elpian/check.mjs elpian/app.js --apps APPS.json --server http://127.0.0.1:$port
@@ -348,7 +377,8 @@ Work in this order:
 3. Test: unit/API tests for your server, the theme applicator, parsing of
    microtool results (fixtures shaped like real replies) and the handling of
    agent replies (mock Aseman.ask and the server SDK). Run them until they
-   pass. Never call the real Aseman API from tests.
+   pass. Never call the real Aseman API from tests.$( [[ "$ui" == "elpian" ]] && printf '\n%s' '   Then test the app end to end with the Elpian driver (above): every screen,
+   every control, each journey saved to elpian/e2e and passing.')
 4. Make sure the start command serves the built app in the foreground on
    0.0.0.0:$port (read PORT from the environment, default $port) without
    rebuilding, and that GET / answers.
@@ -369,7 +399,11 @@ Find the root cause and fix it (AGENTS.md, ELPIAN.md for an Elpian frontend,
 BRIEF.md, CHANGES.md and PLAN.md describe the app). For an Elpian frontend,
 the elpian_validate_program tool (or node vendor/aseman-elpian/validate.mjs
 --program elpian/app.js --server http://127.0.0.1:$port) shows each problem in
-the view trees with where it is and how to fix it. Run the tests again, make sure the start command serves on
+the view trees with where it is and how to fix it, and the Elpian driver
+(elpian_open, elpian_tap, … elpian_run_scenarios; ELPIAN.md, Testing end to
+end) reproduces a failing scenario step by step: replay it by hand, read the
+screen and the PROBLEMS at the failing step, fix the app (or the scenario, if
+it expects the wrong thing), and run every scenario again. Run the tests again, make sure the start command serves on
 0.0.0.0:$port and GET / answers, then rewrite READY.json.
 PROMPT
 }
@@ -403,7 +437,7 @@ cmd_build() {
   fi
   if [[ -d "$ROOT/elpian" ]]; then
     mkdir -p "$dir/vendor/aseman-elpian"
-    for f in aseman-elpian.js openui-elpian.js bundle.mjs check.mjs nodes.json ELPIAN.md validate.mjs validate-mcp.mjs schema.mjs icons.json; do
+    for f in aseman-elpian.js openui-elpian.js bundle.mjs check.mjs nodes.json ELPIAN.md validate.mjs validate-mcp.mjs schema.mjs icons.json drive.mjs drive-mcp.mjs mcp-stdio.mjs; do
       [[ -f "$ROOT/elpian/$f" ]] && cp -f "$ROOT/elpian/$f" "$dir/vendor/aseman-elpian/$f"
     done
     [[ -f "$ROOT/elpian/ELPIAN.md" ]] && cp -f "$ROOT/elpian/ELPIAN.md" "$dir/ELPIAN.md"

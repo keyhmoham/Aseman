@@ -244,6 +244,19 @@ Validating view trees). The backend is the same in both cases.
    `vendor/aseman-elpian/check.mjs` and the UI DSL validator
    (`elpian_validate_program`, no errors or warnings) for Elpian — a web app's
    phone widget too. **Run them**. Do not claim ready if tests fail.
+
+   **End to end (Elpian)**: code tests and API tests are not enough — prove
+   the app works for a person by using it headlessly with the Elpian driver
+   (your `elpian_*` driver tools; ELPIAN.md, Testing end to end): open a
+   session against your running server, go through every screen and every
+   control step by step, `elpian_expect` what each step should show and do,
+   mock the space's agents and apps realistically (and their failures), fix
+   every PROBLEM a step reports, and continue until `elpian_coverage` lists
+   nothing unused. Save each user journey as `elpian/e2e/<journey>.json`
+   (`elpian_save_scenario`); the platform replays them all against your
+   server (`node vendor/aseman-elpian/drive.mjs run elpian/e2e`) before the
+   app is ready — an app without passing scenarios is not ready. After an
+   update, replay them, drive what changed, and update the scenarios.
 8. **Listen**: bind `0.0.0.0` on the port in `JOB.json` (`port`).
 9. **READY.json**: only after tests pass, write this file in the project root:
 

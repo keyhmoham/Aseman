@@ -31,7 +31,7 @@ func Parse(body string) (string, []string) {
 			continue
 		}
 		if len([]rune(r)) > MaxLen {
-			r = string([]rune(r)[:MaxLen])
+			r = strings.TrimSpace(string([]rune(r)[:MaxLen]))
 		}
 		out = append(out, r)
 	}

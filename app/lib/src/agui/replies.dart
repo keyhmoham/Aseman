@@ -21,7 +21,7 @@ final _line = RegExp(r'\n?[ \t]*<replies>([\s\S]*?)</replies>[ \t]*$');
     if (r.isEmpty || out.length == maxReplies) continue;
     final runes = r.runes.toList();
     if (runes.length > maxReplyLength) {
-      r = String.fromCharCodes(runes.take(maxReplyLength));
+      r = String.fromCharCodes(runes.take(maxReplyLength)).trim();
     }
     out.add(r);
   }

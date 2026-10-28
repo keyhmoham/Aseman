@@ -23,7 +23,13 @@ POST /apps/{slug}/{function}   # JSON body = microtool arguments
 POST /apps/{slug}/ask          # apps without microtools
 POST /platform/{tool}          # files, proxies, routines, desk, UI, db, …
 POST /timeline/{tool}          # project timeline reads
+POST /sandbox/{op}             # shared computer: exec, write_files, read_files, edit_file, list, delete
+POST /agents/{name}            # hand a task to one of the space's agents → {agent, answer}
 ```
+
+`/agents/{name}` needs a room (`X-Aseman-Room`). `codemode.batch` (concurrent
+calls) exists only in the node's own executor; in the Worker, use
+`Promise.all` over `codemode.request`.
 
 ## Deploy
 
@@ -40,4 +46,4 @@ Connect an MCP client to `https://<worker>/mcp?space=<space-id>` with the person
 
 ## In-platform agents
 
-No Worker required: deepagents turns receive `codemode: true` and use `codemode_search` / `codemode_execute` against `/deepagents/v1/codemode/mcp`. Apps, platform tools and the timeline are injected into that OpenAPI surface automatically. Messaging, `ask_user`, sandbox FS/shell, planning and swarm remain native harness tools.
+No Worker required: deepagents turns receive `codemode: true` and use `codemode_search` / `codemode_execute` against `/deepagents/v1/codemode/mcp`. Apps, platform tools, the timeline, the shared computer (`/sandbox/…`) and the space's agents (`/agents/…`) are injected into that OpenAPI surface automatically, and agents are told to do straightforward jobs in one execute. Messaging, `ask_user`, the native sandbox FS/shell, planning and swarm remain native harness tools.

@@ -3,8 +3,11 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
@@ -135,4 +138,124 @@ func TestCodeModeMCPToolsList(t *testing.T) {
 func str(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+func TestRunCodeModeJSBatchRunsConcurrently(t *testing.T) {
+	var mu sync.Mutex
+	inFlight, peak := 0, 0
+	release := make(chan struct{})
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		close(release)
+	}()
+	out, err := runCodeModeJS(`async () => {
+  const [a, b, c] = await codemode.batch([
+    { path: "/agents/writer", body: { task: "one" } },
+    { path: "/agents/critic", body: { task: "two" } },
+    { path: "/sandbox/exec", body: { command: "false" } },
+  ]);
+  return { a: a.result.answer, b: b.result.answer, c: c.ok, err: c.error };
+}`, map[string]any{}, func(opts CodeModeRequest) (any, error) {
+		mu.Lock()
+		inFlight++
+		if inFlight > peak {
+			peak = inFlight
+		}
+		mu.Unlock()
+		<-release
+		mu.Lock()
+		inFlight--
+		mu.Unlock()
+		if opts.Path == "/sandbox/exec" {
+			return nil, errors.New("boom")
+		}
+		body, _ := opts.Body.(map[string]any)
+		return map[string]any{"answer": body["task"]}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, _ := out.(map[string]any)
+	if m["a"] != "one" || m["b"] != "two" || m["c"] != false || m["err"] != "boom" {
+		t.Fatalf("got %#v", out)
+	}
+	if peak != 3 {
+		t.Fatalf("batch ran %d at a time, want 3", peak)
+	}
+}
+
+func TestRunCodeModeJSPromiseAllIsSync(t *testing.T) {
+	out, err := runCodeModeJS(`async () => {
+  const [x, y] = await Promise.all([
+    codemode.request({ path: "/apps/a/f", body: {} }),
+    codemode.request({ path: "/apps/b/g", body: {} }),
+  ]);
+  return [x, y];
+}`, map[string]any{}, func(opts CodeModeRequest) (any, error) {
+		return opts.Path, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	arr, _ := out.([]any)
+	if len(arr) != 2 || arr[0] != "/apps/a/f" || arr[1] != "/apps/b/g" {
+		t.Fatalf("got %#v", out)
+	}
+}
+
+func TestCodeModeFilePath(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct{ dir, path, want string }{
+		{"", "/workspace/apps/x/a.js", "/workspace/apps/x/a.js"},
+		{"/workspace/apps/x", "src/a.js", "/workspace/apps/x/src/a.js"},
+		{"apps/x", "a.js", "/workspace/apps/x/a.js"},
+		{"", "a.js", "/workspace/a.js"},
+	}
+	for _, c := range cases {
+		got, err := codeModeFilePath(ctx, c.dir, c.path)
+		if err != nil || got != c.want {
+			t.Fatalf("%q+%q = %q, %v; want %q", c.dir, c.path, got, err, c.want)
+		}
+	}
+	for _, bad := range []string{"/etc/passwd", "../../etc/passwd", "/workspace/../root"} {
+		if _, err := codeModeFilePath(ctx, "", bad); err == nil {
+			t.Fatalf("%q should be refused", bad)
+		}
+	}
+	noMemory := vmm.WithExecution(ctx, vmm.Execution{NoMemory: true})
+	if _, err := codeModeFilePath(noMemory, "", "/workspace/AGENTS.md"); err == nil {
+		t.Fatal("memory files should be refused for a no-memory request")
+	}
+}
+
+func TestCodeModeSandboxPathsFollowPolicy(t *testing.T) {
+	paths := map[string]any{}
+	if !codeModeAddSandboxPaths(context.Background(), paths) || paths["/sandbox/exec"] == nil || paths["/sandbox/write_files"] == nil {
+		t.Fatalf("sandbox paths missing: %v", paths)
+	}
+	denied := vmm.WithExecution(context.Background(), vmm.Execution{NoSandbox: true})
+	none := map[string]any{}
+	if codeModeAddSandboxPaths(denied, none) || len(none) != 0 {
+		t.Fatal("a no-sandbox request must not see /sandbox paths")
+	}
+	s := &Service{}
+	if _, err := s.codeModeCallSandbox(denied, "space-1", "exec", map[string]any{"command": "ls"}); err == nil {
+		t.Fatal("a no-sandbox request must not run commands")
+	}
+}
+
+func TestCodeModeAgentPaths(t *testing.T) {
+	paths := map[string]any{}
+	codeModeAddAgentPaths(paths, []codeModeAgent{{Slug: "researcher", BotID: "b1", Name: "Researcher"}})
+	op, _ := paths["/agents/researcher"].(map[string]any)
+	post, _ := op["post"].(map[string]any)
+	if post == nil || post["x-aseman-bot"] != "b1" {
+		t.Fatalf("agent path = %#v", paths)
+	}
+}
+
+func TestCodeModeWriteScriptIsOneShellWord(t *testing.T) {
+	if strings.Contains(codeModeWriteScript, "'") {
+		t.Fatal("the write script must not contain a single quote")
+	}
 }

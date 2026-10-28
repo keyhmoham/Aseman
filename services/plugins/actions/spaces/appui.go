@@ -454,7 +454,7 @@ func (s *Service) appuiAgentsBuild(ctx context.Context, spaceID identity.ID, job
 	if terr != nil || strings.TrimSpace(task) == "" {
 		task = strings.TrimPrefix(out, "exit=0\n")
 	}
-	next := "Build the app now, exactly as the task says (or hand the whole task to a developer agent of the space with this dir and TASK.md): plan, build, test, drive it end to end with aseman-elpian, write READY.json. Then call appui_publish {\"dir\": \"" + job.Dir + "\"}: the platform verifies it and opens it on the desk, or answers with what to fix."
+	next := "Build the app now, exactly as the task says (or hand the whole task to a developer agent of the space with this dir and TASK.md): plan, build, test, drive it end to end with aseman-elpian, write READY.json. Then call appui_publish {\"dir\": \"" + job.Dir + "\"}: the platform verifies it and opens it on the desk, or answers with what to fix. With Code Mode, do the whole build in one codemode_execute: every file in one /sandbox/write_files, the tests and aseman-elpian checks through /sandbox/exec, READY.json and /platform/appui_publish, returning only the outcome."
 	b, _ := json.Marshal(map[string]any{
 		"state":   "building",
 		"builder": "agents",

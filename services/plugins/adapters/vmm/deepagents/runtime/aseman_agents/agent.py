@@ -15,8 +15,10 @@ scope, on the agent's durable LangGraph thread (one per agent per room):
   extracted from (see memory.py);
 * Code Mode — Cloudflare search/execute is the capability-calling system
   (``codemode_search`` / ``codemode_execute``; see codemode.py): connected
-  apps, platform tools and the project timeline are one OpenAPI surface
-  under ``/apps``, ``/platform`` and ``/timeline``. Fallback (Code Mode
+  apps, platform tools, the project timeline, the shared computer and the
+  space's agents are one OpenAPI surface under ``/apps``, ``/platform``,
+  ``/timeline``, ``/sandbox`` and ``/agents``, and straightforward jobs are
+  done in one execute. Fallback (Code Mode
   off or MCP down): direct LLM tools + app deferral (apps.py) and
   ``timeline_*`` (timeline.py), with a visible system note;
 * subagents — the ``task`` tool, delegating to the space's agents over room

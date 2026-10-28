@@ -261,7 +261,8 @@ abstract final class BackendCapabilities {
       'list',
       'pause',
       'resume',
-      'test'
+      'test',
+      'triggers'
     ],
     'routines': [
       'create',

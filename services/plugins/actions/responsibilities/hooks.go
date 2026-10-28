@@ -45,7 +45,10 @@ func (s *Service) serveHook(ctx context.Context, req *network.Request) (*network
 		return reply(http.StatusNotFound, map[string]string{"error": "not found"}), nil
 	}
 	var r rm.Responsibility
-	if err := s.R.Get(ctx, "responsibilities", id, &r); err != nil || r.Trigger == rm.TriggerEmail {
+	if err := s.R.Get(ctx, "responsibilities", id, &r); err != nil {
+		return reply(http.StatusNotFound, map[string]string{"error": "not found"}), nil
+	}
+	if spec, ok := TriggerFor(r.Trigger); !ok || spec.Delivery != DeliveryHook {
 		return reply(http.StatusNotFound, map[string]string{"error": "not found"}), nil
 	}
 	secret, err := s.secret(&r)
@@ -65,6 +68,23 @@ func (s *Service) serveHook(ctx context.Context, req *network.Request) (*network
 		}
 	case rm.TriggerWebhook:
 		source, event, ok = s.webhook(secret, req)
+		if ok && !matches(&r, event) {
+			event = ""
+		}
+	case rm.TriggerGitLab:
+		source, event, ok = s.gitlab(&r, secret, req)
+	case rm.TriggerTeams:
+		source, event, ok = s.teams(&r, secret, req)
+	case rm.TriggerSMS:
+		source, event, ok = s.sms(&r, secret, req)
+	case rm.TriggerStripe:
+		source, event, ok = s.stripe(&r, secret, req)
+	case rm.TriggerLinear:
+		source, event, ok = s.linear(&r, secret, req)
+	case rm.TriggerJira:
+		source, event, ok = s.jira(&r, secret, req)
+	case rm.TriggerShopify:
+		source, event, ok = s.shopify(&r, secret, req)
 	}
 	if !ok {
 		return reply(http.StatusUnauthorized, map[string]string{"error": "signature"}), nil
@@ -78,6 +98,13 @@ func (s *Service) serveHook(ctx context.Context, req *network.Request) (*network
 			s.L.Warn("responsibility failed", "id", r.ID.String(), "error", err)
 		}
 	}()
+	switch r.Trigger {
+	case rm.TriggerTeams:
+		// Teams shows the answer in the channel.
+		return reply(http.StatusOK, map[string]string{"type": "message", "text": "On it: " + r.Name}), nil
+	case rm.TriggerSMS:
+		return &network.Response{Status: http.StatusOK, Header: map[string]string{"Content-Type": "text/xml"}, Body: []byte("<Response></Response>")}, nil
+	}
 	return reply(http.StatusAccepted, map[string]string{"status": "accepted"}), nil
 }
 
@@ -136,6 +163,9 @@ func (s *Service) github(r *rm.Responsibility, secret string, req *network.Reque
 	}
 	if p.Comment != nil {
 		b.WriteString("Comment: " + p.Comment.Body + "\n")
+	}
+	if !matches(r, b.String()) {
+		return "", "", true
 	}
 	return "github " + p.Repository.FullName, b.String(), true
 }

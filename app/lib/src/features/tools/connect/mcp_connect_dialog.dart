@@ -4,8 +4,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_shape.dart';
 import '../../../data/services/aseman_service.dart';
-import 'mcp_sign_in.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import 'mcp_sign_in.dart';
 
 /// Asks the person to connect their own account to the tool [botId] in the
 /// project [spaceId]: sign in with the provider (OAuth), with an OAuth client

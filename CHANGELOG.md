@@ -4,6 +4,20 @@
 
 What upgraders need to know first:
 
+- **Agents no longer reach people's own computers by default.** Host access
+  (the desktop app's "Let agents use this computer") is a node setting,
+  Admin → Governance → Host access, off by default; while off, desktop apps
+  stop answering and the `host_*` tools are not offered. Shared folders now
+  come from project computers (Settings → Shared folders; agent tools
+  `folder_list`, `folder_read`, `folder_write`).
+- **Google is an app.** Gmail and Calendar moved from built-in agent tools to
+  the Google app in the Apps catalog (Admin → Catalog → Connector apps).
+  A node that had Google on lists the app by itself after it starts; people
+  connect their account from Apps, and connecting adds the app to their home
+  project. Composio and Arcade are set up on the same admin page.
+- **Responsibilities** react to many more sources (see below); existing ones
+  keep working unchanged.
+
 - **Agent actions now pass a policy gate.** The new `governance` namespace
   decides every tool call, app call and sandbox command (CEL rules: deny, then
   ask, then allow) and records it. The default policy **asks the person before
@@ -32,15 +46,18 @@ New features:
 
 - Tasks, the morning brief, inbox triage, background research and a first-day
   greeting (proactive); reply chips under agent messages.
-- Responsibilities: agents own an area and react to schedules, GitHub, Slack
-  and webhooks. Demonstrations: show an agent how, save it as a routine.
+- Responsibilities: agents own an area and react to GitHub, GitLab, Slack,
+  Microsoft Teams, SMS, Stripe, Linear, Jira, Shopify and signed webhooks; to
+  new mail, upcoming calendar events, feed items, changed API answers and
+  changed app answers; and to schedules. Demonstrations: show an agent how,
+  save it as a routine.
 - Slack, Microsoft Teams and SMS (Twilio), including approvals there.
-- Gmail and Google Calendar; Composio and Arcade tool brokers.
+- Google (Gmail and Calendar), Composio and Arcade as apps.
 - Enterprise: OIDC single sign-on (enforceable), SCIM 2.0 provisioning,
   organizations, SPIFFE workload identity for the agent runtime (`spire`
   Compose profile).
-- Agents can use a person's own computer, limited to shared folders, through
-  the desktop app.
+- Shared folders from project computers; optionally (admin switch) a
+  person's own computer through the desktop app.
 - Voice dictation (`developer.dictate`), room purpose, icon and color, a
   setup checklist and deeper Admin → Health checks.
 - `deploy/helm/aseman`, `.github/workflows/ci.yml`, `evals/`, `docs/telemetry.md`.

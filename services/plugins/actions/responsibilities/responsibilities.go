@@ -1,15 +1,20 @@
 // Package responsibilities gives agents standing responsibilities: "when a
 // customer emails about an order, draft the answer", "when a GitHub issue is
-// labelled bug, triage it", "when someone asks in #support, answer". A
+// labelled bug, triage it", "when a payment is disputed, gather the order",
+// "when the status page changes, tell the team", "every morning at 8, check
+// the stock". A
 // responsibility belongs to a person and a room; when its trigger matches,
 // the room's lead runs its instruction as that person, started as
 // initiator "responsibility" (the audit trail's "nobody watching"), with
 // the event handed over as outside content, and the outcome lands in their
 // Tasks.
 //
-// Email triggers poll the owner's Gmail. GitHub, Slack and generic webhooks
+// The triggers are one catalog (triggers.go). Hooks from services (GitHub,
+// GitLab, Slack, Teams, SMS, Stripe, Linear, Jira, Shopify, signed webhooks)
 // arrive at /hooks/v1/responsibilities/{id}, each verified by its own
-// signature scheme with the responsibility's secret.
+// signature scheme (hooks.go). Polls (Gmail, Google Calendar, feeds, any
+// API, an app's read function) and schedules run on the node's clock
+// (polls.go).
 package responsibilities
 
 import (
@@ -18,7 +23,9 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -48,6 +55,16 @@ type Mail struct {
 	Labels  []string  `json:"labels,omitempty"`
 }
 
+// Event is a calendar event as the google namespace returns it.
+type Event struct {
+	ID       string    `json:"id"`
+	Summary  string    `json:"summary"`
+	Start    time.Time `json:"start"`
+	End      time.Time `json:"end"`
+	Location string    `json:"location,omitempty"`
+	Link     string    `json:"link,omitempty"`
+}
+
 // Ports this namespace uses.
 type (
 	SpacesPort interface {
@@ -56,6 +73,12 @@ type (
 	GooglePort interface {
 		Connected(ctx context.Context, accountID string) bool
 		SearchMail(ctx context.Context, accountID, query string, max int) ([]Mail, error)
+		Events(ctx context.Context, accountID string, from, to time.Time, query string) ([]Event, error)
+	}
+	// AppsPort calls an app's function as a person, in a project.
+	AppsPort interface {
+		ReadOnly(ctx context.Context, actor identity.ID, space, app, function string) (bool, error)
+		Call(ctx context.Context, actor identity.ID, space, app, function string, args map[string]any) (string, error)
 	}
 	TasksPort interface {
 		AddTask(ctx context.Context, t *pm.Task) (*pm.Task, error)
@@ -70,12 +93,15 @@ type Service struct {
 	Spaces SpacesPort
 	Google GooglePort
 	Tasks  TasksPort
-	now    func() time.Time
+	Apps   AppsPort
+	// HTTP fetches feeds and APIs (public addresses only).
+	HTTP *http.Client
+	now  func() time.Time
 }
 
 // NewService builds the namespace's service.
 func NewService(k api.Kernel, r *repo.Repo, log *logger.Logger) *Service {
-	return &Service{K: k, R: r, L: log.Named("responsibilities"), now: time.Now}
+	return &Service{K: k, R: r, L: log.Named("responsibilities"), HTTP: publicClient(), now: time.Now}
 }
 
 func (s *Service) master() string { return s.K.Env()["node_private_key"] }
@@ -97,7 +123,19 @@ type Input struct {
 	Action      string   `json:"action,omitempty"`
 	Channel     string   `json:"channel,omitempty"`
 	Keyword     string   `json:"keyword,omitempty"`
-	// Secret is the provider's signing secret (Slack's); empty generates one.
+	// Polls and schedules (see the trigger catalog).
+	URL             string `json:"url,omitempty"`
+	Path            string `json:"path,omitempty"`
+	App             string `json:"app,omitempty"`
+	Function        string `json:"function,omitempty"`
+	Args            string `json:"args,omitempty"`
+	IntervalMinutes int64  `json:"interval_minutes,omitempty"`
+	LeadMinutes     int64  `json:"lead_minutes,omitempty"`
+	At              string `json:"at,omitempty"`
+	Timezone        string `json:"timezone,omitempty"`
+	// Secret is the provider's signing secret (Slack's, Stripe's…) or an
+	// API's bearer token; for a hook whose source takes ours, empty
+	// generates one.
 	Secret string `json:"secret,omitempty"`
 }
 
@@ -123,14 +161,18 @@ func (s *Service) Create(ctx context.Context, owner identity.ID, in Input) (*rm.
 	if strings.TrimSpace(in.Name) == "" || strings.TrimSpace(in.Instruction) == "" {
 		return nil, nil, errs.InvalidArgument("a responsibility needs a name and an instruction")
 	}
-	switch in.Trigger {
-	case rm.TriggerEmail:
-		if in.From == "" && in.Subject == "" && in.Label == "" {
-			return nil, nil, errs.InvalidArgument("an email trigger needs from, subject or label")
+	spec, ok := TriggerFor(in.Trigger)
+	if !ok {
+		return nil, nil, errs.InvalidArgument("unknown trigger " + in.Trigger + "; responsibilities.triggers lists them")
+	}
+	if err := spec.check(in); err != nil {
+		return nil, nil, err
+	}
+	if in.Args != "" {
+		var args map[string]any
+		if err := json.Unmarshal([]byte(in.Args), &args); err != nil {
+			return nil, nil, errs.InvalidArgument("arguments are a JSON object")
 		}
-	case rm.TriggerGitHub, rm.TriggerSlack, rm.TriggerWebhook:
-	default:
-		return nil, nil, errs.InvalidArgument("trigger is email, github, slack or webhook")
 	}
 	id, err := identity.New(s.K.NodeID())
 	if err != nil {
@@ -140,9 +182,18 @@ func (s *Service) Create(ctx context.Context, owner identity.ID, in Input) (*rm.
 	r := &rm.Responsibility{Entity: entity.Entity{ID: id, CreatedAt: now, UpdatedAt: now}, OwnerID: owner.String(), SpaceID: in.Space,
 		RoomID: in.Room, Name: clip(in.Name, 120), Instruction: clip(in.Instruction, 4000), Trigger: in.Trigger, From: in.From,
 		Subject: in.Subject, Label: in.Label, Repo: strings.ToLower(in.Repo), Events: in.Events, Action: in.Action,
-		Channel: in.Channel, Keyword: in.Keyword, Enabled: true, Cursor: now}
+		Channel: in.Channel, Keyword: in.Keyword, Enabled: true, Cursor: now,
+		URL: strings.TrimSpace(in.URL), Path: strings.TrimSpace(in.Path), App: in.App, Function: strings.TrimSpace(in.Function), Args: in.Args,
+		IntervalMinutes: in.IntervalMinutes, LeadMinutes: in.LeadMinutes, At: in.At, Timezone: in.Timezone}
 	extra := map[string]string{}
-	if in.Trigger != rm.TriggerEmail {
+	if spec.Delivery != DeliveryHook {
+		r.NextRun = nextRun(r, now)
+		if r.Trigger != rm.TriggerSchedule {
+			// A poll looks once soon, to learn what is there already.
+			r.NextRun = now.Add(time.Minute)
+		}
+	}
+	if spec.Delivery == DeliveryHook || strings.TrimSpace(in.Secret) != "" {
 		secret := strings.TrimSpace(in.Secret)
 		if secret == "" {
 			b := make([]byte, 24)
@@ -155,7 +206,9 @@ func (s *Service) Create(ctx context.Context, owner identity.ID, in Input) (*rm.
 			return nil, nil, errs.Wrap(errs.CodeInternal, err, "seal secret")
 		}
 		r.Secret = sealed
-		extra["url"] = HookPath + "/" + id.String()
+		if spec.Delivery == DeliveryHook {
+			extra["url"] = hookURL(id.String())
+		}
 	}
 	if err := s.R.CreateID(ctx, "responsibilities", id, r); err != nil {
 		return nil, nil, err
@@ -197,6 +250,11 @@ func (s *Service) SetEnabled(ctx context.Context, owner identity.ID, id string, 
 	r.Enabled, r.UpdatedAt = on, s.now().UTC()
 	if on && r.Trigger == rm.TriggerEmail {
 		r.Cursor = s.now().UTC()
+	}
+	if on && r.NextRun.Before(s.now()) {
+		if spec, ok := TriggerFor(r.Trigger); ok && spec.Delivery != DeliveryHook {
+			r.NextRun = nextRun(r, s.now())
+		}
 	}
 	return r, s.R.Update(ctx, "responsibilities", r.ID, r)
 }
@@ -252,48 +310,6 @@ func errString(err error) string {
 	return err.Error()
 }
 
-// pollEmail fires email responsibilities for new matching mail.
-func (s *Service) pollEmail(ctx context.Context) {
-	if s.Google == nil {
-		return
-	}
-	var rows []rm.Responsibility
-	if err := s.R.List(ctx, "responsibilities", database.Filter{Equal: map[string]any{"trigger": rm.TriggerEmail, "enabled": true}, Limit: 200}, &rows); err != nil {
-		return
-	}
-	for i := range rows {
-		r := &rows[i]
-		if !s.Google.Connected(ctx, r.OwnerID) {
-			continue
-		}
-		mails, err := s.Google.SearchMail(ctx, r.OwnerID, EmailQuery(r), 10)
-		if err != nil {
-			continue
-		}
-		cursor := r.Cursor
-		fired := 0
-		for j := len(mails) - 1; j >= 0 && fired < 5; j-- {
-			m := mails[j]
-			if !m.Date.After(r.Cursor) {
-				continue
-			}
-			event := fmt.Sprintf("Email id %s from %s on %s\nSubject: %s\n%s", m.ID, m.From, m.Date.Format(time.RFC1123), m.Subject, m.Snippet)
-			_, _ = s.Fire(ctx, r, "email from "+m.From, event)
-			fired++
-			if m.Date.After(cursor) {
-				cursor = m.Date
-			}
-		}
-		if cursor.After(r.Cursor) {
-			var cur rm.Responsibility
-			if s.R.Get(ctx, "responsibilities", r.ID, &cur) == nil {
-				cur.Cursor = cursor
-				_ = s.R.Update(ctx, "responsibilities", r.ID, &cur)
-			}
-		}
-	}
-}
-
 // EmailQuery is the Gmail search an email responsibility watches.
 func EmailQuery(r *rm.Responsibility) string {
 	parts := []string{"newer_than:2d"}
@@ -313,20 +329,6 @@ func EmailQuery(r *rm.Responsibility) string {
 		parts = append(parts, "label:"+quote(r.Label))
 	}
 	return strings.Join(parts, " ")
-}
-
-// Run polls email responsibilities.
-func (s *Service) Run(ctx context.Context) {
-	t := time.NewTicker(2 * time.Minute)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			s.pollEmail(ctx)
-		}
-	}
 }
 
 // secret opens a responsibility's signing secret.
@@ -379,4 +381,51 @@ func (b tasksBridge) AddTask(ctx context.Context, t *pm.Task) (*pm.Task, error) 
 	var out *pm.Task
 	err := bridge.Invoke(ctx, b.K, "proactive", "AddTask", []any{ctx, t}, &out)
 	return out, err
+}
+
+func (b googleBridge) Events(ctx context.Context, accountID string, from, to time.Time, query string) ([]Event, error) {
+	var out []Event
+	err := bridge.Invoke(ctx, b.K, "google", "Events", []any{ctx, accountID, from, to, query}, &out)
+	return out, err
+}
+
+// appsBridge calls apps through the tools namespace, as the person.
+type appsBridge struct{ K api.Kernel }
+
+func (b appsBridge) dispatch(ctx context.Context, actor identity.ID, action string, body map[string]any) (map[string]any, error) {
+	raw, _ := json.Marshal(body)
+	resp, err := b.K.Actions().Dispatch(ctx, "tools", action, &api.ActionRequest{Caller: api.Caller{ID: actor, Kind: "user"}, Body: raw})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{}
+	return out, json.Unmarshal(resp.Body, &out)
+}
+
+// ReadOnly reports whether the app says the function only reads.
+func (b appsBridge) ReadOnly(ctx context.Context, actor identity.ID, space, app, function string) (bool, error) {
+	out, err := b.dispatch(ctx, actor, "commands_list", map[string]any{"bot": app, "space": space})
+	if err != nil {
+		return false, err
+	}
+	commands, _ := out["commands"].([]any)
+	for _, c := range commands {
+		cmd, _ := c.(map[string]any)
+		if name, _ := cmd["name"].(string); name != function {
+			continue
+		}
+		ann, _ := cmd["annotations"].(map[string]any)
+		ro, _ := ann["readOnlyHint"].(bool)
+		return ro || readName(function), nil
+	}
+	return false, errs.NotFound("the app has no function " + function)
+}
+
+func (b appsBridge) Call(ctx context.Context, actor identity.ID, space, app, function string, args map[string]any) (string, error) {
+	out, err := b.dispatch(ctx, actor, "invoke", map[string]any{"bot": app, "space": space, "function": function, "payload": args})
+	if err != nil {
+		return "", err
+	}
+	raw, _ := json.Marshal(out["result"])
+	return string(raw), nil
 }

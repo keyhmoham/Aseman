@@ -227,11 +227,18 @@ dependency. See [`services/README.md`](services/README.md#tools-one-form-three-b
   egress proxy, optionally under gVisor (`ASEMAN_SANDBOX_RUNTIME=runsc`), and a
   person can take one over.
 - **Your assistant works on its own, read-only**: Tasks, the morning brief,
-  inbox triage and background research, with Gmail and Calendar connected
-  (Settings → Connections). Responsibilities react to email, GitHub, Slack and
-  webhooks; demonstrations turn something you showed into a skill.
-- **Reach it anywhere**: Slack, Microsoft Teams and SMS; voice dictation; the
-  desktop app lets agents use shared folders on your computer.
+  inbox triage and background research, with the Google app connected.
+  Responsibilities react to services (GitHub, GitLab, Slack, Teams, SMS,
+  Stripe, Linear, Jira, Shopify, webhooks), polls (mail, calendar, feeds, any
+  API, an app's answer) and schedules; demonstrations turn something you
+  showed into a skill.
+- **Apps are the connectors**: Google (Gmail and Calendar), Composio and Arcade
+  are apps in the catalog, added to projects and connected per person like
+  any other app.
+- **Reach it anywhere**: Slack, Microsoft Teams and SMS; voice dictation.
+  People share folders of their project computers with their agents
+  everywhere; agents on people's own computers (desktop app) is an admin
+  switch, off by default.
 - **Enterprise**: OIDC single sign-on, SCIM provisioning, organizations, SPIFFE
   workload identity (`docker compose --profile spire up`).
 - **Operations**: Admin → Health checks the real thing; `deploy/helm/aseman`

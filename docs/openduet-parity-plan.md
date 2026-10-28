@@ -157,13 +157,25 @@ records are its own schemas, and other modules reach it only through
 ## 9. Responsibilities
 
 - `responsibilities`: a standing instruction for an agent in a room, fired by
-  an email matching a filter (from, subject, label), a GitHub event (type,
-  repo, action), a Slack event (channel, keyword), or a signed generic webhook.
-- Inbound `/hooks/v1/responsibilities/{id}` verifies GitHub
-  `X-Hub-Signature-256`, Slack `v0` signatures (with replay window) or an
-  HMAC header; the email trigger polls the owner's Gmail.
+  a trigger from one catalog (`responsibilities.triggers`), which the app
+  builds its form from.
+- Signed hooks at `/hooks/v1/responsibilities/{id}`: GitHub
+  (`X-Hub-Signature-256`), GitLab (`X-Gitlab-Token`), Slack (`v0`, replay
+  window), Microsoft Teams outgoing webhooks (HMAC), SMS through Twilio
+  (`X-Twilio-Signature`), Stripe (`Stripe-Signature`, replay window), Linear
+  (`Linear-Signature`, delivery timestamp), Jira (`X-Hub-Signature`), Shopify
+  (`X-Shopify-Hmac-Sha256`) and generic signed webhooks; each filters by
+  repository or project, event types, action and keyword.
+- Polls on the node's clock: Gmail and Google Calendar (through the Google
+  app's connection), RSS/Atom feeds, any HTTP API (fires when its answer, or a
+  JSON value in it, changes) and an app's read-only function (called as the
+  person); the first look only learns what is there. Feeds and APIs reach
+  public addresses only.
+- Schedules: every N minutes, or daily at a time in a time zone.
 - A firing runs as the owner with `initiator=responsibility`, is audited, and
-  shows in the room and Tasks.
+  shows in the room and Tasks. Agents may set up polls and schedules
+  themselves; hooks, whose secrets only the person should see, are set up by
+  the person.
 
 ## 10. Demonstrations
 
@@ -186,16 +198,22 @@ records are its own schemas, and other modules reach it only through
   to the thread; answering an approval there answers it in Aseman.
 - Delivery router: push (APNs, existing), Twilio SMS, Slack DM, Teams.
 
-## 12. Gmail, Calendar, Composio, Arcade
+## 12. Gmail, Calendar, Composio, Arcade — as apps
 
-- `google` namespace: admin registers one OAuth client (Admin → Connections);
-  each person connects their own account (authorization code + PKCE,
-  offline refresh token sealed in the vault).
-- Agent tools: `gmail_search`, `gmail_read`, `gmail_draft`, `gmail_send`
-  (send asks by default), `calendar_events`, `calendar_create` (asks).
-- A fake Google (`cmd/fakegoogle`) for tests and demos.
-- Composio and Arcade join the MCP catalog samples as governed brokers;
-  connectors are granted per agent through its allowed tools.
+- Apps are Aseman's connectors, so these are apps: listed in the Apps
+  catalog, added to projects, connected per person through the same flow.
+- Google: an administrator sets up one OAuth client (Admin → Catalog →
+  Connector apps), which lists the Google app; its MCP server is the `google`
+  namespace (`/google/v1/mcp`), called with the app's key and the person each
+  call is for, using that person's own connection (authorization code + PKCE,
+  offline refresh token sealed in the vault). Connecting adds it to the
+  person's home project. Functions: `gmail_search`, `gmail_read`,
+  `gmail_draft`, `gmail_send` (send asks by default), `calendar_events`,
+  `calendar_create` (asks).
+- Composio and Arcade are presets on the same page: listed as MCP apps with the
+  node's key and each person's id; people connect their accounts at the broker.
+- `tools.commands_list` reports connector apps as `auth: "account"` with how to
+  connect them. A fake Google (`cmd/fakegoogle`) for tests and demos.
 
 ## 13. Enterprise identity
 
@@ -210,14 +228,17 @@ records are its own schemas, and other modules reach it only through
   verifies a JWT-SVID from the runtime (bundle from SPIRE's JWKS endpoint) as
   workload identity on top of the turn token.
 
-## 14. Desktop host access
+## 14. Shared folders and host access
 
-- The desktop app (macOS, Windows, Linux) can register the computer it runs
-  on as a host the person's agents may use, limited to folders the person
-  shares.
-- `hostaccess` brokers calls (`host_exec`, `host_read`, `host_write`,
-  `host_list`) to the host over long-polling; every call passes the gate and,
-  by default, asks on the desktop before it runs.
+- People share folders of their project computers (sandboxes) with their own
+  agents in every project: `folder_list`, `folder_read`, `folder_write` (write
+  only where shared read-write); the files never leave that computer.
+- Agents on people's own computers is the highest access the node can give:
+  an administrator turns it on (Admin → Governance → Host access), off by
+  default. Only then may the desktop app register its computer and answer
+  `host_exec`, `host_read`, `host_write`, `host_list` over long-polling,
+  limited to folders shared there; every call passes the gate and asks on the
+  desktop first. Turning it off disconnects every computer.
 
 ## 15. Evals
 

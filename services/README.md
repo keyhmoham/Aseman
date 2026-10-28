@@ -342,31 +342,53 @@ done is never refused, so a run can finish at most one step past the cap.
   audited with who started it (`audit_list`, `audit_export` as CSV). Agents ask
   for credentials with a masked box (`secret_request`; `secret_*`) and use them
   as `{{secret:name}}`; outbound content is checked for credentials and card
-  numbers; outside content reaches models in an untrusted envelope. A project's
+  numbers; outside content reaches models in an untrusted envelope. An app
+  function is judged by what it does (`gmail_search` reads, `gmail_send`
+  sends), read from the call's body. A project's
   computer follows its network policy (`egress_get`, `egress_set`; the
   `aseman-egress` sidecar), and a person can take it over (`computer_help`,
   `control_take`, `control_release`). See [`docs/openduet-parity-plan.md`](../docs/openduet-parity-plan.md).
-- **google** — each person's Gmail and Calendar over OAuth (PKCE): agents
-  search and read mail, draft (and, approved, send) replies, list and create
-  events (`status`, `connect_start`, `disconnect`; `admin_get`, `admin_set`).
+- **google** — Gmail and Calendar as an app: turned on (`admin_set`), it lists
+  a **Google** app in the Apps catalog whose MCP server is this namespace
+  (`/google/v1/mcp`, called with the app's key and the person each call is
+  for). Each person connects their own Google account (OAuth with PKCE:
+  `status`, `connect_start`, `disconnect`); connecting adds the app to their
+  home project. Its functions: `gmail_search`, `gmail_read`, `gmail_draft`,
+  `gmail_send`, `calendar_events`, `calendar_create`.
 - **proactive** — Tasks (suggested, working, needs input, ready for review),
   inbox triage, the morning brief, background research (read-only, as
   initiator `proactive`), the first-day greeting and the setup checklist
   (`tasks_list`, `task_*`, `brief_*`, `triage`, `first_day`, `settings_*`,
   `research_now`, `setup_check`).
-- **responsibilities** — standing instructions an agent runs when an email,
-  GitHub event, Slack message or webhook matches (`create`, `list`, `pause`,
-  `resume`, `delete`, `test`; hooks at `/hooks/v1/responsibilities/{id}`).
+- **responsibilities** — standing instructions an agent runs, as the person,
+  when a trigger fires. The triggers are one catalog (`triggers`): signed
+  hooks from GitHub, GitLab, Slack, Microsoft Teams, SMS (Twilio), Stripe,
+  Linear, Jira, Shopify and generic webhooks at
+  `/hooks/v1/responsibilities/{id}`; polls of Gmail, Google Calendar, RSS/Atom
+  feeds, any HTTP API (a change of its answer or one JSON value) and an app's
+  read-only function; and schedules (an interval, or daily at a time). Feeds
+  and APIs are fetched from public addresses only
+  (`ASEMAN_RESPONSIBILITIES_ALLOW_PRIVATE=1` lifts that). `create`, `list`,
+  `pause`, `resume`, `delete`, `test`.
 - **channels** — Slack, Microsoft Teams and SMS (Twilio): people link their
   accounts with a code, talk to their agents, answer approvals with buttons and
   get their brief there (`status`, `link_code`, `unlink`, `binding_set`,
   `admin_get`, `admin_set`).
+- **apps as connectors** — Composio and Arcade are listed as apps from
+  presets (`tools.broker_presets`, `tools.broker_add`), each person connecting
+  their own accounts at the broker. `tools.commands_list` reports such
+  connector apps (and Google) as `auth: "account"` with how to connect them,
+  so every app is added and connected through the same Apps flow.
 - **enterprise** — OpenID Connect single sign-on (optionally required per
   domain), SCIM 2.0 provisioning at `/scim/v2`, organizations by email domain,
   offboarding, and SPIFFE workload identity for the agent runtime.
-- **hostaccess** — a person's own computer through the desktop app, limited to
-  the folders they share (`register`, `hosts`, `set_enabled`, `next`, `result`;
-  agent tools `host_exec`, `host_read`, `host_write`, `host_list`).
+- **hostaccess** — shared folders. A person shares a folder of one of their
+  project computers with their own agents in every project (`folders`,
+  `folder_share`, `folder_set`, `folder_unshare`; agent tools `folder_list`,
+  `folder_read`, `folder_write`); the files stay on that computer. Agents on
+  people's **own** computers (the desktop app: `register`, `next`, `result`;
+  tools `host_*`) is a node setting an administrator turns on (`admin_set`),
+  off by default.
 
 ### Agents & apps
 

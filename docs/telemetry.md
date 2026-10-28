@@ -14,6 +14,7 @@ or a person used one. Here is every destination:
 | OpenViking and timelines (your own containers) | Agents remember; projects record history | Memory and timeline entries |
 | Google (Gmail, Calendar, OAuth) | A person connects Google and their agents read mail or calendar | That person's OAuth token; mail and calendar requests |
 | Slack, Microsoft Teams, Twilio | An administrator connects them and people link their accounts | Replies, approval prompts, notifications |
+| Feeds and APIs a responsibility watches | A person sets up a feed or API responsibility | GET requests to that public address, with the bearer token they gave |
 | Composio, Arcade, MCP servers, apps | An administrator adds them and agents call their tools | Tool calls, with the person's id where the broker needs it |
 | Single sign-on providers | SSO is on and people sign in | The standard OIDC exchange; SCIM only receives |
 | Apple Push Notification service | APNs keys are set | Notification titles and bodies |

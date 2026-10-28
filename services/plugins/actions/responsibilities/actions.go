@@ -23,13 +23,18 @@ func (s *Service) actions() []api.Action {
 		}}
 	}
 	return []api.Action{
-		a("create", "Give an agent a standing responsibility: an instruction run when an email, GitHub event, Slack message or webhook matches", s.create),
+		a("triggers", "What can fire a responsibility: services' signed hooks, polls of mail, calendars, feeds, APIs and apps, and schedules, with their settings", s.triggers),
+		a("create", "Give an agent a standing responsibility: an instruction run when an event from a service, an app, an API or the clock matches (see triggers)", s.create),
 		a("list", "My responsibilities (in a project, or all)", s.list),
 		a("pause", "Pause a responsibility", s.toggle(false)),
 		a("resume", "Resume a responsibility", s.toggle(true)),
 		a("delete", "Delete a responsibility", s.delete),
 		a("test", "Fire a responsibility now with a sample event", s.test),
 	}
+}
+
+func (s *Service) triggers(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+	return helper.JSON(map[string]any{"triggers": Triggers, "hook_base": hookURL("")})
 }
 
 func (s *Service) create(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
@@ -112,8 +117,13 @@ func (s *Service) test(ctx context.Context, req *api.ActionRequest) (*api.Action
 	return helper.JSON(map[string]any{"reply": reply})
 }
 
-// AvailableTools: an agent working for a person may give itself an email
-// responsibility (webhook ones need a secret only the person should see).
+// agentTriggers are the triggers an agent may set up for the person: those
+// that need nothing from a source the person controls. Hooks need a signing
+// secret only the person should see, so the person sets those up.
+var agentTriggers = []string{rm.TriggerEmail, rm.TriggerCalendar, rm.TriggerFeed, rm.TriggerAPI, rm.TriggerApp, rm.TriggerSchedule}
+
+// AvailableTools: an agent working for a person may give itself polling and
+// scheduled responsibilities in a project the person works in.
 func (s *Service) AvailableTools(ctx context.Context, actor, space string) ([]string, error) {
 	id, err := identity.Parse(actor)
 	if err != nil || !s.canWrite(ctx, id, space) {
@@ -122,8 +132,7 @@ func (s *Service) AvailableTools(ctx context.Context, actor, space string) ([]st
 	return []string{"responsibility_create", "responsibility_list"}, nil
 }
 
-// AgentTool serves responsibility_create (email triggers) and
-// responsibility_list.
+// AgentTool serves responsibility_create and responsibility_list.
 func (s *Service) AgentTool(ctx context.Context, call gate.ToolCall) (string, error) {
 	owner, err := identity.Parse(call.ActorID)
 	if err != nil {
@@ -133,12 +142,24 @@ func (s *Service) AgentTool(ctx context.Context, call gate.ToolCall) (string, er
 	case "responsibility_create":
 		var in Input
 		_ = json.Unmarshal([]byte(call.Args), &in)
-		in.Space, in.Room, in.Trigger = call.SpaceID, call.RoomID, rm.TriggerEmail
+		in.Space, in.Room = call.SpaceID, call.RoomID
+		if in.Trigger == "" {
+			in.Trigger = rm.TriggerEmail
+		}
+		if !contains(agentTriggers, in.Trigger) {
+			return "", errs.Permission("a " + in.Trigger + " trigger is connected by the person, under the project's Agents → Responsibilities; agents set up " + strings.Join(agentTriggers, ", "))
+		}
+		in.Secret = ""
 		r, _, err := s.Create(ctx, owner, in)
 		if err != nil {
 			return "", err
 		}
-		return "Responsibility \"" + r.Name + "\" is on: it runs when new mail matches " + EmailQuery(r) + ".", nil
+		spec, _ := TriggerFor(r.Trigger)
+		what := strings.ToLower(spec.Label)
+		if r.Trigger == rm.TriggerEmail {
+			what = "new mail matches " + EmailQuery(r)
+		}
+		return "Responsibility \"" + r.Name + "\" is on: it runs when " + what + ".", nil
 	case "responsibility_list":
 		rows, err := s.List(ctx, owner, call.SpaceID)
 		if err != nil {

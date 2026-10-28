@@ -2,8 +2,12 @@ package responsibilities
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,18 +54,56 @@ func (f *fakeSpaces) count() int {
 	return len(f.tasks)
 }
 
-type fakeGoogle struct{ mails []Mail }
+func (f *fakeSpaces) joined() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return strings.Join(f.tasks, "\n")
+}
+
+type fakeGoogle struct {
+	mails  []Mail
+	events []Event
+}
 
 func (f *fakeGoogle) Connected(context.Context, string) bool { return true }
 func (f *fakeGoogle) SearchMail(context.Context, string, string, int) ([]Mail, error) {
 	return f.mails, nil
 }
+func (f *fakeGoogle) Events(context.Context, string, time.Time, time.Time, string) ([]Event, error) {
+	return f.events, nil
+}
 
-type fakeTasks struct{ added []pm.Task }
+// fakeApps is one app with a read function and a write function.
+type fakeApps struct {
+	answer string
+	calls  int
+}
+
+func (f *fakeApps) ReadOnly(_ context.Context, _ identity.ID, _, _, function string) (bool, error) {
+	return function == "order_status", nil
+}
+
+func (f *fakeApps) Call(context.Context, identity.ID, string, string, string, map[string]any) (string, error) {
+	f.calls++
+	return f.answer, nil
+}
+
+type fakeTasks struct {
+	mu    sync.Mutex
+	added []pm.Task
+}
 
 func (f *fakeTasks) AddTask(_ context.Context, t *pm.Task) (*pm.Task, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.added = append(f.added, *t)
 	return t, nil
+}
+
+func (f *fakeTasks) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.added)
 }
 
 func harness(t *testing.T) (*Service, *fakeSpaces, *fakeTasks, context.Context) {
@@ -131,7 +173,7 @@ func TestGitHubDeliveryIsVerifiedAndFiltered(t *testing.T) {
 	if spaces.kinds[0] != vmm.InitiatorResponsibility || !strings.Contains(spaces.tasks[0], "<untrusted_data source=\"github harbor/shop\">") {
 		t.Fatalf("runs as a responsibility, with the event as outside content: %v %s", spaces.kinds, spaces.tasks[0])
 	}
-	waitFor(t, func() bool { return len(tasks.added) == 1 })
+	waitFor(t, func() bool { return tasks.count() == 1 })
 	if tasks.added[0].Status != pm.StatusReview {
 		t.Fatal("the outcome lands in Tasks")
 	}
@@ -163,6 +205,12 @@ func TestSlackSignatureAndChallenge(t *testing.T) {
 	waitFor(t, func() bool { return spaces.count() == 1 })
 }
 
+// tick runs the due polls and schedules [d] from now.
+func tick(s *Service, ctx context.Context, d time.Duration) {
+	s.now = func() time.Time { return time.Now().Add(d) }
+	s.Tick(ctx)
+}
+
 func TestEmailFiresOncePerNewMessage(t *testing.T) {
 	s, spaces, _, ctx := harness(t)
 	owner, _ := identity.Parse(ownerHex)
@@ -173,11 +221,194 @@ func TestEmailFiresOncePerNewMessage(t *testing.T) {
 	if q := EmailQuery(r); q != "newer_than:2d subject:order" {
 		t.Fatal(q)
 	}
-	g := &fakeGoogle{mails: []Mail{{ID: "new", Subject: "Where is my order?", Date: time.Now().Add(time.Minute)}, {ID: "old", Subject: "order", Date: time.Now().Add(-time.Hour)}}}
-	s.Google = g
-	s.pollEmail(ctx)
-	s.pollEmail(ctx)
+	s.Google = &fakeGoogle{mails: []Mail{{ID: "new", Subject: "Where is my order?", Date: time.Now().Add(time.Minute)}, {ID: "old", Subject: "order", Date: time.Now().Add(-time.Hour)}}}
+	tick(s, ctx, 2*time.Minute)
+	tick(s, ctx, 5*time.Minute)
 	if spaces.count() != 1 {
 		t.Fatalf("one new message fires once: %d", spaces.count())
 	}
+}
+
+func TestTheCatalogChecksEachTrigger(t *testing.T) {
+	s, _, _, ctx := harness(t)
+	owner, _ := identity.Parse(ownerHex)
+	for _, in := range []Input{
+		{Trigger: "carrier_pigeon"},
+		{Trigger: rm.TriggerEmail},
+		{Trigger: rm.TriggerStripe},
+		{Trigger: rm.TriggerFeed},
+		{Trigger: rm.TriggerFeed, URL: "file:///etc/passwd"},
+		{Trigger: rm.TriggerAPI, URL: "https://user:pw@api.example.com"},
+		{Trigger: rm.TriggerSchedule},
+		{Trigger: rm.TriggerSchedule, At: "25:00"},
+		{Trigger: rm.TriggerSchedule, At: "08:00", Timezone: "Mars/Olympus"},
+		{Trigger: rm.TriggerApp, App: "x"},
+		{Trigger: rm.TriggerApp, App: "x", Function: "f", Args: "not json"},
+	} {
+		in.Space, in.Name, in.Instruction = spaceHex, "n", "i"
+		if _, _, err := s.Create(ctx, owner, in); err == nil {
+			t.Errorf("accepted %+v", in)
+		}
+	}
+	if len(Triggers) < 16 {
+		t.Fatalf("the catalog: %d triggers", len(Triggers))
+	}
+}
+
+func TestScheduleFiresOnTheClock(t *testing.T) {
+	s, spaces, _, ctx := harness(t)
+	owner, _ := identity.Parse(ownerHex)
+	if _, _, err := s.Create(ctx, owner, Input{Space: spaceHex, Name: "Stock", Instruction: "Check the stock", Trigger: rm.TriggerSchedule, IntervalMinutes: 30}); err != nil {
+		t.Fatal(err)
+	}
+	tick(s, ctx, 10*time.Minute)
+	if spaces.count() != 0 {
+		t.Fatal("not before its time")
+	}
+	tick(s, ctx, 31*time.Minute)
+	tick(s, ctx, 32*time.Minute)
+	if spaces.count() != 1 {
+		t.Fatalf("once per interval: %d", spaces.count())
+	}
+	daily, _, _ := s.Create(ctx, owner, Input{Space: spaceHex, Name: "Morning", Instruction: "Plan", Trigger: rm.TriggerSchedule, At: "08:00", Timezone: "Europe/Berlin"})
+	loc, _ := time.LoadLocation("Europe/Berlin")
+	if at := daily.NextRun.In(loc); at.Hour() != 8 || at.Minute() != 0 || !daily.NextRun.After(time.Now()) {
+		t.Fatalf("next 08:00 Berlin: %s", at)
+	}
+}
+
+func TestCalendarFiresOncePerEvent(t *testing.T) {
+	s, spaces, _, ctx := harness(t)
+	owner, _ := identity.Parse(ownerHex)
+	s.Google = &fakeGoogle{events: []Event{{ID: "e1", Summary: "Call with the supplier", Start: time.Now().Add(20 * time.Minute)}}}
+	if _, _, err := s.Create(ctx, owner, Input{Space: spaceHex, Name: "Prep", Instruction: "Prepare a brief", Trigger: rm.TriggerCalendar, LeadMinutes: 45}); err != nil {
+		t.Fatal(err)
+	}
+	tick(s, ctx, 2*time.Minute)
+	tick(s, ctx, 8*time.Minute)
+	if spaces.count() != 1 || !strings.Contains(spaces.tasks[0], "Call with the supplier") {
+		t.Fatalf("once per event: %d", spaces.count())
+	}
+}
+
+func TestFeedAPIAndAppFireOnWhatIsNew(t *testing.T) {
+	s, spaces, _, ctx := harness(t)
+	owner, _ := identity.Parse(ownerHex)
+	items := []string{"a"}
+	status := "operational"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/feed" {
+			var b strings.Builder
+			b.WriteString(`<rss><channel>`)
+			for _, it := range items {
+				b.WriteString(`<item><guid>` + it + `</guid><title>Release ` + it + `</title><description>notes</description></item>`)
+			}
+			b.WriteString(`</channel></rss>`)
+			_, _ = w.Write([]byte(b.String()))
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer tok" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":{"status":"` + status + `","checked":"` + time.Now().String() + `"}}`))
+	}))
+	defer srv.Close()
+	// The public-only client would refuse a local server.
+	if _, err := s.fetch(ctx, srv.URL+"/feed", ""); err == nil {
+		t.Fatal("feeds and APIs are public addresses only")
+	}
+	s.HTTP = srv.Client()
+	if _, _, err := s.Create(ctx, owner, Input{Space: spaceHex, Name: "Releases", Instruction: "Summarize", Trigger: rm.TriggerFeed, URL: srv.URL + "/feed"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Create(ctx, owner, Input{Space: spaceHex, Name: "Status", Instruction: "Tell the team", Trigger: rm.TriggerAPI, URL: srv.URL + "/status",
+		Path: "data.status", Secret: "tok"}); err != nil {
+		t.Fatal(err)
+	}
+	apps := &fakeApps{answer: `{"shipped":false}`}
+	s.Apps = apps
+	if _, _, err := s.Create(ctx, owner, Input{Space: spaceHex, Name: "Order", Instruction: "Tell the customer", Trigger: rm.TriggerApp, App: "shop", Function: "order_status", Args: `{"order":"7"}`}); err != nil {
+		t.Fatal(err)
+	}
+	tick(s, ctx, 2*time.Minute)
+	if spaces.count() != 0 {
+		t.Fatal("the first look only learns what is there")
+	}
+	items, status, apps.answer = append(items, "b"), "degraded", `{"shipped":true}`
+	tick(s, ctx, 20*time.Minute)
+	if spaces.count() != 3 {
+		t.Fatalf("a new item, a changed value and a changed answer: %d %v", spaces.count(), spaces.tasks)
+	}
+	tick(s, ctx, 40*time.Minute)
+	if spaces.count() != 3 {
+		t.Fatal("nothing new, nothing fired (the JSON value ignores the rest of the answer)")
+	}
+	if _, _, err := s.Create(ctx, owner, Input{Space: spaceHex, Name: "Refund", Instruction: "x", Trigger: rm.TriggerApp, App: "shop", Function: "refund_order"}); err != nil {
+		t.Fatal(err)
+	}
+	calls := apps.calls
+	tick(s, ctx, 60*time.Minute)
+	if apps.calls != calls+1 {
+		t.Fatal("a function that may change something is never called on its own")
+	}
+}
+
+func TestServiceHooksAreVerified(t *testing.T) {
+	s, spaces, _, ctx := harness(t)
+	owner, _ := identity.Parse(ownerHex)
+	t.Setenv("ASEMAN_PUBLIC_URL", "https://aseman.example")
+	fire := func(in Input, headers func(id string, body []byte) map[string]string, body []byte, wantStatus int) {
+		t.Helper()
+		in.Space, in.Name, in.Instruction = spaceHex, in.Trigger, "do it"
+		r, _, err := s.Create(ctx, owner, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before := spaces.count()
+		bad := hook(r.ID.String(), map[string]string{}, body)
+		if resp, _ := s.serveHook(ctx, bad); resp.Status != http.StatusUnauthorized {
+			t.Errorf("%s: unsigned is refused: %d", in.Trigger, resp.Status)
+		}
+		resp, _ := s.serveHook(ctx, hook(r.ID.String(), headers(r.ID.String(), body), body))
+		if resp.Status != wantStatus {
+			t.Errorf("%s: %d", in.Trigger, resp.Status)
+			return
+		}
+		waitFor(t, func() bool { return spaces.count() == before+1 })
+	}
+	now := strconv.FormatInt(time.Now().Unix(), 10)
+	fire(Input{Trigger: rm.TriggerStripe, Secret: "whsec_x", Events: []string{"charge.dispute.created"}},
+		func(_ string, b []byte) map[string]string {
+			return map[string]string{"Stripe-Signature": "t=" + now + ",v1=" + hmacHex("whsec_x", []byte(now+"."), b)}
+		}, []byte(`{"type":"charge.dispute.created","data":{"object":{"id":"dp_1","amount":4000,"reason":"fraudulent"}}}`), http.StatusAccepted)
+	gl, extra, _ := s.Create(ctx, owner, Input{Space: spaceHex, Name: "MRs", Instruction: "Review", Trigger: rm.TriggerGitLab, Repo: "harbor/shop"})
+	glBody := []byte(`{"project":{"path_with_namespace":"harbor/shop"},"object_attributes":{"action":"open","title":"Fix brakes"}}`)
+	if resp, _ := s.serveHook(ctx, hook(gl.ID.String(), map[string]string{"X-Gitlab-Token": extra["secret"], "X-Gitlab-Event": "Merge Request Hook"}, glBody)); resp.Status != http.StatusAccepted {
+		t.Fatalf("gitlab: %d", resp.Status)
+	}
+	waitFor(t, func() bool { return strings.Contains(spaces.joined(), "Fix brakes") })
+	ms := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	fire(Input{Trigger: rm.TriggerLinear, Secret: "lin"}, func(_ string, b []byte) map[string]string { return map[string]string{"Linear-Signature": hmacHex("lin", b)} },
+		[]byte(`{"action":"create","type":"Issue","webhookTimestamp":`+ms+`,"data":{"identifier":"ENG-1","title":"Crash"}}`), http.StatusAccepted)
+	fire(Input{Trigger: rm.TriggerShopify, Secret: "shp", Events: []string{"orders/paid"}},
+		func(_ string, b []byte) map[string]string {
+			return map[string]string{"X-Shopify-Hmac-Sha256": hmacBase64([]byte("shp"), b), "X-Shopify-Topic": "orders/paid"}
+		}, []byte(`{"name":"#1001","total_price":"40.00"}`), http.StatusAccepted)
+	jira, jextra, _ := s.Create(ctx, owner, Input{Space: spaceHex, Name: "Jira", Instruction: "x", Trigger: rm.TriggerJira, Repo: "OPS"})
+	jBody := []byte(`{"webhookEvent":"jira:issue_created","issue":{"key":"OPS-1","fields":{"summary":"Server down","project":{"key":"OPS"}}}}`)
+	if resp, _ := s.serveHook(ctx, hook(jira.ID.String(), map[string]string{"X-Hub-Signature": "sha256=" + hmacHex(jextra["secret"], jBody)}, jBody)); resp.Status != http.StatusAccepted {
+		t.Fatalf("jira: %d", resp.Status)
+	}
+	waitFor(t, func() bool { return strings.Contains(spaces.joined(), "Server down") })
+	teamsKey := base64.StdEncoding.EncodeToString([]byte("teams-key"))
+	fire(Input{Trigger: rm.TriggerTeams, Secret: teamsKey}, func(_ string, b []byte) map[string]string {
+		return map[string]string{"Authorization": "HMAC " + hmacBase64([]byte("teams-key"), b)}
+	}, []byte(`{"type":"message","text":"<at>Aseman</at> the site is slow","from":{"name":"Ana"}}`), http.StatusOK)
+	smsBody := []byte("Body=Running+late&From=%2B15555550100")
+	fire(Input{Trigger: rm.TriggerSMS, Secret: "twilio-token"}, func(id string, _ []byte) map[string]string {
+		mac := hmac.New(sha1.New, []byte("twilio-token"))
+		mac.Write([]byte("https://aseman.example" + HookPath + "/" + id + "BodyRunning lateFrom+15555550100"))
+		return map[string]string{"X-Twilio-Signature": base64.StdEncoding.EncodeToString(mac.Sum(nil))}
+	}, smsBody, http.StatusOK)
 }

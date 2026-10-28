@@ -14,7 +14,7 @@ import (
 func NewPlugin() api.Plugin {
 	return module.New(api.Info{Name: "responsibilities-ns", Version: "1.0.0", Provides: []string{"service/responsibilities"}}, func(ctx context.Context, d *api.Dependencies) (module.Instance, error) {
 		s := NewService(d.Kernel, repo.New(d.Kernel), d.Logger)
-		s.Spaces, s.Google, s.Tasks = spacesBridge{K: d.Kernel}, googleBridge{K: d.Kernel}, tasksBridge{K: d.Kernel}
+		s.Spaces, s.Google, s.Tasks, s.Apps = spacesBridge{K: d.Kernel}, googleBridge{K: d.Kernel}, tasksBridge{K: d.Kernel}, appsBridge{K: d.Kernel}
 		var release func()
 		return module.Instance{Service: s, Models: rm.Models(), Actions: s.actions(), Run: s.Run,
 			Mount: func(context.Context) error {

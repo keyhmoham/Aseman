@@ -55,6 +55,11 @@ func (a *Adapter) EnsureSidecar(ctx context.Context, vmID, name, image string, e
 			"AutoRemove":  false,
 		},
 	}
+	// A sidecar shares the computer's network, so it runs under the same
+	// runtime (gVisor keeps its own network stack).
+	if a.runtime != "" {
+		create["HostConfig"].(map[string]any)["Runtime"] = a.runtime
+	}
 	if _, err := a.do(ctx, http.MethodPost, "/containers/create?name="+container, create); err != nil {
 		return errs.Wrap(errs.CodeVMM, err, "create sidecar")
 	}

@@ -24,6 +24,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-aseman}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    # Only on the data network: project computers (which have a shell) join
+    # the default network, and must not reach the database.
+    networks: [data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -82,6 +85,17 @@ services:
     command: ["node", "server.mjs", "--compiler"]
     restart: unless-stopped
 
+  # The filtering proxy beside each project computer (services/cmd/aseman-egress).
+  # Built here; the node runs it as a sidecar in a computer's network namespace
+  # when the computer starts, and the computer's shell and browser go through it.
+  egress-proxy:
+    build:
+      context: ./services
+      dockerfile: ../deploy/egress-proxy/Dockerfile
+    image: aseman/egress-proxy:v1
+    command: ["version"]
+    restart: "no"
+
   # The deep agents runtime (LangChain deepagents on LangGraph) that runs every
   # agent. Built here; the node runs it as a Nomad service on the stack's
   # network (alias aseman-deepagents) the first time an agent works. The
@@ -116,6 +130,7 @@ services:
     image: aseman/postgres:16-pgvector
     command: ["timeline-db"]
     restart: "no"
+    networks: [data]
     depends_on:
       postgres:
         condition: service_healthy
@@ -138,6 +153,7 @@ services:
     depends_on:
       timeline-db:
         condition: service_completed_successfully
+    networks: [data]
     environment:
       UTOPIA_DATABASE_URL: postgres://${POSTGRES_USER:-aseman}:${POSTGRES_PASSWORD:-aseman}@postgres:5432/${ASEMAN_TIMELINE_DB:-aseman_timeline}
       UTOPIA_BIND_ADDR: 0.0.0.0:1516
@@ -155,6 +171,8 @@ services:
     build: ./services
     image: aseman/asemand:latest
     restart: unless-stopped
+    # The node is the one place the two networks meet.
+    networks: [default, data]
     depends_on:
       postgres:
         condition: service_healthy
@@ -193,6 +211,11 @@ services:
       # The deep agents runtime: its image, the node as the runtime reaches it
       # (agent gateway + metered LLM proxy) and the network it joins.
       ASEMAN_AGENT_RUNTIME_IMAGE: ${ASEMAN_AGENT_RUNTIME_IMAGE:-aseman/deepagents:v2}
+      # The filtering proxy run beside each project computer (empty: none, and
+      # computers connect directly). Network policies are set per project.
+      ASEMAN_EGRESS_IMAGE: ${ASEMAN_EGRESS_IMAGE:-aseman/egress-proxy:v1}
+      # Run project computers under gVisor where the host has it (runsc).
+      ASEMAN_SANDBOX_RUNTIME: ${ASEMAN_SANDBOX_RUNTIME:-}
       ASEMAN_AGENT_NODE_URL: ${ASEMAN_AGENT_NODE_URL:-http://aseman:8080}
       ASEMAN_AGENT_RUNTIME_NETWORK: ${ASEMAN_AGENT_RUNTIME_NETWORK:-aseman_default}
       # Memory (MB) the runtime reserves on Nomad. Lower it on a small server, raise it on a big one.
@@ -298,6 +321,12 @@ services:
         condition: service_healthy
     ports:
       - "${WEB_PORT:-3000}:80"
+
+networks:
+  default:
+  # The database and what reads it directly; never the project computers.
+  data:
+    internal: true
 
 volumes:
   postgres-data:

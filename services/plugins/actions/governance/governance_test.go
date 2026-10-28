@@ -406,3 +406,19 @@ func TestEgressPolicy(t *testing.T) {
 		t.Fatal("only the project's owner sets its egress")
 	}
 }
+
+func TestHostAndChannelToolsAreTheirOwnKinds(t *testing.T) {
+	s, _, ctx := harness(t)
+	s.ApprovalTimeout = 30 * time.Millisecond
+	read := req(gate.KindPlatform, "spaces.ask", map[string]any{"space": spaceHex, "tool": "host_list", "args": map[string]any{"path": "~/Documents"}})
+	if res, _ := s.Gate(ctx, read); !res.Allowed {
+		t.Fatalf("listing a shared folder runs: %+v", res)
+	}
+	exec := req(gate.KindPlatform, "spaces.ask", map[string]any{"space": spaceHex, "tool": "host_exec", "args": map[string]any{"command": "rm notes.txt"}})
+	if res, _ := s.Gate(ctx, exec); res.Allowed || res.Decision != gov.DecisionTimedOut {
+		t.Fatalf("a change on the person's computer asks first: %+v", res)
+	}
+	if got := Normalize(req(gate.KindTool, "slack_post", map[string]any{"channel": "C1", "text": "hi"})); got.Kind != gate.KindChannel || got.Effect != gate.EffectSend {
+		t.Fatalf("%+v", got)
+	}
+}

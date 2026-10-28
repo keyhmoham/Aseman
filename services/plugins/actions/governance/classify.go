@@ -229,6 +229,17 @@ func Normalize(req gate.Request) gate.Request {
 			req.Text = argString(args, "body")
 		}
 	}
+	// The person's own computer and outside messaging are kinds of their own,
+	// whichever door the call came through.
+	switch {
+	case strings.HasPrefix(req.Tool, "host_"):
+		req.Kind = gate.KindHost
+		if req.Command == "" {
+			req.Command = argString(args, "command")
+		}
+	case req.Tool == "slack_post" || req.Tool == "teams_post" || req.Tool == "sms_send":
+		req.Kind = gate.KindChannel
+	}
 	if req.Tool == "sandbox_exec" && req.Command == "" {
 		req.Command = argString(args, "command", "input", "cmd")
 		req.Kind = gate.KindSandbox

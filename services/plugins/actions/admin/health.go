@@ -146,6 +146,8 @@ func (s *Service) health(ctx context.Context, req *api.ActionRequest) (*api.Acti
 		add(healthCheck{ID: "admins", Group: "Accounts", Label: "Administrators", Status: "warn", Detail: "No account has the admin role; only the bootstrap handle can sign in as admin."})
 	}
 
+	s.moreHealth(ctx, r, add)
+
 	counts := map[string]int{"ok": 0, "warn": 0, "fail": 0}
 	for _, c := range checks {
 		counts[c.Status]++

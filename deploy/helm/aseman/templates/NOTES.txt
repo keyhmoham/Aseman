@@ -1,0 +1,13 @@
+Aseman is installing as {{ include "aseman.fullname" . }}.
+
+  Node:  {{ .Values.publicURL }}
+  App:   {{ .Values.appURL }}
+
+Sign in with the handle named in config (node.name) and the admin password:
+
+  kubectl get secret {{ include "aseman.secretName" . }} -n {{ .Release.Namespace }} -o jsonpath='{.data.ASEMAN_ADMIN_PASSWORD}' | base64 -d
+
+Then open Admin → Health: every check says what is ready and how to fix the rest.
+{{- if eq .Values.sandbox.backend "modal" }}
+Project computers run on Modal: set sandbox.modal.tokenId and tokenSecret.
+{{- end }}

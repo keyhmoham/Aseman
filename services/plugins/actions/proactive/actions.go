@@ -32,6 +32,7 @@ func (s *Service) actions() []api.Action {
 		a("settings_get", "My background research and brief settings", s.settingsGet),
 		a("settings_set", "Turn background research on or off, how often, and the brief", s.settingsSet),
 		a("research_now", "Run a background check-in now", s.researchNow),
+		a("setup_check", "My setup checklist: what my assistant depends on, each ready or not, with how to fix it", s.setupCheck),
 	}
 }
 
@@ -203,4 +204,14 @@ func (s *Service) researchNow(ctx context.Context, req *api.ActionRequest) (*api
 		return nil, err
 	}
 	return helper.JSON(map[string]any{"result": result})
+}
+
+func (s *Service) setupCheck(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+	var in struct {
+		Notifications string `json:"notifications,omitempty"`
+	}
+	if err := helper.Decode(req, &in); err != nil {
+		return nil, err
+	}
+	return helper.JSON(map[string]any{"items": s.Setup(ctx, req.Caller.ID, in.Notifications)})
 }

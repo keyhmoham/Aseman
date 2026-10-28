@@ -268,6 +268,9 @@ func (s *Service) agentContext(ctx context.Context, spaceID, roomID identity.ID,
 			fmt.Fprintf(&b, " — topic: %s", room.Topic)
 		}
 		b.WriteString("\n")
+		if room.Purpose != "" {
+			fmt.Fprintf(&b, "This room is for: %s. Keep the work here about that; suggest another room for anything else.\n", room.Purpose)
+		}
 	}
 	var mems []membership.Membership
 	if err := s.R.List(ctx, "memberships", database.Filter{Equal: map[string]any{"space_id": spaceID.String()}}, &mems); err == nil {

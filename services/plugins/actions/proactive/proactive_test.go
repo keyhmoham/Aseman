@@ -44,11 +44,11 @@ func (f *fakeGoogle) Events(context.Context, string, time.Time, time.Time, strin
 }
 
 type fakeSpaces struct {
-	mu        sync.Mutex
-	asks      []string
-	posts     []string
-	turns     int
-	db        *repo.Repo
+	mu         sync.Mutex
+	asks       []string
+	posts      []string
+	turns      int
+	db         *repo.Repo
 	onResearch func(ctx context.Context)
 }
 
@@ -84,7 +84,9 @@ func (f *fakeSpaces) PostMessage(_ context.Context, _, _, _ identity.ID, body st
 	f.posts = append(f.posts, body)
 	return nil
 }
-func (f *fakeSpaces) AsemanAccount(context.Context) (identity.ID, error) { return identity.Parse(leadHex) }
+func (f *fakeSpaces) AsemanAccount(context.Context) (identity.ID, error) {
+	return identity.Parse(leadHex)
+}
 
 type fakeLLM struct{ calls int }
 
@@ -227,5 +229,21 @@ func TestResearchIsProactiveAndPostsSuggestions(t *testing.T) {
 	}
 	if len(spaces.posts) != 2 || !strings.Contains(spaces.posts[1], `"c":"Suggestion"`) {
 		t.Fatalf("the lead writes first, with the suggestion as a card: %v", spaces.posts)
+	}
+}
+
+func TestSetupChecklist(t *testing.T) {
+	s, _, _, ctx := harness(t)
+	owner, _ := identity.Parse(ownerHex)
+	items := s.Setup(ctx, owner, "denied")
+	byID := map[string]SetupItem{}
+	for _, i := range items {
+		byID[i.ID] = i
+	}
+	if byID["model"].Status != "needs_setup" || byID["google_node"].Status != "needs_setup" || byID["notifications"].Status != "needs_setup" {
+		t.Fatalf("%+v", items)
+	}
+	if byID["computer"].Status != "not_checked" || !byID["computer"].Optional {
+		t.Fatalf("optional items are not checked: %+v", byID["computer"])
 	}
 }

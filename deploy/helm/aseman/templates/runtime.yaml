@@ -1,0 +1,65 @@
+{{- $fn := include "aseman.fullname" . -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $fn }}-runtime-data
+  labels: {{- include "aseman.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.runtime.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources: { requests: { storage: {{ .Values.runtime.persistence.size }} } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fn }}-runtime
+  labels: {{- include "aseman.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.runtime.replicas }}
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: {{- include "aseman.selector" (dict "root" . "component" "runtime") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aseman.selector" (dict "root" . "component" "runtime") | nindent 8 }}
+        aseman.workload: agent-runtime
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: runtime
+          image: {{ include "aseman.image" .Values.images.runtime }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          ports: [{ name: http, containerPort: 8000 }]
+          env:
+            - { name: ASEMAN_NODE_URL, value: "http://{{ $fn }}-node:8080" }
+            - { name: ASEMAN_RUNTIME_PORT, value: "8000" }
+            - { name: ASEMAN_DATA_DIR, value: /data }
+            - name: ASEMAN_RUNTIME_SECRET
+              valueFrom: { secretKeyRef: { name: {{ include "aseman.secretName" . }}, key: ASEMAN_AGENT_RUNTIME_SECRET } }
+            {{- if .Values.openviking.enabled }}
+            - { name: ASEMAN_OPENVIKING_URL, value: "http://{{ $fn }}-openviking:1933" }
+            - name: ASEMAN_OPENVIKING_API_KEY
+              valueFrom: { secretKeyRef: { name: {{ include "aseman.secretName" . }}, key: ASEMAN_OPENVIKING_API_KEY } }
+            {{- end }}
+            {{- with .Values.runtime.svidFile }}
+            - { name: ASEMAN_SVID_FILE, value: {{ . | quote }} }
+            {{- end }}
+          resources: {{- toYaml .Values.runtime.resources | nindent 12 }}
+          volumeMounts: [{ name: data, mountPath: /data }]
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: {{ $fn }}-runtime-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fn }}-runtime
+  labels: {{- include "aseman.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "aseman.selector" (dict "root" . "component" "runtime") | nindent 4 }}
+  ports: [{ name: http, port: 8000, targetPort: http }]

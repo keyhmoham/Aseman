@@ -18,6 +18,7 @@ import (
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/tools/mechanisms/mcp"
 	"github.com/aseman/aseman/plugins/actions/tools/models"
 	"github.com/aseman/aseman/plugins/adapters/network/ports"
 	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
@@ -188,6 +189,22 @@ func nodeURL() string {
 	return "http://aseman:8080"
 }
 
+// ownApp reports an app this node serves itself (the Google app): its MCP
+// address is under the node's own internal URL.
+func ownApp(url string) bool {
+	return strings.HasPrefix(url, nodeURL()+"/")
+}
+
+// mcpClient is the client for an MCP address: the internal one for this
+// node's own apps, the one that refuses private addresses for everything
+// else (an app's URL is whoever registered it's to choose).
+func (s *Service) mcpClient(url string) *mcp.Client {
+	if ownApp(url) && s.Internal != nil {
+		return s.Internal
+	}
+	return s.Client
+}
+
 // runtimeNetwork is the docker network managed backends join, where the node
 // reaches them by name.
 func runtimeNetwork() string {
@@ -210,7 +227,7 @@ func (s *Service) runtimeEnv(runtimeKey string, port int) (map[string]string, er
 		"ASEMAN_TOOL_ID":    runtimeKey,
 		"ASEMAN_TOOL_TOKEN": token,
 		"ASEMAN_NODE_URL":   nodeURL(),
-		"PORT":               strconv.Itoa(port),
+		"PORT":              strconv.Itoa(port),
 	}, nil
 }
 

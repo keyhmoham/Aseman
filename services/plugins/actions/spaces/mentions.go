@@ -105,13 +105,23 @@ func (s *Service) DeliverMentions(ctx context.Context, spaceID, roomID identity.
 		}
 		delivered[member.MemberID.String()] = true
 		rec, err := s.botForMember(ctx, member.MemberID)
-		if err != nil || !isAgentRuntime(rec) || rec.AccountID == msg.SenderID {
+		if err != nil || rec.AccountID == msg.SenderID {
+			continue
+		}
+		deliver := s.deliverToAgent
+		switch {
+		case isAgentRuntime(rec):
+		case mentionedApp(rec, mentions) && s.isBotAccount(ctx, msg.SenderID):
+			// People do not mention apps in chat; an agent naming an app in
+			// the room asks it, and the answer lands in the room.
+			deliver = s.deliverToApp
+		default:
 			continue
 		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			reply, err := s.deliverToAgent(ctx, spaceID, roomID, msg, rec, mentions, atts)
+			reply, err := deliver(ctx, spaceID, roomID, msg, rec, mentions, atts)
 			mu.Lock()
 			defer mu.Unlock()
 			// A mentioned agent's failure is the one the sender asked about, so
@@ -254,6 +264,43 @@ func (s *Service) isBotAccount(ctx context.Context, id identity.ID) bool {
 
 // isMentioned reports whether a message's mentions address rec (by bot or
 // account id).
+// mentionedApp reports an app (not the project's computer) a message names.
+func mentionedApp(rec *bot.Bot, mentions []string) bool {
+	return rec != nil && rec.Kind == bot.KindTool && rec.IsToolBackend() && !rec.IsSandbox() && isMentioned(rec, mentions)
+}
+
+// deliverToApp hands a room message an agent wrote to an app it mentioned,
+// as the person the agent works for, and posts the app's answer in the room
+// from the app's own account. Apps take
+// plain words: the tools namespace turns them into one of the app's
+// functions (deciding it through the gate when an agent is behind it).
+func (s *Service) deliverToApp(ctx context.Context, spaceID, roomID identity.ID, msg *message.Message, rec *bot.Bot, _ []string, atts []vmm.FileAttachment) (*MentionReply, error) {
+	ctx, actor := actingAs(ctx, msg.SenderID)
+	payer := s.payer(ctx, actor)
+	if exec := vmm.ExecutionFrom(ctx); exec.ActorID == "" {
+		ctx = vmm.WithExecution(ctx, vmm.Execution{ActorID: actor.String(), SpaceID: spaceID.String(), RoomID: roomID.String()})
+	}
+	if s.Bots == nil {
+		return nil, errs.New(errs.CodeUnavailable, "apps are not available")
+	}
+	if err := s.Bots.EnsureFunds(ctx, payer, rec.ID); err != nil {
+		return nil, err
+	}
+	started := time.Now()
+	reply, askErr := s.AskBot(ctx, spaceID, rec.ID, msg.Body, atts, nil)
+	_, _ = s.Bots.BillAndRecordUsage(ctx, payer, rec.ID, elapsedSeconds(started), "room mention",
+		usage.UsageCtx{SpaceID: spaceID, RoomID: roomID, BotName: rec.Name, RequestID: usage.RequestIDFrom(ctx), Kind: usage.KindAsk})
+	if askErr != nil {
+		// The person asked it something: they read why it could not answer.
+		reply = "I could not do that: " + askErr.Error()
+	}
+	id, err := s.storeBotReply(ctx, spaceID, roomID, rec.AccountID, reply, msg.ID.String())
+	if err != nil {
+		return nil, err
+	}
+	return &MentionReply{BotID: rec.ID.String(), BotHandle: rec.Name, MessageID: id.String(), Reply: reply}, askErr
+}
+
 func isMentioned(rec *bot.Bot, mentions []string) bool {
 	return mentionsAgent(mentions, rec.ID.String(), rec.AccountID.String(), rec.VMID, rec.Name)
 }

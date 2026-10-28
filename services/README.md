@@ -379,6 +379,15 @@ done is never refused, so a run can finish at most one step past the cap.
   their own accounts at the broker. `tools.commands_list` reports such
   connector apps (and Google) as `auth: "account"` with how to connect them,
   so every app is added and connected through the same Apps flow.
+- **apps are bots** — every app, these included, is a bot with its own
+  account: added to projects and rooms, given to agents as functions, asked
+  with `spaces.ask` / `message.ask`, messaged directly (`users.dm_send`), and
+  named by an agent in a room (people do not mention apps in chat). Plain
+  words reach an app without an `ask` function of its own: the node's model
+  turns them into one of its functions, as the person, and when an agent is
+  behind them that call is decided by the gate. The node's own apps (Google)
+  are called on its internal address; every other app's address must be
+  public.
 - **enterprise** — OpenID Connect single sign-on (optionally required per
   domain), SCIM 2.0 provisioning at `/scim/v2`, organizations by email domain,
   offboarding, and SPIFFE workload identity for the agent runtime.

@@ -39,6 +39,8 @@ type Service struct {
 	Internal *mcp.Client
 	// Compiler compiles Elpian VM programs (ASEMAN_TOOL_COMPILER_URL).
 	Compiler *Compiler
+	// Words reads plain-words requests to apps (llm.Complete when nil).
+	Words WordsModel
 
 	// commandCache holds what each connected app offers, per person and
 	// project, for a few minutes: agents ask for it at the start of every turn.
@@ -98,10 +100,10 @@ func (s *Service) CommandsFor(ctx context.Context, botID, actorID, spaceID strin
 			if e != nil {
 				return nil
 			}
-			if h, e = s.Client.Session(listCtx, tool.URL, h); e != nil {
+			if h, e = s.mcpClient(tool.URL).Session(listCtx, tool.URL, h); e != nil {
 				return nil
 			}
-			result, e := s.Client.RPC(listCtx, tool.URL, h, "tools/list", map[string]any{})
+			result, e := s.mcpClient(tool.URL).RPC(listCtx, tool.URL, h, "tools/list", map[string]any{})
 			if e != nil {
 				return nil
 			}
@@ -122,8 +124,8 @@ func (s *Service) CommandsFor(ctx context.Context, botID, actorID, spaceID strin
 		if e != nil {
 			return []map[string]any{}, nil // not connected yet: nothing to call
 		}
-		if h, e = s.Client.Session(ctx, tool.URL, h); e == nil {
-			if result, e := s.Client.RPC(ctx, tool.URL, h, "tools/list", map[string]any{}); e == nil {
+		if h, e = s.mcpClient(tool.URL).Session(ctx, tool.URL, h); e == nil {
+			if result, e := s.mcpClient(tool.URL).RPC(ctx, tool.URL, h, "tools/list", map[string]any{}); e == nil {
 				commands = commandDefs(result)
 			}
 		}
@@ -335,11 +337,11 @@ func (s *Service) registerMCP(ctx context.Context, req *api.ActionRequest, in mc
 		for k, v := range headers {
 			listing[k] = actorHeader(v, req.Caller.ID)
 		}
-		session, e := s.Client.Session(ctx, in.URL, listing)
+		session, e := s.mcpClient(in.URL).Session(ctx, in.URL, listing)
 		if e != nil {
 			return nil, errs.New(errs.CodeUnavailable, e.Error())
 		}
-		r, e := s.Client.RPC(ctx, in.URL, session, "tools/list", map[string]any{})
+		r, e := s.mcpClient(in.URL).RPC(ctx, in.URL, session, "tools/list", map[string]any{})
 		if e != nil {
 			return nil, e
 		}
@@ -774,8 +776,8 @@ func (s *Service) commandsList(ctx context.Context, req *api.ActionRequest) (*ap
 		}
 		if r.Auth == "user" && in.Space != "" {
 			if h, e := s.headers(ctx, &r, req.Caller.ID, in.Space); e == nil {
-				if h, e = s.Client.Session(ctx, r.URL, h); e == nil {
-					if result, e := s.Client.RPC(ctx, r.URL, h, "tools/list", map[string]any{}); e == nil {
+				if h, e = s.mcpClient(r.URL).Session(ctx, r.URL, h); e == nil {
+					if result, e := s.mcpClient(r.URL).RPC(ctx, r.URL, h, "tools/list", map[string]any{}); e == nil {
 						commands = commandDefs(result)
 					}
 				}

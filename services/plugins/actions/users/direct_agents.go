@@ -14,17 +14,19 @@ import (
 	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
-// agentAccount reports the agent bot behind an account, if the account is an
-// agent's. Direct messages to agents are conversations with them.
+// agentAccount reports the bot behind an account a person can talk to
+// directly: an agent (a conversation with it) or an app (asked in plain
+// words, as the person). The project's computer is not one.
 func (s *Service) agentAccount(ctx context.Context, accountID identity.ID) (identity.ID, bool) {
 	var bots []bot.Bot
 	if err := s.R.List(ctx, "bots", database.Filter{Equal: map[string]any{"account_id": accountID.String()}, Limit: 1}, &bots); err != nil || len(bots) == 0 {
 		return identity.ID{}, false
 	}
-	if bots[0].Kind != bot.KindAgent {
-		return identity.ID{}, false
+	b := &bots[0]
+	if b.Kind == bot.KindAgent || (b.Kind == bot.KindTool && b.IsToolBackend() && !b.IsSandbox()) {
+		return b.ID, true
 	}
-	return bots[0].ID, true
+	return identity.ID{}, false
 }
 
 // deliverDirect hands a direct message to the agent it was sent to and sends
@@ -47,6 +49,8 @@ func (s *Service) deliverDirect(ctx context.Context, from, agentAccount, botID i
 		return // its run was stopped
 	}
 	var reply string
+	// Agents and apps are both asked through the spaces namespace, which
+	// knows which one the bot is.
 	err := bridge.Invoke(ctx, s.K, "spaces", "AskDirect", []any{ctx, from, botID, body, []vmm.FileAttachment(nil)}, &reply)
 	if err != nil {
 		if s.L != nil {

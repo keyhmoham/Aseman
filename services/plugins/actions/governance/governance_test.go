@@ -43,7 +43,9 @@ func (f *fakeSpaces) PostMessage(_ context.Context, _, _, _ identity.ID, body st
 	f.posts = append(f.posts, body)
 	return nil
 }
-func (f *fakeSpaces) AsemanAccount(context.Context) (identity.ID, error) { return identity.Parse(agentHex) }
+func (f *fakeSpaces) AsemanAccount(context.Context) (identity.ID, error) {
+	return identity.Parse(agentHex)
+}
 func (f *fakeSpaces) SandboxExec(context.Context, identity.ID, string) (string, error) {
 	return "", nil
 }
@@ -103,20 +105,20 @@ func req(kind, tool string, args any) gate.Request {
 
 func TestCommandEffects(t *testing.T) {
 	for cmd, want := range map[string]string{
-		"ls -la /workspace":                         gate.EffectRead,
-		"cat a.txt | grep foo | wc -l":              gate.EffectRead,
-		"git status && git log --oneline":           gate.EffectRead,
-		"ls 2>/dev/null":                            gate.EffectRead,
-		"npm install":                               gate.EffectWrite,
-		"echo hi > out.txt":                         gate.EffectWrite,
-		"rm -rf /workspace":                         gate.EffectDelete,
-		"rm -rf build":                              gate.EffectWrite,
-		"psql -c 'DROP TABLE users'":                gate.EffectDelete,
-		"curl -X POST https://api.example.com/x":    gate.EffectExternal,
-		"curl -d a=b http://localhost:3000/hook":    gate.EffectWrite,
-		"git push origin main":                      gate.EffectExternal,
+		"ls -la /workspace":                        gate.EffectRead,
+		"cat a.txt | grep foo | wc -l":             gate.EffectRead,
+		"git status && git log --oneline":          gate.EffectRead,
+		"ls 2>/dev/null":                           gate.EffectRead,
+		"npm install":                              gate.EffectWrite,
+		"echo hi > out.txt":                        gate.EffectWrite,
+		"rm -rf /workspace":                        gate.EffectDelete,
+		"rm -rf build":                             gate.EffectWrite,
+		"psql -c 'DROP TABLE users'":               gate.EffectDelete,
+		"curl -X POST https://api.example.com/x":   gate.EffectExternal,
+		"curl -d a=b http://localhost:3000/hook":   gate.EffectWrite,
+		"git push origin main":                     gate.EffectExternal,
 		"echo body | sendmail someone@example.com": gate.EffectSend,
-		"find . -name '*.tmp' -delete":              gate.EffectWrite,
+		"find . -name '*.tmp' -delete":             gate.EffectWrite,
 	} {
 		if got := commandEffect(cmd); got != want {
 			t.Errorf("%q: got %s want %s", cmd, got, want)

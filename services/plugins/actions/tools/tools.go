@@ -331,7 +331,11 @@ func (s *Service) registerMCP(ctx context.Context, req *api.ActionRequest, in mc
 	}
 	commands := []map[string]any{}
 	if in.Auth != "user" {
-		session, e := s.Client.Session(ctx, in.URL, headers)
+		listing := map[string]string{}
+		for k, v := range headers {
+			listing[k] = actorHeader(v, req.Caller.ID)
+		}
+		session, e := s.Client.Session(ctx, in.URL, listing)
 		if e != nil {
 			return nil, errs.New(errs.CodeUnavailable, e.Error())
 		}
@@ -593,7 +597,7 @@ func (s *Service) headers(ctx context.Context, tool *models.Tool, actor identity
 		if values, ok := secret["headers"].(map[string]any); ok {
 			for k, v := range values {
 				if text, ok := v.(string); ok {
-					headers[k] = text
+					headers[k] = actorHeader(text, actor)
 				}
 			}
 		}
@@ -787,7 +791,7 @@ func NewPlugin() api.Plugin {
 			helper.Action{Namespace: "tools", Name: "app_rpc", Summary: "A tool's app (MCP Apps) asks its server: resources/read or tools/call, as the person in the space", Handler: s.appRPC},
 		)
 		var release func()
-		return module.Instance{Service: s, Models: append(schema.Models(), models.Models()...), Actions: append(actions, oauthActions(s)...),
+		return module.Instance{Service: s, Models: append(schema.Models(), models.Models()...), Actions: append(append(actions, oauthActions(s)...), brokerActions(s)...),
 			Mount: func(context.Context) error {
 				// The gateway managed and installed backends reach the node by.
 				binder, ok := d.Kernel.(api.NetworkBindings)

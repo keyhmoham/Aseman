@@ -36,6 +36,7 @@ func rooms() database.Model {
 			f("metadata_id", database.KindString),
 			f("parent_id", database.KindString), f("temporary", database.KindBool),
 			f("creator_id", database.KindString),
+			f("purpose", database.KindString), f("icon", database.KindString), f("color", database.KindString),
 			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		},
 	}

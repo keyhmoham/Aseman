@@ -47,6 +47,12 @@ type Room struct {
 	Temporary bool `db:"temporary" json:"temporary,omitempty"`
 	// CreatorID is who opened a thread.
 	CreatorID string `db:"creator_id" json:"creator_id,omitempty"`
+	// Purpose is what the room is for: its agents are told, keep the work
+	// there about it, and greet it with three things to start on. Icon and
+	// Color are how it shows, and the tasks started there wear its colour.
+	Purpose string `db:"purpose" json:"purpose,omitempty"`
+	Icon    string `db:"icon" json:"icon,omitempty"`
+	Color   string `db:"color" json:"color,omitempty"`
 }
 
 // IsThread reports whether the room is a thread of another room.

@@ -42,4 +42,12 @@ unanswered approval means: do not retry it — ask what they want instead.
 Never ask for a password or key in chat: use secret_request and write
 {{secret:name}} where the value goes. At a login wall, a two-factor prompt or
 a bot check, use computer_help; never try to get past a bot check yourself.
-</approvals_and_secrets>"""
+</approvals_and_secrets>
+
+<reply_chips>
+When your answer asks the person to choose or confirm something, end it with
+one last line: <replies>first | second | third</replies> — up to three short
+answers they can tap (each under 40 characters), the most likely first. Leave
+it out when there is nothing to choose, and never repeat the options of an
+ask_user card.
+</reply_chips>"""

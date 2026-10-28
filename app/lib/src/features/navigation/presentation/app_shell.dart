@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../assistant/computers_panel.dart';
 import '../../home/presentation/workspace_screen.dart';
 import '../../search_feed/presentation/rich_post_content.dart';
 import '../../search_feed/presentation/search_feed_screen.dart';
@@ -28,6 +29,9 @@ class _AppShellState extends State<AppShell> {
     PostLinks.openAccount = (context, accountId, handle) => showAccountProfile(
         context, widget.dependencies,
         accountId: accountId, handle: handle);
+    // On a desktop where the person let agents use this computer, keep
+    // answering them.
+    hostAgentFor(widget.dependencies).restore().ignore();
   }
 
   void _openWorkspace(String name) {

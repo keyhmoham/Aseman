@@ -11,6 +11,7 @@ import '../../../shared/widgets/avatar_editor.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../account/presentation/account_panel.dart';
+import '../../assistant/assistant.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, this.dependencies});
@@ -167,6 +168,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showAccountPanel(context, deps, area);
   }
 
+  void _openAssistant(Widget Function(AppDependencies deps) panel) {
+    final deps = widget.dependencies;
+    if (deps == null) return;
+    openPanel(context, panel(deps));
+  }
+
   void _openProfile() {
     final deps = widget.dependencies;
     if (deps == null) return;
@@ -305,6 +312,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title: 'Trading accounts',
                       subtitle: 'Exchanges, brokers and wallets'),
                 ]),
+            if (widget.dependencies != null)
+              _Section(
+                  title: 'Your assistant',
+                  icon: Icons.auto_awesome_outlined,
+                  children: [
+                    _SettingsTile(
+                        icon: Icons.task_alt_rounded,
+                        title: 'Tasks',
+                        subtitle: 'Suggestions, work in progress and your morning brief',
+                        onTap: () => _openAssistant(
+                            (deps) => TasksPanel(dependencies: deps))),
+                    _SettingsTile(
+                        icon: Icons.checklist_rounded,
+                        title: 'Setup',
+                        subtitle: 'What your assistant needs and how to fix it',
+                        onTap: () => _openAssistant(
+                            (deps) => SetupPanel(dependencies: deps))),
+                    _SettingsTile(
+                        icon: Icons.verified_user_outlined,
+                        title: 'Approvals',
+                        subtitle: 'Actions waiting on you and what you always allow',
+                        onTap: () => _openAssistant(
+                            (deps) => ApprovalsPanel(dependencies: deps))),
+                    _SettingsTile(
+                        icon: Icons.hub_outlined,
+                        title: 'Connections',
+                        subtitle: 'Gmail and Calendar, Slack, Teams, SMS, and what runs on its own',
+                        onTap: () => _openAssistant(
+                            (deps) => ConnectionsPanel(dependencies: deps))),
+                    _SettingsTile(
+                        icon: Icons.computer_rounded,
+                        title: 'Computers',
+                        subtitle: 'Let agents use folders on your own computer',
+                        onTap: () => _openAssistant(
+                            (deps) => ComputersPanel(dependencies: deps))),
+                  ]),
             _Section(
                 title: 'Trading & agents',
                 icon: Icons.candlestick_chart,

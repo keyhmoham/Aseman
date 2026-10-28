@@ -17,6 +17,7 @@ import '../../../shared/widgets/backend_action_ui.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/skeleton.dart';
+import '../../assistant/assistant.dart';
 
 /// The one settings panel of a workspace (space): profile & visibility,
 /// stats, rooms, members & invites, usage & budget, and — as the very last
@@ -514,6 +515,21 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
           ),
         ),
         const SizedBox(height: 14),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.smart_toy_outlined),
+          title: const Text('Agents'),
+          subtitle: const Text(
+              'Responsibilities, demonstrations, the computer, its network, credentials, policy and audit'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => openPanel(
+              context,
+              ProjectAgentsPanel(
+                  dependencies: widget.dependencies,
+                  space: _space.id,
+                  title: _space.name)),
+        ),
+        const SizedBox(height: 6),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Public workspace'),

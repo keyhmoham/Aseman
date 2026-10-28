@@ -12,6 +12,7 @@ import '../../../../data/models/bot.dart';
 import '../../../../data/models/space.dart';
 import '../../../../data/services/aseman_service.dart';
 import '../../../../shared/widgets/avatar.dart';
+import '../../../assistant/assistant.dart';
 import '../../../../shared/widgets/mini_tag.dart';
 import '../../../../shared/widgets/overlay_panels.dart';
 import '../../../../shared/widgets/skeleton.dart';
@@ -43,6 +44,7 @@ class RoomChat extends StatefulWidget {
     this.dependencies,
     this.spaceId = '',
     this.roomId = '',
+    this.suggestions = false,
     this.mentionable = const [],
     this.onSend,
     this.flat = false,
@@ -79,6 +81,9 @@ class RoomChat extends StatefulWidget {
   final AppDependencies? dependencies;
   final String spaceId;
   final String roomId;
+
+  /// Shows the latest suggested task above the composer (the home chat).
+  final bool suggestions;
   final List<Bot> mentionable;
   final Future<void> Function(
       String body, List<String> mentions, List<String> attachments,
@@ -158,6 +163,9 @@ class RoomChat extends StatefulWidget {
 }
 
 class _RoomChatState extends State<RoomChat> {
+  /// The message whose reply chips are offered (the newest, from an agent).
+  String _repliesFor = '';
+
   final input = TextEditingController();
   final Set<String> _mentions = {};
   final Map<String, String> _mentionNames = {};
@@ -1179,6 +1187,14 @@ class _RoomChatState extends State<RoomChat> {
         final c = a.createdAt.compareTo(b.createdAt);
         return c != 0 ? c : a.id.compareTo(b.id);
       });
+    // Only the newest message's replies are offered: once the conversation
+    // moves on, older ones no longer answer anything.
+    _repliesFor = '';
+    for (final m in messages.reversed) {
+      if (m.kind == 'log') continue;
+      if (m.senderIsAgent) _repliesFor = m.id;
+      break;
+    }
     final working = _workingIndicator();
     if (widget.flat) {
       return _Panel(
@@ -1494,11 +1510,20 @@ class _RoomChatState extends State<RoomChat> {
                                 child:
                                     CircularProgressIndicator(strokeWidth: 2))
                             : const Icon(Icons.send_rounded, size: 20));
+                final deps = widget.dependencies;
+                final mic = deps == null || _sending || _editing != null
+                    ? null
+                    : DictationButton(dependencies: deps, onText: _dictated);
                 // Narrow panels give the text its own line above the actions.
                 if (box.maxWidth < 340) {
                   return Column(mainAxisSize: MainAxisSize.min, children: [
                     field,
-                    Row(children: [...actions, const Spacer(), send]),
+                    Row(children: [
+                      ...actions,
+                      const Spacer(),
+                      if (mic != null) mic,
+                      send
+                    ]),
                   ]);
                 }
                 return Row(
@@ -1508,15 +1533,41 @@ class _RoomChatState extends State<RoomChat> {
                       const SizedBox(width: 4),
                       Expanded(child: field),
                       const SizedBox(width: 4),
+                      if (mic != null) mic,
                       send,
                     ]);
               }),
             ])));
-    if (work == null) return box;
+    final deps = widget.dependencies;
+    final banner = widget.suggestions && deps != null
+        ? Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: SuggestionBanner(
+                dependencies: deps,
+                onOpenTasks: () =>
+                    openPanel(context, TasksPanel(dependencies: deps))),
+          )
+        : null;
+    if (work == null && banner == null) return box;
     return Column(mainAxisSize: MainAxisSize.min, children: [
-      RoomWorkNeeds(work: work, onAnswer: _answer, onRunAgain: _runAgain),
+      if (banner != null) banner,
+      if (work != null)
+        RoomWorkNeeds(work: work, onAnswer: _answer, onRunAgain: _runAgain),
       box,
     ]);
+  }
+
+  /// Puts dictated text where the cursor is; the person sends it.
+  void _dictated(String text) {
+    final value = input.value;
+    final at = value.selection.isValid ? value.selection.start : value.text.length;
+    final end = value.selection.isValid ? value.selection.end : value.text.length;
+    final before = value.text.substring(0, at);
+    final spaced = before.isEmpty || before.endsWith(' ') ? text : ' $text';
+    input.value = TextEditingValue(
+        text: before + spaced + value.text.substring(end),
+        selection: TextSelection.collapsed(offset: at + spaced.length));
+    _typed(input.text);
   }
 
   Widget _composerAction(
@@ -1720,7 +1771,8 @@ class _RoomChatState extends State<RoomChat> {
   /// Caption markdown + AG-UI surface (if the body carries an `agui` fence).
   List<Widget> _agUiBody(
       BuildContext context, RoomMessage m, AppDependencies? deps, Color fg) {
-    final parsed = parseAgUiBody(m.body);
+    final offered = parseReplies(m.body);
+    final parsed = parseAgUiBody(offered.text);
     final out = <Widget>[];
     if (parsed.caption.trim().isNotEmpty) {
       out.add(RichPostContent(parsed.caption,
@@ -1734,25 +1786,57 @@ class _RoomChatState extends State<RoomChat> {
     if (surface != null && surface.root != null) {
       out.add(Padding(
         padding: EdgeInsets.only(top: parsed.caption.trim().isEmpty ? 0 : 8),
-        child: AgUiSurfaceView(
-          surface: surface,
-          onReply: widget.onSend == null
-              ? null
-              : (value, {meta}) {
-                  widget.onSend!(value, const [], const [], replyTo: m.id);
-                },
+        child: _withActions(
+          deps,
+          AgUiSurfaceView(
+            surface: surface,
+            onReply: widget.onSend == null
+                ? null
+                : (value, {meta}) {
+                    widget.onSend!(value, const [], const [], replyTo: m.id);
+                  },
+          ),
         ),
       ));
-    } else if (parsed.caption.trim().isEmpty && m.body.trim().isNotEmpty) {
+    } else if (parsed.caption.trim().isEmpty && offered.text.trim().isNotEmpty) {
       // No fence — original markdown body.
-      out.add(RichPostContent(m.body,
+      out.add(RichPostContent(offered.text,
           headers: deps?.service.authHeaders() ?? const {},
           resolveUrl: deps?.service.resolveContentUrl,
           onLinkTap: deps == null
               ? null
               : (link) => openWorkspaceLink(context, deps.service, link)));
     }
+    if (offered.replies.isNotEmpty &&
+        m.id == _repliesFor &&
+        widget.onSend != null) {
+      out.add(Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final reply in offered.replies)
+            ActionChip(
+              label: Text(reply),
+              onPressed: () =>
+                  widget.onSend!(reply, const [], const [], replyTo: m.id),
+            ),
+        ]),
+      ));
+    }
     return out;
+  }
+
+  /// Gives governance cards (approvals, secrets, take-over, suggestions)
+  /// the node and this conversation's project.
+  Widget _withActions(AppDependencies? deps, Widget child) {
+    if (deps == null) return child;
+    return AgUiActions(
+      invoke: (namespace, action, body) =>
+          deps.service.invokeAction(namespace, action, body: body),
+      spaceId: widget.spaceId,
+      roomId: widget.roomId,
+      onOpenTasks: () => openPanel(context, TasksPanel(dependencies: deps)),
+      child: child,
+    );
   }
 }
 

@@ -5,6 +5,8 @@
 /// there is one component vocabulary; HITL lives in [hitl.dart] only.
 library;
 
+export 'governance_cards.dart';
 export 'hitl.dart';
+export 'replies.dart';
 export 'surface.dart';
 export 'surface_view.dart';

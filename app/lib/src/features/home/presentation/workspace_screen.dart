@@ -780,6 +780,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                                       ?.id ??
                                                   '',
                                               roomId: _chatRoomId,
+                                              suggestions: _spaceFor(workspace)?.home ?? false,
                                               threadRoomId: _currentRoomId,
                                               threadTitle: _roomThreads[
                                                           _currentRoomId]
@@ -846,6 +847,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                     dependencies: widget.dependencies,
                     spaceId: _spaceFor(workspace)?.id ?? '',
                     roomId: _chatRoomId,
+                    suggestions: _spaceFor(workspace)?.home ?? false,
                     threadRoomId: _currentRoomId,
                     threadTitle: _roomThreads[_currentRoomId]?.title ?? '',
                     onThread: _switchThread,

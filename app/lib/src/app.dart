@@ -11,6 +11,10 @@ class AsemanApp extends StatefulWidget {
 
   final AppDependencies dependencies;
 
+  /// The app's navigator, for prompts raised outside any screen (the
+  /// desktop host agent's confirmations).
+  static final navigatorKey = GlobalKey<NavigatorState>();
+
   @override
   State<AsemanApp> createState() => _AsemanAppState();
 }
@@ -29,6 +33,7 @@ class _AsemanAppState extends State<AsemanApp> {
         builder: (context, _) => AppSettingsScope(
           controller: settings,
           child: MaterialApp(
+            navigatorKey: AsemanApp.navigatorKey,
             debugShowCheckedModeBanner: false,
             title: 'Aseman',
             theme: AppTheme.lightWith(settings.accent),

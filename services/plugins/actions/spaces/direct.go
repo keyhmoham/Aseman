@@ -76,6 +76,12 @@ func (s *Service) openDirect(ctx context.Context, caller, peer identity.ID) (*sp
 	if callerAcc.IsBot() && peerAcc.IsBot() {
 		return nil, nil, false, errs.InvalidArgument("a direct conversation needs a person")
 	}
+	// People use apps in their projects; they do not chat with one.
+	if peerAcc.IsBot() && s.Bots != nil {
+		if rec, err := s.botForMember(ctx, peer); err == nil && isAppBot(rec) {
+			return nil, nil, false, errs.Permission(rec.Name + " is an app: use it in a project, or ask an agent to")
+		}
+	}
 	key := directKey(caller, peer)
 	directMu.Lock()
 	defer directMu.Unlock()

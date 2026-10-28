@@ -381,8 +381,10 @@ done is never refused, so a run can finish at most one step past the cap.
   so every app is added and connected through the same Apps flow.
 - **apps are bots** — every app, these included, is a bot with its own
   account: added to projects and rooms, given to agents as functions, asked
-  with `spaces.ask` / `message.ask`, messaged directly (`users.dm_send`), and
-  named by an agent in a room (people do not mention apps in chat). Plain
+  with `spaces.ask` / `message.ask`, and messaged directly or named in a
+  room by an agent. People use apps in their projects: they neither mention
+  an app in chat nor message one directly (`users.dm_send` and
+  `spaces.direct_open` refuse it). Plain
   words reach an app without an `ask` function of its own: the node's model
   turns them into one of its functions, as the person, and when an agent is
   behind them that call is decided by the gate. The node's own apps (Google)

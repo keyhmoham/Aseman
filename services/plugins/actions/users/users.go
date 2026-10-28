@@ -342,6 +342,9 @@ func (a *dmSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	if err := bridge.Invoke(ctx, a.s.K, "spaces", "DirectBlocked", []any{ctx, req.Caller.ID, to}, &blocked); err == nil && blocked {
 		return nil, errs.Permission("You can't message this person.")
 	}
+	if err := a.s.directAllowed(ctx, req.Caller.ID, to); err != nil {
+		return nil, err
+	}
 	id, err := identity.New(a.s.K.NodeID())
 	if err != nil {
 		return nil, err

@@ -606,8 +606,8 @@ func (s *Service) AnswerQuestion(ctx context.Context, caller, spaceID, roomID, b
 // AskDirect serves a direct message to an agent. A person's conversation runs
 // in their home space (whose sandbox the agent works on); an agent messaging
 // another agent during a run converses inside the run's space and room.
-// askAppDirect answers a direct message to an app: asked in plain words, as
-// the person (or the person an agent writing it works for). Inside a run the
+// askAppDirect answers an agent's direct message to an app: asked in plain
+// words, as the person the agent works for. Inside a run the
 // run's project is the scope; otherwise the person's home project when the
 // app was added there, else the person alone (an app connected per person,
 // like Google, needs no project).
@@ -641,7 +641,11 @@ func (s *Service) AskDirect(ctx context.Context, caller, botID identity.ID, body
 	if err != nil {
 		return "", err
 	}
-	if rec.Kind == bot.KindTool && rec.IsToolBackend() && !rec.IsSandbox() {
+	if isAppBot(rec) {
+		// Only agents message apps directly (users.dm_send refuses people).
+		if !s.isBotAccount(ctx, caller) {
+			return "", errs.Permission(rec.Name + " is an app: use it in a project, or ask an agent to")
+		}
 		return s.askAppDirect(ctx, caller, rec, body)
 	}
 	if !isAgentRuntime(rec) {

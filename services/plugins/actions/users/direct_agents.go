@@ -8,25 +8,47 @@ import (
 	"github.com/aseman/aseman/internal/plugins/bridge"
 	"github.com/aseman/aseman/internal/plugins/entity"
 	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 	"github.com/aseman/aseman/plugins/actions/message/models/message"
 	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
-// agentAccount reports the bot behind an account a person can talk to
-// directly: an agent (a conversation with it) or an app (asked in plain
-// words, as the person). The project's computer is not one.
-func (s *Service) agentAccount(ctx context.Context, accountID identity.ID) (identity.ID, bool) {
+// botOf is the bot behind an account, if the account is a bot's.
+func (s *Service) botOf(ctx context.Context, accountID identity.ID) (*bot.Bot, bool) {
 	var bots []bot.Bot
 	if err := s.R.List(ctx, "bots", database.Filter{Equal: map[string]any{"account_id": accountID.String()}, Limit: 1}, &bots); err != nil || len(bots) == 0 {
+		return nil, false
+	}
+	return &bots[0], true
+}
+
+// isApp reports an app (not the project's computer).
+func isApp(b *bot.Bot) bool { return b.Kind == bot.KindTool && b.IsToolBackend() && !b.IsSandbox() }
+
+// agentAccount reports the bot behind an account that answers direct
+// messages: an agent (a conversation with it) or an app (asked in plain
+// words, as the person its sender works for).
+func (s *Service) agentAccount(ctx context.Context, accountID identity.ID) (identity.ID, bool) {
+	b, ok := s.botOf(ctx, accountID)
+	if !ok || (b.Kind != bot.KindAgent && !isApp(b)) {
 		return identity.ID{}, false
 	}
-	b := &bots[0]
-	if b.Kind == bot.KindAgent || (b.Kind == bot.KindTool && b.IsToolBackend() && !b.IsSandbox()) {
-		return b.ID, true
+	return b.ID, true
+}
+
+// directAllowed refuses a person's direct message to an app: people use apps
+// in their projects, and only agents message an app directly.
+func (s *Service) directAllowed(ctx context.Context, from, to identity.ID) error {
+	target, ok := s.botOf(ctx, to)
+	if !ok || !isApp(target) {
+		return nil
 	}
-	return identity.ID{}, false
+	if _, fromBot := s.botOf(ctx, from); fromBot {
+		return nil
+	}
+	return errs.Permission(target.Name + " is an app: use it in a project, or ask an agent to")
 }
 
 // deliverDirect hands a direct message to the agent it was sent to and sends

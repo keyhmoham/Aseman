@@ -264,9 +264,14 @@ func (s *Service) isBotAccount(ctx context.Context, id identity.ID) bool {
 
 // isMentioned reports whether a message's mentions address rec (by bot or
 // account id).
-// mentionedApp reports an app (not the project's computer) a message names.
+// isAppBot reports an app (not the project's computer).
+func isAppBot(rec *bot.Bot) bool {
+	return rec != nil && rec.Kind == bot.KindTool && rec.IsToolBackend() && !rec.IsSandbox()
+}
+
+// mentionedApp reports an app a message names.
 func mentionedApp(rec *bot.Bot, mentions []string) bool {
-	return rec != nil && rec.Kind == bot.KindTool && rec.IsToolBackend() && !rec.IsSandbox() && isMentioned(rec, mentions)
+	return isAppBot(rec) && isMentioned(rec, mentions)
 }
 
 // deliverToApp hands a room message an agent wrote to an app it mentioned,

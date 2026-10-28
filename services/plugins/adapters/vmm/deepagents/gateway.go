@@ -54,6 +54,14 @@ type route struct {
 }
 
 func routes(a *Adapter) []route {
+	out := baseRoutes(a)
+	for i := range out {
+		out[i].handler = a.withWorkload(out[i].handler)
+	}
+	return out
+}
+
+func baseRoutes(a *Adapter) []route {
 	return []route{
 		{network.MethodPost, gatewayPrefix + "/call", a.serveCall},
 		{network.MethodPost, gatewayPrefix + "/llm/chat/completions", a.serveChat},

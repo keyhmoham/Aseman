@@ -100,6 +100,8 @@ type agentDef struct {
 
 // Adapter is the deep agents VMM plugin.
 type Adapter struct {
+	// workload is the SPIFFE workload-identity policy (workload.go).
+	workload workloadPolicy
 	base.Base
 	k        api.Kernel
 	platform platform

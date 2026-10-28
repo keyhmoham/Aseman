@@ -322,6 +322,44 @@ services:
     ports:
       - "${WEB_PORT:-3000}:80"
 
+  # Workload identity (SPIFFE/SPIRE), optional: docker compose --profile spire up
+  # (deploy/spire/README.md).
+  spire-server:
+    image: ghcr.io/spiffe/spire-server:1.11.2
+    profiles: [spire]
+    command: ["-config", "/etc/spire/server.conf"]
+    volumes:
+      - ./deploy/spire/server.conf:/etc/spire/server.conf:ro
+      - spire-server-data:/run/spire/data
+      - spire-server-socket:/tmp/spire-server
+  spire-oidc:
+    image: ghcr.io/spiffe/oidc-discovery-provider:1.11.2
+    profiles: [spire]
+    command: ["-config", "/etc/spire/oidc-discovery-provider.conf"]
+    depends_on: [spire-server]
+    volumes:
+      - ./deploy/spire/oidc-discovery-provider.conf:/etc/spire/oidc-discovery-provider.conf:ro
+      - spire-server-socket:/run/spire/server/private:ro
+  spire-agent:
+    image: ghcr.io/spiffe/spire-agent:1.11.2
+    profiles: [spire]
+    command: ["-config", "/etc/spire/agent.conf"]
+    pid: host
+    depends_on: [spire-server]
+    volumes:
+      - ./deploy/spire/agent.conf:/etc/spire/agent.conf:ro
+      - spire-sockets:/run/spire/sockets
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+  spiffe-helper:
+    image: ghcr.io/spiffe/spiffe-helper:0.10.0
+    profiles: [spire]
+    command: ["-config", "/etc/spire/helper.conf"]
+    depends_on: [spire-agent]
+    volumes:
+      - ./deploy/spire/helper.conf:/etc/spire/helper.conf:ro
+      - spire-sockets:/run/spire/sockets
+      - spire-svid:/run/spire/svid
+
 networks:
   default:
   # The database and what reads it directly; never the project computers.
@@ -329,6 +367,10 @@ networks:
     internal: true
 
 volumes:
+  spire-server-data:
+  spire-server-socket:
+  spire-sockets:
+  spire-svid:
   postgres-data:
   aseman-data:
   openviking-data:

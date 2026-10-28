@@ -38,6 +38,7 @@ var toolEffects = map[string]string{
 	"calendar_events": gate.EffectRead, "calendar_create": gate.EffectSend,
 	"host_read": gate.EffectRead, "host_list": gate.EffectRead, "host_write": gate.EffectWrite, "host_exec": gate.EffectWrite,
 	"slack_post": gate.EffectSend, "teams_post": gate.EffectSend, "sms_send": gate.EffectSend,
+	"responsibility_create": gate.EffectWrite, "responsibility_list": gate.EffectRead,
 }
 
 var (

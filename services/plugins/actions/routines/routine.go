@@ -41,10 +41,12 @@ type SpacesPort interface {
 
 // Service manages routines.
 type Service struct {
-	K           apiKernel
-	R           *repo.Repo
-	L           *logger.Logger
-	Spaces      SpacesPort
+	K      apiKernel
+	R      *repo.Repo
+	L      *logger.Logger
+	Spaces SpacesPort
+	// LLM drafts skills from demonstrations.
+	LLM         LLMPort
 	now         func() time.Time
 	workerInit  sync.Once
 	workerSlots chan struct{}
@@ -269,6 +271,7 @@ func (s *Service) Start(ctx context.Context) {
 			if err := s.RunDue(ctx); err != nil {
 				s.L.Warn("routine scheduler pass failed", "error", err)
 			}
+			s.expireDemos(ctx)
 		}
 	}
 }

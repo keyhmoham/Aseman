@@ -188,6 +188,7 @@ var toolOwners = map[string]string{
 	"offer_task": "proactive", "task_update": "proactive",
 	"host_exec": "hostaccess", "host_read": "hostaccess", "host_write": "hostaccess", "host_list": "hostaccess",
 	"slack_post": "channels", "teams_post": "channels", "sms_send": "channels",
+	"responsibility_create": "responsibilities", "responsibility_list": "responsibilities",
 }
 
 // ToolOwner is the namespace serving an agent tool, or "" for spaces' own.

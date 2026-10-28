@@ -19,6 +19,15 @@ func BuildActions(s *Service) []api.Action {
 	}
 }
 
+// BuildAllActions is BuildActions with the demonstration actions.
+func BuildAllActions(s *Service) []api.Action {
+	out := BuildActions(s)
+	for _, a := range demoActions(s) {
+		out = append(out, a)
+	}
+	return out
+}
+
 // createAction implements routines.create.
 type createAction struct{ s *Service }
 

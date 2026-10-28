@@ -163,6 +163,11 @@ func governedBuiltins() []Tool {
 			`{"channel":"C0123","text":"Deploy is done."}`, map[string]any{"channel": str("Channel id, or user id for a direct message."), "text": str("Message."), "thread_ts": str("Thread to answer in.")}, "channel", "text"),
 		tool("teams_post", "Post in the person's linked Microsoft Teams conversation.", "The person approves it.",
 			`{"text":"Deploy is done."}`, map[string]any{"conversation": str("Conversation id; empty for the person's own."), "text": str("Message.")}, "text"),
+		tool("responsibility_create", "Give yourself a standing responsibility: an instruction you run, as the person, whenever new mail matches.",
+			"Use when the person asks for something to happen every time mail of a kind arrives (\"when a customer writes about an order, draft the answer\"). Set from, subject or label to match; the instruction is what you do each time. GitHub, Slack and webhook triggers are set up by the person under Responsibilities.",
+			`{"name":"Order emails","instruction":"Draft a reply with the order's status","subject":"order"}`,
+			map[string]any{"name": str("Short name."), "instruction": str("What to do each time."), "from": str("Sender to match."), "subject": str("Subject text to match."), "label": str("Gmail label to match.")}, "name", "instruction"),
+		tool("responsibility_list", "List the standing responsibilities in this project.", "Check before creating one that may already exist.", `{}`, map[string]any{}),
 		tool("sms_send", "Send a text message (SMS).", "The person approves it.",
 			`{"to":"+15555550100","text":"Running 10 minutes late."}`, map[string]any{"to": str("Phone number (E.164)."), "text": str("Message.")}, "to", "text"),
 	}

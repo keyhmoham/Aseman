@@ -12,6 +12,7 @@ import (
 	"github.com/aseman/aseman/pkg/errs"
 	gov "github.com/aseman/aseman/plugins/actions/governance/models"
 	"github.com/aseman/aseman/plugins/actions/governance/models/gate"
+	"github.com/aseman/aseman/plugins/actions/governance/models/scan"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
 	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
@@ -323,7 +324,7 @@ func redactArgs(req gate.Request) string {
 		}
 	}
 	raw, _ := json.Marshal(helper.RedactCredentials(v))
-	return clip(redactFindings(string(raw)), 4000)
+	return clip(scan.Redact(string(raw)), 4000)
 }
 
 func clip(s string, n int) string {

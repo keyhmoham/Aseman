@@ -16,6 +16,7 @@ import (
 	gov "github.com/aseman/aseman/plugins/actions/governance/models"
 	"github.com/aseman/aseman/plugins/actions/governance/models/egress"
 	"github.com/aseman/aseman/plugins/actions/governance/models/gate"
+	"github.com/aseman/aseman/plugins/actions/governance/models/scan"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/actions/support/repo"
@@ -318,13 +319,13 @@ func TestOutboundChecks(t *testing.T) {
 	if res.Allowed || !strings.Contains(res.Reason, "GitHub token in args.body") || strings.Contains(res.Reason, "ghp_") {
 		t.Fatalf("a credential must not leave, and the reason must not quote it: %+v", res)
 	}
-	if got := Findings("card 4111 1111 1111 1111 exp 12/29"); len(got) != 1 || got[0] != "payment card number" {
+	if got := scan.Findings("card 4111 1111 1111 1111 exp 12/29"); len(got) != 1 || got[0] != "payment card number" {
 		t.Fatalf("Luhn-valid card: %v", got)
 	}
-	if got := Findings("order 1234567890123 and phone 4155550100"); len(got) != 0 {
+	if got := scan.Findings("order 1234567890123 and phone 4155550100"); len(got) != 0 {
 		t.Fatalf("ordinary numbers are not cards: %v", got)
 	}
-	if got := Findings("use {{secret:token}} here"); len(got) != 0 {
+	if got := scan.Findings("use {{secret:token}} here"); len(got) != 0 {
 		t.Fatalf("a secret placeholder passes: %v", got)
 	}
 }

@@ -17,6 +17,7 @@ func NewPlugin() api.Plugin {
 		log := d.Logger
 		s := NewService(d.Kernel, r, log)
 		s.Spaces = spacesPortBridge{K: d.Kernel}
-		return module.Instance{Service: s, Actions: BuildActions(s), Models: append(schema.Models(), models.Models()...), Run: s.Start}, nil
+		s.LLM = llmBridge{K: d.Kernel}
+		return module.Instance{Service: s, Actions: BuildAllActions(s), Models: append(schema.Models(), models.Models()...), Run: s.Start}, nil
 	})
 }

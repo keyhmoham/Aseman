@@ -82,6 +82,8 @@ PLATFORM_TOOLS = {
     "slack_post": "slack_post",
     "teams_post": "teams_post",
     "sms_send": "sms_send",
+    "responsibility_create": "responsibility_create",
+    "responsibility_list": "responsibility_list",
 }
 
 # Platform tools that stay native LLM tools when Code Mode is on. read_attachment

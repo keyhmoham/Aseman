@@ -68,6 +68,7 @@ var codeModePlatform = map[string]bool{
 	"gmail_search": true, "gmail_read": true, "gmail_draft": true, "gmail_send": true, "calendar_events": true, "calendar_create": true,
 	"host_exec": true, "host_read": true, "host_write": true, "host_list": true,
 	"slack_post": true, "teams_post": true, "sms_send": true,
+	"responsibility_create": true, "responsibility_list": true,
 }
 
 // CodeModeRequest is one authenticated API call from sandbox code (or from the

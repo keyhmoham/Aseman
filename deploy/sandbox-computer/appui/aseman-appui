@@ -128,6 +128,13 @@ cmd_run() {
   cmd_status "$dir"
 }
 
+# kit_file is a tool of the platform's checks: the platform's own copy (so a
+# project's vendored copy, missing or edited, never decides whether it
+# passes), else the project's.
+kit_file() {
+  if [[ -f "$ROOT/elpian/$1" ]]; then echo "$ROOT/elpian/$1"; else echo "$2/vendor/aseman-elpian/$1"; fi
+}
+
 # verify_app starts READY.json's `start` command the way the preview gateway
 # will, waits for the port to answer and stops it again. Prints why it failed.
 verify_app() {
@@ -147,13 +154,13 @@ verify_app() {
   if [[ "$ui" == "elpian" ]]; then
     # The bundle is always rebuilt from elpian/src: what is checked and
     # served is the current frontend (its phone widget included).
-    if ! out=$(node "$dir/vendor/aseman-elpian/bundle.mjs" "$dir" 2>&1); then
+    if ! out=$(node "$(kit_file bundle.mjs "$dir")" "$dir" 2>&1); then
       echo "the Elpian frontend could not be bundled: $out"
       return 1
     fi
   else
     # A web app's phone widget is an Elpian program of its own.
-    if ! out=$(node "$dir/vendor/aseman-elpian/bundle.mjs" "$dir" --widget 2>&1); then
+    if ! out=$(node "$(kit_file bundle.mjs "$dir")" "$dir" --widget 2>&1); then
       echo "the phone widget could not be bundled (write it in elpian/widget/, see ELPIAN.md): $out"
       return 1
     fi
@@ -216,7 +223,7 @@ check_elpian() {
     return 1
   fi
   rm -f "$dir/.elpian-served.js"
-  if ! out=$(node "$dir/vendor/aseman-elpian/check.mjs" "$dir/$entry" --apps "$dir/APPS.json" --server "http://127.0.0.1:$port" $mode 2>&1); then
+  if ! out=$(node "$(kit_file check.mjs "$dir")" "$dir/$entry" --apps "$dir/APPS.json" --server "http://127.0.0.1:$port" $mode 2>&1); then
     echo "The Elpian program $entry fails on QuickJS (vendor/aseman-elpian/check.mjs):"
     echo "$out" | tail -n 40
     return 1
@@ -226,7 +233,7 @@ check_elpian() {
       echo "The app has no end-to-end scenarios: drive it headlessly with the elpian_* driver tools (elpian_open, then elpian_tap / elpian_type / elpian_select … and elpian_expect) through every screen and control, and save each journey with elpian_save_scenario to elpian/e2e/*.json (ELPIAN.md, Testing end to end)."
       return 1
     fi
-    if ! out=$(node "$dir/vendor/aseman-elpian/drive.mjs" run "$dir/elpian/e2e" --dir "$dir" --bundle "$entry" --apps "$dir/APPS.json" --server "http://127.0.0.1:$port" 2>&1); then
+    if ! out=$(node "$(kit_file drive.mjs "$dir")" run "$dir/elpian/e2e" --dir "$dir" --bundle "$entry" --apps "$dir/APPS.json" --server "http://127.0.0.1:$port" 2>&1); then
       echo "The app's end-to-end scenarios fail (node vendor/aseman-elpian/drive.mjs run elpian/e2e): fix the app (or a scenario that expects the wrong thing):"
       echo "$out" | tail -n 80
       return 1
@@ -252,7 +259,9 @@ check_ready() {
     return 1
   fi
   local want
-  want=$(jq -r '.ui // "elpian"' "$dir/JOB.json" 2>/dev/null || echo elpian)
+  # The frontend the app was asked for (JOB.json), else the one it reports.
+  want=$(jq -r '.ui // empty' "$dir/JOB.json" 2>/dev/null || true)
+  [[ -n "$want" ]] || want=$(jq -r '.ui // "elpian"' "$dir/READY.json" 2>/dev/null || echo elpian)
   if [[ "$want" == "elpian" ]] && ! jq -e '.ui == "elpian" and (.elpian|type=="string" and length>0)' "$dir/READY.json" >/dev/null 2>&1; then
     echo "this app's frontend is Elpian (JOB.json ui): READY.json needs \"ui\": \"elpian\" and \"elpian\": \"elpian/app.js\" (see ELPIAN.md)"
     return 1
@@ -595,7 +604,8 @@ cmd_verify() {
   [[ -d "$dir" ]] || die "no project at $dir"
   dir=$(cd "$dir" && pwd)
   local port problem
-  port=$(jq -r '.port // 8787' "$dir/JOB.json" 2>/dev/null || echo 8787)
+  port=$(jq -r '.port // empty' "$dir/READY.json" 2>/dev/null || true)
+  [[ -n "$port" ]] || port=$(jq -r '.port // 8787' "$dir/JOB.json" 2>/dev/null || echo 8787)
   if problem=$(check_app "$dir"); then
     rm -f "$dir/REPAIR.md"
     jq -n --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{state:"completed", engine:"agents", finished_at:$at}' >"$dir/STATUS.json"

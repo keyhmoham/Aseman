@@ -6,7 +6,7 @@ library;
 
 export 'approvals_panel.dart';
 export 'assistant_common.dart' show openPanel;
-export 'computers_panel.dart';
+export 'shared_folders_panel.dart';
 export 'connections_panel.dart';
 export 'dictation_button.dart';
 export 'governance_views.dart';

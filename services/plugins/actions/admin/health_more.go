@@ -107,6 +107,17 @@ func (s *Service) moreHealth(ctx context.Context, r *repo.Repo, add func(healthC
 		add(healthCheck{ID: "isolation", Group: "Governance", Label: "Computer isolation", Status: "ok", Detail: "Computers run under " + rt})
 	}
 
+	if loaded("hostaccess") {
+		var rows []struct {
+			HostEnabled bool `json:"host_enabled"`
+		}
+		if r.List(ctx, "hostaccess_settings", database.Filter{Limit: 1}, &rows) == nil && len(rows) > 0 && rows[0].HostEnabled {
+			add(healthCheck{ID: "host_access", Group: "Governance", Label: "People's own computers", Status: "warn", Detail: "On: agents can reach folders people share from their own machines through the desktop app.", Fix: "Admin → Governance → Host access"})
+		} else {
+			add(healthCheck{ID: "host_access", Group: "Governance", Label: "People's own computers", Status: "ok", Detail: "Off: agents reach only project computers; people share folders from those."})
+		}
+	}
+
 	// Connections
 	enabledRow := func(model string, eq map[string]any) bool {
 		n, err := r.Count(ctx, model, database.Filter{Equal: eq})

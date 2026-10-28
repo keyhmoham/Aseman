@@ -36,9 +36,22 @@ class HostAgent {
   String get hostId => _host;
   List<String> get folders => _folders;
 
-  /// Starts again if the person had it on.
+  /// Whether the node lets agents use people's own computers at all (an
+  /// administrator's choice, off by default).
+  Future<bool> allowed() async {
+    try {
+      final out = jsonMap(
+        await dependencies.service.invokeAction('hostaccess', 'status'),
+      );
+      return out['host_enabled'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Starts again if the person had it on and the node still allows it.
   Future<void> restore() async {
-    if (!supported) return;
+    if (!supported || !await allowed()) return;
     final prefs = await SharedPreferences.getInstance();
     final folders = prefs.getStringList(_foldersKey) ?? const [];
     _host = prefs.getString(_hostKey) ?? '';
@@ -103,6 +116,11 @@ class HostAgent {
         final call = jsonMap(out['call']);
         if (call.isNotEmpty) await _answer(call);
       } catch (_) {
+        // An administrator may have turned host access off: stop answering.
+        if (!await allowed()) {
+          _running = false;
+          return;
+        }
         await Future<void>.delayed(Duration(seconds: backoff));
         backoff = (backoff * 2).clamp(1, 60);
       }

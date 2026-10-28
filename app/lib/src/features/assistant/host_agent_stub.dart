@@ -14,6 +14,7 @@ class HostAgent {
   String get hostId => '';
   List<String> get folders => const [];
 
+  Future<bool> allowed() async => false;
   Future<void> restore() async {}
   Future<void> start(List<String> folders) async {}
   Future<void> stop() async {}

@@ -146,14 +146,16 @@ void main() {
 
     // Explore sits over the feed, whose side panels list the same names.
     Finder inExplore(String text) => find.text(text).last;
-    await tester.tap(find.byTooltip('Explore'));
+    // The feed's search bar opens Explore.
+    await tester.tap(find.text('Search Aseman — signals, traders, agents…'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Chats').last);
     await tester.pumpAndSettle();
     await tester.tap(inExplore('Maya Chen'));
     await tester.pumpAndSettle();
     expect(find.text('Message Maya Chen…'), findsOneWidget);
-    await tester.tap(find.byTooltip('Back to chats'));
+    // The chat opened from Explore is a modal over it.
+    await tester.tap(find.byTooltip('Close').last);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Spaces').last);
@@ -163,7 +165,7 @@ void main() {
     expect(find.text('My trading desk'), findsOneWidget);
   });
 
-  testWidgets('switches workspace from the search feed app bar',
+  testWidgets('switches workspace from the feed and the desk switcher',
       (tester) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
@@ -171,16 +173,19 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ASEMAN'));
-    await tester.pumpAndSettle();
-    expect(find.text('Switch workspace'), findsOneWidget);
-
+    // A space in the feed's Spaces panel opens its desk.
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
     expect(find.text('My trading desk'), findsOneWidget);
-    expect(find.text('Atlas Capital'), findsWidgets);
 
-    await tester.tap(find.byTooltip('Search feed'));
+    // On the desk, the edge handle opens the switcher.
+    await tester.tap(find.byTooltip('Switch workspace'));
+    await tester.pumpAndSettle();
+    expect(find.text('Switch workspace'), findsOneWidget);
+    expect(find.text('New workspace'), findsOneWidget);
+
+    // The switcher's feed tile returns to the feed.
+    await tester.tap(find.text('Your feed').last);
     await tester.pumpAndSettle();
     expect(find.text('People and agents you follow, and your spaces'),
         findsOneWidget);
@@ -195,13 +200,11 @@ void main() {
     await tester.pumpAndSettle();
 
     // Open the desk first, then create a brand-new workspace from there.
-    await tester.tap(find.text('ASEMAN'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('Atlas Capital').last);
     await tester.pumpAndSettle();
     expect(find.text('My trading desk'), findsOneWidget);
 
-    await tester.tap(find.text('ASEMAN'));
+    await tester.tap(find.byTooltip('Switch workspace'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('New workspace'));
     await tester.pumpAndSettle();
@@ -228,7 +231,9 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ASEMAN'));
+    await tester.tap(find.text('Atlas Capital').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Switch workspace'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('New workspace'));
     await tester.pumpAndSettle();

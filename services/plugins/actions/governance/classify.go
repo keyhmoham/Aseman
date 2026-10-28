@@ -37,6 +37,7 @@ var toolEffects = map[string]string{
 	"gmail_search": gate.EffectRead, "gmail_read": gate.EffectRead, "gmail_draft": gate.EffectWrite, "gmail_send": gate.EffectSend,
 	"calendar_events": gate.EffectRead, "calendar_create": gate.EffectSend,
 	"host_read": gate.EffectRead, "host_list": gate.EffectRead, "host_write": gate.EffectWrite, "host_exec": gate.EffectWrite,
+	"folder_list": gate.EffectRead, "folder_read": gate.EffectRead, "folder_write": gate.EffectWrite,
 	"slack_post": gate.EffectSend, "teams_post": gate.EffectSend, "sms_send": gate.EffectSend,
 	"responsibility_create": gate.EffectWrite, "responsibility_list": gate.EffectRead,
 }

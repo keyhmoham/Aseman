@@ -4,7 +4,6 @@ import (
 	"context"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/aseman/aseman/internal/plugins/identity"
 	llmmodels "github.com/aseman/aseman/plugins/actions/llm/models"
@@ -84,12 +83,11 @@ func (s *Service) Setup(ctx context.Context, owner identity.ID, notifications st
 	} else {
 		add(SetupItem{ID: "channels", Label: "Slack, Teams or SMS", Status: "not_checked", Detail: "None linked: you reach your agents in the app.", Fix: "Settings → Channels.", Optional: true})
 	}
-	hosts, _ := s.R.Count(ctx, "hosts", database.Filter{Equal: map[string]any{"owner_id": owner.String(), "enabled": true},
-		GreaterThan: map[string]any{"last_seen": time.Now().UTC().Add(-90 * time.Second)}})
-	if hosts > 0 {
-		add(SetupItem{ID: "computer", Label: "Your computer", Status: "ready", Detail: "Connected through the desktop app.", Optional: true})
+	folders, _ := s.R.Count(ctx, "shared_folders", database.Filter{Equal: map[string]any{"owner_id": owner.String(), "enabled": true}})
+	if folders > 0 {
+		add(SetupItem{ID: "folders", Label: "Shared folders", Status: "ready", Detail: itoa(folders) + " shared from your project computers.", Optional: true})
 	} else {
-		add(SetupItem{ID: "computer", Label: "Your computer", Status: "not_checked", Detail: "Not connected: agents work on the project computer only.", Fix: "Desktop app → Settings → Let agents use this computer.", Optional: true})
+		add(SetupItem{ID: "folders", Label: "Shared folders", Status: "not_checked", Detail: "None shared: each project's agents see only their own computer.", Fix: "Settings → Shared folders.", Optional: true})
 	}
 	return out
 }

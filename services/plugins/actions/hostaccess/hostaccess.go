@@ -1,7 +1,14 @@
-// Package hostaccess lets a person's agents use the person's own computer,
-// through the Aseman desktop app, limited to the folders the person shares.
+// Package hostaccess shares folders with a person's agents.
 //
-// The desktop app registers the computer as a host and long-polls for calls
+// By default the folders come from the person's project computers (their
+// sandboxes): a folder of one project's workspace, shared with the person's
+// own agents in every project through folder_list, folder_read and
+// folder_write (see folders.go). Nothing on the person's own machine is
+// reachable.
+//
+// Reaching people's own computers is the highest access the node can give,
+// so it is a node setting an administrator turns on (hostaccess.admin_set),
+// off by default. Only then may the desktop app register the computer as a host and long-polls for calls
 // (hostaccess.next); an agent's host_exec, host_read, host_write and
 // host_list wait here until the app answers (hostaccess.result). Every call
 // has already passed the governance gate, which by default asks the person
@@ -38,6 +45,8 @@ type Service struct {
 	K api.Kernel
 	R *repo.Repo
 	L *logger.Logger
+	// Files reaches project computers' workspaces (spaces).
+	Files ProjectFiles
 	// CallTimeout bounds how long an agent waits on the desktop app;
 	// PollWait how long one long poll waits for a call.
 	CallTimeout, PollWait time.Duration
@@ -84,6 +93,9 @@ func (s *Service) wake(key string) {
 
 // Register adds (or refreshes) one of the person's computers.
 func (s *Service) Register(ctx context.Context, owner identity.ID, hostID, name, platform string, folders []string) (*hm.Host, error) {
+	if err := s.requireHost(ctx); err != nil {
+		return nil, err
+	}
 	clean := []string{}
 	for _, f := range folders {
 		f = strings.TrimSpace(f)
@@ -150,6 +162,9 @@ func (s *Service) online(ctx context.Context, owner string) (*hm.Host, bool) {
 // Next waits for the host's next call and claims it (the desktop app's long
 // poll). No call is not an error: the app polls again.
 func (s *Service) Next(ctx context.Context, owner identity.ID, hostID string) (*hm.Call, error) {
+	if err := s.requireHost(ctx); err != nil {
+		return nil, err
+	}
 	h, err := s.host(ctx, owner, hostID)
 	if err != nil {
 		return nil, err
@@ -198,6 +213,9 @@ func (s *Service) Next(ctx context.Context, owner identity.ID, hostID string) (*
 
 // Result records what the desktop app did with a call.
 func (s *Service) Result(ctx context.Context, owner identity.ID, callID, output, failure string) error {
+	if err := s.requireHost(ctx); err != nil {
+		return err
+	}
 	cid, err := identity.Parse(callID)
 	if err != nil {
 		return errs.InvalidArgument("invalid call")
@@ -236,16 +254,30 @@ func inside(p string, folders []string) bool {
 	return false
 }
 
-// AvailableTools: host tools for a person with a connected computer.
+// AvailableTools: the folder tools for a person who shared folders, and the
+// host tools only while host access is on and their computer is connected.
 func (s *Service) AvailableTools(ctx context.Context, actor, space string) ([]string, error) {
-	if _, ok := s.online(ctx, actor); !ok {
-		return []string{}, nil
+	out := []string{}
+	if n, err := s.R.Count(ctx, "shared_folders", database.Filter{Equal: map[string]any{"owner_id": actor, "enabled": true}}); err == nil && n > 0 {
+		out = append(out, folderTools...)
 	}
-	return []string{"host_exec", "host_read", "host_write", "host_list"}, nil
+	if s.HostEnabled(ctx) {
+		if _, ok := s.online(ctx, actor); ok {
+			out = append(out, hostTools...)
+		}
+	}
+	return out, nil
 }
 
-// AgentTool sends an agent's call to the person's computer and waits for it.
+// AgentTool serves the folder tools, and the host tools by sending the call
+// to the person's computer and waiting for it.
 func (s *Service) AgentTool(ctx context.Context, call gate.ToolCall) (string, error) {
+	if strings.HasPrefix(call.Tool, "folder_") {
+		return s.folderTool(ctx, call)
+	}
+	if err := s.requireHost(ctx); err != nil {
+		return "", err
+	}
 	h, ok := s.online(ctx, call.ActorID)
 	if !ok {
 		return "", errs.New(errs.CodeUnavailable, "the person's computer is not connected: they open the Aseman desktop app and turn on \"Let agents use this computer\"")

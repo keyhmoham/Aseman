@@ -178,6 +178,9 @@ class _RoomChatState extends State<RoomChat> {
   /// the person has not scrolled this room yet (land on the live bottom).
   RoomChatScroll? _restore;
 
+  /// How many frames a restore may wait for the list to settle.
+  static const _maxRestoreFrames = 45;
+
   /// True once [_restore] has been applied (or abandoned for a fresh bottom).
   bool _didRestore = false;
 
@@ -298,16 +301,28 @@ class _RoomChatState extends State<RoomChat> {
   bool _tryRestore() {
     final saved = _restore;
     if (saved == null || _didRestore) return saved != null && _didRestore;
+    // Never retry for ever: a list whose height keeps changing (or that never
+    // lays out) would otherwise request a frame every frame.
+    if (_restoreAttempts >= _maxRestoreFrames) {
+      if (_chatScroll.hasClients) {
+        _runWithoutPersist(() => _chatScroll
+            .jumpTo(saved.offsetFor(_chatScroll.position.maxScrollExtent)));
+      }
+      _pinToBottom = saved.nearBottom;
+      _didRestore = true;
+      _restoreAttempts = 0;
+      return true;
+    }
     if (!_chatScroll.hasClients) {
+      _restoreAttempts++;
       _scheduleRestoreRetry();
       return true;
     }
     // First page still arriving: keep the pending restore until it lands.
+    // didUpdateWidget tries again when the messages arrive, so no frames
+    // are spent waiting.
     if (widget.messages.isEmpty) {
-      if (widget.loading) {
-        _scheduleRestoreRetry();
-        return true;
-      }
+      if (widget.loading) return true;
       // Truly empty conversation — nothing to restore to.
       _runWithoutPersist(
           () => _chatScroll.jumpTo(_chatScroll.position.maxScrollExtent));
@@ -320,7 +335,7 @@ class _RoomChatState extends State<RoomChat> {
     // Children often report max==0 for a frame before layout finishes.
     final expectScroll =
         saved.maxExtent > 0 || saved.offset > 0 || saved.nearBottom;
-    if (max <= 0 && expectScroll && _restoreAttempts < 45) {
+    if (max <= 0 && expectScroll) {
       _restoreExtent = null;
       _restoreStableFrames = 0;
       _scheduleRestoreRetry();

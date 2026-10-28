@@ -237,6 +237,9 @@ class _AppScreenState extends State<AdminScreen> {
       _Page('Audit', 'Every agent action, who started it and why',
           Icons.fact_check_outlined, Icons.fact_check_rounded,
           custom: adminAuditPage),
+      _Page('Host access', 'Agents on people\'s own computers (off by default)',
+          Icons.computer_outlined, Icons.computer_rounded,
+          custom: adminHostAccessPage),
     ]),
     _Section('Connections', [
       _Page('Google', 'Gmail and Calendar for everyone',

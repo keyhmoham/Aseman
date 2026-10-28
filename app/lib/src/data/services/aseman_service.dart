@@ -420,7 +420,7 @@ class AsemanService implements BackendService {
     return (
       main: RoomThread.fromJson(main, isMain: true),
       threads: (body['threads'] as List? ?? const [])
-          .whereType<Map>()
+          .whereType<Map<dynamic, dynamic>>()
           .map((t) => RoomThread.fromJson(t.cast<String, dynamic>()))
           .toList(),
     );

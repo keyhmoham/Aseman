@@ -243,7 +243,7 @@ func TestSetupChecklist(t *testing.T) {
 	if byID["model"].Status != "needs_setup" || byID["google_node"].Status != "needs_setup" || byID["notifications"].Status != "needs_setup" {
 		t.Fatalf("%+v", items)
 	}
-	if byID["computer"].Status != "not_checked" || !byID["computer"].Optional {
-		t.Fatalf("optional items are not checked: %+v", byID["computer"])
+	if byID["folders"].Status != "not_checked" || !byID["folders"].Optional {
+		t.Fatalf("optional items are not checked: %+v", byID["folders"])
 	}
 }

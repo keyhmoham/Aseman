@@ -67,6 +67,7 @@ var codeModePlatform = map[string]bool{
 	"secret_request": true, "computer_help": true, "offer_task": true, "task_update": true,
 	"gmail_search": true, "gmail_read": true, "gmail_draft": true, "gmail_send": true, "calendar_events": true, "calendar_create": true,
 	"host_exec": true, "host_read": true, "host_write": true, "host_list": true,
+	"folder_list": true, "folder_read": true, "folder_write": true,
 	"slack_post": true, "teams_post": true, "sms_send": true,
 	"responsibility_create": true, "responsibility_list": true,
 }

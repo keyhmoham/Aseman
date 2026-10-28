@@ -178,11 +178,18 @@ abstract final class BackendCapabilities {
       'secret_submit'
     ],
     'hostaccess': [
+      'admin_get',
+      'admin_set',
+      'folder_set',
+      'folder_share',
+      'folder_unshare',
+      'folders',
       'hosts',
       'next',
       'register',
       'result',
-      'set_enabled'
+      'set_enabled',
+      'status'
     ],
     'llm': [
       'llm_decision_get',

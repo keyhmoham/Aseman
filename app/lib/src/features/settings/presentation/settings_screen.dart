@@ -342,11 +342,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onTap: () => _openAssistant(
                             (deps) => ConnectionsPanel(dependencies: deps))),
                     _SettingsTile(
-                        icon: Icons.computer_rounded,
-                        title: 'Computers',
-                        subtitle: 'Let agents use folders on your own computer',
+                        icon: Icons.folder_shared_outlined,
+                        title: 'Shared folders',
+                        subtitle: 'Folders of your project computers your agents may use everywhere',
                         onTap: () => _openAssistant(
-                            (deps) => ComputersPanel(dependencies: deps))),
+                            (deps) => SharedFoldersPanel(dependencies: deps))),
                   ]),
             _Section(
                 title: 'Trading & agents',

@@ -85,13 +85,14 @@ class RoomWorkNeeds extends StatelessWidget {
               ),
             ]),
             const SizedBox(height: 8),
-            AgUiQuestion(
-              question: q.question,
-              options: options,
-              allowFreeText: !q.approval,
-              dense: true,
-              onReply: (value, {meta}) => onAnswer(q, value),
-            ),
+            // The question itself is the agent's message in the thread, and
+            // a typed answer goes through the composer: only its choices
+            // are offered here.
+            if (options.isNotEmpty)
+              AgUiChoices(
+                options: options,
+                onSelect: (value) => onAnswer(q, value),
+              ),
             if (!q.approval)
               Align(
                 alignment: Alignment.centerLeft,

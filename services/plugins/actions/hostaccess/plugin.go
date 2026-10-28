@@ -13,6 +13,7 @@ import (
 func NewPlugin() api.Plugin {
 	return module.New(api.Info{Name: "hostaccess-ns", Version: "1.0.0", Provides: []string{"service/hostaccess"}}, func(ctx context.Context, d *api.Dependencies) (module.Instance, error) {
 		s := NewService(d.Kernel, repo.New(d.Kernel), d.Logger)
+		s.Files = bridgedFiles{s}
 		return module.Instance{Service: s, Models: hm.Models(), Actions: s.actions()}, nil
 	})
 }

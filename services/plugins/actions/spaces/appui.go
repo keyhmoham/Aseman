@@ -136,8 +136,11 @@ printf '%%s' %s | base64 -d > %s
 	return nil
 }
 
+// sandboxReadText reads a file of an app project on the computer itself: the
+// app tools have just run there, and what they wrote may not be in the
+// stored files yet.
 func (s *Service) sandboxReadText(ctx context.Context, spaceID identity.ID, p string) (string, error) {
-	data, err := s.sandboxReadFile(ctx, spaceID, p)
+	data, err := s.sandboxReadLive(ctx, spaceID, p)
 	if err != nil {
 		return "", err
 	}
@@ -482,7 +485,18 @@ func (s *Service) appuiExec(ctx context.Context, spaceID identity.ID, cmd string
 		return out, err
 	}
 	s.L.Info("sandbox tools are older than the node: restarting the machine on the current image", "space", spaceID.String())
-	if _, err := s.SandboxStop(ctx, spaceID); err != nil {
+	// Other agents' commands may be running on it: wait for a gap.
+	for try := 0; try < 12; try++ {
+		if _, err = s.SandboxStop(ctx, spaceID); errs.CodeOf(err) != errs.CodeConflict {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(10 * time.Second):
+		}
+	}
+	if err != nil {
 		return "", errs.New(errs.CodeUnavailable, "the project's computer runs an older image without the app tools, and it could not be restarted now ("+err.Error()+"); try again in a moment")
 	}
 	return s.SandboxExec(ctx, spaceID, cmd)
@@ -521,10 +535,15 @@ func (s *Service) appuiPublishTool(ctx context.Context, spaceID, roomID identity
 		_ = json.Unmarshal([]byte(raw), &job)
 	}
 	if job.Dir == "" {
-		// Not prepared by appui_create in this node version: read the project.
+		// Not prepared by appui_create (an older node, or a build it could
+		// not set up): the project says what it is, in JOB.json or, built by
+		// hand, in READY.json. The platform's checks decide the rest.
 		raw, err := s.sandboxReadText(opCtx, spaceID, dir+"/JOB.json")
 		if err != nil {
-			return "", errs.NotFound("no app project at " + dir + ": start one with appui_create")
+			raw, err = s.sandboxReadText(opCtx, spaceID, dir+"/READY.json")
+		}
+		if err != nil {
+			return "", errs.NotFound("nothing to publish at " + dir + ": it has no JOB.json or READY.json. Build the app there (start it with appui_create) and write READY.json once its tests pass, then call appui_publish again")
 		}
 		var j struct {
 			Title string `json:"title"`

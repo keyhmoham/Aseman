@@ -254,12 +254,34 @@ func (s *Service) sandboxReadFile(ctx context.Context, spaceID identity.ID, path
 		return nil, errs.InvalidArgument("sandbox path required")
 	}
 	// A file of the workspace is read from the stored files: reading is no
-	// reason to wake the computer.
+	// reason to wake the computer. While it is awake, though, the computer is
+	// the truth: what it wrote last may not be stored yet (a provider's volume
+	// syncs later), so a file the store lacks is read on the computer.
 	if data, found, ok := s.readStoredFile(ctx, spaceID, path); ok {
-		if !found {
+		if found {
+			return data, nil
+		}
+		if !s.computerAwake(ctx, spaceID) {
 			return nil, errs.New(errs.CodeNotFound, "cannot read sandbox file: "+path)
 		}
-		return data, nil
+	}
+	return s.sandboxReadLive(ctx, spaceID, path)
+}
+
+// computerAwake reports whether the project's computer is running now.
+func (s *Service) computerAwake(ctx context.Context, spaceID identity.ID) bool {
+	id, found := s.sandboxBotID(ctx, spaceID)
+	if !found || s.Bots == nil {
+		return false
+	}
+	rec, err := s.Bots.GetBot(ctx, id)
+	return err == nil && rec.Status == bot.StatusRunning
+}
+
+// sandboxReadLive reads a file on the computer itself (waking it).
+func (s *Service) sandboxReadLive(ctx context.Context, spaceID identity.ID, path string) ([]byte, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, errs.InvalidArgument("sandbox path required")
 	}
 	out, err := s.SandboxExec(ctx, spaceID, "base64 -w0 "+shellFilePath(path)+" 2>/dev/null || base64 "+shellFilePath(path))
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/aseman/aseman/internal/plugins/bridge"
 	"strings"
 	"time"
 
@@ -155,6 +156,10 @@ func (s *Service) BriefToday(ctx context.Context, owner identity.ID, tz string, 
 				_ = s.R.Update(ctx, "briefs", id, b)
 			}
 		}
+	}
+	// Slack, Teams or SMS, where the person linked them for notices.
+	if s.K != nil {
+		_ = bridge.Invoke(ctx, s.K, "channels", "Notify", []any{ctx, owner.String(), briefMarkdown(content)})
 	}
 	if s.Users != nil {
 		s.Users.Push(ctx, []identity.ID{owner}, PushNote{Title: "Your brief for today",

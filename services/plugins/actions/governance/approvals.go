@@ -3,6 +3,7 @@ package governance
 import (
 	"context"
 	"fmt"
+	"github.com/aseman/aseman/internal/plugins/bridge"
 	"strings"
 
 	"github.com/aseman/aseman/internal/plugins/entity"
@@ -87,6 +88,13 @@ func (s *Service) announce(ctx context.Context, req gate.Request, a *gov.Approva
 		if perr := s.Spaces.PostMessage(context.WithoutCancel(ctx), space, room, sender, body); perr != nil && s.L != nil {
 			s.L.Warn("approval card not posted", "approval", a.ID.String(), "error", perr)
 		}
+	}
+	// Slack, Teams and SMS, where the person linked them, offer the same
+	// answers; a namespace that is not loaded is simply not told.
+	if s.K != nil {
+		note := gate.ApprovalNote{ID: a.ID.String(), ActorID: req.ActorID, SpaceID: req.SpaceID, RoomID: req.RoomID, AgentName: req.AgentName,
+			Summary: a.Summary, Tool: a.Tool, Effect: a.Effect, Rule: a.Rule, Recipients: a.Recipients, Text: a.Text}
+		_ = bridge.Invoke(context.WithoutCancel(ctx), s.K, "channels", "ApprovalAsked", []any{context.WithoutCancel(ctx), note})
 	}
 	if s.Users != nil {
 		if actor, err := identity.Parse(req.ActorID); err == nil && s.isPerson(ctx, req.ActorID) {

@@ -202,3 +202,19 @@ func OwnedTools() map[string][]string {
 	}
 	return out
 }
+
+// ApprovalNote is an approval as the places a person may answer it from
+// (Slack, Teams, SMS) are told about it.
+type ApprovalNote struct {
+	ID         string   `json:"id"`
+	ActorID    string   `json:"actor_id"`
+	SpaceID    string   `json:"space_id"`
+	RoomID     string   `json:"room_id,omitempty"`
+	AgentName  string   `json:"agent_name,omitempty"`
+	Summary    string   `json:"summary"`
+	Tool       string   `json:"tool"`
+	Effect     string   `json:"effect"`
+	Rule       string   `json:"rule"`
+	Recipients []string `json:"recipients,omitempty"`
+	Text       string   `json:"text,omitempty"`
+}

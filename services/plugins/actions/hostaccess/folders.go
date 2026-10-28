@@ -14,7 +14,7 @@ import (
 	"github.com/aseman/aseman/plugins/actions/governance/models/gate"
 	hm "github.com/aseman/aseman/plugins/actions/hostaccess/models"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
-	)
+)
 
 // Shared folders come from the person's project computers: a folder of one
 // project's workspace, shared with the person's own agents in every project.

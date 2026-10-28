@@ -5,6 +5,7 @@ import '../../../core/theme/app_shape.dart';
 import '../../tools/connect/mcp_sign_in.dart';
 import 'admin_forms.dart';
 import 'admin_page_content.dart';
+import 'admin_trust_pages.dart';
 import 'llm_providers_tab.dart';
 
 typedef JsonMap = Map<String, dynamic>;
@@ -19,7 +20,10 @@ class _Call {
 
 class _Page {
   const _Page(this.label, this.hint, this.icon, this.selectedIcon,
-      {this.calls = const [], this.actions = const [], this.providers = false});
+      {this.calls = const [],
+      this.actions = const [],
+      this.providers = false,
+      this.custom});
   final String label;
   final String hint;
   final IconData icon;
@@ -27,6 +31,12 @@ class _Page {
   final List<_Call> calls;
   final List<_Call> actions;
   final bool providers;
+
+  /// A page that loads and saves on its own.
+  final Widget Function(AppDependencies deps)? custom;
+
+  /// Whether the page leaves loading to itself.
+  bool get standalone => providers || custom != null;
 }
 
 class _Section {
@@ -220,6 +230,33 @@ class _AppScreenState extends State<AdminScreen> {
           calls: [_Call('spaces', 'opencode_get')],
           actions: [_Call('spaces', 'opencode_set')]),
     ]),
+    _Section('Governance', [
+      _Page('Policy', 'What agents may do, ask about or never do',
+          Icons.policy_outlined, Icons.policy_rounded,
+          custom: adminPolicyPage),
+      _Page('Audit', 'Every agent action, who started it and why',
+          Icons.fact_check_outlined, Icons.fact_check_rounded,
+          custom: adminAuditPage),
+    ]),
+    _Section('Connections', [
+      _Page('Google', 'Gmail and Calendar for everyone',
+          Icons.mail_outline_rounded, Icons.mail_rounded,
+          custom: adminGooglePage),
+      _Page('Slack, Teams, SMS', 'Where people reach their agents',
+          Icons.forum_outlined, Icons.forum_rounded,
+          custom: adminChannelsPage),
+      _Page('Tool brokers', 'Composio and Arcade',
+          Icons.hub_outlined, Icons.hub_rounded,
+          custom: adminBrokersPage),
+    ]),
+    _Section('Enterprise', [
+      _Page('Single sign-on', 'OpenID Connect providers',
+          Icons.verified_user_outlined, Icons.verified_user_rounded,
+          custom: adminSsoPage),
+      _Page('Directory', 'SCIM, organizations and workload identity',
+          Icons.apartment_outlined, Icons.apartment_rounded,
+          custom: adminDirectoryPage),
+    ]),
     _Section('System', [
       _Page('Health', 'Deployment checklist', Icons.monitor_heart_outlined,
           Icons.monitor_heart_rounded,
@@ -320,7 +357,7 @@ class _AppScreenState extends State<AdminScreen> {
     final selected = current;
     final generation = ++_generation;
     _refreshing = null;
-    if (selected.providers) return;
+    if (selected.standalone) return;
     setState(() {
       loading = true;
       results = const {};
@@ -337,7 +374,7 @@ class _AppScreenState extends State<AdminScreen> {
   /// [afterChange] waits for one already in flight and fetches again so the
   /// result of a mutation is never missed.
   Future<void> refresh({bool background = false, bool afterChange = false}) {
-    if (current.providers) return Future.value();
+    if (current.standalone) return Future.value();
     if (loading) return Future.value();
     final pending = _refreshing;
     if (pending != null) {
@@ -544,7 +581,7 @@ class _AppScreenState extends State<AdminScreen> {
               icon: const Icon(Icons.search_rounded)),
           IconButton(
               tooltip: 'Refresh',
-              onPressed: current.providers ? null : refresh,
+              onPressed: current.standalone ? null : refresh,
               icon: const Icon(Icons.refresh_rounded)),
         ];
         final content = Column(children: [
@@ -614,7 +651,9 @@ class _AppScreenState extends State<AdminScreen> {
               ),
               child: KeyedSubtree(
                 key: ValueKey(current.label),
-                child: current.providers
+                child: current.custom != null
+                    ? current.custom!(widget.dependencies)
+                    : current.providers
                     ? Padding(
                         padding: EdgeInsets.symmetric(
                             horizontal: width < 600 ? 16 : 28),

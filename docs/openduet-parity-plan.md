@@ -242,10 +242,12 @@ records are its own schemas, and other modules reach it only through
 
 ## 17. Experience
 
-- Reply chips: agents end a question with up to three likely answers
-  (`suggested_replies`), shown as tappable chips under their last message.
-- Dictation: a microphone button records, `llm.transcribe` writes it down with
-  the node's transcription model, and it is sent as the person's message.
+- Reply chips: agents end a question with up to three likely answers on a last
+  line `<replies>a | b | c</replies>` (`pkg/replies`), shown as tappable chips
+  under their newest message and as buttons in Slack and Teams.
+- Dictation: a microphone button in the composer records, `developer.dictate`
+  writes it down with the node's transcription model (billed to the person),
+  and the text lands in the composer for the person to send.
 - First day: the first time a person opens their home project, its lead greets
   them, reads recent mail and this week's calendar if connected, and answers in
   three short bubbles with "Sounds right" / "Something's off".

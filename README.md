@@ -214,6 +214,31 @@ dependency. See [`services/README.md`](services/README.md#tools-one-form-three-b
 - **Decision Model:** Optionally pick a decision model such as TypeSafe AI's Jev on Vercel AI Gateway (**Admin → Decision model**). Agents then use it for tool selection, routing and work checks together with their own model; turned off, every agent decides with its own model.
 - **First Boot Bootstrap:** To automatically seed an initial LLM provider on startup, set `ASEMAN_LLM_API_KEY` (and optionally `ASEMAN_LLM_MODEL`) in your `.env`.
 
+## Governance, proactive work and connections
+
+- **Every agent action is decided and recorded.** A CEL policy (Admin →
+  Governance → Policy, or a project's Agents settings) denies, asks or allows
+  each action; asks become approvals with Allow once, Always allow and Refuse,
+  in the app, Slack, Teams or SMS. The audit trail records who started each
+  action and exports as CSV.
+- **Secrets stay out of the conversation**: agents ask with a masked box and
+  use credentials by name; outbound content is checked; outside content is
+  marked untrusted. Project computers follow a network policy through the
+  egress proxy, optionally under gVisor (`ASEMAN_SANDBOX_RUNTIME=runsc`), and a
+  person can take one over.
+- **Your assistant works on its own, read-only**: Tasks, the morning brief,
+  inbox triage and background research, with Gmail and Calendar connected
+  (Settings → Connections). Responsibilities react to email, GitHub, Slack and
+  webhooks; demonstrations turn something you showed into a skill.
+- **Reach it anywhere**: Slack, Microsoft Teams and SMS; voice dictation; the
+  desktop app lets agents use shared folders on your computer.
+- **Enterprise**: OIDC single sign-on, SCIM provisioning, organizations, SPIFFE
+  workload identity (`docker compose --profile spire up`).
+- **Operations**: Admin → Health checks the real thing; `deploy/helm/aseman`
+  for Kubernetes; `evals/` for triage and reply-chip quality; the node sends no
+  telemetry ([`docs/telemetry.md`](docs/telemetry.md)); see
+  [`CHANGELOG.md`](CHANGELOG.md) when upgrading.
+
 ---
 
 ## Local Development

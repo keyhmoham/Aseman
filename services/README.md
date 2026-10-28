@@ -331,6 +331,42 @@ done is never refused, so a run can finish at most one step past the cap.
   came from is never in the partner API. 120 calls a minute per key.
 - **market** — publish, discover and install agents and apps:
   `publish`, `unpublish`, `list`, `get`, `install`, `my_listings`.
+- **governance** — every agent action passes one gate: the deep agents
+  gateway, Code Mode, platform tools, app calls and sandbox commands are
+  normalized to a request (tool, kind, effect, target, initiator) and decided
+  by CEL rules, deny then ask then allow, failing closed (`policy_get`,
+  `policy_set`, `policy_test`). The default policy asks before sending, paying,
+  signing or deleting and lets proactive work only read. Asks become approvals
+  (Allow once, Always allow, Refuse: `approval_*`, `grant_list`,
+  `grant_revoke`) answered in the app, Slack, Teams or SMS. Every decision is
+  audited with who started it (`audit_list`, `audit_export` as CSV). Agents ask
+  for credentials with a masked box (`secret_request`; `secret_*`) and use them
+  as `{{secret:name}}`; outbound content is checked for credentials and card
+  numbers; outside content reaches models in an untrusted envelope. A project's
+  computer follows its network policy (`egress_get`, `egress_set`; the
+  `aseman-egress` sidecar), and a person can take it over (`computer_help`,
+  `control_take`, `control_release`). See [`docs/openduet-parity-plan.md`](../docs/openduet-parity-plan.md).
+- **google** — each person's Gmail and Calendar over OAuth (PKCE): agents
+  search and read mail, draft (and, approved, send) replies, list and create
+  events (`status`, `connect_start`, `disconnect`; `admin_get`, `admin_set`).
+- **proactive** — Tasks (suggested, working, needs input, ready for review),
+  inbox triage, the morning brief, background research (read-only, as
+  initiator `proactive`), the first-day greeting and the setup checklist
+  (`tasks_list`, `task_*`, `brief_*`, `triage`, `first_day`, `settings_*`,
+  `research_now`, `setup_check`).
+- **responsibilities** — standing instructions an agent runs when an email,
+  GitHub event, Slack message or webhook matches (`create`, `list`, `pause`,
+  `resume`, `delete`, `test`; hooks at `/hooks/v1/responsibilities/{id}`).
+- **channels** — Slack, Microsoft Teams and SMS (Twilio): people link their
+  accounts with a code, talk to their agents, answer approvals with buttons and
+  get their brief there (`status`, `link_code`, `unlink`, `binding_set`,
+  `admin_get`, `admin_set`).
+- **enterprise** — OpenID Connect single sign-on (optionally required per
+  domain), SCIM 2.0 provisioning at `/scim/v2`, organizations by email domain,
+  offboarding, and SPIFFE workload identity for the agent runtime.
+- **hostaccess** — a person's own computer through the desktop app, limited to
+  the folders they share (`register`, `hosts`, `set_enabled`, `next`, `result`;
+  agent tools `host_exec`, `host_read`, `host_write`, `host_list`).
 
 ### Agents & apps
 

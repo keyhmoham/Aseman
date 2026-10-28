@@ -42,6 +42,7 @@ import '../../files/presentation/file_viewer.dart';
 import '../../messenger/presentation/chat_page.dart';
 import '../../messenger/presentation/report_dialog.dart';
 import '../../rooms/presentation/widgets/attachment_bubble.dart';
+import '../../rooms/presentation/widgets/new_room_dialog.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import '../../rooms/presentation/widgets/shared_file_viewer.dart';
 import '../../search_feed/presentation/feed_post_card.dart';
@@ -432,15 +433,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   }
 
   Future<void> _createRoom() async {
-    final name = await showAppDialog<String>(
+    final room = await showAppDialog<NewRoom>(
       context: context,
-      builder: (_) => const _RoomNameDialog(),
+      builder: (_) => const NewRoomDialog(),
     );
-    if (name == null || name.trim().isEmpty || !mounted) return;
+    if (room == null || !mounted) return;
     final sp = _spaceFor(workspace);
     if (sp == null) return;
     try {
-      await widget.dependencies.service.createRoom(sp.id, name.trim(), '');
+      await widget.dependencies.service.createRoom(sp.id, room.name, '',
+          purpose: room.purpose, icon: room.icon, color: room.color);
       await _loadRooms();
     } catch (e) {
       if (!mounted) return;
@@ -4757,47 +4759,3 @@ class _WorkspacePatternPainter extends CustomPainter {
       old.workspace != workspace;
 }
 
-class _RoomNameDialog extends StatefulWidget {
-  const _RoomNameDialog();
-  @override
-  State<_RoomNameDialog> createState() => _RoomNameDialogState();
-}
-
-class _RoomNameDialogState extends State<_RoomNameDialog> {
-  final controller = TextEditingController();
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('New room'),
-      content: SizedBox(
-        width: 360,
-        child: TextField(
-          controller: controller,
-          autofocus: true,
-          onSubmitted: (v) {
-            if (v.trim().isNotEmpty) Navigator.pop(context, v.trim());
-          },
-          decoration: const InputDecoration(labelText: 'Room name'),
-        ),
-      ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel')),
-        FilledButton(
-          onPressed: () {
-            final v = controller.text.trim();
-            if (v.isNotEmpty) Navigator.pop(context, v);
-          },
-          child: const Text('Create'),
-        ),
-      ],
-    );
-  }
-}

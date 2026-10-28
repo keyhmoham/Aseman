@@ -73,6 +73,9 @@ class WorkspaceRoom {
     required this.spaceId,
     required this.name,
     this.topic = '',
+    this.purpose = '',
+    this.icon = '',
+    this.color = '',
   });
 
   final String id;
@@ -80,11 +83,19 @@ class WorkspaceRoom {
   final String name;
   final String topic;
 
+  /// What the room is for, and the icon and colour (#rrggbb) it wears.
+  final String purpose;
+  final String icon;
+  final String color;
+
   factory WorkspaceRoom.fromJson(Map<String, dynamic> json) => WorkspaceRoom(
         id: json['id'] as String? ?? '',
         spaceId: json['space_id'] as String? ?? '',
         name: json['name'] as String? ?? '',
         topic: json['topic'] as String? ?? '',
+        purpose: json['purpose'] as String? ?? '',
+        icon: json['icon'] as String? ?? '',
+        color: json['color'] as String? ?? '',
       );
 }
 

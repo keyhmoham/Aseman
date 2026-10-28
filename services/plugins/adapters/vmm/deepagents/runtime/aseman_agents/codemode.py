@@ -30,6 +30,7 @@ from langchain_core.tools import BaseTool, StructuredTool
 
 from .context import TurnContext
 from .gateway import GatewayError
+from .untrusted import wrap as untrusted
 
 log = logging.getLogger("aseman.agents")
 
@@ -123,7 +124,10 @@ def _tool(ctx: TurnContext, spec: dict[str, Any]) -> BaseTool:
     async def run(**kwargs: Any) -> str:
         args = {k: v for k, v in kwargs.items() if v is not None}
         try:
-            return _text(await rpc(ctx, "tools/call", {"name": mcp_name, "arguments": args}))
+            text = _text(await rpc(ctx, "tools/call", {"name": mcp_name, "arguments": args}))
+            # What the script brought back is apps', connectors' and the
+            # computer's output: data, never instructions.
+            return untrusted("code mode results", text) if mcp_name == "execute" else text
         except GatewayError as exc:
             return f"Code Mode is unavailable right now: {exc}"
 

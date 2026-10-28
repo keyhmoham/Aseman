@@ -368,3 +368,13 @@ func (a *Adapter) ForgetRoom(ctx context.Context, spaceID, roomID string) error 
 	defer cancel()
 	return a.call(fctx, http.MethodPost, "/v1/rooms/forget", map[string]string{"space": spaceID, "room": roomID}, nil)
 }
+
+// agentName is the turn's agent as people know it.
+func (s *session) agentName() string {
+	if s.def == nil {
+		return ""
+	}
+	s.def.mu.Lock()
+	defer s.def.mu.Unlock()
+	return s.def.spec.Name
+}

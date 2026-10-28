@@ -2,6 +2,7 @@ package spaces
 
 import (
 	"encoding/json"
+	"github.com/aseman/aseman/plugins/actions/governance/models/gate"
 	"reflect"
 	"strings"
 	"testing"
@@ -39,6 +40,12 @@ func TestSpaceToolContractsMatchPromptCatalog(t *testing.T) {
 			if strings.HasPrefix(contract.Name, "memory_") {
 				continue
 			} // manager is intentionally absent in this fixture
+			if gate.ToolOwner(contract.Name) != "" {
+				if _, ok := actual[contract.Name]; ok {
+					t.Fatalf("%s is offered though its namespace is not loaded", contract.Name)
+				}
+				continue
+			}
 			tool, ok := actual[contract.Name]
 			if !ok || !reflect.DeepEqual(tool.Parameters, contract.Parameters) || tool.Usage != contract.Usage {
 				t.Fatalf("schema drift for %s (opencode %v)", contract.Name, openCode)

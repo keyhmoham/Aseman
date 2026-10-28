@@ -16,6 +16,7 @@ import (
 	"github.com/aseman/aseman/internal/plugins/bridge"
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/governance/models/gate"
 	"github.com/aseman/aseman/plugins/actions/usage/models/usage"
 	"github.com/aseman/aseman/plugins/adapters/network/ports"
 	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
@@ -160,12 +161,23 @@ func (a *Adapter) serveCall(ctx context.Context, req *network.Request) (*network
 	if json.Unmarshal(in.Body, &scope) == nil && scope.Space != "" && scope.Space != s.spaceID {
 		return errorResponse(errs.Permission("an agent acts only inside the space of its turn")), nil
 	}
-	endCall := vmm.Trace(s.base, "platform."+name, "")
-	resp, err := a.k.Actions().Dispatch(scoped{Context: ctx, values: s.base}, in.Namespace, in.Action,
-		&api.ActionRequest{Caller: api.Caller{ID: s.account, Kind: "bot"}, Body: in.Body})
-	endCall()
+	// Every action is decided and recorded before it runs, and runs with the
+	// person's secrets put in; what comes back hides them again.
+	call := scoped{Context: ctx, values: s.base}
+	body, decision, err := a.govern(call, s, name, in.Body)
 	if err != nil {
 		return errorResponse(err), nil
+	}
+	endCall := vmm.Trace(s.base, "platform."+name, "")
+	resp, err := a.k.Actions().Dispatch(call, in.Namespace, in.Action,
+		&api.ActionRequest{Caller: api.Caller{ID: s.account, Kind: "bot"}, Body: body})
+	endCall()
+	if err != nil {
+		gate.Finish(call, a.k, decision, "", err)
+		return errorResponse(err), nil
+	}
+	if out := gate.Finish(call, a.k, decision, string(resp.Body), nil); out != string(resp.Body) {
+		resp.Body = []byte(out)
 	}
 	if name == "spaces.message_send" {
 		var sent struct {
@@ -185,6 +197,30 @@ func (a *Adapter) serveCall(ctx context.Context, req *network.Request) (*network
 		status = http.StatusOK
 	}
 	return &network.Response{Status: status, Header: map[string]string{"Content-Type": "application/json"}, Body: resp.Body}, nil
+}
+
+// govern decides a platform action of the turn's agent. A sandbox command is
+// run as the gate returns it (secrets put in, shell-quoted).
+func (a *Adapter) govern(ctx context.Context, s *session, name string, body json.RawMessage) (json.RawMessage, gate.Result, error) {
+	res, err := gate.Check(ctx, a.k, gate.Request{Kind: gate.KindPlatform, Tool: name, Args: body, SpaceID: s.spaceID, RoomID: s.roomID,
+		AgentID: s.botID, AgentName: s.agentName(), AgentAccount: s.account.String()})
+	if err != nil {
+		return nil, res, err
+	}
+	out := body
+	if len(res.Args) > 0 {
+		out = res.Args
+	}
+	if name == "spaces.ask" && res.Command != "" {
+		var m map[string]any
+		if json.Unmarshal(out, &m) == nil {
+			m["body"] = res.Command
+			if raw, err := json.Marshal(m); err == nil {
+				out = raw
+			}
+		}
+	}
+	return out, res, nil
 }
 
 func (s *session) checkRequestMode(name string, body json.RawMessage) error {

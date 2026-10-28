@@ -66,6 +66,13 @@ func (s *Service) DeliverMentions(ctx context.Context, spaceID, roomID identity.
 	// Tool posts during this delivery (file_send, image_generate, ...) default
 	// to the room the message was posted in, not the space's general room.
 	ctx = vmm.WithRoom(ctx, roomID.String())
+	// An agent handing work to another acts on the person's behalf, but the
+	// person did not ask the second agent themselves: the trail says so.
+	if vmm.InitiatorFrom(ctx).Kind == vmm.InitiatorPerson {
+		if sender, err := s.botForMember(ctx, msg.SenderID); err == nil && sender != nil {
+			ctx = vmm.WithInitiator(ctx, vmm.Initiator{Kind: vmm.InitiatorHandoff, ID: sender.ID.String()})
+		}
+	}
 	var mems []membership.Membership
 	if err := s.R.List(ctx, "memberships", database.Filter{
 		Equal: map[string]any{"space_id": spaceID.String(), "role": string(membership.RoleBot)},

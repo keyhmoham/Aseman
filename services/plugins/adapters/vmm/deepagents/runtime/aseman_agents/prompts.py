@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .context import AgentDef
 from .sandbox import WORKSPACE
+from .untrusted import PROMPT as OUTSIDE_PROMPT
 
 # Shared harness guidance (messaging, sandbox, planning). Capability calling
 # and presentation are selected by ``via_codemode`` so the prompt matches the
@@ -355,6 +356,7 @@ def system_prompt(agent: AgentDef, scope: str, *, via_codemode: bool = True, ope
     parts = [
         f"You are {agent.name}." + (f" {agent.description}" if agent.description else ""),
         common_prompt(via_codemode=via_codemode, opencode=opencode),
+        OUTSIDE_PROMPT,
         (LEAD.replace("{lead_codemode}\n", _LEAD_CODEMODE if via_codemode else "")
          + (LEAD_OPENCODE if opencode else LEAD_AGENTS)) if agent.lead else SPECIALIST,
     ]

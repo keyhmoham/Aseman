@@ -53,8 +53,10 @@ var codeModeSlug = regexp.MustCompile(`[^a-z0-9_]+`)
 // room_info and ask_user stay as native communication / HITL tools; file_read
 // stays the agent's native read_attachment, because an image it returns is
 // vision input only as a tool result, not as Code Mode's text result.
+// ui_present (AG-UI in chat or as a desk window) is here too: with Code Mode
+// on, the agents reach it only as /platform/ui_present.
 var codeModePlatform = map[string]bool{
-	"file_send": true, "file_upload": true, "image_generate": true,
+	"file_send": true, "file_upload": true, "image_generate": true, "ui_present": true,
 	"proxy_create": true, "proxy_list": true, "proxy_get": true, "proxy_delete": true,
 	"appui_create": true, "appui_publish": true, "appui_status": true, "opencode_run": true, "opencode_status": true, "opencode_models": true,
 	"routine_create": true, "routine_list": true, "routine_get": true, "routine_update": true, "routine_delete": true,

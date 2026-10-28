@@ -389,7 +389,9 @@ func TestServiceHooksAreVerified(t *testing.T) {
 	}
 	waitFor(t, func() bool { return strings.Contains(spaces.joined(), "Fix brakes") })
 	ms := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	fire(Input{Trigger: rm.TriggerLinear, Secret: "lin"}, func(_ string, b []byte) map[string]string { return map[string]string{"Linear-Signature": hmacHex("lin", b)} },
+	fire(Input{Trigger: rm.TriggerLinear, Secret: "lin"}, func(_ string, b []byte) map[string]string {
+		return map[string]string{"Linear-Signature": hmacHex("lin", b)}
+	},
 		[]byte(`{"action":"create","type":"Issue","webhookTimestamp":`+ms+`,"data":{"identifier":"ENG-1","title":"Crash"}}`), http.StatusAccepted)
 	fire(Input{Trigger: rm.TriggerShopify, Secret: "shp", Events: []string{"orders/paid"}},
 		func(_ string, b []byte) map[string]string {

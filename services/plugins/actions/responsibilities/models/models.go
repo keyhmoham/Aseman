@@ -68,17 +68,17 @@ type Responsibility struct {
 	At              string `db:"at" json:"at,omitempty"`
 	Timezone        string `db:"timezone" json:"timezone,omitempty"`
 	// Secret verifies inbound events (sealed; shown once when generated).
-	Secret     string    `db:"secret" json:"-"`
-	Enabled    bool      `db:"enabled" json:"enabled"`
-	Cursor     time.Time `db:"cursor" json:"cursor,omitempty"`
+	Secret  string    `db:"secret" json:"-"`
+	Enabled bool      `db:"enabled" json:"enabled"`
+	Cursor  time.Time `db:"cursor" json:"cursor,omitempty"`
 	// NextRun is when a poll or schedule is due; Seen the latest items a poll
 	// already fired for; Fingerprint the last answer an API or app gave.
 	NextRun     time.Time `db:"next_run" json:"next_run,omitempty"`
 	Seen        []string  `db:"seen" json:"-"`
 	Fingerprint string    `db:"fingerprint" json:"-"`
-	Fired      int64     `db:"fired" json:"fired"`
-	LastFired  time.Time `db:"last_fired" json:"last_fired,omitempty"`
-	LastResult string    `db:"last_result" json:"last_result,omitempty"`
+	Fired       int64     `db:"fired" json:"fired"`
+	LastFired   time.Time `db:"last_fired" json:"last_fired,omitempty"`
+	LastResult  string    `db:"last_result" json:"last_result,omitempty"`
 }
 
 func f(name string, k database.Kind) database.Field { return database.Field{Name: name, Kind: k} }

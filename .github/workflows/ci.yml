@@ -1,0 +1,69 @@
+# Checks every change: the node (vet, tests), the agent runtime (pytest), the
+# evals' own tests, the app (analyze, tests), the Compose file and the Helm chart.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    name: Node (Go)
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: services } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/go.mod
+          cache-dependency-path: services/go.sum
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Triage eval (rules only, no model)
+        run: go run ./cmd/evals triage -rules-only -set ../evals/triage/emails.jsonl -out /tmp/triage.md
+
+  runtime:
+    name: Agent runtime (Python)
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: services/plugins/adapters/vmm/deepagents/runtime } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements.txt -r requirements-dev.txt -e .
+      - run: python -m pytest -q tests
+
+  app:
+    name: App (Flutter)
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: app } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: flutter pub get
+      # Infos are advice; warnings and errors fail.
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+
+  deploy:
+    name: Compose and Helm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker compose config
+        env: { ASEMAN_TIMELINE_PASSWORD: x, ASEMAN_OPENVIKING_ROOT_KEY: x }
+        run: docker compose config -q && docker compose --profile spire config -q
+      - uses: azure/setup-helm@v4
+        with: { version: v3.16.4 }
+      - run: helm lint deploy/helm/aseman
+      - run: helm template ci deploy/helm/aseman --set sandbox.backend=docker,ingress.enabled=true > /dev/null

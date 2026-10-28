@@ -490,7 +490,11 @@ def test_agents_build_interactive_pages_for_tools() -> None:
     hint = presentation_hint({"bot_id": "bot-wx", "frontend": "", "commands": [{"name": "forecast"}]}, "forecast")
     assert "/platform/appui_create" in hint and "tool='bot-wx'" in hint
     assert "/platform/proxy_create" in hint and "tool='bot-wx'" in hint
-    native = presentation_hint({"bot_id": "bot-wx", "frontend": ""}, "forecast", via_codemode=False)
+    native = presentation_hint({"bot_id": "bot-wx", "frontend": "", "commands": [{"name": "forecast"}]}, "forecast",
+                               via_codemode=False)
+    # A tool with neither a frontend nor microtools has no interface to build on.
+    bare = presentation_hint({"bot_id": "bot-wx", "frontend": ""}, via_codemode=False)
+    assert "no interface" in bare and "appui_create" not in bare
     assert "appui_create(brief=" in native and "tool='bot-wx'" in native and "proxy_create(tool='bot-wx'" in native
 
 

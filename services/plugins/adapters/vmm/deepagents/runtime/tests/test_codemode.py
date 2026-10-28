@@ -93,3 +93,35 @@ async def test_codemode_fallback_when_mcp_down(platform: Platform, tmp_path: Pat
     assert any(n.startswith("weather__") for n in offered)
     assert "<code_mode_fallback>" in system_text(model)
     assert any("Code Mode unavailable" in (e.get("text") or "") for e in platform.logs)
+
+
+def test_codemode_prompt_offers_sandbox_agents_and_one_shot() -> None:
+    from aseman_agents.codemode import CODEMODE_PROMPT
+
+    for words in ("/sandbox/{op}", "write_files", "exec", "/agents/{name}", "codemode.batch", "One shot first"):
+        assert words in CODEMODE_PROMPT, words
+
+
+def test_one_shot_app_builds_with_codemode_and_opencode_off() -> None:
+    from aseman_agents.context import AgentDef
+    from aseman_agents.prompts import common_prompt, system_prompt
+
+    prompt = common_prompt(via_codemode=True, opencode=False)
+    rule = prompt[prompt.index("## Software development is the space's own"):prompt.index("## Presenting")]
+    for words in ("one `codemode_execute`", "/sandbox/write_files", "/sandbox/exec", "/platform/appui_publish",
+                  "/agents/{name}"):
+        assert words in rule, words
+    assert "Prefer one shot" in prompt
+    # Without Code Mode there is no one-shot build to describe.
+    native = common_prompt(via_codemode=False, opencode=False)
+    assert "/sandbox/write_files" not in native and "Prefer one shot" not in native
+    # With OpenCode on, OpenCode builds: no agent build flow, but one shot still applies.
+    on = common_prompt(via_codemode=True, opencode=True)
+    assert "/sandbox/write_files" not in on and "Prefer one shot" in on
+
+    lead = AgentDef(name="a", bot_id="b", account_id="c", vm_id="d", role="lead")
+    with_codemode = system_prompt(lead, "", via_codemode=True)
+    assert "`/agents/{name}`" in with_codemode and "codemode.batch" in with_codemode
+    assert "{lead_codemode}" not in with_codemode
+    without = system_prompt(lead, "", via_codemode=False)
+    assert "/agents/{name}" not in without and "{lead_codemode}" not in without

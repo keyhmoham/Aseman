@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 
-	"github.com/dop251/goja"
 	"github.com/aseman/aseman/pkg/errs"
+	"github.com/dop251/goja"
 )
 
 // runCodeModeJS executes model-written Code Mode JavaScript in an isolated
@@ -33,13 +34,9 @@ func runCodeModeJS(code string, spec map[string]any, request func(CodeModeReques
 			if len(call.Arguments) < 1 {
 				panic(vm.ToValue("codemode.request(options) needs an options object"))
 			}
-			var opts CodeModeRequest
-			raw, err := json.Marshal(call.Arguments[0].Export())
+			opts, err := codeModeOptions(call.Arguments[0].Export())
 			if err != nil {
 				panic(vm.ToValue(err.Error()))
-			}
-			if err := json.Unmarshal(raw, &opts); err != nil {
-				panic(vm.ToValue("invalid request options: " + err.Error()))
 			}
 			out, err := request(opts)
 			if err != nil {
@@ -47,12 +44,40 @@ func runCodeModeJS(code string, spec map[string]any, request func(CodeModeReques
 			}
 			return vm.ToValue(out)
 		})
-	} else {
-		_ = codemode.Set("request", func(call goja.FunctionCall) goja.Value {
-			panic(vm.ToValue("codemode.request is only available in execute, not search"))
+		// codemode.batch runs independent calls at the same time (several
+		// agents, apps or commands) and returns each one's outcome in order.
+		_ = codemode.Set("batch", func(call goja.FunctionCall) goja.Value {
+			var items []any
+			if len(call.Arguments) > 0 {
+				items, _ = call.Arguments[0].Export().([]any)
+			}
+			if len(items) == 0 {
+				panic(vm.ToValue("codemode.batch(requests) needs an array of request options"))
+			}
+			reqs := make([]CodeModeRequest, len(items))
+			for i, item := range items {
+				opts, err := codeModeOptions(item)
+				if err != nil {
+					panic(vm.ToValue(fmt.Sprintf("request %d: %v", i, err)))
+				}
+				reqs[i] = opts
+			}
+			return vm.ToValue(runCodeModeBatch(reqs, request))
 		})
+	} else {
+		unavailable := func(call goja.FunctionCall) goja.Value {
+			panic(vm.ToValue("codemode.request and codemode.batch are only available in execute, not search"))
+		}
+		_ = codemode.Set("request", unavailable)
+		_ = codemode.Set("batch", unavailable)
 	}
 	_ = vm.Set("codemode", codemode)
+	// Host calls are synchronous (await is stripped), so the usual
+	// Promise.all / Promise.resolve wrappers just pass their values through.
+	if _, err := vm.RunString(`Promise.all = function (a) { return Array.from(a); };
+Promise.resolve = function (v) { return v; };`); err != nil {
+		return nil, err
+	}
 
 	// Evaluate the user program as a function and call it.
 	wrapped := fmt.Sprintf(`(function(){
@@ -100,4 +125,49 @@ func cleanGojaErr(err error) string {
 		s = s[:i]
 	}
 	return s
+}
+
+// How many calls of one codemode.batch run at a time.
+const codeModeBatchParallel = 8
+
+func codeModeOptions(v any) (CodeModeRequest, error) {
+	var opts CodeModeRequest
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return opts, err
+	}
+	if err := json.Unmarshal(raw, &opts); err != nil {
+		return opts, fmt.Errorf("invalid request options: %w", err)
+	}
+	return opts, nil
+}
+
+// runCodeModeBatch runs the calls concurrently; each outcome is
+// {ok: true, result} or {ok: false, error}, so one failure does not lose the
+// others' results.
+func runCodeModeBatch(reqs []CodeModeRequest, request func(CodeModeRequest) (any, error)) []any {
+	out := make([]any, len(reqs))
+	slots := make(chan struct{}, codeModeBatchParallel)
+	var wg sync.WaitGroup
+	for i, opts := range reqs {
+		wg.Add(1)
+		slots <- struct{}{}
+		go func(i int, opts CodeModeRequest) {
+			defer func() {
+				if r := recover(); r != nil {
+					out[i] = map[string]any{"ok": false, "error": fmt.Sprint(r)}
+				}
+				<-slots
+				wg.Done()
+			}()
+			result, err := request(opts)
+			if err != nil {
+				out[i] = map[string]any{"ok": false, "error": err.Error()}
+				return
+			}
+			out[i] = map[string]any{"ok": true, "result": result}
+		}(i, opts)
+	}
+	wg.Wait()
+	return out
 }

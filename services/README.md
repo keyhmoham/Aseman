@@ -278,8 +278,16 @@ done is never refused, so a run can finish at most one step past the cap.
   runs model-written JavaScript in an isolated sandbox (`codemode.spec` /
   `codemode.request`). Agents get `codemode_search` / `codemode_execute` instead
   of one tool per capability, so composition stays out of the model context.
-  Messaging, HITL, sandbox FS/shell, planning and swarm stay native harness
-  tools. HTTP for external hosts (including `deploy/codemode` Cloudflare
+  The surface also carries the shared computer (`POST /sandbox/{exec,
+  write_files, read_files, edit_file, list, delete}` over `spaces.ask` and
+  `spaces.sandbox_files`) and the space's agents as subagents (`POST
+  /agents/{name}` {task} → {agent, answer}, a `spaces.message_send` hand-off
+  with `wait`, visible in the room); `codemode.batch` runs independent calls
+  concurrently. Agents are told to prefer one shot: a straightforward job —
+  with OpenCode off, a whole app build (every file, tests, `aseman-elpian`
+  checks, READY.json, `appui_publish`) — is one `codemode_execute` that
+  returns a short report, not a step per file or command. Messaging, HITL,
+  the native sandbox FS/shell, planning and swarm stay native harness tools. HTTP for external hosts (including `deploy/codemode` Cloudflare
   Workers): `/tools/v1/codemode/{openapi,request,mcp}`. The catalog sample
   "Cloudflare API (Code Mode)" points at `https://mcp.cloudflare.com/mcp`.
 - **developer** — the developer API: organizations (a person's own, or teams with

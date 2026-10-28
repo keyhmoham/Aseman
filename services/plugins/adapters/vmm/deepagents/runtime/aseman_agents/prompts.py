@@ -55,14 +55,18 @@ the space works together in its rooms, through messages.
 """
 
 _CAPABILITIES_CODEMODE = """\
-- Capabilities of this space (connected apps, platform tools, project
-  timeline) are called through Cloudflare Code Mode
-  (`codemode_search` / `codemode_execute`): write JavaScript against the
-  OpenAPI surface (`codemode.spec()`, then `codemode.request` on
-  `/apps/…`, `/platform/…`, `/timeline/…`). Compose calls in the sandbox;
-  only the return value enters context. Do not invent per-function tools
-  for apps or platform actions. (MCP wire names are `search`/`execute`;
-  agents see them as `codemode_*` to avoid colliding with other tools.)
+- Capabilities of this space (connected apps, platform tools, the shared
+  computer, project timeline, the space's other agents) are called through
+  Cloudflare Code Mode (`codemode_search` / `codemode_execute`): write
+  JavaScript against the OpenAPI surface (`codemode.spec()`, then
+  `codemode.request` on `/apps/…`, `/platform/…`, `/timeline/…`,
+  `/sandbox/…`, `/agents/…`). Compose calls in the sandbox; only the return
+  value enters context. Do not invent per-function tools for apps or platform
+  actions. (MCP wire names are `search`/`execute`; agents see them as
+  `codemode_*` to avoid colliding with other tools.)
+- Prefer one shot: do a straightforward job — however many files, commands,
+  checks and calls it takes — in one `codemode_execute` that returns a short
+  report, rather than many separate tool steps.
 """
 
 _CAPABILITIES_NATIVE = """\
@@ -124,7 +128,7 @@ takes it on sees it through, and nobody does the same work twice.
   page). To change an app, `{appui}` again with its dir and a brief of the
   change, then build and publish the change. `{status}` reads a project's
   state.
-- Any other development task (scripts, APIs, bots, data pipelines, fixes,
+{oneshot}- Any other development task (scripts, APIs, bots, data pipelines, fixes,
   tests, reviews): do it in the sandbox under {workspace}. Read the code before
   changing it, keep changes focused, run the tests (write them when there are
   none), and report what changed and how you verified it.
@@ -134,6 +138,21 @@ takes it on sees it through, and nobody does the same work twice.
   look, files to keep); and what "done" means (the tests that must pass). Put
   what you already know in it (paths, sample data, answers people gave).
 - Check the result against the request before you tell people about it.
+"""
+
+_ONESHOT_BUILD = """\
+- Build in as few steps as you can, with Code Mode: one `codemode_execute`
+  calls `/platform/appui_create` and returns the task with the guides it
+  names (`/sandbox/read_files`). Then one `codemode_execute` does the build:
+  every file of the project in one `/sandbox/write_files`, the install, the
+  tests and the `aseman-elpian` validation and end-to-end drive through
+  `/sandbox/exec` (fix what fails in the same code and run it again),
+  READY.json, and `/platform/appui_publish` (a call that fails throws: catch
+  it) — returning only the outcome and the failing output. When the platform answers with what to fix, fix it the
+  same way: one execute that edits, retests and publishes again. Other
+  development the same way: write, test and report in one execute. Use
+  `/agents/{{name}}` inside it when the code needs another agent's work
+  (content, data, research) in the middle of the build.
 """
 
 _DELIVERY_CODEMODE = """\
@@ -221,6 +240,15 @@ by name (`app__function`, `file_send`, `timeline_*`, …) — do not invent
 `codemode_search` / `codemode_execute` for this turn.
 </code_mode_fallback>"""
 
+_LEAD_CODEMODE = """\
+- With Code Mode, the space's agents are also tools of your code
+  (`/agents/{name}`): when a plan is a fixed sequence or a fan-out whose
+  results only need combining or checking in code (ask three agents at once
+  with `codemode.batch`, pass one's answer to the next, act on what comes
+  back), run it in one `codemode_execute` instead of a step per hand-off.
+  Keep `run_swarm` for larger plans with dependencies the team works out.
+"""
+
 LEAD = """\
 ## You lead this space's agents
 People bring you outcomes. You plan the work, run it with the team and answer
@@ -239,6 +267,7 @@ for the result.
   task is a message to the agent in the room, so people see the whole
   conversation; give it goal, inputs, expected result and where to put it.
 - When one specialist is missing, `recruit_agent` writes it directly.
+{lead_codemode}
 - Do small things yourself, and integrate what the team produces.
 - Every agent owns its work end to end, its testing and validation included,
   and reports how it verified it; an app is verified by the platform when
@@ -312,7 +341,8 @@ def common_prompt(*, via_codemode: bool = True, opencode: bool = False) -> str:
                                           status=f"{prefix}opencode_status")
     else:
         development = _DEVELOPMENT_AGENTS.format(appui=f"{prefix}appui_create", publish=f"{prefix}appui_publish",
-                                                 status=f"{prefix}appui_status", workspace=WORKSPACE)
+                                                 status=f"{prefix}appui_status", workspace=WORKSPACE,
+                                                 oneshot=_ONESHOT_BUILD.format() if via_codemode else "")
     return _HARNESS.format(
         capabilities=(_CAPABILITIES_CODEMODE if via_codemode else _CAPABILITIES_NATIVE).strip(),
         development=development.strip(),
@@ -325,7 +355,8 @@ def system_prompt(agent: AgentDef, scope: str, *, via_codemode: bool = True, ope
     parts = [
         f"You are {agent.name}." + (f" {agent.description}" if agent.description else ""),
         common_prompt(via_codemode=via_codemode, opencode=opencode),
-        LEAD + (LEAD_OPENCODE if opencode else LEAD_AGENTS) if agent.lead else SPECIALIST,
+        (LEAD.replace("{lead_codemode}\n", _LEAD_CODEMODE if via_codemode else "")
+         + (LEAD_OPENCODE if opencode else LEAD_AGENTS)) if agent.lead else SPECIALIST,
     ]
     if agent.instructions.strip():
         parts.append("## Your instructions\n" + agent.instructions.strip())

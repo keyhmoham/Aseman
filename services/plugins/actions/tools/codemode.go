@@ -32,6 +32,8 @@ import (
 //	POST /platform/{tool}          JSON body = platform tool arguments (files,
 //	                               proxies, routines, desk, UI, db, …)
 //	POST /timeline/{tool}          JSON body = timeline MCP tool arguments
+//	POST /sandbox/{op}             the shared computer (codemode_workspace.go)
+//	POST /agents/{name}            the space's agents as subagents (codemode_workspace.go)
 //
 // Harness tools (messaging, ask_user, sandbox FS/shell, planning, swarm) stay
 // as native LLM tools — they own interrupts, the shared computer and turn UX.
@@ -116,6 +118,15 @@ func (s *Service) CodeModeOpenAPI(ctx context.Context, spaceID string) (map[stri
 		}
 	}
 	tags = append(tags, map[string]any{"name": "platform", "description": "Aseman platform tools (files, proxies, routines, desk, UI, database)"})
+	if codeModeAddSandboxPaths(ctx, paths) {
+		tags = append(tags, map[string]any{"name": "sandbox", "description": "The space's shared computer: shell and files under /workspace (whole jobs in one call)"})
+	}
+	if agents, err := s.codeModeAgents(ctx, spaceID); err != nil {
+		log.Printf("codemode: agents unavailable for %s (%v); omitting /agents paths", spaceID, err)
+	} else if len(agents) > 0 {
+		codeModeAddAgentPaths(paths, agents)
+		tags = append(tags, map[string]any{"name": "agents", "description": "The space's agents as subagents: hand a task, get the answer"})
+	}
 	if timelinePaths, timelineTags, ok := s.codeModeTimelinePaths(ctx, spaceID); ok {
 		for p, op := range timelinePaths {
 			paths[p] = op
@@ -128,7 +139,8 @@ func (s *Service) CodeModeOpenAPI(ctx context.Context, spaceID string) (map[stri
 			"title":   "Aseman Code Mode",
 			"version": "1.0.0",
 			"description": "Capability surface for Cloudflare Code Mode search/execute: " +
-				"POST /apps/{slug}/{function}, POST /platform/{tool}, POST /timeline/{tool}. " +
+				"POST /apps/{slug}/{function}, POST /platform/{tool}, POST /timeline/{tool}, " +
+				"POST /sandbox/{op} (shared computer), POST /agents/{name} (the space's agents). " +
 				"Use search to discover paths, then execute with codemode.request. " +
 				"Compose calls in the sandbox; only the return value enters the model context.",
 		},
@@ -308,7 +320,7 @@ func (s *Service) CodeModeRequestCall(ctx context.Context, spaceID string, opts 
 	}
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) < 2 {
-		return nil, errs.InvalidArgument("path must be /apps/{slug}/{function}, /platform/{tool}, or /timeline/{tool}")
+		return nil, errs.InvalidArgument("path must be /apps/{slug}/{function}, /platform/{tool}, /timeline/{tool}, /sandbox/{op} or /agents/{name}")
 	}
 	payload, err := codeModeBody(opts.Body, opts.RawBody)
 	if err != nil {
@@ -330,8 +342,18 @@ func (s *Service) CodeModeRequestCall(ctx context.Context, spaceID string, opts 
 			return nil, errs.InvalidArgument("path must be /timeline/{tool}")
 		}
 		return s.codeModeCallTimeline(ctx, spaceID, parts[1], payload)
+	case "sandbox":
+		if len(parts) != 2 {
+			return nil, errs.InvalidArgument("path must be /sandbox/{op}")
+		}
+		return s.codeModeCallSandbox(ctx, spaceID, parts[1], payload)
+	case "agents":
+		if len(parts) != 2 {
+			return nil, errs.InvalidArgument("path must be /agents/{name}")
+		}
+		return s.codeModeCallAgent(ctx, spaceID, parts[1], payload)
 	default:
-		return nil, errs.InvalidArgument("path must start with /apps, /platform, or /timeline")
+		return nil, errs.InvalidArgument("path must start with /apps, /platform, /timeline, /sandbox or /agents")
 	}
 }
 
@@ -627,7 +649,7 @@ func codeModeToolDefs() []map[string]any {
 	}
 	searchDesc := `Search the OpenAPI capability surface without calling anything.
 Write JavaScript that inspects codemode.spec() and returns only the paths, methods, parameters or schemas you need.
-Paths: /apps/{slug}/{function}, /platform/{tool}, /timeline/{tool}.
+Paths: /apps/{slug}/{function}, /platform/{tool}, /timeline/{tool}, /sandbox/{op}, /agents/{name}.
 Example:
 () => {
   const spec = codemode.spec();
@@ -639,26 +661,35 @@ Example:
 The full OpenAPI document stays in the sandbox; only your return value enters the model context.`
 
 	executeDesc := `Execute JavaScript against this space's capability surface (Cloudflare Code Mode).
-This is how agents call connected apps, platform tools and the project timeline — not as one LLM tool each.
+This is how agents call connected apps, platform tools, the shared computer, the
+project timeline and the space's other agents — not as one LLM tool each.
 codemode.spec() returns the OpenAPI document. codemode.request({method, path, body}) calls:
   POST /apps/{slug}/{function}  — connected app microtools
-  POST /platform/{tool}         — files, proxies, routines, desk, UI, database, …
+  POST /platform/{tool}         — files, proxies, routines, desk, UI, apps (appui_*), database, …
   POST /timeline/{tool}         — project timeline reads
-Compose multiple calls, filter intermediate results, and return only what you need —
-intermediates never enter the model context. Credentials never enter the sandbox.
+  POST /sandbox/{op}            — the shared computer: exec {command, cwd}, write_files {files, dir},
+                                  read_files {paths, dir}, edit_file, list, delete (under /workspace)
+  POST /agents/{name}           — hand a task to another agent of the space; returns {agent, answer}
+codemode.batch([{path, body}, …]) runs independent calls at the same time and returns
+[{ok, result} | {ok:false, error}] in order (fan out to several agents, apps or checks).
+Do the whole job in one call when you can: write every file, run the tests and checks,
+publish, and return a short summary (exit codes, failures, paths). Compose, branch and
+loop on results in the code; intermediates never enter the model context.
+Credentials never enter the sandbox.
 Example:
 () => {
-  const report = codemode.request({
-    method: "POST",
-    path: "/apps/weather/weather_report",
-    body: { city: "London" },
-  });
-  codemode.request({
-    method: "POST",
-    path: "/platform/appui_create",
-    body: { brief: "Weather dashboard for the report city", tool: "weather" },
-  });
-  return { summary: report.summary, temp: report.temperature };
+  const dir = "/workspace/apps/todo";
+  codemode.request({ method: "POST", path: "/sandbox/write_files", body: { dir, files: [
+    { path: "server.js", content: "…" },
+    { path: "test/server.test.js", content: "…" },
+  ] } });
+  const test = codemode.request({ method: "POST", path: "/sandbox/exec", body: { cwd: dir, command: "npm test 2>&1 | tail -30" } });
+  if (test.exit_code !== 0) return { failed: "tests", output: test.output };
+  const [review, weather] = codemode.batch([
+    { path: "/agents/researcher", body: { task: "List 5 must-have todo features, one line each" } },
+    { path: "/apps/weather/weather_report", body: { city: "London" } },
+  ]);
+  return { tests: "passed", review: review.ok ? review.result.answer : review.error, weather: weather.ok && weather.result };
 }`
 
 	return []map[string]any{

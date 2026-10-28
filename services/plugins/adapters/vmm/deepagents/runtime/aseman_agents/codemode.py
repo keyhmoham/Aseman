@@ -12,6 +12,8 @@ Paths in the document:
 * ``POST /apps/{slug}/{function}`` — connected apps
 * ``POST /platform/{tool}`` — files, proxies, routines, desk, UI, database, …
 * ``POST /timeline/{tool}`` — project timeline reads
+* ``POST /sandbox/{op}`` — the shared computer (exec, write_files, read_files, …)
+* ``POST /agents/{name}`` — the space's agents as subagents, mid-script
 
 Generated code runs in an isolated sandbox on the node; intermediate results
 never enter the model context. Messaging, ``ask_user``, sandbox FS/shell,
@@ -43,8 +45,9 @@ _ids = itertools.count(1)
 CODEMODE_PROMPT = """\
 <code_mode>
 Cloudflare Code Mode (`codemode_search` / `codemode_execute`) is how you call
-capabilities of this space — connected apps, platform tools and the project
-timeline. They are **not** offered as one LLM tool per function.
+capabilities of this space — connected apps, platform tools, the shared
+computer, the project timeline and the space's other agents. They are **not**
+offered as one LLM tool per function.
 
 The MCP server exposes `search` and `execute`; this agent sees them as
 `codemode_search` / `codemode_execute` so names stay unique among harness tools.
@@ -53,19 +56,40 @@ Write JavaScript that discovers and calls them, composes multiple calls, and
 returns only the final result — intermediates stay out of context.
 
 1. `codemode_search` with code that inspects `codemode.spec()` (OpenAPI of
-   `/apps/…`, `/platform/…`, `/timeline/…`) and returns the paths you need.
+   `/apps/…`, `/platform/…`, `/timeline/…`, `/sandbox/…`, `/agents/…`) and
+   returns the paths you need. Skip it when you already know the paths.
 2. `codemode_execute` with code that calls
    `codemode.request({method:"POST", path:"…", body:{…}})`:
    - `/apps/{slug}/{function}` — connected app microtools
    - `/platform/{tool}` — e.g. `file_send`, `ui_present`, `proxy_create`, `appui_create`,
      `appui_publish`, `desk_*`, `routine_*`, `db_*`
    - `/timeline/{tool}` — e.g. `find_entities`, `timeline`, `changes`
+   - `/sandbox/{op}` — the shared computer: `exec` {command, cwd} → {exit_code, output};
+     `write_files` {dir, files:[{path, content}]}; `read_files` {dir, paths} → {path: text};
+     `edit_file` {path, old, new}; `list`; `delete`
+   - `/agents/{name}` {task} — the space's agents as subagents: the agent does the
+     task (in the room, on the shared computer) and you get {agent, answer} back
+     in the middle of your code, to branch on or pass to the next call
+   `codemode.batch([{path, body}, …])` runs independent calls at the same time
+   and returns `[{ok, result} | {ok:false, error}]` in order. A failing
+   `codemode.request` throws: catch it to retry, fix or report it.
+
+## One shot first
+Each model step re-reads the whole conversation; one execute that does the job
+costs a fraction of many small steps. So for any straightforward job, write
+one `codemode_execute` that does all of it — create every file, run the tests
+and checks, react to their results in code (retry, fix, branch), call the apps,
+platform tools and agents it needs, publish or deliver — and return a short
+report: what was done, exit codes, failures with the relevant output lines,
+paths. Read what you need first (also in one call), then act in one call. Fall
+back to separate steps only when a step needs your judgement on a result you
+cannot check in code, or a person must answer (`ask_user`).
 
 Do not invent direct `app__function`, `file_send`, `appui_create` or
 `timeline_*` tools — use Code Mode. Messaging (`send_message`, …), `ask_user`,
 `read_attachment` (files and images people attach: it shows you the picture),
-sandbox files/shell (`execute`, `read_file`, …), `write_todos` and `task` /
-swarm remain native tools.
+the native sandbox files/shell (`execute`, `read_file`, … — `read_file` also
+shows you screenshots), `write_todos` and `task` / swarm remain native tools.
 </code_mode>"""
 
 

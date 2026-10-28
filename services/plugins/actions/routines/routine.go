@@ -41,10 +41,12 @@ type SpacesPort interface {
 
 // Service manages routines.
 type Service struct {
-	K           apiKernel
-	R           *repo.Repo
-	L           *logger.Logger
-	Spaces      SpacesPort
+	K      apiKernel
+	R      *repo.Repo
+	L      *logger.Logger
+	Spaces SpacesPort
+	// LLM drafts skills from demonstrations.
+	LLM         LLMPort
 	now         func() time.Time
 	workerInit  sync.Once
 	workerSlots chan struct{}
@@ -269,6 +271,7 @@ func (s *Service) Start(ctx context.Context) {
 			if err := s.RunDue(ctx); err != nil {
 				s.L.Warn("routine scheduler pass failed", "error", err)
 			}
+			s.expireDemos(ctx)
 		}
 	}
 }
@@ -454,6 +457,9 @@ func (s *Service) dispatch(ctx context.Context, r *rt.Routine) (string, error) {
 	if s.Spaces == nil {
 		return "", errs.New(errs.CodeUnavailable, "routine dispatcher not wired")
 	}
+	// What the run does is on its creator's authority, with nobody watching:
+	// the audit trail and the policies tell the two apart by this.
+	ctx = vmm.WithInitiator(ctx, vmm.Initiator{Kind: vmm.InitiatorRoutine, ID: r.ID.String()})
 	if r.Target == "" {
 		if runner, ok := s.Spaces.(interface {
 			RunScheduledTask(context.Context, identity.ID, identity.ID, identity.ID, string) (string, error)

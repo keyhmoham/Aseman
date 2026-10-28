@@ -1,0 +1,115 @@
+# Aseman on Kubernetes.
+#
+# The node, the web client, the agent runtime (as a Deployment the node calls
+# at ASEMAN_AGENT_RUNTIME_URL), the agents' memory (OpenViking), project
+# timelines (Utopia) and Postgres (or your own). Project computers need a
+# container runtime the node can drive: Modal (sandbox.backend: modal, the
+# default here) or a Docker host (sandbox.backend: docker, see sandbox.docker).
+
+nameOverride: ""
+fullnameOverride: ""
+
+images:
+  node: { repository: aseman/asemand, tag: latest, pullPolicy: IfNotPresent }
+  web: { repository: aseman/flutter-web, tag: latest, pullPolicy: IfNotPresent }
+  runtime: { repository: aseman/deepagents, tag: v2, pullPolicy: IfNotPresent }
+  openviking: { repository: aseman/openviking, tag: v1, pullPolicy: IfNotPresent }
+  timeline: { repository: ghcr.io/deeplethe/utopia, tag: 0.1.0-rc9, pullPolicy: IfNotPresent }
+  postgres: { repository: aseman/postgres, tag: 16-pgvector, pullPolicy: IfNotPresent }
+imagePullSecrets: []
+
+# The node's public address (people, phones, webhooks and identity providers
+# reach it here) and the web client's.
+publicURL: https://aseman.example.com
+appURL: https://app.aseman.example.com
+
+# Secrets. Leave a value empty to have one generated on install (kept on
+# upgrade), or name an existing Secret holding the same keys.
+secrets:
+  existingSecret: ""
+  adminPassword: ""
+  timelinePassword: ""
+  openvikingKey: ""
+  runtimeSecret: ""
+
+# The node's configuration file (services/configs/config.example.yml).
+config: |
+  node:
+    name: "node-a"
+    oauth_client_id: ""
+  sandbox:
+    backend: "modal"
+
+node:
+  replicas: 1
+  resources: { requests: { cpu: 500m, memory: 512Mi }, limits: { memory: 2Gi } }
+  persistence: { size: 10Gi, storageClass: "" }
+  # Extra environment (any ASEMAN_* setting of .env.example).
+  env: {}
+  # Name a Secret whose keys become environment (provider keys, APNs, ...).
+  envFromSecret: ""
+
+web:
+  replicas: 1
+  resources: { requests: { cpu: 50m, memory: 64Mi } }
+
+runtime:
+  replicas: 1
+  resources: { requests: { cpu: "1", memory: 2Gi }, limits: { memory: 4Gi } }
+  persistence: { size: 10Gi, storageClass: "" }
+  # The runtime's JWT-SVID file, when SPIRE runs in the cluster.
+  svidFile: ""
+
+sandbox:
+  backend: modal
+  modal: { tokenId: "", tokenSecret: "", environment: "" }
+  docker:
+    # The node drives a Docker daemon on its node: mount its socket and pin
+    # the node to the hosts that have one.
+    socketPath: /var/run/docker.sock
+    nodeSelector: {}
+    network: ""
+    # gVisor, where the hosts have it.
+    runtime: ""
+  # The filtering proxy beside each project computer (docker backend only).
+  egressImage: aseman/egress-proxy:v1
+
+openviking:
+  enabled: true
+  resources: { requests: { cpu: 250m, memory: 512Mi } }
+  persistence: { size: 10Gi, storageClass: "" }
+
+timeline:
+  enabled: true
+  resources: { requests: { cpu: 100m, memory: 256Mi } }
+  persistence: { size: 5Gi, storageClass: "" }
+
+postgres:
+  # Off: set externalDSN (and timelineDSN when timelines are on).
+  enabled: true
+  user: aseman
+  password: ""
+  database: aseman
+  timelineDatabase: aseman_timeline
+  externalDSN: ""
+  timelineDSN: ""
+  resources: { requests: { cpu: 250m, memory: 512Mi } }
+  persistence: { size: 20Gi, storageClass: "" }
+
+governance:
+  # Refuse every agent action while governance is not loaded.
+  required: true
+  approvalTimeout: 30m
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  nodeHost: aseman.example.com
+  webHost: app.aseman.example.com
+  tls: []
+
+# Only the node (and the timeline) reach Postgres; only the node and the
+# runtime reach memory and timelines.
+networkPolicy:
+  enabled: true

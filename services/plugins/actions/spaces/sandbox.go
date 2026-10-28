@@ -151,7 +151,7 @@ func (s *Service) SandboxEnsure(ctx context.Context, spaceID identity.ID) (*bot.
 		ImageRef:  s.sandboxImage(),
 		Args:      []string{"sleep", "infinity"},
 		Resources: s.sandboxResourceProfile(ctx),
-		Env:       sandboxOpenCodeEnv(),
+		Env:       s.sandboxEnv(),
 		// The shared sandbox is priced by the platform (Pricing → sandbox);
 		// the proceeds go to the sandbox tool owner (the space owner).
 	})
@@ -332,6 +332,9 @@ func (s *Service) SandboxStart(ctx context.Context, spaceID identity.ID) (*bot.B
 		// Starting a computer costs time and money: record what asked for it.
 		s.L.Info("sandbox started", "space", spaceID.String(), "for", startedFor(), "agent", vmm.ExecutionFrom(ctx).AgentID)
 		s.provideDesktopScript(ctx, rec)
+		// The proxy joins the computer's network namespace each time the
+		// computer starts (a computer recreated has a new namespace).
+		s.ensureEgress(ctx, spaceID)
 	}
 	s.touch(spaceID)
 	return rec, nil

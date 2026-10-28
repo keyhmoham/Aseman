@@ -558,11 +558,11 @@ func (s *Service) listExternal(ctx context.Context, tool *models.Tool) ([]map[st
 			}
 		}
 	}
-	session, err := s.Client.Session(ctx, tool.URL, headers)
+	session, err := s.mcpClient(tool.URL).Session(ctx, tool.URL, headers)
 	if err != nil {
 		return nil, errs.New(errs.CodeUnavailable, err.Error())
 	}
-	listed, err := s.Client.RPC(ctx, tool.URL, session, "tools/list", map[string]any{})
+	listed, err := s.mcpClient(tool.URL).RPC(ctx, tool.URL, session, "tools/list", map[string]any{})
 	if err != nil {
 		return nil, err
 	}

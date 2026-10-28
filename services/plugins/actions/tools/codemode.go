@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/aseman/aseman/plugins/actions/governance/models/gate"
 	"log"
 	"net/http"
 	"regexp"
@@ -62,6 +63,12 @@ var codeModePlatform = map[string]bool{
 	"routine_create": true, "routine_list": true, "routine_get": true, "routine_update": true, "routine_delete": true,
 	"desk_state": true, "desk_arrange": true, "desk_close": true,
 	"db_tables": true, "db_read": true,
+	// Served by other namespaces, offered while they are available.
+	"secret_request": true, "computer_help": true, "offer_task": true, "task_update": true,
+	"host_exec": true, "host_read": true, "host_write": true, "host_list": true,
+	"folder_list": true, "folder_read": true, "folder_write": true,
+	"slack_post": true, "teams_post": true, "sms_send": true,
+	"responsibility_create": true, "responsibility_list": true,
 }
 
 // CodeModeRequest is one authenticated API call from sandbox code (or from the
@@ -309,7 +316,7 @@ func (s *Service) codeModeTimelineRPC(ctx context.Context, spaceID string, messa
 }
 
 // CodeModeRequestCall runs one authenticated capability call for Code Mode execute.
-func (s *Service) CodeModeRequestCall(ctx context.Context, spaceID string, opts CodeModeRequest) (any, error) {
+func (s *Service) CodeModeRequestCall(ctx context.Context, spaceID string, opts CodeModeRequest) (result any, err error) {
 	if opts.Method == "" {
 		opts.Method = "POST"
 	}
@@ -327,6 +334,15 @@ func (s *Service) CodeModeRequestCall(ctx context.Context, spaceID string, opts 
 	payload, err := codeModeBody(opts.Body, opts.RawBody)
 	if err != nil {
 		return nil, err
+	}
+	// Every well-formed request is an agent action: decided, recorded, and
+	// run with the person's secrets put in; what comes back hides them.
+	if n, ok := codeModePathParts[parts[0]]; ok && len(parts) == n {
+		var decision gate.Result
+		if payload, decision, err = s.gateCodeMode(ctx, spaceID, parts, payload); err != nil {
+			return nil, err
+		}
+		defer func() { result = s.redactCodeMode(ctx, decision, result, err) }()
 	}
 	switch parts[0] {
 	case "apps":
@@ -358,6 +374,9 @@ func (s *Service) CodeModeRequestCall(ctx context.Context, spaceID string, opts 
 		return nil, errs.InvalidArgument("path must start with /apps, /platform, /timeline, /sandbox or /agents")
 	}
 }
+
+// codeModePathParts is how many segments each Code Mode path has.
+var codeModePathParts = map[string]int{"apps": 3, "platform": 2, "timeline": 2, "sandbox": 2, "agents": 2}
 
 func (s *Service) codeModeCallApp(ctx context.Context, spaceID, slug, fn string, payload map[string]any) (any, error) {
 	apps, err := s.codeModeApps(ctx, spaceID)

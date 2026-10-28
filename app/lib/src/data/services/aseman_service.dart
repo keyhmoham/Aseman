@@ -136,6 +136,13 @@ class AsemanService implements BackendService {
     return _adopt(_sessionFrom(result));
   }
 
+  /// Trades a single sign-on handoff for a session (once).
+  Future<Session> ssoComplete(String handoff) async {
+    final result =
+        await actionMap('enterprise', 'sso_complete', body: {'handoff': handoff});
+    return _adopt(_sessionFrom(result));
+  }
+
   /// Makes a freshly obtained session the client's identity, so the following
   /// requests carry its bearer token and signature (without this, calls made
   /// right after logging in were unauthenticated until the app restarted).
@@ -302,12 +309,17 @@ class AsemanService implements BackendService {
         .toList();
   }
 
-  Future<WorkspaceRoom> createRoom(
-      String spaceId, String name, String topic) async {
+  /// Create a room. One made for something ([purpose], with an [icon] and a
+  /// [color]) is greeted by the lead with three things to start on.
+  Future<WorkspaceRoom> createRoom(String spaceId, String name, String topic,
+      {String purpose = '', String icon = '', String color = ''}) async {
     final resp = await client.call('spaces', 'room_create', body: {
       'space': spaceId,
       'name': name,
       'topic': topic,
+      if (purpose.isNotEmpty) 'purpose': purpose,
+      if (icon.isNotEmpty) 'icon': icon,
+      if (color.isNotEmpty) 'color': color,
     });
     final m = resp.body as Map<String, dynamic>;
     return WorkspaceRoom(
@@ -315,6 +327,9 @@ class AsemanService implements BackendService {
       spaceId: spaceId,
       name: name,
       topic: topic,
+      purpose: purpose,
+      icon: icon,
+      color: color,
     );
   }
 
@@ -405,7 +420,7 @@ class AsemanService implements BackendService {
     return (
       main: RoomThread.fromJson(main, isMain: true),
       threads: (body['threads'] as List? ?? const [])
-          .whereType<Map>()
+          .whereType<Map<dynamic, dynamic>>()
           .map((t) => RoomThread.fromJson(t.cast<String, dynamic>()))
           .toList(),
     );
@@ -533,6 +548,18 @@ class AsemanService implements BackendService {
       connected: m['connected'] != false,
       name: '${m['name'] ?? ''}',
     );
+  }
+
+  /// How a person connects their own account to a connector app (Google, a
+  /// broker like Composio): its `connect` description ({namespace, start,
+  /// status, disconnect} or {url}), or null for any other app.
+  Future<Map<String, dynamic>?> appAccount(String botId, String spaceId) async {
+    final resp = await client
+        .call('tools', 'commands_list', body: {'bot': botId, 'space': spaceId});
+    final m = (resp.body as Map?) ?? const {};
+    final connect = m['connect'];
+    if (m['auth'] != 'account' || connect is! Map) return null;
+    return connect.cast<String, dynamic>();
   }
 
   /// Every tool's connection state in a project, by bot id.

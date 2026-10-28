@@ -32,7 +32,7 @@ func NewPlugin() api.Plugin {
 		var release func()
 		return module.Instance{
 			Service: s,
-			Actions: BuildActions(s),
+			Actions: append(BuildActions(s), dictateAction(s)),
 			Models:  models.Models(),
 			Mount: func(context.Context) error {
 				binder, ok := d.Kernel.(api.NetworkBindings)

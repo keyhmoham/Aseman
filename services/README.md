@@ -331,6 +331,75 @@ done is never refused, so a run can finish at most one step past the cap.
   came from is never in the partner API. 120 calls a minute per key.
 - **market** — publish, discover and install agents and apps:
   `publish`, `unpublish`, `list`, `get`, `install`, `my_listings`.
+- **governance** — every agent action passes one gate: the deep agents
+  gateway, Code Mode, platform tools, app calls and sandbox commands are
+  normalized to a request (tool, kind, effect, target, initiator) and decided
+  by CEL rules, deny then ask then allow, failing closed (`policy_get`,
+  `policy_set`, `policy_test`). The default policy asks before sending, paying,
+  signing or deleting and lets proactive work only read. Asks become approvals
+  (Allow once, Always allow, Refuse: `approval_*`, `grant_list`,
+  `grant_revoke`) answered in the app, Slack, Teams or SMS. Every decision is
+  audited with who started it (`audit_list`, `audit_export` as CSV). Agents ask
+  for credentials with a masked box (`secret_request`; `secret_*`) and use them
+  as `{{secret:name}}`; outbound content is checked for credentials and card
+  numbers; outside content reaches models in an untrusted envelope. An app
+  function is judged by what it does (`gmail_search` reads, `gmail_send`
+  sends), read from the call's body. A project's
+  computer follows its network policy (`egress_get`, `egress_set`; the
+  `aseman-egress` sidecar), and a person can take it over (`computer_help`,
+  `control_take`, `control_release`). See [`docs/openduet-parity-plan.md`](../docs/openduet-parity-plan.md).
+- **google** — Gmail and Calendar as an app: turned on (`admin_set`), it lists
+  a **Google** app in the Apps catalog whose MCP server is this namespace
+  (`/google/v1/mcp`, called with the app's key and the person each call is
+  for). Each person connects their own Google account (OAuth with PKCE:
+  `status`, `connect_start`, `disconnect`); connecting adds the app to their
+  home project. Its functions: `gmail_search`, `gmail_read`, `gmail_draft`,
+  `gmail_send`, `calendar_events`, `calendar_create`.
+- **proactive** — Tasks (suggested, working, needs input, ready for review),
+  inbox triage, the morning brief, background research (read-only, as
+  initiator `proactive`), the first-day greeting and the setup checklist
+  (`tasks_list`, `task_*`, `brief_*`, `triage`, `first_day`, `settings_*`,
+  `research_now`, `setup_check`).
+- **responsibilities** — standing instructions an agent runs, as the person,
+  when a trigger fires. The triggers are one catalog (`triggers`): signed
+  hooks from GitHub, GitLab, Slack, Microsoft Teams, SMS (Twilio), Stripe,
+  Linear, Jira, Shopify and generic webhooks at
+  `/hooks/v1/responsibilities/{id}`; polls of Gmail, Google Calendar, RSS/Atom
+  feeds, any HTTP API (a change of its answer or one JSON value) and an app's
+  read-only function; and schedules (an interval, or daily at a time). Feeds
+  and APIs are fetched from public addresses only
+  (`ASEMAN_RESPONSIBILITIES_ALLOW_PRIVATE=1` lifts that). `create`, `list`,
+  `pause`, `resume`, `delete`, `test`.
+- **channels** — Slack, Microsoft Teams and SMS (Twilio): people link their
+  accounts with a code, talk to their agents, answer approvals with buttons and
+  get their brief there (`status`, `link_code`, `unlink`, `binding_set`,
+  `admin_get`, `admin_set`).
+- **apps as connectors** — Composio and Arcade are listed as apps from
+  presets (`tools.broker_presets`, `tools.broker_add`), each person connecting
+  their own accounts at the broker. `tools.commands_list` reports such
+  connector apps (and Google) as `auth: "account"` with how to connect them,
+  so every app is added and connected through the same Apps flow.
+- **apps are bots** — every app, these included, is a bot with its own
+  account: added to projects and rooms, given to agents as functions, asked
+  with `spaces.ask` / `message.ask`, and messaged directly or named in a
+  room by an agent. People use apps in their projects: they neither mention
+  an app in chat nor message one directly (`users.dm_send` and
+  `spaces.direct_open` refuse it). Plain
+  words reach an app without an `ask` function of its own: the node's model
+  turns them into one of its functions, as the person, and when an agent is
+  behind them that call is decided by the gate. The node's own apps (Google)
+  are called on its internal address; every other app's address must be
+  public.
+- **enterprise** — OpenID Connect single sign-on (optionally required per
+  domain), SCIM 2.0 provisioning at `/scim/v2`, organizations by email domain,
+  offboarding, and SPIFFE workload identity for the agent runtime.
+- **hostaccess** — shared folders. A person shares a folder of one of their
+  project computers with their own agents in every project (`folders`,
+  `folder_share`, `folder_set`, `folder_unshare`; agent tools `folder_list`,
+  `folder_read`, `folder_write`); the files stay on that computer. Agents on
+  people's **own** computers (the desktop app: `register`, `next`, `result`;
+  tools `host_*`) is a node setting an administrator turns on (`admin_set`),
+  off by default.
 
 ### Agents & apps
 

@@ -90,6 +90,12 @@ func (s *Service) Login(ctx context.Context, handleOrEmail, password string) (*a
 		return nil, "", "", errs.Unauthenticated("account is disabled")
 	}
 	isAdmin := acc.Role == "admin" || acc.Handle == s.K.Env()["admin_handle"]
+	// An administrator keeps a password way in, should the identity provider fail.
+	if !isAdmin {
+		if err := s.ssoRequired(ctx, acc.Email, "password"); err != nil {
+			return nil, "", "", err
+		}
+	}
 	if !isAdmin && (acc.Status == account.StatusPending || !acc.EmailVerified) {
 		return nil, "", "", errs.Unauthenticated("please verify your email address before signing in")
 	}
@@ -302,6 +308,9 @@ func (s *Service) OAuthSignIn(ctx context.Context, provider string, claims map[s
 	}
 	if sub == "" {
 		return nil, "", "", false, errs.InvalidArgument(provider + " token missing subject")
+	}
+	if err := s.ssoRequired(ctx, email, provider); err != nil {
+		return nil, "", "", false, err
 	}
 	oauthPass := oauthPassword(provider, sub)
 	var targetAccount *account.Account

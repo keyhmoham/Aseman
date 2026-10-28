@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../features/tools/ui_kit/kit.dart';
+import 'governance_cards.dart';
 import 'hitl.dart';
 import 'surface.dart';
 
@@ -200,6 +201,14 @@ class AgUiSurfaceView extends StatelessWidget {
           submitLabel: '${props['submitLabel'] ?? 'Submit'}',
           onReply: onReply,
         );
+      case 'Approval':
+        return AgUiApproval(props: props);
+      case 'Secret':
+        return AgUiSecret(props: props);
+      case 'Handover':
+        return AgUiHandover(props: props);
+      case 'Suggestion':
+        return AgUiSuggestion(props: props);
       case 'Table':
         // Alias → DataGrid (ui_kit).
         return _kit('DataGrid', {

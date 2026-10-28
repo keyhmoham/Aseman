@@ -7,6 +7,7 @@ scope. The turn token authorizes it and expires with the turn.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import httpx
@@ -52,8 +53,10 @@ class Gateway:
         self.base_url = base_url.rstrip("/")
         self.token = token
         headers = {"Authorization": f"Bearer {token}"}
-        self._client = httpx.AsyncClient(headers=headers, timeout=CALL_TIMEOUT, transport=transport)
-        self._sync = httpx.Client(headers=headers, timeout=CALL_TIMEOUT, transport=sync_transport)
+        self._client = httpx.AsyncClient(headers=headers, timeout=CALL_TIMEOUT, transport=transport,
+                                         event_hooks={"request": [_async_workload_identity]})
+        self._sync = httpx.Client(headers=headers, timeout=CALL_TIMEOUT, transport=sync_transport,
+                                  event_hooks={"request": [_workload_identity]})
 
     @property
     def llm_base_url(self) -> str:
@@ -101,6 +104,33 @@ class Gateway:
     async def aclose(self) -> None:
         await self._client.aclose()
         self._sync.close()
+
+
+# SPIFFE workload identity: with SPIRE, spiffe-helper keeps the runtime's
+# JWT-SVID in this file (deploy/spire); it goes with every gateway call and
+# the node checks it on top of the turn token.
+SVID_FILE = os.environ.get("ASEMAN_SVID_FILE", "")
+SVID_HEADER = "X-Aseman-SVID"
+
+
+def _svid() -> str:
+    if not SVID_FILE:
+        return ""
+    try:
+        with open(SVID_FILE, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def _workload_identity(request: httpx.Request) -> None:
+    svid = _svid()
+    if svid:
+        request.headers[SVID_HEADER] = svid
+
+
+async def _async_workload_identity(request: httpx.Request) -> None:
+    _workload_identity(request)
 
 
 def _payload(namespace: str, action: str, body: dict[str, Any] | None) -> dict[str, Any]:

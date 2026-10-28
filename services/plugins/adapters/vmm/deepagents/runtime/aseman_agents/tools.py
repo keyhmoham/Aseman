@@ -27,6 +27,7 @@ from langchain_core.tools import BaseTool, StructuredTool, tool
 from . import team as teamlib
 from .context import TurnContext
 from .gateway import GatewayError
+from .untrusted import wrap as untrusted
 
 # Platform tools agents reach through spaces.ask, under the name the agent
 # sees. The shell and sandbox files are the deep agents tools instead, and
@@ -61,6 +62,25 @@ PLATFORM_TOOLS = {
     # when the turn is for a platform administrator.
     "db_tables": "db_tables",
     "db_read": "db_read",
+    # Served by other namespaces of the node (listed only while available):
+    # the secret box and computer handover, tasks, mail and calendar, the
+    # person's own computer, and Slack, Teams and SMS.
+    "secret_request": "secret_request",
+    "computer_help": "computer_help",
+    "offer_task": "offer_task",
+    "task_update": "task_update",
+    "host_exec": "host_exec",
+    "host_read": "host_read",
+    "host_write": "host_write",
+    "host_list": "host_list",
+    "folder_list": "folder_list",
+    "folder_read": "folder_read",
+    "folder_write": "folder_write",
+    "slack_post": "slack_post",
+    "teams_post": "teams_post",
+    "sms_send": "sms_send",
+    "responsibility_create": "responsibility_create",
+    "responsibility_list": "responsibility_list",
 }
 
 # Platform tools that stay native LLM tools when Code Mode is on. read_attachment
@@ -310,6 +330,11 @@ def _app_result(reply: str) -> str:
     return f"The app reported an error: {text}" if result.get("isError") else text
 
 
+def _outside(source: str, text: str) -> str:
+    """An app's answer, in the untrusted envelope."""
+    return untrusted(source, text)
+
+
 def _readable(text: str) -> str:
     """An app's JSON answer whose strings hold whole documents
     (``{"skill": "# Spec\\n..."}``) as those documents. A large result that
@@ -349,7 +374,7 @@ def _app_command_tool(ctx: TurnContext, name: str, spec: dict[str, Any], command
             })
         except GatewayError as exc:
             return _err(exc)
-        return _app_result(str(res.get("reply", "")))
+        return _outside(f"app {spec.get('name')}", _app_result(str(res.get("reply", ""))))
 
     return StructuredTool(name=name, description=description, args_schema=schema, coroutine=run)
 
@@ -437,7 +462,7 @@ def _bot_tool(ctx: TurnContext, name: str, spec: dict[str, Any]) -> BaseTool:
             })
         except GatewayError as exc:
             return _err(exc)
-        return str(res.get("reply", ""))
+        return _outside(f"app {spec.get('name')}", str(res.get("reply", "")))
 
     return StructuredTool.from_function(coroutine=run, name=name, description=description)
 

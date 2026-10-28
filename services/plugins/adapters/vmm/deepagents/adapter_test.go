@@ -52,6 +52,9 @@ func (k fakeKernel) Env() map[string]string    { return nil }
 func (k fakeKernel) NodeID() identity.NodeID   { return identity.NodeID(1) }
 func (k fakeKernel) Logger() *logger.Logger    { return nil }
 
+// Resolve finds no other namespace: governance is not loaded in these tests.
+func (k fakeKernel) Resolve(string) (any, error) { return nil, errs.NotFound("not loaded") }
+
 // fakeRuntime is the Python runtime's HTTP contract.
 type fakeRuntime struct {
 	mu        sync.Mutex

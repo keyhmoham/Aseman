@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/aseman/aseman/internal/plugins/bridge"
+	"github.com/aseman/aseman/plugins/actions/governance/models/gate"
 	"sort"
 	"strings"
 	"unicode"
@@ -158,8 +159,12 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 		used["opencode"] = true
 		tools = append(tools, openCodeBuiltinApp())
 	}
+	available := map[string]map[string]bool{}
 	for _, t := range vmm.BuiltinsFor(openCode) {
 		if strings.HasPrefix(t.Name, "routine_") && s.Routines == nil {
+			continue
+		}
+		if owner := gate.ToolOwner(t.Name); owner != "" && !s.ownedToolAvailable(ctx, available, owner, t.Name, spaceID) {
 			continue
 		}
 		if t.Name == "sandbox_exec" && hasSandbox {
@@ -196,7 +201,8 @@ func (s *Service) appCommands(ctx context.Context, spaceID identity.ID, rec *bot
 		description, _ := r["description"].(string)
 		schema, _ := r["schema"].(map[string]any)
 		ui, _ := r["ui"].(string)
-		out = append(out, vmm.ToolCommand{Name: name, Description: description, Schema: schema, UI: ui})
+		annotations, _ := r["annotations"].(map[string]any)
+		out = append(out, vmm.ToolCommand{Name: name, Description: description, Schema: schema, UI: ui, Annotations: annotations})
 	}
 	return out
 }
@@ -336,6 +342,8 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 	var result string
 	var terr error
 	switch {
+	case gate.ToolOwner(toolName) != "":
+		result, terr = s.ownedTool(ctx, id, roomID, agentName, toolName, argsJSON)
 	case toolName == "sandbox_exec":
 		if input == "" {
 			terr = errs.InvalidArgument("sandbox_exec requires a command")
@@ -437,6 +445,50 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 		return result, err
 	}
 	return result, terr
+}
+
+// ownedToolAvailable asks a tool's owner, once per listing, which of its
+// tools the turn's person can use here (mail only once Google is connected,
+// host tools only while their desktop is connected). An owner that is not
+// loaded offers none.
+func (s *Service) ownedToolAvailable(ctx context.Context, cache map[string]map[string]bool, owner, tool string, spaceID identity.ID) bool {
+	names, ok := cache[owner]
+	if !ok {
+		actor := vmm.ExecutionFrom(ctx).ActorID
+		if actor == "" {
+			actor = helper.Actor(ctx).String()
+		}
+		var list []string
+		names = map[string]bool{}
+		if err := bridge.Invoke(ctx, s.K, owner, "AvailableTools", []any{ctx, actor, spaceID.String()}, &list); err == nil {
+			for _, n := range list {
+				names[n] = true
+			}
+		}
+		cache[owner] = names
+	}
+	return names[tool]
+}
+
+// ownedTool hands a tool another namespace serves (the secret box, mail and
+// calendar, tasks, the person's own computer, Slack and Teams) to its owner.
+func (s *Service) ownedTool(ctx context.Context, spaceID, roomID identity.ID, agentName, toolName, argsJSON string) (string, error) {
+	exec := vmm.ExecutionFrom(ctx)
+	call := gate.ToolCall{Tool: toolName, Args: argsJSON, SpaceID: spaceID.String(), RoomID: roomID.String(),
+		AgentID: exec.AgentID, AgentName: agentName, ActorID: exec.ActorID}
+	if call.ActorID == "" {
+		call.ActorID = helper.Actor(ctx).String()
+	}
+	if agentID, err := identity.Parse(exec.AgentID); err == nil {
+		if rec, err := s.Bots.GetBot(ctx, agentID); err == nil {
+			call.AgentAccount = rec.AccountID.String()
+		}
+	}
+	var out string
+	if err := bridge.Invoke(ctx, s.K, gate.ToolOwner(toolName), "AgentTool", []any{ctx, call}, &out); err != nil {
+		return "", err
+	}
+	return out, nil
 }
 
 // slugToolName builds a stable function name for a bot, sanitizing and

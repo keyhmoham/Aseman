@@ -489,15 +489,21 @@ func (a *roomCreateAction) Handle(ctx context.Context, req *api.ActionRequest) (
 		return nil, err
 	}
 	var in struct {
-		Space string `json:"space"`
-		Name  string `json:"name"`
-		Topic string `json:"topic"`
+		Space   string `json:"space"`
+		Name    string `json:"name"`
+		Topic   string `json:"topic"`
+		Purpose string `json:"purpose"`
+		Icon    string `json:"icon"`
+		Color   string `json:"color"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
 	}
 	spID, err := identity.Parse(in.Space)
 	if err != nil {
+		return nil, err
+	}
+	if err := validRoomLook(in.Icon, in.Color); err != nil {
 		return nil, err
 	}
 	if err := a.s.Can(ctx, spID, identity.ID{}, req.Caller.ID, permission.SpaceManageRooms); err != nil {
@@ -509,7 +515,8 @@ func (a *roomCreateAction) Handle(ctx context.Context, req *api.ActionRequest) (
 	}
 	now := time.Now().UTC()
 	room := &space.Room{Entity: entity.Entity{ID: id, CreatedAt: now, UpdatedAt: now},
-		SpaceID: spID, Name: in.Name, Topic: in.Topic, MetadataID: id}
+		SpaceID: spID, Name: in.Name, Topic: in.Topic, MetadataID: id,
+		Purpose: clipRoomText(in.Purpose, 1000), Icon: in.Icon, Color: in.Color}
 	if err := a.s.R.CreateID(ctx, "rooms", id, room); err != nil {
 		return nil, err
 	}
@@ -517,6 +524,11 @@ func (a *roomCreateAction) Handle(ctx context.Context, req *api.ActionRequest) (
 		PublicPaths: []string{}, Version: 1, UpdatedAt: now}
 	if err := a.s.R.CreateID(ctx, "metadatas", id, meta); err != nil {
 		return nil, err
+	}
+	// A room made for something is greeted: the lead says hello there and
+	// offers three things to start on.
+	if room.Purpose != "" {
+		a.s.greetRoom(ctx, req.Caller.ID, room)
 	}
 	return helper.JSON(map[string]any{"room_id": id.String()})
 }

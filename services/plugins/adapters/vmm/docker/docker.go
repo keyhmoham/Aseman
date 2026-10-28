@@ -36,6 +36,9 @@ type Adapter struct {
 	// node must be on it too) so proxied sandbox ports are reachable from a
 	// containerized daemon. Empty means the default bridge network.
 	network string
+	// runtime is the OCI runtime computers run under ("runsc" for gVisor);
+	// empty is Docker's default.
+	runtime string
 	mu      sync.Mutex
 	vms     map[string]string     // vm id -> container id
 	specs   map[string]vmm.VMSpec // vm id -> creation spec (for recreate)
@@ -68,6 +71,10 @@ func (a *Adapter) Init(ctx context.Context, deps *api.Dependencies) error {
 		a.baseURL = "http://localhost"
 	}
 	a.network = c.Options["network"]
+	a.runtime = c.Options["runtime"]
+	if a.runtime == "" {
+		a.runtime = strings.TrimSpace(os.Getenv("ASEMAN_SANDBOX_RUNTIME"))
+	}
 	return nil
 }
 
@@ -251,6 +258,9 @@ func (a *Adapter) createContainer(ctx context.Context, spec vmm.VMSpec) (vmm.VM,
 		"MemorySwap": spec.Resources.MemoryMB * 2 * 1024 * 1024,
 		"NanoCpus":   int64(spec.Resources.CPU * 1e9),
 		"AutoRemove": false,
+	}
+	if a.runtime != "" {
+		hostConfig["Runtime"] = a.runtime
 	}
 	if owner := spec.Labels["aseman.bot_id"]; owner != "" {
 		hostConfig["Mounts"] = []map[string]any{{"Type": "volume", "Source": "aseman-workspace-" + owner, "Target": "/workspace"}, {"Type": "volume", "Source": "aseman-agent-state-" + owner, "Target": "/var/lib/grok"}}

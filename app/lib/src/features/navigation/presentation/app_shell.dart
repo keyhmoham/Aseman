@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../assistant/assistant.dart';
 import '../../home/presentation/workspace_screen.dart';
 import '../../search_feed/presentation/rich_post_content.dart';
 import '../../search_feed/presentation/search_feed_screen.dart';
@@ -28,6 +29,24 @@ class _AppShellState extends State<AppShell> {
     PostLinks.openAccount = (context, accountId, handle) => showAccountProfile(
         context, widget.dependencies,
         accountId: accountId, handle: handle);
+    // On a desktop where the person let agents use this computer, keep
+    // answering them.
+    hostAgentFor(widget.dependencies).restore().ignore();
+    _firstDay();
+  }
+
+  /// On a person's first day the lead greets them in their home chat and
+  /// asks what they work on; the setup checklist then shows what is left.
+  /// The node runs it once, however often this asks.
+  Future<void> _firstDay() async {
+    try {
+      final out = await widget.dependencies.service
+          .invokeAction('proactive', 'first_day');
+      if (!mounted || out is! Map || out['started'] != true) return;
+      await openPanel(context, SetupPanel(dependencies: widget.dependencies));
+    } catch (_) {
+      // No proactive work on this node.
+    }
   }
 
   void _openWorkspace(String name) {

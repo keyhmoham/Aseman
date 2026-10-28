@@ -66,7 +66,7 @@ func (s *Service) endpointFor(ctx context.Context, tool *models.Tool, rec *bot.B
 		if err != nil {
 			return nil, err
 		}
-		return &endpoint{URL: tool.URL, Headers: headers, Client: s.Client}, nil
+		return &endpoint{URL: tool.URL, Headers: headers, Client: s.mcpClient(tool.URL)}, nil
 	case models.ModeManaged:
 		base := tool.Endpoint
 		if base == "" {
@@ -182,18 +182,17 @@ func (s *Service) invokeBot(ctx context.Context, rec *bot.Bot, body string) (str
 		Function string         `json:"function"`
 		Payload  map[string]any `json:"payload"`
 	}
-	if e := json.Unmarshal([]byte(body), &in); e != nil || in.Function == "" {
-		// A tool asked in plain words (by an agent that was given no
-		// microtools) gets the request as the input of a tool named "ask",
-		// the convention for a backend that takes free text.
-		in.Function, in.Payload = "ask", map[string]any{"request": body}
-	}
-	if in.Payload == nil {
-		in.Payload = map[string]any{}
-	}
 	ep, err := s.endpointFor(ctx, &tool, rec, actor, execution.SpaceID)
 	if err != nil {
 		return "", err
+	}
+	if e := json.Unmarshal([]byte(body), &in); e != nil || in.Function == "" {
+		// Asked in plain words: in a room, a direct message, a routine, or
+		// by an agent that was given no functions.
+		return s.answerInWords(ctx, ep, rec, actor, execution.SpaceID, body)
+	}
+	if in.Payload == nil {
+		in.Payload = map[string]any{}
 	}
 	result, err := s.rpc(ctx, ep, "tools/call", map[string]any{"name": in.Function, "arguments": in.Payload})
 	if err != nil {

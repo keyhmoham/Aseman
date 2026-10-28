@@ -46,6 +46,12 @@ var ChatComponents = map[string]string{
 	"Choices":  "single-select options",
 	"Confirm":  "yes/no confirm bar",
 	"Form":     "short field group + submit",
+	// Governance (chat): an action waiting on a person, a masked secret box,
+	// a request to take over the project computer, and a suggested task.
+	"Approval":   "allow once / always allow / refuse an action",
+	"Secret":     "masked credential entry",
+	"Handover":   "take control of the project computer",
+	"Suggestion": "a suggested task with start / hide",
 }
 
 // EncodeFence wraps a surface as a chat body fence.
@@ -108,6 +114,45 @@ func QuestionSurface(question string, options []string) Surface {
 			"p": props,
 		},
 	}
+}
+
+// ApprovalSurface is the card of an action waiting on a person: the exact
+// action, the rule that asked, and for a message who it goes to and what it
+// says. The client reads the approval's live state by its id.
+func ApprovalSurface(id, summary, tool, effect, rule string, recipients []string, text string) Surface {
+	props := map[string]any{"approval": id, "summary": summary, "tool": tool, "effect": effect, "rule": rule}
+	if len(recipients) > 0 {
+		props["recipients"] = recipients
+	}
+	if text != "" {
+		props["text"] = text
+	}
+	return Surface{Version: SpecVersion, Layout: "chat", Title: "Approval", Root: map[string]any{"c": "Approval", "p": props}}
+}
+
+// SecretSurface is a masked box a person types a credential into. The value
+// goes to the node's vault, never into the conversation.
+func SecretSurface(id, name, reason, site string) Surface {
+	props := map[string]any{"request": id, "name": name, "reason": reason}
+	if site != "" {
+		props["site"] = site
+	}
+	return Surface{Version: SpecVersion, Layout: "chat", Title: "Secret", Root: map[string]any{"c": "Secret", "p": props}}
+}
+
+// HandoverSurface asks a person to take over the project computer.
+func HandoverSurface(id, reason, url string) Surface {
+	props := map[string]any{"handover": id, "reason": reason}
+	if url != "" {
+		props["url"] = url
+	}
+	return Surface{Version: SpecVersion, Layout: "chat", Title: "Take over", Root: map[string]any{"c": "Handover", "p": props}}
+}
+
+// SuggestionSurface is a task an agent suggests, with Start and Hide.
+func SuggestionSurface(id, title, detail string) Surface {
+	return Surface{Version: SpecVersion, Layout: "chat", Title: "Suggestion",
+		Root: map[string]any{"c": "Suggestion", "p": map[string]any{"task": id, "title": title, "detail": detail}}}
 }
 
 // MustFormat is FormatMessage that panics only in tests; production uses FormatMessage.

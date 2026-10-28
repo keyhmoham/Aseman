@@ -268,6 +268,9 @@ func (s *Service) agentContext(ctx context.Context, spaceID, roomID identity.ID,
 			fmt.Fprintf(&b, " — topic: %s", room.Topic)
 		}
 		b.WriteString("\n")
+		if room.Purpose != "" {
+			fmt.Fprintf(&b, "This room is for: %s. Keep the work here about that; suggest another room for anything else.\n", room.Purpose)
+		}
 	}
 	var mems []membership.Membership
 	if err := s.R.List(ctx, "memberships", database.Filter{Equal: map[string]any{"space_id": spaceID.String()}}, &mems); err == nil {
@@ -603,13 +606,50 @@ func (s *Service) AnswerQuestion(ctx context.Context, caller, spaceID, roomID, b
 // AskDirect serves a direct message to an agent. A person's conversation runs
 // in their home space (whose sandbox the agent works on); an agent messaging
 // another agent during a run converses inside the run's space and room.
+// askAppDirect answers an agent's direct message to an app: asked in plain
+// words, as the person the agent works for. Inside a run the
+// run's project is the scope; otherwise the person's home project when the
+// app was added there, else the person alone (an app connected per person,
+// like Google, needs no project).
+func (s *Service) askAppDirect(ctx context.Context, caller identity.ID, rec *bot.Bot, body string) (string, error) {
+	ctx, actor := actingAs(ctx, caller)
+	exec := vmm.ExecutionFrom(ctx)
+	exec.ActorID = actor.String()
+	if exec.SpaceID == "" {
+		if home, err := s.HomeSpace(ctx, actor); err == nil && home != nil {
+			if _, err := s.SpaceMembership(ctx, home.ID, rec.AccountID); err == nil {
+				exec.SpaceID = home.ID.String()
+			}
+		}
+	}
+	ctx = vmm.WithExecution(ctx, exec)
+	payer := s.payer(ctx, actor)
+	if err := s.Bots.EnsureFunds(ctx, payer, rec.ID); err != nil {
+		return "", err
+	}
+	started := time.Now()
+	var reply string
+	err := bridge.Invoke(ctx, s.K, "tools", "InvokeTool", []any{ctx, rec.ID.String(), body}, &reply)
+	space, _ := identity.Parse(exec.SpaceID)
+	_, _ = s.Bots.BillAndRecordUsage(ctx, payer, rec.ID, elapsedSeconds(started), "direct message",
+		usage.UsageCtx{SpaceID: space, BotName: rec.Name, RequestID: usage.RequestIDFrom(ctx), Kind: usage.KindAsk})
+	return reply, err
+}
+
 func (s *Service) AskDirect(ctx context.Context, caller, botID identity.ID, body string, atts []vmm.FileAttachment) (string, error) {
 	rec, err := s.Bots.GetBot(ctx, botID)
 	if err != nil {
 		return "", err
 	}
+	if isAppBot(rec) {
+		// Only agents message apps directly (users.dm_send refuses people).
+		if !s.isBotAccount(ctx, caller) {
+			return "", errs.Permission(rec.Name + " is an app: use it in a project, or ask an agent to")
+		}
+		return s.askAppDirect(ctx, caller, rec, body)
+	}
 	if !isAgentRuntime(rec) {
-		return "", errs.InvalidArgument(rec.Name + " is not an agent")
+		return "", errs.InvalidArgument(rec.Name + " is not an agent or an app")
 	}
 	if run := vmm.ExecutionFrom(ctx); run.SpaceID != "" && run.RoomID != "" {
 		ids, perr := parseIDs(run.SpaceID, run.RoomID)

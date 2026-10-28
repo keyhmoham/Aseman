@@ -10,6 +10,7 @@ from aseman_agents import economy, guard, memory
 from aseman_agents.agent import _is_overflow
 from fakes import LEAD, call, turn_request
 from test_runtime import platform, runner  # noqa: F401
+from aseman_agents import untrusted
 
 IMAGE = {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}
 
@@ -181,7 +182,8 @@ async def test_an_apps_instructions_stay_whole_in_the_conversation(platform, tmp
     assert out.status == "done", out
     # The agent has the whole skill to work from, as text: not a preview of a file, not one line of JSON.
     first = next(m for m in model.seen[1] if isinstance(m, ToolMessage))
-    assert str(first.content) == SPEC
+    # Whole, inside the untrusted envelope: an app's text is data.
+    assert SPEC in str(first.content) and untrusted.wrapped(str(first.content))
 
 
 async def test_instructions_too_large_to_keep_go_to_a_file(platform, tmp_path: Path) -> None:

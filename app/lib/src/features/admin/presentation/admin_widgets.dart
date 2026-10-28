@@ -521,8 +521,11 @@ class AdminFilterChips<T> extends StatelessWidget {
                     color: option.value == selected
                         ? scheme.onSecondaryContainer
                         : scheme.onSurfaceVariant),
+            // A long label shortens instead of overflowing a narrow screen.
             label: Row(mainAxisSize: MainAxisSize.min, children: [
-              Text(option.label),
+              Flexible(
+                  child: Text(option.label,
+                      maxLines: 1, overflow: TextOverflow.ellipsis)),
               if (option.count != null) ...[
                 const SizedBox(width: 6),
                 Container(

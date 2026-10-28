@@ -39,6 +39,8 @@ type Service struct {
 	Internal *mcp.Client
 	// Compiler compiles Elpian VM programs (ASEMAN_TOOL_COMPILER_URL).
 	Compiler *Compiler
+	// Words reads plain-words requests to apps (llm.Complete when nil).
+	Words WordsModel
 
 	// commandCache holds what each connected app offers, per person and
 	// project, for a few minutes: agents ask for it at the start of every turn.
@@ -98,10 +100,10 @@ func (s *Service) CommandsFor(ctx context.Context, botID, actorID, spaceID strin
 			if e != nil {
 				return nil
 			}
-			if h, e = s.Client.Session(listCtx, tool.URL, h); e != nil {
+			if h, e = s.mcpClient(tool.URL).Session(listCtx, tool.URL, h); e != nil {
 				return nil
 			}
-			result, e := s.Client.RPC(listCtx, tool.URL, h, "tools/list", map[string]any{})
+			result, e := s.mcpClient(tool.URL).RPC(listCtx, tool.URL, h, "tools/list", map[string]any{})
 			if e != nil {
 				return nil
 			}
@@ -122,8 +124,8 @@ func (s *Service) CommandsFor(ctx context.Context, botID, actorID, spaceID strin
 		if e != nil {
 			return []map[string]any{}, nil // not connected yet: nothing to call
 		}
-		if h, e = s.Client.Session(ctx, tool.URL, h); e == nil {
-			if result, e := s.Client.RPC(ctx, tool.URL, h, "tools/list", map[string]any{}); e == nil {
+		if h, e = s.mcpClient(tool.URL).Session(ctx, tool.URL, h); e == nil {
+			if result, e := s.mcpClient(tool.URL).RPC(ctx, tool.URL, h, "tools/list", map[string]any{}); e == nil {
 				commands = commandDefs(result)
 			}
 		}
@@ -331,11 +333,15 @@ func (s *Service) registerMCP(ctx context.Context, req *api.ActionRequest, in mc
 	}
 	commands := []map[string]any{}
 	if in.Auth != "user" {
-		session, e := s.Client.Session(ctx, in.URL, headers)
+		listing := map[string]string{}
+		for k, v := range headers {
+			listing[k] = actorHeader(v, req.Caller.ID)
+		}
+		session, e := s.mcpClient(in.URL).Session(ctx, in.URL, listing)
 		if e != nil {
 			return nil, errs.New(errs.CodeUnavailable, e.Error())
 		}
-		r, e := s.Client.RPC(ctx, in.URL, session, "tools/list", map[string]any{})
+		r, e := s.mcpClient(in.URL).RPC(ctx, in.URL, session, "tools/list", map[string]any{})
 		if e != nil {
 			return nil, e
 		}
@@ -570,6 +576,21 @@ func (s *Service) connectionSet(ctx context.Context, req *api.ActionRequest) (*a
 	return helper.JSON(map[string]any{"ok": true, "connected": in.Token != ""})
 }
 
+// accountConnected reports whether the caller connected their account to a
+// connector app. A namespace answers for its own (Connected); accounts kept
+// at a broker are the broker's to know, so those read as connected.
+func (s *Service) accountConnected(ctx context.Context, connect map[string]any, caller identity.ID) bool {
+	ns, _ := connect["namespace"].(string)
+	if ns == "" {
+		return true
+	}
+	var ok bool
+	if e := bridge.Invoke(ctx, s.K, ns, "Connected", []any{ctx, caller.String()}, &ok); e != nil {
+		return false
+	}
+	return ok
+}
+
 // hasConnection reports whether the actor stored a credential for a tool in a space.
 func (s *Service) hasConnection(ctx context.Context, actor identity.ID, space, bot string) bool {
 	var row models.Connection
@@ -593,7 +614,7 @@ func (s *Service) headers(ctx context.Context, tool *models.Tool, actor identity
 		if values, ok := secret["headers"].(map[string]any); ok {
 			for k, v := range values {
 				if text, ok := v.(string); ok {
-					headers[k] = text
+					headers[k] = actorHeader(text, actor)
 				}
 			}
 		}
@@ -755,18 +776,28 @@ func (s *Service) commandsList(ctx context.Context, req *api.ActionRequest) (*ap
 		}
 		if r.Auth == "user" && in.Space != "" {
 			if h, e := s.headers(ctx, &r, req.Caller.ID, in.Space); e == nil {
-				if h, e = s.Client.Session(ctx, r.URL, h); e == nil {
-					if result, e := s.Client.RPC(ctx, r.URL, h, "tools/list", map[string]any{}); e == nil {
+				if h, e = s.mcpClient(r.URL).Session(ctx, r.URL, h); e == nil {
+					if result, e := s.mcpClient(r.URL).RPC(ctx, r.URL, h, "tools/list", map[string]any{}); e == nil {
 						commands = commandDefs(result)
 					}
 				}
 			}
 		}
 		avatar := ""
+		var connect map[string]any
 		if m, e := (&metasvc.Service{K: s.K, R: s.R}).Get(ctx, rec.AccountID); e == nil && m != nil {
 			avatar = helper.TreeAvatar(m.Tree)
+			if d, ok := m.Tree["descriptor"].(map[string]any); ok {
+				connect, _ = d["connect"].(map[string]any)
+			}
 		}
-		out = append(out, map[string]any{"bot_id": r.BotID, "name": rec.Name, "auth": r.Auth, "connected": connected, "commands": commands, "avatar": avatar})
+		row := map[string]any{"bot_id": r.BotID, "name": rec.Name, "auth": r.Auth, "connected": connected, "commands": commands, "avatar": avatar}
+		if connect != nil {
+			// A connector app: each person connects an account of their own,
+			// through the namespace serving it (Google) or at the broker.
+			row["auth"], row["connect"], row["connected"] = "account", connect, s.accountConnected(ctx, connect, req.Caller.ID)
+		}
+		out = append(out, row)
 	}
 	if in.Bot != "" && len(out) > 0 {
 		return helper.JSON(out[0])
@@ -787,7 +818,7 @@ func NewPlugin() api.Plugin {
 			helper.Action{Namespace: "tools", Name: "app_rpc", Summary: "A tool's app (MCP Apps) asks its server: resources/read or tools/call, as the person in the space", Handler: s.appRPC},
 		)
 		var release func()
-		return module.Instance{Service: s, Models: append(schema.Models(), models.Models()...), Actions: append(actions, oauthActions(s)...),
+		return module.Instance{Service: s, Models: append(schema.Models(), models.Models()...), Actions: append(append(actions, oauthActions(s)...), brokerActions(s)...),
 			Mount: func(context.Context) error {
 				// The gateway managed and installed backends reach the node by.
 				binder, ok := d.Kernel.(api.NetworkBindings)

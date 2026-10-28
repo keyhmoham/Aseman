@@ -15,6 +15,7 @@ from aseman_agents.memory import Settings
 from aseman_agents.server import create_app
 from aseman_agents.store import Store
 from fakes import CODER, LEAD, ROOM, SPACE, FakeViking, Platform, ScriptedModel, call, turn_request
+from aseman_agents import untrusted
 
 WORKSPACE = Path(os.environ["ASEMAN_WORKSPACE"])
 
@@ -380,7 +381,8 @@ async def test_a_connected_apps_functions_are_tools_of_their_own(platform: Platf
     # The node gets the function and its arguments; the agent gets the app's words.
     sent = next(run for run in platform.tool_runs if run.get("bot") == "bot-wiki")
     assert json.loads(sent["body"]) == {"function": "ask_question", "payload": {"repoName": "vercel/next.js", "question": "What is it?"}}
-    assert tool_results(model)["deepwiki__ask_question"] == "It is a web framework."
+    result = tool_results(model)["deepwiki__ask_question"]
+    assert "It is a web framework." in result and untrusted.wrapped(result)
 
 
 def test_every_agent_is_told_to_present_via_code_mode_platform_paths() -> None:

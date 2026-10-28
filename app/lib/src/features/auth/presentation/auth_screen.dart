@@ -10,6 +10,7 @@ import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/skeleton.dart';
 import 'google_sign_in_button.dart';
+import 'sso_sign_in.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 
 /// Gates the whole app behind authentication. Shows the auth screen until a
@@ -57,6 +58,7 @@ class _AuthScreenState extends State<AuthScreen>
   bool _obscure = true;
   bool _providersLoading = true;
   bool _googleEnabled = false;
+  List<String> _ssoProviders = const [];
   bool _googleReady = false;
   bool _appleEnabled = false;
   StreamSubscription<String>? _googleTokens;
@@ -73,6 +75,37 @@ class _AuthScreenState extends State<AuthScreen>
     _googleErrors =
         FederatedSignIn.instance.googleErrors.listen(_providerError);
     _loadProviders();
+    _loadSso();
+  }
+
+  Future<void> _loadSso() async {
+    if (returnedFromSso) {
+      try {
+        await completeSso(widget.dependencies, Uri.base);
+        return;
+      } catch (e) {
+        _snack('Single sign-on failed: $e');
+      }
+    }
+    final providers = await ssoProviders(widget.dependencies);
+    if (mounted) setState(() => _ssoProviders = providers);
+  }
+
+  void _snack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _sso() async {
+    final email = await _textDialog(
+        title: 'Continue with single sign-on', label: 'Work email');
+    if (email == null || email.trim().isEmpty || !mounted) return;
+    try {
+      await signInWithSso(context, widget.dependencies, email.trim());
+    } catch (e) {
+      _snack('$e');
+    }
   }
 
   @override
@@ -393,7 +426,10 @@ class _AuthScreenState extends State<AuthScreen>
             child: TextButton(
                 onPressed: _verifyEmail, child: const Text('Verify email')),
           ),
-        if (_providersLoading || _googleEnabled || _appleEnabled) ...[
+        if (_providersLoading ||
+            _googleEnabled ||
+            _appleEnabled ||
+            _ssoProviders.isNotEmpty) ...[
           const SizedBox(height: 8),
           const Row(children: [
             Expanded(child: Divider()),
@@ -428,6 +464,20 @@ class _AuthScreenState extends State<AuthScreen>
                   label: const Text('Continue with Apple'),
                 ),
               ),
+            if (_ssoProviders.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton.icon(
+                  onPressed: session.isBusy ? null : _sso,
+                  icon: const Icon(Icons.business_rounded),
+                  label: Text(_ssoProviders.length == 1
+                      ? 'Continue with ${_ssoProviders.first}'
+                      : 'Continue with single sign-on'),
+                ),
+              ),
+            ],
           ],
         ],
       ]),

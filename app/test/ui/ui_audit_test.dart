@@ -198,18 +198,22 @@ void main() {
         expect(errors, isEmpty, reason: name);
       }
 
+      // Opens Atlas Capital's desk from the feed's Spaces panel (a tab on
+      // phones).
+      Future<void> openAtlas() async {
+        if (size.key == 'phone') {
+          await tester.tap(find.text('Spaces').first);
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.text('Atlas Capital').last);
+      }
+
       await app('feed');
       await app(
           'profile_menu', () => tester.tap(find.byType(CircleAvatar).first));
-      await app('workspace', () async {
-        await tester.tap(find.text('ASEMAN'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Atlas Capital').last);
-      });
+      await app('workspace', openAtlas);
       await app('room', () async {
-        await tester.tap(find.text('ASEMAN'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Atlas Capital').last);
+        await openAtlas();
         await tester.pumpAndSettle();
         if (size.key == 'phone') {
           await tester.tap(find.byTooltip('Rooms and workspace').first);
@@ -257,7 +261,7 @@ void main() {
         await tester.tap(find.text('Chats').first);
       });
       await app('feed_explore', () async {
-        await tester.tap(find.byTooltip('Explore'));
+        await tester.tap(find.text('Search Aseman — signals, traders, agents…'));
         await tester.pumpAndSettle();
         await tester.enterText(find.byType(TextField).last, 'a');
       });

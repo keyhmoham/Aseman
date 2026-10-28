@@ -17,6 +17,8 @@ import '../../../shared/widgets/backend_action_ui.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/skeleton.dart';
+import '../../assistant/assistant.dart';
+import '../../rooms/presentation/widgets/new_room_dialog.dart';
 
 /// The one settings panel of a workspace (space): profile & visibility,
 /// stats, rooms, members & invites, usage & budget, and — as the very last
@@ -218,18 +220,15 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
   // ── rooms ────────────────────────────────────────────────────────────────
 
   Future<void> _createRoom() async {
-    final name = await showAppDialog<String>(
+    final room = await showAppDialog<NewRoom>(
       context: context,
-      builder: (_) => const _PromptDialog(
-        title: 'New room',
-        label: 'Room name',
-        confirmLabel: 'Create',
-      ),
+      builder: (_) => const NewRoomDialog(),
     );
-    if (name == null || name.trim().isEmpty || !mounted) return;
+    if (room == null || !mounted) return;
     setState(() => _busy = true);
     try {
-      await widget.dependencies.service.createRoom(_space.id, name.trim(), '');
+      await widget.dependencies.service.createRoom(_space.id, room.name, '',
+          purpose: room.purpose, icon: room.icon, color: room.color);
       final rooms =
           await widget.dependencies.service.fetchRoomsForSpace(_space.id);
       if (!mounted) return;
@@ -514,6 +513,21 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
           ),
         ),
         const SizedBox(height: 14),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.smart_toy_outlined),
+          title: const Text('Agents'),
+          subtitle: const Text(
+              'Responsibilities, demonstrations, the computer, its network, credentials, policy and audit'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => openPanel(
+              context,
+              ProjectAgentsPanel(
+                  dependencies: widget.dependencies,
+                  space: _space.id,
+                  title: _space.name)),
+        ),
+        const SizedBox(height: 6),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Public workspace'),

@@ -59,9 +59,12 @@ func (s *Service) roomUpdate(ctx context.Context, req *api.ActionRequest) (*api.
 		return nil, err
 	}
 	var in struct {
-		Room  string  `json:"room"`
-		Name  *string `json:"name"`
-		Topic *string `json:"topic"`
+		Room    string  `json:"room"`
+		Name    *string `json:"name"`
+		Topic   *string `json:"topic"`
+		Purpose *string `json:"purpose"`
+		Icon    *string `json:"icon"`
+		Color   *string `json:"color"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
@@ -85,6 +88,18 @@ func (s *Service) roomUpdate(ctx context.Context, req *api.ActionRequest) (*api.
 	}
 	if in.Topic != nil {
 		r.Topic = *in.Topic
+	}
+	if in.Purpose != nil {
+		r.Purpose = clipRoomText(*in.Purpose, 1000)
+	}
+	if in.Icon != nil {
+		r.Icon = *in.Icon
+	}
+	if in.Color != nil {
+		r.Color = *in.Color
+	}
+	if err := validRoomLook(r.Icon, r.Color); err != nil {
+		return nil, err
 	}
 	r.UpdatedAt = time.Now().UTC()
 	if err = s.R.Update(ctx, "rooms", id, r); err != nil {

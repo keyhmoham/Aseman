@@ -86,6 +86,18 @@ func TestCodeModeOpenAPIFromApps(t *testing.T) {
 	}
 }
 
+// With Code Mode on, the agents see a platform builtin only under
+// /platform/{name}: one missing here is unreachable (ui_present once was).
+func TestCodeModeServesEveryPlatformBuiltin(t *testing.T) {
+	native := map[string]bool{"sandbox_exec": true, "file_edit": true, "file_read": true,
+		"message_send": true, "room_info": true, "ask_user": true}
+	for _, tool := range vmm.BuiltinsFor(true) {
+		if !native[tool.Name] && !codeModePlatform[tool.Name] {
+			t.Errorf("builtin %s is neither native nor served under /platform", tool.Name)
+		}
+	}
+}
+
 func TestCodeModeRequestPathRouting(t *testing.T) {
 	cases := []struct {
 		path string

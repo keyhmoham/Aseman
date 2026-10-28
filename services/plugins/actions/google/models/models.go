@@ -20,6 +20,10 @@ type Settings struct {
 	ClientID     string `db:"client_id" json:"client_id"`
 	ClientSecret string `db:"client_secret" json:"-"`
 	UpdatedBy    string `db:"updated_by" json:"updated_by,omitempty"`
+	// AppKey (sealed) is what the Google app's calls carry to this node's
+	// MCP endpoint; AppBot is that app in the Apps catalog.
+	AppKey string `db:"app_key" json:"-"`
+	AppBot string `db:"app_bot" json:"app_bot,omitempty"`
 }
 
 // Connection states.
@@ -62,7 +66,7 @@ func base(fields ...database.Field) []database.Field {
 func Models() []database.Model {
 	return []database.Model{
 		{Name: "google_settings", Table: "google_settings", Fields: base(f("enabled", database.KindBool), f("client_id", database.KindString),
-			f("client_secret", database.KindString), f("updated_by", database.KindString))},
+			f("client_secret", database.KindString), f("updated_by", database.KindString), f("app_key", database.KindString), f("app_bot", database.KindString))},
 		{Name: "google_connections", Table: "google_connections", Fields: base(f("email", database.KindString), f("scopes", database.KindJSON),
 			f("refresh_token", database.KindString), f("status", database.KindString), f("last_error", database.KindString),
 			f("connected_at", database.KindTime), f("fake", database.KindBool))},

@@ -31,7 +31,7 @@ func (s *Service) actions() []api.Action {
 func (s *Service) status(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	st, _, err := s.settings(ctx)
 	offered := err == nil && st.Enabled
-	out := map[string]any{"offered": offered, "connected": false, "fake": s.endpoints().Fake}
+	out := map[string]any{"offered": offered, "connected": false, "fake": s.endpoints().Fake, "app_bot": s.AppBot(ctx)}
 	if c, err := s.connection(ctx, req.Caller.ID.String()); err == nil {
 		out["connected"] = c.Status == gm.StatusConnected
 		out["connection"] = c
@@ -104,5 +104,15 @@ func (s *Service) adminSet(ctx context.Context, req *api.ActionRequest) (*api.Ac
 	if err != nil {
 		return nil, err
 	}
-	return helper.JSON(map[string]any{"enabled": st.Enabled, "client_id": st.ClientID, "has_secret": st.ClientSecret != ""})
+	out := map[string]any{"enabled": st.Enabled, "client_id": st.ClientID, "has_secret": st.ClientSecret != ""}
+	// Turning Google on lists the Google app in the Apps catalog.
+	if st.Enabled {
+		bot, err := s.EnsureApp(ctx, req.Caller.ID)
+		if err != nil {
+			out["app_error"] = "Saved, but the Google app could not be listed yet (" + err.Error() + "); the node retries."
+			go s.keepAppListed(context.WithoutCancel(ctx))
+		}
+		out["app_bot"] = bot
+	}
+	return helper.JSON(out)
 }

@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../app_dependencies.dart';
 import 'assistant_common.dart';
 
-/// The person's connections and what their assistant does on its own:
-/// Gmail and Calendar, Slack, Teams and SMS, background research and the
-/// morning brief.
+/// Where the person reaches their assistant and what it does on its own:
+/// Slack, Teams and SMS, background research and the morning brief. Accounts
+/// like Google are apps: they are added and connected in Apps.
 class ConnectionsPanel extends StatelessWidget {
   const ConnectionsPanel({super.key, required this.dependencies});
   final AppDependencies dependencies;
@@ -40,12 +39,19 @@ class ConnectionsPanel extends StatelessWidget {
     title: 'Connections',
     load: _load,
     build: (context, data, reload) {
-      final google = jsonMap(data['google']);
       final channels = jsonMap(data['channels']);
       final settings = jsonMap(jsonMap(data['proactive'])['settings']);
       return ListView(
         children: [
-          if (google['missing'] != true) _google(context, google, reload),
+          const PanelSection(
+            title: 'Gmail, Calendar and other accounts',
+            children: [
+              Text(
+                'Accounts are apps: add Google (or another app) to a project from its Apps, '
+                'and connect your own account there. Connecting Google adds it to your home project.',
+              ),
+            ],
+          ),
           if (channels['missing'] != true) _channels(context, channels, reload),
           if (settings.isNotEmpty) _proactive(context, settings, reload),
           const SizedBox(height: 32),
@@ -53,83 +59,6 @@ class ConnectionsPanel extends StatelessWidget {
       );
     },
   );
-
-  Widget _google(
-    BuildContext context,
-    Map<String, dynamic> g,
-    Future<void> Function() reload,
-  ) {
-    final connected = g['connected'] == true;
-    final connection = jsonMap(g['connection']);
-    return PanelSection(
-      title: 'Gmail and Calendar',
-      subtitle:
-          'Your agents read your mail and calendar for triage and the morning brief, draft replies, and ask before they send.',
-      children: [
-        if (g['offered'] != true)
-          const Text(
-            'Not offered on this node yet: an administrator adds Google under Admin → Connections.',
-          )
-        else if (connected)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.mark_email_read_outlined),
-            title: Text('${connection['email'] ?? 'Connected'}'),
-            subtitle: const Text('Connected'),
-            trailing: TextButton(
-              onPressed: () async {
-                final out = await runAction(
-                  context,
-                  dependencies,
-                  'google',
-                  'disconnect',
-                  const {},
-                  'Disconnected',
-                );
-                if (out != null) await reload();
-              },
-              child: const Text('Disconnect'),
-            ),
-          )
-        else
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilledButton.icon(
-              icon: const Icon(Icons.link_rounded),
-              label: const Text('Connect Google'),
-              onPressed: () async {
-                final out = await runAction(
-                  context,
-                  dependencies,
-                  'google',
-                  'connect_start',
-                );
-                final url = Uri.tryParse('${out?['url'] ?? ''}');
-                if (url == null || !url.hasScheme) return;
-                await launchUrl(url, mode: LaunchMode.externalApplication);
-                if (!context.mounted) return;
-                await showDialog<void>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Finish in your browser'),
-                    content: const Text(
-                      'Sign in to Google there, then come back.',
-                    ),
-                    actions: [
-                      FilledButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Done'),
-                      ),
-                    ],
-                  ),
-                );
-                await reload();
-              },
-            ),
-          ),
-      ],
-    );
-  }
 
   Widget _channels(
     BuildContext context,

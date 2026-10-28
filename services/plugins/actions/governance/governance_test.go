@@ -422,3 +422,21 @@ func TestHostAndChannelToolsAreTheirOwnKinds(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestAppFunctionsAreJudgedByWhatTheyDo(t *testing.T) {
+	ask := func(body string) gate.Request {
+		args, _ := json.Marshal(map[string]any{"bot": "google", "body": body})
+		return Normalize(gate.Request{Kind: gate.KindPlatform, Tool: "spaces.ask", Args: args})
+	}
+	read := ask(`{"function":"gmail_search","payload":{"query":"is:unread"}}`)
+	if read.Kind != gate.KindApp || read.Function != "gmail_search" || read.Effect != gate.EffectRead {
+		t.Fatalf("searching mail reads, though its name says mail: %+v", read)
+	}
+	send := ask(`{"function":"gmail_send","payload":{"to":"a@b.example","body":"hi"}}`)
+	if send.Effect != gate.EffectSend || !strings.Contains(string(send.Args), "a@b.example") {
+		t.Fatalf("sending sends, with its payload as the arguments: %+v", send)
+	}
+	if free := ask("what is on today?"); free.Function != "ask" {
+		t.Fatalf("a free-text question stays an ask: %+v", free)
+	}
+}

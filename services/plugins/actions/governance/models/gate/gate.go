@@ -183,8 +183,6 @@ type ToolCall struct {
 // toolOwners are the agent tools other namespaces serve.
 var toolOwners = map[string]string{
 	"secret_request": "governance", "computer_help": "governance",
-	"gmail_search": "google", "gmail_read": "google", "gmail_draft": "google", "gmail_send": "google",
-	"calendar_events": "google", "calendar_create": "google",
 	"offer_task": "proactive", "task_update": "proactive",
 	"host_exec": "hostaccess", "host_read": "hostaccess", "host_write": "hostaccess", "host_list": "hostaccess",
 	"folder_list": "hostaccess", "folder_read": "hostaccess", "folder_write": "hostaccess",

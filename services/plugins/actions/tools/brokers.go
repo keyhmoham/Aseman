@@ -39,6 +39,8 @@ type broker struct {
 	URLHint     string            `json:"url_hint"`
 	Headers     map[string]string `json:"headers"`
 	Docs        string            `json:"docs"`
+	// Connect is where each person connects their own accounts.
+	Connect string `json:"connect"`
 }
 
 var brokers = []broker{
@@ -46,12 +48,12 @@ var brokers = []broker{
 		Description: "Hundreds of apps (Gmail, Slack, GitHub, Notion, HubSpot, ...) through one MCP server; each person connects their own accounts at Composio.",
 		URLHint:     "https://backend.composio.dev/v3/mcp/<server-id>/mcp",
 		Headers:     map[string]string{"x-api-key": "{{key}}", "x-user-id": actorPlaceholder},
-		Docs:        "https://docs.composio.dev"},
+		Docs:        "https://docs.composio.dev", Connect: "https://app.composio.dev"},
 	{ID: "arcade", Name: "Arcade", Site: "arcade.dev",
 		Description: "Authenticated tools for Google, Microsoft, Slack, GitHub and more through Arcade's MCP gateway; each person authorizes their own accounts at Arcade.",
 		URLHint:     "https://api.arcade.dev/mcp/<gateway-slug>",
 		Headers:     map[string]string{"Authorization": "Bearer {{key}}", "Arcade-User-ID": actorPlaceholder},
-		Docs:        "https://docs.arcade.dev"},
+		Docs:        "https://docs.arcade.dev", Connect: "https://api.arcade.dev/dashboard"},
 }
 
 func brokerActions(s *Service) []api.Action {
@@ -102,7 +104,8 @@ func (s *Service) brokerAdd(ctx context.Context, req *api.ActionRequest) (*api.A
 		name = preset.Name
 	}
 	out, err := s.registerMCP(ctx, req, mcpInput{Name: name, URL: strings.TrimSpace(in.URL), Headers: headers, Listed: true,
-		Descriptor: map[string]any{"description": preset.Description, "site": preset.Site, "broker": preset.ID}})
+		Descriptor: map[string]any{"description": preset.Description, "site": preset.Site, "broker": preset.ID,
+			"connect": map[string]any{"url": preset.Connect, "label": "your accounts at " + preset.Name}}})
 	if err != nil {
 		return nil, err
 	}

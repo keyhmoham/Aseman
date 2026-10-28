@@ -34,6 +34,7 @@ var toolEffects = map[string]string{
 	"desk_state": gate.EffectRead, "db_tables": gate.EffectRead, "db_read": gate.EffectRead,
 	"secret_request": gate.EffectRead, "computer_help": gate.EffectRead, "offer_task": gate.EffectRead,
 	"routine_delete": gate.EffectDelete, "proxy_delete": gate.EffectDelete,
+	// The Google app's functions.
 	"gmail_search": gate.EffectRead, "gmail_read": gate.EffectRead, "gmail_draft": gate.EffectWrite, "gmail_send": gate.EffectSend,
 	"calendar_events": gate.EffectRead, "calendar_create": gate.EffectSend,
 	"host_read": gate.EffectRead, "host_list": gate.EffectRead, "host_write": gate.EffectWrite, "host_exec": gate.EffectWrite,
@@ -224,10 +225,23 @@ func Normalize(req gate.Request) gate.Request {
 			req.Kind, req.Tool, req.Command = gate.KindSandbox, "sandbox_exec", argString(args, "body")
 		} else {
 			req.Kind, req.App = gate.KindApp, bot
+			req.Text = argString(args, "body")
+			// A call of one of the app's functions names it in the body:
+			// {"function": "...", "payload": {...}}.
+			if call, ok := decodeJSON(json.RawMessage(req.Text)).(map[string]any); ok {
+				if fn := argString(call, "function"); fn != "" && req.Function == "" {
+					req.Function = fn
+					payload, _ := call["payload"].(map[string]any)
+					if payload == nil {
+						payload = map[string]any{}
+					}
+					raw, _ := json.Marshal(payload)
+					req.Args, args, req.Text = raw, payload, ""
+				}
+			}
 			if req.Function == "" {
 				req.Function = "ask"
 			}
-			req.Text = argString(args, "body")
 		}
 	}
 	// The person's own computer and outside messaging are kinds of their own,
@@ -298,6 +312,10 @@ func effectOf(req gate.Request) string {
 		}
 		if name == "" || name == "ask" {
 			return gate.EffectWrite
+		}
+		// Functions the platform knows (the Google app's, say) by what they do.
+		if e, ok := toolEffects[name]; ok {
+			return e
 		}
 		return effectFromName(name)
 	case gate.KindAgent:

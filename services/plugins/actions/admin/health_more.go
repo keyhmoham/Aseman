@@ -126,9 +126,9 @@ func (s *Service) moreHealth(ctx context.Context, r *repo.Repo, add func(healthC
 	if loaded("google") {
 		if enabledRow("google_settings", map[string]any{"enabled": true}) {
 			people, _ := r.Count(ctx, "google_connections", database.Filter{Equal: map[string]any{"status": "connected"}})
-			add(healthCheck{ID: "google_mail", Group: "Connections", Label: "Gmail and Calendar", Status: "ok", Detail: itoa(people) + " people connected"})
+			add(healthCheck{ID: "google_mail", Group: "Connections", Label: "Gmail and Calendar", Status: "ok", Detail: itoa(people) + " people connected their Google account"})
 		} else {
-			add(healthCheck{ID: "google_mail", Group: "Connections", Label: "Gmail and Calendar", Status: "warn", Detail: "No OAuth client: people cannot connect their mail, so there is no morning brief or triage.", Fix: "Admin → Connections → Google"})
+			add(healthCheck{ID: "google_mail", Group: "Connections", Label: "Gmail and Calendar", Status: "warn", Detail: "No OAuth client: the Google app is not in the Apps catalog, so there is no morning brief or triage.", Fix: "Admin → Catalog → Connector apps"})
 		}
 	}
 	if loaded("channels") {

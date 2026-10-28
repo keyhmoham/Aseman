@@ -338,7 +338,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _SettingsTile(
                         icon: Icons.hub_outlined,
                         title: 'Connections',
-                        subtitle: 'Gmail and Calendar, Slack, Teams, SMS, and what runs on its own',
+                        subtitle: 'Slack, Teams, SMS, and what runs on its own',
                         onTap: () => _openAssistant(
                             (deps) => ConnectionsPanel(dependencies: deps))),
                     _SettingsTile(

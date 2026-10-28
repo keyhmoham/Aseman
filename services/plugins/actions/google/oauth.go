@@ -5,17 +5,20 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/internal/plugins/entity"
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/crypto"
 	"github.com/aseman/aseman/pkg/errs"
 	gm "github.com/aseman/aseman/plugins/actions/google/models"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
@@ -85,7 +88,7 @@ func (s *Service) StartConnect(ctx context.Context, accountID identity.ID, retur
 func safeReturn(p string) string {
 	p = strings.TrimSpace(p)
 	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.Contains(p, "\\") {
-		return "/connections"
+		return "/"
 	}
 	return p
 }
@@ -152,7 +155,29 @@ func (s *Service) FinishConnect(ctx context.Context, stateID, code string) (*gm.
 	s.mu.Lock()
 	s.tokens[state.AccountID] = accessToken{value: tok.AccessToken, expires: now.Add(time.Duration(max(tok.ExpiresIn, 60)) * time.Second)}
 	s.mu.Unlock()
+	s.addAppHome(ctx, account)
 	return c, state.Return, nil
+}
+
+// addAppHome adds the Google app to the person's home project once they
+// connect, so their own assistant can use it at once; other projects add it
+// from Apps like any app. Best effort.
+func (s *Service) addAppHome(ctx context.Context, account identity.ID) {
+	bot := s.AppBot(ctx)
+	if bot == "" || s.K == nil || s.K.Actions() == nil {
+		return
+	}
+	var spaces []struct {
+		ID string `json:"id"`
+	}
+	if err := s.R.List(ctx, "spaces", database.Filter{Equal: map[string]any{"owner_id": account.String(), "home": true}, Limit: 1}, &spaces); err != nil || len(spaces) == 0 {
+		return
+	}
+	body, _ := json.Marshal(map[string]any{"space": spaces[0].ID, "bot": bot})
+	if _, err := s.K.Actions().Dispatch(ctx, "spaces", "bot_add", &api.ActionRequest{Caller: api.Caller{ID: account, Kind: "user"}, Body: body}); err != nil &&
+		errs.CodeOf(err) != errs.CodeAlreadyExists && errs.CodeOf(err) != errs.CodeConflict && s.L != nil {
+		s.L.Warn("add the Google app to the home project", "error", err)
+	}
 }
 
 // serveCallback finishes a consent in the browser and sends the person back
@@ -161,11 +186,11 @@ func (s *Service) serveCallback(ctx context.Context, req *network.Request) (*net
 	q := req.Query
 	target := appURL()
 	if e := q.Get("error"); e != "" {
-		return redirect(target + "/connections?google=" + url.QueryEscape("refused: "+e)), nil
+		return redirect(target + "/?google=" + url.QueryEscape("refused: "+e)), nil
 	}
 	_, ret, err := s.FinishConnect(ctx, q.Get("state"), q.Get("code"))
 	if ret == "" {
-		ret = "/connections"
+		ret = "/"
 	}
 	sep := "?"
 	if strings.Contains(ret, "?") {

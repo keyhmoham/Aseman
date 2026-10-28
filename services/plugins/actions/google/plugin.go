@@ -23,10 +23,19 @@ func NewPlugin() api.Plugin {
 				}
 				var err error
 				release, err = binder.BindRoutes("google", func(n network.Network) error {
-					return n.Handle(network.MethodGet, CallbackPath, s.serveCallback)
-				}, func(n network.Network) error { return n.Unhandle(network.MethodGet, CallbackPath) })
+					if err := n.Handle(network.MethodGet, CallbackPath, s.serveCallback); err != nil {
+						return err
+					}
+					return n.Handle(network.MethodPost, MCPPath, s.serveMCP)
+				}, func(n network.Network) error {
+					_ = n.Unhandle(network.MethodPost, MCPPath)
+					return n.Unhandle(network.MethodGet, CallbackPath)
+				})
 				return err
 			},
+			// A node that had Google on before it was an app lists it once the
+			// node answers its own calls.
+			Run: s.keepAppListed,
 			Close: func(context.Context) error {
 				if release != nil {
 					release()

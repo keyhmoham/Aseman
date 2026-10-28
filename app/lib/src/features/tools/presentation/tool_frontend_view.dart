@@ -87,7 +87,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
         try {
           final state =
               await service.toolConnection(widget.botId, widget.spaceId);
-          if (state.auth == 'user' && !state.connected) {
+          if (personalApp(state.auth) && !state.connected) {
             if (!mounted) return;
             setState(() {
               _needsAccount = state.name.isEmpty ? 'this app' : state.name;

@@ -574,6 +574,21 @@ func (s *Service) connectionSet(ctx context.Context, req *api.ActionRequest) (*a
 	return helper.JSON(map[string]any{"ok": true, "connected": in.Token != ""})
 }
 
+// accountConnected reports whether the caller connected their account to a
+// connector app. A namespace answers for its own (Connected); accounts kept
+// at a broker are the broker's to know, so those read as connected.
+func (s *Service) accountConnected(ctx context.Context, connect map[string]any, caller identity.ID) bool {
+	ns, _ := connect["namespace"].(string)
+	if ns == "" {
+		return true
+	}
+	var ok bool
+	if e := bridge.Invoke(ctx, s.K, ns, "Connected", []any{ctx, caller.String()}, &ok); e != nil {
+		return false
+	}
+	return ok
+}
+
 // hasConnection reports whether the actor stored a credential for a tool in a space.
 func (s *Service) hasConnection(ctx context.Context, actor identity.ID, space, bot string) bool {
 	var row models.Connection
@@ -767,10 +782,20 @@ func (s *Service) commandsList(ctx context.Context, req *api.ActionRequest) (*ap
 			}
 		}
 		avatar := ""
+		var connect map[string]any
 		if m, e := (&metasvc.Service{K: s.K, R: s.R}).Get(ctx, rec.AccountID); e == nil && m != nil {
 			avatar = helper.TreeAvatar(m.Tree)
+			if d, ok := m.Tree["descriptor"].(map[string]any); ok {
+				connect, _ = d["connect"].(map[string]any)
+			}
 		}
-		out = append(out, map[string]any{"bot_id": r.BotID, "name": rec.Name, "auth": r.Auth, "connected": connected, "commands": commands, "avatar": avatar})
+		row := map[string]any{"bot_id": r.BotID, "name": rec.Name, "auth": r.Auth, "connected": connected, "commands": commands, "avatar": avatar}
+		if connect != nil {
+			// A connector app: each person connects an account of their own,
+			// through the namespace serving it (Google) or at the broker.
+			row["auth"], row["connect"], row["connected"] = "account", connect, s.accountConnected(ctx, connect, req.Caller.ID)
+		}
+		out = append(out, row)
 	}
 	if in.Bot != "" && len(out) > 0 {
 		return helper.JSON(out[0])

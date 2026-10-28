@@ -149,6 +149,9 @@ class _AppScreenState extends State<AdminScreen> {
             _Call('market', 'publish'),
             _Call('market', 'unpublish'),
           ]),
+      _Page('Connector apps', 'Google, Composio and Arcade, in the Apps catalog',
+          Icons.hub_outlined, Icons.hub_rounded,
+          custom: adminConnectorAppsPage),
       _Page('Talent', 'People listed for hire', Icons.badge_outlined,
           Icons.badge_rounded,
           calls: [
@@ -241,16 +244,10 @@ class _AppScreenState extends State<AdminScreen> {
           Icons.computer_outlined, Icons.computer_rounded,
           custom: adminHostAccessPage),
     ]),
-    _Section('Connections', [
-      _Page('Google', 'Gmail and Calendar for everyone',
-          Icons.mail_outline_rounded, Icons.mail_rounded,
-          custom: adminGooglePage),
+    _Section('Channels', [
       _Page('Slack, Teams, SMS', 'Where people reach their agents',
           Icons.forum_outlined, Icons.forum_rounded,
           custom: adminChannelsPage),
-      _Page('Tool brokers', 'Composio and Arcade',
-          Icons.hub_outlined, Icons.hub_rounded,
-          custom: adminBrokersPage),
     ]),
     _Section('Enterprise', [
       _Page('Single sign-on', 'OpenID Connect providers',

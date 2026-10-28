@@ -550,6 +550,18 @@ class AsemanService implements BackendService {
     );
   }
 
+  /// How a person connects their own account to a connector app (Google, a
+  /// broker like Composio): its `connect` description ({namespace, start,
+  /// status, disconnect} or {url}), or null for any other app.
+  Future<Map<String, dynamic>?> appAccount(String botId, String spaceId) async {
+    final resp = await client
+        .call('tools', 'commands_list', body: {'bot': botId, 'space': spaceId});
+    final m = (resp.body as Map?) ?? const {};
+    final connect = m['connect'];
+    if (m['auth'] != 'account' || connect is! Map) return null;
+    return connect.cast<String, dynamic>();
+  }
+
   /// Every tool's connection state in a project, by bot id.
   Future<Map<String, ({String auth, bool connected, String name})>>
       toolConnections(String spaceId) async {

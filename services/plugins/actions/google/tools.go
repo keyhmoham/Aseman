@@ -9,30 +9,21 @@ import (
 
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/pkg/untrusted"
-	"github.com/aseman/aseman/plugins/actions/governance/models/gate"
 )
 
-// agentTools are the tools this namespace serves agents.
-var agentTools = []string{"gmail_search", "gmail_read", "gmail_draft", "gmail_send", "calendar_events", "calendar_create"}
-
-// AvailableTools offers mail and calendar to agents working for a person who
-// connected Google.
-func (s *Service) AvailableTools(ctx context.Context, actor, space string) ([]string, error) {
+// callTool runs one of the Google app's functions for [actor], with their own
+// Google connection. What it reads from mail is outside content and arrives
+// in the untrusted envelope.
+func (s *Service) callTool(ctx context.Context, actor, tool string, raw json.RawMessage) (string, error) {
+	if !s.isPerson(ctx, actor) {
+		return "", errs.Permission("mail and calendar act for a person; this call has none")
+	}
 	if !s.Connected(ctx, actor) {
-		return []string{}, nil
+		return "", errs.New(errs.CodeUnavailable, "this person has not connected their Google account")
 	}
-	return agentTools, nil
-}
-
-// AgentTool serves an agent's mail or calendar call, as the person it works
-// for. What it reads from mail is outside content and arrives in the
-// untrusted envelope.
-func (s *Service) AgentTool(ctx context.Context, call gate.ToolCall) (string, error) {
-	if !s.isPerson(ctx, call.ActorID) {
-		return "", errs.Permission("mail and calendar act for a person; this run has none")
-	}
+	call := struct{ Tool, ActorID string }{tool, actor}
 	var args map[string]any
-	_ = json.Unmarshal([]byte(call.Args), &args)
+	_ = json.Unmarshal(raw, &args)
 	str := func(k string) string {
 		v, _ := args[k].(string)
 		return strings.TrimSpace(v)

@@ -88,7 +88,7 @@ func (s *Service) Research(ctx context.Context, owner identity.ID) (string, erro
 	started := s.now().UTC()
 	hours := int(time.Since(since).Hours()) + 1
 	prompt := fmt.Sprintf(`Background check-in for the person (nobody is watching; you can only read).
-Look at what is new since %s: their mail (gmail_search "in:inbox newer_than:%dh"), their calendar for the next two days (calendar_events), and anything a message refers to.
+Look at what is new since %s: their mail (the Google app's gmail_search "in:inbox newer_than:%dh"), their calendar for the next two days (its calendar_events), and anything a message refers to.
 If something likely needs doing — a reply owed, a deadline, a meeting to prepare for, a follow-up — suggest it with offer_task: a short imperative title, what you found, and why it matters now. At most three suggestions, none already suggested.
 Do not send, draft, schedule or change anything, and do not message anyone: those are refused in a check-in. If nothing is worth suggesting, answer exactly "nothing new".`,
 		since.Format(time.RFC1123), hours)
@@ -171,7 +171,7 @@ func (s *Service) FirstDay(ctx context.Context, owner identity.ID, tz string) (m
 	}
 	var prompt string
 	if connected {
-		prompt = `This is the person's first day with you. Speak first. Read their recent mail (gmail_search "newer_than:14d", then gmail_read the few that tell you most) and this week's calendar (calendar_events for the next 7 days).
+		prompt = `This is the person's first day with you. Speak first. Read their recent mail with the Google app (gmail_search "newer_than:14d", then gmail_read the few that tell you most) and this week's calendar (its calendar_events for the next 7 days).
 Then answer in exactly three short messages, separated by a line with only "---":
 1. Who you think they are and what their work looks like, from what you read (two or three sentences, concrete).
 2. Three specific ways you can help this week, from what you saw.

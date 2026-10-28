@@ -47,7 +47,7 @@ class _ToolScreenState extends State<ToolScreen> {
     super.initState();
     _api.get(widget.bot.id).then((info) {
       if (mounted) setState(() => _info = info);
-      if (info.auth == 'user' && widget.spaceId.isNotEmpty) _checkConnection();
+      if (widget.spaceId.isNotEmpty) _checkConnection();
     }).catchError((Object _) {});
   }
 
@@ -55,7 +55,10 @@ class _ToolScreenState extends State<ToolScreen> {
     try {
       final state = await widget.dependencies.service
           .toolConnection(widget.bot.id, widget.spaceId);
-      if (mounted) setState(() => _connected = state.connected);
+      // Only an app each person connects to has a connection to show.
+      if (mounted && personalApp(state.auth)) {
+        setState(() => _connected = state.connected);
+      }
     } catch (_) {}
   }
 

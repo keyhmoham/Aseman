@@ -1338,14 +1338,14 @@ class _LibraryPanel extends StatelessWidget {
             final connect = onConnectApp;
             return _LibraryToolCard(
                 label: bot.name,
-                subtitle: connection?.auth == 'user' && !connection!.connected
+                subtitle: personalApp(connection?.auth ?? '') && !connection!.connected
                     ? 'Needs your sign-in'
                     : '${bot.toolModeLabel} · ${bot.status}',
                 icon: Icons.widgets_outlined,
                 dependencies: dependencies,
                 spaceId: spaceId,
                 connected: connection?.connected ?? true,
-                onConnect: connect == null || connection?.auth != 'user'
+                onConnect: connect == null || !personalApp(connection?.auth ?? '')
                     ? null
                     : () => connect(bot, connection!.connected),
                 onTap: () => onOpenApp?.call(bot),

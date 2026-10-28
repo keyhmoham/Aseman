@@ -121,7 +121,7 @@ class _AddAppDialogState extends State<AddAppDialog> {
     await widget.service.addBotToSpace(widget.spaceId, botId);
     if (!mounted) return;
     setState(() => _step = null);
-    if (auth == 'user') {
+    if (personalApp(auth)) {
       final connected = await connectMcpTool(context, widget.service,
           botId: botId, spaceId: widget.spaceId, name: name);
       if (!connected) {
@@ -269,7 +269,7 @@ class _AddAppDialogState extends State<AddAppDialog> {
                           height: 28,
                           child: Icon(Icons.hub_outlined))),
                   title: Text(t.name.isEmpty ? t.id : t.name),
-                  subtitle: Text(t.auth == 'user'
+                  subtitle: Text(personalApp(t.auth)
                       ? 'Sign in with your own account'
                       : 'Ready to use'),
                   trailing: _busy == t.id

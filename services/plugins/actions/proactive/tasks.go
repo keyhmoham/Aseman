@@ -99,7 +99,7 @@ func taskPrompt(t *pm.Task) string {
 		b.WriteString("Why: " + t.Reason + "\n")
 	}
 	if strings.HasPrefix(t.Source, "mail:") {
-		b.WriteString("It is about the email " + strings.TrimPrefix(t.Source, "mail:") + ": read it with gmail_read first.\n")
+		b.WriteString("It is about the email " + strings.TrimPrefix(t.Source, "mail:") + ": read it with the Google app's gmail_read first.\n")
 	}
 	b.WriteString("Do it. When you need the person, call task_update with status needs_input and the question; " +
 		"when it is done, call task_update with status ready_for_review and a one-line summary. " +

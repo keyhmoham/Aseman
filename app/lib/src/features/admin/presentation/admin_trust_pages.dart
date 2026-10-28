@@ -17,11 +17,32 @@ Widget adminAuditPage(AppDependencies deps) =>
 Widget adminHostAccessPage(AppDependencies deps) =>
     _Padded(_HostAccessAdmin(deps));
 
-Widget adminGooglePage(AppDependencies deps) => _Padded(_GoogleAdmin(deps));
+/// Connector apps: apps whose people connect an account of their own
+/// (Google, through this node's OAuth client; Composio and Arcade, through
+/// the broker). Set up here, they are listed in the Apps catalog like any
+/// app, and people add and connect them from Apps.
+Widget adminConnectorAppsPage(AppDependencies deps) => _Padded(
+  Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const Text(
+        'Google',
+        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+      ),
+      const SizedBox(height: 6),
+      _GoogleAdmin(deps),
+      const Divider(height: 40),
+      const Text(
+        'Composio and Arcade',
+        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+      ),
+      const SizedBox(height: 6),
+      _BrokersAdmin(deps),
+    ],
+  ),
+);
 
 Widget adminChannelsPage(AppDependencies deps) => _Padded(_ChannelsAdmin(deps));
-
-Widget adminBrokersPage(AppDependencies deps) => _Padded(_BrokersAdmin(deps));
 
 Widget adminSsoPage(AppDependencies deps) => _Padded(_SsoAdmin(deps));
 

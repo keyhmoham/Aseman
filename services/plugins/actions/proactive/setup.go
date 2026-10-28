@@ -53,11 +53,11 @@ func (s *Service) Setup(ctx context.Context, owner identity.ID, notifications st
 	}
 	switch {
 	case !offered:
-		add(SetupItem{ID: "google_node", Label: "Google on this node", Status: "needs_setup", Detail: "The node has no Google OAuth client, so mail and calendar cannot be connected.", Fix: "An administrator adds it under Admin → Connections → Google."})
+		add(SetupItem{ID: "google_node", Label: "Google on this node", Status: "needs_setup", Detail: "The node has no Google OAuth client, so mail and calendar cannot be connected.", Fix: "An administrator sets it up under Admin → Catalog → Connector apps."})
 	case s.Google != nil && s.Google.Connected(ctx, owner.String()):
 		add(SetupItem{ID: "google", Label: "Your Gmail and Calendar", Status: "ready", Detail: "Connected: triage, the morning brief and background research use them."})
 	default:
-		add(SetupItem{ID: "google", Label: "Your Gmail and Calendar", Status: "needs_setup", Detail: "Not connected: there is no brief or triage without them.", Fix: "Connections → Google → Connect."})
+		add(SetupItem{ID: "google", Label: "Your Gmail and Calendar", Status: "needs_setup", Detail: "Not connected: there is no brief or triage without them.", Fix: "Apps → Google → Connect (it is added to your home project)."})
 	}
 
 	// Notifications on this device.

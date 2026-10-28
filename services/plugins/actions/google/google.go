@@ -74,6 +74,11 @@ type Service struct {
 	// ep is fixed in tests; otherwise read on each use.
 	ep *endpoints
 
+	// Register lists the Google app in the catalog (tools.mcp_register when nil).
+	Register AppRegistrar
+	// listedCheck replaces the catalog lookup in tests.
+	listedCheck func(bot string) bool
+
 	mu     sync.Mutex
 	tokens map[string]accessToken
 }
@@ -104,7 +109,7 @@ func (s *Service) settings(ctx context.Context) (gm.Settings, string, error) {
 	id, _ := identity.Parse(gm.SettingsID)
 	if err := s.R.Get(ctx, "google_settings", id, &st); err != nil {
 		if errs.CodeOf(err) == errs.CodeNotFound {
-			return gm.Settings{}, "", errs.New(errs.CodeUnavailable, "Google is not set up on this node: an administrator adds the OAuth client under Admin → Connections")
+			return gm.Settings{}, "", errs.New(errs.CodeUnavailable, "Google is not set up on this node: an administrator sets up the Google app under Admin → Catalog → Connector apps")
 		}
 		return gm.Settings{}, "", err
 	}

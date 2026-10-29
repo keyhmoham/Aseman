@@ -445,6 +445,11 @@ class Runner:
         blocks: list[dict[str, Any]] = []
         room = ATTACHMENTS_MAX_CHARS
         for att in turn.attachments:
+            if att.get("mime") == "inode/directory":
+                # A folder of a project computer: its content says where it is
+                # and how to work in it (the folder tools), not read_attachment.
+                parts.append(f"\nAttached folder {att.get('name', '')}:\n{att.get('content', '')}")
+                continue
             line = f"\nAttached file {att.get('name', '')} (file id {att.get('id', '')}, {att.get('mime', '')})"
             if att.get("content") and room > 0:
                 shown = att["content"][:min(20000, room)]

@@ -67,7 +67,7 @@ class TasksPanel extends StatelessWidget {
       final brief = jsonMap(jsonMap(data['brief'])['brief']);
       return ListView(
         children: [
-          if (brief.isNotEmpty) _BriefCard(brief: brief),
+          if (brief.isNotEmpty) BriefCard(brief: brief),
           if (tasks.isEmpty)
             const Padding(
               padding: EdgeInsets.all(24),
@@ -81,7 +81,7 @@ class TasksPanel extends StatelessWidget {
                 title: _labels[status]!,
                 children: [
                   for (final t in tasks.where((t) => t['status'] == status))
-                    _TaskTile(
+                    TaskTile(
                       task: t,
                       dependencies: dependencies,
                       reload: reload,
@@ -95,9 +95,14 @@ class TasksPanel extends StatelessWidget {
   );
 }
 
-class _BriefCard extends StatelessWidget {
-  const _BriefCard({required this.brief});
+class BriefCard extends StatelessWidget {
+  const BriefCard({
+    super.key,
+    required this.brief,
+    this.margin = const EdgeInsets.fromLTRB(16, 16, 16, 0),
+  });
   final Map<String, dynamic> brief;
+  final EdgeInsetsGeometry margin;
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +118,7 @@ class _BriefCard extends StatelessWidget {
     }
 
     return Card(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      margin: margin,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -190,8 +195,9 @@ class _BriefCard extends StatelessWidget {
   );
 }
 
-class _TaskTile extends StatelessWidget {
-  const _TaskTile({
+class TaskTile extends StatelessWidget {
+  const TaskTile({
+    super.key,
     required this.task,
     required this.dependencies,
     required this.reload,

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aseman/aseman/internal/plugins/bridge"
 	"github.com/aseman/aseman/internal/plugins/entity"
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
@@ -209,6 +210,13 @@ func (s *Service) enrichMessages(ctx context.Context, msgs []message.Message) []
 		ids := msgs[i].ParseAttachments()
 		atts := make([]map[string]any, 0, len(ids))
 		for _, ref := range ids {
+			if isFolderRef(ref) {
+				var meta map[string]any
+				if bridge.Invoke(ctx, s.K, "hostaccess", "FolderMeta", []any{ctx, ref}, &meta) == nil && meta != nil {
+					atts = append(atts, meta)
+				}
+				continue
+			}
 			fid, err := identity.Parse(ref)
 			if err != nil {
 				continue
@@ -320,6 +328,9 @@ func sniffMime(name string, data []byte) string {
 	return http.DetectContentType(data)
 }
 
+// isFolderRef reports a shared folder among a message's attachments.
+func isFolderRef(ref string) bool { return strings.HasPrefix(ref, "folder:") }
+
 // ResolveAttachments turns a list of file ids into the VM-facing attachment
 // descriptors an agent receives for a chat message, authorizing the caller to
 // read each file first.
@@ -337,6 +348,16 @@ func (s *Service) ResolveAttachments(ctx context.Context, caller identity.ID, id
 	}
 	out := make([]vmm.FileAttachment, 0, len(ids))
 	for _, ref := range ids {
+		if isFolderRef(ref) {
+			// An attached folder reaches the agent as what it is and holds;
+			// the folder tools work in it.
+			var att vmm.FileAttachment
+			if err := bridge.Invoke(ctx, s.K, "hostaccess", "FolderAttachment", []any{ctx, caller, ref}, &att); err != nil {
+				return nil, err
+			}
+			out = append(out, att)
+			continue
+		}
 		fid, err := identity.Parse(ref)
 		if err != nil {
 			return nil, errs.InvalidArgument("invalid attachment id")

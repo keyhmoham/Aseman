@@ -15,6 +15,7 @@ import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../../shared/widgets/workspace_panel_motion.dart';
 import '../../admin/presentation/admin_screen.dart';
+import '../../assistant/assistant.dart';
 import '../../home/presentation/workspace_screen.dart' show showExplore;
 import '../../messenger/presentation/chat_page.dart';
 import '../../messenger/presentation/messenger_panel.dart';
@@ -340,6 +341,14 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   List<Widget> _feedSlivers(double horizontalPad) {
     final posts = model.followingPosts;
     return [
+      // The person's assistant leads their home: the brief, what waits on
+      // them and what their agents suggest.
+      SliverPadding(
+          padding: EdgeInsets.fromLTRB(horizontalPad, 16, horizontalPad, 0),
+          sliver: SliverToBoxAdapter(
+              child: HomeAssistant(
+                  key: const ValueKey('home-assistant'),
+                  dependencies: widget.dependencies))),
       SliverPadding(
           padding: EdgeInsets.fromLTRB(horizontalPad, 16, horizontalPad, 12),
           sliver: SliverToBoxAdapter(

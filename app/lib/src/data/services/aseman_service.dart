@@ -1076,8 +1076,32 @@ class AsemanService implements BackendService {
 
   Future<List<UploadedFile>> _resolveAttachments(List<String> ids) async {
     if (ids.isEmpty) return const [];
+    // Attached project folders ("folder:<id>") are the sender's shared folders.
+    Map<String, Map<String, dynamic>> folders = const {};
+    if (ids.any((id) => id.startsWith('folder:'))) {
+      try {
+        final list = (await actionMap('hostaccess', 'folders'))['folders'];
+        folders = {
+          if (list is List)
+            for (final f in list)
+              if (f is Map) 'folder:${f['id']}': f.cast<String, dynamic>(),
+        };
+      } catch (_) {}
+    }
     final out = <UploadedFile>[];
     for (final id in ids) {
+      if (id.startsWith('folder:')) {
+        final f = folders[id] ?? const {};
+        out.add(UploadedFile.fromJson({
+          'id': id,
+          'kind': 'folder',
+          'mime': 'inode/directory',
+          'name': f['name'] ?? 'Folder',
+          'path': f['path'] == null ? null : '/workspace/${f['path']}',
+          'access': f['access'],
+        }));
+        continue;
+      }
       try {
         out.add(await fetchFile(id));
       } catch (_) {}

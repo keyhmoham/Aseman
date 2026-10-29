@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
 	"github.com/aseman/aseman/internal/plugins/entity"
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
@@ -1156,6 +1157,13 @@ func (a *msgSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	// Resolve and authorize every referenced attachment before persisting so a
 	// sender can only attach files they can read in the room.
 	for _, ref := range in.Attachments {
+		if isFolderRef(ref) {
+			// A folder the sender shared from one of their project computers.
+			if err := bridge.Invoke(ctx, a.s.K, "hostaccess", "CanAttachFolder", []any{ctx, req.Caller.ID, ref}); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		fileID, perr := identity.Parse(ref)
 		if perr != nil {
 			return nil, errs.InvalidArgument("invalid attachment id")

@@ -8,7 +8,8 @@ What upgraders need to know first:
   (the desktop app's "Let agents use this computer") is a node setting,
   Admin → Governance → Host access, off by default; while off, desktop apps
   stop answering and the `host_*` tools are not offered. Shared folders now
-  come from project computers (Settings → Shared folders; agent tools
+  come from project computers, attached to a message like a file
+  (Attach → Project folder; agent tools
   `folder_list`, `folder_read`, `folder_write`).
 - **Google is an app.** Gmail and Calendar moved from built-in agent tools to
   the Google app in the Apps catalog (Admin → Catalog → Connector apps).
@@ -26,7 +27,8 @@ What upgraders need to know first:
   Governance. Set `ASEMAN_GOVERNANCE_REQUIRED=1` to refuse every action while
   governance is not loaded.
 - **Approvals** offer Allow once, Always allow and Refuse; standing grants are
-  listed and revoked in Settings → Approvals. `ASEMAN_APPROVAL_TIMEOUT` (30m).
+  listed and revoked in Settings → What agents may always do; pending ones
+  are answered on the home feed. `ASEMAN_APPROVAL_TIMEOUT` (30m).
 - **Outside content is wrapped** as untrusted data before it reaches a model
   (app results, mail, files from a person's computer); outbound content is
   checked for credentials and card numbers.
@@ -45,7 +47,8 @@ created on start; no manual migration.
 New features:
 
 - Tasks, the morning brief, inbox triage, background research and a first-day
-  greeting (proactive); reply chips under agent messages.
+  greeting (proactive), at the top of the home feed with the approvals
+  waiting on the person; reply chips under agent messages.
 - Responsibilities: agents own an area and react to GitHub, GitLab, Slack,
   Microsoft Teams, SMS, Stripe, Linear, Jira, Shopify and signed webhooks; to
   new mail, upcoming calendar events, feed items, changed API answers and

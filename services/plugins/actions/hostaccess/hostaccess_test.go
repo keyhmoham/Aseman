@@ -79,10 +79,11 @@ func (f *fakeFiles) ProjectFiles(_ context.Context, _ identity.ID, space, op, p,
 		if p == "missing" {
 			return map[string]any{"ok": false, "missing": true}, nil
 		}
-		items := []map[string]any{}
+		// As the bridge delivers it: decoded JSON.
+		items := []any{}
 		for name := range f.files {
 			if strings.HasPrefix(name, p+"/") {
-				items = append(items, map[string]any{"name": strings.TrimPrefix(name, p+"/")})
+				items = append(items, map[string]any{"name": strings.TrimPrefix(name, p+"/"), "type": "file", "size": len(f.files[name])})
 			}
 		}
 		return map[string]any{"items": items}, nil
@@ -192,5 +193,36 @@ func TestAgentCallsReachTheDesktopApp(t *testing.T) {
 	s.CallTimeout = 50 * time.Millisecond
 	if _, err := s.AgentTool(ctx, gate.ToolCall{Tool: "host_list", Args: `{}`, ActorID: ownerHex}); err == nil {
 		t.Fatal("an unanswered call fails")
+	}
+}
+
+func TestAFolderIsAttachedToAPrompt(t *testing.T) {
+	s, ctx := harness(t)
+	owner, _ := identity.Parse(ownerHex)
+	other, _ := identity.Parse("00000000000000010000000000000009")
+	files := &fakeFiles{member: true, files: map[string]string{"invoices/oct.csv": "001,40", "invoices/nov.csv": "002,10"}}
+	s.Files = files
+	f, err := s.ShareFolder(ctx, owner, "00000000000000010000000000000050", "invoices", "", "read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := FolderRefPrefix + f.ID.String()
+	if err := s.CanAttachFolder(ctx, other, ref); err == nil {
+		t.Fatal("only its owner attaches it")
+	}
+	att, err := s.FolderAttachment(ctx, owner, ref)
+	if err != nil || att.Mime != "inode/directory" || !strings.Contains(att.Content, "oct.csv") ||
+		!strings.Contains(att.Content, "read only") || !strings.Contains(att.Content, "untrusted_data") {
+		t.Fatalf("the agent sees what it is and holds: %+v %v", att, err)
+	}
+	meta, err := s.FolderMeta(ctx, ref)
+	if err != nil || meta["kind"] != "folder" || meta["name"] != "invoices" {
+		t.Fatalf("%+v %v", meta, err)
+	}
+	if _, err := s.SetFolder(ctx, owner, f.ID.String(), "", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CanAttachFolder(ctx, owner, ref); err == nil {
+		t.Fatal("a folder no longer shared is not attached")
 	}
 }

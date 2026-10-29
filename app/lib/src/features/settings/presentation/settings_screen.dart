@@ -318,12 +318,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.auto_awesome_outlined,
                   children: [
                     _SettingsTile(
-                        icon: Icons.task_alt_rounded,
-                        title: 'Tasks',
-                        subtitle: 'Suggestions, work in progress and your morning brief',
-                        onTap: () => _openAssistant(
-                            (deps) => TasksPanel(dependencies: deps))),
-                    _SettingsTile(
                         icon: Icons.checklist_rounded,
                         title: 'Setup',
                         subtitle: 'What your assistant needs and how to fix it',
@@ -331,8 +325,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             (deps) => SetupPanel(dependencies: deps))),
                     _SettingsTile(
                         icon: Icons.verified_user_outlined,
-                        title: 'Approvals',
-                        subtitle: 'Actions waiting on you and what you always allow',
+                        title: 'What agents may always do',
+                        subtitle: 'The actions you always allowed, to revoke',
                         onTap: () => _openAssistant(
                             (deps) => ApprovalsPanel(dependencies: deps))),
                     _SettingsTile(
@@ -341,12 +335,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         subtitle: 'Slack, Teams, SMS, and what runs on its own',
                         onTap: () => _openAssistant(
                             (deps) => ConnectionsPanel(dependencies: deps))),
-                    _SettingsTile(
-                        icon: Icons.folder_shared_outlined,
-                        title: 'Shared folders',
-                        subtitle: 'Folders of your project computers your agents may use everywhere',
-                        onTap: () => _openAssistant(
-                            (deps) => SharedFoldersPanel(dependencies: deps))),
                   ]),
             _Section(
                 title: 'Trading & agents',

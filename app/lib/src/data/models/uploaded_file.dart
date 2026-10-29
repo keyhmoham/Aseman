@@ -17,6 +17,7 @@ class UploadedFile {
     this.contentUrl = '',
     this.createdAt,
     this.bytes,
+    this.detail = '',
   });
 
   final String id;
@@ -33,6 +34,12 @@ class UploadedFile {
   /// Decoded payload when the file was fetched with data (file_get with_data
   /// / file_download).
   final Uint8List? bytes;
+
+  /// Where an attached folder is and how it is shared (empty for files).
+  final String detail;
+
+  /// A folder of a project computer attached to a message (not a file).
+  bool get isFolder => mime == 'inode/directory';
 
   bool get isImage => mime.startsWith('image/');
   bool get isGif => mime == 'image/gif';
@@ -73,5 +80,12 @@ class UploadedFile {
         public: json['public'] as bool? ?? false,
         contentUrl: json['content_url'] as String? ?? '',
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+        detail: json['kind'] == 'folder'
+            ? [
+                json['project'],
+                json['path'],
+                json['access'] == 'write' ? 'read and write' : 'read only',
+              ].where((x) => '${x ?? ''}'.isNotEmpty).join(' · ')
+            : '',
       );
 }

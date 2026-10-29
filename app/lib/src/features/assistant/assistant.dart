@@ -9,6 +9,7 @@ export 'assistant_common.dart' show openPanel;
 export 'connections_panel.dart';
 export 'dictation_button.dart';
 export 'governance_views.dart';
+export 'home_assistant.dart';
 export 'project_panel.dart';
 export 'setup_panel.dart';
 export 'shared_folders_panel.dart';

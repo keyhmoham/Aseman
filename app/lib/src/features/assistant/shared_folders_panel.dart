@@ -84,7 +84,7 @@ class _SharedFoldersPanelState extends State<SharedFoldersPanel> {
     final picked = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) =>
-          _ProjectFolderPicker(dependencies: deps, projects: projectNames),
+          ProjectFolderPicker(dependencies: deps, projects: projectNames),
     );
     if (picked == null || !mounted) return;
     final out = await runAction(
@@ -344,21 +344,32 @@ class _SharedFoldersPanelState extends State<SharedFoldersPanel> {
 }
 
 /// Picks a folder of one of the person's project computers: the project,
-/// then the folder, browsing its workspace.
-class _ProjectFolderPicker extends StatefulWidget {
-  const _ProjectFolderPicker({
+/// then the folder, browsing its workspace, and the access agents get.
+class ProjectFolderPicker extends StatefulWidget {
+  const ProjectFolderPicker({
+    super.key,
     required this.dependencies,
     required this.projects,
+    this.initialSpace = '',
+    this.attach = false,
   });
   final AppDependencies dependencies;
   final Map<String, String> projects;
 
+  /// The project to start in (the conversation's, when it has a computer).
+  final String initialSpace;
+
+  /// Picking attaches the folder to a message (else it is only shared).
+  final bool attach;
+
   @override
-  State<_ProjectFolderPicker> createState() => _ProjectFolderPickerState();
+  State<ProjectFolderPicker> createState() => _ProjectFolderPickerState();
 }
 
-class _ProjectFolderPickerState extends State<_ProjectFolderPicker> {
-  late String space = widget.projects.keys.first;
+class _ProjectFolderPickerState extends State<ProjectFolderPicker> {
+  late String space = widget.projects.containsKey(widget.initialSpace)
+      ? widget.initialSpace
+      : widget.projects.keys.first;
   String path = '';
   String access = 'read';
   List<String> dirs = const [];
@@ -410,7 +421,7 @@ class _ProjectFolderPickerState extends State<_ProjectFolderPicker> {
   Widget build(BuildContext context) {
     final parts = path.isEmpty ? <String>[] : path.split('/');
     return AlertDialog(
-      title: const Text('Share a folder'),
+      title: Text(widget.attach ? 'Attach a project folder' : 'Share a folder'),
       content: SizedBox(
         width: 440,
         height: 420,
@@ -478,6 +489,14 @@ class _ProjectFolderPickerState extends State<_ProjectFolderPicker> {
         ),
       ),
       actions: [
+        if (widget.attach)
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              openPanel(context, SharedFoldersPanel(dependencies: widget.dependencies));
+            },
+            child: const Text('Manage shared folders'),
+          ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
@@ -489,10 +508,39 @@ class _ProjectFolderPickerState extends State<_ProjectFolderPicker> {
             'access': access,
           }),
           child: Text(
-            path.isEmpty ? 'Share the whole workspace' : 'Share ${parts.last}',
+            '${widget.attach ? 'Attach' : 'Share'} ${path.isEmpty ? 'the whole workspace' : parts.last}',
           ),
         ),
       ],
     );
   }
+}
+
+
+/// Lets the person pick a folder of one of their project computers to attach
+/// to a message: it is shared with their own agents (read, or read and
+/// write) and returned for the message to carry as "folder:<id>". Returns
+/// null when cancelled.
+Future<Map<String, dynamic>?> attachProjectFolder(
+    BuildContext context, AppDependencies deps,
+    {String initialSpace = ''}) async {
+  final spaces = await deps.service.fetchSpaces();
+  if (!context.mounted) return null;
+  if (spaces.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You have no projects with a computer yet.')));
+    return null;
+  }
+  final picked = await showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (_) => ProjectFolderPicker(
+        dependencies: deps,
+        projects: {for (final s in spaces) s.id: s.name},
+        initialSpace: initialSpace,
+        attach: true),
+  );
+  if (picked == null || !context.mounted) return null;
+  final out = await runAction(context, deps, 'hostaccess', 'folder_share', picked);
+  final folder = jsonMap(out?['folder']);
+  return folder.isEmpty ? null : folder;
 }

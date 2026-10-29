@@ -2,6 +2,7 @@
 package helper
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -65,10 +66,12 @@ func JSONBytes(status int, b []byte) (*api.ActionResponse, error) {
 	return &api.ActionResponse{Status: status, Body: b}, nil
 }
 
-// Decode unmarshals the request body into out.
+// Decode unmarshals the request body into out. An empty body is an empty
+// object: clients send nothing for a call with no fields, and each action
+// checks the fields it requires itself.
 func Decode(req *api.ActionRequest, out any) error {
-	if len(req.Body) == 0 {
-		return errs.InvalidArgument("empty request body")
+	if len(bytes.TrimSpace(req.Body)) == 0 {
+		return nil
 	}
 	if err := json.Unmarshal(req.Body, out); err != nil {
 		return errs.Wrap(errs.CodeInvalidArgument, err, "invalid request body")

@@ -87,7 +87,7 @@ func (s *Service) Setup(ctx context.Context, owner identity.ID, notifications st
 	if folders > 0 {
 		add(SetupItem{ID: "folders", Label: "Shared folders", Status: "ready", Detail: itoa(folders) + " shared from your project computers.", Optional: true})
 	} else {
-		add(SetupItem{ID: "folders", Label: "Shared folders", Status: "not_checked", Detail: "None shared: each project's agents see only their own computer.", Fix: "Settings → Shared folders.", Optional: true})
+		add(SetupItem{ID: "folders", Label: "Shared folders", Status: "not_checked", Detail: "None shared: each project's agents see only their own computer.", Fix: "Attach a project folder to a message (Attach → Project folder).", Optional: true})
 	}
 	return out
 }

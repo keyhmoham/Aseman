@@ -924,6 +924,13 @@ class _RoomChatState extends State<RoomChat> {
                           Navigator.pop(context);
                           _pickFile(_documentTypes);
                         }),
+                        // A folder of a project computer, in the prompt's
+                        // context; the agent works in it there.
+                        _attachOption(
+                            Icons.folder_shared_rounded, 'Project folder', () {
+                          Navigator.pop(context);
+                          _attachFolder();
+                        }),
                       ]),
                     ]))));
   }
@@ -1062,6 +1069,22 @@ class _RoomChatState extends State<RoomChat> {
     }
   }
 
+  Future<void> _attachFolder() async {
+    final deps = widget.dependencies;
+    if (deps == null) return;
+    final folder = await attachProjectFolder(context, deps,
+        initialSpace: widget.spaceId);
+    if (folder == null || !mounted) return;
+    final ref = 'folder:${folder['id']}';
+    if (_drafts.any((d) => d.fileId == ref)) return;
+    setState(() => _drafts.add(_DraftAttachment(
+        name: '${folder['name']}',
+        mime: 'inode/directory',
+        bytes: Uint8List(0))
+      ..fileId = ref
+      ..uploaded = true));
+  }
+
   Future<void> _uploadDraft(_DraftAttachment draft) async {
     final deps = widget.dependencies;
     if (deps == null) return;
@@ -1088,7 +1111,10 @@ class _RoomChatState extends State<RoomChat> {
   Future<void> _removeDraft(_DraftAttachment draft) async {
     // Best-effort cleanup of the uploaded file so cancelled drafts don't leak
     // into the workspace file library.
-    if (draft.uploaded && draft.fileId.isNotEmpty) {
+    // An attached folder stays shared; only uploaded files are removed.
+    if (draft.uploaded &&
+        draft.fileId.isNotEmpty &&
+        !draft.fileId.startsWith('folder:')) {
       try {
         await widget.dependencies?.service.deleteFile(draft.fileId);
       } catch (_) {}
@@ -1112,7 +1138,9 @@ class _RoomChatState extends State<RoomChat> {
                     width: 30, height: 30, fit: BoxFit.cover))
           else
             Icon(
-                d.mime.startsWith('audio/')
+                d.mime == 'inode/directory'
+                    ? Icons.folder_shared_rounded
+                    : d.mime.startsWith('audio/')
                     ? Icons.mic_rounded
                     : d.mime.startsWith('video/')
                         ? Icons.videocam_rounded

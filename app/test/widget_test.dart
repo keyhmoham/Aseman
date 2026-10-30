@@ -70,7 +70,7 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('phone feed tabs: spaces, chats, then the feed',
+  testWidgets('phone feed hero opens chats and spaces sheets',
       (tester) async {
     await seedSession();
     tester.view.physicalSize = const Size(390, 844);
@@ -78,17 +78,24 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    // The feed tab is open; the panels are tabs before it.
+    // The feed stays open; Spaces and Chats flank the robot.
     expect(find.text('Private update inside the Home workspace.'),
         findsOneWidget);
     expect(find.text('Maya Chen'), findsNothing);
+    expect(find.text('Spaces'), findsOneWidget);
+    expect(find.text('Chats'), findsOneWidget);
 
     await tester.tap(find.text('Chats'));
     await tester.pumpAndSettle();
+    expect(find.text('Messages'), findsOneWidget);
     expect(find.text('Maya Chen'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Spaces'));
     await tester.pumpAndSettle();
+    expect(find.text('Switch workspace'), findsOneWidget);
     expect(find.text('Atlas Capital'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
@@ -303,6 +310,8 @@ void main() {
     expect(find.text('My bots'), findsOneWidget);
     expect(find.text('Market'), findsOneWidget);
     expect(find.text('Wallet'), findsOneWidget);
+    // Messages is a workspace-desk entry, not the feed's.
+    expect(find.text('Messages'), findsNothing);
 
     await tester.tap(find.text('Market'));
     await tester.pumpAndSettle();
@@ -389,6 +398,23 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Profile'), findsWidgets);
     expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
+    expect(find.text('Log out'), findsOneWidget);
+    expect(find.text('Messages'), findsNothing);
+  });
+
+  testWidgets('workspace profile menu includes Messages', (tester) async {
+    await seedSession();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    await tester.pumpWidget(AsemanApp(dependencies: app()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Atlas Capital').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(CircleAvatar).first);
+    await tester.pumpAndSettle();
+    expect(find.text('Messages'), findsOneWidget);
+    expect(find.text('My bots'), findsOneWidget);
     expect(find.text('Log out'), findsOneWidget);
   });
 

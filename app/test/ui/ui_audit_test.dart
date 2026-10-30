@@ -198,8 +198,8 @@ void main() {
         expect(errors, isEmpty, reason: name);
       }
 
-      // Opens Atlas Capital's desk from the feed's Spaces panel (a tab on
-      // phones).
+      // Opens Atlas Capital's desk from the feed's Spaces panel (the hero
+      // Spaces button → workspace switcher on phones).
       Future<void> openAtlas() async {
         if (size.key == 'phone') {
           await tester.tap(find.text('Spaces').first);
@@ -233,11 +233,15 @@ void main() {
         });
       }
       await app('messenger', () async {
+        await openAtlas();
+        await tester.pumpAndSettle();
         await tester.tap(find.byType(CircleAvatar).first);
         await tester.pumpAndSettle();
         await tester.tap(find.text('Messages').last);
       }, roomService());
       await app('messenger_spaces', () async {
+        await openAtlas();
+        await tester.pumpAndSettle();
         await tester.tap(find.byType(CircleAvatar).first);
         await tester.pumpAndSettle();
         await tester.tap(find.text('Messages').last);
@@ -245,6 +249,8 @@ void main() {
         await tester.tap(find.text('Spaces').last);
       }, roomService());
       await app('messenger_chat', () async {
+        await openAtlas();
+        await tester.pumpAndSettle();
         await tester.tap(find.byType(CircleAvatar).first);
         await tester.pumpAndSettle();
         await tester.tap(find.text('Messages').last);

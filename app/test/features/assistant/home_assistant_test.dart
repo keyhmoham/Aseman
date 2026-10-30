@@ -76,13 +76,18 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      // Working tasks breathe forever; settle with fixed pumps instead.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
       expect(find.text('Your assistant'), findsOneWidget);
+      expect(find.text('1 needs you'), findsOneWidget);
       expect(find.text('Send an email to Marco'), findsOneWidget);
       expect(find.text('Reply to Priya'), findsOneWidget);
-      expect(find.text('Tasks · 1 working'), findsOneWidget);
+      expect(find.text('Working'), findsOneWidget);
+      expect(find.text('Setup'), findsNothing);
       await tester.tap(find.text('Allow once'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
       expect(node.calls, contains('governance.approval_answer'));
       expect(find.text('Send an email to Marco'), findsNothing);
     },

@@ -676,8 +676,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                   dependencies: widget.dependencies),
                             ),
                           ),
-                  onOpenProfile: () =>
-                      showProfileMenu(context, widget.dependencies)),
+                  onOpenProfile: () => showProfileMenu(
+                      context, widget.dependencies,
+                      showMessages: true)),
               ),
               Expanded(child: LayoutBuilder(builder: (context, box) {
                 if (box.maxWidth < 820) {

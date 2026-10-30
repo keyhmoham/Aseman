@@ -1,16 +1,16 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
+import '../../core/theme/app_shape.dart';
 import 'assistant_common.dart';
-import 'setup_panel.dart';
 import 'tasks_panel.dart';
 
-/// The person's assistant at the top of their home feed: today's brief, the
-/// actions waiting on them (approvals, answered in place), the tasks that
-/// need them and what their agents suggest, and how much is in progress.
-/// With nothing set up yet it says how to start.
+/// The person's assistant at the top of their home feed: a live tasks pulse
+/// card, today's brief, approvals waiting on them, and the tasks that need
+/// them. Setup lives in Settings → Your assistant.
 class HomeAssistant extends StatefulWidget {
   const HomeAssistant({super.key, required this.dependencies});
   final AppDependencies dependencies;
@@ -19,7 +19,8 @@ class HomeAssistant extends StatefulWidget {
   State<HomeAssistant> createState() => _HomeAssistantState();
 }
 
-class _HomeAssistantState extends State<HomeAssistant> {
+class _HomeAssistantState extends State<HomeAssistant>
+    with SingleTickerProviderStateMixin {
   static const _refresh = Duration(minutes: 1);
 
   Map<String, dynamic> brief = const {};
@@ -29,6 +30,8 @@ class _HomeAssistantState extends State<HomeAssistant> {
   bool loaded = false;
   bool briefOpen = true;
   Timer? timer;
+  late final AnimationController pulse =
+      AnimationController(vsync: this, duration: const Duration(seconds: 2));
 
   AppDependencies get deps => widget.dependencies;
 
@@ -42,7 +45,19 @@ class _HomeAssistantState extends State<HomeAssistant> {
   @override
   void dispose() {
     timer?.cancel();
+    pulse.dispose();
     super.dispose();
+  }
+
+  /// The ring only breathes while agents are working, so quiet screens settle.
+  void _syncPulse(bool working) {
+    if (working) {
+      if (!pulse.isAnimating) pulse.repeat(reverse: true);
+    } else if (pulse.isAnimating || pulse.value != 0) {
+      pulse
+        ..stop()
+        ..value = 0;
+    }
   }
 
   Future<Map<String, dynamic>?> _try(
@@ -64,14 +79,21 @@ class _HomeAssistantState extends State<HomeAssistant> {
       _try('governance', 'approval_list', {'status': 'pending'}),
     ]);
     if (!mounted) return;
+    final nextTasks = jsonList(results[0]?['tasks']);
     setState(() {
       loaded = true;
       // No proactive namespace on this node: nothing to show.
       available = results[0] != null;
-      tasks = jsonList(results[0]?['tasks']);
+      tasks = nextTasks;
       brief = jsonMap(results[1]?['brief']);
       approvals = jsonList(results[2]?['approvals']);
     });
+    _syncPulse(nextTasks.any((t) => t['status'] == 'working'));
+  }
+
+  Future<void> _openTasks() async {
+    await showTasksPanel(context, deps);
+    if (mounted) await _load();
   }
 
   Future<void> _answer(Map<String, dynamic> a, String answer) async {
@@ -85,10 +107,7 @@ class _HomeAssistantState extends State<HomeAssistant> {
     if (out != null) await _load();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (!loaded || !available) return const SizedBox.shrink();
-    final scheme = Theme.of(context).colorScheme;
+  _TaskPulse get _pulse {
     final needsYou = tasks
         .where(
           (t) => const {
@@ -100,46 +119,33 @@ class _HomeAssistantState extends State<HomeAssistant> {
         .toList();
     final suggested = tasks.where((t) => t['status'] == 'suggested').toList();
     final working = tasks.where((t) => t['status'] == 'working').length;
-    final quiet =
-        brief.isEmpty &&
-        approvals.isEmpty &&
-        needsYou.isEmpty &&
-        suggested.isEmpty &&
-        working == 0;
-    if (quiet) return _quiet(context);
+    final resolved = tasks.where((t) => t['status'] == 'resolved').length;
+    return _TaskPulse(
+      needsYou: needsYou.length,
+      working: working,
+      suggested: suggested.length,
+      done: resolved,
+      needsYouTasks: needsYou,
+      suggestedTasks: suggested,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!loaded || !available) return const SizedBox.shrink();
+    final pulseData = _pulse;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Icon(Icons.auto_awesome_rounded, size: 20, color: scheme.primary),
-            const SizedBox(width: 8),
-            const Expanded(
-              child: Text(
-                'Your assistant',
-                style: TextStyle(
-                  fontSize: 22,
-                  letterSpacing: -.3,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            TextButton.icon(
-              onPressed: () => openPanel(
-                context,
-                TasksPanel(dependencies: deps),
-              ).then((_) => _load()),
-              icon: const Icon(Icons.task_alt_rounded, size: 18),
-              label: Text(
-                working > 0 ? 'Tasks · $working working' : 'All tasks',
-              ),
-            ),
-          ],
+        _TasksPulseCard(
+          pulse: pulseData,
+          animation: pulse,
+          onOpen: _openTasks,
         ),
-        const SizedBox(height: 8),
-        if (brief.isNotEmpty)
+        if (brief.isNotEmpty) ...[
+          const SizedBox(height: 10),
           Card(
-            margin: const EdgeInsets.only(bottom: 10),
+            margin: EdgeInsets.zero,
             clipBehavior: Clip.antiAlias,
             child: ExpansionTile(
               initiallyExpanded: briefOpen,
@@ -153,10 +159,19 @@ class _HomeAssistantState extends State<HomeAssistant> {
               children: [BriefCard(brief: brief, margin: EdgeInsets.zero)],
             ),
           ),
-        for (final a in approvals) _approval(context, a),
-        for (final t in [...needsYou, ...suggested])
-          TaskTile(task: t, dependencies: deps, reload: _load),
-        const SizedBox(height: 8),
+        ],
+        for (final a in approvals) ...[
+          const SizedBox(height: 8),
+          _approval(context, a),
+        ],
+        for (final t in [
+          ...pulseData.needsYouTasks,
+          ...pulseData.suggestedTasks,
+        ])
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: TaskTile(task: t, dependencies: deps, reload: _load),
+          ),
       ],
     );
   }
@@ -165,7 +180,7 @@ class _HomeAssistantState extends State<HomeAssistant> {
     final scheme = Theme.of(context).colorScheme;
     final recipients = jsonStrings(a['recipients']);
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: EdgeInsets.zero,
       color: scheme.tertiaryContainer,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
@@ -230,47 +245,410 @@ class _HomeAssistantState extends State<HomeAssistant> {
       ),
     );
   }
+}
 
-  /// Nothing waits on the person: one line, so the feed stays in view.
-  Widget _quiet(BuildContext context) {
+class _TaskPulse {
+  const _TaskPulse({
+    required this.needsYou,
+    required this.working,
+    required this.suggested,
+    required this.done,
+    required this.needsYouTasks,
+    required this.suggestedTasks,
+  });
+
+  final int needsYou;
+  final int working;
+  final int suggested;
+  final int done;
+  final List<Map<String, dynamic>> needsYouTasks;
+  final List<Map<String, dynamic>> suggestedTasks;
+
+  int get active => needsYou + working + suggested;
+  int get total => active + done;
+  bool get quiet => active == 0;
+}
+
+/// Live tasks pulse: a tappable card with a ring chart and status legend.
+class _TasksPulseCard extends StatelessWidget {
+  const _TasksPulseCard({
+    required this.pulse,
+    required this.animation,
+    required this.onOpen,
+  });
+
+  final _TaskPulse pulse;
+  final Animation<double> animation;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final headline = pulse.quiet
+        ? 'All clear'
+        : pulse.needsYou > 0
+            ? '${pulse.needsYou} need${pulse.needsYou == 1 ? 's' : ''} you'
+            : pulse.working > 0
+                ? '${pulse.working} in motion'
+                : '${pulse.suggested} suggested';
+    final subtitle = pulse.quiet
+        ? 'Nothing waiting · tap for your board'
+        : [
+            if (pulse.working > 0) '${pulse.working} working',
+            if (pulse.suggested > 0) '${pulse.suggested} suggested',
+            if (pulse.done > 0) '${pulse.done} done',
+          ].join(' · ');
+
     return Material(
-      color: scheme.surfaceContainerHigh.withValues(alpha: .7),
-      borderRadius: BorderRadius.circular(14),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
-        child: Row(
-          children: [
-            Icon(Icons.auto_awesome_rounded, size: 18, color: scheme.primary),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Your assistant · nothing needs you',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: scheme.onSurfaceVariant,
+      color: scheme.surfaceContainerHigh.withValues(alpha: .78),
+      borderRadius: BorderRadius.circular(AppShape.card - 4),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          child: Row(
+            children: [
+              AnimatedBuilder(
+                animation: animation,
+                builder: (context, _) => _PulseRing(
+                  pulse: pulse,
+                  breath: animation.value,
+                  size: 78,
                 ),
               ),
-            ),
-            TextButton(
-              onPressed: () => openPanel(
-                context,
-                TasksPanel(dependencies: deps),
-              ).then((_) => _load()),
-              child: const Text('Tasks'),
-            ),
-            TextButton(
-              onPressed: () => openPanel(
-                context,
-                SetupPanel(dependencies: deps),
-              ).then((_) => _load()),
-              child: const Text('Setup'),
-            ),
-          ],
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.auto_awesome_rounded,
+                            size: 16, color: scheme.primary),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Your assistant',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .2,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const Spacer(),
+                        Icon(Icons.chevron_right_rounded,
+                            color: scheme.onSurfaceVariant),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      headline,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        letterSpacing: -.3,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _LegendChip(
+                          label: 'Needs you',
+                          count: pulse.needsYou,
+                          color: scheme.error,
+                          onTap: onOpen,
+                        ),
+                        _LegendChip(
+                          label: 'Working',
+                          count: pulse.working,
+                          color: scheme.primary,
+                          live: pulse.working > 0,
+                          breath: animation,
+                          onTap: onOpen,
+                        ),
+                        _LegendChip(
+                          label: 'Suggested',
+                          count: pulse.suggested,
+                          color: scheme.tertiary,
+                          onTap: onOpen,
+                        ),
+                        _LegendChip(
+                          label: 'Done',
+                          count: pulse.done,
+                          color: scheme.outline,
+                          onTap: onOpen,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+class _LegendChip extends StatelessWidget {
+  const _LegendChip({
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.onTap,
+    this.live = false,
+    this.breath,
+  });
+
+  final String label;
+  final int count;
+  final Color color;
+  final VoidCallback onTap;
+  final bool live;
+  final Animation<double>? breath;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final active = count > 0;
+    Widget chip = Material(
+      color: active
+          ? color.withValues(alpha: .14)
+          : scheme.surface.withValues(alpha: .35),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: active ? color : scheme.outlineVariant,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: active ? color : scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (live && breath != null) {
+      chip = AnimatedBuilder(
+        animation: breath!,
+        builder: (context, child) => Opacity(
+          opacity: .72 + .28 * breath!.value,
+          child: child,
+        ),
+        child: chip,
+      );
+    }
+    return chip;
+  }
+}
+
+class _PulseRing extends StatelessWidget {
+  const _PulseRing({
+    required this.pulse,
+    required this.breath,
+    required this.size,
+  });
+
+  final _TaskPulse pulse;
+  final double breath;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: _PulseRingPainter(
+          needsYou: pulse.needsYou,
+          working: pulse.working,
+          suggested: pulse.suggested,
+          done: pulse.done,
+          breath: breath,
+          track: scheme.surfaceContainerHighest,
+          needsColor: scheme.error,
+          workingColor: scheme.primary,
+          suggestedColor: scheme.tertiary,
+          doneColor: scheme.outline,
+          centerFill: scheme.surface.withValues(alpha: .55),
+          labelColor: scheme.onSurface,
+          mutedColor: scheme.onSurfaceVariant,
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${pulse.active}',
+                style: TextStyle(
+                  fontSize: 22,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                  color: scheme.onSurface,
+                ),
+              ),
+              Text(
+                pulse.quiet ? 'idle' : 'live',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: .6,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PulseRingPainter extends CustomPainter {
+  _PulseRingPainter({
+    required this.needsYou,
+    required this.working,
+    required this.suggested,
+    required this.done,
+    required this.breath,
+    required this.track,
+    required this.needsColor,
+    required this.workingColor,
+    required this.suggestedColor,
+    required this.doneColor,
+    required this.centerFill,
+    required this.labelColor,
+    required this.mutedColor,
+  });
+
+  final int needsYou, working, suggested, done;
+  final double breath;
+  final Color track,
+      needsColor,
+      workingColor,
+      suggestedColor,
+      doneColor,
+      centerFill,
+      labelColor,
+      mutedColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.shortestSide / 2;
+    final stroke = 9.0;
+    final rect = Rect.fromCircle(center: center, radius: radius - stroke / 2);
+
+    canvas.drawCircle(
+      center,
+      radius - stroke - 2,
+      Paint()..color = centerFill,
+    );
+
+    final trackPaint = Paint()
+      ..color = track
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, 0, math.pi * 2, false, trackPaint);
+
+    final segments = <(int, Color)>[
+      (needsYou, needsColor),
+      (working, workingColor),
+      (suggested, suggestedColor),
+      (done, doneColor),
+    ].where((s) => s.$1 > 0).toList();
+    final total = segments.fold<int>(0, (n, s) => n + s.$1);
+    if (total == 0) {
+      // Soft idle arc that breathes.
+      final idle = Paint()
+        ..color = workingColor.withValues(alpha: .25 + .2 * breath)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..strokeCap = StrokeCap.round;
+      canvas.drawArc(rect, -math.pi / 2, math.pi * 1.35, false, idle);
+      return;
+    }
+
+    var start = -math.pi / 2;
+    final gap = segments.length > 1 ? 0.08 : 0.0;
+    for (final (count, color) in segments) {
+      final sweep = (count / total) * (math.pi * 2 - gap * segments.length);
+      final paint = Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth =
+            color == workingColor ? stroke + 1.5 * breath : stroke
+        ..strokeCap = StrokeCap.round;
+      if (color == workingColor) {
+        paint.color = Color.lerp(
+              color,
+              color.withValues(alpha: .65),
+              breath,
+            ) ??
+            color;
+      }
+      canvas.drawArc(rect, start, sweep, false, paint);
+      start += sweep + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PulseRingPainter old) =>
+      old.needsYou != needsYou ||
+      old.working != working ||
+      old.suggested != suggested ||
+      old.done != done ||
+      old.breath != breath ||
+      old.track != track ||
+      old.needsColor != needsColor ||
+      old.workingColor != workingColor ||
+      old.suggestedColor != suggestedColor ||
+      old.doneColor != doneColor;
 }

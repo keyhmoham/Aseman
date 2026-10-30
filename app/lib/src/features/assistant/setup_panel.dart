@@ -5,7 +5,8 @@ import 'assistant_common.dart';
 
 /// The setup checklist: what the person's assistant depends on, each Ready,
 /// Not checked or Needs setup from the node's real answer, with how to fix
-/// it. First-day onboarding ends here; Settings → Setup opens it again.
+/// it. First-day onboarding ends here; Settings → Your assistant → Setup
+/// checklist opens it again.
 class SetupPanel extends StatelessWidget {
   const SetupPanel({
     super.key,

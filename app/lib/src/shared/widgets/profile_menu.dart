@@ -36,13 +36,13 @@ enum ProfileAction {
 
 /// Opens the profile menu anchored at the app-bar avatar. On desktop it is an
 /// animated floating popup; on mobile it is a standard bottom sheet. Both
-/// present the account header (with a settings action) above a row of
-/// Profile / My bots / Market / Wallet, then Messages, Invitations, Usage and
-/// Account, and a logout row beneath. Each item opens as its own modal panel.
+/// present the account header above a single-colour action grid. [showMessages]
+/// is for the workspace desk — the feed reaches chats through its own entry.
 Future<void> showProfileMenu(
   BuildContext context,
-  AppDependencies dependencies,
-) async {
+  AppDependencies dependencies, {
+  bool showMessages = false,
+}) async {
   final compact = MediaQuery.sizeOf(context).width < 820;
   final ProfileAction? action;
   if (compact) {
@@ -58,6 +58,7 @@ Future<void> showProfileMenu(
           child: _ProfileBody(
             dependencies: dependencies,
             showAdmin: dependencies.sessionController.isAdmin,
+            showMessages: showMessages,
             onSelect: (a) => Navigator.pop(sheetContext, a),
           ),
         ),
@@ -86,6 +87,7 @@ Future<void> showProfileMenu(
                   child: _ProfileBody(
                     dependencies: dependencies,
                     showAdmin: false,
+                    showMessages: showMessages,
                     onSelect: (a) => Navigator.pop(dialogContext, a),
                   ),
                 ),
@@ -152,18 +154,50 @@ Future<void> _dispatch(
   }
 }
 
-/// Shared body for the popup menu and the bottom sheet: header + grid +
-/// logout row. [onSelect] closes the enclosing route with the chosen action.
+/// Shared body for the popup menu and the bottom sheet: header + unified
+/// action grid. [onSelect] closes the enclosing route with the chosen action.
 class _ProfileBody extends StatelessWidget {
   const _ProfileBody({
     required this.dependencies,
     required this.showAdmin,
+    required this.showMessages,
     required this.onSelect,
   });
 
   final AppDependencies dependencies;
   final bool showAdmin;
+  final bool showMessages;
   final ValueChanged<ProfileAction> onSelect;
+
+  List<_GridItem> get _items => [
+        const _GridItem(ProfileAction.profile, Icons.person_outline_rounded,
+            'Profile'),
+        const _GridItem(
+            ProfileAction.myBots, Icons.smart_toy_outlined, 'My bots'),
+        const _GridItem(
+            ProfileAction.market, Icons.storefront_outlined, 'Market'),
+        const _GridItem(ProfileAction.wallet,
+            Icons.account_balance_wallet_outlined, 'Wallet'),
+        if (showMessages)
+          const _GridItem(
+              ProfileAction.messages, Icons.forum_outlined, 'Messages'),
+        const _GridItem(ProfileAction.invitations,
+            Icons.mark_email_unread_outlined, 'Invitations'),
+        const _GridItem(
+            ProfileAction.usage, Icons.query_stats_outlined, 'Usage'),
+        const _GridItem(ProfileAction.talent, Icons.work_outline_rounded,
+            'Hire talent'),
+        const _GridItem(
+            ProfileAction.developer, Icons.api_rounded, 'Developer API'),
+        const _GridItem(ProfileAction.account,
+            Icons.manage_accounts_outlined, 'Account'),
+        if (showAdmin)
+          const _GridItem(ProfileAction.admin,
+              Icons.admin_panel_settings_outlined, 'Admin console'),
+        const _GridItem(
+            ProfileAction.logout, Icons.logout_rounded, 'Log out',
+            danger: true),
+      ];
 
   @override
   Widget build(BuildContext context) {
@@ -171,17 +205,17 @@ class _ProfileBody extends StatelessWidget {
     final session = dependencies.sessionController.session;
     final handle = session?.handle ?? 'guest';
     final initials = handle.isEmpty ? '?' : handle[0].toUpperCase();
+    final items = _items;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // The account, on the primary container like other hero surfaces.
           Container(
             padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
             decoration: BoxDecoration(
-              color: scheme.primaryContainer,
+              color: scheme.surfaceContainerHighest.withValues(alpha: .55),
               borderRadius: BorderRadius.circular(AppShape.inner + 2),
             ),
             child: Row(children: [
@@ -207,113 +241,39 @@ class _ProfileBody extends StatelessWidget {
                         style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w800,
-                            color: scheme.onPrimaryContainer)),
+                            color: scheme.onSurface)),
                     const SizedBox(height: 2),
                     Text(session?.accountId ?? '',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             fontSize: 11,
-                            color: scheme.onPrimaryContainer
-                                .withValues(alpha: .7))),
+                            color: scheme.onSurfaceVariant)),
                   ],
                 ),
               ),
-              IconButton.filled(
+              IconButton.filledTonal(
                 tooltip: 'Settings',
-                style: IconButton.styleFrom(
-                    backgroundColor: scheme.surface.withValues(alpha: .5),
-                    foregroundColor: scheme.onPrimaryContainer),
                 onPressed: () => onSelect(ProfileAction.settings),
                 icon: const Icon(Icons.settings_outlined, size: 20),
               ),
             ]),
           ),
           const SizedBox(height: 12),
-          Row(children: [
-            _GridSquare(
-              action: ProfileAction.profile,
-              icon: Icons.person_outline_rounded,
-              label: 'Profile',
-              color: AppColors.primary,
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: items.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: 1.05,
+            ),
+            itemBuilder: (context, i) => _GridTile(
+              item: items[i],
               onSelect: onSelect,
             ),
-            const SizedBox(width: 8),
-            _GridSquare(
-              action: ProfileAction.myBots,
-              icon: Icons.smart_toy_outlined,
-              label: 'My bots',
-              color: AppColors.cyan,
-              onSelect: onSelect,
-            ),
-            const SizedBox(width: 8),
-            _GridSquare(
-              action: ProfileAction.market,
-              icon: Icons.storefront_outlined,
-              label: 'Market',
-              color: AppColors.warning,
-              onSelect: onSelect,
-            ),
-            const SizedBox(width: 8),
-            _GridSquare(
-              action: ProfileAction.wallet,
-              icon: Icons.account_balance_wallet_outlined,
-              label: 'Wallet',
-              color: AppColors.success,
-              onSelect: onSelect,
-            ),
-          ]),
-          const SizedBox(height: 12),
-          // One grouped list, rounded as a whole, like M3 list sections.
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppShape.inner),
-            child: Column(children: [
-              _MenuRow(
-                icon: Icons.forum_outlined,
-                label: 'Messages',
-                onTap: () => onSelect(ProfileAction.messages),
-              ),
-              const SizedBox(height: 2),
-              _MenuRow(
-                icon: Icons.mark_email_unread_outlined,
-                label: 'Invitations',
-                onTap: () => onSelect(ProfileAction.invitations),
-              ),
-              const SizedBox(height: 2),
-              _MenuRow(
-                icon: Icons.query_stats_outlined,
-                label: 'Usage',
-                onTap: () => onSelect(ProfileAction.usage),
-              ),
-              const SizedBox(height: 2),
-              _MenuRow(
-                icon: Icons.work_outline_rounded,
-                label: 'Hire talent',
-                onTap: () => onSelect(ProfileAction.talent),
-              ),
-              const SizedBox(height: 2),
-              _MenuRow(
-                icon: Icons.api_rounded,
-                label: 'Developer API',
-                onTap: () => onSelect(ProfileAction.developer),
-              ),
-              const SizedBox(height: 2),
-              _MenuRow(
-                icon: Icons.manage_accounts_outlined,
-                label: 'Account',
-                onTap: () => onSelect(ProfileAction.account),
-              ),
-              if (showAdmin) ...[
-                const SizedBox(height: 2),
-                _MenuRow(
-                  icon: Icons.admin_panel_settings_outlined,
-                  label: 'Admin console',
-                  onTap: () => onSelect(ProfileAction.admin),
-                ),
-              ],
-              const SizedBox(height: 2),
-              _LogoutRow(onSelect: onSelect),
-            ]),
           ),
         ],
       ),
@@ -321,105 +281,54 @@ class _ProfileBody extends StatelessWidget {
   }
 }
 
-class _MenuRow extends StatelessWidget {
-  const _MenuRow(
-      {required this.icon, required this.label, required this.onTap});
+class _GridItem {
+  const _GridItem(this.action, this.icon, this.label, {this.danger = false});
+  final ProfileAction action;
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final bool danger;
+}
+
+/// One tile of the unified action grid.
+class _GridTile extends StatelessWidget {
+  const _GridTile({required this.item, required this.onSelect});
+
+  final _GridItem item;
+  final ValueChanged<ProfileAction> onSelect;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final accent =
+        item.danger ? AppColors.danger : scheme.onSurfaceVariant;
     return Material(
-      color: scheme.surfaceContainerHighest.withValues(alpha: .6),
+      color: scheme.surfaceContainerHighest.withValues(alpha: .55),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppShape.inner)),
       child: InkWell(
-        onTap: onTap,
+        onTap: () => onSelect(item.action),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(children: [
-            Icon(icon, size: 21, color: scheme.onSurfaceVariant),
-            const SizedBox(width: 14),
-            Expanded(
-                child: Text(label,
-                    style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w600))),
-            Icon(Icons.chevron_right_rounded,
-                size: 20, color: scheme.onSurfaceVariant),
-          ]),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(item.icon, size: 24, color: accent),
+              const SizedBox(height: 8),
+              Text(item.label,
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: item.danger
+                          ? AppColors.danger
+                          : scheme.onSurface)),
+            ],
+          ),
         ),
       ),
     );
   }
-}
-
-/// One tile of the shortcut row.
-class _GridSquare extends StatelessWidget {
-  const _GridSquare({
-    required this.action,
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onSelect,
-  });
-
-  final ProfileAction action;
-  final IconData icon;
-  final String label;
-  final Color color;
-  final ValueChanged<ProfileAction> onSelect;
-
-  @override
-  Widget build(BuildContext context) => Expanded(
-        child: Material(
-          color: color.withValues(alpha: .13),
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppShape.inner)),
-          child: InkWell(
-            onTap: () => onSelect(action),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 24, color: color),
-                  const SizedBox(height: 8),
-                  Text(label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w700)),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-}
-
-class _LogoutRow extends StatelessWidget {
-  const _LogoutRow({required this.onSelect});
-
-  final ValueChanged<ProfileAction> onSelect;
-
-  @override
-  Widget build(BuildContext context) => Material(
-        color: AppColors.danger.withValues(alpha: .1),
-        child: InkWell(
-          onTap: () => onSelect(ProfileAction.logout),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(children: [
-              Icon(Icons.logout_rounded, size: 21, color: AppColors.danger),
-              SizedBox(width: 14),
-              Text('Log out',
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.danger)),
-            ]),
-          ),
-        ),
-      );
 }

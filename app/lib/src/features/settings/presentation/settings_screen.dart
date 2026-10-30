@@ -319,8 +319,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     _SettingsTile(
                         icon: Icons.checklist_rounded,
-                        title: 'Setup',
-                        subtitle: 'What your assistant needs and how to fix it',
+                        title: 'Setup checklist',
+                        subtitle:
+                            'Accounts, notifications and what your assistant still needs',
                         onTap: () => _openAssistant(
                             (deps) => SetupPanel(dependencies: deps))),
                     _SettingsTile(
@@ -485,11 +486,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   static const _accents = [
     Color(0xFF8B7BFF),
-    Color(0xFF3F8CFF),
-    Color(0xFF00A98F),
-    Color(0xFFFF6B81),
-    Color(0xFFFF8A3D),
-    Color(0xFFB45CFF)
+    Colors.red,
+    Colors.pink,
+    Colors.purple,
+    Colors.deepPurple,
+    Colors.indigo,
+    Colors.blue,
+    Colors.lightBlue,
+    Colors.cyan,
+    Colors.teal,
+    Colors.green,
+    Colors.lightGreen,
+    Colors.lime,
+    Colors.amber,
+    Colors.orange,
+    Colors.deepOrange,
+    Colors.brown,
+    Colors.blueGrey,
   ];
 }
 
@@ -682,22 +695,26 @@ class _AccentChoice extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) => InkWell(
-      onTap: onTap,
-      customBorder: const CircleBorder(),
-      child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              border: Border.all(
-                  color: selected
-                      ? Theme.of(context).colorScheme.onSurface
-                      : Colors.transparent,
-                  width: 3)),
-          child: selected
-              ? const Icon(Icons.check_rounded, color: Colors.white)
-              : null));
+  Widget build(BuildContext context) {
+    final onAccent =
+        color.computeLuminance() > 0.45 ? Colors.black87 : Colors.white;
+    return InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: selected
+                        ? Theme.of(context).colorScheme.onSurface
+                        : Colors.transparent,
+                    width: 3)),
+            child: selected
+                ? Icon(Icons.check_rounded, color: onAccent)
+                : null));
+  }
 }

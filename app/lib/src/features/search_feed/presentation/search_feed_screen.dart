@@ -9,8 +9,8 @@ import '../../../data/models/space.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/notifications_menu.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/profile_menu.dart';
-import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../../shared/widgets/workspace_panel_motion.dart';
@@ -29,8 +29,9 @@ import 'search_feed_view_model.dart';
 /// (the posts of the people and agents the user follows mixed with the posts
 /// of their spaces). The robot head + search bar live in a collapsible header.
 /// Beside the feed, like the workspace's panels, the user's spaces sit on the
-/// left and their direct chats on the right; on phones they are tabs after
-/// the feed's own. The workspace-switch rocket is not shown here.
+/// left and their direct chats on the right; on phones, Spaces and Chats
+/// buttons flank the robot and open those sheets. The workspace-switch rocket
+/// is not shown here.
 class SearchFeedScreen extends StatefulWidget {
   const SearchFeedScreen({
     super.key,
@@ -50,7 +51,6 @@ class SearchFeedScreen extends StatefulWidget {
 class _SearchFeedScreenState extends State<SearchFeedScreen>
     with TickerProviderStateMixin {
   late final SearchFeedViewModel model;
-  late final TabController tabs;
 
   /// The panels' motion, the same as a workspace switch: the feed arrives
   /// like a switched-to workspace and leaves like one.
@@ -58,9 +58,6 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
       workspaceMotionController(this, value: 0);
   final scrollController = ScrollController();
   Timer? _chatsPoll;
-
-  /// The phone tabs: the feed, the spaces and the direct chats.
-  static const _feedTab = 0, _spacesTab = 1, _chatsTab = 2;
 
   /// How many notifications are unread, badging the app bar's bell.
   int _unreadNotifications = 0;
@@ -72,10 +69,6 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
       dependencies: widget.dependencies,
       workspace: widget.workspace,
     );
-    tabs = TabController(length: 3, initialIndex: _feedTab, vsync: this)
-      ..addListener(() {
-        if (!tabs.indexIsChanging) setState(() {});
-      });
     scrollController.addListener(_onScroll);
     model.load();
     // New messages arrive on their own time, like in the messenger.
@@ -115,7 +108,6 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
 
   void _onScroll() {
     if (!scrollController.hasClients) return;
-    if (_compact && tabs.index != _feedTab) return;
     if (scrollController.position.extentAfter < 300) {
       unawaited(model.loadMore());
     }
@@ -133,7 +125,6 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   void dispose() {
     _chatsPoll?.cancel();
     scrollController.dispose();
-    tabs.dispose();
     motion.dispose();
     model.dispose();
     super.dispose();
@@ -147,6 +138,22 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   Future<void> _openMessenger() async {
     await showMessenger(context, widget.dependencies);
     if (mounted) unawaited(model.loadChats());
+  }
+
+  /// The phone Spaces button opens the same workspace switch sheet the desk's
+  /// rocket opens.
+  void _openWorkspaceSwitcher() {
+    final picker = WorkspacePicker(
+        current: model.workspace,
+        dependencies: widget.dependencies,
+        feedSelected: true,
+        onOpenFeed: () => Navigator.pop(context),
+        onPick: (value) async {
+          Navigator.pop(context);
+          await Future<void>.delayed(const Duration(milliseconds: 320));
+          if (mounted) await _enterWorkspace(value);
+        });
+    showAppSheet<void>(context, picker, heightFactor: .82);
   }
 
   /// The search bar opens Explore: the server's search across people,
@@ -266,51 +273,21 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
 
   void _openSpace(Workspace space) => _enterWorkspace(space.name);
 
-  /// The search hero over the feed; on phones the tabs switch the content
-  /// below it between the spaces, the direct chats and the feed.
+  /// The search hero over the feed; on phones Spaces and Chats flank the
+  /// robot and open their sheets instead of swapping the scroll body.
   Widget _feedScroll({required bool compact}) =>
       LayoutBuilder(builder: (context, box) {
         final horizontalPad = math.max(16.0, (box.maxWidth - 760) / 2);
-        final tab = compact ? tabs.index : _feedTab;
         return CustomScrollView(controller: scrollController, slivers: [
           SliverPersistentHeader(
               pinned: false,
               delegate: _SearchHeroDelegate(
                   compact: compact,
                   model: model,
-                  onSearch: _openExplore)),
-          if (compact)
-            SliverPersistentHeader(
-                pinned: true,
-                delegate: _FixedHeaderDelegate(
-                    extent: 60, child: _FeedTabs(tabs: tabs, compact: true))),
-          ...switch (tab) {
-            _spacesTab => [
-                SliverPadding(
-                    padding:
-                        EdgeInsets.fromLTRB(horizontalPad, 12, horizontalPad, 96),
-                    sliver: SliverToBoxAdapter(
-                        child: _SpacesList(
-                            spaces: model.spaces,
-                            current: model.workspace,
-                            loading: model.loading && model.spaces.isEmpty,
-                            shrinkWrap: true,
-                            onOpen: _openSpace))),
-              ],
-            _chatsTab => [
-                SliverPadding(
-                    padding:
-                        EdgeInsets.fromLTRB(horizontalPad, 12, horizontalPad, 96),
-                    sliver: SliverToBoxAdapter(
-                        child: _ChatsList(
-                            chats: model.chats,
-                            me: _me,
-                            loading: model.chatsLoading,
-                            shrinkWrap: true,
-                            onOpen: _openChat))),
-              ],
-            _ => _feedSlivers(horizontalPad),
-          },
+                  onSearch: _openExplore,
+                  onOpenSpaces: compact ? _openWorkspaceSwitcher : null,
+                  onOpenChats: compact ? _openMessenger : null)),
+          ..._feedSlivers(horizontalPad),
         ]);
       });
 
@@ -344,7 +321,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
       // The person's assistant leads their home: the brief, what waits on
       // them and what their agents suggest.
       SliverPadding(
-          padding: EdgeInsets.fromLTRB(horizontalPad, 16, horizontalPad, 0),
+          padding: EdgeInsets.fromLTRB(horizontalPad, 4, horizontalPad, 0),
           sliver: SliverToBoxAdapter(
               child: HomeAssistant(
                   key: const ValueKey('home-assistant'),
@@ -382,41 +359,33 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   }
 }
 
-class _FixedHeaderDelegate extends SliverPersistentHeaderDelegate {
-  _FixedHeaderDelegate({required this.extent, required this.child});
-  final double extent;
-  final Widget child;
-  @override
-  double get minExtent => extent;
-  @override
-  double get maxExtent => extent;
-  @override
-  Widget build(
-          BuildContext context, double shrinkOffset, bool overlapsContent) =>
-      SizedBox(height: extent, width: double.infinity, child: child);
-  @override
-  bool shouldRebuild(covariant _FixedHeaderDelegate old) =>
-      old.extent != extent || old.child != child;
-}
-
 class _SearchHeroDelegate extends SliverPersistentHeaderDelegate {
   _SearchHeroDelegate({
     required this.compact,
     required this.model,
     required this.onSearch,
+    this.onOpenSpaces,
+    this.onOpenChats,
   });
 
   final bool compact;
   final SearchFeedViewModel model;
   final ValueChanged<String> onSearch;
+  final VoidCallback? onOpenSpaces;
+  final VoidCallback? onOpenChats;
 
   @override
   double get minExtent => 0;
+  // Ends just under the suggestion chips so the assistant bar sits close.
   @override
-  double get maxExtent => compact ? 318 : 360;
+  double get maxExtent => _HeroContent.extent(compact);
   @override
   bool shouldRebuild(covariant _SearchHeroDelegate old) =>
-      old.compact != compact || old.model != model || old.onSearch != onSearch;
+      old.compact != compact ||
+      old.model != model ||
+      old.onSearch != onSearch ||
+      old.onOpenSpaces != onOpenSpaces ||
+      old.onOpenChats != onOpenChats;
 
   @override
   Widget build(
@@ -425,7 +394,9 @@ class _SearchHeroDelegate extends SliverPersistentHeaderDelegate {
     return _HeroContent(
         progress: progress,
         compact: compact,
-        onSearch: onSearch);
+        onSearch: onSearch,
+        onOpenSpaces: onOpenSpaces,
+        onOpenChats: onOpenChats);
   }
 }
 
@@ -434,20 +405,37 @@ class _HeroContent extends StatelessWidget {
     required this.progress,
     required this.compact,
     required this.onSearch,
+    this.onOpenSpaces,
+    this.onOpenChats,
   });
 
   final double progress;
   final bool compact;
   final ValueChanged<String> onSearch;
+  final VoidCallback? onOpenSpaces;
+  final VoidCallback? onOpenChats;
+
+  static double robotSizeFor(bool compact) => compact ? 124.0 : 148.0;
+
+  /// Height that fits the robot, search bar and chips with a small bottom pad.
+  static double extent(bool compact) {
+    final robotSize = robotSizeFor(compact);
+    final searchTop = 18 + robotSize + 26;
+    final chipsTop = searchTop + 62 + 12;
+    const chipsHeight = 36.0;
+    const bottomPad = 4.0;
+    return chipsTop + chipsHeight + bottomPad;
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final robotSize = compact ? 124.0 : 148.0;
+    final robotSize = robotSizeFor(compact);
     final fade = (1 - progress).clamp(0.0, 1.0);
     final robotScale = 1 - .45 * progress;
     final searchTop = 18 + robotSize + 26;
-    final chipsTop = searchTop + 62 + 16;
+    final chipsTop = searchTop + 62 + 12;
+    final showSideActions = compact && onOpenSpaces != null && onOpenChats != null;
     return Stack(clipBehavior: Clip.hardEdge, children: [
       Positioned.fill(
           child: IgnorePointer(
@@ -462,7 +450,28 @@ class _HeroContent extends StatelessWidget {
           child: Opacity(
               opacity: fade,
               child: Transform.scale(
-                  scale: robotScale, child: _RobotHead(size: robotSize)))),
+                  scale: robotScale,
+                  child: SizedBox(
+                      height: robotSize,
+                      child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (showSideActions) ...[
+                              _HeroSideButton(
+                                  icon: Icons.workspaces_outline,
+                                  title: 'Spaces',
+                                  onTap: onOpenSpaces!),
+                              const SizedBox(width: 4),
+                            ],
+                            _RobotHead(size: robotSize),
+                            if (showSideActions) ...[
+                              const SizedBox(width: 4),
+                              _HeroSideButton(
+                                  icon: Icons.forum_outlined,
+                                  title: 'Chats',
+                                  onTap: onOpenChats!),
+                            ],
+                          ]))))),
       Positioned(
           top: searchTop,
           left: 0,
@@ -481,6 +490,45 @@ class _HeroContent extends StatelessWidget {
               opacity: fade,
               child: _SuggestionChips(onSuggestion: onSearch))),
     ]);
+  }
+}
+
+/// Icon + title control flanking the robot on phones.
+class _HeroSideButton extends StatelessWidget {
+  const _HeroSideButton({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+        message: title,
+        child: Semantics(
+            button: true,
+            label: title,
+            child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(16),
+                child: SizedBox(
+                    width: 72,
+                    child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(icon, size: 26, color: scheme.onSurface),
+                          const SizedBox(height: 6),
+                          Text(title,
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: scheme.onSurfaceVariant)),
+                        ])))));
   }
 }
 
@@ -569,46 +617,37 @@ class _BigSearchBar extends StatelessWidget {
 class _SuggestionChips extends StatelessWidget {
   const _SuggestionChips({required this.onSuggestion});
   final ValueChanged<String> onSuggestion;
-  static const suggestions = ['About Aseman', 'Best agents', 'News'];
+  static const suggestions = ['About Aseman', 'Best agents'];
   @override
-  Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
-        final chips = [
-          for (final s in suggestions) ...[
-            if (s != suggestions.first) const SizedBox(width: 8),
-            ActionChip(
-                avatar: const Icon(Icons.help_outline_rounded, size: 14),
-                label: Text(s),
-                visualDensity: VisualDensity.compact,
-                onPressed: () => onSuggestion(s)),
-          ],
-        ];
-        // One horizontal row: centered when it fits, scrollable when it does not.
-        return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: box.maxWidth - 24),
-                child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: chips)));
-      });
-}
-
-class _FeedTabs extends StatelessWidget {
-  const _FeedTabs({required this.tabs, required this.compact});
-  final TabController tabs;
-  final bool compact;
-  @override
-  Widget build(BuildContext context) => SegmentedTabBar(
-        controller: tabs,
-        compact: compact,
-        labels: const ['Following', 'Spaces', 'Chats'],
-        icons: const [
-          Icons.person_pin_circle_outlined,
-          Icons.workspaces_outline,
-          Icons.forum_outlined,
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    // Same surface as the tasks pulse card under the hero.
+    final chipColor = scheme.surfaceContainerHigh.withValues(alpha: .78);
+    return LayoutBuilder(builder: (context, box) {
+      final chips = [
+        for (final s in suggestions) ...[
+          if (s != suggestions.first) const SizedBox(width: 8),
+          ActionChip(
+              avatar: Icon(Icons.help_outline_rounded,
+                  size: 14, color: scheme.onSurfaceVariant),
+              label: Text(s),
+              visualDensity: VisualDensity.compact,
+              backgroundColor: chipColor,
+              side: BorderSide.none,
+              onPressed: () => onSuggestion(s)),
         ],
-      );
+      ];
+      // One horizontal row: centered when it fits, scrollable when it does not.
+      return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: box.maxWidth - 24),
+              child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: chips)));
+    });
+  }
 }
 
 class _FeedHeader extends StatelessWidget {
@@ -754,15 +793,11 @@ class _SpacesList extends StatelessWidget {
     required this.current,
     required this.loading,
     required this.onOpen,
-    this.shrinkWrap = false,
   });
   final List<Workspace> spaces;
   final String current;
   final bool loading;
   final ValueChanged<Workspace> onOpen;
-
-  /// Laid out inside the phone feed's scroll view instead of scrolling itself.
-  final bool shrinkWrap;
 
   @override
   Widget build(BuildContext context) {
@@ -772,20 +807,14 @@ class _SpacesList extends StatelessWidget {
           icon: Icons.workspaces_outline,
           text: 'You are not a member of any space yet.');
     }
-    final list = ListView.builder(
-        shrinkWrap: shrinkWrap,
-        physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
-        padding: shrinkWrap
-            ? const EdgeInsets.fromLTRB(8, 8, 8, 4)
-            : const EdgeInsets.fromLTRB(8, 0, 8, 12),
+    return ListView.builder(
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
         itemCount: spaces.length,
         itemBuilder: (context, i) => _SpaceTile(
             space: spaces[i],
             selected: spaces[i].name == current,
-            // Side panels on desktop use a denser row than the phone tabs.
-            dense: !shrinkWrap,
+            dense: true,
             onTap: () => onOpen(spaces[i])));
-    return shrinkWrap ? _ListCard(child: list) : list;
   }
 }
 
@@ -799,7 +828,7 @@ class _SpaceTile extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  /// Narrower desktop side-panel rows; phone tabs keep the larger size.
+  /// Narrower desktop side-panel rows.
   final bool dense;
 
   @override
@@ -877,20 +906,6 @@ class _SpaceTile extends StatelessWidget {
   }
 }
 
-/// The phone feed's spaces or chats, together on one card like its posts.
-class _ListCard extends StatelessWidget {
-  const _ListCard({required this.child});
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.card - 2)),
-      clipBehavior: Clip.antiAlias,
-      child: child);
-}
-
 /// The user's direct chats; tapping one opens the chat.
 class _ChatsList extends StatelessWidget {
   const _ChatsList({
@@ -898,15 +913,11 @@ class _ChatsList extends StatelessWidget {
     required this.me,
     required this.loading,
     required this.onOpen,
-    this.shrinkWrap = false,
   });
   final List<ChatSummary> chats;
   final String me;
   final bool loading;
   final ValueChanged<ChatSummary> onOpen;
-
-  /// Laid out inside the phone feed's scroll view instead of scrolling itself.
-  final bool shrinkWrap;
 
   @override
   Widget build(BuildContext context) {
@@ -915,20 +926,14 @@ class _ChatsList extends StatelessWidget {
       return const _PanelNote(
           icon: Icons.forum_outlined, text: 'No direct chats yet.');
     }
-    final list = ListView.builder(
-        shrinkWrap: shrinkWrap,
-        physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
-        padding: shrinkWrap
-            ? const EdgeInsets.fromLTRB(8, 8, 8, 4)
-            : const EdgeInsets.fromLTRB(8, 0, 8, 12),
+    return ListView.builder(
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
         itemCount: chats.length,
         itemBuilder: (context, i) => _DirectChatTile(
             chat: chats[i],
             me: me,
-            // Side panels on desktop use a denser row than the phone tabs.
-            dense: !shrinkWrap,
+            dense: true,
             onTap: () => onOpen(chats[i])));
-    return shrinkWrap ? _ListCard(child: list) : list;
   }
 }
 
@@ -942,7 +947,7 @@ class _DirectChatTile extends StatelessWidget {
   final String me;
   final VoidCallback onTap;
 
-  /// Narrower desktop side-panel rows; phone tabs keep the larger size.
+  /// Narrower desktop side-panel rows.
   final bool dense;
 
   String get _preview {

@@ -1587,8 +1587,7 @@ class _RoomChatState extends State<RoomChat> {
             padding: const EdgeInsets.only(bottom: 6),
             child: SuggestionBanner(
                 dependencies: deps,
-                onOpenTasks: () =>
-                    openPanel(context, TasksPanel(dependencies: deps))),
+                onOpenTasks: () => showTasksPanel(context, deps)),
           )
         : null;
     if (work == null && banner == null) return box;
@@ -1877,7 +1876,7 @@ class _RoomChatState extends State<RoomChat> {
           deps.service.invokeAction(namespace, action, body: body),
       spaceId: widget.spaceId,
       roomId: widget.roomId,
-      onOpenTasks: () => openPanel(context, TasksPanel(dependencies: deps)),
+      onOpenTasks: () => showTasksPanel(context, deps),
       child: child,
     );
   }

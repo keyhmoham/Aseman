@@ -63,6 +63,9 @@ void main() {
     await tester.pumpWidget(
         AsemanApp(dependencies: AppDependencies.withService(service)));
     await tester.pumpAndSettle();
+    // Messages lives in the workspace profile menu, not the feed's.
+    await tester.tap(find.text('Atlas Capital').last);
+    await tester.pumpAndSettle();
     await tester.tap(find.byType(CircleAvatar).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Messages').last);

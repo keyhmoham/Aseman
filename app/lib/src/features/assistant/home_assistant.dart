@@ -134,6 +134,7 @@ class _HomeAssistantState extends State<HomeAssistant>
   Widget build(BuildContext context) {
     if (!loaded || !available) return const SizedBox.shrink();
     final pulseData = _pulse;
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -144,19 +145,39 @@ class _HomeAssistantState extends State<HomeAssistant>
         ),
         if (brief.isNotEmpty) ...[
           const SizedBox(height: 10),
-          Card(
-            margin: EdgeInsets.zero,
+          // Same single surface as the tasks pulse card — no Card solid
+          // stacked with a secondaryContainer accent fill.
+          Material(
+            color: scheme.surfaceContainerHigh.withValues(alpha: .78),
+            borderRadius: BorderRadius.circular(AppShape.card - 4),
             clipBehavior: Clip.antiAlias,
-            child: ExpansionTile(
-              initiallyExpanded: briefOpen,
-              onExpansionChanged: (v) => briefOpen = v,
-              leading: const Icon(Icons.wb_sunny_outlined),
-              title: const Text(
-                'Today\'s brief',
-                style: TextStyle(fontWeight: FontWeight.w700),
+            child: Theme(
+              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                initiallyExpanded: briefOpen,
+                onExpansionChanged: (v) => briefOpen = v,
+                leading: Icon(
+                  Icons.wb_sunny_outlined,
+                  color: scheme.onSurfaceVariant,
+                ),
+                title: Text(
+                  'Today\'s brief',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                iconColor: scheme.onSurfaceVariant,
+                collapsedIconColor: scheme.onSurfaceVariant,
+                childrenPadding: EdgeInsets.zero,
+                children: [
+                  BriefCard(
+                    brief: brief,
+                    margin: EdgeInsets.zero,
+                    embedded: true,
+                  ),
+                ],
               ),
-              childrenPadding: EdgeInsets.zero,
-              children: [BriefCard(brief: brief, margin: EdgeInsets.zero)],
             ),
           ),
         ],

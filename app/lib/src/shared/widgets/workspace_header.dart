@@ -221,6 +221,7 @@ class _LivePill extends StatelessWidget {
 /// Workspace switcher dialog/sheet with a searchable grid of the user's real
 /// spaces. [dependencies] lists and creates spaces through the backend.
 /// With [onOpenFeed] the grid starts with a Home tile that opens the feed.
+/// With [embedded] it fills a mobile home tab (no close control).
 class WorkspacePicker extends StatefulWidget {
   const WorkspacePicker(
       {super.key,
@@ -229,7 +230,8 @@ class WorkspacePicker extends StatefulWidget {
       this.onOpenFeed,
       this.feedSelected = false,
       this.dependencies,
-      this.onSettings});
+      this.onSettings,
+      this.embedded = false});
   final String current;
   final ValueChanged<String> onPick;
   final VoidCallback? onOpenFeed;
@@ -238,6 +240,9 @@ class WorkspacePicker extends StatefulWidget {
   final bool feedSelected;
   final AppDependencies? dependencies;
   final void Function(Workspace space)? onSettings;
+
+  /// Full-page tab on the mobile home shell: no close, fills its parent.
+  final bool embedded;
   @override
   State<WorkspacePicker> createState() => _WorkspacePickerState();
 }
@@ -318,219 +323,210 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 820;
+    final embedded = widget.embedded;
     final names = _names;
     final showFeed = _showFeed;
-    return SafeArea(
-        child: Center(
-            child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  width: 760,
-                  constraints: BoxConstraints(
-                      maxHeight: compact ? double.infinity : 620),
-                  padding: const EdgeInsets.all(26),
-                  // In a bottom sheet the sheet already paints the surface;
-                  // floating on desktop it matches every other modal panel.
-                  decoration: BoxDecoration(
-                      color: compact
-                          ? null
-                          : AppSurfaces.overlay(Theme.of(context).colorScheme),
-                      borderRadius: BorderRadius.circular(AppShape.card),
-                      boxShadow: compact
-                          ? null
-                          : const [
-                              BoxShadow(
-                                  color: Colors.black38,
-                                  blurRadius: 60,
-                                  offset: Offset(0, 22))
-                            ]),
-                  child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [
-                          const Icon(Icons.blur_on_rounded, size: 30),
-                          const SizedBox(width: 10),
-                          const Expanded(
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                Text('Switch workspace',
-                                    style: TextStyle(
-                                        fontSize: 23,
-                                        fontWeight: FontWeight.w900)),
-                                Text(
-                                    'Every workspace has its own rooms, desks and feed',
-                                    style: TextStyle(fontSize: 11))
-                              ])),
-                          IconButton(
-                              onPressed: () => Navigator.pop(context),
-                              icon: const Icon(Icons.close))
-                        ]),
-                        const SizedBox(height: 18),
-                        TextField(
-                            autofocus: true,
-                            onChanged: (v) => setState(() => query = v),
-                            decoration: const InputDecoration(
-                                prefixIcon: Icon(Icons.search_rounded),
-                                hintText: 'Search workspaces…')),
-                        const SizedBox(height: 18),
-                        Flexible(
-                            child: loading
-                                ? const SkeletonGrid(
-                                    maxCrossAxisExtent: 220,
-                                    mainAxisExtent: 154)
-                                : GridView.builder(
-                                    shrinkWrap: true,
-                                    gridDelegate:
-                                        SliverGridDelegateWithFixedCrossAxisCount(
-                                            crossAxisCount: compact
-                                                ? math.max(
-                                                    1,
-                                                    (MediaQuery.sizeOf(context)
-                                                                .width /
-                                                            180)
-                                                        .floor())
-                                                : 3,
-                                            mainAxisSpacing: 12,
-                                            crossAxisSpacing: 12,
-                                            mainAxisExtent: 154),
-                                    itemCount:
-                                        names.length + 1 + (showFeed ? 1 : 0),
-                                    itemBuilder: (context, i) {
-                                      if (showFeed) {
-                                        if (i == 0) {
-                                          return _FeedTile(
-                                              selected: widget.feedSelected,
-                                              onTap: widget.onOpenFeed!);
-                                        }
-                                        i -= 1;
-                                      }
-                                      if (i == names.length)
-                                        return InkWell(
-                                            onTap: _create,
+    final body = Material(
+        color: Colors.transparent,
+        child: Container(
+          width: embedded ? null : 760,
+          constraints: embedded
+              ? const BoxConstraints.expand()
+              : BoxConstraints(maxHeight: compact ? double.infinity : 620),
+          padding: EdgeInsets.all(embedded ? 16 : 26),
+          // In a bottom sheet the sheet already paints the surface;
+          // floating on desktop it matches every other modal panel.
+          decoration: BoxDecoration(
+              color: compact || embedded
+                  ? null
+                  : AppSurfaces.overlay(Theme.of(context).colorScheme),
+              borderRadius: BorderRadius.circular(AppShape.card),
+              boxShadow: compact || embedded
+                  ? null
+                  : const [
+                      BoxShadow(
+                          color: Colors.black38,
+                          blurRadius: 60,
+                          offset: Offset(0, 22))
+                    ]),
+          child: Column(
+              mainAxisSize: embedded ? MainAxisSize.max : MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Icon(
+                      embedded
+                          ? Icons.workspaces_outline
+                          : Icons.blur_on_rounded,
+                      size: 30),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(embedded ? 'Spaces' : 'Switch workspace',
+                            style: const TextStyle(
+                                fontSize: 23, fontWeight: FontWeight.w900)),
+                        Text(
+                            embedded
+                                ? 'Open a workspace or start a new one'
+                                : 'Every workspace has its own rooms, desks and feed',
+                            style: const TextStyle(fontSize: 11))
+                      ])),
+                  if (!embedded)
+                    IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close))
+                ]),
+                const SizedBox(height: 18),
+                TextField(
+                    autofocus: !embedded,
+                    onChanged: (v) => setState(() => query = v),
+                    decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search_rounded),
+                        hintText: 'Search workspaces…')),
+                const SizedBox(height: 18),
+                Flexible(
+                    child: loading
+                        ? const SkeletonGrid(
+                            maxCrossAxisExtent: 220, mainAxisExtent: 154)
+                        : GridView.builder(
+                            shrinkWrap: !embedded,
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: compact
+                                        ? math.max(
+                                            1,
+                                            (MediaQuery.sizeOf(context).width /
+                                                    180)
+                                                .floor())
+                                        : 3,
+                                    mainAxisSpacing: 12,
+                                    crossAxisSpacing: 12,
+                                    mainAxisExtent: 154),
+                            itemCount: names.length + 1 + (showFeed ? 1 : 0),
+                            itemBuilder: (context, i) {
+                              if (showFeed) {
+                                if (i == 0) {
+                                  return _FeedTile(
+                                      selected: widget.feedSelected,
+                                      onTap: widget.onOpenFeed!);
+                                }
+                                i -= 1;
+                              }
+                              if (i == names.length) {
+                                return InkWell(
+                                    onTap: _create,
+                                    borderRadius: BorderRadius.circular(24),
+                                    child: Container(
+                                        decoration: BoxDecoration(
+                                            border: Border.all(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .outlineVariant),
                                             borderRadius:
-                                                BorderRadius.circular(24),
-                                            child: Container(
-                                                decoration: BoxDecoration(
-                                                    border: Border.all(
-                                                        color: Theme.of(context)
-                                                            .colorScheme
-                                                            .outlineVariant),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            24)),
-                                                child: const Column(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .center,
-                                                    children: [
-                                                      Icon(Icons
-                                                          .add_circle_outline_rounded),
-                                                      SizedBox(height: 8),
-                                                      Text('New workspace',
-                                                          style: TextStyle(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w700))
-                                                    ])));
-                                      final name = names[i];
-                                      final selected = !widget.feedSelected &&
-                                          name == widget.current;
-                                      final space = spaces.firstWhere(
-                                          (s) => s.name == name,
-                                          orElse: () => Workspace(
-                                              id: '', ownerId: '', name: name));
-                                      return InkWell(
-                                          onTap: () => widget.onPick(name),
+                                                BorderRadius.circular(24)),
+                                        child: const Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(Icons
+                                                  .add_circle_outline_rounded),
+                                              SizedBox(height: 8),
+                                              Text('New workspace',
+                                                  style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w700))
+                                            ])));
+                              }
+                              final name = names[i];
+                              final selected =
+                                  !widget.feedSelected && name == widget.current;
+                              final space = spaces.firstWhere(
+                                  (s) => s.name == name,
+                                  orElse: () => Workspace(
+                                      id: '', ownerId: '', name: name));
+                              return InkWell(
+                                  onTap: () => widget.onPick(name),
+                                  borderRadius: BorderRadius.circular(24),
+                                  child: AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 180),
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                          color: selected
+                                              ? Theme.of(context)
+                                                  .colorScheme
+                                                  .primaryContainer
+                                              : Theme.of(context)
+                                                  .colorScheme
+                                                  .surfaceContainerHighest
+                                                  .withValues(alpha: .6),
                                           borderRadius:
                                               BorderRadius.circular(24),
-                                          child: AnimatedContainer(
-                                              duration: const Duration(
-                                                  milliseconds: 180),
-                                              padding: const EdgeInsets.all(16),
-                                              decoration: BoxDecoration(
-                                                  color: selected
-                                                      ? Theme.of(context)
-                                                          .colorScheme
-                                                          .primaryContainer
-                                                      : Theme.of(context)
-                                                          .colorScheme
-                                                          .surfaceContainerHighest
-                                                          .withValues(
-                                                              alpha: .6),
-                                                  borderRadius:
-                                                      BorderRadius.circular(24),
-                                                  border: Border.all(
-                                                      color: selected
-                                                          ? Theme.of(context)
-                                                              .colorScheme
-                                                              .primary
-                                                          : Colors
-                                                              .transparent)),
-                                              child: Stack(children: [
-                                                Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      CircleAvatar(
-                                                          foregroundImage:
-                                                              _avatarOf(name),
-                                                          onForegroundImageError:
-                                                              _avatarOf(name) ==
-                                                                      null
-                                                                  ? null
-                                                                  : (_, __) {},
-                                                          child: Text(name
-                                                              .substring(
-                                                                  0,
-                                                                  math.min(2,
-                                                                      name.length))
-                                                              .toUpperCase())),
-                                                      const Spacer(),
-                                                      Text(name,
-                                                          style: const TextStyle(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w900)),
-                                                      Text(
-                                                          '${_roomCountFor(name)} rooms',
-                                                          style:
-                                                              const TextStyle(
-                                                                  fontSize:
-                                                                      10)),
-                                                      if (selected)
-                                                        const Align(
-                                                            alignment: Alignment
-                                                                .bottomRight,
-                                                            child: Icon(
-                                                                Icons
-                                                                    .check_circle_rounded,
-                                                                size: 17))
-                                                    ]),
-                                                if (widget.onSettings != null &&
-                                                    space.id.isNotEmpty)
-                                                  Positioned(
-                                                      top: 0,
-                                                      right: 0,
-                                                      child: IconButton(
-                                                          tooltip:
-                                                              'Settings for $name',
-                                                          visualDensity:
-                                                              VisualDensity
-                                                                  .compact,
-                                                          onPressed: () =>
-                                                              widget.onSettings!(
-                                                                  space),
-                                                          icon: const Icon(
-                                                              Icons
-                                                                  .settings_outlined,
-                                                              size: 18)))
-                                              ])));
-                                    })),
-                      ]),
-                ))));
+                                          border: Border.all(
+                                              color: selected
+                                                  ? Theme.of(context)
+                                                      .colorScheme
+                                                      .primary
+                                                  : Colors.transparent)),
+                                      child: Stack(children: [
+                                        Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              CircleAvatar(
+                                                  foregroundImage:
+                                                      _avatarOf(name),
+                                                  onForegroundImageError:
+                                                      _avatarOf(name) == null
+                                                          ? null
+                                                          : (_, __) {},
+                                                  child: Text(name
+                                                      .substring(
+                                                          0,
+                                                          math.min(
+                                                              2, name.length))
+                                                      .toUpperCase())),
+                                              const Spacer(),
+                                              Text(name,
+                                                  style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w900)),
+                                              Text(
+                                                  '${_roomCountFor(name)} rooms',
+                                                  style: const TextStyle(
+                                                      fontSize: 10)),
+                                              if (selected)
+                                                const Align(
+                                                    alignment:
+                                                        Alignment.bottomRight,
+                                                    child: Icon(
+                                                        Icons
+                                                            .check_circle_rounded,
+                                                        size: 17))
+                                            ]),
+                                        if (widget.onSettings != null &&
+                                            space.id.isNotEmpty)
+                                          Positioned(
+                                              top: 0,
+                                              right: 0,
+                                              child: IconButton(
+                                                  tooltip:
+                                                      'Settings for $name',
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  onPressed: () =>
+                                                      widget.onSettings!(space),
+                                                  icon: const Icon(
+                                                      Icons.settings_outlined,
+                                                      size: 18)))
+                                      ])));
+                            })),
+              ]),
+        ));
+    if (embedded) return body;
+    return SafeArea(child: Center(child: body));
   }
 
   int _roomCountFor(String name) => _roomCounts[name] ?? 0;

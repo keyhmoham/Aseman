@@ -1147,6 +1147,9 @@ func (a *msgSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	if blocked, byMe := a.s.directBlock(ctx, spID, req.Caller.ID); blocked {
 		return nil, blockError(byMe)
 	}
+	// A reply to an agent's message counts as mentioning that agent, then a
+	// direct conversation still addresses its agent when nothing else was named.
+	in.Mentions = a.s.replyMentions(ctx, in.ReplyTo, req.Caller.ID, in.Mentions)
 	in.Mentions = a.s.directMentions(ctx, spID, req.Caller.ID, in.Mentions)
 	// An agent handing work to agents is refused up front when the chain is
 	// already as deep as it may go, so the sender hears it instead of waiting

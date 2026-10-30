@@ -16,9 +16,6 @@ void main() {
         .clearAllTestValues();
   });
 
-  Finder robotHead() => find.byWidgetPredicate((widget) =>
-      widget is Image && widget.image.toString().contains('only_orb'));
-
   /// Seed a logged-in session so the shell mounts the feed instead of the
   /// auth screen. The app runs against the deterministic fake service, so the
   /// UI renders real-shaped backend data with no network.
@@ -52,16 +49,15 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    expect(robotHead(), findsOneWidget);
     expect(find.text('Global'), findsNothing);
     expect(find.text('Traders'), findsNothing);
     expect(find.text('Following'), findsOneWidget);
-    expect(find.textContaining('Search'), findsWidgets);
+    expect(find.text('Search Aseman…'), findsOneWidget);
 
-    // The spaces the user is in on the left, their direct chats on the right.
-    expect(find.text('Spaces'), findsOneWidget);
+    // The spaces picker on the left, the messenger on the right.
+    expect(find.text('Spaces'), findsWidgets);
     expect(find.text('Atlas Capital'), findsWidgets);
-    expect(find.text('Chats'), findsOneWidget);
+    expect(find.text('Chats'), findsWidgets);
     expect(find.text('Maya Chen'), findsOneWidget);
     expect(find.text('AlphaBot'), findsOneWidget);
 
@@ -70,7 +66,7 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('phone feed hero opens chats and spaces sheets',
+  testWidgets('phone home bottom nav switches chats, spaces and explore',
       (tester) async {
     await seedSession();
     tester.view.physicalSize = const Size(390, 844);
@@ -78,25 +74,25 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    // The feed stays open; Spaces and Chats flank the robot.
+    Finder navLabel(String label) => find.descendant(
+        of: find.byType(NavigationBar), matching: find.text(label));
+
+    // Phones land on the Chats tab.
+    expect(find.text('Maya Chen'), findsOneWidget);
+    expect(navLabel('Chats'), findsOneWidget);
+    expect(navLabel('Spaces'), findsOneWidget);
+    expect(navLabel('Explore'), findsOneWidget);
+
+    await tester.tap(navLabel('Spaces'));
+    await tester.pumpAndSettle();
+    expect(find.text('Atlas Capital'), findsWidgets);
+    expect(find.text('Open a workspace or start a new one'), findsOneWidget);
+
+    await tester.tap(navLabel('Explore'));
+    await tester.pumpAndSettle();
+    expect(find.text('Search Aseman…'), findsOneWidget);
     expect(find.text('Private update inside the Home workspace.'),
         findsOneWidget);
-    expect(find.text('Maya Chen'), findsNothing);
-    expect(find.text('Spaces'), findsOneWidget);
-    expect(find.text('Chats'), findsOneWidget);
-
-    await tester.tap(find.text('Chats'));
-    await tester.pumpAndSettle();
-    expect(find.text('Messages'), findsOneWidget);
-    expect(find.text('Maya Chen'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('Close'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Spaces'));
-    await tester.pumpAndSettle();
-    expect(find.text('Switch workspace'), findsOneWidget);
-    expect(find.text('Atlas Capital'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
@@ -110,7 +106,7 @@ void main() {
         dependencies: AppDependencies.withService(service)));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Search Aseman — signals, traders, agents…'));
+    await tester.tap(find.text('Search Aseman…'));
     await tester.pumpAndSettle();
     expect(find.text('Explore'), findsOneWidget);
     // Outside a space there is no space/explore scope to pick.
@@ -154,7 +150,7 @@ void main() {
     // Explore sits over the feed, whose side panels list the same names.
     Finder inExplore(String text) => find.text(text).last;
     // The feed's search bar opens Explore.
-    await tester.tap(find.text('Search Aseman — signals, traders, agents…'));
+    await tester.tap(find.text('Search Aseman…'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Chats').last);
     await tester.pumpAndSettle();

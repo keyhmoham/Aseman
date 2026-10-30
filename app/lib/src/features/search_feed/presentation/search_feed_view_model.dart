@@ -30,25 +30,17 @@ class SearchFeedViewModel extends ChangeNotifier {
   final _hasMore = [true, true];
   Map<String, String> _spaceNames = {};
 
-  /// The spaces the caller is a member of (the feed's left panel).
-  List<Workspace> spaces = const [];
-
-  /// The caller's direct chats (the feed's right panel).
-  List<ChatSummary> chats = const [];
-  bool chatsLoading = true;
-  bool _refreshingChats = false;
-
   String get workspace => _workspace;
 
-  /// Loads the first page of the feed, the caller's spaces and their direct
-  /// chats from the server.
+  /// Loads the first page of the feed and the caller's spaces (for post
+  /// space names). Chats and the spaces grid live in MessengerPanel /
+  /// WorkspacePicker.
   Future<void> load() async {
     final deps = dependencies?.service;
     if (deps == null) return;
     loading = true;
     error = null;
     notifyListeners();
-    unawaited(loadChats());
     try {
       final results = await Future.wait([
         deps.fetchFeed(following: true, limit: pageSize),
@@ -57,7 +49,7 @@ class SearchFeedViewModel extends ChangeNotifier {
       ]);
       _serverFollowing = (results[0] as List).cast<SocialPost>();
       _serverSpaces = (results[1] as List).cast<SocialPost>();
-      spaces = (results[2] as List).cast<Workspace>();
+      final spaces = (results[2] as List).cast<Workspace>();
       _spaceNames = {for (final sp in spaces) sp.id: sp.name};
       _offsets[0] = _serverFollowing.length;
       _offsets[1] = _serverSpaces.length;
@@ -67,21 +59,6 @@ class SearchFeedViewModel extends ChangeNotifier {
       error = e.toString();
     }
     loading = false;
-    notifyListeners();
-  }
-
-  /// Refreshes the caller's direct chats.
-  Future<void> loadChats() async {
-    final deps = dependencies?.service;
-    if (deps == null || _refreshingChats) return;
-    _refreshingChats = true;
-    try {
-      chats = await deps.fetchChats(kind: 'direct');
-    } catch (_) {
-      // Keep showing what loaded before.
-    }
-    _refreshingChats = false;
-    chatsLoading = false;
     notifyListeners();
   }
 

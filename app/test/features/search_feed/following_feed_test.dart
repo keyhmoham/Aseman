@@ -43,8 +43,6 @@ void main() {
     // The space post carries its space's name; the others carry none.
     expect(posts[1].workspace, isNotNull);
     expect(posts[0].workspace, isNull);
-    expect(model.spaces, isNotEmpty);
-    expect(model.chats.every((c) => c.direct), isTrue);
     model.dispose();
   });
 }

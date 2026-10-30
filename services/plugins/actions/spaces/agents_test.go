@@ -601,3 +601,80 @@ func TestAnAgentsHandOffCanWaitForTheAnswer(t *testing.T) {
 		t.Fatalf("beta ran %d times", len(rt.prompts))
 	}
 }
+
+// A person's reply to an agent's message triggers that agent even when the
+// body does not mention it (reply chips, threaded answers, …).
+func TestReplyingToAnAgentCountsAsAMention(t *testing.T) {
+	s, ctx := fileToolHarness(t)
+	owner := idFromHex(t, "00000000000000010000000000000001")
+	sp, err := s.CreateSpace(ctx, owner, "follow-up", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addSandbox(t, s, ctx, sp.ID)
+	room, _ := s.generalRoom(ctx, sp.ID)
+	s.Bots = sandboxBots{mentionBots{BotPort: s.Bots}}
+	rt := bootRuntime(t, s, ctx)
+	helper := addAgent(t, s, ctx, sp.ID, "helper", "g-helper")
+	_ = addAgent(t, s, ctx, sp.ID, "observer", "g-observer")
+
+	agentMsgID, _ := identity.New(s.K.NodeID())
+	agentMsg := &message.Message{
+		Entity:  entity.Entity{ID: agentMsgID, CreatedAt: time.Now()},
+		SpaceID: sp.ID, RoomID: room.ID, SenderID: helper.AccountID,
+		Body: "Which color should the button be?",
+	}
+	if err := s.R.CreateID(ctx, "messages", agentMsgID, agentMsg); err != nil {
+		t.Fatal(err)
+	}
+
+	body := `{"space":"` + sp.ID.String() + `","room":"` + room.ID.String() +
+		`","body":"blue","reply_to":"` + agentMsgID.String() + `","wait":true}`
+	resp, err := (&msgSendAction{s: s}).Handle(ctx, &api.ActionRequest{
+		Caller: api.Caller{ID: owner, Kind: "user"}, Body: []byte(body),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		MessageID string         `json:"message_id"`
+		Replies   []MentionReply `json:"replies"`
+	}
+	if err := json.Unmarshal(resp.Body, &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Replies) != 1 || out.Replies[0].BotID != helper.ID.String() || out.Replies[0].Reply != "done by helper" {
+		t.Fatalf("replies=%+v", out.Replies)
+	}
+	if len(rt.prompts) != 1 || rt.prompts[0].Agent.Name != "helper" {
+		t.Fatalf("prompts=%+v", rt.prompts)
+	}
+	var stored message.Message
+	if err := s.R.Get(ctx, "messages", identity.MustParse(out.MessageID), &stored); err != nil {
+		t.Fatal(err)
+	}
+	if !isMentioned(helper, stored.ParseMentions()) {
+		t.Fatalf("reply did not record the agent as mentioned: %v", stored.ParseMentions())
+	}
+
+	// Replying to a person does not wake every agent in the room.
+	rt.prompts = nil
+	personMsgID, _ := identity.New(s.K.NodeID())
+	personMsg := &message.Message{
+		Entity:  entity.Entity{ID: personMsgID, CreatedAt: time.Now()},
+		SpaceID: sp.ID, RoomID: room.ID, SenderID: owner, Body: "notes for later",
+	}
+	if err := s.R.CreateID(ctx, "messages", personMsgID, personMsg); err != nil {
+		t.Fatal(err)
+	}
+	body = `{"space":"` + sp.ID.String() + `","room":"` + room.ID.String() +
+		`","body":"ok","reply_to":"` + personMsgID.String() + `","wait":true}`
+	if _, err := (&msgSendAction{s: s}).Handle(ctx, &api.ActionRequest{
+		Caller: api.Caller{ID: owner, Kind: "user"}, Body: []byte(body),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(rt.prompts) != 0 {
+		t.Fatalf("a reply to a person triggered agents: %+v", rt.prompts)
+	}
+}

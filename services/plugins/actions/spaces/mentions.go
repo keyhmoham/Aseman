@@ -152,6 +152,32 @@ func mentionsAgent(mentions []string, ids ...string) bool {
 	return false
 }
 
+// replyMentions treats a person's reply to an agent's message as a mention of
+// that agent: answering it in the thread is enough to put it to work, even
+// when the body does not name it. Agents still have to mention each other
+// explicitly when they hand work off.
+func (s *Service) replyMentions(ctx context.Context, replyTo string, sender identity.ID, mentions []string) []string {
+	if replyTo == "" || s.isBotAccount(ctx, sender) {
+		return mentions
+	}
+	msgID, err := identity.Parse(replyTo)
+	if err != nil {
+		return mentions
+	}
+	var parent message.Message
+	if err := s.R.Get(ctx, "messages", msgID, &parent); err != nil {
+		return mentions
+	}
+	rec, err := s.botForMember(ctx, parent.SenderID)
+	if err != nil || !isAgentRuntime(rec) {
+		return mentions
+	}
+	if isMentioned(rec, mentions) {
+		return mentions
+	}
+	return append(mentions, rec.AccountID.String())
+}
+
 // withoutToolMessages drops KindTool rows from a chat feed. Those are microtool
 // replies (microtool/page API traffic, …) and must not appear as conversation.
 func withoutToolMessages(msgs []message.Message) []message.Message {

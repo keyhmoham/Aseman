@@ -2763,16 +2763,17 @@ class _SearchPanelState extends State<_SearchPanel>
                   hintText: _local
                       ? 'Search ${widget.workspace}…'
                       : 'Search all of Aseman…')),
-          // Outside a space there is nothing to scope the search to.
-          if (!widget.feed) ...[
-            const SizedBox(height: 9),
-            SegmentedTabBar(
-              controller: tabs,
-              compact: compact,
-              labels: ['In ${widget.workspace}', 'Explore Aseman'],
-              icons: const [Icons.hub_outlined, Icons.travel_explore_rounded],
-            ),
-          ],
+          const SizedBox(height: 9),
+          _SearchSectionNav(
+              sections: sections,
+              selected: selected,
+              onSelect: (value) => setState(() {
+                    if (_local) {
+                      localSection = value;
+                    } else {
+                      globalSection = value;
+                    }
+                  })),
           Expanded(
               child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 240),
@@ -2786,16 +2787,16 @@ class _SearchPanelState extends State<_SearchPanel>
                       query: query,
                       onOpenSpace: widget.onOpenSpace,
                       dependencies: widget.dependencies))),
-          _SearchSectionNav(
-              sections: sections,
-              selected: selected,
-              onSelect: (value) => setState(() {
-                    if (_local) {
-                      localSection = value;
-                    } else {
-                      globalSection = value;
-                    }
-                  })),
+          // Outside a space there is nothing to scope the search to.
+          if (!widget.feed) ...[
+            const SizedBox(height: 9),
+            SegmentedTabBar(
+              controller: tabs,
+              compact: compact,
+              labels: ['In ${widget.workspace}', 'Explore Aseman'],
+              icons: const [Icons.hub_outlined, Icons.travel_explore_rounded],
+            ),
+          ],
         ]));
   }
 }

@@ -472,9 +472,13 @@ class BriefCard extends StatelessWidget {
     super.key,
     required this.brief,
     this.margin = const EdgeInsets.fromLTRB(0, 0, 0, 0),
+    /// When true, no fill of its own — sits on a parent surface (e.g. the
+    /// feed's collapsible brief) so solid and accent never stack.
+    this.embedded = false,
   });
   final Map<String, dynamic> brief;
   final EdgeInsetsGeometry margin;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
@@ -483,6 +487,8 @@ class BriefCard extends StatelessWidget {
     final needs = jsonList(content['needs_you']);
     final calendar = jsonList(content['calendar']);
     final tasks = jsonList(content['tasks']);
+    final fg =
+        embedded ? scheme.onSurface : scheme.onSecondaryContainer;
     String time(dynamic iso) {
       final t = DateTime.tryParse('$iso')?.toLocal();
       return t == null
@@ -493,7 +499,9 @@ class BriefCard extends StatelessWidget {
     return Container(
       margin: margin,
       decoration: BoxDecoration(
-        color: scheme.secondaryContainer.withValues(alpha: .45),
+        color: embedded
+            ? Colors.transparent
+            : scheme.secondaryContainer.withValues(alpha: .45),
         borderRadius: BorderRadius.circular(AppShape.inner),
       ),
       padding: const EdgeInsets.all(16),
@@ -502,15 +510,14 @@ class BriefCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.wb_sunny_outlined,
-                  size: 20, color: scheme.onSecondaryContainer),
+              Icon(Icons.wb_sunny_outlined, size: 20, color: fg),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Your brief · ${content['day'] ?? brief['day'] ?? ''}',
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
-                    color: scheme.onSecondaryContainer,
+                    color: fg,
                   ),
                 ),
               ),
@@ -522,7 +529,7 @@ class BriefCard extends StatelessWidget {
               'Needs you',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: scheme.onSecondaryContainer,
+                color: fg,
               ),
             ),
             for (final n in needs)
@@ -532,7 +539,7 @@ class BriefCard extends StatelessWidget {
                   n['from'],
                   n['reason'],
                 ].where((x) => '${x ?? ''}'.isNotEmpty).join(' · '),
-                scheme.onSecondaryContainer,
+                fg,
               ),
           ],
           if (calendar.isNotEmpty) ...[
@@ -541,14 +548,14 @@ class BriefCard extends StatelessWidget {
               'Today',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: scheme.onSecondaryContainer,
+                color: fg,
               ),
             ),
             for (final e in calendar)
               _line(
                 '${e['summary']}',
                 e['all_day'] == true ? 'All day' : time(e['start']),
-                scheme.onSecondaryContainer,
+                fg,
               ),
           ],
           if (tasks.isNotEmpty) ...[
@@ -557,19 +564,18 @@ class BriefCard extends StatelessWidget {
               'Tasks',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: scheme.onSecondaryContainer,
+                color: fg,
               ),
             ),
             for (final t in tasks)
-              _line('${t['subject']}', '${t['reason'] ?? ''}',
-                  scheme.onSecondaryContainer),
+              _line('${t['subject']}', '${t['reason'] ?? ''}', fg),
           ],
           if (needs.isEmpty && calendar.isEmpty && tasks.isEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                 'A quiet day: nothing needs you.',
-                style: TextStyle(color: scheme.onSecondaryContainer),
+                style: TextStyle(color: fg),
               ),
             ),
         ],

@@ -28,10 +28,20 @@ Future<void> showMessenger(
 /// Every conversation of the account in one place, like a messenger: direct
 /// chats with people and agents and the rooms of the account's projects, each
 /// opening the same full room chat.
+///
+/// With [embedded] the list is a full-page home tab (no close control); the
+/// sheet/dialog form still uses [showMessenger].
 class MessengerPanel extends StatefulWidget {
-  const MessengerPanel({super.key, required this.dependencies});
+  const MessengerPanel({
+    super.key,
+    required this.dependencies,
+    this.embedded = false,
+  });
 
   final AppDependencies dependencies;
+
+  /// Full-page tab on the mobile home shell: no close button.
+  final bool embedded;
 
   @override
   State<MessengerPanel> createState() => _MessengerPanelState();
@@ -47,7 +57,7 @@ class _MessengerPanelState extends State<MessengerPanel> {
   Widget build(BuildContext context) {
     // The list and the chats share the panel: a chat slides in over the list
     // and back (or the system back gesture) returns to it. On the list, back
-    // closes the panel as usual.
+    // closes the panel as usual (unless this is an embedded home tab).
     final inChat = _depth.depth > 1;
     return PopScope(
       canPop: !inChat,
@@ -58,12 +68,23 @@ class _MessengerPanelState extends State<MessengerPanel> {
         child: Navigator(
           key: _navigator,
           observers: [_depth],
-          onGenerateRoute: (_) => MaterialPageRoute<void>(
-            builder: (_) => _ChatList(
+          onGenerateRoute: (_) {
+            final list = _ChatList(
               dependencies: widget.dependencies,
-              onClose: () => Navigator.of(context).pop(),
-            ),
-          ),
+              embedded: widget.embedded,
+              onClose: widget.embedded
+                  ? null
+                  : () => Navigator.of(context).pop(),
+            );
+            // Embedded home tab: transparent route so the page glow shows.
+            if (widget.embedded) {
+              return PageRouteBuilder<void>(
+                opaque: false,
+                pageBuilder: (_, __, ___) => list,
+              );
+            }
+            return MaterialPageRoute<void>(builder: (_) => list);
+          },
         ),
       ),
     );
@@ -98,10 +119,17 @@ class _DepthObserver extends NavigatorObserver {
 enum _Filter { all, direct, spaces }
 
 class _ChatList extends StatefulWidget {
-  const _ChatList({required this.dependencies, required this.onClose});
+  const _ChatList({
+    required this.dependencies,
+    this.onClose,
+    this.embedded = false,
+  });
 
   final AppDependencies dependencies;
-  final VoidCallback onClose;
+
+  /// Null when the list is an embedded home tab (no close control).
+  final VoidCallback? onClose;
+  final bool embedded;
 
   @override
   State<_ChatList> createState() => _ChatListState();
@@ -261,17 +289,20 @@ class _ChatListState extends State<_ChatList> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final compact = MediaQuery.sizeOf(context).width < 560;
-    final gutter = compact ? 16.0 : 26.0;
+    final gutter = compact || widget.embedded ? 16.0 : 26.0;
     final shown = _shown;
     return Scaffold(
-      backgroundColor: scheme.surface,
+      // Embedded home tab keeps the page glow; the sheet/dialog paints a
+      // solid surface so the list reads as a panel.
+      backgroundColor:
+          widget.embedded ? Colors.transparent : scheme.surface,
       body: Padding(
-        padding: EdgeInsets.fromLTRB(gutter, compact ? 16 : 22, gutter, 0),
+        padding: EdgeInsets.fromLTRB(gutter, compact || widget.embedded ? 8 : 22, gutter, 0),
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           PanelHeader(
             icon: Icons.forum_outlined,
-            title: 'Messages',
+            title: widget.embedded ? 'Chats' : 'Messages',
             subtitle: 'Direct chats and your project rooms',
             onClose: widget.onClose,
             actions: [

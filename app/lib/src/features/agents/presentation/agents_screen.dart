@@ -326,7 +326,7 @@ class _AgentsScreenState extends State<AgentsScreen> {
             subtitle: 'Agents & apps you created across the network',
             onClose: () => Navigator.pop(context),
             actions: [
-              PopupMenuButton<String>(
+              AppPopupMenuButton<String>(
                 tooltip: 'Create',
                 onSelected: _create,
                 itemBuilder: (_) => const [

@@ -21,19 +21,20 @@ Future<void> showNotificationsMenu(
   final compact = MediaQuery.sizeOf(context).width < 820;
   final AppNotification? picked;
   if (compact) {
-    picked = await showModalBottomSheet<AppNotification>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) => ConstrainedBox(
+    picked = await showAppSheet<AppNotification>(
+      context,
+      ConstrainedBox(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(sheetContext).height * .8,
+          maxHeight: MediaQuery.sizeOf(context).height * .8,
         ),
-        child: _NotificationsBody(
-          dependencies: dependencies,
-          onSelect: (n) => Navigator.pop(sheetContext, n),
-        ),
+        child: Builder(builder: (sheetContext) {
+          return _NotificationsBody(
+            dependencies: dependencies,
+            onSelect: (n) => Navigator.pop(sheetContext, n),
+          );
+        }),
       ),
+      isScrollControlled: true,
     );
   } else {
     final size = MediaQuery.sizeOf(context);

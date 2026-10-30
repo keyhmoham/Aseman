@@ -46,23 +46,24 @@ Future<void> showProfileMenu(
   final compact = MediaQuery.sizeOf(context).width < 820;
   final ProfileAction? action;
   if (compact) {
-    action = await showModalBottomSheet<ProfileAction>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) => ConstrainedBox(
+    action = await showAppSheet<ProfileAction>(
+      context,
+      ConstrainedBox(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(sheetContext).height * .92,
+          maxHeight: MediaQuery.sizeOf(context).height * .92,
         ),
         child: SingleChildScrollView(
-          child: _ProfileBody(
-            dependencies: dependencies,
-            showAdmin: dependencies.sessionController.isAdmin,
-            showMessages: showMessages,
-            onSelect: (a) => Navigator.pop(sheetContext, a),
-          ),
+          child: Builder(builder: (sheetContext) {
+            return _ProfileBody(
+              dependencies: dependencies,
+              showAdmin: dependencies.sessionController.isAdmin,
+              showMessages: showMessages,
+              onSelect: (a) => Navigator.pop(sheetContext, a),
+            );
+          }),
         ),
       ),
+      isScrollControlled: true,
     );
   } else {
     // A floating panel anchored under the avatar. (A popup menu would grey

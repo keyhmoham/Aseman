@@ -33,8 +33,8 @@ class SearchFeedViewModel extends ChangeNotifier {
   String get workspace => _workspace;
 
   /// Loads the first page of the feed and the caller's spaces (for post
-  /// space names). Chats and the spaces grid live in MessengerPanel /
-  /// WorkspacePicker.
+  /// space names). Chats live in MessengerPanel; pinned windows, in the
+  /// feed desk's toolbox.
   Future<void> load() async {
     final deps = dependencies?.service;
     if (deps == null) return;

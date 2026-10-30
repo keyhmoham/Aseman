@@ -245,7 +245,7 @@ class _RoomThreadsPanelState extends State<RoomThreadsPanel> {
           overflow: TextOverflow.ellipsis),
       trailing: t.isMain
           ? (selected ? const Icon(Icons.check_rounded) : null)
-          : PopupMenuButton<String>(
+          : AppPopupMenuButton<String>(
               tooltip: 'Thread options',
               icon: const Icon(Icons.more_vert_rounded),
               onSelected: (v) {

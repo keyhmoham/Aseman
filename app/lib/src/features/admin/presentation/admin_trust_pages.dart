@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 
 import '../../../app_dependencies.dart';
 import '../../assistant/assistant_common.dart';
 import '../../assistant/governance_views.dart';
+import '../../../shared/widgets/glass_surface.dart';
 
 /// The admin console's governance, connection and enterprise pages. Each is
 /// self-contained: it loads its own settings and saves them with the node's
@@ -175,7 +177,7 @@ class _HostAccessAdminState extends _FormState<_HostAccessAdmin> {
 
   Future<void> _set(bool on) async {
     if (on) {
-      final sure = await showDialog<bool>(
+      final sure = await showAppDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Let agents use people\'s own computers?'),
@@ -220,7 +222,7 @@ class _HostAccessAdminState extends _FormState<_HostAccessAdmin> {
           'this node can give.',
         ),
         const SizedBox(height: 12),
-        Card(
+        AppCard(
           color: on ? scheme.errorContainer : null,
           child: SwitchListTile(
             title: const Text('Agents may use people\'s own computers'),
@@ -495,7 +497,7 @@ class _BrokersAdminState extends _FormState<_BrokersAdmin> {
       ),
       const SizedBox(height: 12),
       for (final b in jsonList(d['brokers']))
-        Card(
+        AppCard(
           margin: const EdgeInsets.only(bottom: 10),
           child: Padding(
             padding: const EdgeInsets.all(14),
@@ -541,7 +543,7 @@ class _SsoAdminState extends _FormState<_SsoAdmin> {
   );
 
   Future<void> _edit([Map<String, dynamic> p = const {}]) async {
-    final body = await showDialog<Map<String, dynamic>>(
+    final body = await showAppDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => _ProviderDialog(p),
     );
@@ -759,7 +761,7 @@ class _DirectoryAdminState extends _FormState<_DirectoryAdmin> {
   Future<void> _newToken() async {
     final out = await call('enterprise', 'scim_token_new', const {});
     if (out == null || !mounted) return;
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('SCIM token'),
@@ -926,7 +928,7 @@ class _DirectoryAdminState extends _FormState<_DirectoryAdmin> {
             trailing: p['active'] == true
                 ? TextButton(
                     onPressed: () async {
-                      final ok = await showDialog<bool>(
+                      final ok = await showAppDialog<bool>(
                         context: context,
                         builder: (context) => AlertDialog(
                           title: Text('Offboard ${p['user_name']}?'),

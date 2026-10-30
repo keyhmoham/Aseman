@@ -36,6 +36,12 @@ func (p kernelPlatform) OpenCodeEnabled(ctx context.Context) (bool, error) {
 	return on, err
 }
 
+func (p kernelPlatform) AgentEngine(ctx context.Context) (string, error) {
+	var engine string
+	err := bridge.Invoke(ctx, p.K, "spaces", "AgentEngine", []any{ctx}, &engine)
+	return engine, err
+}
+
 // timelineOn reports whether turns get the timeline (an error means the
 // timeline namespace is not loaded: off).
 func (a *Adapter) timelineOn(ctx context.Context) bool {

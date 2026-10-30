@@ -5,7 +5,9 @@ import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/mini_tag.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/spark_painter.dart';
 import '../../../shared/widgets/status_tag.dart';
 import '../domain/feed_post.dart';
@@ -156,11 +158,8 @@ class _FeedPostCardState extends State<FeedPostCard> {
       child: AnimatedOpacity(
         duration: const Duration(milliseconds: 160),
         opacity: _busy ? .55 : 1,
-        child: Material(
-          color: scheme.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppShape.card - 2)),
-          clipBehavior: Clip.antiAlias,
+        child: GlassSurface(
+          borderRadius: BorderRadius.circular(AppShape.card - 2),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(18, 16, 10, 12),
             child: Column(
@@ -336,7 +335,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(icon, color: color),
                 title: Text(label, style: TextStyle(color: color))));
-    return PopupMenuButton<String>(
+    return AppPopupMenuButton<String>(
       tooltip: 'More',
       enabled: !_busy,
       icon: const Icon(Icons.more_horiz_rounded),

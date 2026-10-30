@@ -519,7 +519,8 @@ Configuration: `ASEMAN_TOOL_RUNTIME_IMAGE`, `ASEMAN_TOOL_RUNTIME_NETWORK`,
 
 Every agent — the built-in **aseman** lead of each space and every
 specialist — runs on [LangChain Deep Agents](https://github.com/langchain-ai/deepagents)
-(on LangGraph). The engine is a modular VMM adapter,
+(on LangGraph), unless an admin sets the agentic engine to OpenCode
+(below). The engine is a modular VMM adapter,
 `plugins/adapters/vmm/deepagents`:
 
 - the **Go adapter** registers agents as VMs (`vm_type: deepagents`), runs the
@@ -722,6 +723,23 @@ and the runtime gets it as `opencode` in the turn request):
   builtin app with microtools `run`, `status`, `models`, `build`.
 
 `appui_status` (and `appui_publish`, to re-verify and reopen) work in both.
+
+That switch is the programmer only. **Who runs agent turns** is
+`spaces.agent_engine_get` / `spaces.agent_engine_set` (Admin → AI → Agentic
+engine, table `spaces_agent_engine`, default `deepagents`). Each turn reads
+it, so a change applies to the next step without a restart, and it does not
+change the programmer switch:
+
+- **deepagents** — the LangGraph runtime above. Models come from the
+  platform LLM gateway.
+- **opencode** — the runtime drives the OpenCode CLI (`opencode run --format
+  json --auto`), one session per agent per room, on a free `opencode/…`
+  model from OpenCode's own gateway (`opencode models`). The platform LLM
+  proxy is not used. A swarm is parallel `opencode run` processes, the team
+  is OpenCode agents (primary plus subagents), a handoff is the task tool,
+  and app generation is the `aseman-app-builder` subagent (sandbox files,
+  then `appui_publish`). It does not call `opencode_run`, `appui_create`, or
+  `aseman-appui`, and it does not load `/etc/opencode`.
 
 When an agent takes a turn in a space, the runtime reads the space's tools
 (`spaces.tools_list`) — every app installed in the space **plus the

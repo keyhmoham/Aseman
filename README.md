@@ -26,20 +26,24 @@ AsemanAIOS/
 Run the entire platform with a single command. Docker with the Compose plugin is the only prerequisite.
 
 ```bash
-# Start all services (builds images on first run)
+# Start all services. The Flutter app is served in debug mode and hot-reloads
+# when files under app/ change.
 ./aseman.sh up
+
+# Serve the release web image instead of the debug server
+./aseman.sh up --no-hot-reload
 
 # Or launch with a custom configuration file
 ./aseman.sh up path/to/config.yml
 ```
 
-> **Note:** `./aseman.sh up` is equivalent to running `docker compose up -d --build`.
+> **Note:** `./aseman.sh up` starts the stack with the Flutter client in debug mode (`docker-compose.hotreload.yml`). `./aseman.sh up --no-hot-reload` is the release image, equivalent to `docker compose up -d --build`.
 
 ### Service Map
 
 | Service | Purpose | Port |
 | :--- | :--- | :--- |
-| **`web`** | Flutter Web client (served via nginx) | [http://localhost:3000](http://localhost:3000) |
+| **`web`** | Flutter web client. Debug mode with hot reload by default; `--no-hot-reload` serves the release build | [http://localhost:3000](http://localhost:3000) |
 | **`aseman`** | Core Go node (REST/WebSocket API, agent gateway, finance) | [http://localhost:8080](http://localhost:8080) |
 | **`postgres`** | The stack's one database server (Postgres 16 with pgvector): the node's records and the timelines' database | Internal |
 | **`nomad`** | Nomad agent executing bot and agent workloads | Internal |
@@ -196,6 +200,13 @@ Users create tools in the Tools panel from one form with a **backend** and a
     and check the result.
   Both modes share the project layout, guides, toolchain, checks, update
   flow and app features. `appui_status` reads a project's state in either.
+  This switch is only the programmer. Who runs agent turns is separate
+  (Admin → AI → Agentic engine, `spaces.agent_engine_get` / `agent_engine_set`,
+  default `deepagents`). `opencode` runs every turn through the OpenCode CLI
+  (`opencode run --format json`) on OpenCode's own free models — swarm as
+  parallel runs, the team as OpenCode agents, handoff as the task tool, app
+  generation as the `aseman-app-builder` agent — and does not use the platform
+  LLM gateway or this programmer switch.
   Use `proxy_create` to expose an already-running sandbox HTTP service as a
   DeskWeb card. Previews serve the page API at `/_aseman/api/` (context,
   tools, microtool calls).

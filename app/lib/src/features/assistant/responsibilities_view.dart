@@ -1,10 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../../shared/widgets/overlay_panels.dart';
 import 'package:flutter/services.dart';
 
 import '../../app_dependencies.dart';
 import 'assistant_common.dart';
+import '../../shared/widgets/glass_surface.dart';
 
 /// Standing responsibilities: an instruction an agent runs, as the person,
 /// when an event from a service, an app, an API or the clock matches. The
@@ -61,7 +63,7 @@ class _ResponsibilitiesViewState extends State<ResponsibilitiesView> {
             .map((b) => (id: b.id, name: b.name))
             .toList();
     if (!mounted) return;
-    final input = await showDialog<Map<String, dynamic>>(
+    final input = await showAppDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => _ResponsibilityDialog(triggers: triggers, apps: apps),
     );
@@ -76,7 +78,7 @@ class _ResponsibilitiesViewState extends State<ResponsibilitiesView> {
     if (out == null || !mounted) return;
     final trigger = _byId['${input['trigger']}'] ?? const {};
     if ('${out['url'] ?? ''}'.isNotEmpty) {
-      await showDialog<void>(
+      await showAppDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
           title: Text('Connect ${trigger['label'] ?? 'the source'}'),
@@ -160,7 +162,7 @@ class _ResponsibilitiesViewState extends State<ResponsibilitiesView> {
       ),
       const SizedBox(height: 8),
       for (final r in rows)
-        Card(
+        AppCard(
           margin: const EdgeInsets.only(bottom: 8),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),

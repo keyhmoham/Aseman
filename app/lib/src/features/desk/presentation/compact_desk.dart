@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../elpian/core/media.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 import '../domain/desk_models.dart';
 import 'desk_controller.dart';
 import 'desk_dock.dart';
@@ -360,39 +361,27 @@ class CompactDeskState extends State<CompactDesk> {
   /// Opens [w] in full, in a bottom sheet.
   Future<void> openSheet(DeskWindow w) {
     final media = ElpianMediaScope.maybeOf(context);
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        Widget body = _WindowSheet(
-          controller: c,
-          windowId: w.id,
-          content: (window) => FrontendPresentation(
-            display: FrontendDisplay.sheet,
-            child: KeyedSubtree(
-              key: ValueKey('sheet-${window.id}'),
-              child: Builder(
-                  builder: (context) => widget.windowContent(context, window)),
-            ),
-          ),
-        );
-        if (media != null)
-          body = ElpianMediaScope(resolver: media, child: body);
-        return body;
-      },
+    Widget body = _WindowSheet(
+      controller: c,
+      windowId: w.id,
+      content: (window) => FrontendPresentation(
+        display: FrontendDisplay.sheet,
+        child: KeyedSubtree(
+          key: ValueKey('sheet-${window.id}'),
+          child: Builder(
+              builder: (context) => widget.windowContent(context, window)),
+        ),
+      ),
     );
+    if (media != null) body = ElpianMediaScope(resolver: media, child: body);
+    return showAppSheet<void>(context, body, heightFactor: .9);
   }
 
   Future<void> _menu(DeskWindow w) async {
     final (shape, size) = _look(w);
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => _WidgetMenu(
+    await showAppSheet<void>(
+      context,
+      _WidgetMenu(
         window: w,
         shape: shape,
         size: size,
@@ -402,6 +391,7 @@ class CompactDeskState extends State<CompactDesk> {
         onPin: () => c.togglePin(w),
         onClose: () => c.close(w.id),
       ),
+      isScrollControlled: true,
     );
   }
 
@@ -743,7 +733,6 @@ class _WindowSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final height = MediaQuery.sizeOf(context).height;
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
@@ -753,16 +742,15 @@ class _WindowSheet extends StatelessWidget {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (context.mounted) Navigator.of(context).maybePop();
           });
-          return SizedBox(height: height * .3);
+          return const SizedBox(height: 120);
         }
         final scheme = Theme.of(context).colorScheme;
         final subtitle = [
           if (w.argsSummary.isNotEmpty) w.argsSummary,
         ].join('  ·  ');
         final pinned = controller.isPinned(w);
-        return SizedBox(
-          height: height * .9,
-          child: Column(
+        // Host [showAppSheet] sizes the chrome; fill whatever height it gives.
+        return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
@@ -821,7 +809,6 @@ class _WindowSheet extends StatelessWidget {
               ),
               Expanded(child: content(w)),
             ],
-          ),
         );
       },
     );

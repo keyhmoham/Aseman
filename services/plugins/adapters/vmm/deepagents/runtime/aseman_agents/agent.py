@@ -142,6 +142,15 @@ class Runner:
     def _lock(self, thread: str) -> asyncio.Lock:
         return self._locks.setdefault(thread, asyncio.Lock())
 
+    def _opencode(self):
+        """The OpenCode CLI engine, created on the first turn that needs it."""
+        engine = getattr(self, "_opencode_engine", None)
+        if engine is None:
+            from .opencode_engine import OpenCodeEngine
+            engine = OpenCodeEngine(self.store)
+            self._opencode_engine = engine
+        return engine
+
     # --- entry points -------------------------------------------------------
 
     async def prompt(self, req: dict[str, Any]) -> Outcome:
@@ -150,6 +159,8 @@ class Runner:
         try:
             async with self._lock(ctx.thread_id):
                 pending = self.store.question_for_thread(ctx.thread_id)
+                if ctx.agent_engine == "opencode":
+                    return await self._opencode().prompt(ctx, pending)
                 if pending is not None:
                     # The room moved on while the agent waited: the open
                     # question is closed with the new message, which the
@@ -181,6 +192,10 @@ class Runner:
                 if pending is None or (ctx.turn.question_id and ctx.turn.question_id != pending.id):
                     return Outcome(reply="", answered=False)
                 who = ctx.turn.sender_name or "A person"
+                if ctx.agent_engine == "opencode":
+                    outcome = await self._opencode().answer(ctx, pending)
+                    outcome.answered = True
+                    return outcome
                 outcome = await self._resume(ctx, pending, f"{who}: {ctx.turn.message}",
                                              approve=bool(APPROVE.match(ctx.turn.message)))
                 outcome.answered = True
@@ -238,10 +253,19 @@ class Runner:
         ctx = TurnContext(gateway=gateway, agent=AgentDef.from_payload(req.get("agent") or {}), turn=turn,
                           decision_config=DecisionConfig.from_payload(req.get("decision")))
         ctx.generation = self.store.generation(ctx.base_thread)
-        ctx.memory = memlib.Memory.for_turn(ctx, self.memory_settings)
         ctx.timeline = bool(req.get("timeline")) and not turn.no_memory
         ctx.codemode = bool(req.get("codemode"))
         ctx.opencode = bool(req.get("opencode"))
+        engine = str(req.get("agent_engine") or "deepagents")
+        ctx.agent_engine = engine if engine in ("deepagents", "opencode") else "deepagents"
+        if ctx.agent_engine == "opencode":
+            # The OpenCode CLI brings its own models. Skip platform memory
+            # (its embeddings are a platform model) and the LangGraph tools.
+            ctx.memory = None
+            ctx.timeline = False
+            ctx.codemode = False
+        else:
+            ctx.memory = memlib.Memory.for_turn(ctx, self.memory_settings)
         models = req.get("memory")
         if ctx.memory is not None and isinstance(models, dict):
             ctx.memory.recall_enabled = bool(models.get("recall"))

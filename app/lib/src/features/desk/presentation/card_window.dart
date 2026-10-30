@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_surfaces.dart';
+import '../../../shared/widgets/glass_surface.dart';
 import '../domain/desk_models.dart';
 import 'tool_avatar.dart';
 
@@ -25,6 +27,9 @@ class CardWindow extends StatefulWidget {
     this.onPin,
     this.onMinimize,
     this.onMaximize,
+    this.onSwapCompact,
+    this.showPin = true,
+    this.closeTooltip = 'Close',
   });
 
   final DeskWindow window;
@@ -47,6 +52,15 @@ class CardWindow extends StatefulWidget {
   final VoidCallback? onPin;
   final VoidCallback? onMinimize;
   final VoidCallback? onMaximize;
+
+  /// Switches this window into its compact widget. Hidden when null.
+  final VoidCallback? onSwapCompact;
+
+  /// The pin control. Surfaces that are not the room desk turn it off.
+  final bool showPin;
+
+  /// The close control's name (`Remove` on the feed desk).
+  final String closeTooltip;
 
   @override
   State<CardWindow> createState() => _CardWindowState();
@@ -84,16 +98,10 @@ class _CardWindowState extends State<CardWindow>
           !RegExp(r'^[0-9a-f]{20,}$').hasMatch(w.openedBy))
         'by ${w.openedBy}',
     ].join('  ·  ');
-    final card = AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+    final radius = BorderRadius.circular(widget.maximized ? 20 : 28);
+    final card = DecoratedBox(
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(widget.maximized ? 20 : 28),
-        border: Border.all(
-            color: widget.front
-                ? scheme.primary.withValues(alpha: .45)
-                : scheme.outlineVariant.withValues(alpha: .7),
-            width: widget.front ? 1.4 : 1),
+        borderRadius: radius,
         boxShadow: [
           BoxShadow(
               color: Colors.black
@@ -112,7 +120,11 @@ class _CardWindowState extends State<CardWindow>
                           : 4)),
         ],
       ),
-      clipBehavior: Clip.antiAlias,
+      child: GlassSurface(
+      alpha: widget.front ? AppSurfaces.overlayAlpha : AppSurfaces.cardAlpha,
+      borderRadius: radius,
+      border: true,
+      color: widget.front ? scheme.surfaceContainer : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -120,9 +132,10 @@ class _CardWindowState extends State<CardWindow>
           Container(
             height: 56,
             padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
-            color: widget.front
-                ? scheme.surfaceContainer
-                : scheme.surfaceContainerLow,
+            color: (widget.front
+                    ? scheme.surfaceContainer
+                    : scheme.surfaceContainerLow)
+                .withValues(alpha: .35),
             child: Row(children: [
               Expanded(
                 child: MouseRegion(
@@ -178,12 +191,20 @@ class _CardWindowState extends State<CardWindow>
                   ),
                 ),
               ),
-              _ChromeButton(
-                tooltip: widget.pinned ? 'Unpin' : 'Pin to the pinned desk',
-                icon: widget.pinned ? Icons.push_pin : Icons.push_pin_outlined,
-                selected: widget.pinned,
-                onPressed: widget.onPin,
-              ),
+              if (widget.showPin)
+                _ChromeButton(
+                  tooltip: widget.pinned ? 'Unpin' : 'Pin to the pinned desk',
+                  icon:
+                      widget.pinned ? Icons.push_pin : Icons.push_pin_outlined,
+                  selected: widget.pinned,
+                  onPressed: widget.onPin,
+                ),
+              if (widget.onSwapCompact != null)
+                _ChromeButton(
+                  tooltip: 'Compact widget',
+                  icon: Icons.widgets_outlined,
+                  onPressed: widget.onSwapCompact,
+                ),
               _ChromeButton(
                 tooltip: 'Minimize',
                 icon: Icons.minimize_rounded,
@@ -197,7 +218,7 @@ class _CardWindowState extends State<CardWindow>
                 onPressed: widget.onMaximize,
               ),
               _ChromeButton(
-                tooltip: 'Close',
+                tooltip: widget.closeTooltip,
                 icon: Icons.close_rounded,
                 danger: true,
                 onPressed: widget.onClose == null ? null : _close,
@@ -235,6 +256,7 @@ class _CardWindowState extends State<CardWindow>
             ]),
           ),
         ],
+      ),
       ),
     );
     return Listener(

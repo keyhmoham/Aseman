@@ -4,17 +4,45 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aseman/src/app.dart';
+import 'package:aseman/src/features/search_feed/presentation/search_feed_screen.dart';
 import 'package:aseman/src/app_dependencies.dart';
 import 'package:aseman/src/data/models/space.dart';
+import 'package:aseman/src/shared/widgets/glass_surface.dart';
+import 'package:aseman/src/shared/widgets/workspace_header.dart';
 
 import 'fake_aseman_service.dart';
 
 void main() {
   tearDown(() {
-    TestWidgetsFlutterBinding.ensureInitialized()
-        .platformDispatcher
+    TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher
         .clearAllTestValues();
   });
+
+  /// Opens Atlas Capital from the feed desk's toolbox. The spaces grid is
+  /// not on the feed; the messenger also lists a project room of this name.
+  Future<void> openAtlas(WidgetTester tester) async {
+    final logical =
+        tester.view.physicalSize.width / tester.view.devicePixelRatio;
+    if (logical < 820) {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(HomeTabBar),
+          matching: find.text('Desk'),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(find.byTooltip('Toolbox'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Open Atlas Capital'));
+    await tester.pumpAndSettle();
+  }
+
+  /// Profile avatar in the floating app bar (not a chat/space tile avatar).
+  Finder profileAvatar() => find.descendant(
+    of: find.byType(WorkspaceHeader),
+    matching: find.byType(CircleAvatar),
+  );
 
   /// Seed a logged-in session so the shell mounts the feed instead of the
   /// auth screen. The app runs against the deterministic fake service, so the
@@ -23,8 +51,8 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'aseman.session':
           '{"account_id":"00000000000000010000000000000001","handle":"test",'
-              '"token":"x","private_key":"","public_key":"",'
-              '"home_space_id":"00000000000000010000000000000002"}',
+          '"token":"x","private_key":"","public_key":"",'
+          '"home_space_id":"00000000000000010000000000000002"}',
     });
   }
 
@@ -54,20 +82,47 @@ void main() {
     expect(find.text('Following'), findsOneWidget);
     expect(find.text('Search Aseman…'), findsOneWidget);
 
-    // The spaces picker on the left, the messenger on the right.
-    expect(find.text('Spaces'), findsWidgets);
-    expect(find.text('Atlas Capital'), findsWidgets);
+    // Chats on the left, the free desk in the center, posts on the right.
+    // The posts rail is the same width as the chats rail.
+    expect(find.byTooltip('Toolbox'), findsOneWidget);
+    Size railAround(Finder content) {
+      final glasses = find.ancestor(
+        of: content,
+        matching: find.byType(GlassSurface),
+      );
+      final count = glasses.evaluate().length;
+      var width = 0.0;
+      var height = 0.0;
+      for (var i = 0; i < count; i++) {
+        final size = tester.getSize(glasses.at(i));
+        if (size.height > height) {
+          height = size.height;
+          width = size.width;
+        }
+      }
+      return Size(width, height);
+    }
+
+    final chatsRail = railAround(find.text('Maya Chen'));
+    final postsRail = railAround(find.text('Following'));
+    expect(postsRail.width, chatsRail.width);
+    expect(chatsRail.width, 320);
+    expect(find.text('Open a workspace or start a new one'), findsNothing);
     expect(find.text('Chats'), findsWidgets);
+    expect(find.text('Atlas Capital'), findsWidgets);
     expect(find.text('Maya Chen'), findsOneWidget);
     expect(find.text('AlphaBot'), findsOneWidget);
 
     // Space posts are mixed into the feed, tagged with their space.
-    expect(find.text('Private update inside the Home workspace.'),
-        findsOneWidget);
+    expect(
+      find.text('Private update inside the Home workspace.'),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('phone home bottom nav switches chats, spaces and explore',
-      (tester) async {
+  testWidgets('phone home bottom nav switches chats, spaces and explore', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -75,35 +130,49 @@ void main() {
     await tester.pumpAndSettle();
 
     Finder navLabel(String label) => find.descendant(
-        of: find.byType(NavigationBar), matching: find.text(label));
+      of: find.byType(HomeTabBar),
+      matching: find.text(label),
+    );
 
-    // Phones land on the Chats tab.
+    // Phones land on the Chats tab. The bar is a short centered pill.
     expect(find.text('Maya Chen'), findsOneWidget);
+    final capsule = tester.getRect(
+      find.descendant(
+        of: find.byType(HomeTabBar),
+        matching: find.byType(GlassSurface),
+      ),
+    );
+    expect(capsule.width, lessThan(260));
+    expect(capsule.center.dx, closeTo(195, 12));
     expect(navLabel('Chats'), findsOneWidget);
-    expect(navLabel('Spaces'), findsOneWidget);
-    expect(navLabel('Explore'), findsOneWidget);
+    expect(navLabel('Desk'), findsOneWidget);
+    expect(navLabel('Feed'), findsOneWidget);
 
-    await tester.tap(navLabel('Spaces'));
+    await tester.tap(navLabel('Desk'));
     await tester.pumpAndSettle();
-    expect(find.text('Atlas Capital'), findsWidgets);
-    expect(find.text('Open a workspace or start a new one'), findsOneWidget);
+    expect(find.byTooltip('Toolbox'), findsOneWidget);
+    expect(find.text('Your desk'), findsOneWidget);
 
-    await tester.tap(navLabel('Explore'));
+    await tester.tap(navLabel('Feed'));
     await tester.pumpAndSettle();
     expect(find.text('Search Aseman…'), findsOneWidget);
-    expect(find.text('Private update inside the Home workspace.'),
-        findsOneWidget);
+    expect(
+      find.text('Private update inside the Home workspace.'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the feed search bar opens Explore without the space tabs',
-      (tester) async {
+  testWidgets('the feed search bar opens Explore without the space tabs', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
     final service = FakeAsemanService();
-    await tester.pumpWidget(AsemanApp(
-        dependencies: AppDependencies.withService(service)));
+    await tester.pumpWidget(
+      AsemanApp(dependencies: AppDependencies.withService(service)),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Search Aseman…'));
@@ -133,14 +202,17 @@ void main() {
     await tester.enterText(find.byType(TextField).last, 'home');
     await tester.tap(find.text('Posts').last);
     await tester.pumpAndSettle();
-    expect(inExplore('Private update inside the Home workspace.'),
-        findsOneWidget);
+    expect(
+      inExplore('Private update inside the Home workspace.'),
+      findsOneWidget,
+    );
     expect(service.postSearches.last, ('home', true));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a space found in Explore opens it, a chat opens the chat',
-      (tester) async {
+  testWidgets('a space found in Explore opens it, a chat opens the chat', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
@@ -168,8 +240,9 @@ void main() {
     expect(find.text('My trading desk'), findsOneWidget);
   });
 
-  testWidgets('switches workspace from the feed and the desk switcher',
-      (tester) async {
+  testWidgets('switches workspace from the feed and the desk switcher', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
@@ -177,8 +250,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // A space in the feed's Spaces panel opens its desk.
-    await tester.tap(find.text('Atlas Capital').last);
-    await tester.pumpAndSettle();
+    await openAtlas(tester);
     expect(find.text('My trading desk'), findsOneWidget);
 
     // On the desk, the edge handle opens the switcher.
@@ -190,12 +262,15 @@ void main() {
     // The switcher's feed tile returns to the feed.
     await tester.tap(find.text('Your feed').last);
     await tester.pumpAndSettle();
-    expect(find.text('People and agents you follow, and your spaces'),
-        findsOneWidget);
+    expect(
+      find.text('People and agents you follow, and your spaces'),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('new workspace hall room shows its own feed and the composer',
-      (tester) async {
+  testWidgets('new workspace hall room shows its own feed and the composer', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
@@ -203,8 +278,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Open the desk first, then create a brand-new workspace from there.
-    await tester.tap(find.text('Atlas Capital').last);
-    await tester.pumpAndSettle();
+    await openAtlas(tester);
     expect(find.text('My trading desk'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Switch workspace'));
@@ -234,8 +308,7 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Atlas Capital').last);
-    await tester.pumpAndSettle();
+    await openAtlas(tester);
     await tester.tap(find.byTooltip('Switch workspace'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('New workspace'));
@@ -258,8 +331,9 @@ void main() {
     expect(find.text('SignalBot'), findsNothing);
   });
 
-  testWidgets('room chat mentions a workspace agent and triggers it',
-      (tester) async {
+  testWidgets('room chat mentions a workspace agent and triggers it', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
@@ -268,8 +342,7 @@ void main() {
 
     await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital').last);
-    await tester.pumpAndSettle();
+    await openAtlas(tester);
     expect(find.text('My trading desk'), findsOneWidget);
 
     // Open the "general" room so the room chat shows.
@@ -287,7 +360,8 @@ void main() {
 
     // Sending the message keeps the structured mention attached.
     final composerField = find.byWidgetPredicate(
-        (w) => w is TextField && w.decoration?.hintText == 'Message room…');
+      (w) => w is TextField && w.decoration?.hintText == 'Message room…',
+    );
     await tester.enterText(composerField, 'Please analyze BTC');
     await tester.tap(find.byIcon(Icons.send_rounded));
     await tester.pumpAndSettle();
@@ -301,7 +375,7 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(CircleAvatar).first);
+    await tester.tap(profileAvatar());
     await tester.pumpAndSettle();
     expect(find.text('My bots'), findsOneWidget);
     expect(find.text('Market'), findsOneWidget);
@@ -323,7 +397,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Mobile: the avatar opens the bottom sheet menu.
-    await tester.tap(find.byType(CircleAvatar).first);
+    await tester.tap(profileAvatar());
     await tester.pumpAndSettle();
     expect(find.text('My bots'), findsOneWidget);
 
@@ -335,15 +409,16 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('mobile profile menu opens the responsive admin console',
-      (tester) async {
+  testWidgets('mobile profile menu opens the responsive admin console', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(CircleAvatar).first);
+    await tester.tap(profileAvatar());
     await tester.pumpAndSettle();
     expect(find.text('Admin console'), findsOneWidget);
 
@@ -357,32 +432,41 @@ void main() {
     await tester.tap(find.byTooltip('Open navigation menu'));
     await tester.pumpAndSettle();
     expect(
-        find.descendant(
-            of: find.byType(Drawer), matching: find.text('Admin console')),
-        findsOneWidget);
+      find.descendant(
+        of: find.byType(Drawer),
+        matching: find.text('Admin console'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Users'), findsWidgets);
     expect(find.text('Projects'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('profile menu hides the admin console from non-admins',
-      (tester) async {
+  testWidgets('profile menu hides the admin console from non-admins', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
-    await tester.pumpWidget(AsemanApp(
-        dependencies:
-            AppDependencies.withService(FakeAsemanService(admin: false))));
+    await tester.pumpWidget(
+      AsemanApp(
+        dependencies: AppDependencies.withService(
+          FakeAsemanService(admin: false),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(CircleAvatar).first);
+    await tester.tap(profileAvatar());
     await tester.pumpAndSettle();
     expect(find.text('My bots'), findsOneWidget);
     expect(find.text('Admin console'), findsNothing);
   });
 
-  testWidgets('workspace header opens the profile popup on the feed',
-      (tester) async {
+  testWidgets('workspace header opens the profile popup on the feed', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
@@ -390,7 +474,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // The app bar has the profile avatar; tapping opens the popup menu.
-    await tester.tap(find.byType(CircleAvatar).first);
+    await tester.tap(profileAvatar());
     await tester.pumpAndSettle();
     expect(find.text('Profile'), findsWidgets);
     expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
@@ -405,17 +489,17 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Atlas Capital').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byType(CircleAvatar).first);
+    await openAtlas(tester);
+    await tester.tap(profileAvatar());
     await tester.pumpAndSettle();
     expect(find.text('Messages'), findsOneWidget);
     expect(find.text('My bots'), findsOneWidget);
     expect(find.text('Log out'), findsOneWidget);
   });
 
-  testWidgets('room chat renders attachments and offers an attach button',
-      (tester) async {
+  testWidgets('room chat renders attachments and offers an attach button', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
@@ -437,13 +521,13 @@ void main() {
     );
 
     await tester.pumpWidget(
-        AsemanApp(dependencies: AppDependencies.withService(service)));
+      AsemanApp(dependencies: AppDependencies.withService(service)),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital').last);
-    await tester.pumpAndSettle();
+    await openAtlas(tester);
     await tester.tap(find.text('general'));
     await tester.pumpAndSettle();
 
@@ -458,8 +542,9 @@ void main() {
     expect(find.byTooltip('Mention an agent'), findsOneWidget);
   });
 
-  testWidgets('workspace left panel classifies uploaded attachments',
-      (tester) async {
+  testWidgets('workspace left panel classifies uploaded attachments', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
@@ -488,13 +573,13 @@ void main() {
     );
 
     await tester.pumpWidget(
-        AsemanApp(dependencies: AppDependencies.withService(service)));
+      AsemanApp(dependencies: AppDependencies.withService(service)),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital').last);
-    await tester.pumpAndSettle();
+    await openAtlas(tester);
 
     // Docs tab shows the text file.
     await tester.tap(find.byIcon(Icons.description_outlined));
@@ -512,8 +597,9 @@ void main() {
     expect(find.text('voice-note.mp3'), findsOneWidget);
   });
 
-  testWidgets('agent profile renders real backend data and wired action',
-      (tester) async {
+  testWidgets('agent profile renders real backend data and wired action', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
@@ -522,8 +608,7 @@ void main() {
 
     await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital').last);
-    await tester.pumpAndSettle();
+    await openAtlas(tester);
 
     // Open the Agents tab (Atlas has SignalBot installed).
     await tester.tap(find.byIcon(Icons.smart_toy_outlined).first);
@@ -542,8 +627,9 @@ void main() {
     expect(find.text('Added'), findsOneWidget);
   });
 
-  testWidgets('search scopes agents to the workspace vs the whole platform',
-      (tester) async {
+  testWidgets('search scopes agents to the workspace vs the whole platform', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
@@ -552,8 +638,7 @@ void main() {
 
     await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital').last);
-    await tester.pumpAndSettle();
+    await openAtlas(tester);
 
     // Open the search/discover panel (the left panel's search button).
     await tester.tap(find.byIcon(Icons.search_rounded).first);
@@ -578,8 +663,9 @@ void main() {
     expect(find.text('AlphaBot'), findsWidgets);
   });
 
-  testWidgets('aseman logs render as collapsible sections in the room',
-      (tester) async {
+  testWidgets('aseman logs render as collapsible sections in the room', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
@@ -588,29 +674,31 @@ void main() {
     final now = DateTime.now();
     service.roomMessages['${FakeAsemanService.atlasId}/a1'] = [
       RoomMessage(
-          id: 'm1',
-          spaceId: FakeAsemanService.atlasId,
-          roomId: 'a1',
-          senderId: '00000000000000015c00dfede113ae2e',
-          body: 'Ready.',
-          createdAt: now),
+        id: 'm1',
+        spaceId: FakeAsemanService.atlasId,
+        roomId: 'a1',
+        senderId: '00000000000000015c00dfede113ae2e',
+        body: 'Ready.',
+        createdAt: now,
+      ),
       RoomMessage(
-          id: 'm2',
-          spaceId: FakeAsemanService.atlasId,
-          roomId: 'a1',
-          senderId: '00000000000000015c00dfede113ae2e',
-          body: '## Execution Plan\n1. Inspect the workspace',
-          kind: 'log',
-          createdAt: now.add(const Duration(seconds: 1))),
+        id: 'm2',
+        spaceId: FakeAsemanService.atlasId,
+        roomId: 'a1',
+        senderId: '00000000000000015c00dfede113ae2e',
+        body: '## Execution Plan\n1. Inspect the workspace',
+        kind: 'log',
+        createdAt: now.add(const Duration(seconds: 1)),
+      ),
     ];
 
     await tester.pumpWidget(
-        AsemanApp(dependencies: AppDependencies.withService(service)));
+      AsemanApp(dependencies: AppDependencies.withService(service)),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital').last);
-    await tester.pumpAndSettle();
+    await openAtlas(tester);
     await tester.tap(find.text('general'));
     await tester.pumpAndSettle();
 
@@ -624,8 +712,9 @@ void main() {
     expect(find.textContaining('Execution Plan'), findsOneWidget);
   });
 
-  testWidgets('room chat shows a working-agent indicator with the agent name',
-      (tester) async {
+  testWidgets('room chat shows a working-agent indicator with the agent name', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
@@ -633,23 +722,24 @@ void main() {
     final service = FakeAsemanService();
     service.roomMessages['${FakeAsemanService.atlasId}/a1'] = [
       RoomMessage(
-          id: 'm1',
-          spaceId: FakeAsemanService.atlasId,
-          roomId: 'a1',
-          senderId: '00000000000000010000000000000099',
-          body: 'hello',
-          createdAt: DateTime.now()),
+        id: 'm1',
+        spaceId: FakeAsemanService.atlasId,
+        roomId: 'a1',
+        senderId: '00000000000000010000000000000099',
+        body: 'hello',
+        createdAt: DateTime.now(),
+      ),
     ];
     // The backend reports that the dev agent is currently working.
     service.workingAgent = 'dev';
 
     await tester.pumpWidget(
-        AsemanApp(dependencies: AppDependencies.withService(service)));
+      AsemanApp(dependencies: AppDependencies.withService(service)),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital').last);
-    await tester.pumpAndSettle();
+    await openAtlas(tester);
     await tester.tap(find.text('general'));
     // The indicator animates indefinitely, so pump fixed durations instead of
     // pumpAndSettle (which never settles while the animation repeats).
@@ -664,8 +754,9 @@ void main() {
     expect(find.text('working'), findsNothing);
   });
 
-  testWidgets('proxy messages render an open-on-the-desk button',
-      (tester) async {
+  testWidgets('proxy messages render an open-on-the-desk button', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
@@ -673,22 +764,23 @@ void main() {
     final service = FakeAsemanService();
     service.roomMessages['${FakeAsemanService.atlasId}/a1'] = [
       RoomMessage(
-          id: 'm1',
-          spaceId: FakeAsemanService.atlasId,
-          roomId: 'a1',
-          senderId: '00000000000000015c00dfede113ae2e',
-          body:
-              '🔗 **Landing Page** is now live on the gateway.\n\nOpen it: /v1/proxy/0000000000000001626f3df602aaad3d/',
-          createdAt: DateTime.now()),
+        id: 'm1',
+        spaceId: FakeAsemanService.atlasId,
+        roomId: 'a1',
+        senderId: '00000000000000015c00dfede113ae2e',
+        body:
+            '🔗 **Landing Page** is now live on the gateway.\n\nOpen it: /v1/proxy/0000000000000001626f3df602aaad3d/',
+        createdAt: DateTime.now(),
+      ),
     ];
 
     await tester.pumpWidget(
-        AsemanApp(dependencies: AppDependencies.withService(service)));
+      AsemanApp(dependencies: AppDependencies.withService(service)),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital').last);
-    await tester.pumpAndSettle();
+    await openAtlas(tester);
     await tester.tap(find.text('general'));
     await tester.pumpAndSettle();
 
@@ -696,20 +788,21 @@ void main() {
     expect(find.text('Open on the desk'), findsOneWidget);
   });
 
-  testWidgets('message designer sends a designed message to the room chat',
-      (tester) async {
+  testWidgets('message designer sends a designed message to the room chat', (
+    tester,
+  ) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
 
     final service = FakeAsemanService();
     await tester.pumpWidget(
-        AsemanApp(dependencies: AppDependencies.withService(service)));
+      AsemanApp(dependencies: AppDependencies.withService(service)),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital').last);
-    await tester.pumpAndSettle();
+    await openAtlas(tester);
     await tester.tap(find.text('general'));
     await tester.pumpAndSettle();
 
@@ -720,9 +813,12 @@ void main() {
 
     // Author markdown and send it to the chat.
     await tester.enterText(
-        find.descendant(
-            of: find.byType(Dialog), matching: find.byType(TextField)),
-        '## Hello\n\n- point one\n- point two');
+      find.descendant(
+        of: find.byType(Dialog),
+        matching: find.byType(TextField),
+      ),
+      '## Hello\n\n- point one\n- point two',
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Send to chat'));
     await tester.pumpAndSettle();

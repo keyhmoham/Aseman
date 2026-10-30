@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../shared/widgets/overlay_panels.dart';
 
 import '../../app_dependencies.dart';
 import 'assistant_common.dart';
 import 'governance_views.dart';
 import 'responsibilities_view.dart';
+import '../../shared/widgets/glass_surface.dart';
 
 /// A project's agents settings: what they own (responsibilities), what they
 /// were shown (demonstrations), who holds the computer, where it may
@@ -117,7 +119,7 @@ class _DemonstrationsViewState extends State<DemonstrationsView> {
       text: '${d['instructions'] ?? ''}',
     );
     final at = TextEditingController();
-    final keep = await showDialog<bool>(
+    final keep = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Keep this skill'),
@@ -207,7 +209,7 @@ class _DemonstrationsViewState extends State<DemonstrationsView> {
           ),
         const SizedBox(height: 8),
         for (final d in demos.where((d) => d['status'] != 'recording'))
-          Card(
+          AppCard(
             margin: const EdgeInsets.only(bottom: 8),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),

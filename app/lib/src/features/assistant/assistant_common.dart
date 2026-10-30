@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
+import '../../shared/widgets/overlay_panels.dart';
 
 /// Shared plumbing for the assistant's panels: JSON helpers, a loader that
 /// shows errors in place, and calls that report failures in a snack bar.
@@ -97,7 +98,10 @@ class _LoadedPanelState extends State<LoadedPanel> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
         title: Text(widget.title),
         actions: [
           ...widget.actions,
@@ -178,7 +182,7 @@ Future<String?> askText(
   int lines = 1,
 }) {
   final controller = TextEditingController(text: initial);
-  return showDialog<String>(
+  return showAppDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
       title: Text(title),

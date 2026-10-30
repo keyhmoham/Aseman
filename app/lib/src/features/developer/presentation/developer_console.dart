@@ -615,7 +615,7 @@ class _KeysState extends _LoadedState<_Keys> {
                     title: Text('${k['name']}'),
                     subtitle: Text(
                         '${k['prefix']}…${k['last4']} · ${k['status']} · ${_usd(k['spentMonth'])} this month · ${_count(k['requests'])} requests · last used ${_date(k['lastUsedAt'])}'),
-                    trailing: PopupMenuButton<String>(
+                    trailing: AppPopupMenuButton<String>(
                       tooltip: 'Key options',
                       onSelected: (v) async {
                         if (v == 'revoke' &&
@@ -1527,7 +1527,7 @@ class _TeamState extends _LoadedState<_Team> {
               title: Text('${m['name'] ?? m['handle']}${m['you'] == true ? ' (you)' : ''}'),
               subtitle: Text('@${m['handle']} · ${m['role']} · ${m['status']}'),
               trailing: manage && m['role'] != 'owner'
-                  ? PopupMenuButton<String>(
+                  ? AppPopupMenuButton<String>(
                       tooltip: 'Member options',
                       onSelected: (v) => change(() => v == 'remove'
                           ? call('member_remove', {'member': m['id']})

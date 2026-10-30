@@ -1034,7 +1034,7 @@ class _BlockMenu extends StatelessWidget {
           onPressed: onRemove,
           icon: Icon(Icons.delete_outline_rounded, color: scheme.outline),
         ),
-        PopupMenuButton<VoidCallback>(
+        AppPopupMenuButton<VoidCallback>(
           tooltip: 'Block actions',
           icon: Icon(Icons.more_vert_rounded, size: 18, color: scheme.outline),
           onSelected: (on) => on(),

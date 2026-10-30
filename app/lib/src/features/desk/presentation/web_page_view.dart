@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/settings/app_settings.dart';
 import '../../../data/services/aseman_service.dart';
 import 'web/web_page_frame.dart';
+import '../../../shared/widgets/glass_surface.dart';
 
 /// The app's theme as desk App UIs take it: brightness, accent seed, Material
 /// color-scheme roles, and where the page is shown. Passed on the preview URL
@@ -234,7 +235,7 @@ class _WebPageViewState extends State<WebPageView> {
               left: 12,
               right: 12,
               top: 12,
-              child: Card(
+              child: AppCard(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(

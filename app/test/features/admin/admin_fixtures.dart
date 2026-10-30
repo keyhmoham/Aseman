@@ -336,6 +336,32 @@ Map<String, dynamic> adminFixtures() {
       'status': 'Partly in effect: memories are learned but not recalled.',
       'providers': [providers.first],
     },
+    'spaces.agent_engine_get': {
+      'engine': 'deepagents',
+      'llm': 'platform',
+      'active': true,
+      'status':
+          'Deep Agents runs every agent turn. Models come from the platform LLM gateway. The programmer OpenCode switch still decides who writes code.',
+      'programmer': 'spaces.opencode_get',
+      'mapping': [
+        {
+          'platform': 'Swarm',
+          'opencode': 'Parallel opencode run processes, one per task'
+        },
+        {
+          'platform': 'Agent team',
+          'opencode': 'OpenCode agents, primary and subagents'
+        },
+        {
+          'platform': 'Task handoff',
+          'opencode': 'OpenCode task tool'
+        },
+        {
+          'platform': 'App generation',
+          'opencode': 'aseman-app-builder, then appui_publish'
+        },
+      ],
+    },
     'spaces.opencode_get': {
       'enabled': false,
       'builder': 'agents',

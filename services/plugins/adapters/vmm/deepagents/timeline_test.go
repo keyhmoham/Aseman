@@ -78,5 +78,27 @@ func TestATurnSaysWhetherOpenCodeBuildsApps(t *testing.T) {
 		if got := rt.turns[0].OpenCode; got != on {
 			t.Fatalf("opencode sent to the runtime = %v, want %v", got, on)
 		}
+		if rt.turns[0].AgentEngine != "deepagents" {
+			t.Fatalf("programmer switch must not select the agentic engine: %q", rt.turns[0].AgentEngine)
+		}
+	}
+}
+
+func TestATurnUsesTheAgenticEngineTheAdminJustSet(t *testing.T) {
+	for _, engine := range []string{"deepagents", "opencode"} {
+		a, rt, _ := newTestAdapter(t)
+		a.platform = fakePlatform{provider: vmm.ProviderConfig{Model: "m1"}, agentEngine: engine, openCode: engine == "deepagents"}
+		turn := testTurn()
+		turn.Agent.AccountID = mustID(t)
+		if _, err := a.Prompt(context.Background(), onlyVM(t, a), turn); err != nil {
+			t.Fatal(err)
+		}
+		if got := rt.turns[0].AgentEngine; got != engine {
+			t.Fatalf("agent_engine sent to the runtime = %q, want %q", got, engine)
+		}
+		// The programmer switch stays whatever it was; the engine does not flip it.
+		if engine == "opencode" && rt.turns[0].OpenCode {
+			t.Fatal("opencode engine must not force the programmer switch on")
+		}
 	}
 }

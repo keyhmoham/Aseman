@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/widgets/overlay_panels.dart';
 
 import '../../app_dependencies.dart';
 import 'assistant_common.dart';
@@ -133,7 +134,7 @@ class ConnectionsPanel extends StatelessWidget {
                   'link_code',
                 );
                 if (out == null || !context.mounted) return;
-                await showDialog<void>(
+                await showAppDialog<void>(
                   context: context,
                   builder: (context) => AlertDialog(
                     title: const Text('Link an account'),

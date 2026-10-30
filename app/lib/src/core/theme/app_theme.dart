@@ -39,10 +39,12 @@ abstract final class AppTheme {
             borderSide: BorderSide(color: scheme.outlineVariant)),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: scheme.surfaceContainer,
+        backgroundColor: AppSurfaces.overlay(scheme),
         height: 66,
       ),
       dividerTheme: DividerThemeData(color: scheme.outlineVariant),
+      // Translucent glass tint; prefer [AppCard] / [GlassSurface] when the
+      // surface should also frost what sits behind it.
       cardTheme: CardThemeData(
           color: AppSurfaces.card(scheme),
           surfaceTintColor: Colors.transparent,
@@ -105,24 +107,44 @@ ThemeData _expressive(ThemeData base) {
     // Every modal surface shares one background, scrim and corner radius
     // (see AppSurfaces), so call sites never pass their own.
     dialogTheme: DialogThemeData(
+      // [showAppDialog] paints [GlassSurface]; keep Dialog chrome clear so
+      // raw AlertDialogs opened outside it still read as translucent glass.
       backgroundColor: overlay,
       surfaceTintColor: Colors.transparent,
       barrierColor: AppSurfaces.barrier,
       shape: AppSurfaces.overlayShape,
     ),
     bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: overlay,
-      modalBackgroundColor: overlay,
+      // Prefer [showAppSheet]: it paints [GlassSurface] including the handle.
+      // Theme chrome stays clear so Material's own handle is not drawn on a
+      // translucent fill above the frost. Raw [showModalBottomSheet] callers
+      // that need an opaque body must set backgroundColor themselves.
+      backgroundColor: Colors.transparent,
+      modalBackgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       modalBarrierColor: AppSurfaces.barrier,
       showDragHandle: true,
       shape: AppSurfaces.sheetShape,
     ),
+    drawerTheme: const DrawerThemeData(
+      // [GlassDrawerSurface] paints the frost; Drawer chrome stays clear.
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      scrimColor: AppSurfaces.barrier,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.horizontal(
+            right: Radius.circular(AppShape.card)),
+      ),
+    ),
     popupMenuTheme: PopupMenuThemeData(
+      // Prefer [AppPopupMenuButton] / [showAppMenu] for real blur; native
+      // menus at least share the translucent overlay tint.
       color: overlay,
       surfaceTintColor: Colors.transparent,
+      elevation: 0,
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.control)),
+          borderRadius: BorderRadius.circular(AppShape.control),
+          side: BorderSide(color: AppSurfaces.cardBorder(scheme))),
     ),
     menuTheme: MenuThemeData(style: menuStyle),
     dropdownMenuTheme: DropdownMenuThemeData(menuStyle: menuStyle),
@@ -133,7 +155,8 @@ ThemeData _expressive(ThemeData base) {
     ),
     inputDecorationTheme: base.inputDecorationTheme.copyWith(
       filled: true,
-      fillColor: scheme.surfaceContainerHighest.withValues(alpha: .55),
+      fillColor: scheme.surfaceContainerHighest
+          .withValues(alpha: AppSurfaces.cardAlpha * .7),
       border: border(Colors.transparent),
       enabledBorder: border(Colors.transparent),
       focusedBorder: border(scheme.primary, 2),

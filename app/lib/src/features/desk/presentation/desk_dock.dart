@@ -1,7 +1,8 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_surfaces.dart';
+import '../../../shared/widgets/glass_surface.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 import 'desk_controller.dart';
 import 'tool_avatar.dart';
 
@@ -21,19 +22,13 @@ class DeskDock extends StatelessWidget {
     final tools = controller.state.openTools;
     final focus = controller.focusTool;
     final item = compact ? 42.0 : 48.0;
-    return ClipRRect(
+    return GlassSurface(
+      alpha: AppSurfaces.overlayAlpha,
+      blur: AppSurfaces.blurSigma,
       borderRadius: BorderRadius.circular(40),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
+      child: Padding(
           padding:
               EdgeInsets.symmetric(horizontal: compact ? 8 : 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHigh.withValues(alpha: .88),
-            borderRadius: BorderRadius.circular(40),
-            border:
-                Border.all(color: scheme.outlineVariant.withValues(alpha: .6)),
-          ),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -93,7 +88,6 @@ class DeskDock extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 }
@@ -200,7 +194,7 @@ class _DockToolState extends State<_DockTool> {
 
   Future<void> _menu(Offset at) async {
     final windows = widget.count == 1 ? '1 window' : '${widget.count} windows';
-    final choice = await showMenu<String>(
+    final choice = await showAppMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(at.dx, at.dy - 120, at.dx, at.dy),
       items: [

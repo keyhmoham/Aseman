@@ -42,15 +42,14 @@ class WorkspacePanelMotion extends StatelessWidget {
         parent: animation,
         curve: Curves.easeOutCubic,
         reverseCurve: Curves.easeInCubic);
-    return FadeTransition(
-      opacity: curved,
-      child: SlideTransition(
-        position: Tween<Offset>(begin: hiddenOffset, end: Offset.zero)
-            .animate(curved),
-        child: ScaleTransition(
-            scale: Tween<double>(begin: scaleFrom, end: 1).animate(curved),
-            child: child),
-      ),
+    // Slide + scale only — [FadeTransition]/[Opacity] would put the child
+    // in an offscreen layer and kill backdrop blur on glass panels.
+    return SlideTransition(
+      position: Tween<Offset>(begin: hiddenOffset, end: Offset.zero)
+          .animate(curved),
+      child: ScaleTransition(
+          scale: Tween<double>(begin: scaleFrom, end: 1).animate(curved),
+          child: child),
     );
   }
 }

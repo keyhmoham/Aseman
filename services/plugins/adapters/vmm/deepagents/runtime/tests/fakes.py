@@ -394,7 +394,8 @@ def call(name: str, args: dict[str, Any], cid: str | None = None) -> AIMessage:
 def turn_request(agent: dict[str, Any], message: str, *, token: str, sender: str = "acc-ann", sender_name: str = "ann",
                  message_id: str = "", role: str = "", **extra: Any) -> dict[str, Any]:
     # Match production (turn.go): Code Mode is on unless a test opts out.
-    agent_extra = {k: v for k, v in extra.items() if k not in ("codemode", "timeline", "memory", "decision", "opencode")}
+    agent_extra = {k: v for k, v in extra.items()
+                   if k not in ("codemode", "timeline", "memory", "decision", "opencode", "agent_engine")}
     req: dict[str, Any] = {
         "token": token, "gateway": "http://node/deepagents/v1",
         "codemode": extra.get("codemode", True),
@@ -413,6 +414,8 @@ def turn_request(agent: dict[str, Any], message: str, *, token: str, sender: str
         req["decision"] = extra["decision"]
     if "opencode" in extra:
         req["opencode"] = extra["opencode"]
+    if extra.get("agent_engine"):
+        req["agent_engine"] = extra["agent_engine"]
     return req
 
 

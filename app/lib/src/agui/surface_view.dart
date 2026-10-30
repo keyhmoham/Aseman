@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../features/tools/ui_kit/kit.dart';
+import '../shared/widgets/glass_surface.dart';
+import '../shared/widgets/overlay_panels.dart';
 import 'governance_cards.dart';
 import 'hitl.dart';
 import 'surface.dart';
@@ -13,11 +15,16 @@ class AgUiSurfaceView extends StatelessWidget {
     required this.surface,
     this.onReply,
     this.compact = true,
+    this.inBottomSheet = false,
   });
 
   final AgUiSurface surface;
   final AgUiReply? onReply;
   final bool compact;
+
+  /// When true (or when built under [AppSheetScope]) the body stays clear so
+  /// the host bottom sheet paints the glass.
+  final bool inBottomSheet;
 
   @override
   Widget build(BuildContext context) {
@@ -27,10 +34,10 @@ class AgUiSurfaceView extends StatelessWidget {
       return Text('Empty AG-UI surface',
           style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12));
     }
-    return Material(
-      color: scheme.surfaceContainerHighest.withValues(alpha: .55),
+    final embedded = inBottomSheet || AppSheetScope.inSheetOf(context);
+    return GlassSurface(
+      embedded: embedded,
       borderRadius: BorderRadius.circular(14),
-      clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: EdgeInsets.all(compact ? 10 : 14),
         child: Column(
@@ -105,7 +112,7 @@ class AgUiSurfaceView extends StatelessWidget {
           ],
         );
       case 'Card':
-        return Card(
+        return AppCard(
           margin: EdgeInsets.zero,
           child: Padding(
             padding: const EdgeInsets.all(10),

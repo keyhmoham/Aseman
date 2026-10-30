@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../core/formatting/billing_units.dart';
 import 'app_form.dart';
 import 'app_inputs.dart';
+import 'glass_surface.dart';
 
 enum BackendFieldType {
   text,
@@ -18,12 +19,14 @@ enum BackendFieldType {
 }
 
 class _FieldTemplate {
-  const _FieldTemplate(this.name,
-      {this.type = BackendFieldType.text,
-      this.required = false,
-      this.sensitive = false,
-      this.ledgerCredits = false,
-      this.hint});
+  const _FieldTemplate(
+    this.name, {
+    this.type = BackendFieldType.text,
+    this.required = false,
+    this.sensitive = false,
+    this.ledgerCredits = false,
+    this.hint,
+  });
 
   final String name;
   final BackendFieldType type;
@@ -62,11 +65,13 @@ const _templates = <String, List<_FieldTemplate>>{
   ],
   'finance.wallet_mint': [
     _FieldTemplate('target', required: true, hint: 'Account ID'),
-    _FieldTemplate('amount',
-        type: BackendFieldType.decimal,
-        required: true,
-        ledgerCredits: true,
-        hint: 'Credits shown to the user'),
+    _FieldTemplate(
+      'amount',
+      type: BackendFieldType.decimal,
+      required: true,
+      ledgerCredits: true,
+      hint: 'Credits shown to the user',
+    ),
     _FieldTemplate('reason'),
     _FieldTemplate('expires_at', hint: 'Optional RFC 3339 timestamp'),
   ],
@@ -76,12 +81,19 @@ const _templates = <String, List<_FieldTemplate>>{
   ],
   'finance.budget_set': [
     _FieldTemplate('space', required: true, hint: 'Project ID'),
-    _FieldTemplate('cap',
-        type: BackendFieldType.decimal, required: true, ledgerCredits: true),
+    _FieldTemplate(
+      'cap',
+      type: BackendFieldType.decimal,
+      required: true,
+      ledgerCredits: true,
+    ),
   ],
   'finance.purchases_label': [
-    _FieldTemplate('transaction_ids',
-        type: BackendFieldType.stringList, required: true),
+    _FieldTemplate(
+      'transaction_ids',
+      type: BackendFieldType.stringList,
+      required: true,
+    ),
     _FieldTemplate('sandbox', type: BackendFieldType.boolean, required: true),
   ],
   'finance.payout_resolve': [
@@ -98,12 +110,19 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('listed_currency'),
   ],
   'finance.payout_request': [
-    _FieldTemplate('amount',
-        type: BackendFieldType.decimal, required: true, ledgerCredits: true),
+    _FieldTemplate(
+      'amount',
+      type: BackendFieldType.decimal,
+      required: true,
+      ledgerCredits: true,
+    ),
     _FieldTemplate('request_id', required: true),
     _FieldTemplate('method', required: true),
-    _FieldTemplate('destination',
-        type: BackendFieldType.object, required: true),
+    _FieldTemplate(
+      'destination',
+      type: BackendFieldType.object,
+      required: true,
+    ),
   ],
   'spaces.space_detail': [
     _FieldTemplate('space', required: true, hint: 'Project ID'),
@@ -121,14 +140,19 @@ const _templates = <String, List<_FieldTemplate>>{
   ],
   'spaces.computer': [
     _FieldTemplate('space', required: true, hint: 'Project ID'),
-    _FieldTemplate('operation',
-        required: true,
-        hint: 'status, provision, keepalive, sleep, replace or forget_logins'),
+    _FieldTemplate(
+      'operation',
+      required: true,
+      hint: 'status, provision, keepalive, sleep, replace or forget_logins',
+    ),
   ],
   'spaces.sandbox_files': [
     _FieldTemplate('space', required: true, hint: 'Project ID'),
-    _FieldTemplate('operation',
-        required: true, hint: 'list, read, write, mkdir, delete, or preview'),
+    _FieldTemplate(
+      'operation',
+      required: true,
+      hint: 'list, read, write, mkdir, delete, or preview',
+    ),
     _FieldTemplate('path', required: true),
     _FieldTemplate('content', type: BackendFieldType.multiline),
   ],
@@ -151,12 +175,8 @@ const _templates = <String, List<_FieldTemplate>>{
   'spaces.proxy_delete': [
     _FieldTemplate('proxy', required: true, hint: 'Preview/proxy ID'),
   ],
-  'spaces.desktop_install': [
-    _FieldTemplate('space', required: true),
-  ],
-  'spaces.desktop_uninstall': [
-    _FieldTemplate('space', required: true),
-  ],
+  'spaces.desktop_install': [_FieldTemplate('space', required: true)],
+  'spaces.desktop_uninstall': [_FieldTemplate('space', required: true)],
   'bots.bot_create': [
     _FieldTemplate('name', required: true),
     _FieldTemplate('kind', hint: 'agent or tool (an app)'),
@@ -177,8 +197,11 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('max_tokens', type: BackendFieldType.integer),
     _FieldTemplate('allowed_tools', type: BackendFieldType.stringList),
     _FieldTemplate('max_turns', type: BackendFieldType.integer),
-    _FieldTemplate('skills',
-        type: BackendFieldType.stringList, hint: 'JSON list of skill objects'),
+    _FieldTemplate(
+      'skills',
+      type: BackendFieldType.stringList,
+      hint: 'JSON list of skill objects',
+    ),
     _FieldTemplate('module'),
     _FieldTemplate('widget_dsl', type: BackendFieldType.multiline),
   ],
@@ -191,16 +214,17 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('cost', type: BackendFieldType.object),
     _FieldTemplate('descriptor', type: BackendFieldType.object),
   ],
-  'bots.bot_delete': [
-    _FieldTemplate('bot', required: true, hint: 'Agent ID'),
-  ],
+  'bots.bot_delete': [_FieldTemplate('bot', required: true, hint: 'Agent ID')],
   'market.publish': [
     _FieldTemplate('bot', required: true, hint: 'Agent or app ID'),
     _FieldTemplate('type', required: true, hint: 'agent or tool (an app)'),
     _FieldTemplate('name'),
     _FieldTemplate('description', type: BackendFieldType.multiline),
-    _FieldTemplate('price',
-        type: BackendFieldType.decimal, ledgerCredits: true),
+    _FieldTemplate(
+      'price',
+      type: BackendFieldType.decimal,
+      ledgerCredits: true,
+    ),
     _FieldTemplate('category'),
     _FieldTemplate('image_ref'),
   ],
@@ -213,9 +237,7 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('bot', hint: 'Bot ID (or supply listing)'),
     _FieldTemplate('reason', type: BackendFieldType.multiline),
   ],
-  'market.unpublish': [
-    _FieldTemplate('listing', required: true),
-  ],
+  'market.unpublish': [_FieldTemplate('listing', required: true)],
   'tools.mcp_register': [
     _FieldTemplate('name', required: true),
     _FieldTemplate('url', required: true),
@@ -232,9 +254,7 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('headers', type: BackendFieldType.object, sensitive: true),
     _FieldTemplate('auth', hint: 'Empty for shared credentials or user'),
   ],
-  'tools.mcp_delete': [
-    _FieldTemplate('bot', required: true, hint: 'App ID'),
-  ],
+  'tools.mcp_delete': [_FieldTemplate('bot', required: true, hint: 'App ID')],
   'tools.mcp_oauth_get': [
     _FieldTemplate('bot', required: true, hint: 'App ID'),
   ],
@@ -276,14 +296,16 @@ const _templates = <String, List<_FieldTemplate>>{
   'talent.create': [
     _FieldTemplate('space', required: true),
     _FieldTemplate('recipient', required: true),
-    _FieldTemplate('amount',
-        type: BackendFieldType.decimal, required: true, ledgerCredits: true),
+    _FieldTemplate(
+      'amount',
+      type: BackendFieldType.decimal,
+      required: true,
+      ledgerCredits: true,
+    ),
     _FieldTemplate('message', type: BackendFieldType.multiline),
     _FieldTemplate('request_id', required: true),
   ],
-  'talent.list_project': [
-    _FieldTemplate('space', required: true),
-  ],
+  'talent.list_project': [_FieldTemplate('space', required: true)],
   'talent.respond': [
     _FieldTemplate('id', required: true, hint: 'Offer ID'),
     _FieldTemplate('status', required: true, hint: 'accepted or declined'),
@@ -293,15 +315,14 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('path', hint: 'Or a native module path'),
     _FieldTemplate('config', type: BackendFieldType.object),
   ],
-  'admin.plugins_unload': [
-    _FieldTemplate('name', required: true),
-  ],
-  'admin.plugins_stop': [
-    _FieldTemplate('name', required: true),
-  ],
+  'admin.plugins_unload': [_FieldTemplate('name', required: true)],
+  'admin.plugins_stop': [_FieldTemplate('name', required: true)],
   'admin.plugins_set_active': [
-    _FieldTemplate('category',
-        required: true, hint: 'database, cache, network, filesystem, or vmm'),
+    _FieldTemplate(
+      'category',
+      required: true,
+      hint: 'database, cache, network, filesystem, or vmm',
+    ),
     _FieldTemplate('plugin', required: true),
   ],
   'routines.create': [
@@ -335,12 +356,8 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('current_password', sensitive: true),
     _FieldTemplate('password', sensitive: true),
   ],
-  'auth.send_verification': [
-    _FieldTemplate('email', required: true),
-  ],
-  'auth.resend_verification': [
-    _FieldTemplate('email', required: true),
-  ],
+  'auth.send_verification': [_FieldTemplate('email', required: true)],
+  'auth.resend_verification': [_FieldTemplate('email', required: true)],
   'auth.verify_email': [
     _FieldTemplate('email', required: true),
     _FieldTemplate('code', required: true),
@@ -359,9 +376,7 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('data', type: BackendFieldType.multiline, required: true),
     _FieldTemplate('public', type: BackendFieldType.boolean),
   ],
-  'users.file_delete': [
-    _FieldTemplate('file', required: true),
-  ],
+  'users.file_delete': [_FieldTemplate('file', required: true)],
   'users.dm_list': [
     _FieldTemplate('peer', required: true),
     _FieldTemplate('limit', type: BackendFieldType.integer),
@@ -373,8 +388,11 @@ const _templates = <String, List<_FieldTemplate>>{
   'users.push_register': [
     _FieldTemplate('token', required: true, sensitive: true),
     _FieldTemplate('platform', required: true, hint: 'ios'),
-    _FieldTemplate('environment',
-        required: true, hint: 'development or production'),
+    _FieldTemplate(
+      'environment',
+      required: true,
+      hint: 'development or production',
+    ),
   ],
   'users.push_unregister': [
     _FieldTemplate('token', required: true, sensitive: true),
@@ -389,12 +407,8 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('offset', type: BackendFieldType.integer),
   ],
   'usage.model_summary': [_FieldTemplate('space')],
-  'spaces.invitation_accept': [
-    _FieldTemplate('invitation', required: true),
-  ],
-  'spaces.invitation_decline': [
-    _FieldTemplate('invitation', required: true),
-  ],
+  'spaces.invitation_accept': [_FieldTemplate('invitation', required: true)],
+  'spaces.invitation_decline': [_FieldTemplate('invitation', required: true)],
   'llm.llm_provider_set': [
     _FieldTemplate('id', hint: 'Leave empty to create'),
     _FieldTemplate('name'),
@@ -403,13 +417,18 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('api_key', sensitive: true),
     _FieldTemplate('enabled', type: BackendFieldType.boolean),
     _FieldTemplate('is_default', type: BackendFieldType.boolean),
-    _FieldTemplate('models',
-        type: BackendFieldType.stringList,
-        required: true,
-        hint: 'JSON list of model objects'),
+    _FieldTemplate(
+      'models',
+      type: BackendFieldType.stringList,
+      required: true,
+      hint: 'JSON list of model objects',
+    ),
     _FieldTemplate('image_model'),
-    _FieldTemplate('image_price',
-        type: BackendFieldType.decimal, ledgerCredits: true),
+    _FieldTemplate(
+      'image_price',
+      type: BackendFieldType.decimal,
+      ledgerCredits: true,
+    ),
   ],
   'llm.llm_provider_delete': [
     _FieldTemplate('id', required: true, hint: 'Provider ID'),
@@ -422,6 +441,9 @@ const _templates = <String, List<_FieldTemplate>>{
   ],
   'spaces.opencode_set': [
     _FieldTemplate('enabled', type: BackendFieldType.boolean, required: true),
+  ],
+  'spaces.agent_engine_set': [
+    _FieldTemplate('engine', required: true, hint: 'deepagents or opencode'),
   ],
   'llm.llm_memory_set': [
     _FieldTemplate('chat_provider_id'),
@@ -524,7 +546,7 @@ const _fieldChoices = <String, List<String>>{
     'provision',
     'keepalive',
     'sleep',
-    'replace'
+    'replace',
   ],
   'spaces.sandbox_files.operation': [
     'list',
@@ -532,7 +554,7 @@ const _fieldChoices = <String, List<String>>{
     'write',
     'mkdir',
     'delete',
-    'preview'
+    'preview',
   ],
   'talent.respond.status': ['accepted', 'declined'],
   'routines.create.type': ['delayed', 'periodic'],
@@ -542,7 +564,7 @@ const _fieldChoices = <String, List<String>>{
     'cache',
     'network',
     'filesystem',
-    'vmm'
+    'vmm',
   ],
 };
 
@@ -632,15 +654,14 @@ Future<Map<String, dynamic>?> showBackendActionForm(
   required String namespace,
   required String action,
   Map<String, dynamic> initialBody = const {},
-}) =>
-    showAppForm<Map<String, dynamic>>(
-      context,
-      BackendActionDialog(
-        namespace: namespace,
-        action: action,
-        initialBody: initialBody,
-      ),
-    );
+}) => showAppForm<Map<String, dynamic>>(
+  context,
+  BackendActionDialog(
+    namespace: namespace,
+    action: action,
+    initialBody: initialBody,
+  ),
+);
 
 class _Field {
   _Field({
@@ -654,7 +675,8 @@ class _Field {
     required this.value,
     this.hint,
   }) : text = TextEditingController(
-            text: value is String || value is num ? '$value' : '');
+         text: value is String || value is num ? '$value' : '',
+       );
 
   final String name;
   final BackendFieldType type;
@@ -701,7 +723,7 @@ class _BackendActionDialogState extends State<BackendActionDialog> {
     final templates = _templates[key] ?? const <_FieldTemplate>[];
     final names = <String>{
       ...widget.initialBody.keys,
-      ...templates.map((e) => e.name)
+      ...templates.map((e) => e.name),
     };
     fields = [
       for (final name in names)
@@ -734,7 +756,8 @@ class _BackendActionDialogState extends State<BackendActionDialog> {
       name: name,
       type: type,
       required: template?.required ?? false,
-      sensitive: template?.sensitive ??
+      sensitive:
+          template?.sensitive ??
           lowered.contains('password') ||
               lowered.contains('secret') ||
               lowered.contains('token') ||
@@ -830,8 +853,9 @@ class _BackendActionDialogState extends State<BackendActionDialog> {
     Navigator.pop(context, body);
   }
 
-  void _toast(String text) => ScaffoldMessenger.maybeOf(context)
-      ?.showSnackBar(SnackBar(content: Text(text)));
+  void _toast(String text) => ScaffoldMessenger.maybeOf(
+    context,
+  )?.showSnackBar(SnackBar(content: Text(text)));
 
   @override
   Widget build(BuildContext context) {
@@ -842,24 +866,26 @@ class _BackendActionDialogState extends State<BackendActionDialog> {
           ? Icons.warning_amber_rounded
           : _actionIcons[widget.namespace] ?? Icons.tune_rounded,
       title: _actionTitles[key] ?? _humanLabel(widget.action),
-      subtitle: _actionDescriptions[key] ??
+      subtitle:
+          _actionDescriptions[key] ??
           (destructive ? 'This action can remove or disable data.' : null),
       destructive: destructive,
       submit: destructive
           ? 'Confirm'
           : widget.action.contains('create') ||
-                  widget.action.contains('register') ||
-                  widget.action.contains('request')
-              ? 'Create'
-              : 'Save',
+                widget.action.contains('register') ||
+                widget.action.contains('request')
+          ? 'Create'
+          : 'Save',
       onSubmit: destructive && !understood ? null : submit,
       children: [
         for (final f in visible) _editor(f),
         if (destructive)
           AppConfirmCheck(
-              value: understood,
-              onChanged: (v) => setState(() => understood = v),
-              label: 'I understand this cannot be undone'),
+            value: understood,
+            onChanged: (v) => setState(() => understood = v),
+            label: 'I understand this cannot be undone',
+          ),
       ],
     );
   }
@@ -874,25 +900,28 @@ class _BackendActionDialogState extends State<BackendActionDialog> {
       final current = choices.contains('${f.value}') ? '${f.value}' : null;
       if (choices.length <= 3 && current != null) {
         return AppSegmentedField<String>(
-            label: label,
-            hint: f.hint,
-            value: current,
-            choices: options,
-            onChanged: (v) => setState(() => f.value = v));
-      }
-      return AppChoiceField<String>(
           label: label,
           hint: f.hint,
           value: current,
           choices: options,
-          onChanged: (v) => setState(() => f.value = v));
+          onChanged: (v) => setState(() => f.value = v),
+        );
+      }
+      return AppChoiceField<String>(
+        label: label,
+        hint: f.hint,
+        value: current,
+        choices: options,
+        onChanged: (v) => setState(() => f.value = v),
+      );
     }
     if (f.type == BackendFieldType.boolean) {
       return AppSwitchCard(
-          title: label,
-          subtitle: f.hint,
-          value: f.value == true,
-          onChanged: (v) => setState(() => f.value = v));
+        title: label,
+        subtitle: f.hint,
+        value: f.value == true,
+        onChanged: (v) => setState(() => f.value = v),
+      );
     }
     if (f.ledgerCredits) {
       final max = switch (f.name) {
@@ -902,16 +931,20 @@ class _BackendActionDialogState extends State<BackendActionDialog> {
       };
       return AppAmountField(
         label: label,
-        hint: f.hint ??
+        hint:
+            f.hint ??
             '≈ ${formatLedgerUsd(creditsToLedger((f.value as num?) ?? 0))}',
         value: ((f.value as num?) ?? 0).toDouble(),
         max: max,
         step: max >= 10000 ? 50 : 10,
         decimals: 2,
         unit: 'credits',
-        presets: [max / 100, max / 20, max / 10, max / 2]
-            .map((v) => v.roundToDouble())
-            .toList(),
+        presets: [
+          max / 100,
+          max / 20,
+          max / 10,
+          max / 2,
+        ].map((v) => v.roundToDouble()).toList(),
         presetLabel: (v) => compactDecimal(v),
         format: (v) => '${compactDecimal(v)} credits',
         onChanged: (v) => setState(() => f.value = v),
@@ -919,63 +952,88 @@ class _BackendActionDialogState extends State<BackendActionDialog> {
     }
     if (f.name == 'expires_at') {
       return AppExpiryField(
-          label: label,
-          hint: f.hint == null || f.hint!.contains('RFC') ? null : f.hint,
-          value: DateTime.tryParse('${f.value ?? ''}')?.toLocal(),
-          onChanged: (v) => setState(() => f.value = v == null
+        label: label,
+        hint: f.hint == null || f.hint!.contains('RFC') ? null : f.hint,
+        value: DateTime.tryParse('${f.value ?? ''}')?.toLocal(),
+        onChanged: (v) => setState(
+          () => f.value = v == null
               ? null
-              : DateTime.utc(v.year, v.month, v.day, 23, 59, 59)
-                  .toIso8601String()));
+              : DateTime.utc(
+                  v.year,
+                  v.month,
+                  v.day,
+                  23,
+                  59,
+                  59,
+                ).toIso8601String(),
+        ),
+      );
     }
     if (f.name == 'at') {
       final parts = '${f.value ?? ''}'.split(':');
       final time = parts.length == 2
           ? TimeOfDay(
               hour: int.tryParse(parts[0]) ?? 9,
-              minute: int.tryParse(parts[1]) ?? 0)
+              minute: int.tryParse(parts[1]) ?? 0,
+            )
           : null;
-      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        AppFieldLabel(label, hint: 'Runs every day at this time.'),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          ChoiceChip(
-              selected: time == null,
-              label: const Text('Not daily'),
-              onSelected: (_) => setState(() => f.value = null)),
-          ActionChip(
-            avatar: const Icon(Icons.schedule_rounded, size: 18),
-            label: Text(time == null ? 'Pick a time' : time.format(context)),
-            onPressed: () async {
-              final picked = await showTimePicker(
-                  context: context,
-                  initialTime: time ?? const TimeOfDay(hour: 9, minute: 0));
-              if (picked != null) {
-                setState(() => f.value =
-                    '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}');
-              }
-            },
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppFieldLabel(label, hint: 'Runs every day at this time.'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                selected: time == null,
+                label: const Text('Not daily'),
+                onSelected: (_) => setState(() => f.value = null),
+              ),
+              ActionChip(
+                avatar: const Icon(Icons.schedule_rounded, size: 18),
+                label: Text(
+                  time == null ? 'Pick a time' : time.format(context),
+                ),
+                onPressed: () async {
+                  final picked = await showTimePicker(
+                    context: context,
+                    initialTime: time ?? const TimeOfDay(hour: 9, minute: 0),
+                  );
+                  if (picked != null) {
+                    setState(
+                      () => f.value =
+                          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}',
+                    );
+                  }
+                },
+              ),
+            ],
           ),
-        ]),
-      ]);
+        ],
+      );
     }
     if (f.type == BackendFieldType.integer && f.name.endsWith('_sec')) {
       return AppDurationField(
-          label: label.replaceAll(' sec', ''),
-          hint: f.hint,
-          seconds: f.value is num ? (f.value as num).toInt() : null,
-          onChanged: (v) => setState(() => f.value = v));
+        label: label.replaceAll(' sec', ''),
+        hint: f.hint,
+        seconds: f.value is num ? (f.value as num).toInt() : null,
+        onChanged: (v) => setState(() => f.value = v),
+      );
     }
     if (f.type == BackendFieldType.integer && f.name == 'limit') {
       f.value ??= 50;
       return AppChoiceField<int>(
-          label: 'How many',
-          value: f.value as int?,
-          choices: const [
-            AppChoice(25, '25'),
-            AppChoice(50, '50'),
-            AppChoice(100, '100'),
-            AppChoice(200, '200'),
-          ],
-          onChanged: (v) => setState(() => f.value = v));
+        label: 'How many',
+        value: f.value as int?,
+        choices: const [
+          AppChoice(25, '25'),
+          AppChoice(50, '50'),
+          AppChoice(100, '100'),
+          AppChoice(200, '200'),
+        ],
+        onChanged: (v) => setState(() => f.value = v),
+      );
     }
     if (_jsonEditor(f)) {
       if (f.text.text.isEmpty && f.value != null) {
@@ -990,9 +1048,10 @@ class _BackendActionDialogState extends State<BackendActionDialog> {
         maxLines: 10,
         style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
         decoration: InputDecoration(
-            labelText: label,
-            helperText: f.hint ?? 'Advanced: JSON',
-            alignLabelWithHint: true),
+          labelText: label,
+          helperText: f.hint ?? 'Advanced: JSON',
+          alignLabelWithHint: true,
+        ),
         validator: (value) {
           final text = (value ?? '').trim();
           if (text.isEmpty) return f.required ? 'Required' : null;
@@ -1013,22 +1072,25 @@ class _BackendActionDialogState extends State<BackendActionDialog> {
     }
     if (f.type == BackendFieldType.stringList) {
       return AppTagsField(
-          label: label,
-          hint: f.hint,
-          values: [for (final v in f.value as List) '$v'],
-          onChanged: (v) => setState(() => f.value = v));
+        label: label,
+        hint: f.hint,
+        values: [for (final v in f.value as List) '$v'],
+        onChanged: (v) => setState(() => f.value = v),
+      );
     }
     if (f.type == BackendFieldType.object) {
       return AppPairsEditor(
-          label: label,
-          hint: f.hint,
-          obscureValues: f.sensitive,
-          initial: {
-            for (final e in (f.value as Map).entries) '${e.key}': '${e.value}'
-          },
-          onChanged: (v) => f.value = v);
+        label: label,
+        hint: f.hint,
+        obscureValues: f.sensitive,
+        initial: {
+          for (final e in (f.value as Map).entries) '${e.key}': '${e.value}',
+        },
+        onChanged: (v) => f.value = v,
+      );
     }
-    final numeric = f.type == BackendFieldType.integer ||
+    final numeric =
+        f.type == BackendFieldType.integer ||
         f.type == BackendFieldType.decimal;
     final multiline = f.type == BackendFieldType.multiline;
     final hidden = f.sensitive && obscured.contains(f.name);
@@ -1039,18 +1101,23 @@ class _BackendActionDialogState extends State<BackendActionDialog> {
       maxLines: hidden ? 1 : (multiline ? 8 : 1),
       keyboardType: switch (f.type) {
         BackendFieldType.integer => TextInputType.number,
-        BackendFieldType.decimal =>
-          const TextInputType.numberWithOptions(decimal: true),
-        _ => f.name.contains('email')
-            ? TextInputType.emailAddress
-            : f.name.contains('url')
-                ? TextInputType.url
-                : TextInputType.text,
+        BackendFieldType.decimal => const TextInputType.numberWithOptions(
+          decimal: true,
+        ),
+        _ =>
+          f.name.contains('email')
+              ? TextInputType.emailAddress
+              : f.name.contains('url')
+              ? TextInputType.url
+              : TextInputType.text,
       },
       inputFormatters: numeric
           ? [
-              FilteringTextInputFormatter.allow(RegExp(
-                  f.type == BackendFieldType.integer ? r'[0-9]' : r'[0-9.]'))
+              FilteringTextInputFormatter.allow(
+                RegExp(
+                  f.type == BackendFieldType.integer ? r'[0-9]' : r'[0-9.]',
+                ),
+              ),
             ]
           : null,
       decoration: InputDecoration(
@@ -1059,11 +1126,14 @@ class _BackendActionDialogState extends State<BackendActionDialog> {
         alignLabelWithHint: multiline,
         suffixIcon: f.sensitive
             ? IconButton(
-                onPressed: () => setState(() =>
-                    hidden ? obscured.remove(f.name) : obscured.add(f.name)),
-                icon: Icon(hidden
-                    ? Icons.visibility_outlined
-                    : Icons.visibility_off_outlined),
+                onPressed: () => setState(
+                  () => hidden ? obscured.remove(f.name) : obscured.add(f.name),
+                ),
+                icon: Icon(
+                  hidden
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
               )
             : null,
       ),
@@ -1105,16 +1175,19 @@ class BackendResultView extends StatelessWidget {
       padding: padding ?? const EdgeInsets.fromLTRB(24, 8, 24, 32),
       children: [
         for (final entry in results.entries)
-          Card(
+          AppCard(
             margin: const EdgeInsets.only(bottom: 12),
             child: ExpansionTile(
               initiallyExpanded: true,
-              leading: Icon(entry.value is Map &&
-                      (entry.value as Map).containsKey('error')
-                  ? Icons.error_outline_rounded
-                  : Icons.cloud_done_outlined),
-              title: Text(entry.key,
-                  style: const TextStyle(fontWeight: FontWeight.w800)),
+              leading: Icon(
+                entry.value is Map && (entry.value as Map).containsKey('error')
+                    ? Icons.error_outline_rounded
+                    : Icons.cloud_done_outlined,
+              ),
+              title: Text(
+                entry.key,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
@@ -1141,13 +1214,18 @@ class _StructuredValue extends StatelessWidget {
       final list = value as List;
       if (list.isEmpty) return const ListTile(title: Text('No records'));
       if (list.every(_scalar)) {
-        return Wrap(spacing: 7, runSpacing: 7, children: [
-          for (final item in list) Chip(label: Text('${item ?? '—'}')),
-        ]);
+        return Wrap(
+          spacing: 7,
+          runSpacing: 7,
+          children: [
+            for (final item in list) Chip(label: Text('${item ?? '—'}')),
+          ],
+        );
       }
       if (list.every((item) => item is Map)) {
-        final maps =
-            list.map((item) => (item as Map).cast<String, dynamic>()).toList();
+        final maps = list
+            .map((item) => (item as Map).cast<String, dynamic>())
+            .toList();
         final columns = <String>{
           for (final map in maps)
             for (final entry in map.entries)
@@ -1158,61 +1236,71 @@ class _StructuredValue extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: DataTable(
               columns: [
-                for (final name in columns) DataColumn(label: Text(name))
+                for (final name in columns) DataColumn(label: Text(name)),
               ],
               rows: [
                 for (final map in maps)
-                  DataRow(cells: [
-                    for (final name in columns)
-                      DataCell(SelectableText('${map[name] ?? '—'}')),
-                  ]),
+                  DataRow(
+                    cells: [
+                      for (final name in columns)
+                        DataCell(SelectableText('${map[name] ?? '—'}')),
+                    ],
+                  ),
               ],
             ),
           );
         }
       }
-      return Column(children: [
-        for (var i = 0; i < list.length; i++)
-          ExpansionTile(
-            title: Text('Item ${i + 1}'),
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: _StructuredValue(value: list[i]),
-              )
-            ],
-          ),
-      ]);
-    }
-    if (value is Map) {
-      final map = (value as Map).cast<String, dynamic>();
-      return Column(children: [
-        for (final entry in map.entries)
-          if (_scalar(entry.value))
-            ListTile(
-              dense: true,
-              title: Text(entry.key),
-              trailing: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: SelectableText('${entry.value ?? '—'}',
-                    textAlign: TextAlign.end),
-              ),
-            )
-          else
+      return Column(
+        children: [
+          for (var i = 0; i < list.length; i++)
             ExpansionTile(
-              tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-              title: Text(entry.key),
-              subtitle: Text(entry.value is List
-                  ? '${(entry.value as List).length} records'
-                  : 'Details'),
+              title: Text('Item ${i + 1}'),
               children: [
                 Padding(
                   padding: const EdgeInsets.all(12),
-                  child: _StructuredValue(value: entry.value),
-                )
+                  child: _StructuredValue(value: list[i]),
+                ),
               ],
             ),
-      ]);
+        ],
+      );
+    }
+    if (value is Map) {
+      final map = (value as Map).cast<String, dynamic>();
+      return Column(
+        children: [
+          for (final entry in map.entries)
+            if (_scalar(entry.value))
+              ListTile(
+                dense: true,
+                title: Text(entry.key),
+                trailing: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: SelectableText(
+                    '${entry.value ?? '—'}',
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+              )
+            else
+              ExpansionTile(
+                tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                title: Text(entry.key),
+                subtitle: Text(
+                  entry.value is List
+                      ? '${(entry.value as List).length} records'
+                      : 'Details',
+                ),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: _StructuredValue(value: entry.value),
+                  ),
+                ],
+              ),
+        ],
+      );
     }
     return Align(
       alignment: Alignment.centerLeft,

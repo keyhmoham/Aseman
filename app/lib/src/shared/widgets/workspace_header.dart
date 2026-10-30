@@ -6,17 +6,66 @@ import '../../app_dependencies.dart';
 import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_surfaces.dart';
 import '../../data/models/space.dart';
-import 'skeleton.dart';
+import 'glass_surface.dart';
 import 'overlay_panels.dart';
+import 'skeleton.dart';
 
-/// Shared top app bar of the workspace and the feed: the ASEMAN name in the
-/// middle, the account avatar (its menu) on the right edge. On the workspace
-/// the left edge is a Home pill that returns to the feed. On phones the
-/// navigation drawer opens from a menu on the desk below this bar, not from
-/// here. On the feed the left edge holds the notifications. On the workspace
-/// the switcher opens from the [SwitcherEdgeHandle] (hidden on the feed). No
-/// background, border or shadow: the page's glow shows through. Optional
-/// callbacks hide the corresponding controls.
+/// Layout numbers for the floating glass [WorkspaceHeader] so every host
+/// page can reserve matching top space. Pass [compact] from the same
+/// breakpoint the header uses (`width < 820`): phones keep a near-edge pill;
+/// desktop keeps a wide gutter and caps the pill at [desktopMaxWidth] so it
+/// stays compact instead of stretching across the screen.
+abstract final class FloatingAppBarLayout {
+  /// Inner height of the glass pill (not including outer margins).
+  /// Short enough to sit with the other floating sections; the account
+  /// avatar ([avatarRadius]) is what sets this.
+  static const double height = 40;
+
+  /// Account avatar radius. Smaller than a default [CircleAvatar] so the
+  /// pill can stay short.
+  static const double avatarRadius = 13;
+
+  /// Small gap under the pill before content feels clear of it.
+  static const double contentGap = 8;
+
+  /// Distance from the safe-area top to the pill.
+  static double topMargin(bool compact) => compact ? 16 : 20;
+
+  /// Distance from the screen's left/right edges to the pill. Desktop keeps
+  /// a wide gutter; on very wide windows [desktopMaxWidth] adds still more.
+  static double horizontalMargin(bool compact) => compact ? 16 : 128;
+
+  /// Widest the desktop pill grows. Extra window width stays as side margin.
+  static const double desktopMaxWidth = 840;
+
+  /// Top space hosts should reserve inside scrollable / page content so the
+  /// first paint clears the bar; when that content scrolls, it passes under.
+  static double contentInset(bool compact) =>
+      topMargin(compact) + height + contentGap;
+
+  static EdgeInsets margin(bool compact) => EdgeInsets.fromLTRB(
+      horizontalMargin(compact), topMargin(compact), horizontalMargin(compact), 0);
+}
+
+/// Icon buttons inside the short pill: the theme's 48px target would force
+/// the bar taller than the avatar.
+ButtonStyle _barIconStyle() => IconButton.styleFrom(
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      minimumSize: const Size(32, 32),
+      padding: const EdgeInsets.all(4),
+      iconSize: 18,
+    );
+
+/// Shared floating top app bar of the workspace and the feed: a long glass
+/// pill over the page. ASEMAN sits in the middle, the account avatar (its
+/// menu) on the right. On the workspace the left edge is a Home pill that
+/// returns to the feed. On phones the navigation drawer opens from a menu on
+/// the desk below this bar, not from here. On the feed the left edge holds
+/// the notifications. On the workspace the switcher opens from the
+/// [SwitcherEdgeHandle] (hidden on the feed). Hosts overlay this bar and use
+/// [FloatingAppBarLayout.contentInset] so content starts clear of it.
+/// Optional callbacks hide the corresponding controls.
 class WorkspaceHeader extends StatelessWidget {
   const WorkspaceHeader({
     super.key,
@@ -54,69 +103,121 @@ class WorkspaceHeader extends StatelessWidget {
   final VoidCallback onOpenProfile;
 
   @override
-  Widget build(BuildContext context) => Padding(
-      padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 24, vertical: 10),
-      child: Row(children: [
-        Expanded(
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(FloatingAppBarLayout.height);
+    final bar = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .12),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: GlassSurface(
+        alpha: AppSurfaces.cardAlpha,
+        blur: AppSurfaces.blurSigma,
+        borderRadius: radius,
+        child: SizedBox(
+          height: FloatingAppBarLayout.height,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12),
             child: Row(children: [
-          if (feed && onOpenNotifications != null)
-            IconButton(
-                visualDensity: compact ? VisualDensity.compact : null,
-                tooltip: 'Notifications',
-                onPressed: onOpenNotifications,
-                icon: Badge(
-                    isLabelVisible: unreadNotifications > 0,
-                    label: Text(unreadNotifications > 99
-                        ? '99+'
-                        : '$unreadNotifications'),
-                    child: const Icon(Icons.notifications_none_rounded)))
-          else if (onBackToFeed != null)
-            _HomePill(onPressed: onBackToFeed),
-          // Room path (hall shortcut + room title) is desktop-only; on phones
-          // the Desk / Feed|Chat tabs already cover navigation.
-          if (room != null && !compact) ...[
-            const SizedBox(width: 6),
-            const Icon(Icons.chevron_right_rounded),
-            if (onGoHome != null)
-              IconButton(
-                  onPressed: onGoHome,
-                  tooltip: 'Workspace home',
-                  icon: const Icon(Icons.home_outlined, size: 18)),
-            Flexible(
-                child: Text(room!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700)))
-          ],
-        ])),
-        SizedBox(width: compact ? 6 : 12),
-        const Text('ASEMAN',
-            maxLines: 1,
-            style: TextStyle(
-                fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 2)),
-        SizedBox(width: compact ? 6 : 12),
-        Expanded(
-            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-          if (!compact) ...[
-            const Flexible(child: _LivePill()),
-            const SizedBox(width: 8),
-          ],
-          if (!compact && onOpenAdmin != null) ...[
-            IconButton.filledTonal(
-                onPressed: onOpenAdmin,
-                icon: const Icon(Icons.space_dashboard_outlined)),
-            const SizedBox(width: 8),
-          ],
-          InkWell(
-              onTap: onOpenProfile,
-              customBorder: const CircleBorder(),
-              child: CircleAvatar(
-                  foregroundImage: avatar,
-                  onForegroundImageError: avatar == null ? null : (_, __) {},
-                  child:
-                      Text(handle.isEmpty ? 'ME' : handle[0].toUpperCase())))
-        ])),
-      ]));
+              Expanded(
+                  child: Row(children: [
+                if (feed && onOpenNotifications != null)
+                  IconButton(
+                      style: _barIconStyle(),
+                      tooltip: 'Notifications',
+                      onPressed: onOpenNotifications,
+                      icon: Badge(
+                          isLabelVisible: unreadNotifications > 0,
+                          label: Text(unreadNotifications > 99
+                              ? '99+'
+                              : '$unreadNotifications'),
+                          child: const Icon(Icons.notifications_none_rounded)))
+                else if (onBackToFeed != null)
+                  _HomePill(onPressed: onBackToFeed),
+                // Room path (hall shortcut + room title) is desktop-only;
+                // on phones the Desk / Feed|Chat tabs already cover
+                // navigation.
+                if (room != null && !compact) ...[
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right_rounded, size: 18),
+                  if (onGoHome != null)
+                    IconButton(
+                        style: _barIconStyle(),
+                        onPressed: onGoHome,
+                        tooltip: 'Workspace home',
+                        icon: const Icon(Icons.home_outlined)),
+                  Flexible(
+                      child: Text(room!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600)))
+                ],
+              ])),
+              SizedBox(width: compact ? 6 : 10),
+              const Text('ASEMAN',
+                  maxLines: 1,
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2)),
+              SizedBox(width: compact ? 6 : 10),
+              Expanded(
+                  child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                    if (!compact) ...[
+                      const Flexible(child: _LivePill()),
+                      const SizedBox(width: 6),
+                    ],
+                    if (!compact && onOpenAdmin != null) ...[
+                      IconButton.filledTonal(
+                          style: _barIconStyle(),
+                          onPressed: onOpenAdmin,
+                          icon: const Icon(Icons.space_dashboard_outlined)),
+                      const SizedBox(width: 6),
+                    ],
+                    InkWell(
+                        onTap: onOpenProfile,
+                        customBorder: const CircleBorder(),
+                        child: CircleAvatar(
+                            radius: FloatingAppBarLayout.avatarRadius,
+                            foregroundImage: avatar,
+                            onForegroundImageError:
+                                avatar == null ? null : (_, __) {},
+                            child: Text(
+                                handle.isEmpty ? 'ME' : handle[0].toUpperCase(),
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1))))
+                  ])),
+            ]),
+          ),
+        ),
+      ),
+    );
+    return Padding(
+      padding: FloatingAppBarLayout.margin(compact),
+      child: Center(
+        heightFactor: 1,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: compact
+                ? double.infinity
+                : FloatingAppBarLayout.desktopMaxWidth,
+          ),
+          child: bar,
+        ),
+      ),
+    );
+  }
 }
 
 /// Filled stadium control that returns to the feed from any workspace.
@@ -127,15 +228,17 @@ class _HomePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) => FilledButton.icon(
       onPressed: onPressed,
-      icon: const Icon(Icons.arrow_back_rounded, size: 18),
+      icon: const Icon(Icons.arrow_back_rounded, size: 16),
       label: const Text('Home'),
       style: FilledButton.styleFrom(
           visualDensity: VisualDensity.compact,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          minimumSize: const Size(0, 28),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           textStyle: Theme.of(context)
               .textTheme
               .labelLarge
-              ?.copyWith(fontWeight: FontWeight.w700, fontSize: 13)));
+              ?.copyWith(fontWeight: FontWeight.w600, fontSize: 13)));
 }
 
 /// The workspace switcher's handle: a bump stuck to the screen's right edge,
@@ -206,7 +309,7 @@ class _LivePill extends StatelessWidget {
   const _LivePill();
   @override
   Widget build(BuildContext context) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
           color: Colors.green.withValues(alpha: .12),
           borderRadius: BorderRadius.circular(20)),
@@ -221,7 +324,10 @@ class _LivePill extends StatelessWidget {
 /// Workspace switcher dialog/sheet with a searchable grid of the user's real
 /// spaces. [dependencies] lists and creates spaces through the backend.
 /// With [onOpenFeed] the grid starts with a Home tile that opens the feed.
-/// With [embedded] it fills a mobile home tab (no close control).
+/// With [embedded] it fills a home-shell tab (no close control).
+/// With [inBottomSheet] (or under [AppSheetScope]) the body stays transparent
+/// so the host sheet paints the glass.
+/// With [dense] tiles and type shrink for a narrow desktop rail.
 class WorkspacePicker extends StatefulWidget {
   const WorkspacePicker(
       {super.key,
@@ -231,7 +337,9 @@ class WorkspacePicker extends StatefulWidget {
       this.feedSelected = false,
       this.dependencies,
       this.onSettings,
-      this.embedded = false});
+      this.embedded = false,
+      this.inBottomSheet = false,
+      this.dense = false});
   final String current;
   final ValueChanged<String> onPick;
   final VoidCallback? onOpenFeed;
@@ -241,8 +349,14 @@ class WorkspacePicker extends StatefulWidget {
   final AppDependencies? dependencies;
   final void Function(Workspace space)? onSettings;
 
-  /// Full-page tab on the mobile home shell: no close, fills its parent.
+  /// Home-shell tab: no close, fills its parent.
   final bool embedded;
+
+  /// Body stays clear; [showAppSheet] owns the frosted chrome.
+  final bool inBottomSheet;
+
+  /// Compact chrome for a desktop side rail; leave false on mobile.
+  final bool dense;
   @override
   State<WorkspacePicker> createState() => _WorkspacePickerState();
 }
@@ -324,8 +438,12 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 820;
     final embedded = widget.embedded;
+    final inSheet =
+        widget.inBottomSheet || AppSheetScope.inSheetOf(context);
+    final dense = widget.dense;
     final names = _names;
     final showFeed = _showFeed;
+    // Sheet / floating panel / embedded rail paint the frost; keep clear.
     final body = Material(
         color: Colors.transparent,
         child: Container(
@@ -333,24 +451,13 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
           constraints: embedded
               ? const BoxConstraints.expand()
               : BoxConstraints(maxHeight: compact ? double.infinity : 620),
-          padding: EdgeInsets.all(embedded ? 16 : 26),
-          // In a bottom sheet the sheet already paints the surface;
-          // floating on desktop it matches every other modal panel.
+          padding: EdgeInsets.all(dense ? 12 : (embedded || inSheet ? 16 : 26)),
           decoration: BoxDecoration(
-              color: compact || embedded
-                  ? null
-                  : AppSurfaces.overlay(Theme.of(context).colorScheme),
-              borderRadius: BorderRadius.circular(AppShape.card),
-              boxShadow: compact || embedded
-                  ? null
-                  : const [
-                      BoxShadow(
-                          color: Colors.black38,
-                          blurRadius: 60,
-                          offset: Offset(0, 22))
-                    ]),
+              borderRadius: BorderRadius.circular(AppShape.card)),
           child: Column(
-              mainAxisSize: embedded ? MainAxisSize.max : MainAxisSize.min,
+              mainAxisSize: embedded || inSheet
+                  ? MainAxisSize.max
+                  : MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
@@ -358,52 +465,57 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                       embedded
                           ? Icons.workspaces_outline
                           : Icons.blur_on_rounded,
-                      size: 30),
+                      size: dense ? 22 : 30),
                   const SizedBox(width: 10),
                   Expanded(
                       child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                         Text(embedded ? 'Spaces' : 'Switch workspace',
-                            style: const TextStyle(
-                                fontSize: 23, fontWeight: FontWeight.w900)),
+                            style: TextStyle(
+                                fontSize: dense ? 17 : 23,
+                                fontWeight: FontWeight.w900)),
                         Text(
                             embedded
                                 ? 'Open a workspace or start a new one'
                                 : 'Every workspace has its own rooms, desks and feed',
-                            style: const TextStyle(fontSize: 11))
+                            style: TextStyle(fontSize: dense ? 10 : 11))
                       ])),
                   if (!embedded)
                     IconButton(
                         onPressed: () => Navigator.pop(context),
                         icon: const Icon(Icons.close))
                 ]),
-                const SizedBox(height: 18),
+                SizedBox(height: dense ? 12 : 18),
                 TextField(
                     autofocus: !embedded,
                     onChanged: (v) => setState(() => query = v),
                     decoration: const InputDecoration(
                         prefixIcon: Icon(Icons.search_rounded),
                         hintText: 'Search workspaces…')),
-                const SizedBox(height: 18),
+                SizedBox(height: dense ? 12 : 18),
                 Flexible(
-                    child: loading
-                        ? const SkeletonGrid(
-                            maxCrossAxisExtent: 220, mainAxisExtent: 154)
-                        : GridView.builder(
+                    child: LayoutBuilder(builder: (context, gridBox) {
+                  // Size columns to this panel, not the whole window — side
+                  // rails are much narrower than a phone or the modal sheet.
+                  final tileExtent = dense ? 118.0 : 154.0;
+                  final cols = math.max(
+                      1,
+                      (gridBox.maxWidth / (dense ? 140 : 180))
+                          .floor()
+                          .clamp(1, 3));
+                  if (loading) {
+                    return SkeletonGrid(
+                        maxCrossAxisExtent: 220, mainAxisExtent: tileExtent);
+                  }
+                  return GridView.builder(
                             shrinkWrap: !embedded,
                             gridDelegate:
                                 SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: compact
-                                        ? math.max(
-                                            1,
-                                            (MediaQuery.sizeOf(context).width /
-                                                    180)
-                                                .floor())
-                                        : 3,
-                                    mainAxisSpacing: 12,
-                                    crossAxisSpacing: 12,
-                                    mainAxisExtent: 154),
+                                    crossAxisCount: cols,
+                                    mainAxisSpacing: dense ? 8 : 12,
+                                    crossAxisSpacing: dense ? 8 : 12,
+                                    mainAxisExtent: tileExtent),
                             itemCount: names.length + 1 + (showFeed ? 1 : 0),
                             itemBuilder: (context, i) {
                               if (showFeed) {
@@ -446,13 +558,14 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                                   (s) => s.name == name,
                                   orElse: () => Workspace(
                                       id: '', ownerId: '', name: name));
+                              final radius = dense ? 18.0 : 24.0;
                               return InkWell(
                                   onTap: () => widget.onPick(name),
-                                  borderRadius: BorderRadius.circular(24),
+                                  borderRadius: BorderRadius.circular(radius),
                                   child: AnimatedContainer(
                                       duration:
                                           const Duration(milliseconds: 180),
-                                      padding: const EdgeInsets.all(16),
+                                      padding: EdgeInsets.all(dense ? 10 : 16),
                                       decoration: BoxDecoration(
                                           color: selected
                                               ? Theme.of(context)
@@ -463,7 +576,7 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                                                   .surfaceContainerHighest
                                                   .withValues(alpha: .6),
                                           borderRadius:
-                                              BorderRadius.circular(24),
+                                              BorderRadius.circular(radius),
                                           border: Border.all(
                                               color: selected
                                                   ? Theme.of(context)
@@ -476,6 +589,7 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                                                 CrossAxisAlignment.start,
                                             children: [
                                               CircleAvatar(
+                                                  radius: dense ? 16 : 20,
                                                   foregroundImage:
                                                       _avatarOf(name),
                                                   onForegroundImageError:
@@ -490,21 +604,29 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                                                       .toUpperCase())),
                                               const Spacer(),
                                               Text(name,
-                                                  style: const TextStyle(
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
                                                       fontWeight:
-                                                          FontWeight.w900)),
+                                                          FontWeight.w900,
+                                                      fontSize:
+                                                          dense ? 12 : 14)),
                                               Text(
                                                   '${_roomCountFor(name)} rooms',
-                                                  style: const TextStyle(
-                                                      fontSize: 10)),
+                                                  style: TextStyle(
+                                                      fontSize:
+                                                          dense ? 9 : 10)),
                                               if (selected)
-                                                const Align(
+                                                Align(
                                                     alignment:
                                                         Alignment.bottomRight,
                                                     child: Icon(
                                                         Icons
                                                             .check_circle_rounded,
-                                                        size: 17))
+                                                        size: dense
+                                                            ? 14
+                                                            : 17))
                                             ]),
                                         if (widget.onSettings != null &&
                                             space.id.isNotEmpty)
@@ -518,14 +640,17 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                                                       VisualDensity.compact,
                                                   onPressed: () =>
                                                       widget.onSettings!(space),
-                                                  icon: const Icon(
+                                                  icon: Icon(
                                                       Icons.settings_outlined,
-                                                      size: 18)))
+                                                      size: dense
+                                                          ? 16
+                                                          : 18)))
                                       ])));
-                            })),
+                            });
+                })),
               ]),
         ));
-    if (embedded) return body;
+    if (embedded || inSheet) return body;
     return SafeArea(child: Center(child: body));
   }
 

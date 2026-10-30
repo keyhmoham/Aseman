@@ -19,7 +19,14 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   String _workspace = 'Home';
+
+  /// Room to select when the workspace page opens, from the home chats list.
+  String? _initialRoom;
+  String? _initialRoomId;
   int _page = 0; // 0 = search feed, 1 = workspace desk
+
+  /// Phone home tab. Chats on first land and when leaving a workspace.
+  HomeMobileTab _mobileTab = HomeMobileTab.chats;
 
   @override
   void initState() {
@@ -27,8 +34,11 @@ class _AppShellState extends State<AppShell> {
     // A post's author (or a shared post's original author) opens their
     // profile wherever the post shows.
     PostLinks.openAccount = (context, accountId, handle) => showAccountProfile(
-        context, widget.dependencies,
-        accountId: accountId, handle: handle);
+      context,
+      widget.dependencies,
+      accountId: accountId,
+      handle: handle,
+    );
     // On a desktop where the person let agents use this computer, keep
     // answering them.
     hostAgentFor(widget.dependencies).restore().ignore();
@@ -40,8 +50,10 @@ class _AppShellState extends State<AppShell> {
   /// The node runs it once, however often this asks.
   Future<void> _firstDay() async {
     try {
-      final out = await widget.dependencies.service
-          .invokeAction('proactive', 'first_day');
+      final out = await widget.dependencies.service.invokeAction(
+        'proactive',
+        'first_day',
+      );
       if (!mounted || out is! Map || out['started'] != true) return;
       await openPanel(context, SetupPanel(dependencies: widget.dependencies));
     } catch (_) {
@@ -52,26 +64,46 @@ class _AppShellState extends State<AppShell> {
   void _openWorkspace(String name) {
     setState(() {
       _workspace = name;
+      _initialRoom = null;
+      _initialRoomId = null;
       _page = 1;
     });
   }
 
-  void _openFeed() => setState(() => _page = 0);
+  /// Opens [name] with the room from the home chats list already selected.
+  void _openWorkspaceRoom(String name, String roomName, String roomId) {
+    setState(() {
+      _workspace = name;
+      _initialRoom = roomName;
+      _initialRoomId = roomId;
+      _page = 1;
+    });
+  }
+
+  void _openFeed() => setState(() {
+    _page = 0;
+    // The workspace Home button returns to the chats tab.
+    _mobileTab = HomeMobileTab.chats;
+  });
 
   void _setWorkspace(String name) => setState(() => _workspace = name);
 
   @override
   Widget build(BuildContext context) {
     final feed = SearchFeedScreen(
-      key: ValueKey('search-feed-$_workspace'),
+      key: ValueKey('search-feed-$_workspace-$_mobileTab'),
       dependencies: widget.dependencies,
       workspace: _workspace,
       onOpenWorkspace: _openWorkspace,
+      onOpenSpaceRoom: _openWorkspaceRoom,
+      initialMobileTab: _mobileTab,
     );
     final desk = WorkspaceScreen(
       key: const ValueKey('workspace-desk'),
       dependencies: widget.dependencies,
       initialWorkspace: _workspace,
+      initialRoom: _initialRoom,
+      initialRoomId: _initialRoomId,
       onBackToFeed: _openFeed,
       onWorkspaceChanged: _setWorkspace,
     );

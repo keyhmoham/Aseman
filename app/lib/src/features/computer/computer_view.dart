@@ -37,9 +37,12 @@ Future<void> showComputerSheet(
   required String spaceId,
 }) => showModalBottomSheet<void>(
   context: context,
+  // Remote screen — opaque bezel, not the frosted app-sheet chrome.
+  backgroundColor: const Color(0xFF1B1F25),
   isScrollControlled: true,
   useSafeArea: true,
   enableDrag: false,
+  showDragHandle: true,
   clipBehavior: Clip.antiAlias,
   shape: const RoundedRectangleBorder(
     borderRadius: BorderRadius.vertical(top: Radius.circular(24)),

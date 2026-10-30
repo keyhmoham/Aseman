@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
 import 'assistant_common.dart';
+import '../../shared/widgets/glass_surface.dart';
 
 /// Approvals waiting on the person, and the standing "always allow" grants
 /// they gave (each revocable).
@@ -52,7 +53,7 @@ class ApprovalsPanel extends StatelessWidget {
             children: [
               if (approvals.isEmpty) const Text('Nothing is waiting.'),
               for (final a in approvals)
-                Card(
+                AppCard(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: Padding(
                     padding: const EdgeInsets.all(12),

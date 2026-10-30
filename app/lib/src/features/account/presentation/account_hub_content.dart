@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../admin/presentation/admin_widgets.dart';
 import 'account_panel.dart';
+import '../../../shared/widgets/glass_surface.dart';
 
 typedef AccountAction = Future<void> Function(
     String namespace, String action, Map<String, dynamic> initialBody);
@@ -52,7 +53,7 @@ class _AccountHubContentState extends State<AccountHubContent> {
           icon: Icons.mark_email_read_outlined);
     return Column(children: [
       for (final invite in rows)
-        Card(
+        AppCard(
           margin: const EdgeInsets.only(bottom: 10),
           child: ListTile(
             contentPadding: const EdgeInsets.all(14),

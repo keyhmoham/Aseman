@@ -98,7 +98,11 @@ type platform interface {
 	CodeModeMCP(ctx context.Context, spaceID string, body []byte) ([]byte, error)
 	// OpenCodeEnabled is the node's OpenCode switch (Admin → OpenCode): on,
 	// OpenCode builds apps and writes code; off, the agents do it themselves.
+	// It is not AgentEngine.
 	OpenCodeEnabled(ctx context.Context) (bool, error)
+	// AgentEngine is which runtime runs the turn: "deepagents" or "opencode".
+	// Read on every turn so an admin change applies to the next one.
+	AgentEngine(ctx context.Context) (string, error)
 }
 
 type kernelPlatform struct{ K api.Kernel }

@@ -14,6 +14,7 @@ import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/avatar_editor.dart';
 import '../../../shared/widgets/backend_action_ui.dart';
+import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/skeleton.dart';
@@ -834,11 +835,8 @@ class _Section extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Material(
-      color: colors.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.card)),
-      clipBehavior: Clip.antiAlias,
+    return GlassSurface(
+      borderRadius: BorderRadius.circular(AppShape.card),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -948,7 +946,7 @@ class _MemberTile extends StatelessWidget {
         child: MiniTag(_role.toUpperCase(), roleColor),
       ),
       trailing: canManage && !isOwner && !isMe
-          ? PopupMenuButton<String>(
+          ? AppPopupMenuButton<String>(
               tooltip: 'Manage member',
               onSelected: (value) {
                 if (value == 'remove') {

@@ -17,6 +17,13 @@
   <script type="module" src="assets/assets/elpian/web_runtime/quickjs_web_runtime.js"></script>
 </head>
 <body>
+  <script>
+    // The Flutter view handles right-click. Block the browser menu on the
+    // whole page, including before the app finishes booting.
+    document.addEventListener('contextmenu', function (event) {
+      event.preventDefault();
+    }, true);
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

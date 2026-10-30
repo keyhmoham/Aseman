@@ -290,6 +290,8 @@ abstract final class BackendCapabilities {
       'admins_space_get',
       'admins_space_set',
       'agent_answer',
+      'agent_engine_get',
+      'agent_engine_set',
       'agent_questions',
       'ask',
       'bot_add',

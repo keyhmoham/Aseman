@@ -130,9 +130,13 @@ class TurnContext:
     timeline: bool = False
     # Whether the node serves Cloudflare Code Mode over space apps (codemode.py).
     codemode: bool = False
-    # The node's OpenCode switch: on, OpenCode builds apps and writes code,
-    # briefed by the agents; off, the agents build and code themselves.
+    # The node's programmer OpenCode switch: on, OpenCode builds apps and
+    # writes code, briefed by the agents; off, the agents build and code
+    # themselves. Not the agentic engine.
     opencode: bool = False
+    # Which runtime runs this turn: "deepagents" or "opencode". "opencode"
+    # drives the headless CLI on OpenCode's own free models.
+    agent_engine: str = "deepagents"
     # The agent's own chat model for side calls (the swarm's planning and team
     # setup): a LangChain chat model behind the turn's metered LLM endpoint.
     llm: Any = None

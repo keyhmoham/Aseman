@@ -8,6 +8,10 @@ package spaces
 // toolchain (the Elpian validator and headless driver as aseman-elpian) and
 // platform checks (appui_publish), and write any other code themselves.
 // Admins turn it on or off (Admin → OpenCode); the next turn follows it.
+//
+// This is the programmer, not the agentic engine. Which runtime runs agent
+// turns (Deep Agents or the OpenCode CLI) is agent_engine.go. The two
+// switches do not change each other.
 
 import (
 	"context"

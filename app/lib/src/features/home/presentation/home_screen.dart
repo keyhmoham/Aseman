@@ -5,13 +5,14 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/app_shape.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/post.dart';
 import '../../../data/repositories/market_repository.dart';
 import '../../../domain/models/market_quote.dart';
 import '../../../shared/widgets/app_panel.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/page_scaffold.dart';
 import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/stat_card.dart';
@@ -171,35 +172,41 @@ class _MarketTile extends StatelessWidget {
   const _MarketTile(this.quote);
   final MarketQuote quote;
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => SizedBox(
         width: 165,
         height: 82,
-        padding: const EdgeInsets.all(14),
-        decoration: AppSurfaces.cardDecoration(context),
-        child: Row(children: [
-          AppAvatar(quote.symbol[0], color: quote.color),
-          const SizedBox(width: 8),
-          Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                Text(quote.symbol,
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
-                Text(quote.price,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                Text('${quote.change > 0 ? '+' : ''}${quote.change}%',
-                    style: TextStyle(
-                        color: quote.change > 0
-                            ? AppColors.success
-                            : AppColors.danger,
-                        fontSize: 10))
-              ]))
-        ]),
+        child: GlassSurface(
+          borderRadius: BorderRadius.circular(AppShape.inner),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(children: [
+              AppAvatar(quote.symbol[0], color: quote.color),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                    Text(quote.symbol,
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                    Text(quote.price,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant)),
+                    Text('${quote.change > 0 ? '+' : ''}${quote.change}%',
+                        style: TextStyle(
+                            color: quote.change > 0
+                                ? AppColors.success
+                                : AppColors.danger,
+                            fontSize: 10))
+                  ]))
+            ]),
+          ),
+        ),
       );
 }
 
@@ -233,42 +240,50 @@ class _FeedCard extends StatelessWidget {
       );
 
   @override
-  Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: AppSurfaces.cardDecoration(context),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          AppAvatar(initials, color: color, avatar: avatar),
-          const SizedBox(width: 13),
-          Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Row(children: [
-                  Expanded(
-                      child: Text(title,
-                          style: const TextStyle(fontWeight: FontWeight.w800))),
-                  StatusTag(tag, color)
-                ]),
-                const SizedBox(height: 9),
-                Text(body, style: const TextStyle(height: 1.5)),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Icon(Icons.favorite_border_rounded,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      size: 18),
-                  const SizedBox(width: 5),
-                  Text(likes,
-                      style: TextStyle(
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: GlassSurface(
+          borderRadius: BorderRadius.circular(AppShape.inner),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              AppAvatar(initials, color: color, avatar: avatar),
+              const SizedBox(width: 13),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Row(children: [
+                      Expanded(
+                          child: Text(title,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w800))),
+                      StatusTag(tag, color)
+                    ]),
+                    const SizedBox(height: 9),
+                    Text(body, style: const TextStyle(height: 1.5)),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Icon(Icons.favorite_border_rounded,
                           color:
-                              Theme.of(context).colorScheme.onSurfaceVariant)),
-                  const SizedBox(width: 18),
-                  Icon(Icons.chat_bubble_outline_rounded,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      size: 17),
-                ])
-              ]))
-        ]),
+                              Theme.of(context).colorScheme.onSurfaceVariant,
+                          size: 18),
+                      const SizedBox(width: 5),
+                      Text(likes,
+                          style: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant)),
+                      const SizedBox(width: 18),
+                      Icon(Icons.chat_bubble_outline_rounded,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
+                          size: 17),
+                    ])
+                  ])),
+            ]),
+          ),
+        ),
       );
 }
 

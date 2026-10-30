@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/theme/app_shape.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_inputs.dart';
+import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/skeleton.dart';
@@ -131,7 +133,7 @@ class _TalentRequestsPanelState extends State<TalentRequestsPanel> {
     final compact = MediaQuery.sizeOf(context).width < 560;
     final gutter = compact ? 16.0 : 26.0;
     return Scaffold(
-      backgroundColor: scheme.surface,
+      backgroundColor: Colors.transparent,
       body: Padding(
         padding: EdgeInsets.fromLTRB(gutter, compact ? 16 : 22, gutter, 0),
         child:
@@ -228,11 +230,8 @@ class _RequestCard extends StatelessWidget {
       _ => ('Closed', scheme.onSurfaceVariant),
     };
     final skills = [for (final s in request['skills'] as List? ?? const []) '$s'];
-    return Material(
-      color: scheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.inner)),
-      clipBehavior: Clip.antiAlias,
+    return GlassSurface(
+      borderRadius: BorderRadius.circular(AppShape.inner),
       child: ExpansionTile(
         shape: const Border(),
         collapsedShape: const Border(),
@@ -244,7 +243,7 @@ class _RequestCard extends StatelessWidget {
           Text(label,
               style: TextStyle(
                   fontSize: 12, fontWeight: FontWeight.w700, color: color)),
-          PopupMenuButton<String>(
+          AppPopupMenuButton<String>(
             tooltip: 'Request options',
             onSelected: (v) => v == 'delete' ? onDelete() : onStatus(v),
             itemBuilder: (_) => [

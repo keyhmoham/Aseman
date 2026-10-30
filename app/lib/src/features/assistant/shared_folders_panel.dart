@@ -1,10 +1,12 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import '../../shared/widgets/overlay_panels.dart';
 
 import '../../app.dart';
 import '../../app_dependencies.dart';
 import 'assistant_common.dart';
 import 'host_agent.dart';
+import '../../shared/widgets/glass_surface.dart';
 
 final _agents = Expando<HostAgent>();
 
@@ -17,7 +19,7 @@ HostAgent hostAgentFor(AppDependencies deps) =>
 Future<bool> _confirmOnDesktop(String tool, String summary) async {
   final context = AsemanApp.navigatorKey.currentContext;
   if (context == null) return false;
-  final ok = await showDialog<bool>(
+  final ok = await showAppDialog<bool>(
     context: context,
     barrierDismissible: false,
     builder: (context) => AlertDialog(
@@ -81,7 +83,7 @@ class _SharedFoldersPanelState extends State<SharedFoldersPanel> {
   }
 
   Future<void> _share(Future<void> Function() reload) async {
-    final picked = await showDialog<Map<String, dynamic>>(
+    final picked = await showAppDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) =>
           ProjectFolderPicker(dependencies: deps, projects: projectNames),
@@ -145,7 +147,7 @@ class _SharedFoldersPanelState extends State<SharedFoldersPanel> {
             children: [
               if (folders.isEmpty) const Text('Nothing shared yet.'),
               for (final f in folders)
-                Card(
+                AppCard(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 8, 4, 4),
@@ -531,7 +533,7 @@ Future<Map<String, dynamic>?> attachProjectFolder(
         const SnackBar(content: Text('You have no projects with a computer yet.')));
     return null;
   }
-  final picked = await showDialog<Map<String, dynamic>>(
+  final picked = await showAppDialog<Map<String, dynamic>>(
     context: context,
     builder: (_) => ProjectFolderPicker(
         dependencies: deps,

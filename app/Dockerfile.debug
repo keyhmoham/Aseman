@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1.7
+# Debug image for the Flutter web client. The app source is not compiled into
+# this image: compose mounts ./app and app/tool/debug_server.sh runs
+# `flutter run` (debug mode, hot reload). Same Flutter SDK as the release image.
+ARG FLUTTER_IMAGE=ghcr.io/cirruslabs/flutter:3.44.0
+FROM ${FLUTTER_IMAGE}
+
+USER root
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      nginx inotify-tools \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /etc/nginx/sites-enabled/default
+
+COPY deploy/nginx.debug.conf /etc/nginx/aseman-debug.conf
+RUN mkdir -p /tmp/nginx-client /tmp/nginx-proxy /tmp/nginx-fastcgi /tmp/nginx-uwsgi /tmp/nginx-scgi \
+    && nginx -t -c /etc/nginx/aseman-debug.conf
+
+COPY tool/debug_server.sh /usr/local/bin/aseman-debug-server
+RUN chmod 755 /usr/local/bin/aseman-debug-server
+
+WORKDIR /src
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/aseman-debug-server"]

@@ -17,10 +17,17 @@ import 'package:aseman/src/features/home/presentation/widgets/space_facility_tab
 import 'package:aseman/src/features/market/presentation/market_screen.dart';
 import 'package:aseman/src/features/messenger/presentation/chat_page.dart';
 import 'package:aseman/src/features/messenger/presentation/messenger_panel.dart';
+import 'package:aseman/src/features/search_feed/presentation/search_feed_screen.dart';
 import 'package:aseman/src/features/settings/presentation/settings_screen.dart';
+import 'package:aseman/src/shared/widgets/workspace_header.dart';
 
 import '../fake_aseman_service.dart';
 import '../features/admin/admin_fixtures.dart' show loadFonts;
+
+Finder profileAvatar() => find.descendant(
+  of: find.byType(WorkspaceHeader),
+  matching: find.byType(CircleAvatar),
+);
 
 /// Renders every main screen at phone and desktop sizes and fails on any
 /// layout error. Writes screenshots when UI_SHOTS names a directory.
@@ -33,21 +40,22 @@ void main() {
     if (shots != null) await loadFonts();
   });
   tearDown(() {
-    TestWidgetsFlutterBinding.ensureInitialized()
-        .platformDispatcher
+    TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher
         .clearAllTestValues();
   });
 
   AppDependencies deps() {
     final d = AppDependencies.withService(FakeAsemanService());
-    d.sessionController.setSession(const Session(
-      accountId: 'me',
-      handle: 'test',
-      token: 'x',
-      privateKey: '',
-      publicKey: '',
-      homeSpaceId: FakeAsemanService.homeId,
-    ));
+    d.sessionController.setSession(
+      const Session(
+        accountId: 'me',
+        handle: 'test',
+        token: 'x',
+        privateKey: '',
+        publicKey: '',
+        homeSpaceId: FakeAsemanService.homeId,
+      ),
+    );
     return d;
   }
 
@@ -55,21 +63,27 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'aseman.session':
           '{"account_id":"00000000000000010000000000000001","handle":"test",'
-              '"token":"x","private_key":"","public_key":"",'
-              '"home_space_id":"00000000000000010000000000000002"}',
+          '"token":"x","private_key":"","public_key":"",'
+          '"home_space_id":"00000000000000010000000000000002"}',
     });
   }
 
-  Future<List<String>> capture(WidgetTester tester, Size size, String name,
-      Future<void> Function() build) async {
+  Future<List<String>> capture(
+    WidgetTester tester,
+    Size size,
+    String name,
+    Future<void> Function() build,
+  ) async {
     final errors = <String>[];
     final previous = FlutterError.onError;
     FlutterError.onError = (details) {
-      final culprit =
-          RegExp(r'The relevant error-causing widget was:\s*\n\s*(.*)\n\s*(.*)')
-              .firstMatch(details.toString());
-      errors.add('${details.exceptionAsString().split('\n').first}'
-          '${culprit == null ? '' : ' @ ${culprit.group(1)} ${culprit.group(2)}'}');
+      final culprit = RegExp(
+        r'The relevant error-causing widget was:\s*\n\s*(.*)\n\s*(.*)',
+      ).firstMatch(details.toString());
+      errors.add(
+        '${details.exceptionAsString().split('\n').first}'
+        '${culprit == null ? '' : ' @ ${culprit.group(1)} ${culprit.group(2)}'}',
+      );
     };
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -79,8 +93,10 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
       }
       if (shots != null) {
-        await expectLater(find.byType(MaterialApp).first,
-            matchesGoldenFile(Uri.file('$shots/$name.png')));
+        await expectLater(
+          find.byType(MaterialApp).first,
+          matchesGoldenFile(Uri.file('$shots/$name.png')),
+        );
       }
     } finally {
       await tester.pumpWidget(const SizedBox());
@@ -92,13 +108,13 @@ void main() {
   }
 
   Widget host(Widget child) => AppSettingsScope(
-        controller: AppSettingsController(),
-        child: MaterialApp(
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.darkWith(const Color(0xFF8B7BFF)),
-          home: child is Scaffold ? child : Scaffold(body: child),
-        ),
-      );
+    controller: AppSettingsController(),
+    child: MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.darkWith(const Color(0xFF8B7BFF)),
+      home: child is Scaffold ? child : Scaffold(body: child),
+    ),
+  );
 
   final screens = <String, Widget Function(AppDependencies)>{
     'settings': (d) => SettingsScreen(dependencies: d),
@@ -114,57 +130,92 @@ void main() {
     // The space's facility tabs, at the left panel's width.
     for (final tab in ['computer', 'memory', 'previews'])
       'space_$tab': (d) => Scaffold(
-          body: Center(
-              child: SizedBox(
-                  width: 210,
-                  height: 600,
-                  child: switch (tab) {
-                    'computer' => SpaceComputerTab(
-                        dependencies: d, spaceId: FakeAsemanService.atlasId),
-                    'memory' => SpaceMemoryTab(
-                        dependencies: d, spaceId: FakeAsemanService.atlasId),
-                    _ => SpacePreviewsTab(
-                        dependencies: d, spaceId: FakeAsemanService.atlasId),
-                  }))),
+        body: Center(
+          child: SizedBox(
+            width: 210,
+            height: 600,
+            child: switch (tab) {
+              'computer' => SpaceComputerTab(
+                dependencies: d,
+                spaceId: FakeAsemanService.atlasId,
+              ),
+              'memory' => SpaceMemoryTab(
+                dependencies: d,
+                spaceId: FakeAsemanService.atlasId,
+              ),
+              _ => SpacePreviewsTab(
+                dependencies: d,
+                spaceId: FakeAsemanService.atlasId,
+              ),
+            },
+          ),
+        ),
+      ),
     'space_settings': (d) => Scaffold(
-        body: SpaceSettingsPanel(
-            dependencies: d,
-            space: const Workspace(
-                id: FakeAsemanService.atlasId,
-                ownerId: 'me',
-                name: 'Atlas Capital'))),
+      body: SpaceSettingsPanel(
+        dependencies: d,
+        space: const Workspace(
+          id: FakeAsemanService.atlasId,
+          ownerId: 'me',
+          name: 'Atlas Capital',
+        ),
+      ),
+    ),
     'routines': (d) => Scaffold(
-        body: RoutinesPanel(
-            dependencies: d,
-            spaceId: FakeAsemanService.atlasId,
-            roomId: 'room-1',
-            roomName: 'General')),
+      body: RoutinesPanel(
+        dependencies: d,
+        spaceId: FakeAsemanService.atlasId,
+        roomId: 'room-1',
+        roomName: 'General',
+      ),
+    ),
   };
 
   // A fake service whose Atlas "general" room already holds a conversation.
   FakeAsemanService roomService() {
     final service = FakeAsemanService();
     final t = DateTime(2026, 3, 4, 9, 30);
-    RoomMessage msg(String id, String sender, String body, int minute,
-            {String kind = 'message'}) =>
-        RoomMessage(
-            id: id,
-            spaceId: FakeAsemanService.atlasId,
-            roomId: 'a1',
-            senderId: sender,
-            body: body,
-            kind: kind,
-            createdAt: t.add(Duration(minutes: minute)));
+    RoomMessage msg(
+      String id,
+      String sender,
+      String body,
+      int minute, {
+      String kind = 'message',
+    }) => RoomMessage(
+      id: id,
+      spaceId: FakeAsemanService.atlasId,
+      roomId: 'a1',
+      senderId: sender,
+      body: body,
+      kind: kind,
+      createdAt: t.add(Duration(minutes: minute)),
+    );
     service.roomMessages['${FakeAsemanService.atlasId}/a1'] = [
-      msg('m1', '00000000000000010000000000000042',
-          'Morning team. BTC broke above the weekly range overnight.', 0),
-      msg('m2', '00000000000000010000000000000001',
-          'Nice. @AlphaBot can you size a long with 2% risk?', 2),
-      msg('m3', 'bot-alpha', 'Plan: fetch order book, compute ATR stop, size.',
-          3,
-          kind: 'log'),
-      msg('m4', 'bot-alpha',
-          'Entry 68,200 · stop 66,900 · size 0.31 BTC (2% of equity).', 4),
+      msg(
+        'm1',
+        '00000000000000010000000000000042',
+        'Morning team. BTC broke above the weekly range overnight.',
+        0,
+      ),
+      msg(
+        'm2',
+        '00000000000000010000000000000001',
+        'Nice. @AlphaBot can you size a long with 2% risk?',
+        2,
+      ),
+      msg(
+        'm3',
+        'bot-alpha',
+        'Plan: fetch order book, compute ATR stop, size.',
+        3,
+        kind: 'log',
+      ),
+      msg(
+        'm4',
+        'bot-alpha',
+        'Entry 68,200 · stop 66,900 · size 0.31 BTC (2% of equity).',
+        4,
+      ),
       msg('m5', '00000000000000010000000000000001', 'Perfect, thanks!', 5),
     ];
     return service;
@@ -174,43 +225,62 @@ void main() {
     for (final screen in screens.entries) {
       testWidgets('${size.key} · ${screen.key}', (tester) async {
         final errors = await capture(
-            tester, size.value, '${size.key}_${screen.key}', () async {
-          await tester.pumpWidget(host(screen.value(deps())));
-        });
+          tester,
+          size.value,
+          '${size.key}_${screen.key}',
+          () async {
+            await tester.pumpWidget(host(screen.value(deps())));
+          },
+        );
         expect(errors, isEmpty);
       });
     }
 
     testWidgets('${size.key} · app flows', (tester) async {
-      Future<void> app(String name,
-          [Future<void> Function()? interact,
-          FakeAsemanService? service]) async {
+      Future<void> app(
+        String name, [
+        Future<void> Function()? interact,
+        FakeAsemanService? service,
+      ]) async {
         await seedSession();
-        final errors =
-            await capture(tester, size.value, '${size.key}_$name', () async {
-          await tester.pumpWidget(AsemanApp(
-              dependencies: AppDependencies.withService(
-                  service ?? FakeAsemanService())));
-          await tester.pumpAndSettle();
-          await interact?.call();
-          await tester.pumpAndSettle();
-        });
+        final errors = await capture(
+          tester,
+          size.value,
+          '${size.key}_$name',
+          () async {
+            await tester.pumpWidget(
+              AsemanApp(
+                dependencies: AppDependencies.withService(
+                  service ?? FakeAsemanService(),
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            await interact?.call();
+            await tester.pumpAndSettle();
+          },
+        );
         expect(errors, isEmpty, reason: name);
       }
 
-      // Opens Atlas Capital's desk from the feed's Spaces panel (the hero
-      // Spaces button → workspace switcher on phones).
+      // Opens Atlas Capital from the feed desk's toolbox.
       Future<void> openAtlas() async {
         if (size.key == 'phone') {
-          await tester.tap(find.text('Spaces').first);
+          await tester.tap(
+            find.descendant(
+              of: find.byType(HomeTabBar),
+              matching: find.text('Desk'),
+            ),
+          );
           await tester.pumpAndSettle();
         }
-        await tester.tap(find.text('Atlas Capital').last);
+        await tester.tap(find.byTooltip('Toolbox'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Open Atlas Capital'));
       }
 
       await app('feed');
-      await app(
-          'profile_menu', () => tester.tap(find.byType(CircleAvatar).first));
+      await app('profile_menu', () => tester.tap(profileAvatar()));
       await app('workspace', openAtlas);
       await app('room', () async {
         await openAtlas();
@@ -227,7 +297,7 @@ void main() {
       }, roomService());
       for (final item in ['Wallet', 'Invitations', 'Usage', 'Account']) {
         await app('menu_${item.toLowerCase()}', () async {
-          await tester.tap(find.byType(CircleAvatar).first);
+          await tester.tap(profileAvatar());
           await tester.pumpAndSettle();
           await tester.tap(find.text(item).last);
         });
@@ -235,14 +305,14 @@ void main() {
       await app('messenger', () async {
         await openAtlas();
         await tester.pumpAndSettle();
-        await tester.tap(find.byType(CircleAvatar).first);
+        await tester.tap(profileAvatar());
         await tester.pumpAndSettle();
         await tester.tap(find.text('Messages').last);
       }, roomService());
       await app('messenger_spaces', () async {
         await openAtlas();
         await tester.pumpAndSettle();
-        await tester.tap(find.byType(CircleAvatar).first);
+        await tester.tap(profileAvatar());
         await tester.pumpAndSettle();
         await tester.tap(find.text('Messages').last);
         await tester.pumpAndSettle();
@@ -251,11 +321,23 @@ void main() {
       await app('messenger_chat', () async {
         await openAtlas();
         await tester.pumpAndSettle();
-        await tester.tap(find.byType(CircleAvatar).first);
+        await tester.tap(profileAvatar());
         await tester.pumpAndSettle();
         await tester.tap(find.text('Messages').last);
         await tester.pumpAndSettle();
-        await tester.tap(find.text('general').last);
+        await tester.tap(
+          find.descendant(
+            of: find.byType(MessengerPanel),
+            matching: find.text('Atlas Capital'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.descendant(
+            of: find.byType(MessengerPanel),
+            matching: find.text('general'),
+          ),
+        );
       }, roomService());
       await app('feed_following', () async {
         await tester.tap(find.text('Following').first);
@@ -267,17 +349,26 @@ void main() {
         await tester.tap(find.text('Chats').first);
       });
       await app('feed_explore', () async {
-        await tester.tap(find.text('Search Aseman — signals, traders, agents…'));
+        await tester.tap(
+          find.text('Search Aseman — signals, traders, agents…'),
+        );
         await tester.pumpAndSettle();
         await tester.enterText(find.byType(TextField).last, 'a');
       });
       SharedPreferences.setMockInitialValues({});
-      final errors =
-          await capture(tester, size.value, '${size.key}_auth', () async {
-        await tester.pumpWidget(AsemanApp(
-            dependencies: AppDependencies.withService(FakeAsemanService())));
-        await tester.pumpAndSettle();
-      });
+      final errors = await capture(
+        tester,
+        size.value,
+        '${size.key}_auth',
+        () async {
+          await tester.pumpWidget(
+            AsemanApp(
+              dependencies: AppDependencies.withService(FakeAsemanService()),
+            ),
+          );
+          await tester.pumpAndSettle();
+        },
+      );
       expect(errors, isEmpty, reason: 'auth');
     });
   }

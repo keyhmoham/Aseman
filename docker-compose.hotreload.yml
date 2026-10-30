@@ -1,0 +1,30 @@
+# Debug overlay for the Flutter client. `./aseman.sh up` adds this file so the
+# app is served by `flutter run` (debug mode) and hot-reloads when source
+# changes, instead of building the release web image.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.hotreload.yml up -d --build
+#
+# Needs Docker Compose >= 2.24 (the !override tag).
+services:
+  web:
+    build: !override
+      context: ./app
+      dockerfile: Dockerfile.debug
+    image: aseman/flutter-web:debug
+    init: true
+    environment:
+      DEVELOPER_API_BASE: ${DEVELOPER_API_BASE:-${DEVELOPER_DOMAIN:+https://${DEVELOPER_DOMAIN}/v1}}
+      ASEMAN_UID: ${ASEMAN_UID:-0}
+      ASEMAN_GID: ${ASEMAN_GID:-0}
+    volumes: !override
+      - ./app:/src
+      - ./app/deploy/nginx.debug.conf:/etc/nginx/aseman-debug.conf:ro
+      - ./app/tool/debug_server.sh:/usr/local/bin/aseman-debug-server:ro
+      - flutter-pub-cache:/root/.pub-cache
+      - flutter-web-debug-dart-tool:/src/.dart_tool
+    ports: !override
+      - "${WEB_PORT:-3000}:8080"
+
+volumes:
+  flutter-pub-cache:
+  flutter-web-debug-dart-tool:

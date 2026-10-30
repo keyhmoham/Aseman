@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'app_dependencies.dart';
@@ -21,6 +23,24 @@ class AsemanApp extends StatefulWidget {
 
 class _AsemanAppState extends State<AsemanApp> {
   final settings = AppSettingsController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Hold the first frame until the cached theme is applied, so a saved
+    // light or dark choice does not flash the default on startup.
+    WidgetsBinding.instance.deferFirstFrame();
+    unawaited(_restoreTheme());
+  }
+
+  Future<void> _restoreTheme() async {
+    try {
+      await settings.restore();
+    } finally {
+      WidgetsBinding.instance.allowFirstFrame();
+    }
+  }
+
   @override
   void dispose() {
     settings.dispose();
@@ -29,21 +49,21 @@ class _AsemanAppState extends State<AsemanApp> {
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-        animation: settings,
-        builder: (context, _) => AppSettingsScope(
-          controller: settings,
-          child: MaterialApp(
-            navigatorKey: AsemanApp.navigatorKey,
-            debugShowCheckedModeBanner: false,
-            title: 'Aseman',
-            theme: AppTheme.lightWith(settings.accent),
-            darkTheme: AppTheme.darkWith(settings.accent),
-            themeMode: settings.themeMode,
-            home: AuthGate(
-              dependencies: widget.dependencies,
-              child: AppShell(dependencies: widget.dependencies),
-            ),
-          ),
+    animation: settings,
+    builder: (context, _) => AppSettingsScope(
+      controller: settings,
+      child: MaterialApp(
+        navigatorKey: AsemanApp.navigatorKey,
+        debugShowCheckedModeBanner: false,
+        title: 'Aseman',
+        theme: AppTheme.lightWith(settings.accent),
+        darkTheme: AppTheme.darkWith(settings.accent),
+        themeMode: settings.themeMode,
+        home: AuthGate(
+          dependencies: widget.dependencies,
+          child: AppShell(dependencies: widget.dependencies),
         ),
-      );
+      ),
+    ),
+  );
 }

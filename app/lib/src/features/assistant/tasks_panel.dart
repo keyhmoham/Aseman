@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
 import '../../core/theme/app_shape.dart';
+import '../../shared/widgets/glass_surface.dart';
 import '../../shared/widgets/overlay_panels.dart';
 import '../../shared/widgets/panel_header.dart';
 import '../../shared/widgets/skeleton.dart';
@@ -112,7 +113,7 @@ class _TasksPanelState extends State<TasksPanel> {
     final suggested = _count('suggested');
 
     return Scaffold(
-      backgroundColor: scheme.surface,
+      backgroundColor: Colors.transparent,
       body: Padding(
         padding: EdgeInsets.fromLTRB(gutter, compact ? 16 : 22, gutter, 0),
         child: Column(
@@ -228,8 +229,8 @@ class _PulseStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final total = needsYou + working + suggested + done;
-    return Material(
-      color: scheme.surfaceContainerHigh.withValues(alpha: .7),
+    return GlassSurface(
+      alpha: .7,
       borderRadius: BorderRadius.circular(AppShape.inner),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -656,10 +657,9 @@ class TaskTile extends StatelessWidget {
             .map((x) => '${x ?? ''}')
             .firstWhere((x) => x.isNotEmpty, orElse: () => '');
 
-    return Material(
-      color: scheme.surfaceContainerHigh.withValues(alpha: .65),
+    return GlassSurface(
+      alpha: .7,
       borderRadius: BorderRadius.circular(AppShape.inner),
-      clipBehavior: Clip.antiAlias,
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,

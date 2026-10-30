@@ -577,7 +577,7 @@ class _RoutineCard extends StatelessWidget {
                     ],
                   ]),
             ),
-            PopupMenuButton<_CardMenu>(
+            AppPopupMenuButton<_CardMenu>(
               tooltip: 'Routine actions',
               icon:
                   Icon(Icons.more_vert_rounded, color: scheme.onSurfaceVariant),

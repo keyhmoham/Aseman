@@ -12,7 +12,8 @@ import '../../rooms/presentation/widgets/room_chat.dart';
 import 'report_dialog.dart';
 
 /// Opens [chat]: on a wide screen a direct chat (or Saved Messages) is a
-/// floating modal; project rooms and compact widths keep a full-page push.
+/// floating modal; project rooms and compact widths keep a full-page push
+/// on the root navigator (so an embedded chats tab never hosts the chat).
 Future<void> showChat(
   BuildContext context,
   AppDependencies dependencies,
@@ -28,8 +29,10 @@ Future<void> showChat(
       barrierLabel: 'Close chat',
     );
   }
-  return Navigator.of(context).push<void>(MaterialPageRoute<void>(
-      builder: (_) => ChatPage(dependencies: dependencies, chat: chat)));
+  return Navigator.of(context, rootNavigator: true).push<void>(
+      MaterialPageRoute<void>(
+          builder: (_) =>
+              ChatPage(dependencies: dependencies, chat: chat)));
 }
 
 /// One conversation of the messenger, direct or a project room. Both are rooms
@@ -317,7 +320,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  Widget _menu() => PopupMenuButton<String>(
+  Widget _menu() => AppPopupMenuButton<String>(
         tooltip: 'Chat options',
         icon: const Icon(Icons.more_vert_rounded),
         onSelected: (value) {
@@ -368,13 +371,12 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final peer = chat.peer;
     final canPop = Navigator.of(context).canPop();
     final modal = widget.asModal;
     final receipts = chat.direct && !chat.saved && !(peer?.isAgent ?? false);
     return Scaffold(
-      backgroundColor: scheme.surface,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         top: false,
         child: RoomChat(

@@ -27,7 +27,12 @@ Future<void> showCommentsSheet(
   ValueChanged<int>? onCount,
 }) => showAdaptivePanel<void>(
   context,
-  CommentsSheet(dependencies: dependencies, post: post, onCount: onCount),
+  CommentsSheet(
+    dependencies: dependencies,
+    post: post,
+    onCount: onCount,
+    inBottomSheet: MediaQuery.sizeOf(context).width < 720,
+  ),
   breakpoint: 720,
   maxWidth: 600,
   maxHeight: 820,
@@ -40,10 +45,14 @@ class CommentsSheet extends StatefulWidget {
     required this.dependencies,
     required this.post,
     this.onCount,
+    this.inBottomSheet = false,
   });
   final AppDependencies dependencies;
   final FeedPost post;
   final ValueChanged<int>? onCount;
+
+  /// Body stays clear; [showAppSheet] owns the frosted chrome.
+  final bool inBottomSheet;
 
   @override
   State<CommentsSheet> createState() => _CommentsSheetState();
@@ -326,11 +335,14 @@ class _CommentsSheetState extends State<CommentsSheet> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    // Sheet / adaptive dialog host paints the glass; keep the body clear.
+    final inSheet =
+        widget.inBottomSheet || AppSheetScope.inSheetOf(context);
     return Material(
       color: Colors.transparent,
       child: Column(
         children: [
-          _header(scheme),
+          _header(scheme, inSheet: inSheet),
           Expanded(child: _body(scheme)),
           _composer(scheme),
         ],
@@ -338,8 +350,9 @@ class _CommentsSheetState extends State<CommentsSheet> {
     );
   }
 
-  Widget _header(ColorScheme scheme) => Padding(
-    padding: const EdgeInsets.fromLTRB(20, 12, 8, 4),
+  Widget _header(ColorScheme scheme, {required bool inSheet}) => Padding(
+    // Sheet chrome already has a drag handle; tighten the title inset.
+    padding: EdgeInsets.fromLTRB(20, inSheet ? 4 : 12, 8, 4),
     child: Row(
       children: [
         const Text(
@@ -725,7 +738,7 @@ class _CommentTile extends StatelessWidget {
     );
   }
 
-  Widget _menu(ColorScheme scheme) => PopupMenuButton<String>(
+  Widget _menu(ColorScheme scheme) => AppPopupMenuButton<String>(
     tooltip: 'Comment options',
     enabled: !busy,
     iconSize: 18,

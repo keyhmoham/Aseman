@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/glass_surface.dart';
 
 /// Building blocks of the admin console, drawn in the Material 3 Expressive
 /// style: tonal surfaces instead of outlines, generous corner radii, bold
@@ -193,12 +194,10 @@ class AdminStatCard extends StatelessWidget {
         if (footer != null) ...[const SizedBox(height: 12), footer!],
       ]),
     );
-    return Material(
-      color: scheme.surfaceContainer,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.inner + 4)),
-      child: onTap == null ? body : InkWell(onTap: onTap, child: body),
+    return GlassSurface(
+      borderRadius: BorderRadius.circular(AppShape.inner + 4),
+      onTap: onTap,
+      child: body,
     );
   }
 }
@@ -225,13 +224,9 @@ class AdminSectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // A Material (not a decorated Container) so list tiles inside the card
-    // paint their ink and selection on the card itself.
-    return Material(
-      color: scheme.surfaceContainerLow,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.card)),
+    // Glass Material so list tiles inside the card paint ink on the frost.
+    return GlassSurface(
+      borderRadius: BorderRadius.circular(AppShape.card),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 14, 0),

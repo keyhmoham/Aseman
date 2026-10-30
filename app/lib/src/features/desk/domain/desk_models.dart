@@ -303,6 +303,34 @@ class DeskPin {
           .where((e) => e.value is! Map && e.value is! List)
           .map((e) => '${e.key}: ${e.value}')
           .join(' · ');
+
+  /// A window opened from this shortcut, for a surface that shows the pin.
+  DeskWindow asWindow({required String id, Rect? rect}) => DeskWindow(
+        id: id,
+        tool: tool,
+        kind: kind,
+        name: name,
+        title: title,
+        frontend: frontend,
+        microtool: microtool,
+        args: args,
+        rect: rect ?? Rect.fromLTWH(0, 0, size.width, size.height),
+        compact: compact,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'tool': tool,
+        'kind': kind,
+        'name': name,
+        'title': title,
+        'frontend': frontend,
+        'microtool': microtool,
+        if (args.isNotEmpty) 'args': args,
+        'w': size.width,
+        'h': size.height,
+        if (compact != null) 'compact': compact!.toJson(),
+      };
 }
 
 class DeskState {

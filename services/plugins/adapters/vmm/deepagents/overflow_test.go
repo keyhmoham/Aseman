@@ -22,8 +22,10 @@ type fakePlatform struct {
 	memoryChat, memoryEmbedding *vmm.ProviderConfig
 	// timeline answers the spaces' timeline MCP; nil means it is off.
 	timeline func(spaceID string, body []byte) ([]byte, error)
-	// openCode is the node's OpenCode switch.
+	// openCode is the node's programmer OpenCode switch.
 	openCode bool
+	// agentEngine is the agentic engine ("deepagents" or "opencode").
+	agentEngine string
 }
 
 func (p fakePlatform) ResolveMemoryChat(context.Context) (vmm.ProviderConfig, error) {
@@ -43,6 +45,13 @@ func (p fakePlatform) ResolveMemoryEmbedding(context.Context) (vmm.ProviderConfi
 func (p fakePlatform) TimelineEnabled(context.Context) (bool, error) { return p.timeline != nil, nil }
 
 func (p fakePlatform) OpenCodeEnabled(context.Context) (bool, error) { return p.openCode, nil }
+
+func (p fakePlatform) AgentEngine(context.Context) (string, error) {
+	if p.agentEngine == "" {
+		return "deepagents", nil
+	}
+	return p.agentEngine, nil
+}
 
 func (p fakePlatform) TimelineMCP(_ context.Context, spaceID string, body []byte) ([]byte, error) {
 	if p.timeline == nil {

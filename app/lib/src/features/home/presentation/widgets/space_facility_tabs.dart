@@ -864,7 +864,7 @@ class _PreviewCard extends StatelessWidget {
                     ),
                     child: const Text('Open'),
                   ),
-                  PopupMenuButton<String>(
+                  AppPopupMenuButton<String>(
                     tooltip: 'More',
                     iconSize: 19,
                     padding: EdgeInsets.zero,

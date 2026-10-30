@@ -1,7 +1,9 @@
 # Aseman / aseman — full stack in one command:
 #
 #   ./aseman.sh up [path/to/config.yml]
-#   # or: docker compose up -d --build   (uses services/configs/config.example.yml)
+#   # Hot reload (debug Flutter client) is the default. A release web image:
+#   #   ./aseman.sh up --no-hot-reload
+#   # or: docker compose up -d --build   (release web image; config.example.yml)
 #
 # The config file only carries node identity, Google sign-in (optional) and the
 # Modal credentials. Postgres, Nomad, the docker sandbox host, storage and HTTP
@@ -96,10 +98,11 @@ services:
     command: ["version"]
     restart: "no"
 
-  # The deep agents runtime (LangChain deepagents on LangGraph) that runs every
-  # agent. Built here; the node runs it as a Nomad service on the stack's
-  # network (alias aseman-deepagents) the first time an agent works. The
-  # tag is pinned because Nomad always pulls ":latest" images.
+  # The agent runtime. By default it is LangChain Deep Agents on LangGraph.
+  # Admin → Agentic engine can run the same turns through the OpenCode CLI
+  # in this image (its own free models). Built here; the node runs it as a
+  # Nomad service on the stack's network (alias aseman-deepagents) the first
+  # time an agent works. The tag is pinned because Nomad always pulls ":latest".
   deepagents:
     build: ./services/plugins/adapters/vmm/deepagents/runtime
     image: aseman/deepagents:v2
@@ -228,9 +231,11 @@ services:
       # Long App UI / sandbox tool rounds can leave the model quiet between
       # tool results; 45s was killing turns mid-appui_create.
       ASEMAN_LLM_STREAM_IDLE_TIMEOUT: ${ASEMAN_LLM_STREAM_IDLE_TIMEOUT:-180s}
-      # OpenCode (sandbox App UI) uses the agent turn's metered LLM gateway
-      # (/deepagents/v1/llm) — same backbone + billing as agents. Optional
-      # overrides when sandboxes cannot resolve ASEMAN_AGENT_NODE_URL:
+      # Programmer OpenCode only (Admin → OpenCode, appui_create / opencode_run):
+      # the sandbox coding agent uses the turn's metered LLM gateway
+      # (/deepagents/v1/llm). The agentic engine does not read OPENCODE_MODEL;
+      # when it is OpenCode, the runtime CLI uses OpenCode's free models.
+      # Optional overrides when sandboxes cannot resolve ASEMAN_AGENT_NODE_URL:
       ASEMAN_SANDBOX_LLM_URL: ${ASEMAN_SANDBOX_LLM_URL:-}
       OPENCODE_MODEL: ${OPENCODE_MODEL:-aseman/default}
       # The agents' memory: the self-hosted OpenViking above, as the runtime
@@ -308,6 +313,8 @@ services:
 
   # The Flutter web client (nginx). It proxies the node's API (/v1) on the same
   # origin, so the browser only ever talks to this port.
+  # ./aseman.sh up replaces this service with the debug server
+  # (docker-compose.hotreload.yml): flutter run, hot reload on source changes.
   web:
     build:
       context: ./app
@@ -375,3 +382,7 @@ volumes:
   aseman-data:
   openviking-data:
   timeline-data:
+  # Debug Flutter client (docker-compose.hotreload.yml): pub cache and the
+  # SDK's .dart_tool, kept off the host tree.
+  flutter-pub-cache:
+  flutter-web-debug-dart-tool:

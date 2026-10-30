@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_surfaces.dart';
 import '../../../../shared/widgets/app_brand.dart';
 import '../../../../shared/widgets/avatar.dart';
+import '../../../../shared/widgets/glass_surface.dart';
 import '../../domain/app_destination.dart';
 
 class SideNavigation extends StatelessWidget {
@@ -18,9 +20,13 @@ class SideNavigation extends StatelessWidget {
   final bool showAdmin;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => SizedBox(
       width: 244,
-      color: Theme.of(context).colorScheme.surfaceContainer,
+      child: GlassSurface(
+      alpha: AppSurfaces.overlayAlpha,
+      borderRadius: BorderRadius.zero,
+      border: false,
+      child: Padding(
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Padding(
@@ -57,7 +63,7 @@ class SideNavigation extends StatelessWidget {
                     style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 12)))),
-      ]));
+      ]))));
 }
 
 class _Label extends StatelessWidget {

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 
 import '../../../core/utils/context_extensions.dart';
 import '../../../data/services/aseman_service.dart';
@@ -353,7 +354,7 @@ class _WorkspaceFileTreeState extends State<WorkspaceFileTree> {
                 ),
               ),
             ),
-            PopupMenuButton<VoidCallback>(
+            AppPopupMenuButton<VoidCallback>(
               tooltip: 'New',
               icon: const Icon(Icons.add_rounded, size: 18),
               style: IconButton.styleFrom(visualDensity: VisualDensity.compact),

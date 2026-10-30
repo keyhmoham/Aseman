@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 /// title + subtitle sit on one line with the actions beside them; on narrow
 /// screens the title row stays on top and the actions wrap below, so nothing
 /// gets squeezed or clipped on mobile bottom sheets.
+///
+/// When the available width is rail-sized (< 380), the heading scales down so
+/// side panels stay readable without oversized chrome.
 class PanelHeader extends StatelessWidget {
   const PanelHeader({
     super.key,
@@ -29,40 +32,46 @@ class PanelHeader extends StatelessWidget {
             tooltip: 'Close',
             onPressed: onClose,
             icon: const Icon(Icons.close_rounded));
-    // An expressive header: the icon sits in a tonal rounded square beside
-    // a bold title, the same as the admin console's page headers.
-    final heading = Row(children: [
-      Container(
-        width: 48,
-        height: 48,
-        decoration: ShapeDecoration(
-          color: scheme.primaryContainer,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-        child: Icon(icon, size: 24, color: scheme.onPrimaryContainer),
-      ),
-      const SizedBox(width: 14),
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  fontSize: 26,
-                  height: 1.15,
-                  letterSpacing: -.5,
-                  fontWeight: FontWeight.w800)),
-          const SizedBox(height: 2),
-          Text(subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
-        ]),
-      ),
-    ]);
 
     return LayoutBuilder(builder: (context, box) {
+      final rail = box.maxWidth < 380;
+      final iconBox = rail ? 36.0 : 48.0;
+      final iconSize = rail ? 18.0 : 24.0;
+      final titleSize = rail ? 17.0 : 26.0;
+      final heading = Row(children: [
+        Container(
+          width: iconBox,
+          height: iconBox,
+          decoration: ShapeDecoration(
+            color: scheme.primaryContainer,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(rail ? 12 : 16)),
+          ),
+          child: Icon(icon, size: iconSize, color: scheme.onPrimaryContainer),
+        ),
+        SizedBox(width: rail ? 10 : 14),
+        Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: titleSize,
+                    height: 1.15,
+                    letterSpacing: -.5,
+                    fontWeight: FontWeight.w800)),
+            const SizedBox(height: 2),
+            Text(subtitle,
+                maxLines: rail ? 2 : 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: rail ? 11 : 13,
+                    color: scheme.onSurfaceVariant)),
+          ]),
+        ),
+      ]);
+
       if (box.maxWidth >= 560) {
         return Row(children: [
           Expanded(child: heading),

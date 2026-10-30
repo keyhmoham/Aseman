@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
-import '../../core/theme/app_shape.dart';
+import '../../shared/widgets/glass_surface.dart';
 import 'assistant_common.dart';
 import 'tasks_panel.dart';
 
@@ -145,12 +145,8 @@ class _HomeAssistantState extends State<HomeAssistant>
         ),
         if (brief.isNotEmpty) ...[
           const SizedBox(height: 10),
-          // Same single surface as the tasks pulse card — no Card solid
-          // stacked with a secondaryContainer accent fill.
-          Material(
-            color: scheme.surfaceContainerHigh.withValues(alpha: .78),
-            borderRadius: BorderRadius.circular(AppShape.card - 4),
-            clipBehavior: Clip.antiAlias,
+          // Same frosted glass as the tasks pulse and feed post cards.
+          GlassSurface(
             child: Theme(
               data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
               child: ExpansionTile(
@@ -200,9 +196,9 @@ class _HomeAssistantState extends State<HomeAssistant>
   Widget _approval(BuildContext context, Map<String, dynamic> a) {
     final scheme = Theme.of(context).colorScheme;
     final recipients = jsonStrings(a['recipients']);
-    return Card(
-      margin: EdgeInsets.zero,
+    return GlassSurface(
       color: scheme.tertiaryContainer,
+      alpha: .82,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
         child: Column(
@@ -320,36 +316,35 @@ class _TasksPulseCard extends StatelessWidget {
             if (pulse.done > 0) '${pulse.done} done',
           ].join(' · ');
 
-    return Material(
-      color: scheme.surfaceContainerHigh.withValues(alpha: .78),
-      borderRadius: BorderRadius.circular(AppShape.card - 4),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-          child: Row(
-            children: [
-              AnimatedBuilder(
-                animation: animation,
-                builder: (context, _) => _PulseRing(
-                  pulse: pulse,
-                  breath: animation.value,
-                  size: 78,
-                ),
+    return GlassSurface(
+      onTap: onOpen,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+        child: Row(
+          children: [
+            AnimatedBuilder(
+              animation: animation,
+              builder: (context, _) => _PulseRing(
+                pulse: pulse,
+                breath: animation.value,
+                size: 78,
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.auto_awesome_rounded,
-                            size: 16, color: scheme.primary),
-                        const SizedBox(width: 6),
-                        Text(
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.auto_awesome_rounded,
+                          size: 16, color: scheme.primary),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
                           'Your assistant',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -357,72 +352,71 @@ class _TasksPulseCard extends StatelessWidget {
                             color: scheme.onSurfaceVariant,
                           ),
                         ),
-                        const Spacer(),
-                        Icon(Icons.chevron_right_rounded,
-                            color: scheme.onSurfaceVariant),
-                      ],
+                      ),
+                      Icon(Icons.chevron_right_rounded,
+                          color: scheme.onSurfaceVariant),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    headline,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      letterSpacing: -.3,
+                      fontWeight: FontWeight.w800,
                     ),
-                    const SizedBox(height: 4),
+                  ),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 2),
                     Text(
-                      headline,
+                      subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        letterSpacing: -.3,
-                        fontWeight: FontWeight.w800,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: scheme.onSurfaceVariant,
                       ),
-                    ),
-                    if (subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        _LegendChip(
-                          label: 'Needs you',
-                          count: pulse.needsYou,
-                          color: scheme.error,
-                          onTap: onOpen,
-                        ),
-                        _LegendChip(
-                          label: 'Working',
-                          count: pulse.working,
-                          color: scheme.primary,
-                          live: pulse.working > 0,
-                          breath: animation,
-                          onTap: onOpen,
-                        ),
-                        _LegendChip(
-                          label: 'Suggested',
-                          count: pulse.suggested,
-                          color: scheme.tertiary,
-                          onTap: onOpen,
-                        ),
-                        _LegendChip(
-                          label: 'Done',
-                          count: pulse.done,
-                          color: scheme.outline,
-                          onTap: onOpen,
-                        ),
-                      ],
                     ),
                   ],
-                ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _LegendChip(
+                        label: 'Needs you',
+                        count: pulse.needsYou,
+                        color: scheme.error,
+                        onTap: onOpen,
+                      ),
+                      _LegendChip(
+                        label: 'Working',
+                        count: pulse.working,
+                        color: scheme.primary,
+                        live: pulse.working > 0,
+                        breath: animation,
+                        onTap: onOpen,
+                      ),
+                      _LegendChip(
+                        label: 'Suggested',
+                        count: pulse.suggested,
+                        color: scheme.tertiary,
+                        onTap: onOpen,
+                      ),
+                      _LegendChip(
+                        label: 'Done',
+                        count: pulse.done,
+                        color: scheme.outline,
+                        onTap: onOpen,
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -1,29 +1,38 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_shape.dart';
+import '../../core/theme/app_surfaces.dart';
 import 'app_inputs.dart';
+import 'glass_surface.dart';
 import 'overlay_panels.dart';
 
-/// Shows [form] as a bottom sheet on phones and as a dialog elsewhere, and
-/// returns what the form pops with.
+/// Shows [form] as a frosted bottom sheet on phones and as a glass dialog
+/// elsewhere, and returns what the form pops with.
 Future<T?> showAppForm<T>(BuildContext context, Widget form) {
   if (MediaQuery.sizeOf(context).width < 600) {
-    return showModalBottomSheet<T>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => Padding(
+    return showAppSheet<T>(
+      context,
+      Padding(
         padding:
             EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
         child: form,
       ),
+      isScrollControlled: true,
     );
   }
   return showAppDialog<T>(
     context: context,
+    frosted: false,
     builder: (context) => Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 580, maxHeight: 780),
-        child: form,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: GlassSurface(
+        alpha: AppSurfaces.overlayAlpha,
+        borderRadius: BorderRadius.circular(AppShape.card),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 580, maxHeight: 780),
+          child: form,
+        ),
       ),
     ),
   );

@@ -19,9 +19,10 @@ class DeskApi {
   Map<String, dynamic> _map(dynamic body) =>
       body is Map ? body.cast<String, dynamic>() : <String, dynamic>{};
 
-  Future<DeskState> get(String spaceId, String room) async {
-    final body = _map(
-        await _call('spaces', 'desktop_get', {'space': spaceId, 'room': room}));
+  Future<DeskState> get(String spaceId, String room, {Duration? timeout}) async {
+    final body = _map(await _call(
+        'spaces', 'desktop_get', {'space': spaceId, 'room': room},
+        timeout: timeout));
     return DeskState.fromJson(_map(body['desktop']));
   }
 

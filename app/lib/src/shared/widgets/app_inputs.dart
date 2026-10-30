@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_shape.dart';
+import 'glass_surface.dart';
 import 'overlay_panels.dart';
 
 export '../../core/theme/app_shape.dart';
@@ -183,16 +184,12 @@ class AppSwitchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: value
-          ? scheme.secondaryContainer.withValues(alpha: .7)
-          : scheme.surfaceContainerHighest.withValues(alpha: .55),
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.inner)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onChanged == null ? null : () => onChanged!(!value),
-        child: Padding(
+    return GlassSurface(
+      color: value ? scheme.secondaryContainer : null,
+      alpha: value ? .7 : null,
+      borderRadius: BorderRadius.circular(AppShape.inner),
+      onTap: onChanged == null ? null : () => onChanged!(!value),
+      child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
           child: Row(children: [
             if (icon != null) ...[
@@ -230,7 +227,6 @@ class AppSwitchCard extends StatelessWidget {
             ),
           ]),
         ),
-      ),
     );
   }
 }

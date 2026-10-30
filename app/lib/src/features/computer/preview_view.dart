@@ -77,10 +77,13 @@ Future<void> openPreview(
   }
   await showModalBottomSheet<void>(
     context: context,
+    // Live preview screen — opaque bezel, not frosted sheet chrome.
+    backgroundColor: const Color(0xFF1B1F25),
     isScrollControlled: true,
     useSafeArea: true,
     // The page scrolls and is touched: only the handle bar moves the sheet.
     enableDrag: false,
+    showDragHandle: true,
     clipBehavior: Clip.antiAlias,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),

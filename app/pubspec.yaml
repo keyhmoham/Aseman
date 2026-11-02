@@ -43,6 +43,8 @@ dependencies:
   xml: ^7.0.1
   share_plus: ^13.3.1
   record: ^7.1.2
+  # Native voice/video calls (mobile/desktop). Stubbed on web via conditional import.
+  flutter_webrtc: ^1.6.0
 
 dev_dependencies:
   flutter_test:

@@ -25,7 +25,12 @@ var runtimeTuning = []string{"ASEMAN_MAX_MODEL_CALLS", "ASEMAN_DEFAULT_CONTEXT_W
 	"ASEMAN_OPENVIKING_URL", "ASEMAN_OPENVIKING_API_KEY", "ASEMAN_OPENVIKING_RECALL_TOKENS",
 	"ASEMAN_OPENVIKING_QUERY_EXPANSION",
 	"ASEMAN_SWARM_PARALLEL", "ASEMAN_IMPROVE", "ASEMAN_IMPROVE_EVERY", "ASEMAN_IMPROVE_COOLDOWN",
-	"ASEMAN_IMPROVE_LOOP_COOLDOWN", "ASEMAN_IMPROVE_BUDGET", "ASEMAN_IMPROVE_MAX_AGE_DAYS"}
+	"ASEMAN_IMPROVE_LOOP_COOLDOWN", "ASEMAN_IMPROVE_BUDGET", "ASEMAN_IMPROVE_MAX_AGE_DAYS",
+	// OpenCode agentic engine credential (Go API key or mounted auth.json).
+	"ASEMAN_OPENCODE_ENGINE_API_KEY", "ASEMAN_OPENCODE_ENGINE_AUTH",
+	"ASEMAN_OPENCODE_ENGINE_AUTH_HOME", "ASEMAN_OPENCODE_ENGINE_HOME",
+	"ASEMAN_OPENCODE_ENGINE_TIMEOUT", "ASEMAN_OPENCODE_ENGINE_RETRY_DELAY",
+	"ASEMAN_OPENCODE_BIN"}
 
 // healthTTL is how long a successful health check is trusted.
 const healthTTL = 30 * time.Second
@@ -84,6 +89,13 @@ func (a *Adapter) ensureRuntime(ctx context.Context) error {
 		for _, key := range runtimeTuning {
 			if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 				env[key] = v
+			}
+		}
+		// OpenCode Go key for the agentic engine: prefer the dedicated var, else
+		// the programmer OPENCODE_API_KEY already used by this node.
+		if strings.TrimSpace(env["ASEMAN_OPENCODE_ENGINE_API_KEY"]) == "" {
+			if v := strings.TrimSpace(os.Getenv("OPENCODE_API_KEY")); v != "" {
+				env["ASEMAN_OPENCODE_ENGINE_API_KEY"] = v
 			}
 		}
 		vm, err := host.CreateVM(ctx, vmm.VMSpec{

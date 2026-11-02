@@ -19,6 +19,7 @@ class AudioBubble extends StatefulWidget {
     this.mine = false,
     this.voice = true,
     this.seed,
+    this.waveform,
     this.width = 190,
   });
 
@@ -33,6 +34,9 @@ class AudioBubble extends StatefulWidget {
 
   /// What the waveform is drawn from (defaults to [url]).
   final String? seed;
+
+  /// Real loudness bars from the upload when present.
+  final List<int>? waveform;
 
   /// The waveform's width.
   final double width;
@@ -187,6 +191,7 @@ class _AudioBubbleState extends State<AudioBubble> {
             width: widget.width,
             child: AudioWaveform(
               seed: widget.seed ?? widget.url,
+              bars: widget.waveform,
               progress: _progress,
               onSeek: ready ? _seek : null,
               activeColor: tint,

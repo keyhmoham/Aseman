@@ -21,8 +21,8 @@ Widget adminHostAccessPage(AppDependencies deps) =>
 
 /// Connector apps: apps whose people connect an account of their own
 /// (Google, through this node's OAuth client; Composio and Arcade, through
-/// the broker). Set up here, they are listed in the Apps catalog like any
-/// app, and people add and connect them from Apps.
+/// a connector hub). Set up here, they are listed in the Apps catalog like
+/// any app, and people add and connect them from Apps.
 Widget adminConnectorAppsPage(AppDependencies deps) => _Padded(
   Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -492,7 +492,7 @@ class _BrokersAdminState extends _FormState<_BrokersAdmin> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       const Text(
-        'Connector brokers bring hundreds of apps through one MCP server. The node\'s key is sent with '
+        'Connector hubs bring hundreds of apps through one MCP server. The node\'s key is sent with '
         'every call, and each person\'s id, so everyone uses their own connected accounts.',
       ),
       const SizedBox(height: 12),

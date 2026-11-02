@@ -106,13 +106,14 @@ func (s *Service) SetAgentEngine(ctx context.Context, engine string) (*AgentEngi
 func agentEngineMapping() []map[string]string {
 	return []map[string]string{
 		{"platform": "Agent turn", "opencode": "opencode run --format json --auto, one session per agent per room"},
+		{"platform": "Personal Aseman (notes / Talk)", "opencode": "free OpenCode model + person-scoped MCP gateway (same space tools as room turns)"},
 		{"platform": "Agent team", "opencode": "OpenCode agents (primary for the agent on the turn, subagents for teammates)"},
 		{"platform": "Task handoff", "opencode": "OpenCode's task tool, and opencode run --agent for the teammate"},
 		{"platform": "Swarm", "opencode": "Parallel opencode run processes, one per task, at the same time"},
 		{"platform": "App generation", "opencode": "The aseman-app-builder subagent, through platform file tools, then appui_publish"},
 		{"platform": "Planning", "opencode": "OpenCode's todowrite"},
 		{"platform": "Questions to people", "opencode": "ask_user on the turn's tool bridge; the session waits"},
-		{"platform": "Messaging, sandbox, apps", "opencode": "Platform actions on the turn gateway, never the LLM proxy"},
+		{"platform": "Messaging, sandbox, apps", "opencode": "Named MCP space tools (send_message, list_space_tools, call_space_tool, …) on the turn gateway — same actions as Deep Agents"},
 		{"platform": "Models", "opencode": "A free model on OpenCode's own gateway, chosen for the role"},
 	}
 }
@@ -134,10 +135,10 @@ func (s *Service) agentEngineView(ctx context.Context) (map[string]any, error) {
 	switch row.Engine {
 	case AgentEngineOpenCode:
 		view["llm"] = "opencode-free"
-		view["status"] = "OpenCode CLI runs every agent turn on its own free-model gateway. Platform LLM providers are not used. The programmer OpenCode switch (who builds apps) is unchanged."
+		view["status"] = "OpenCode CLI runs every agent turn and personal Aseman on its own free-model gateway, with MCP space tools on the turn/person gateway (same actions Deep Agents uses in a space). The programmer OpenCode switch (who builds apps) is unchanged."
 	default:
 		view["llm"] = "platform"
-		view["status"] = "Deep Agents runs every agent turn. Models come from the platform LLM gateway. The programmer OpenCode switch still decides who writes code."
+		view["status"] = "Deep Agents runs every agent turn. Personal Aseman uses the chat assistant's platform model. The programmer OpenCode switch still decides who writes code."
 	}
 	return view, nil
 }

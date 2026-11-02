@@ -10,7 +10,7 @@ import (
 
 func TestAgentConfigReadsTheFormBack(t *testing.T) {
 	spec, err := renderAgentSpec(CreateBotRequest{
-		Name: "quant", Description: "Finds trades", Instructions: "Analyze markets.\nBe careful.",
+		Name: "helper", Description: "Helps with research", Instructions: "Stay clear and helpful.\nBe careful.",
 		Provider: "p1", Model: "gpt-5.6", MaxTurns: 5, MaxTokens: 4000,
 		Skills: []SkillConfig{{Name: "Research", Description: "Agent capability: Research"}},
 	})
@@ -18,7 +18,7 @@ func TestAgentConfigReadsTheFormBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := agentConfig(spec)
-	if got["description"] != "Finds trades" || got["instructions"] != "Analyze markets.\nBe careful." ||
+	if got["description"] != "Helps with research" || got["instructions"] != "Stay clear and helpful.\nBe careful." ||
 		got["provider"] != "p1" || got["model"] != "gpt-5.6" || got["max_turns"] != 5 || got["max_tokens"] != 4000 {
 		t.Fatalf("form fields not read back: %+v", got)
 	}
@@ -30,7 +30,7 @@ func TestAgentConfigReadsTheFormBack(t *testing.T) {
 
 // An edited spec, as bot_edit writes it, still parses as the agent runtime's spec.
 func TestEditedSpecStillParses(t *testing.T) {
-	spec := map[string]any{"name": "quant", "instructions": "Trade.", "max_turns": 5, "description": "old"}
+	spec := map[string]any{"name": "helper", "instructions": "Collaborate.", "max_turns": 5, "description": "old"}
 	setOrDrop(spec, "max_turns", 12, true)
 	setOrDrop(spec, "description", "", false)
 	spec["skills"] = skillsSpec([]SkillConfig{{Name: "scan", Tools: []string{"execute"}}})

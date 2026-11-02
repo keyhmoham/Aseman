@@ -91,3 +91,12 @@ const (
 	DefaultMaxLifetimeMin    = 8 * 60
 	DefaultCommandTimeoutSec = 300
 )
+
+// Storage is the limit on what one person's files may add up to (chat
+// attachments, uploads), set from the admin console. Zero means no limit.
+type Storage struct {
+	LimitMB int64 `json:"limit_mb"`
+}
+
+// MaxStorageLimitMB is the largest limit that can be set (100 TB): a sanity bound.
+const MaxStorageLimitMB int64 = 100 * 1024 * 1024

@@ -3,16 +3,22 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
+import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_surfaces.dart';
 import '../../data/models/app_notification.dart';
-import '../../features/account/presentation/account_panel.dart';
+import 'avatar.dart';
 import 'overlay_panels.dart';
+import 'panel_empty.dart';
+import 'segmented_tab_bar.dart';
 import 'skeleton.dart';
+import 'sky_ui.dart';
 
 /// Opens the latest notifications, anchored at the app bar's left edge: on
 /// desktop a floating popup like the profile menu, on phones a bottom sheet.
-/// Opening it marks them read. Tapping a message notification opens its
-/// space through [onOpenSpace] (by name); an invitation opens Invitations.
+/// Opening it marks them read. The sheet is tabbed: **All** for notifications,
+/// **Invites** for pending project invitations. Tapping a message notification
+/// opens its space through [onOpenSpace] (by name); tapping an invite
+/// notification switches to the Invites tab.
 Future<void> showNotificationsMenu(
   BuildContext context,
   AppDependencies dependencies, {
@@ -71,10 +77,6 @@ Future<void> showNotificationsMenu(
     );
   }
   if (picked == null || !context.mounted) return;
-  if (picked.kind == 'invite') {
-    await showAccountPanel(context, dependencies, AccountArea.invitations);
-    return;
-  }
   final open = onOpenSpace;
   if (open == null || picked.space.isEmpty) return;
   try {
@@ -97,10 +99,18 @@ class _NotificationsBodyState extends State<_NotificationsBody> {
   List<AppNotification>? items;
   bool failed = false;
 
+  List<Map<String, dynamic>>? invites;
+  bool invitesFailed = false;
+  bool invitesBusy = false;
+
+  /// 0 = All, 1 = Invites.
+  int tab = 0;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _loadInvites();
   }
 
   Future<void> _load() async {
@@ -116,60 +126,292 @@ class _NotificationsBodyState extends State<_NotificationsBody> {
     }
   }
 
+  Future<void> _loadInvites() async {
+    try {
+      final raw = await widget.dependencies.service.invokeAction(
+        'spaces',
+        'invitations_list',
+      );
+      if (!mounted) return;
+      final map = raw is Map
+          ? Map<String, dynamic>.from(raw)
+          : const <String, dynamic>{};
+      final rows = map['invitations'];
+      setState(() {
+        invites = rows is List
+            ? [
+                for (final e in rows)
+                  if (e is Map) Map<String, dynamic>.from(e),
+              ]
+            : const <Map<String, dynamic>>[];
+        invitesFailed = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          invitesFailed = true;
+          invites = const [];
+        });
+      }
+    }
+  }
+
+  Future<void> _inviteAction(String action, String invitationId) async {
+    if (invitesBusy) return;
+    setState(() => invitesBusy = true);
+    try {
+      await widget.dependencies.service.invokeAction(
+        'spaces',
+        action,
+        body: {'invitation': invitationId},
+      );
+      if (!mounted) return;
+      await _loadInvites();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invitation: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => invitesBusy = false);
+    }
+  }
+
+  void _onNotificationTap(AppNotification note) {
+    if (note.kind == 'invite') {
+      setState(() => tab = 1);
+      return;
+    }
+    widget.onSelect(note);
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final list = items;
+    final pending = invites?.length ?? 0;
+    final unread = list == null ? 0 : list.where((n) => !n.read).length;
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 12, 8),
-        child: Row(children: [
-          Icon(Icons.notifications_none_rounded, color: scheme.primary),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Text('Notifications',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-          ),
-          if (list != null && list.any((n) => !n.read))
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-              decoration: BoxDecoration(
-                  color: scheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(20)),
-              child: Text('${list.where((n) => !n.read).length} new',
-                  style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: scheme.onPrimaryContainer)),
-            ),
-        ]),
+        padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
+        child: SkySectionHeader(
+          icon: Icons.notifications_none_rounded,
+          title: 'Notifications',
+          subtitle: tab == 0
+              ? 'Mentions, replies and updates'
+              : 'Project invitations waiting on you',
+          dense: true,
+          actions: [
+            if (tab == 0 && unread > 0)
+              SoftMetaChip(label: '$unread new', accent: scheme.primary),
+            if (tab == 1 && pending > 0)
+              SoftMetaChip(
+                  label: '$pending pending', accent: scheme.tertiary),
+          ],
+        ),
       ),
-      Flexible(child: _content(context, list)),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+        child: SegmentedTabBar(
+          compact: true,
+          labels: const ['All', 'Invites'],
+          icons: const [
+            Icons.notifications_none_rounded,
+            Icons.mark_email_unread_outlined,
+          ],
+          selectedIndex: tab,
+          onTap: (i) => setState(() => tab = i),
+        ),
+      ),
+      Flexible(
+        child: IndexedStack(
+          index: tab,
+          sizing: StackFit.expand,
+          children: [
+            _notificationsContent(context, list),
+            _invitesContent(context),
+          ],
+        ),
+      ),
     ]);
   }
 
-  Widget _content(BuildContext context, List<AppNotification>? list) {
+  Widget _notificationsContent(
+    BuildContext context,
+    List<AppNotification>? list,
+  ) {
     if (failed) {
-      return const _Empty(
+      return const PanelEmpty(
           icon: Icons.cloud_off_outlined,
-          message: 'Notifications could not be loaded.');
+          title: 'Could not load',
+          message: 'Notifications could not be loaded. Try again shortly.');
     }
     if (list == null) {
       return const SkeletonList(itemCount: 4);
     }
     if (list.isEmpty) {
-      return const _Empty(
-          icon: Icons.notifications_off_outlined,
-          message: "You're all caught up.");
+      return const PanelEmpty(
+          icon: Icons.notifications_none_outlined,
+          title: "You're all caught up",
+          message: 'New mentions, invites, and replies will show up here.');
     }
     return ListView.separated(
       shrinkWrap: true,
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xs, AppSpacing.xxs, AppSpacing.xs, AppSpacing.sm),
       itemCount: list.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 2),
+      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.xs - 2),
       itemBuilder: (context, i) =>
-          _NotificationTile(list[i], onTap: () => widget.onSelect(list[i])),
+          _NotificationTile(list[i], onTap: () => _onNotificationTap(list[i])),
     );
+  }
+
+  Widget _invitesContent(BuildContext context) {
+    if (invitesFailed) {
+      return const PanelEmpty(
+        icon: Icons.cloud_off_outlined,
+        title: 'Could not load',
+        message: 'Invitations could not be loaded. Try again shortly.',
+      );
+    }
+    final rows = invites;
+    if (rows == null) {
+      return const SkeletonList(itemCount: 3);
+    }
+    if (rows.isEmpty) {
+      return const PanelEmpty(
+        icon: Icons.mark_email_read_outlined,
+        title: 'No invitations',
+        message: 'New project invitations will appear here.',
+      );
+    }
+    return ListView.builder(
+      shrinkWrap: true,
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.sm, AppSpacing.xxs, AppSpacing.sm, AppSpacing.sm),
+      itemCount: rows.length,
+      itemBuilder: (context, i) => _InviteTile(
+        invite: rows[i],
+        busy: invitesBusy,
+        onDecline: () => _inviteAction(
+          'invitation_decline',
+          '${rows[i]['id'] ?? ''}',
+        ),
+        onAccept: () => _inviteAction(
+          'invitation_accept',
+          '${rows[i]['id'] ?? ''}',
+        ),
+      ),
+    );
+  }
+}
+
+class _InviteTile extends StatelessWidget {
+  const _InviteTile({
+    required this.invite,
+    required this.busy,
+    required this.onDecline,
+    required this.onAccept,
+  });
+
+  final Map<String, dynamic> invite;
+  final bool busy;
+  final VoidCallback onDecline;
+  final VoidCallback onAccept;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final space = invite['space'];
+    final spaceMap = space is Map
+        ? Map<String, dynamic>.from(space)
+        : const <String, dynamic>{};
+    final inviter = invite['inviter'];
+    final inviterMap = inviter is Map
+        ? Map<String, dynamic>.from(inviter)
+        : const <String, dynamic>{};
+    final name =
+        '${spaceMap['name'] ?? invite['space_name'] ?? 'Project invitation'}';
+    final handle =
+        '${invite['inviter_handle'] ?? inviterMap['handle'] ?? 'a teammate'}';
+    final avatar = invite['space_avatar'];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm - 2),
+      child: SoftCard(
+        accent: scheme.tertiary,
+        showOrb: false,
+        padding: const EdgeInsets.all(AppSpacing.sm + 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                HaloRing(
+                  child: CircleAvatar(
+                    foregroundImage: Avatars.of(avatar),
+                    onForegroundImageError:
+                        Avatars.of(avatar) == null ? null : (_, __) {},
+                    child: const Icon(Icons.folder_shared_outlined),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Invited by @$handle · ${_date(invite['created_at'])}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: busy ? null : onDecline,
+                    child: const Text('Decline'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: busy ? null : onAccept,
+                    child: const Text('Accept'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _date(Object? value) {
+    final raw = '$value'.trim();
+    if (raw.isEmpty || raw == 'null') return 'recently';
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return raw;
+    final d = DateTime.now().difference(parsed);
+    if (d.inMinutes < 1) return 'just now';
+    if (d.inHours < 1) return '${d.inMinutes}m ago';
+    if (d.inDays < 1) return '${d.inHours}h ago';
+    if (d.inDays < 7) return '${d.inDays}d ago';
+    return '${parsed.year}-${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}';
   }
 }
 
@@ -182,63 +424,63 @@ class _NotificationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final invite = note.kind == 'invite';
-    return Material(
-      color: note.read
-          ? Colors.transparent
-          : scheme.primaryContainer.withValues(alpha: .28),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: (invite ? scheme.tertiary : scheme.primary)
-                  .withValues(alpha: .16),
-              child: Icon(
-                  invite
-                      ? Icons.mark_email_unread_outlined
-                      : Icons.forum_outlined,
-                  size: 18,
-                  color: invite ? scheme.tertiary : scheme.primary),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child:
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Expanded(
-                    child: Text(note.title.isEmpty ? 'Aseman' : note.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w700)),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(_ago(note.createdAt),
-                      style: TextStyle(
-                          fontSize: 11, color: scheme.onSurfaceVariant)),
-                ]),
-                const SizedBox(height: 2),
-                Text(note.body,
-                    maxLines: 2,
+    final accent = invite ? scheme.tertiary : scheme.primary;
+    return SoftCard(
+      onTap: onTap,
+      accent: accent,
+      selected: !note.read,
+      showOrb: false,
+      radius: 16,
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.sm, AppSpacing.sm - 1, AppSpacing.sm, AppSpacing.sm - 1),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: .14),
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(
+              invite
+                  ? Icons.mark_email_unread_outlined
+                  : Icons.forum_outlined,
+              size: 18,
+              color: accent),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(
+                child: Text(note.title.isEmpty ? 'Aseman' : note.title,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 13, color: scheme.onSurfaceVariant)),
-              ]),
-            ),
-            if (!note.read) ...[
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: CircleAvatar(radius: 4, backgroundColor: scheme.primary),
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w700)),
               ),
-            ],
+              const SizedBox(width: AppSpacing.xs),
+              Text(_ago(note.createdAt),
+                  style: TextStyle(
+                      fontSize: 11, color: scheme.onSurfaceVariant)),
+            ]),
+            const SizedBox(height: 2),
+            Text(note.body,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 13, color: scheme.onSurfaceVariant)),
           ]),
         ),
-      ),
+        if (!note.read) ...[
+          const SizedBox(width: AppSpacing.xs),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: CircleAvatar(radius: 4, backgroundColor: accent),
+          ),
+        ],
+      ]),
     );
   }
 
@@ -250,20 +492,4 @@ class _NotificationTile extends StatelessWidget {
     if (d.inDays < 7) return '${d.inDays}d';
     return '${(d.inDays / 7).floor()}w';
   }
-}
-
-class _Empty extends StatelessWidget {
-  const _Empty({required this.icon, required this.message});
-  final IconData icon;
-  final String message;
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon,
-              size: 38, color: Theme.of(context).colorScheme.onSurfaceVariant),
-          const SizedBox(height: 10),
-          Text(message, style: const TextStyle(fontWeight: FontWeight.w700)),
-        ]),
-      );
 }

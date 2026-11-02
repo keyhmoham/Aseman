@@ -17,7 +17,36 @@ type Direct struct {
 	To     identity.ID `db:"to_id" json:"to_id"`
 	Body   string      `db:"body" json:"body"`
 	SentAt time.Time   `db:"sent_at" json:"sent_at"`
+	// ReplyTo is the message of the same conversation this one answers.
+	ReplyTo string `db:"reply_to" json:"reply_to,omitempty"`
+	// EditedAt is when its sender last changed it, DeletedAt when they took it
+	// back (its text is then gone for both sides). Zero when never.
+	EditedAt  time.Time `db:"edited_at" json:"-"`
+	DeletedAt time.Time `db:"deleted_at" json:"-"`
+	// AgentID is the account of the agent that wrote it, for an agent's answer
+	// in a person's own notes (Saved Messages): stored as the person's note to
+	// themselves, shown as the agent's. Empty for a person's message.
+	AgentID string `db:"agent_id" json:"agent_id,omitempty"`
+	// AttachmentIDs is a JSON-encoded []string of the files sent with it
+	// (photos, video, voice, documents). The files belong to the sender and count
+	// against their storage; the other person may open them.
+	AttachmentIDs string `db:"attachment_ids" json:"attachment_ids,omitempty"`
+	// Brain is what a person's Aseman did with a note to themselves that it
+	// did not answer: BrainSaved when it kept it (in memory) without a reply.
+	Brain string `db:"brain" json:"brain,omitempty"`
+	// Action is what a person's Aseman proposed to do in an answer and is
+	// waiting for them to confirm (or did, or was told not to): JSON, sealed
+	// at rest like the body.
+	Action string `db:"action" json:"-"`
 }
+
+// BrainSaved marks a note the person's Aseman kept without answering.
+const BrainSaved = "saved"
+
+// BrainCredits marks a Aseman answer saying the person is out of credits:
+// the app shows a way to add some and to try the note again.
+const BrainCredits = "credits"
+
 
 // PacketKind classifies the packet's semantics.
 type PacketKind string
@@ -115,6 +144,9 @@ type Message struct {
 	// person) finds the answer to a request in the room.
 	ReplyTo  string    `db:"reply_to" json:"reply_to,omitempty"`
 	EditedAt time.Time `db:"edited_at" json:"edited_at,omitempty"`
+	// DirectID links a room message in a direct / Saved Messages chat to the
+	// users.directs row (react, hide, keep). Empty for project rooms.
+	DirectID string `db:"direct_id" json:"direct_id,omitempty"`
 }
 
 // Edit is a previous body of a room message: kept when the sender changes it,

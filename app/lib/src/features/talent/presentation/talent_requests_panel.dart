@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
-import '../../../core/theme/app_shape.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_inputs.dart';
-import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import '../../../shared/widgets/panel_empty.dart';
 import '../../../shared/widgets/panel_header.dart';
+import '../../../shared/widgets/panel_scaffold.dart';
 import '../../../shared/widgets/skeleton.dart';
+import '../../../shared/widgets/sky_ui.dart';
 
 /// Opens the person's requests for talent: a bottom sheet on phones, a
 /// floating window on wider screens.
@@ -129,72 +131,49 @@ class _TalentRequestsPanelState extends State<TalentRequestsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final compact = MediaQuery.sizeOf(context).width < 560;
-    final gutter = compact ? 16.0 : 26.0;
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Padding(
-        padding: EdgeInsets.fromLTRB(gutter, compact ? 16 : 22, gutter, 0),
-        child:
-            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          PanelHeader(
-            icon: Icons.work_outline_rounded,
-            title: 'Hire talent',
-            subtitle: 'Post a job; hiring partners read the open ones',
-            onClose: () => Navigator.of(context).maybePop(),
-            actions: [
-              FilledButton.icon(
-                  onPressed: _post,
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('New request')),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: _loading
-                ? const SkeletonList(
-                    item: SkeletonCard(mediaHeight: 0), spacing: 10)
-                : _error != null
-                    ? Center(child: Text('Could not load requests: $_error'))
-                    : _requests.isEmpty
-                        ? Center(
-                            child: Padding(
-                            padding: const EdgeInsets.all(32),
-                            child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.work_outline_rounded,
-                                      size: 44, color: scheme.primary),
-                                  const SizedBox(height: 12),
-                                  const Text('No requests yet',
-                                      style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w800)),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                      'Describe the work you need: hiring partners see it and contact you.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                          color: scheme.onSurfaceVariant)),
-                                ]),
-                          ))
-                        : RefreshIndicator(
-                            onRefresh: _load,
-                            child: ListView.separated(
-                              padding: const EdgeInsets.only(bottom: 24),
-                              itemCount: _requests.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 8),
-                              itemBuilder: (context, i) => _RequestCard(
-                                request: _requests[i],
-                                onStatus: (s) => _setStatus(_requests[i], s),
-                                onDelete: () => _delete(_requests[i]),
-                              ),
-                            ),
+      body: PanelScaffold(
+        compact: compact,
+        header: PanelHeader(
+          icon: Icons.work_outline_rounded,
+          title: 'Hire talent',
+          subtitle: 'Post a job; hiring partners read the open ones',
+          onClose: () => Navigator.of(context).maybePop(),
+          actions: [
+            FilledButton.icon(
+                onPressed: _post,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('New request')),
+          ],
+        ),
+        body: _loading
+            ? const SkeletonList(
+                item: SkeletonCard(mediaHeight: 0), spacing: 10)
+            : _error != null
+                ? Center(child: Text('Could not load requests: $_error'))
+                : _requests.isEmpty
+                    ? const PanelEmpty(
+                        icon: Icons.work_outline_rounded,
+                        title: 'No requests yet',
+                        message:
+                            'Describe the work you need: hiring partners see it and contact you.',
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _load,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.only(bottom: 24),
+                          itemCount: _requests.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
+                          itemBuilder: (context, i) => _RequestCard(
+                            request: _requests[i],
+                            onStatus: (s) => _setStatus(_requests[i], s),
+                            onDelete: () => _delete(_requests[i]),
                           ),
-          ),
-        ]),
+                        ),
+                      ),
       ),
     );
   }
@@ -230,8 +209,10 @@ class _RequestCard extends StatelessWidget {
       _ => ('Closed', scheme.onSurfaceVariant),
     };
     final skills = [for (final s in request['skills'] as List? ?? const []) '$s'];
-    return GlassSurface(
-      borderRadius: BorderRadius.circular(AppShape.inner),
+    return SoftCard(
+      accent: color,
+      showOrb: false,
+      padding: EdgeInsets.zero,
       child: ExpansionTile(
         shape: const Border(),
         collapsedShape: const Border(),
@@ -240,9 +221,7 @@ class _RequestCard extends StatelessWidget {
         subtitle: Text(
             '${request['category']} · ${talentBudget(request)}${'${request['company'] ?? ''}'.isEmpty ? '' : ' · ${request['company']}'}'),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text(label,
-              style: TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+          SoftMetaChip(label: label, accent: color),
           AppPopupMenuButton<String>(
             tooltip: 'Request options',
             onSelected: (v) => v == 'delete' ? onDelete() : onStatus(v),
@@ -255,22 +234,26 @@ class _RequestCard extends StatelessWidget {
             ],
           ),
         ]),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        childrenPadding: const EdgeInsets.fromLTRB(
+            AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('${request['description'] ?? ''}'),
           if (skills.isNotEmpty) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpacing.sm - 2),
             Wrap(spacing: 6, runSpacing: 6, children: [
-              for (final s in skills)
-                Chip(label: Text(s), visualDensity: VisualDensity.compact),
+              for (final s in skills) SoftMetaChip(label: s),
             ]),
           ],
           if (status == 'hidden') ...[
-            const SizedBox(height: 10),
-            Text(
-                'The node’s admins took this request down; partners no longer see it.',
-                style: TextStyle(fontSize: 12, color: scheme.error)),
+            const SizedBox(height: AppSpacing.sm - 2),
+            const QuietTile(
+              icon: Icons.gavel_rounded,
+              label: 'Taken down by admins',
+              subtitle: 'Partners no longer see this request.',
+              danger: true,
+              trailing: SizedBox.shrink(),
+            ),
           ],
         ],
       ),
@@ -389,7 +372,7 @@ class _TalentRequestFormState extends State<TalentRequestForm> {
                   controller: _title,
                   maxLength: 120,
                   decoration: _field('Title',
-                      hint: 'Senior Flutter developer for a trading app')),
+                      hint: 'Senior Flutter developer for a social app')),
               const SizedBox(height: 8),
               AppChoiceField<String>(
                 label: 'Category',
@@ -449,27 +432,25 @@ class _TalentRequestFormState extends State<TalentRequestForm> {
                       hint: 'Flutter, Go, Postgres',
                       helper: 'Separated by commas, up to 10.')),
               const SizedBox(height: 18),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                    color: scheme.secondaryContainer.withValues(alpha: .6),
-                    borderRadius: BorderRadius.circular(AppShape.inner)),
+              SoftCard(
+                accent: scheme.secondary,
+                showOrb: false,
+                padding: const EdgeInsets.all(AppSpacing.sm + 2),
                 child: Row(children: [
-                  Icon(Icons.info_outline_rounded,
-                      color: scheme.onSecondaryContainer),
-                  const SizedBox(width: 10),
+                  Icon(Icons.info_outline_rounded, color: scheme.secondary),
+                  const SizedBox(width: AppSpacing.sm - 2),
                   Expanded(
                     child: Text(
                         'Your name and email are shared with hiring partners so they can contact you. The project you post from is not.',
-                        style: TextStyle(color: scheme.onSecondaryContainer)),
+                        style: TextStyle(color: scheme.onSurface)),
                   ),
                 ]),
               ),
               if (_error != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.sm),
                 Text(_error!, style: TextStyle(color: scheme.error)),
               ],
-              const SizedBox(height: 18),
+              const SizedBox(height: AppSpacing.md + 2),
               Align(
                 alignment: Alignment.centerRight,
                 child: FilledButton.icon(

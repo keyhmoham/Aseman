@@ -45,7 +45,7 @@ func asemanSpec(existing string) string {
 		"name":         "aseman",
 		"role":         "lead",
 		"description":  "The space's lead agent: plans the work, delegates to the space's agents, recruits specialists and delivers the outcome.",
-		"instructions": "You are aseman, the lead agent of every Aseman space. You help the people of the space directly and lead the space's agents to get larger work done end to end.",
+		"instructions": "You are aseman, the lead agent of every Aseman space. You help the people of the space directly and lead the space's agents to get larger work done end to end. When someone prompts you, act with their access only: do not open another member's secrets, host folders or private territory in the shared space.",
 	}
 	if p := strings.TrimSpace(os.Getenv("ASEMAN_ORCHESTRATOR_PROVIDER")); p != "" {
 		spec["provider"] = p
@@ -214,7 +214,7 @@ func (s *Service) routeAseman(ctx context.Context, caller identity.ID, task stri
 }
 
 // Bootstrap moves every agent still recorded on a retired engine onto the deep
-// agents runtime and installs the built-in lead.
+// agents runtime and installs the built-in lead and chat assistant.
 func (s *Service) Bootstrap(ctx context.Context) error {
 	var agents []bot.Bot
 	if err := s.R.List(ctx, "bots", database.Filter{Equal: map[string]any{"kind": string(bot.KindAgent)}}, &agents); err != nil {
@@ -224,6 +224,9 @@ func (s *Service) Bootstrap(ctx context.Context) error {
 		s.migrateAgentEngine(ctx, &agents[i])
 	}
 	s.migrateRetiredKinds(ctx)
-	_, err := s.InstallAseman(ctx)
+	if _, err := s.InstallAseman(ctx); err != nil {
+		return err
+	}
+	_, err := s.InstallChatAssistant(ctx)
 	return err
 }

@@ -15,7 +15,7 @@ void main() {
         '| A | B |\n|---|---|\n| 1 | 2 |\n\n'
         ':::chart {"type":"bar","labels":["Q1","Q2"],"values":[3,4]}\n\n'
         ':::image https://example.com/a.png\n\n'
-        ':::card agent SignalBot\n\n'
+        ':::card agent AssistBot\n\n'
         '---';
     final blocks = markupToDesign(post);
     expect(blocks.map((b) => b.kind), [
@@ -67,13 +67,13 @@ void main() {
   });
 
   test('formatting wraps the selection and unwraps it again', () {
-    final c = MarkupTextController(text: 'buy BTC now')
+    final c = MarkupTextController(text: 'ship this now')
       ..selection = const TextSelection(baseOffset: 4, extentOffset: 7);
     c.toggleWrap('**', '**');
-    expect(c.text, 'buy **BTC** now');
-    expect(c.selectedText, 'BTC');
+    expect(c.text, 'ship **this** now');
+    expect(c.selectedText, 'this');
     c.toggleWrap('**', '**');
-    expect(c.text, 'buy BTC now');
+    expect(c.text, 'ship this now');
   });
 
   test('a forwarded post renders as a card naming its author', () {
@@ -82,15 +82,15 @@ void main() {
       authorId: 'a1',
       name: 'Alice',
       handle: 'alice',
-      body: '**Long** BTC',
+      body: '**Ready** notes',
     );
     final block = parseRichMarkdown('Look\n\n$md').last;
     expect(block.kind, BlockKind.forward);
     expect(block.data?['author_id'], 'a1');
-    expect(block.data?['body'], '**Long** BTC');
+    expect(block.data?['body'], '**Ready** notes');
     expect(
       markupPreview('Look\n\n$md'),
-      'Look Forwarded post from Alice: Long BTC',
+      'Look Forwarded post from Alice: Ready notes',
     );
   });
 }

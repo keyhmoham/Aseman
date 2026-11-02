@@ -4,13 +4,15 @@ import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/repositories/room_repository.dart';
-import '../../../shared/widgets/app_panel.dart';
+import '../../../shared/widgets/bot_avatar.dart';
 import '../../../shared/widgets/page_scaffold.dart';
+import '../../../shared/widgets/panel_empty.dart';
 import '../../../shared/widgets/responsive_grid.dart';
 import '../../../shared/widgets/skeleton.dart';
-import '../../../shared/widgets/status_tag.dart';
+import '../../../shared/widgets/sky_ui.dart';
 import 'explore_view_model.dart';
 
 class ExploreScreen extends StatefulWidget {
@@ -33,7 +35,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   String query = '';
   static const categories = [
     'Trending',
-    'Traders',
+    'People',
     'AI agents',
     'Apps',
     'Rooms'
@@ -90,113 +92,185 @@ class _ExploreScreenState extends State<ExploreScreen> {
   @override
   Widget build(BuildContext context) => FeaturePage(
       title: 'Explore',
-      subtitle: 'Find traders, agents, apps, and public rooms',
+      subtitle: 'Find people, agents, apps, and public rooms',
+      icon: Icons.explore_rounded,
       child: AnimatedBuilder(
           animation: model,
-          builder: (_, __) => ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 0, 22, 24),
-                  children: [
-                    TextField(
-                        onChanged: (v) => setState(() => query = v),
-                        decoration: const InputDecoration(
-                            prefixIcon: Icon(Icons.search_rounded),
-                            hintText: 'Search agents, rooms, traders, apps…')),
-                    const SizedBox(height: 16),
-                    Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (var index = 0;
-                              index < categories.length;
-                              index++)
-                            FilterChip(
-                                selected: model.selectedCategory == index,
-                                onSelected: (_) => model.selectCategory(index),
-                                label: Text(categories[index])),
-                        ]),
-                    const SizedBox(height: 24),
-                    const Text('🔥 Trending AI agents',
-                        style: TextStyle(
-                            fontSize: 17, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 12),
-                    if (_loadingAgents)
-                      const SkeletonGrid(
-                          itemCount: 4,
-                          maxCrossAxisExtent: 320,
-                          mainAxisExtent: 120)
-                    else if (_visibleAgents.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Center(
-                          child: Text('No agents match "$query".',
-                              style: TextStyle(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant)),
-                        ),
-                      )
-                    else
-                      ResponsiveGrid(
-                          children: _visibleAgents
-                              .take(12)
-                              .map((l) => _AgentCard(
-                                    l.name,
-                                    l.description.isEmpty
-                                        ? '${l.kindLabel} · ${l.installs} installs'
-                                        : l.description,
-                                    '${l.installs} installs',
-                                    l.isApp
-                                        ? AppColors.primary
-                                        : AppColors.warning,
-                                  ))
-                              .toList()),
-                    const SizedBox(height: 24),
-                    const Text('🏆 Top performing rooms',
-                        style: TextStyle(
-                            fontSize: 17, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 12),
+          builder: (_, __) {
+            final compact = MediaQuery.sizeOf(context).width < 720;
+            return ListView(
+                padding: AppSpacing.pagePadding(compact)
+                    .copyWith(bottom: AppSpacing.xl - 4, top: 0),
+                children: [
+                  SoftSearchField(
+                    hintText: 'Search agents, rooms, people, apps…',
+                    onChanged: (v) => setState(() => query = v),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Wrap(
+                      spacing: AppSpacing.xs,
+                      runSpacing: AppSpacing.xs,
+                      children: [
+                        for (var index = 0;
+                            index < categories.length;
+                            index++)
+                          FilterChip(
+                              selected: model.selectedCategory == index,
+                              onSelected: (_) => model.selectCategory(index),
+                              label: Text(categories[index])),
+                      ]),
+                  const SizedBox(height: AppSpacing.xl - 4),
+                  const SkySectionHeader(
+                    dense: true,
+                    icon: Icons.trending_up_rounded,
+                    title: 'Trending agents & apps',
+                    subtitle: 'Fresh listings from the market',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  if (_loadingAgents)
+                    const SkeletonGrid(
+                        itemCount: 4,
+                        maxCrossAxisExtent: 320,
+                        mainAxisExtent: 120)
+                  else if (_visibleAgents.isEmpty)
+                    PanelEmpty(
+                      icon: Icons.search_off_rounded,
+                      title: query.trim().isEmpty
+                          ? 'Nothing to explore yet'
+                          : 'No matches',
+                      message: query.trim().isEmpty
+                          ? 'Published agents and apps will show up here.'
+                          : 'Nothing matches “$query”. Try another search.',
+                    )
+                  else
                     ResponsiveGrid(
-                        children: model.rooms
-                            .map((room) => InkWell(
-                                onTap: widget.openRoom,
-                                child: AppPanel(
-                                    title: room.name,
-                                    child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(room.members,
-                                              style: TextStyle(
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant)),
-                                          Text(room.status,
-                                              style: const TextStyle(
-                                                  color: AppColors.success))
-                                        ]))))
+                        children: _visibleAgents
+                            .take(12)
+                            .map((l) => _ExploreListingCard(l))
                             .toList()),
-                  ])));
+                  const SizedBox(height: AppSpacing.xl - 4),
+                  const SkySectionHeader(
+                    dense: true,
+                    icon: Icons.meeting_room_outlined,
+                    title: 'Top rooms',
+                    subtitle: 'Public spaces worth a look',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  ResponsiveGrid(
+                      children: model.rooms
+                          .map((room) => _RoomCard(
+                                name: room.name,
+                                members: room.members,
+                                status: room.status,
+                                onTap: widget.openRoom,
+                              ))
+                          .toList()),
+                ]);
+          }));
 }
 
-class _AgentCard extends StatelessWidget {
-  const _AgentCard(this.name, this.description, this.roi, this.color);
-  final String name, description, roi;
-  final Color color;
+class _ExploreListingCard extends StatelessWidget {
+  const _ExploreListingCard(this.listing);
+  final MarketListing listing;
+
   @override
-  Widget build(BuildContext context) => AppPanel(
-      title: name,
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = listing.isApp ? AppColors.cyan : AppColors.primary;
+    final description = listing.description.isEmpty
+        ? '${listing.kindLabel} · ${listing.installs} installs'
+        : listing.description;
+    return SoftCard(
+      showOrb: false,
+      accent: color,
+      padding: const EdgeInsets.all(AppSpacing.sm + 2),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          BotAvatar(
+            bot: listing.bot ??
+                Bot(
+                  id: listing.botId,
+                  ownerId: listing.publisherId,
+                  accountId: '',
+                  name: listing.name,
+                  kind: listing.isApp ? 'tool' : 'agent',
+                  vmType: '',
+                  status: '',
+                  avatar: listing.avatar,
+                ),
+            radius: 17,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(listing.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 14,
+                    letterSpacing: -.2,
+                    fontWeight: FontWeight.w800)),
+          ),
+          SoftMetaChip(label: listing.kindLabel.toUpperCase(), accent: color),
+        ]),
+        const SizedBox(height: 10),
         Text(description,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 12)),
+                color: scheme.onSurfaceVariant, fontSize: 12, height: 1.35)),
         const SizedBox(height: 12),
-        Row(children: [
-          StatusTag(roi, AppColors.success),
-          const Spacer(),
-          Icon(Icons.extension_rounded, color: color, size: 18)
-        ])
-      ]));
+        SoftMetaChip(
+          icon: Icons.download_rounded,
+          label: '${listing.installs} installs',
+          accent: AppColors.success,
+        ),
+      ]),
+    );
+  }
+}
+
+class _RoomCard extends StatelessWidget {
+  const _RoomCard({
+    required this.name,
+    required this.members,
+    required this.status,
+    required this.onTap,
+  });
+
+  final String name;
+  final String members;
+  final String status;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SoftCard(
+      onTap: onTap,
+      showOrb: false,
+      padding: const EdgeInsets.all(AppSpacing.sm + 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 14,
+                  letterSpacing: -.2,
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(members,
+                  style: TextStyle(
+                      fontSize: 12, color: scheme.onSurfaceVariant)),
+              SoftMetaChip(label: status, accent: AppColors.success),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }

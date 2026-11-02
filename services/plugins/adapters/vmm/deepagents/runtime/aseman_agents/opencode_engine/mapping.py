@@ -16,7 +16,10 @@ MECHANISMS: tuple[tuple[str, str], ...] = (
     ("App generation", "the aseman-app-builder subagent, platform file tools, then appui_publish"),
     ("Planning", "todowrite"),
     ("Questions to people", "the ask_user tool; the session waits for the answer"),
-    ("Messaging, sandbox, apps", "platform_call on the turn gateway (actions only, never /llm)"),
+    ("Messaging", "send_message / read_room / send_direct_message / read_direct_messages (turn gateway)"),
+    ("Team & space tools", "list_team, list_space_tools, call_space_tool → spaces.ask (same as Deep Agents)"),
+    ("Recruit / hire", "recruit_agent, list_marketplace, hire_agent"),
+    ("Other platform actions", "platform_call escape hatch on the turn gateway (never /llm)"),
     ("Models", "a free opencode/* model on OpenCode's own gateway, chosen for the role"),
 )
 
@@ -39,6 +42,11 @@ def brief() -> str:
         "appui_publish). Do not call opencode_run, opencode_status, opencode_models, "
         "appui_create, or aseman-appui. That programmer path is a different switch "
         "and uses a different model gateway."
+    )
+    lines.append(
+        "Use the named space tools (send_message, read_room, list_team, list_space_tools, "
+        "call_space_tool, recruit_agent, …) the same way a Deep Agents turn uses its "
+        "room tools. Prefer them over platform_call."
     )
     return "\n".join(lines)
 

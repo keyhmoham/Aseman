@@ -97,6 +97,8 @@ func (s *Service) DeliverMentions(ctx context.Context, spaceID, roomID identity.
 		failure    error
 		failureFor bool
 	)
+	sp, _ := s.GetSpace(ctx, spaceID)
+	direct := sp != nil && sp.Direct
 	delivered := map[string]bool{}
 	for i := range mems {
 		member := mems[i]
@@ -106,6 +108,11 @@ func (s *Service) DeliverMentions(ctx context.Context, spaceID, roomID identity.
 		delivered[member.MemberID.String()] = true
 		rec, err := s.botForMember(ctx, member.MemberID)
 		if err != nil || rec.AccountID == msg.SenderID {
+			continue
+		}
+		// In a direct chat each person only triggers their own installs
+		// (plus the conversation peer agent).
+		if direct && !s.dmInstallVisible(ctx, spaceID, msg.SenderID, rec.AccountID) {
 			continue
 		}
 		deliver := s.deliverToAgent

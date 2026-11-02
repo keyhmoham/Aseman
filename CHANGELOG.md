@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased: personal Aseman, calls and social parity
+
+- **Personal brain** in Saved Messages: keep/answer, memory, proposals,
+  reminders, work-on-it jobs, AI log, `@aseman` chat assistant, speech models.
+- **Peer voice/video calls** (native WebRTC media + signaling/TURN; incoming
+  call overlay; web stays signaling-only); privacy prefs; notify prefs;
+  Android FCM MethodChannel (soft without google-services.json) alongside APNs.
+- **Richer DMs** (reaction chips, hide/keep via users.dm_*; room messages carry
+  `direct_id` so messenger actions work; voice waveform bars); credit
+  applications; editable email templates; orbit strip; marketing links on auth.
+
 ## Unreleased: governance, proactive work and connections
 
 What upgraders need to know first:

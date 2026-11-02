@@ -1,0 +1,8 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+# NVIDIA Parakeet TDT 0.6B V3 via ONNX (replaces faster-whisper).
+onnx-asr[cpu,hub]>=0.7.0
+kokoro-onnx>=0.4.0
+numpy>=1.26.0
+soundfile>=0.12.1

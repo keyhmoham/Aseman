@@ -298,6 +298,9 @@ class _ForwardMessageSheetState extends State<ForwardMessageSheet> {
                               return _ChatRow(
                                 chat: c,
                                 selected: on,
+                                userId: widget.dependencies.sessionController
+                                        .session?.accountId ??
+                                    '',
                                 onTap: () => setState(() {
                                   if (!_selected.remove(c.key)) {
                                     _selected.add(c.key);
@@ -446,17 +449,19 @@ class _ChatRow extends StatelessWidget {
     required this.chat,
     required this.selected,
     required this.onTap,
+    this.userId = '',
   });
 
   final ChatSummary chat;
   final bool selected;
   final VoidCallback onTap;
+  final String userId;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final subtitle = chat.saved
-        ? 'Just you'
+        ? 'Aseman'
         : chat.direct
             ? (chat.peer?.isAgent ?? false)
                 ? 'Agent'
@@ -476,7 +481,11 @@ class _ChatRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
           child: Row(
             children: [
-              ChatAvatar(chat: chat, radius: 20),
+              ChatAvatar(
+                chat: chat,
+                radius: 20,
+                userId: userId,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

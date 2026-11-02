@@ -925,23 +925,38 @@ class FloatingPanelSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(AppShape.card);
+    final lift = elevation ?? 0;
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: radius,
         boxShadow: [
+          // Soft ambient lift — two layers read cleaner than one heavy blob.
           BoxShadow(
-            color: Colors.black.withValues(alpha: .28),
-            blurRadius: 40 + (elevation ?? 0) * 4,
-            offset: const Offset(0, 18),
+            color: Colors.black.withValues(alpha: .10 + lift * .01),
+            blurRadius: 12 + lift * 2,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .18 + lift * .015),
+            blurRadius: 36 + lift * 3,
+            offset: const Offset(0, 16),
           ),
         ],
       ),
-      child: GlassSurface(
-        alpha: AppSurfaces.overlayAlpha,
-        blur: AppSurfaces.blurSigma,
-        borderRadius: radius,
-        child: child,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          border: Border.all(color: AppSurfaces.cardBorder(scheme)),
+        ),
+        child: GlassSurface(
+          alpha: AppSurfaces.overlayAlpha,
+          blur: AppSurfaces.blurSigma,
+          borderRadius: radius,
+          border: false,
+          child: child,
+        ),
       ),
     );
   }

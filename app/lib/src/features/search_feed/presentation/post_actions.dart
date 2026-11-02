@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/theme/app_surfaces.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 import '../domain/feed_post.dart';
 import 'rich_post_parser.dart';
-import '../../../shared/widgets/overlay_panels.dart';
 
 /// Asks before deleting a post; true when the user confirmed.
 Future<bool> confirmDeletePost(BuildContext context) async {
@@ -125,14 +126,14 @@ class _ReportPostDialogState extends State<_ReportPostDialog> {
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Material(
                     color: _reason == key
-                        ? scheme.errorContainer.withValues(alpha: .6)
-                        : scheme.surfaceContainerHighest.withValues(alpha: .5),
+                        ? scheme.errorContainer.withValues(alpha: .55)
+                        : AppSurfaces.card(scheme),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                       side: BorderSide(
                         color: _reason == key
                             ? scheme.error
-                            : Colors.transparent,
+                            : AppSurfaces.cardBorder(scheme),
                       ),
                     ),
                     clipBehavior: Clip.antiAlias,

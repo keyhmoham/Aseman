@@ -7,6 +7,7 @@ import '../../../app_dependencies.dart';
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
+import '../../../core/theme/app_surfaces.dart';
 import '../../../core/utils/context_extensions.dart';
 import '../../../data/models/profile.dart';
 import '../../../data/models/space.dart';
@@ -881,18 +882,20 @@ class _StatTile extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Container(
       width: math.max(92, (MediaQuery.sizeOf(context).width - 120) / 5),
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
-      decoration: BoxDecoration(
-          color: colors.surfaceContainer,
-          borderRadius: BorderRadius.circular(AppShape.inner)),
-      child: Column(children: [
-        Icon(icon, size: 22, color: colors.primary),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      decoration: AppSurfaces.cardDecoration(context, radius: AppShape.inner),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, size: 18, color: colors.primary),
         const SizedBox(height: 8),
         Text('$value',
             style: const TextStyle(
-                fontSize: 26, letterSpacing: -.5, fontWeight: FontWeight.w800)),
+                fontSize: 24, letterSpacing: -.5, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 2),
         Text(label,
-            style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant)),
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: colors.onSurfaceVariant)),
       ]),
     );
   }
@@ -929,7 +932,9 @@ class _MemberTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: AppAvatar(_handle.isEmpty ? '?' : _handle[0].toUpperCase(),
-          color: colors.primary, avatar: '${member['avatar'] ?? ''}'),
+          color: colors.primary,
+          avatar: '${member['avatar'] ?? ''}',
+          identity: '${member['id'] ?? member['account_id'] ?? ''}'),
       title: Row(children: [
         Flexible(
             child: Text('@$_handle',
@@ -1063,7 +1068,8 @@ class _InviteDialogState extends State<_InviteDialog> {
                               : '${user['handle']}'[0].toUpperCase(),
                           color: Theme.of(context).colorScheme.primary,
                           radius: 14,
-                          avatar: '${user['avatar'] ?? ''}'),
+                          avatar: '${user['avatar'] ?? ''}',
+                          identity: '${user['id'] ?? ''}'),
                     ),
                 ])),
           const SizedBox(height: 6),

@@ -3,6 +3,7 @@
     GET  /healthz                     → {"ok": true}
     POST /v1/turns                    run a turn         → {reply, status, answered, error}
     POST /v1/answers                  answer a question  → {reply, status, answered, error}
+    POST /v1/chat                     personal Aseman chat (OpenCode engine) → {reply, status, error}
     GET  /v1/questions?vm=&space=     open questions     → {questions: [...]}
     POST /v1/playbooks/reset          forget what agents learned → {reset: n}
     POST /v1/rooms/forget             forget agents' conversations of a room thread → {forgotten: n}
@@ -98,6 +99,40 @@ def create_app(runner_factory: Any = None, *, secret: str | None = None, data_di
     @app.post("/v1/answers")
     async def answers(request: Request) -> JSONResponse:
         return await serve(request, request.app.state.runner.answer)
+
+    @app.post("/v1/chat")
+    async def chat(request: Request) -> JSONResponse:
+        """Personal Aseman chat under the OpenCode agentic engine.
+
+        When ``with_tools`` is set, ``gateway`` + ``token`` are a person-scoped
+        session (same MCP space tools as a room turn).
+        """
+        authorize(request)
+        body = await request.json()
+        if str(body.get("agent_engine") or "") != "opencode":
+            raise HTTPException(status_code=400, detail="agent_engine must be opencode")
+        system = str(body.get("system") or "")
+        messages = body.get("messages") or []
+        if not isinstance(messages, list):
+            raise HTTPException(status_code=400, detail="messages must be a list")
+        thread_id = str(body.get("thread_id") or "aseman-chat")
+        with_tools = bool(body.get("with_tools"))
+        gateway = str(body.get("gateway") or "").strip()
+        token = str(body.get("token") or "").strip()
+        account_id = str(body.get("account_id") or "").strip()
+        if with_tools and (not gateway or not token):
+            raise HTTPException(status_code=400, detail="with_tools requires gateway and token")
+        try:
+            reply, error = await request.app.state.runner.chat(
+                system=system, messages=messages, thread_id=thread_id,
+                with_tools=with_tools, gateway=gateway, token=token, account_id=account_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.exception("personal chat crashed")
+            return JSONResponse({"reply": "", "status": "failed", "error": f"{type(exc).__name__}: {exc}"})
+        if error and not reply:
+            return JSONResponse({"reply": "", "status": "failed", "error": error})
+        return JSONResponse({"reply": reply, "status": "done", "error": error or ""})
 
     @app.get("/v1/questions")
     async def questions(request: Request, vm: str = "", space: str = "") -> dict[str, Any]:

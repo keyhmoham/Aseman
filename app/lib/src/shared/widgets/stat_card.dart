@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_shape.dart';
-import 'glass_surface.dart';
+import '../../core/theme/app_spacing.dart';
+import 'sky_ui.dart';
 
+/// Wallet / KPI card aligned with [FleetMetric]: quiet label, large value,
+/// optional tinted hint. Soft gradient surface matching the You-tab language.
 class StatCard extends StatelessWidget {
   const StatCard(
       {super.key,
@@ -16,26 +19,27 @@ class StatCard extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => GlassSurface(
-        borderRadius: BorderRadius.circular(AppShape.inner),
-        child: Container(
-          constraints: const BoxConstraints(minWidth: 180),
-          padding: const EdgeInsets.all(17),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title,
-                style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: 12)),
-            const SizedBox(height: 9),
-            Text(value,
-                style:
-                    const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 5),
-            Text(change,
-                style: TextStyle(
-                    color: color, fontSize: 12, fontWeight: FontWeight.w600)),
-          ]),
-        ),
-      );
+  Widget build(BuildContext context) {
+    return SoftCard(
+      accent: color,
+      radius: AppShape.inner,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        EyebrowLabel(title, color: color, size: 10),
+        const SizedBox(height: 6),
+        Text(value,
+            style: const TextStyle(
+                fontSize: 24,
+                letterSpacing: -.4,
+                height: 1.1,
+                fontWeight: FontWeight.w900)),
+        const SizedBox(height: 5),
+        Text(change,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
 }

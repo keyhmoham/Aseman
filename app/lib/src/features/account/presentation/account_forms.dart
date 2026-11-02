@@ -123,7 +123,7 @@ class _ProfileFormState extends State<_ProfileForm> {
             maxLength: 280,
             decoration: const InputDecoration(
                 labelText: 'Bio',
-                hintText: 'What you trade and what you are good at',
+                hintText: 'What you do and what you are good at',
                 alignLabelWithHint: true),
           ),
           AppSwitchCard(
@@ -140,11 +140,11 @@ class _ProfileFormState extends State<_ProfileForm> {
               values: skills,
               onChanged: (v) => setState(() => skills = v),
               suggestions: const [
-                'trading',
+                'collaboration',
                 'research',
-                'risk management',
+                'agents',
                 'python',
-                'quant',
+                'product',
                 'design',
                 'writing',
               ],

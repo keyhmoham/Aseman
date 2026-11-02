@@ -170,6 +170,44 @@ services:
       # Full-text index, the signing and sealing keys Utopia generates.
       - timeline-data:/app/data
 
+  # Local STT/TTS for Talk (Admin → AI → Voice): OpenAI-compatible
+  # /v1/audio/transcriptions + /v1/audio/speech. The node reaches it as
+  # http://voice:8091/v1 (not 127.0.0.1 — that is the aseman container itself).
+  voice:
+    build: ./deploy/voice
+    image: aseman/voice:v1
+    restart: unless-stopped
+    environment:
+      VOICE_HOST: 0.0.0.0
+      VOICE_PORT: "8091"
+      PARAKEET_MODEL: ${PARAKEET_MODEL:-nemo-parakeet-tdt-0.6b-v3}
+      PARAKEET_DEVICE: ${PARAKEET_DEVICE:-cpu}
+      PARAKEET_QUANTIZATION: ${PARAKEET_QUANTIZATION:-int8}
+      STT_MODEL_ID: ${STT_MODEL_ID:-parakeet-tdt-0.6b-v3}
+      KOKORO_VOICE: ${KOKORO_VOICE:-af_heart}
+      KOKORO_DIR: /models
+      VOICE_API_KEY: ${VOICE_API_KEY:-}
+    volumes:
+      # Cache Parakeet / Kokoro model downloads across restarts.
+      - voice-models:/root/.cache
+      - voice-kokoro:/models
+    # Optional host access for debugging; the node uses the compose DNS name.
+    ports:
+      - "${VOICE_PORT:-8091}:8091"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/healthz')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      # First boot downloads Parakeet ONNX weights (~0.6B).
+      start_period: 300s
+
   aseman:
     build: ./services
     image: aseman/asemand:latest
@@ -190,6 +228,8 @@ services:
       openviking:
         condition: service_healthy
       timeline:
+        condition: service_started
+      voice:
         condition: service_started
     environment:
       ASEMAN_CONFIG: /app/config.yml
@@ -234,10 +274,17 @@ services:
       # Programmer OpenCode only (Admin → OpenCode, appui_create / opencode_run):
       # the sandbox coding agent uses the turn's metered LLM gateway
       # (/deepagents/v1/llm). The agentic engine does not read OPENCODE_MODEL;
-      # when it is OpenCode, the runtime CLI uses OpenCode's free models.
+      # when it is OpenCode, the runtime CLI uses OpenCode's free models and
+      # seeds OpenCode Go auth from ASEMAN_OPENCODE_ENGINE_API_KEY (defaults to
+      # OPENCODE_API_KEY) so free-tier daily limits do not stop the agent.
       # Optional overrides when sandboxes cannot resolve ASEMAN_AGENT_NODE_URL:
       ASEMAN_SANDBOX_LLM_URL: ${ASEMAN_SANDBOX_LLM_URL:-}
       OPENCODE_MODEL: ${OPENCODE_MODEL:-aseman/default}
+      # Also used as the agentic engine's OpenCode Go credential when
+      # ASEMAN_OPENCODE_ENGINE_API_KEY is unset (see deepagents/runtime.go).
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
+      ASEMAN_OPENCODE_ENGINE_API_KEY: ${ASEMAN_OPENCODE_ENGINE_API_KEY:-}
+      ASEMAN_OPENCODE_ENGINE_AUTH: ${ASEMAN_OPENCODE_ENGINE_AUTH:-}
       # The agents' memory: the self-hosted OpenViking above, as the runtime
       # reaches it, and how much it recalls with each message (tokens).
       ASEMAN_OPENVIKING_URL: ${ASEMAN_OPENVIKING_URL:-http://openviking:1933}
@@ -382,6 +429,8 @@ volumes:
   aseman-data:
   openviking-data:
   timeline-data:
+  voice-models:
+  voice-kokoro:
   # Debug Flutter client (docker-compose.hotreload.yml): pub cache and the
   # SDK's .dart_tool, kept off the host tree.
   flutter-pub-cache:

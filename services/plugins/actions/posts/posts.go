@@ -196,7 +196,7 @@ func (s *Service) Feed(ctx context.Context, caller identity.ID, spaceID identity
 		f.In = map[string][]any{"author_id": toAnyList(authors)}
 	default:
 		// Global feed: public posts not tied to any workspace, the featured
-		// ones (imported traders' latest posts) first.
+		// ones (imported authors' latest posts) first.
 		return s.globalFeed(ctx, limit, offset)
 	}
 	var out []post.Post

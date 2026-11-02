@@ -76,7 +76,7 @@ Map<String, dynamic> adminFixtures() {
           'lastName': i == 0 ? 'Lovelace' : 'Number $i',
           'hireable': i.isEven,
           'marketStatus': i == 2 ? 'approved' : 'pending',
-          'skills': ['trading', 'research', 'python', 'risk management'],
+          'skills': ['collaboration', 'research', 'python', 'agents'],
         },
       }
   ];
@@ -418,7 +418,7 @@ Map<String, dynamic> adminFixtures() {
       'sandboxes': [
         {
           'id': 'sbx_0123456789abcdef',
-          'project': {'id': 'space-1', 'name': 'Atlas Capital research desk'},
+          'project': {'id': 'space-1', 'name': 'Atlas Collective research space'},
           'started_at': now,
         },
         {'id': 'sbx_stray_0123456789', 'name': 'orphan', 'started_at': now},
@@ -430,7 +430,7 @@ Map<String, dynamic> adminFixtures() {
         {
           'id': 'vol_0123456789abcdef',
           'name': 'aseman-space-1',
-          'project': {'id': 'space-1', 'name': 'Atlas Capital research desk'},
+          'project': {'id': 'space-1', 'name': 'Atlas Collective research space'},
           'created_at': now,
         },
         {'id': 'vol_orphan_0123', 'name': 'aseman-old', 'created_at': now},
@@ -444,7 +444,7 @@ Map<String, dynamic> adminFixtures() {
       },
       'machine': {'cpu': 2, 'memory_mb': 2048, 'disk_mb': 4096},
       'universal_system_prompt': 'Always answer in the user\'s language.',
-      'categories': ['research', 'coding', 'quant-strategies'],
+      'categories': ['research', 'coding', 'agent-workflows'],
     },
     'spaces.space_detail': {
       'id': 'space-000000000000000001',

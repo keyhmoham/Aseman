@@ -6,7 +6,7 @@ func f(name string, k database.Kind) database.Field { return database.Field{Name
 
 // Models belongs to this namespace and is registered by its plugin lifecycle.
 func Models() []database.Model {
-	return []database.Model{llmProviders(), llmDecision(), llmMemory(), llmImage()}
+	return []database.Model{llmProviders(), llmDecision(), llmMemory(), llmImage(), llmVoice()}
 }
 
 func llmProviders() database.Model {

@@ -18,31 +18,28 @@ void main() {
         .clearAllTestValues();
   });
 
-  /// Opens Atlas Capital from the feed desk's toolbox. The spaces grid is
-  /// not on the feed; the messenger also lists a project room of this name.
+  /// Opens Atlas Collective from the home chats list (expand the space, then
+  /// open a room — that jumps into the workspace).
   Future<void> openAtlas(WidgetTester tester) async {
-    final logical =
-        tester.view.physicalSize.width / tester.view.devicePixelRatio;
-    if (logical < 820) {
-      await tester.tap(
-        find.descendant(
-          of: find.byType(HomeTabBar),
-          matching: find.text('Desk'),
-        ),
-      );
-      await tester.pumpAndSettle();
-    }
-    await tester.tap(find.byTooltip('Toolbox'));
+    await tester.tap(find.text('Atlas Collective').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Open Atlas Capital'));
+    await tester.tap(find.text('general').first);
     await tester.pumpAndSettle();
   }
 
-  /// Profile avatar in the floating app bar (not a chat/space tile avatar).
+  /// Profile avatar in the floating app bar (desktop only; phones use You).
   Finder profileAvatar() => find.descendant(
     of: find.byType(WorkspaceHeader),
     matching: find.byType(CircleAvatar),
   );
+
+  /// Opens the phone You tab (replaces the app-bar avatar on compact widths).
+  Future<void> openYouTab(WidgetTester tester) async {
+    await tester.tap(
+      find.descendant(of: find.byType(HomeTabBar), matching: find.text('You')),
+    );
+    await tester.pumpAndSettle();
+  }
 
   /// Seed a logged-in session so the shell mounts the feed instead of the
   /// auth screen. The app runs against the deterministic fake service, so the
@@ -78,13 +75,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Global'), findsNothing);
-    expect(find.text('Traders'), findsNothing);
+    expect(find.text('People'), findsNothing);
     expect(find.text('Following'), findsOneWidget);
     expect(find.text('Search Aseman…'), findsOneWidget);
 
-    // Chats on the left, the free desk in the center, posts on the right.
+    // Chats on the left, Aseman (Desk/Chat) in the center, posts on the right.
     // The posts rail is the same width as the chats rail.
-    expect(find.byTooltip('Toolbox'), findsOneWidget);
+    expect(find.text('Desk'), findsWidgets);
+    expect(find.text('Chat'), findsWidgets);
     Size railAround(Finder content) {
       final glasses = find.ancestor(
         of: content,
@@ -109,7 +107,7 @@ void main() {
     expect(chatsRail.width, 320);
     expect(find.text('Open a workspace or start a new one'), findsNothing);
     expect(find.text('Chats'), findsWidgets);
-    expect(find.text('Atlas Capital'), findsWidgets);
+    expect(find.text('Atlas Collective'), findsWidgets);
     expect(find.text('Maya Chen'), findsOneWidget);
     expect(find.text('AlphaBot'), findsOneWidget);
 
@@ -120,7 +118,7 @@ void main() {
     );
   });
 
-  testWidgets('phone home bottom nav switches chats, spaces and explore', (
+  testWidgets('phone home bottom nav switches chats, explore and you', (
     tester,
   ) async {
     await seedSession();
@@ -134,7 +132,8 @@ void main() {
       matching: find.text(label),
     );
 
-    // Phones land on the Chats tab. The bar is a short centered pill.
+    // Phones land on the Chats tab. The bar is a short centered pill —
+    // Chats, Explore and You (Aseman lives in the chats list).
     expect(find.text('Maya Chen'), findsOneWidget);
     final capsule = tester.getRect(
       find.descendant(
@@ -142,24 +141,48 @@ void main() {
         matching: find.byType(GlassSurface),
       ),
     );
-    expect(capsule.width, lessThan(260));
+    expect(capsule.width, lessThan(280));
     expect(capsule.center.dx, closeTo(195, 12));
     expect(navLabel('Chats'), findsOneWidget);
-    expect(navLabel('Desk'), findsOneWidget);
-    expect(navLabel('Feed'), findsOneWidget);
+    expect(navLabel('Explore'), findsOneWidget);
+    expect(navLabel('You'), findsOneWidget);
+    expect(navLabel('Aseman'), findsNothing);
 
-    await tester.tap(navLabel('Desk'));
-    await tester.pumpAndSettle();
-    expect(find.byTooltip('Toolbox'), findsOneWidget);
-    expect(find.text('Your desk'), findsOneWidget);
-
-    await tester.tap(navLabel('Feed'));
+    await tester.tap(navLabel('Explore'));
     await tester.pumpAndSettle();
     expect(find.text('Search Aseman…'), findsOneWidget);
     expect(
       find.text('Private update inside the Home workspace.'),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(navLabel('You'));
+    await tester.pumpAndSettle();
+    expect(find.text('Store'), findsOneWidget);
+    expect(find.text('Wallet'), findsOneWidget);
+    expect(find.text('Invitations'), findsNothing);
+    expect(find.text('Settings'), findsNothing);
+    expect(find.byTooltip('Settings'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byTooltip('Notifications'));
+    await tester.pumpAndSettle();
+    expect(find.text('All'), findsOneWidget);
+    expect(find.text('Invites'), findsOneWidget);
+    await tester.tap(find.text('Invites'));
+    await tester.pumpAndSettle();
+    expect(find.text('No invitations'), findsOneWidget);
+    // Dismiss the notifications sheet via its barrier.
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+
+    // Avatar is gone on phones; widgets library owns the top-right corner.
+    expect(profileAvatar(), findsNothing);
+    expect(find.byTooltip('Widgets & windows'), findsOneWidget);
+    await tester.tap(find.byTooltip('Widgets & windows'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Pinned widgets'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -193,7 +216,7 @@ void main() {
 
     await tester.tap(find.text('Spaces').last);
     await tester.pumpAndSettle();
-    expect(inExplore('Atlas Capital'), findsOneWidget);
+    expect(inExplore('Atlas Collective'), findsOneWidget);
 
     await tester.tap(find.text('Agents').last);
     await tester.pumpAndSettle();
@@ -235,9 +258,9 @@ void main() {
 
     await tester.tap(find.text('Spaces').last);
     await tester.pumpAndSettle();
-    await tester.tap(inExplore('Atlas Capital'));
+    await tester.tap(inExplore('Atlas Collective'));
     await tester.pumpAndSettle();
-    expect(find.text('My trading desk'), findsOneWidget);
+    expect(find.text('My desk'), findsOneWidget);
   });
 
   testWidgets('switches workspace from the feed and the desk switcher', (
@@ -249,11 +272,11 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    // A space in the feed's Spaces panel opens its desk.
+    // A room in the chats list opens that workspace (on the room desk).
     await openAtlas(tester);
-    expect(find.text('My trading desk'), findsOneWidget);
+    expect(find.text('general desk'), findsOneWidget);
 
-    // On the desk, the edge handle opens the switcher.
+    // On the workspace, the edge handle opens the switcher.
     await tester.tap(find.byTooltip('Switch workspace'));
     await tester.pumpAndSettle();
     expect(find.text('Switch workspace'), findsOneWidget);
@@ -277,9 +300,9 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    // Open the desk first, then create a brand-new workspace from there.
+    // Open a workspace first, then create a brand-new one from the switcher.
     await openAtlas(tester);
-    expect(find.text('My trading desk'), findsOneWidget);
+    expect(find.text('general desk'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Switch workspace'));
     await tester.pumpAndSettle();
@@ -298,7 +321,7 @@ void main() {
     // not the global feed — and the post composer.
     expect(find.text('No posts in this workspace yet.'), findsOneWidget);
     expect(find.text('Write a post for this workspace…'), findsOneWidget);
-    expect(find.text('BTC consolidating above weekly VWAP.'), findsNothing);
+    expect(find.text('Shipped the onboarding polish with AssistBot.'), findsNothing);
   });
 
   testWidgets('new workspace has no bots until added', (tester) async {
@@ -320,7 +343,7 @@ void main() {
     await tester.enterText(dialogField, 'New Alpha');
     await tester.tap(find.widgetWithText(FilledButton, 'Create'));
     await tester.pumpAndSettle();
-    expect(find.text('My trading desk'), findsOneWidget);
+    expect(find.text('My desk'), findsOneWidget);
 
     // Switch the library to the Agents tab.
     await tester.tap(find.byIcon(Icons.smart_toy_outlined).first);
@@ -328,7 +351,7 @@ void main() {
 
     // A fresh workspace must not come with agents by default.
     expect(find.text('Add agent'), findsOneWidget);
-    expect(find.text('SignalBot'), findsNothing);
+    expect(find.text('AssistBot'), findsNothing);
   });
 
   testWidgets('room chat mentions a workspace agent and triggers it', (
@@ -343,32 +366,32 @@ void main() {
     await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
     await openAtlas(tester);
-    expect(find.text('My trading desk'), findsOneWidget);
+    expect(find.text('My desk'), findsOneWidget);
 
     // Open the "general" room so the room chat shows.
     await tester.tap(find.text('general'));
     await tester.pumpAndSettle();
     expect(find.text('Live room'), findsOneWidget);
 
-    // Open the mention picker and mention SignalBot.
+    // Open the mention picker and mention AssistBot.
     await tester.tap(find.byIcon(Icons.alternate_email_rounded));
     await tester.pumpAndSettle();
     expect(find.text('Mention an agent'), findsOneWidget);
-    await tester.tap(find.text('SignalBot'));
+    await tester.tap(find.text('AssistBot'));
     await tester.pumpAndSettle();
-    expect(find.text('@SignalBot'), findsOneWidget);
+    expect(find.text('@AssistBot'), findsOneWidget);
 
     // Sending the message keeps the structured mention attached.
     final composerField = find.byWidgetPredicate(
       (w) => w is TextField && w.decoration?.hintText == 'Message room…',
     );
-    await tester.enterText(composerField, 'Please analyze BTC');
+    await tester.enterText(composerField, 'Please summarize the room notes');
     await tester.tap(find.byIcon(Icons.send_rounded));
     await tester.pumpAndSettle();
-    expect(find.text('Please analyze BTC'), findsOneWidget);
+    expect(find.text('Please summarize the room notes'), findsOneWidget);
   });
 
-  testWidgets('profile menu opens market and my bots', (tester) async {
+  testWidgets('profile menu opens the store and wallet', (tester) async {
     await seedSession();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
@@ -377,13 +400,20 @@ void main() {
 
     await tester.tap(profileAvatar());
     await tester.pumpAndSettle();
-    expect(find.text('My bots'), findsOneWidget);
-    expect(find.text('Market'), findsOneWidget);
+    expect(find.text('Store'), findsOneWidget);
     expect(find.text('Wallet'), findsOneWidget);
+    expect(find.text('Settings'), findsNothing);
+    expect(find.byTooltip('Settings'), findsOneWidget);
+    expect(find.text('Hire talent'), findsNothing);
+    expect(find.text('Account'), findsNothing);
     // Messages is a workspace-desk entry, not the feed's.
     expect(find.text('Messages'), findsNothing);
 
-    await tester.tap(find.text('Market'));
+    await tester.tap(find.text('Store'));
+    await tester.pumpAndSettle();
+    expect(find.text('Library'), findsOneWidget);
+    expect(find.text('Discover'), findsOneWidget);
+    await tester.tap(find.text('Discover'));
     await tester.pumpAndSettle();
     expect(find.text('Publish'), findsOneWidget);
     expect(find.text('Install'), findsNothing); // empty market list
@@ -396,16 +426,16 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    // Mobile: the avatar opens the bottom sheet menu.
-    await tester.tap(profileAvatar());
-    await tester.pumpAndSettle();
-    expect(find.text('My bots'), findsOneWidget);
+    // Mobile: the You tab shows the profile body inline.
+    await openYouTab(tester);
+    expect(find.text('Store'), findsOneWidget);
 
-    // Open the My bots panel as a bottom sheet; no overflow should occur.
-    await tester.tap(find.text('My bots'));
+    // Open the Store panel as a bottom sheet; no overflow should occur.
+    await tester.tap(find.text('Store'));
     await tester.pumpAndSettle();
     expect(find.text('Create'), findsOneWidget);
     expect(find.text('Agents'), findsOneWidget);
+    expect(find.text('Library'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -418,8 +448,7 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(profileAvatar());
-    await tester.pumpAndSettle();
+    await openYouTab(tester);
     expect(find.text('Admin console'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Admin console'));
@@ -458,9 +487,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(profileAvatar());
-    await tester.pumpAndSettle();
-    expect(find.text('My bots'), findsOneWidget);
+    await openYouTab(tester);
+    expect(find.text('Store'), findsOneWidget);
     expect(find.text('Admin console'), findsNothing);
   });
 
@@ -476,8 +504,10 @@ void main() {
     // The app bar has the profile avatar; tapping opens the popup menu.
     await tester.tap(profileAvatar());
     await tester.pumpAndSettle();
-    expect(find.text('Profile'), findsWidgets);
-    expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
+    expect(find.text('Store'), findsOneWidget);
+    expect(find.text('Settings'), findsNothing);
+    expect(find.byTooltip('Settings'), findsOneWidget);
+    expect(find.byIcon(Icons.settings_outlined), findsWidgets);
     expect(find.text('Log out'), findsOneWidget);
     expect(find.text('Messages'), findsNothing);
   });
@@ -493,7 +523,7 @@ void main() {
     await tester.tap(profileAvatar());
     await tester.pumpAndSettle();
     expect(find.text('Messages'), findsOneWidget);
-    expect(find.text('My bots'), findsOneWidget);
+    expect(find.text('Store'), findsOneWidget);
     expect(find.text('Log out'), findsOneWidget);
   });
 
@@ -610,18 +640,18 @@ void main() {
     await tester.pumpAndSettle();
     await openAtlas(tester);
 
-    // Open the Agents tab (Atlas has SignalBot installed).
+    // Open the Agents tab (Atlas has AssistBot installed).
     await tester.tap(find.byIcon(Icons.smart_toy_outlined).first);
     await tester.pumpAndSettle();
 
-    // Open SignalBot's profile.
-    await tester.tap(find.text('SignalBot').first);
+    // Open AssistBot's profile.
+    await tester.tap(find.text('AssistBot').first);
     await tester.pumpAndSettle();
 
     // Real profile data is rendered: header title, the Agent runtime section
-    // title, the installs stat label and the wired action button (SignalBot is
+    // title, the installs stat label and the wired action button (AssistBot is
     // already installed in the Atlas workspace).
-    expect(find.text('SignalBot'), findsWidgets);
+    expect(find.text('AssistBot'), findsWidgets);
     expect(find.text('Runtime'), findsOneWidget);
     expect(find.text('Installs'), findsOneWidget);
     expect(find.text('Added'), findsOneWidget);
@@ -643,15 +673,15 @@ void main() {
     // Open the search/discover panel (the left panel's search button).
     await tester.tap(find.byIcon(Icons.search_rounded).first);
     await tester.pumpAndSettle();
-    expect(find.text('In Atlas Capital'), findsOneWidget);
+    expect(find.text('In Atlas Collective'), findsOneWidget);
     expect(find.text('Explore Aseman'), findsOneWidget);
 
-    // In-workspace Agents section → only the space's agent (SignalBot), not the
+    // In-workspace Agents section → only the space's agent (AssistBot), not the
     // global AlphaBot.
     await tester.tap(find.widgetWithText(Tab, 'Agents'));
     await tester.pumpAndSettle();
-    expect(find.text('Results from Atlas Capital workspace'), findsOneWidget);
-    expect(find.text('SignalBot'), findsWidgets);
+    expect(find.text('Results from Atlas Collective workspace'), findsOneWidget);
+    expect(find.text('AssistBot'), findsWidgets);
 
     // Switch to the global Explore tab, Agents section → the platform agent
     // appears.

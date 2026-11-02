@@ -23,7 +23,7 @@ class TopBar extends StatelessWidget {
                 child: const TextField(
                     decoration: InputDecoration(
                         prefixIcon: Icon(Icons.search_rounded),
-                        hintText: 'Search rooms, agents, traders, or \$BTC',
+                        hintText: 'Search rooms, agents, people, or apps',
                         isDense: true)))),
         const Spacer(),
         Icon(Icons.notifications_none_rounded,

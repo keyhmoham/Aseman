@@ -40,7 +40,7 @@ type Post struct {
 	// SourceAt is when the post was published at its source.
 	SourceAt time.Time `db:"source_at" json:"source_at,omitempty"`
 	// Featured (1) puts the post above the others in the global feed: an
-	// imported trader's latest posts (see Import).
+	// imported author's latest posts (see Import).
 	Featured int64 `db:"featured" json:"featured,omitempty"`
 	// ForwardOf is the post this one shares (the first post of a chain of
 	// shares); zero for an original post. A shared post carries a copy of its

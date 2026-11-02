@@ -381,7 +381,7 @@ class AsemanService implements BackendService {
     return ChatSummary.fromJson({...m, 'kind': 'direct'});
   }
 
-  /// Opens the caller's Saved Messages: the direct chat with themselves.
+  /// Opens the caller's personal Aseman chat: the direct chat with themselves.
   Future<ChatSummary> openSaved() async {
     final resp = await client.call('spaces', 'direct_open',
         body: {'peer': session?.accountId ?? ''});
@@ -1059,18 +1059,25 @@ class AsemanService implements BackendService {
         bytes = base64Decode(raw);
       } catch (_) {}
     }
+    final file = UploadedFile.fromJson(m);
+    if (bytes == null) return file;
     return UploadedFile(
-      id: m['file_id'] as String? ?? m['id'] as String? ?? '',
-      name: m['name'] as String? ?? '',
-      mime: m['mime'] as String? ?? '',
-      size: (m['size'] as num?)?.toInt() ?? 0,
-      ownerId: m['owner_id'] as String? ?? '',
-      spaceId: m['space_id'] as String? ?? '',
-      roomId: m['room_id'] as String? ?? '',
-      public: m['public'] as bool? ?? false,
-      contentUrl: m['content_url'] as String? ?? '',
-      createdAt: DateTime.tryParse(m['created_at'] as String? ?? ''),
+      id: file.id,
+      name: file.name,
+      mime: file.mime,
+      size: file.size,
+      ownerId: file.ownerId,
+      spaceId: file.spaceId,
+      roomId: file.roomId,
+      public: file.public,
+      contentUrl: file.contentUrl,
+      createdAt: file.createdAt,
       bytes: bytes,
+      detail: file.detail,
+      voice: file.voice,
+      durationMs: file.durationMs,
+      waveform: file.waveform,
+      kept: file.kept,
     );
   }
 
@@ -1136,13 +1143,16 @@ class AsemanService implements BackendService {
         .whereType<Map<String, dynamic>>()
         .map((j) => Bot.fromJson({
               'id': j['id'],
-              'owner_id': '',
+              'owner_id': j['owner_id'] ?? '',
               'account_id': j['account_id'],
               'name': j['name'],
               'kind': j['kind'],
               'vm_type': j['vm_type'],
               'status': j['status'],
-              'avatar': j['avatar'],
+              'image_ref': j['image_ref'] ?? '',
+              'has_frontend': j['has_frontend'] ?? false,
+              'avatar': j['avatar'] ?? '',
+              'humanoid': j['humanoid'],
             }))
         .where((b) => !b.isSandbox)
         .toList();
@@ -2156,6 +2166,167 @@ class AsemanService implements BackendService {
         .map(LlmProvider.fromJson)
         .toList();
   }
+
+  // ── privacy / notifications ──────────────────────────────────────────
+
+  Future<Map<String, dynamic>> privacyGet() =>
+      actionMap('users', 'privacy_get');
+
+  Future<Map<String, dynamic>> privacySet(Map<String, dynamic> prefs) =>
+      actionMap('users', 'privacy_set', body: prefs);
+
+  Future<Map<String, dynamic>> notifyPrefs() =>
+      actionMap('users', 'notify_prefs');
+
+  Future<Map<String, dynamic>> notifySet(
+          {required String category, required bool enabled}) =>
+      actionMap('users', 'notify_set',
+          body: {'category': category, 'enabled': enabled});
+
+  Future<Map<String, dynamic>> notifyMute({
+    String space = '',
+    String peer = '',
+    required bool muted,
+  }) =>
+      actionMap('users', 'notify_mute', body: {
+        if (space.isNotEmpty) 'space': space,
+        if (peer.isNotEmpty) 'peer': peer,
+        'muted': muted,
+      });
+
+  // ── Room message react / hide / keep (works in project rooms and DMs) ─
+
+  /// React to a room message; empty [emoji] removes yours.
+  Future<Map<String, dynamic>> messageReact(
+    String spaceId,
+    String messageId, {
+    String emoji = '',
+  }) =>
+      actionMap('spaces', 'message_react', body: {
+        'space': spaceId,
+        'message': messageId,
+        'emoji': emoji,
+      });
+
+  /// Hide a room message for the caller only.
+  Future<Map<String, dynamic>> messageHide(String spaceId, String messageId) =>
+      actionMap('spaces', 'message_hide', body: {
+        'space': spaceId,
+        'message': messageId,
+      });
+
+  /// Keep files of a room message in the caller's storage.
+  Future<Map<String, dynamic>> messageKeep(
+    String spaceId,
+    String messageId, {
+    String file = '',
+  }) =>
+      actionMap('spaces', 'message_keep', body: {
+        'space': spaceId,
+        'message': messageId,
+        if (file.isNotEmpty) 'file': file,
+      });
+
+  Future<Map<String, dynamic>> storageUsage() =>
+      actionMap('users', 'storage_usage');
+
+  // ── calls ────────────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> callStart(String to, {bool video = false}) =>
+      actionMap('users', 'call_start', body: {'to': to, 'video': video});
+
+  Future<Map<String, dynamic>> callAccept(String id) =>
+      actionMap('users', 'call_accept', body: {'id': id});
+
+  Future<Map<String, dynamic>> callDecline(String id) =>
+      actionMap('users', 'call_decline', body: {'id': id});
+
+  Future<Map<String, dynamic>> callEnd(String id) =>
+      actionMap('users', 'call_end', body: {'id': id});
+
+  Future<Map<String, dynamic>> callIncoming() =>
+      actionMap('users', 'call_incoming');
+
+  Future<Map<String, dynamic>> callPoll(String id, {String after = ''}) =>
+      actionMap('users', 'call_poll',
+          body: {'id': id, if (after.isNotEmpty) 'after': after});
+
+  Future<Map<String, dynamic>> callSignal(
+    String id, {
+    required String kind,
+    required String payload,
+  }) =>
+      actionMap('users', 'call_signal',
+          body: {'id': id, 'kind': kind, 'payload': payload});
+
+  // ── brain (personal Aseman chat) ─────────────────────────────────────
+
+  Future<Map<String, dynamic>> brainConfirm(String message,
+          {required bool approve}) =>
+      actionMap('users', 'brain_confirm',
+          body: {'message': message, 'approve': approve});
+
+  Future<Map<String, dynamic>> brainRetry(String message) =>
+      actionMap('users', 'brain_retry', body: {'message': message});
+
+  Future<Map<String, dynamic>> brainRooms() =>
+      actionMap('users', 'brain_rooms');
+
+  Future<Map<String, dynamic>> brainRoomSet(String room,
+          {required bool allowed}) =>
+      actionMap('users', 'brain_room_set',
+          body: {'room': room, 'allowed': allowed});
+
+  Future<Map<String, dynamic>> brainMemoryGet() =>
+      actionMap('users', 'brain_memory_get');
+
+  Future<Map<String, dynamic>> brainMemorySet(Map<String, dynamic> body) =>
+      actionMap('users', 'brain_memory_set', body: body);
+
+  /// Saved-messages / self DM thread (brain proposals + agents_working).
+  Future<Map<String, dynamic>> dmListSelf({int limit = 40}) {
+    final me = session?.accountId ?? '';
+    return actionMap('users', 'dm_list',
+        body: {'peer': me, 'limit': limit});
+  }
+
+  /// Which live-voice roles the node has on ({speech, transcription, live}).
+  Future<Map<String, dynamic>> voiceConfig() =>
+      actionMap('users', 'voice_config');
+
+  /// One spoken turn: mic audio in, transcript + reply + TTS audio out.
+  Future<Map<String, dynamic>> voiceTurn({
+    required List<int> audio,
+    required String mime,
+  }) =>
+      actionMap('users', 'voice_turn', body: {
+        'audio': base64Encode(audio),
+        'mime': mime,
+      });
+
+  // ── credits / admin misc ─────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> creditRequest({
+    required String reason,
+    double amountUsd = 0,
+  }) =>
+      actionMap('finance', 'credit_request', body: {
+        'reason': reason,
+        if (amountUsd > 0) 'amount_usd': amountUsd,
+      });
+
+  Future<Map<String, dynamic>> creditRequestsMine() =>
+      actionMap('finance', 'credit_requests_mine');
+
+  Future<Map<String, dynamic>> adminAILog(
+          {Map<String, dynamic> body = const {}}) =>
+      actionMap('users', 'admin_ai_log', body: body);
+
+  Future<Map<String, dynamic>> emailTemplates() =>
+      actionMap('settings', 'email_templates');
+
+  Future<Map<String, dynamic>> emailPreview(String key) =>
+      actionMap('settings', 'email_preview', body: {'key': key});
 
   // ── BackendService home/market helpers ───────────────────────────────
 

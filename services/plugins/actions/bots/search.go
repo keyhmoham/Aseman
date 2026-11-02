@@ -42,6 +42,11 @@ func (s *Service) SearchBots(ctx context.Context, query, kind string, limit, off
 		if b.IsSandbox() {
 			continue
 		}
+		// Built-in Aseman (assistant / lead) is the personal Aseman chat, not a
+		// separate New-chat peer.
+		if b.IsBuiltin() {
+			continue
+		}
 		if kinds != nil && !kinds[string(b.Kind)] {
 			continue
 		}
@@ -89,8 +94,12 @@ func (a *botSearchAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 			"id": list[i].ID.String(), "account_id": list[i].AccountID.String(), "name": list[i].Name,
 			"kind": string(list[i].Kind), "vm_type": string(list[i].VMType),
 			"status": string(list[i].Status), "owner_id": list[i].OwnerID.String(),
-			"avatar": a.s.avatarOf(ctx, list[i].AccountID),
+			"image_ref": list[i].ImageRef,
+			"avatar":    a.s.avatarOf(ctx, list[i].AccountID),
 		})
+		if h := a.s.humanoidOf(ctx, list[i].AccountID); h != nil {
+			out[len(out)-1]["humanoid"] = h
+		}
 	}
 	return helper.JSON(map[string]any{"bots": out})
 }

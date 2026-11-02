@@ -4,8 +4,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_surfaces.dart';
 import '../../../elpian/core/media.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import '../../../shared/widgets/sky_ui.dart';
 import '../domain/desk_models.dart';
 import 'desk_controller.dart';
 import 'desk_dock.dart';
@@ -617,6 +620,7 @@ class CompactWidgetTile extends StatelessWidget {
           ),
       ],
     );
+    final accent = tool.primary;
     return Semantics(
       button: true,
       label: '${window.label}, app. Tap to open, long-press to move.',
@@ -627,89 +631,83 @@ class CompactWidgetTile extends StatelessWidget {
               ? border.copyWith(
                   side: BorderSide(
                     color: fresh
-                        ? scheme.primary
-                        : scheme.outlineVariant.withValues(alpha: .6),
+                        ? accent
+                        : AppSurfaces.cardBorder(scheme),
                     width: fresh ? 2 : 1,
                   ),
                 )
               : border,
-          color: scheme.surfaceContainerLow,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              accent.withValues(alpha: lifted || fresh ? .28 : .16),
+              tool.primaryContainer.withValues(alpha: .22),
+              scheme.surfaceContainerHighest.withValues(alpha: .45),
+            ],
+          ),
           shadows: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: lifted ? .28 : .08),
-              blurRadius: lifted ? 30 : 10,
-              offset: Offset(0, lifted ? 14 : 3),
+              color: accent.withValues(alpha: lifted ? .28 : .12),
+              blurRadius: lifted ? 22 : 12,
+              offset: Offset(0, lifted ? 10 : 4),
             ),
           ],
         ),
         child: ClipPath(
           clipper: ShapeBorderClipper(shape: border),
-          child: DecoratedBox(
-            // A wash of the tool's color, strongest behind its mark.
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  tool.primaryContainer.withValues(alpha: .55),
-                  scheme.surfaceContainerLow.withValues(alpha: 0),
-                ],
-                stops: const [0, .7],
-              ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              inset,
+              round || pill ? 14 : 10,
+              round || pill ? inset : 8,
+              round ? 14 : inset - 2,
             ),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                inset,
-                round || pill ? 14 : 10,
-                round || pill ? inset : 8,
-                round ? 14 : inset - 2,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (round)
-                    Align(
-                      alignment: Alignment.topCenter,
-                      child: SizedBox(
-                        height: 26,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ToolAvatar(
-                              tool: window.tool,
-                              name: window.name,
-                              size: 20,
-                            ),
-                            if (onMenu != null)
-                              SizedBox(
-                                width: 26,
-                                height: 26,
-                                child: IconButton(
-                                  tooltip: 'App options',
-                                  padding: EdgeInsets.zero,
-                                  iconSize: 16,
-                                  onPressed: onMenu,
-                                  icon: const Icon(Icons.more_horiz_rounded),
-                                ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (round)
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                      height: 26,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ToolAvatar(
+                            tool: window.tool,
+                            name: window.name,
+                            size: 20,
+                          ),
+                          if (onMenu != null)
+                            SizedBox(
+                              width: 26,
+                              height: 26,
+                              child: IconButton(
+                                tooltip: 'App options',
+                                padding: EdgeInsets.zero,
+                                iconSize: 16,
+                                onPressed: onMenu,
+                                icon: const Icon(Icons.more_horiz_rounded),
                               ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    SizedBox(height: 26, child: header),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    // A glance: taps open the widget, they do not reach in.
-                    child: IgnorePointer(
-                      child: Padding(
-                        padding: EdgeInsets.only(right: round ? 0 : 6),
-                        child: child,
+                            ),
+                        ],
                       ),
                     ),
+                  )
+                else
+                  SizedBox(height: 26, child: header),
+                const SizedBox(height: AppSpacing.xs),
+                Expanded(
+                  // A glance: taps open the widget, they do not reach in.
+                  child: IgnorePointer(
+                    child: Padding(
+                      padding: EdgeInsets.only(right: round ? 0 : 6),
+                      child: child,
+                    ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -754,11 +752,12 @@ class _WindowSheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 8, 8),
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md + 4, 0, AppSpacing.xs, AppSpacing.xs),
                 child: Row(
                   children: [
                     ToolAvatar(tool: w.tool, name: w.name, size: 34),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -785,6 +784,12 @@ class _WindowSheet extends StatelessWidget {
                         ],
                       ),
                     ),
+                    if (pinned)
+                      SoftMetaChip(
+                        label: 'Pinned',
+                        icon: Icons.push_pin,
+                        accent: scheme.primary,
+                      ),
                     IconButton(
                       tooltip: pinned ? 'Unpin' : 'Pin to the pinned desk',
                       onPressed: () => controller.togglePin(w),
@@ -805,7 +810,7 @@ class _WindowSheet extends StatelessWidget {
               ),
               Divider(
                 height: 1,
-                color: scheme.outlineVariant.withValues(alpha: .5),
+                color: AppSurfaces.cardBorder(scheme),
               ),
               Expanded(child: content(w)),
             ],
@@ -880,22 +885,15 @@ class _WidgetMenuState extends State<_WidgetMenu> {
       if (widget.window.argsSummary.isNotEmpty) widget.window.argsSummary,
     ].join('  ·  ');
     Widget label(String title) => Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(
-            title,
-            style: text.labelLarge?.copyWith(
-              color: scheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-              letterSpacing: .2,
-            ),
-          ),
+          padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+          child: EyebrowLabel(title),
         );
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        20,
+        AppSpacing.md + 4,
         4,
-        20,
-        16 + MediaQuery.paddingOf(context).bottom,
+        AppSpacing.md + 4,
+        AppSpacing.md + MediaQuery.paddingOf(context).bottom,
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxH),
@@ -903,39 +901,47 @@ class _WidgetMenuState extends State<_WidgetMenu> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                ToolAvatar(
-                  tool: widget.window.tool,
-                  name: widget.window.name,
-                  size: 40,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.window.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                      Text(
-                        subtitle.isEmpty ? 'Board widget' : subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.labelSmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
+            SoftCard(
+              showOrb: false,
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              child: Row(
+                children: [
+                  ToolAvatar(
+                    tool: widget.window.tool,
+                    name: widget.window.name,
+                    size: 40,
                   ),
-                ),
-              ],
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.window.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        Text(
+                          subtitle.isEmpty ? 'Board widget' : subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.labelSmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SoftMetaChip(
+                    label: _sizeLabels[_size] ?? _size,
+                    accent: scheme.primary,
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             Flexible(
               child: SingleChildScrollView(
                 child: Column(
@@ -958,14 +964,15 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.md),
                     label('Shape'),
                     SizedBox(
                       height: 76,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: DeskCompact.shapes.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 10),
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(width: AppSpacing.sm - 2),
                         itemBuilder: (context, i) {
                           final s = DeskCompact.shapes[i];
                           final selected = s == _shape;
@@ -980,20 +987,13 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                                 duration: const Duration(milliseconds: 180),
                                 curve: Curves.easeOutCubic,
                                 width: s == 'pill' ? 76 : 64,
-                                padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-                                decoration: BoxDecoration(
-                                  color: selected
-                                      ? scheme.primaryContainer
-                                          .withValues(alpha: .55)
-                                      : scheme.surfaceContainerHighest
-                                          .withValues(alpha: .55),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: selected
-                                        ? scheme.primary.withValues(alpha: .55)
-                                        : scheme.outlineVariant
-                                            .withValues(alpha: .35),
-                                  ),
+                                padding:
+                                    const EdgeInsets.fromLTRB(8, 8, 8, 6),
+                                decoration: softSurfaceDecoration(
+                                  scheme,
+                                  accent: scheme.primary,
+                                  radius: 14,
+                                  selected: selected,
                                 ),
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1035,7 +1035,7 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                 ),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: AppSpacing.sm + 2),
             Row(
               children: [
                 Expanded(
@@ -1048,7 +1048,7 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                     label: const Text('Open'),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: AppSpacing.sm - 2),
                 IconButton.filledTonal(
                   tooltip: widget.pinned ? 'Unpin' : 'Pin',
                   onPressed: () {
@@ -1059,7 +1059,7 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                     widget.pinned ? Icons.push_pin : Icons.push_pin_outlined,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.xs),
                 IconButton.filledTonal(
                   tooltip: 'Delete window',
                   style: IconButton.styleFrom(

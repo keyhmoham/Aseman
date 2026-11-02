@@ -65,6 +65,7 @@ type UsageCtx = metrics.UsageCtx
 
 const (
 	KindAsk      = metrics.KindAsk
+	KindChat     = metrics.KindChat
 	KindMention  = metrics.KindMention
 	KindMessage  = metrics.KindMessage
 	KindSandbox  = metrics.KindSandbox

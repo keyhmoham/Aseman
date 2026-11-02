@@ -18,10 +18,10 @@ class _ProfileStubClient extends AsemanApiClient {
       case 'account_get':
         return const ApiResponse(200, {
           'id': 'u-1',
-          'handle': 'macroalex',
+          'handle': 'alex',
           'kind': 'user',
           'status': 'active',
-          'profile': {'display_name': 'Alex Rivera', 'bio': 'Macro trader.'},
+          'profile': {'display_name': 'Alex Rivera', 'bio': 'Builds with people and agents.'},
           'followers': 12,
           'following': 3,
           'am_following': true,
@@ -37,7 +37,7 @@ class _ProfileStubClient extends AsemanApiClient {
           'users': [
             {
               'id': 'u-2',
-              'handle': 'algoquant',
+              'handle': 'jordan',
               'kind': 'user',
               'status': 'active'
             },
@@ -46,27 +46,27 @@ class _ProfileStubClient extends AsemanApiClient {
       case 'bot_profile':
         return const ApiResponse(200, {
           'id': 'b-1',
-          'name': 'SignalBot',
+          'name': 'AssistBot',
           'kind': 'agent',
           'vm_type': 'langchain',
           'status': 'running',
           'owner_id': 'u-1',
-          'owner_handle': 'macroalex',
-          'description': 'Live signals.',
+          'owner_handle': 'alex',
+          'description': 'Live room updates.',
           'resources': const {'cpu': 1, 'memory_mb': 512, 'disk_mb': 512},
           'cost': const {'per_minute': 2},
           'usage': const {'uptime_sec': 7200, 'tokens': 500},
           'entities': ['backend', 'spec'],
           'has_frontend': true,
-          'listing': const {'installs': 42, 'price': 0, 'category': 'signals'},
+          'listing': const {'installs': 42, 'price': 0, 'category': 'productivity'},
         });
       case 'space_profile':
         return const ApiResponse(200, {
           'id': 's-1',
-          'name': 'Atlas Capital',
+          'name': 'Atlas Collective',
           'description': 'Macro desk',
           'public': true,
-          'owner_handle': 'macroalex',
+          'owner_handle': 'alex',
           'member_count': 8,
           'agent_count': 2,
           'room_count': 3,
@@ -81,7 +81,7 @@ class _ProfileStubClient extends AsemanApiClient {
           'name': 'general',
           'topic': 'Markets',
           'space_id': 's-1',
-          'space_name': 'Atlas Capital',
+          'space_name': 'Atlas Collective',
           'member_count': 6,
           'agent_count': 1,
           'message_count': 50,
@@ -109,9 +109,9 @@ void main() {
     final service = AsemanService(client);
 
     final p = await service.fetchUserProfile('u-1');
-    expect(p.handle, 'macroalex');
+    expect(p.handle, 'alex');
     expect(p.displayName, 'Alex Rivera');
-    expect(p.bio, 'Macro trader.');
+    expect(p.bio, 'Builds with people and agents.');
     expect(p.followers, 12);
     expect(p.following, 3);
     expect(p.amFollowing, isTrue);
@@ -130,14 +130,14 @@ void main() {
   test('fetchFollowing parses account summaries', () async {
     final service = AsemanService(_ProfileStubClient());
     final list = await service.fetchFollowing(accountId: 'u-1');
-    expect(list.single.handle, 'algoquant');
+    expect(list.single.handle, 'jordan');
   });
 
   test('fetchBotProfile parses resources, usage, entities and listing',
       () async {
     final service = AsemanService(_ProfileStubClient());
     final b = await service.fetchBotProfile('b-1');
-    expect(b.name, 'SignalBot');
+    expect(b.name, 'AssistBot');
     expect(b.kind, 'agent');
     expect(b.vmType, 'langchain');
     expect(b.resources['cpu'], 1);
@@ -146,13 +146,13 @@ void main() {
     expect(b.entities, ['backend', 'spec']);
     expect(b.hasFrontend, isTrue);
     expect(b.installs, 42);
-    expect(b.ownerHandle, 'macroalex');
+    expect(b.ownerHandle, 'alex');
   });
 
   test('fetchSpaceProfile parses counts and rooms', () async {
     final service = AsemanService(_ProfileStubClient());
     final s = await service.fetchSpaceProfile('s-1');
-    expect(s.name, 'Atlas Capital');
+    expect(s.name, 'Atlas Collective');
     expect(s.memberCount, 8);
     expect(s.agentCount, 2);
     expect(s.rooms, ['general', 'research', 'risk']);
@@ -162,7 +162,7 @@ void main() {
   test('fetchRoomProfile parses activity and counts', () async {
     final service = AsemanService(_ProfileStubClient());
     final r = await service.fetchRoomProfile('r-1');
-    expect(r.spaceName, 'Atlas Capital');
+    expect(r.spaceName, 'Atlas Collective');
     expect(r.messageCount, 50);
     expect(r.recentMessages, hasLength(1));
     expect(r.amMember, isTrue);

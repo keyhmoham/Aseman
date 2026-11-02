@@ -1,6 +1,7 @@
 /// A workspace (space) as returned by the Aseman spaces namespace.
 import 'dart:convert';
 
+import 'agent_humanoid.dart';
 import 'uploaded_file.dart';
 
 class Workspace {
@@ -147,6 +148,13 @@ class RoomThread {
 }
 
 /// A room message as returned by spaces.message_list.
+/// One emoji reaction on a message (users.dm_react / reactions JSON).
+class MessageReaction {
+  const MessageReaction({required this.userId, required this.emoji});
+  final String userId;
+  final String emoji;
+}
+
 class RoomMessage {
   const RoomMessage({
     required this.id,
@@ -163,6 +171,8 @@ class RoomMessage {
     this.senderAvatar = '',
     this.replyTo = '',
     this.editedAt,
+    this.reactions = const [],
+    this.directId = '',
   });
 
   final String id;
@@ -198,7 +208,17 @@ class RoomMessage {
   /// When its sender last changed it (null when never).
   final DateTime? editedAt;
 
+  /// Emoji reactions when the payload carries them (users.dm_list).
+  final List<MessageReaction> reactions;
+
+  /// users.directs row id when known (distinct from the spaces room message
+  /// id). dm_react / dm_hide / dm_keep need this; empty for space-only rows.
+  final String directId;
+
   bool get edited => editedAt != null;
+
+  /// Id to use with users.dm_* actions when available.
+  String get usersDirectId => directId.isNotEmpty ? directId : '';
 
   /// Message pages can rotate at the same length or enrich an existing
   /// attachment. Compare visible content rather than only the oldest ID.
@@ -210,7 +230,10 @@ class RoomMessage {
       createdAt == other.createdAt &&
       replyTo == other.replyTo &&
       editedAt == other.editedAt &&
+      directId == other.directId &&
       _sameList(mentions, other.mentions, (a, b) => a == b) &&
+      _sameList(reactions, other.reactions,
+          (a, b) => a.userId == b.userId && a.emoji == b.emoji) &&
       _sameList(
           attachments,
           other.attachments,
@@ -247,7 +270,22 @@ class RoomMessage {
             json['sender'] is Map ? '${json['sender']['avatar'] ?? ''}' : '',
         replyTo: json['reply_to'] as String? ?? '',
         editedAt: DateTime.tryParse(json['edited_at'] as String? ?? ''),
+        reactions: _reactions(json['reactions']),
+        directId: json['direct_id'] as String? ??
+            (json['users_direct_id'] as String? ?? ''),
       );
+
+  static List<MessageReaction> _reactions(dynamic raw) {
+    if (raw is! List) return const [];
+    return [
+      for (final r in raw)
+        if (r is Map)
+          MessageReaction(
+            userId: '${r['user_id'] ?? ''}',
+            emoji: '${r['emoji'] ?? ''}',
+          ),
+    ].where((r) => r.emoji.isNotEmpty).toList();
+  }
 
   static String _senderName(dynamic sender) {
     if (sender is! Map) return '';
@@ -329,6 +367,7 @@ class ChatPeer {
     this.kind = 'user',
     this.botId = '',
     this.avatar = '',
+    this.humanoid,
   });
 
   final String id;
@@ -341,6 +380,9 @@ class ChatPeer {
   /// The bot record id when the peer is an agent (what mentions address).
   final String botId;
   final String avatar;
+
+  /// Platform-default humanoid for an agent peer (null for people).
+  final AgentHumanoid? humanoid;
 
   bool get isAgent => kind == 'bot';
   String get displayName => name.isNotEmpty
@@ -356,6 +398,7 @@ class ChatPeer {
         kind: '${json['kind'] ?? 'user'}',
         botId: '${json['bot_id'] ?? ''}',
         avatar: '${json['avatar'] ?? ''}',
+        humanoid: AgentHumanoid.tryParse(json['humanoid']),
       );
 }
 
@@ -409,7 +452,7 @@ class ChatSummary {
   /// When the caller pinned the chat to the top of their list (null: not pinned).
   final DateTime? pinnedAt;
 
-  /// The caller's Saved Messages: the direct chat with themselves.
+  /// The caller's personal Aseman chat: the direct chat with themselves.
   final bool saved;
 
   /// Whether the caller blocked the other side of a direct chat, and whether
@@ -427,8 +470,15 @@ class ChatSummary {
   /// managers may; in a direct chat nobody moderates the other side.
   bool get canModerate => !direct && canManage;
   String get key => '$spaceId/$roomId';
-  String get title => saved
-      ? 'Saved Messages'
+  /// Personal Aseman self-chat: flagged [saved], or a Direct whose space is
+  /// still named Aseman / legacy "Saved Messages".
+  bool get isAseman =>
+      saved ||
+      (direct &&
+          (spaceName == 'Aseman' || spaceName == 'Saved Messages'));
+
+  String get title => isAseman
+      ? 'Aseman'
       : direct
           ? (peer?.displayName ?? 'Direct chat')
           : roomName;
@@ -488,7 +538,10 @@ class ChatSummary {
       working: json['working'] == true,
       role: '${json['role'] ?? ''}',
       pinnedAt: DateTime.tryParse('${json['pinned_at'] ?? ''}')?.toLocal(),
-      saved: json['saved'] == true,
+      saved: json['saved'] == true ||
+          (json['kind'] == 'direct' &&
+              ('${json['space_name'] ?? ''}' == 'Aseman' ||
+                  '${json['space_name'] ?? ''}' == 'Saved Messages')),
       blocked: json['blocked'] == true,
       canSend: json['can_send'] != false,
       typing: json['typing'] == true,

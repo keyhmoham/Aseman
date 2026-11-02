@@ -18,6 +18,10 @@ class UploadedFile {
     this.createdAt,
     this.bytes,
     this.detail = '',
+    this.voice = false,
+    this.durationMs = 0,
+    this.waveform = const [],
+    this.kept = false,
   });
 
   final String id;
@@ -38,6 +42,16 @@ class UploadedFile {
   /// Where an attached folder is and how it is shared (empty for files).
   final String detail;
 
+  /// Voice note metadata from users.dm_file_upload / attachment JSON.
+  final bool voice;
+  final int durationMs;
+
+  /// Loudness bars 0–100 for voice notes (empty → seeded pseudo-wave).
+  final List<int> waveform;
+
+  /// Caller already kept this file in their own storage.
+  final bool kept;
+
   /// A folder of a project computer attached to a message (not a file).
   bool get isFolder => mime == 'inode/directory';
 
@@ -49,11 +63,12 @@ class UploadedFile {
   /// Voice notes are audio recordings (webm/ogg/mp4/m4a/aac/opus/wav) often
   /// named voice_*/voice-note*; treated as playable audio in-app.
   bool get isVoice =>
-      isPlayableAudio &&
-      (name.toLowerCase().contains('voice') ||
-          name.toLowerCase().contains('voice_note') ||
-          ['webm', 'ogg', 'opus', 'm4a', 'aac', 'wav', 'mp4', 'mp3', 'amr']
-              .contains(extension));
+      voice ||
+      (isPlayableAudio &&
+          (name.toLowerCase().contains('voice') ||
+              name.toLowerCase().contains('voice_note') ||
+              ['webm', 'ogg', 'opus', 'm4a', 'aac', 'wav', 'mp4', 'mp3', 'amr']
+                  .contains(extension)));
 
   String get extension {
     final i = name.lastIndexOf('.');
@@ -87,5 +102,17 @@ class UploadedFile {
                 json['access'] == 'write' ? 'read and write' : 'read only',
               ].where((x) => '${x ?? ''}'.isNotEmpty).join(' · ')
             : '',
+        voice: json['voice'] == true,
+        durationMs: (json['duration_ms'] as num?)?.toInt() ?? 0,
+        waveform: _waveform(json['waveform']),
+        kept: json['kept'] == true,
       );
+
+  static List<int> _waveform(dynamic raw) {
+    if (raw is! List) return const [];
+    return [
+      for (final b in raw)
+        if (b is num) b.toInt().clamp(0, 100),
+    ];
+  }
 }

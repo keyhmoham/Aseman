@@ -8,6 +8,7 @@ point at ``/etc/opencode``.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass
@@ -53,36 +54,55 @@ def permission() -> dict[str, str]:
     return out
 
 
-def write_config(path: Path, *, model: str, agents: list[AgentFile], mcp_env: dict[str, str]) -> None:
-    """Write opencode.json. ``model`` must be a free opencode/* id."""
-    if not model.startswith("opencode/") or "aseman" in model:
+def write_config(path: Path, *, model: str, agents: list[AgentFile], mcp_env: dict[str, str],
+                 with_mcp: bool = True) -> None:
+    """Write opencode.json. ``model`` must be a free opencode/* or opencode-go/* id.
+
+    Personal Aseman with a person-scoped gateway passes ``with_mcp=True`` so MCP space
+    tools match room turns. Plain answers without a gateway pass ``with_mcp=False``.
+    """
+    from .models import is_opencode_model
+    if not is_opencode_model(model):
         raise ValueError(f"refusing to pin OpenCode to {model}")
+    perms = permission()
+    if not with_mcp:
+        # No team / platform tools in a personal chat.
+        perms = {name: "deny" for name in (*DENY, *ALLOW)}
     doc = {
         "$schema": "https://opencode.ai/config.json",
         "model": model,
-        "permission": permission(),
+        "permission": perms,
         "agent": {
             agent.name: {
                 "description": agent.description,
                 "mode": agent.mode,
                 "model": agent.model,
                 "prompt": agent.prompt,
-                "permission": permission(),
+                "permission": perms,
             }
             for agent in agents
         },
-        "mcp": {
+    }
+    if with_mcp:
+        doc["mcp"] = {
             "aseman-engine": {
                 "type": "local",
                 "command": [sys.executable, "-m", "aseman_agents.opencode_engine.mcp_server"],
                 "environment": mcp_env,
             }
-        },
-    }
+        }
     # No provider block: the built-in OpenCode gateway is the only one.
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(doc, indent=2), encoding="utf-8")
-    agent_dir = Path(mcp_env["ASEMAN_ENGINE_PROCESS_HOME"]) / ".config" / "opencode" / "agents"
+    try:
+        # The turn token lives in the MCP environment; keep it private.
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+    process_home = mcp_env.get("ASEMAN_ENGINE_PROCESS_HOME") or ""
+    if not process_home:
+        raise ValueError("ASEMAN_ENGINE_PROCESS_HOME is required to write agent files")
+    agent_dir = Path(process_home) / ".config" / "opencode" / "agents"
     agent_dir.mkdir(parents=True, exist_ok=True)
     for agent in agents:
         _markdown(agent_dir / f"{agent.name}.md", agent)

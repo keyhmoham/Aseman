@@ -30,7 +30,7 @@ class _Owner extends FakeAsemanService {
             id: 'mine',
             ownerId: 'me',
             accountId: 'acct-mine',
-            name: 'Nova Quant',
+            name: 'Nova Helper',
             vmType: 'deepagents',
             status: 'running'),
       ];
@@ -41,13 +41,13 @@ class _Owner extends FakeAsemanService {
   @override
   Future<Map<String, dynamic>> fetchBotDetail(String botId) async => {
         'id': botId,
-        'name': 'Nova Quant',
+        'name': 'Nova Helper',
         'kind': 'agent',
         'vm_type': 'deepagents',
-        'description': 'Finds trades',
+        'description': 'Helps with research',
         'resources': {'cpu': 2, 'memory_mb': 1024, 'disk_mb': 1024},
         'agent': {
-          'description': 'Finds trades',
+          'description': 'Helps with research',
           'instructions': 'Scan the market.',
           'provider': 'p-openai',
           'model': 'gpt-5.4-mini',
@@ -107,7 +107,7 @@ void main() {
   testWidgets('an agent opens in its form as it is configured', (tester) async {
     await open(tester);
     expect(find.text('Edit agent'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'Nova Quant'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Nova Helper'), findsOneWidget);
     expect(find.widgetWithText(TextField, 'Scan the market.'), findsOneWidget);
     expect(find.text('gpt-5.4-mini'), findsWidgets);
     final research =
@@ -124,7 +124,7 @@ void main() {
     expect(service.edits, [
       {'bot': 'mine', 'instructions': 'Scan FX.'}
     ]);
-    expect(find.text('Nova Quant saved'), findsOneWidget);
+    expect(find.text('Nova Helper saved'), findsOneWidget);
   });
 
   testWidgets('saving an unchanged agent changes nothing', (tester) async {

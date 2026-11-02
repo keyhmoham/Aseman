@@ -90,6 +90,27 @@ type RoomForgetter interface {
 	ForgetRoom(ctx context.Context, spaceID, roomID string) error
 }
 
+// PersonalChat is a one-shot chat answered by the agentic engine without a
+// room turn (the personal Aseman brain). When the node engine is "opencode",
+// the runtime uses OpenCode's free-model gateway instead of platform LLMs.
+type PersonalChat struct {
+	System   string        `json:"system"`
+	Messages []ChatMessage `json:"messages"`
+	// ThreadID keeps OpenCode session continuity across voice turns for one person.
+	ThreadID string `json:"thread_id,omitempty"`
+	// PersonID is who the gateway session acts as (required when WithTools).
+	PersonID string `json:"person_id,omitempty"`
+	// WithTools mints a person-scoped turn gateway and enables OpenCode MCP
+	// space tools (same bridge room turns use).
+	WithTools bool `json:"with_tools,omitempty"`
+}
+
+// PersonalChatter is implemented by agent runtimes that can answer personal
+// Aseman chats under the node's agentic engine setting.
+type PersonalChatter interface {
+	PersonalChat(ctx context.Context, chat PersonalChat) (string, error)
+}
+
 // MaxAgentAskDepth bounds chains of agents asking agents.
 const MaxAgentAskDepth = 4
 

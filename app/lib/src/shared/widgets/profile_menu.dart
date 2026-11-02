@@ -5,39 +5,33 @@ import 'package:flutter/material.dart';
 import '../../app_dependencies.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_shape.dart';
+import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_surfaces.dart';
 import '../../features/account/presentation/account_panel.dart';
 import '../../features/admin/presentation/admin_screen.dart';
-import '../../features/agents/presentation/agents_screen.dart';
 import '../../features/developer/presentation/developer_console.dart';
-import '../../features/market/presentation/market_screen.dart';
+import '../../features/market/presentation/bots_store_screen.dart';
 import '../../features/messenger/presentation/messenger_panel.dart';
 import '../../features/settings/presentation/settings_screen.dart';
-import '../../features/talent/presentation/talent_requests_panel.dart';
 import 'avatar_editor.dart';
 import 'overlay_panels.dart';
-import 'user_profile_sheet.dart';
+import 'sky_ui.dart';
 
 enum ProfileAction {
-  profile,
-  myBots,
-  market,
+  store,
   wallet,
   messages,
-  talent,
   developer,
-  invitations,
-  usage,
-  account,
   admin,
   settings,
   logout,
 }
 
 /// Opens the profile menu anchored at the app-bar avatar. On desktop it is an
-/// animated floating popup; on mobile it is a standard bottom sheet. Both
-/// present the account header above a single-colour action grid. [showMessages]
-/// is for the workspace desk — the feed reaches chats through its own entry.
+/// animated floating popup; on phones outside Home it is a bottom sheet.
+/// Home's phone shell shows the same body as the third tab ("You") instead.
+/// [showMessages] is for the workspace desk — the feed reaches chats through
+/// its own entry.
 Future<void> showProfileMenu(
   BuildContext context,
   AppDependencies dependencies, {
@@ -54,7 +48,7 @@ Future<void> showProfileMenu(
         ),
         child: SingleChildScrollView(
           child: Builder(builder: (sheetContext) {
-            return _ProfileBody(
+            return ProfileMenuBody(
               dependencies: dependencies,
               showAdmin: dependencies.sessionController.isAdmin,
               showMessages: showMessages,
@@ -66,9 +60,7 @@ Future<void> showProfileMenu(
       isScrollControlled: true,
     );
   } else {
-    // A floating panel anchored under the avatar. (A popup menu would grey
-    // the whole body out, since it can only hold it as a disabled item.)
-    final width = math.min(372.0, MediaQuery.sizeOf(context).width - 32);
+    final width = math.min(392.0, MediaQuery.sizeOf(context).width - 32);
     action = await showGeneralDialog<ProfileAction>(
       context: context,
       barrierDismissible: true,
@@ -85,7 +77,7 @@ Future<void> showProfileMenu(
               child: SizedBox(
                 width: width,
                 child: SingleChildScrollView(
-                  child: _ProfileBody(
+                  child: ProfileMenuBody(
                     dependencies: dependencies,
                     showAdmin: false,
                     showMessages: showMessages,
@@ -101,48 +93,24 @@ Future<void> showProfileMenu(
           desktopFloatingPanelTransition(routeContext, animation, child),
     );
   }
-  if (action != null) await _dispatch(context, dependencies, action);
+  if (action != null) await dispatchProfileAction(context, dependencies, action);
 }
 
-Future<void> _dispatch(
+Future<void> dispatchProfileAction(
   BuildContext context,
   AppDependencies dependencies,
   ProfileAction action,
 ) async {
   switch (action) {
-    case ProfileAction.profile:
-      await showFloatingPanel(
-        context,
-        UserProfileSheet(dependencies: dependencies),
-        maxWidth: 760,
-      );
-    case ProfileAction.myBots:
-      await showFloatingPanel(
-        context,
-        AgentsScreen(dependencies: dependencies),
-        maxWidth: 900,
-      );
-    case ProfileAction.market:
-      await showFloatingPanel(
-        context,
-        MarketScreen(dependencies: dependencies),
-        maxWidth: 820,
-      );
+    case ProfileAction.store:
+      await showBotsStore(context, dependencies);
     case ProfileAction.wallet:
       await showAccountPanel(context, dependencies, AccountArea.wallet);
     case ProfileAction.messages:
       await showMessenger(context, dependencies);
-    case ProfileAction.talent:
-      await showTalentRequests(context, dependencies);
     case ProfileAction.developer:
       await Navigator.of(context).push(MaterialPageRoute<void>(
           builder: (_) => DeveloperConsole(service: dependencies.service)));
-    case ProfileAction.invitations:
-      await showAccountPanel(context, dependencies, AccountArea.invitations);
-    case ProfileAction.usage:
-      await showAccountPanel(context, dependencies, AccountArea.usage);
-    case ProfileAction.account:
-      await showAccountPanel(context, dependencies, AccountArea.account);
     case ProfileAction.admin:
       await Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (_) => AdminScreen(dependencies: dependencies),
@@ -155,10 +123,12 @@ Future<void> _dispatch(
   }
 }
 
-/// Shared body for the popup menu and the bottom sheet: header + unified
-/// action grid. [onSelect] closes the enclosing route with the chosen action.
-class _ProfileBody extends StatelessWidget {
-  const _ProfileBody({
+/// Profile menu body: identity masthead, two feature stages (Store + Wallet),
+/// then a quiet list for the rest — no raw icon grid. Settings lives only on
+/// the masthead icon (no duplicate list row).
+class ProfileMenuBody extends StatelessWidget {
+  const ProfileMenuBody({
+    super.key,
     required this.dependencies,
     required this.showAdmin,
     required this.showMessages,
@@ -170,111 +140,89 @@ class _ProfileBody extends StatelessWidget {
   final bool showMessages;
   final ValueChanged<ProfileAction> onSelect;
 
-  List<_GridItem> get _items => [
-        const _GridItem(ProfileAction.profile, Icons.person_outline_rounded,
-            'Profile'),
-        const _GridItem(
-            ProfileAction.myBots, Icons.smart_toy_outlined, 'My bots'),
-        const _GridItem(
-            ProfileAction.market, Icons.storefront_outlined, 'Market'),
-        const _GridItem(ProfileAction.wallet,
-            Icons.account_balance_wallet_outlined, 'Wallet'),
-        if (showMessages)
-          const _GridItem(
-              ProfileAction.messages, Icons.forum_outlined, 'Messages'),
-        const _GridItem(ProfileAction.invitations,
-            Icons.mark_email_unread_outlined, 'Invitations'),
-        const _GridItem(
-            ProfileAction.usage, Icons.query_stats_outlined, 'Usage'),
-        const _GridItem(ProfileAction.talent, Icons.work_outline_rounded,
-            'Hire talent'),
-        const _GridItem(
-            ProfileAction.developer, Icons.api_rounded, 'Developer API'),
-        const _GridItem(ProfileAction.account,
-            Icons.manage_accounts_outlined, 'Account'),
-        if (showAdmin)
-          const _GridItem(ProfileAction.admin,
-              Icons.admin_panel_settings_outlined, 'Admin console'),
-        const _GridItem(
-            ProfileAction.logout, Icons.logout_rounded, 'Log out',
-            danger: true),
-      ];
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final session = dependencies.sessionController.session;
     final handle = session?.handle ?? 'guest';
     final initials = handle.isEmpty ? '?' : handle[0].toUpperCase();
-    final items = _items;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.sm,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest.withValues(alpha: .55),
-              borderRadius: BorderRadius.circular(AppShape.inner + 2),
-            ),
-            child: Row(children: [
-              AvatarEditor(
-                service: dependencies.service,
-                avatar: dependencies.sessionController.avatar,
-                initials: initials,
-                filled: true,
-                radius: 24,
-                subject: 'profile picture',
-                enabled: session?.isLoggedIn ?? false,
-                onChanged: dependencies.sessionController.setAvatar,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('@$handle',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            color: scheme.onSurface)),
-                    const SizedBox(height: 2),
-                    Text(session?.accountId ?? '',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: scheme.onSurfaceVariant)),
-                  ],
-                ),
-              ),
-              IconButton.filledTonal(
-                tooltip: 'Settings',
-                onPressed: () => onSelect(ProfileAction.settings),
-                icon: const Icon(Icons.settings_outlined, size: 20),
-              ),
-            ]),
+          _IdentityMasthead(
+            dependencies: dependencies,
+            handle: handle,
+            initials: initials,
+            accountId: session?.accountId ?? '',
+            loggedIn: session?.isLoggedIn ?? false,
+            onOpenSettings: () => onSelect(ProfileAction.settings),
           ),
-          const SizedBox(height: 12),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: items.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              childAspectRatio: 1.05,
-            ),
-            itemBuilder: (context, i) => _GridTile(
-              item: items[i],
-              onSelect: onSelect,
-            ),
+          const SizedBox(height: AppSpacing.md),
+          FeatureStageCard(
+            title: 'Store',
+            eyebrow: 'Library · Market',
+            subtitle:
+                'Your bots and the marketplace, melted into one storefront',
+            icon: Icons.storefront_rounded,
+            accent: scheme.primary,
+            secondary: scheme.tertiary,
+            badges: const [
+              FeatureStageBadge(Icons.smart_toy_outlined, 'My bots'),
+              FeatureStageBadge(Icons.travel_explore_rounded, 'Market'),
+            ],
+            onTap: () => onSelect(ProfileAction.store),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          FeatureStageCard(
+            title: 'Wallet',
+            eyebrow: 'Balance · Usage',
+            subtitle: 'Credits, purchases and what each project spent',
+            icon: Icons.account_balance_wallet_rounded,
+            accent: AppColors.success,
+            secondary: scheme.primary,
+            badges: const [
+              FeatureStageBadge(Icons.payments_outlined, 'Credits'),
+              FeatureStageBadge(Icons.query_stats_rounded, 'Usage'),
+            ],
+            onTap: () => onSelect(ProfileAction.wallet),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          QuietList(
+            children: [
+              if (showMessages)
+                QuietTile(
+                  icon: Icons.forum_outlined,
+                  label: 'Messages',
+                  onTap: () => onSelect(ProfileAction.messages),
+                ),
+              QuietTile(
+                icon: Icons.api_rounded,
+                label: 'Developer API',
+                onTap: () => onSelect(ProfileAction.developer),
+              ),
+              if (showAdmin)
+                QuietTile(
+                  icon: Icons.admin_panel_settings_outlined,
+                  label: 'Admin console',
+                  onTap: () => onSelect(ProfileAction.admin),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          QuietTile(
+            icon: Icons.logout_rounded,
+            label: 'Log out',
+            danger: true,
+            onTap: () => onSelect(ProfileAction.logout),
           ),
         ],
       ),
@@ -282,53 +230,85 @@ class _ProfileBody extends StatelessWidget {
   }
 }
 
-class _GridItem {
-  const _GridItem(this.action, this.icon, this.label, {this.danger = false});
-  final ProfileAction action;
-  final IconData icon;
-  final String label;
-  final bool danger;
-}
+/// Soft identity card — avatar + handle, with Settings as the only chrome
+/// control (profile & account live inside Settings).
+class _IdentityMasthead extends StatelessWidget {
+  const _IdentityMasthead({
+    required this.dependencies,
+    required this.handle,
+    required this.initials,
+    required this.accountId,
+    required this.loggedIn,
+    required this.onOpenSettings,
+  });
 
-/// One tile of the unified action grid.
-class _GridTile extends StatelessWidget {
-  const _GridTile({required this.item, required this.onSelect});
-
-  final _GridItem item;
-  final ValueChanged<ProfileAction> onSelect;
+  final AppDependencies dependencies;
+  final String handle;
+  final String initials;
+  final String accountId;
+  final bool loggedIn;
+  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final accent =
-        item.danger ? AppColors.danger : scheme.onSurfaceVariant;
-    return Material(
-      color: scheme.surfaceContainerHighest.withValues(alpha: .55),
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.inner)),
-      child: InkWell(
-        onTap: () => onSelect(item.action),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(item.icon, size: 24, color: accent),
-              const SizedBox(height: 8),
-              Text(item.label,
-                  maxLines: 2,
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: item.danger
-                          ? AppColors.danger
-                          : scheme.onSurface)),
-            ],
+    return SoftCard(
+      accent: scheme.primary,
+      radius: AppShape.inner,
+      wash: true,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm + 2,
+        AppSpacing.sm,
+        AppSpacing.sm + 2,
+      ),
+      child: Row(
+        children: [
+          AvatarEditor(
+            service: dependencies.service,
+            avatar: dependencies.sessionController.avatar,
+            initials: initials,
+            filled: true,
+            radius: 24,
+            subject: 'profile picture',
+            enabled: loggedIn,
+            identity: accountId,
+            onChanged: dependencies.sessionController.setAvatar,
           ),
-        ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '@$handle',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -.2,
+                        color: scheme.onSurface,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  accountId.isEmpty ? 'Signed out' : accountId,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          IconButton.filledTonal(
+            tooltip: 'Settings',
+            onPressed: onOpenSettings,
+            icon: const Icon(Icons.settings_outlined, size: 20),
+          ),
+        ],
       ),
     );
   }

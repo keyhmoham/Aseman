@@ -109,6 +109,11 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('listed_amount', type: BackendFieldType.decimal),
     _FieldTemplate('listed_currency'),
   ],
+  'finance.credit_request': [
+    _FieldTemplate('reason',
+        type: BackendFieldType.multiline, required: true),
+    _FieldTemplate('amount_usd', type: BackendFieldType.decimal),
+  ],
   'finance.payout_request': [
     _FieldTemplate(
       'amount',

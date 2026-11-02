@@ -29,11 +29,15 @@ func (s *Service) BotProfile(ctx context.Context, botID identity.ID) (map[string
 		}
 	}
 	description, avatar := "", ""
+	var humanoid map[string]any
 	if rec.AccountID != (identity.ID{}) {
 		if m, merr := s.M.Get(ctx, rec.AccountID); merr == nil && m != nil {
 			if p, ok := m.Tree["profile"].(map[string]any); ok {
 				if d, ok := p["description"].(string); ok {
 					description = d
+				}
+				if h, ok := p["humanoid"].(map[string]any); ok {
+					humanoid = h
 				}
 			}
 			avatar = helper.TreeAvatar(m.Tree)
@@ -83,7 +87,7 @@ func (s *Service) BotProfile(ctx context.Context, botID identity.ID) (map[string
 			"type": string(l.Type),
 		}
 	}
-	return map[string]any{
+	out := map[string]any{
 		"id": rec.ID.String(), "account_id": rec.AccountID.String(),
 		"name": rec.Name, "kind": string(rec.Kind), "vm_type": string(rec.VMType),
 		"status": string(rec.Status), "image_ref": rec.ImageRef,
@@ -93,7 +97,11 @@ func (s *Service) BotProfile(ctx context.Context, botID identity.ID) (map[string
 		"has_frontend": rec.Frontend != "" || rec.FrontendRef != "",
 		"created_at":   rec.CreatedAt, "updated_at": rec.UpdatedAt,
 		"listing": listing,
-	}, nil
+	}
+	if humanoid != nil {
+		out["humanoid"] = humanoid
+	}
+	return out, nil
 }
 
 // botProfileAction implements bots.bot_profile.

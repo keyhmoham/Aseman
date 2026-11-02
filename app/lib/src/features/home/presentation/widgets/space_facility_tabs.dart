@@ -7,13 +7,14 @@ import '../../../../app_dependencies.dart';
 import '../../../../core/utils/context_extensions.dart';
 import '../../../../data/models/bot.dart';
 import '../../../../data/services/aseman_service.dart';
-import '../../../../shared/widgets/avatar.dart';
+import '../../../../shared/widgets/bot_avatar.dart';
+import '../../../../shared/widgets/overlay_panels.dart';
+import '../../../../shared/widgets/panel_empty.dart';
 import '../../../../shared/widgets/skeleton.dart';
 import '../../../computer/computer_view.dart';
 import '../../../computer/preview_view.dart';
 import '../../../computer/space_computer.dart';
 import '../../../search_feed/presentation/rich_post_content.dart';
-import '../../../../shared/widgets/overlay_panels.dart';
 
 // The space's own facilities, shown as tabs of the workspace's left panel:
 // its computer, the agent team's memory and the published previews. Files,
@@ -387,8 +388,10 @@ class _SpaceMemoryTabState extends State<SpaceMemoryTab> {
                 for (final a in widget.agents)
                   _WhoseChip(
                     label: a.name,
-                    initial: a.name.isEmpty ? '?' : a.name[0].toUpperCase(),
-                    avatar: a.avatar,
+                    bot: a,
+                    userId: widget.dependencies.sessionController
+                            .session?.accountId ??
+                        '',
                     selected: a.id == _agent,
                     onTap: () => _choose(a.id),
                   ),
@@ -554,21 +557,18 @@ class _WhoseChip extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.icon,
-    this.initial,
-    this.avatar = '',
+    this.bot,
+    this.userId = '',
   });
   final String label;
   final bool selected;
   final VoidCallback onTap;
   final IconData? icon;
-  final String? initial;
-
-  /// The agent's picture, shown over its initial.
-  final String avatar;
+  final Bot? bot;
+  final String userId;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return ChoiceChip(
       selected: selected,
       onSelected: (_) => onTap(),
@@ -577,19 +577,9 @@ class _WhoseChip extends StatelessWidget {
       labelStyle: const TextStyle(fontSize: 11.5),
       avatar: icon != null
           ? Icon(icon, size: 16)
-          : CircleAvatar(
-              backgroundColor: scheme.tertiaryContainer,
-              foregroundImage: Avatars.of(avatar),
-              onForegroundImageError: avatar.isEmpty ? null : (_, __) {},
-              child: Text(
-                initial ?? '',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  color: scheme.onTertiaryContainer,
-                ),
-              ),
-            ),
+          : bot != null
+              ? BotAvatar(bot: bot!, radius: 10, userId: userId)
+              : null,
       label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
     );
   }
@@ -726,7 +716,6 @@ class _SpacePreviewsTabState extends State<SpacePreviewsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final state = _computer.state;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -747,32 +736,14 @@ class _SpacePreviewsTabState extends State<SpacePreviewsTab> {
                   onRefresh: reload,
                   child: _previews.isEmpty
                       ? ListView(
-                          children: [
-                            const SizedBox(height: 40),
-                            Icon(
-                              Icons.web_asset_rounded,
-                              size: 40,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(height: 10),
-                            const Text(
-                              'No previews yet',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'When an app runs on the computer, publish its '
-                              'port to open it here. Agents publish what they '
-                              'build too.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: scheme.onSurfaceVariant,
-                              ),
+                          children: const [
+                            SizedBox(height: 24),
+                            PanelEmpty(
+                              compact: true,
+                              icon: Icons.web_asset_rounded,
+                              title: 'No previews yet',
+                              message:
+                                  'When an app runs on the computer, publish its port to open it here. Agents publish what they build too.',
                             ),
                           ],
                         )

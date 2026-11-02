@@ -72,7 +72,7 @@ void main() {
     // Token usage rollups render per room chat and per agent.
     expect(find.text('Per room chat'), findsOneWidget);
     expect(find.text('Per agent'), findsOneWidget);
-    expect(find.text('SignalBot'), findsOneWidget);
+    expect(find.text('AssistBot'), findsOneWidget);
     expect(find.text('aseman'), findsOneWidget);
 
     final dangerTop = tester.getTopLeft(find.text('Danger zone')).dy;
@@ -84,7 +84,7 @@ void main() {
         dangerTop, greaterThan(tester.getTopLeft(find.text('LLM usage')).dy));
 
     expect(find.text('general'), findsWidgets);
-    expect(find.text('Crypto Alpha'), findsWidgets);
+    expect(find.text('Build Lab'), findsWidgets);
     expect(find.text('@test'), findsOneWidget);
   });
 

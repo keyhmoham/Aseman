@@ -1,8 +1,9 @@
 """Stdio MCP bridge between an OpenCode process and the turn gateway.
 
-Tools are platform actions, a question for a person, a team write, and a
-swarm of headless ``opencode run`` processes. Model calls are not proxied:
-OpenCode talks to its own gateway. Programmer actions are refused.
+Space tools mirror Deep Agents' room tools (messaging, team, spaces.ask,
+recruit/hire). ``platform_call`` remains an escape hatch. Also: ask_user,
+assemble_team, run_swarm. Model calls are not proxied: OpenCode talks to its
+own free-model gateway. Programmer actions are refused.
 """
 
 from __future__ import annotations
@@ -17,18 +18,25 @@ from typing import Any
 from aseman_agents.gateway import Gateway, GatewayError
 
 from . import config as configlib
+from . import space_tools
 from .cli import RunResult, RunSpec, pause_path
 from .mapping import APP_AGENT, reject_programmer
 from .models import binary, role_for, select
 
 
+SUPPORTED_PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
+DEFAULT_PROTOCOL = "2024-11-05"
+
+def _space_tool_names() -> set[str]:
+    # Room tools always; personal tools when ASEMAN_ENGINE_MODE=personal.
+    return {t["name"] for t in space_tools.space_tool_defs()}
+
+
 def serve(gateway: Gateway) -> None:
     for message in _messages(sys.stdin.buffer):
-        if message.get("method") == "notifications/initialized" or "id" not in message:
-            if message.get("method") == "notifications/initialized":
-                continue
-            if "id" not in message:
-                continue
+        # Notifications (no id) need no reply; requests do.
+        if not isinstance(message, dict) or "id" not in message:
+            continue
         reply = _handle(gateway, message)
         if reply is not None:
             _write(reply)
@@ -38,8 +46,11 @@ def _handle(gateway: Gateway, message: dict[str, Any]) -> dict[str, Any] | None:
     method = message.get("method")
     mid = message.get("id")
     if method == "initialize":
+        params = message.get("params") or {}
+        requested = str(params.get("protocolVersion") or "")
+        version = requested if requested in SUPPORTED_PROTOCOLS else DEFAULT_PROTOCOL
         return {"jsonrpc": "2.0", "id": mid, "result": {
-            "protocolVersion": "2024-11-05",
+            "protocolVersion": version,
             "capabilities": {"tools": {}},
             "serverInfo": {"name": "aseman-opencode-engine", "version": "1.0.0"},
         }}
@@ -58,15 +69,8 @@ def _handle(gateway: Gateway, message: dict[str, Any]) -> dict[str, Any] | None:
 
 def _tools() -> list[dict[str, Any]]:
     obj = {"type": "object"}
-    return [
-        {"name": "platform_call", "description": (
-            "Call one Aseman platform action for this turn (messaging, sandbox, apps, "
-            "appui_publish, hire). Never an LLM call, and never opencode_run / appui_create."
-        ), "inputSchema": {**obj, "properties": {
-            "namespace": {"type": "string"},
-            "action": {"type": "string"},
-            "body": {"type": "object"},
-        }, "required": ["namespace", "action"]}},
+    # Prefer named space tools (same surface as Deep Agents). platform_call last.
+    return space_tools.space_tool_defs() + [
         {"name": "ask_user", "description": "Ask the person a question and pause until they answer.",
          "inputSchema": {**obj, "properties": {
              "question": {"type": "string"},
@@ -84,11 +88,23 @@ def _tools() -> list[dict[str, Any]]:
             "goal": {"type": "string"},
             "tasks": {"type": "array", "items": {"type": "object"}},
         }, "required": ["tasks"]}},
+        {"name": "platform_call", "description": (
+            "Escape hatch: call one Aseman platform action by namespace/action when no "
+            "named space tool fits. Prefer send_message, read_room, list_team, "
+            "list_space_tools, call_space_tool, recruit_agent, hire_agent. Never an LLM "
+            "call, and never opencode_run / appui_create."
+        ), "inputSchema": {**obj, "properties": {
+            "namespace": {"type": "string"},
+            "action": {"type": "string"},
+            "body": {"type": "object"},
+        }, "required": ["namespace", "action"]}},
     ]
 
 
 def _call(gateway: Gateway, name: str, args: dict[str, Any]) -> tuple[str, bool]:
     try:
+        if name in _space_tool_names():
+            return space_tools.call_space_tool(gateway, name, args if isinstance(args, dict) else {})
         if name == "platform_call":
             return _platform(gateway, args)
         if name == "ask_user":
@@ -127,6 +143,11 @@ def _ask(args: dict[str, Any]) -> str:
     path = pause_path(home, thread)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"thread": thread, "question": question, "options": options}), encoding="utf-8")
+    try:
+        # The question may be private to the thread; nobody else needs to read it.
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
     return "Paused until the person answers. Do not keep working."
 
 

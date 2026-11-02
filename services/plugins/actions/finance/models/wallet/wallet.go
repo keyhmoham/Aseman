@@ -3,6 +3,7 @@
 package wallet
 
 import (
+	"context"
 	"time"
 
 	"github.com/aseman/aseman/internal/plugins/identity"
@@ -10,15 +11,54 @@ import (
 
 // Wallet is the balance record of one account.
 type Wallet struct {
-	ID        identity.ID `db:"id" json:"id"`
-	OwnerID   identity.ID `db:"owner_id" json:"owner_id"`
-	Balance   int64       `db:"balance" json:"balance"` // spendable credits
-	Locked    int64       `db:"locked" json:"locked"`   // credits locked for VM pools
-	UpdatedAt time.Time   `db:"updated_at" json:"updated_at"`
+	ID      identity.ID `db:"id" json:"id"`
+	OwnerID identity.ID `db:"owner_id" json:"owner_id"`
+	Balance int64       `db:"balance" json:"balance"` // spendable credits
+	Locked  int64       `db:"locked" json:"locked"`   // credits locked for VM pools
+	// Restricted is the part of Balance that may be spent in the app but not on
+	// the Developer API, nor sent to anyone (complimentary credits an admin
+	// granted with that limit). Always between 0 and Balance.
+	Restricted int64     `db:"restricted" json:"restricted"`
+	UpdatedAt  time.Time `db:"updated_at" json:"updated_at"`
 }
 
 // Available returns the spendable balance.
 func (w *Wallet) Available() int64 { return w.Balance }
+
+// Unrestricted is the balance that can be spent on the Developer API or sent on.
+func (w *Wallet) Unrestricted() int64 { return max(0, w.Balance-w.Restricted) }
+
+// Surface limits what a charge may draw on.
+type surfaceKey struct{}
+
+// WithoutRestricted marks a charge as one that cannot use restricted credits
+// (the Developer API's).
+func WithoutRestricted(ctx context.Context) context.Context {
+	return context.WithValue(ctx, surfaceKey{}, true)
+}
+
+// ExcludesRestricted reports whether the charge cannot use restricted credits.
+func ExcludesRestricted(ctx context.Context) bool {
+	v, _ := ctx.Value(surfaceKey{}).(bool)
+	return v
+}
+
+// Spendable is what a charge in ctx may draw: everything, or only the unrestricted part.
+func (w *Wallet) Spendable(ctx context.Context) int64 {
+	if ExcludesRestricted(ctx) {
+		return w.Unrestricted()
+	}
+	return w.Balance
+}
+
+// Spent records a debit of amount: a charge that may use restricted credits
+// uses them first; one that may not leaves them alone.
+func (w *Wallet) Spent(ctx context.Context, amount int64) {
+	w.Balance -= amount
+	if !ExcludesRestricted(ctx) {
+		w.Restricted -= min(w.Restricted, amount)
+	}
+}
 
 // LockedTotal returns credits currently reserved in pools.
 func (w *Wallet) LockedTotal() int64 { return w.Locked }

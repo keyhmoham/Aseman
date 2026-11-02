@@ -157,7 +157,7 @@ func (a *Adapter) serveCall(ctx context.Context, req *network.Request) (*network
 		return errorResponse(errs.InvalidArgument("invalid call")), nil
 	}
 	name := in.Namespace + "." + in.Action
-	if !allowedActions[name] {
+	if !s.allows(name) {
 		return errorResponse(errs.Permission(name + " is not part of the agent platform API")), nil
 	}
 	if len(in.Body) == 0 {
@@ -166,12 +166,15 @@ func (a *Adapter) serveCall(ctx context.Context, req *network.Request) (*network
 	if err := s.checkRequestMode(name, in.Body); err != nil {
 		return errorResponse(err), nil
 	}
-	// An agent works inside the space of its turn.
-	var scope struct {
-		Space string `json:"space"`
-	}
-	if json.Unmarshal(in.Body, &scope) == nil && scope.Space != "" && scope.Space != s.spaceID {
-		return errorResponse(errs.Permission("an agent acts only inside the space of its turn")), nil
+	// A room agent works only inside the space of its turn. Personal Aseman
+	// acts as the person across their rooms (authorization still applies).
+	if !s.personal {
+		var scope struct {
+			Space string `json:"space"`
+		}
+		if json.Unmarshal(in.Body, &scope) == nil && scope.Space != "" && scope.Space != s.spaceID {
+			return errorResponse(errs.Permission("an agent acts only inside the space of its turn")), nil
+		}
 	}
 	// Every action is decided and recorded before it runs, and runs with the
 	// person's secrets put in; what comes back hides them again.
@@ -181,8 +184,12 @@ func (a *Adapter) serveCall(ctx context.Context, req *network.Request) (*network
 		return errorResponse(err), nil
 	}
 	endCall := vmm.Trace(s.base, "platform."+name, "")
+	kind := "bot"
+	if s.personal {
+		kind = "user"
+	}
 	resp, err := a.k.Actions().Dispatch(call, in.Namespace, in.Action,
-		&api.ActionRequest{Caller: api.Caller{ID: s.account, Kind: "bot"}, Body: body})
+		&api.ActionRequest{Caller: api.Caller{ID: s.account, Kind: kind}, Body: body})
 	endCall()
 	if err != nil {
 		gate.Finish(call, a.k, decision, "", err)

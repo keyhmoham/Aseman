@@ -64,7 +64,7 @@ func TestRecordListAndSummary(t *testing.T) {
 	room2 := mustID(t, "00000000000000010000000000000005")
 	bot2 := mustID(t, "00000000000000010000000000000006")
 	if err := s.Record(ctx, &usage.Usage{SpaceID: space, RoomID: room2, BotID: bot2,
-		BotName: "SignalBot", ActorID: actor, RequestID: "req-2", Kind: usage.KindMention,
+		BotName: "AssistBot", ActorID: actor, RequestID: "req-2", Kind: usage.KindMention,
 		TokensIn: 40, TokensOut: 10, Cost: 1}); err != nil {
 		t.Fatal(err)
 	}

@@ -21,18 +21,31 @@ const (
 // MintExpiring is Mint for a grant that lapses at expiresAt: whatever part of
 // it is still unspent then is taken back by ExpireGrants.
 func (s *Service) MintExpiring(ctx context.Context, operator, target identity.ID, amount int64, desc string, expiresAt time.Time) (*wallet.LedgerEntry, error) {
-	if !expiresAt.After(time.Now()) {
+	return s.MintGrant(ctx, operator, target, amount, desc, expiresAt, false)
+}
+
+// MintGrant adds complimentary credits: lapsing at expiresAt (zero = never) and,
+// when restricted, not usable on the Developer API nor sendable to others.
+func (s *Service) MintGrant(ctx context.Context, operator, target identity.ID, amount int64, desc string, expiresAt time.Time, restricted bool) (*wallet.LedgerEntry, error) {
+	if expiresAt.IsZero() && !restricted {
+		return s.mint(ctx, operator, target, amount, desc, false)
+	}
+	if !expiresAt.IsZero() && !expiresAt.After(time.Now()) {
 		return nil, errs.InvalidArgument("expiry must be in the future")
 	}
-	entry, err := s.Mint(ctx, operator, target, amount, desc)
+	entry, err := s.mint(ctx, operator, target, amount, desc, restricted)
 	if err != nil {
 		return nil, err
 	}
 	id := s.recordID("grant/" + entry.ID.String())
 	now := time.Now().UTC()
+	data := map[string]any{"ledger_seq": entry.Seq, "restricted": restricted}
+	if !expiresAt.IsZero() { // a grant without an expiry never lapses; its record says what it is limited to
+		data["expires_at"] = expiresAt.UTC().Format(time.RFC3339)
+	}
 	err = s.R.DB.Create(ctx, "financial_records", id, &models.Record{
 		ID: id, Owner: target.String(), Kind: grantKind, Amount: amount, Status: grantActive,
-		Data:      map[string]any{"expires_at": expiresAt.UTC().Format(time.RFC3339), "ledger_seq": entry.Seq},
+		Data:      data,
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
@@ -117,6 +130,11 @@ func (s *Service) expireGrant(ctx context.Context, g models.Record) error {
 			return e
 		}
 		take := rec.Amount - spent
+		restricted, _ := rec.Data["restricted"].(bool)
+		if restricted {
+			// What is left of the restricted credits is tracked on the wallet.
+			take = min(rec.Amount, bal.Restricted)
+		}
 		if take > bal.Balance {
 			take = bal.Balance
 		}
@@ -125,6 +143,7 @@ func (s *Service) expireGrant(ctx context.Context, g models.Record) error {
 		}
 		if take > 0 {
 			bal.Balance -= take
+			bal.Restricted = max(0, min(bal.Restricted-boolToInt(restricted)*take, bal.Balance))
 			bal.UpdatedAt = time.Now().UTC()
 			if e := tx.Update(ctx, "wallets", w.ID.String(), &bal); e != nil {
 				return e
@@ -175,4 +194,11 @@ func withGrantExpiry(tx map[string]any, desc string, g models.Record) {
 	tx["expires_at"] = at.UTC().Format(time.RFC3339)
 	tx["base_description"] = base
 	tx["description"] = base + " · " + note
+}
+
+func boolToInt(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
 }

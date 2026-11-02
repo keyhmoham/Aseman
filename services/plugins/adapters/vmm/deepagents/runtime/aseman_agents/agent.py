@@ -151,6 +151,15 @@ class Runner:
             self._opencode_engine = engine
         return engine
 
+    async def chat(self, *, system: str, messages: list, thread_id: str = "aseman-chat",
+                   with_tools: bool = False, gateway: str = "", token: str = "",
+                   account_id: str = "") -> tuple[str, str]:
+        """Personal Aseman chat through the OpenCode agentic engine."""
+        return await self._opencode().chat(
+            system=system, messages=messages, thread_id=thread_id,
+            with_tools=with_tools, gateway=gateway, token=token, account_id=account_id,
+        )
+
     # --- entry points -------------------------------------------------------
 
     async def prompt(self, req: dict[str, Any]) -> Outcome:

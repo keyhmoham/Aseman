@@ -125,3 +125,17 @@ func RequireNodeAdmin(ctx context.Context, r *repo.Repo, req *api.ActionRequest,
 	}
 	return nil
 }
+
+type fastKey struct{}
+
+// WithFast marks a model call as one a person waits on, spoken to (a live voice chat): the model may think
+// less (a lower reasoning effort, where the agent already sets one) so the first words come sooner.
+func WithFast(ctx context.Context) context.Context {
+	return context.WithValue(ctx, fastKey{}, true)
+}
+
+// Fast reports whether WithFast marked the call.
+func Fast(ctx context.Context) bool {
+	v, _ := ctx.Value(fastKey{}).(bool)
+	return v
+}

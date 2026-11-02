@@ -70,23 +70,20 @@ func (s *Service) substituteSecrets(ctx context.Context, req gate.Request) (json
 	return args, command, values, nil
 }
 
-// secretValue opens the project's secret by name, the actor's own first.
+// secretValue opens the prompting actor's own secret by name in the project.
+// Another member's secret of the same name is never used: in a shared space,
+// whoever prompts the agent only unlocks their own vault entries.
 func (s *Service) secretValue(ctx context.Context, space, actor, name string) (string, error) {
 	var rows []gov.VaultSecret
-	if err := s.R.List(ctx, "vault_secrets", database.Filter{Equal: map[string]any{"space_id": space, "name": name},
-		OrderBy: "updated_at", Limit: 20}, &rows); err != nil {
+	if err := s.R.List(ctx, "vault_secrets", database.Filter{Equal: map[string]any{
+		"space_id": space, "name": name, "owner_id": actor,
+	}, OrderBy: "updated_at", Limit: 1}, &rows); err != nil {
 		return "", err
 	}
 	if len(rows) == 0 {
-		return "", errs.NotFound("no secret named " + name + " in this project; ask the person for it with secret_request")
+		return "", errs.NotFound("no secret named " + name + " of yours in this project; ask the person for it with secret_request")
 	}
 	pick := rows[0]
-	for _, r := range rows {
-		if r.OwnerID == actor {
-			pick = r
-			break
-		}
-	}
 	plain, err := crypto.OpenSecret(pick.Sealed, s.K.Env()["node_private_key"], sealContext(&pick))
 	if err != nil {
 		return "", errs.Wrap(errs.CodeInternal, err, "open secret")

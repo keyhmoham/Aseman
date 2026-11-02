@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'app_dependencies.dart';
 import 'core/settings/app_settings.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/halo_ring_cache.dart';
 import 'features/auth/presentation/auth_screen.dart';
+import 'features/calls/call_overlay.dart';
 import 'features/navigation/presentation/app_shell.dart';
 
 class AsemanApp extends StatefulWidget {
@@ -35,7 +37,10 @@ class _AsemanAppState extends State<AsemanApp> {
 
   Future<void> _restoreTheme() async {
     try {
-      await settings.restore();
+      await Future.wait([
+        settings.restore(),
+        HaloRingCache.restore(),
+      ]);
     } finally {
       WidgetsBinding.instance.allowFirstFrame();
     }
@@ -61,7 +66,10 @@ class _AsemanAppState extends State<AsemanApp> {
         themeMode: settings.themeMode,
         home: AuthGate(
           dependencies: widget.dependencies,
-          child: AppShell(dependencies: widget.dependencies),
+          child: CallOverlay(
+            dependencies: widget.dependencies,
+            child: AppShell(dependencies: widget.dependencies),
+          ),
         ),
       ),
     ),

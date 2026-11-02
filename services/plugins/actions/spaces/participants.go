@@ -49,6 +49,9 @@ func (p *participants) get(ctx context.Context, id identity.ID) map[string]any {
 				} else if out["display_name"] == acc.Handle {
 					out["display_name"] = helper.BotName(profile, acc.Handle)
 				}
+				if h, ok := profile["humanoid"].(map[string]any); ok && acc.Kind == account.KindBot {
+					out["humanoid"] = h
+				}
 			}
 			if avatar := helper.TreeAvatar(rec.Tree); avatar != "" {
 				out["avatar"] = avatar

@@ -5,34 +5,80 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/auth/federated_sign_in.dart';
 import '../../../core/network/session_controller.dart';
+import '../../../core/theme/app_shape.dart';
 import '../../../shared/widgets/app_brand.dart';
-import '../../../shared/widgets/glow_painter.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/skeleton.dart';
+import '../../../shared/widgets/sky_ui.dart';
+import '../../brain/brain_avatar.dart';
+import '../../marketing/marketing_links.dart';
 import 'google_sign_in_button.dart';
 import 'sso_sign_in.dart';
-import '../../../shared/widgets/overlay_panels.dart';
 
 /// Gates the whole app behind authentication. Shows the auth screen until a
 /// session exists, then the main shell.
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key, required this.dependencies, required this.child});
 
   final AppDependencies dependencies;
   final Widget child;
 
   @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  @override
+  void initState() {
+    super.initState();
+    widget.dependencies.sessionController.addListener(_syncViewer);
+    _syncViewer();
+  }
+
+  @override
+  void didUpdateWidget(covariant AuthGate old) {
+    super.didUpdateWidget(old);
+    if (old.dependencies.sessionController !=
+        widget.dependencies.sessionController) {
+      old.dependencies.sessionController.removeListener(_syncViewer);
+      widget.dependencies.sessionController.addListener(_syncViewer);
+      _syncViewer();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.dependencies.sessionController.removeListener(_syncViewer);
+    super.dispose();
+  }
+
+  void _syncViewer() {
+    final session = widget.dependencies.sessionController;
+    if (!session.isReady) return;
+    if (!session.isLoggedIn) {
+      BrainAvatarPrefs.viewerId = '';
+      BrainAvatarPrefs.clearLive();
+      return;
+    }
+    final accountId = session.session?.accountId ?? '';
+    if (BrainAvatarPrefs.viewerId != accountId) {
+      BrainAvatarPrefs.viewerId = accountId;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: dependencies.sessionController,
+      listenable: widget.dependencies.sessionController,
       builder: (context, _) {
-        if (!dependencies.sessionController.isReady) {
+        if (!widget.dependencies.sessionController.isReady) {
           return const Scaffold(body: SafeArea(child: SkeletonPage()));
         }
-        if (!dependencies.sessionController.isLoggedIn) {
-          return AuthScreen(dependencies: dependencies);
+        if (!widget.dependencies.sessionController.isLoggedIn) {
+          return AuthScreen(dependencies: widget.dependencies);
         }
-        return child;
+        return widget.child;
       },
     );
   }
@@ -291,13 +337,10 @@ class _AuthScreenState extends State<AuthScreen>
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      body: Stack(children: [
-        Positioned.fill(
-            child: CustomPaint(
-                painter: GlowPainter(scheme.primary, scheme.tertiary))),
-        SafeArea(
+      backgroundColor: Colors.transparent,
+      body: SkyBackdrop(
+        child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
@@ -314,7 +357,7 @@ class _AuthScreenState extends State<AuthScreen>
                         'Aseman',
                         style:
                             Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w900,
                                   letterSpacing: -0.5,
                                 ),
                       ),
@@ -326,7 +369,9 @@ class _AuthScreenState extends State<AuthScreen>
                                 Theme.of(context).colorScheme.onSurfaceVariant),
                       ),
                       const SizedBox(height: 28),
-                      _panel(context, scheme),
+                      _panel(context),
+                      const SizedBox(height: 12),
+                      const MarketingLinkRow(),
                       const SizedBox(height: 16),
                       if (session.isBusy)
                         const SizedBox(
@@ -341,18 +386,15 @@ class _AuthScreenState extends State<AuthScreen>
             ),
           ),
         ),
-      ]),
+      ),
     );
   }
 
-  Widget _panel(BuildContext context, ColorScheme scheme) {
-    return Container(
+  Widget _panel(BuildContext context) {
+    return SoftCard(
+      radius: AppShape.card,
+      elevated: true,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         SegmentedTabBar(
           controller: tabs,

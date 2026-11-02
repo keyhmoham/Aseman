@@ -166,7 +166,7 @@ func (s *Service) updates(ctx context.Context, req *api.ActionRequest) (*api.Act
 	}
 	return helper.JSON(map[string]any{
 		"rooms":    visibleRooms,
-		"messages": s.enrichMessages(ctx, visible),
+		"messages": s.enrichMessages(ctx, visible, req.Caller.ID),
 		"turns":    work,
 		"activity": activity,
 		// How far the caller has read, on any device (zero when never).

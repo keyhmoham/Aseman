@@ -7,9 +7,10 @@ import '../../search_feed/presentation/rich_post_content.dart';
 import '../../search_feed/presentation/search_feed_screen.dart';
 
 /// Root shell: the search feed (Pulse) is the landing page after login.
-/// Picking a workspace from the app bar opens that workspace's home desk;
-/// the profile avatar in the app bar opens the profile menu (profile, my
-/// bots, market, wallet, settings).
+/// Picking a workspace from the app bar pushes that workspace's home desk
+/// onto the navigator; the workspace Home control pops back to this feed
+/// (never pushes or replaces Home). On phones the profile lives in Home's
+/// You tab; on wide screens the app-bar avatar opens the profile menu.
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.dependencies});
   final AppDependencies dependencies;
@@ -23,7 +24,6 @@ class _AppShellState extends State<AppShell> {
   /// Room to select when the workspace page opens, from the home chats list.
   String? _initialRoom;
   String? _initialRoomId;
-  int _page = 0; // 0 = search feed, 1 = workspace desk
 
   /// Phone home tab. Chats on first land and when leaving a workspace.
   HomeMobileTab _mobileTab = HomeMobileTab.chats;
@@ -62,35 +62,77 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _openWorkspace(String name) {
-    setState(() {
-      _workspace = name;
-      _initialRoom = null;
-      _initialRoomId = null;
-      _page = 1;
-    });
+    _workspace = name;
+    _initialRoom = null;
+    _initialRoomId = null;
+    _pushWorkspace();
   }
 
   /// Opens [name] with the room from the home chats list already selected.
   void _openWorkspaceRoom(String name, String roomName, String roomId) {
-    setState(() {
-      _workspace = name;
-      _initialRoom = roomName;
-      _initialRoomId = roomId;
-      _page = 1;
-    });
+    _workspace = name;
+    _initialRoom = roomName;
+    _initialRoomId = roomId;
+    _pushWorkspace();
   }
 
-  void _openFeed() => setState(() {
-    _page = 0;
-    // The workspace Home button returns to the chats tab.
-    _mobileTab = HomeMobileTab.chats;
-  });
+  /// Pushes the workspace desk above Home. Zero-duration route so each page
+  /// still owns its own panel motion (same as the old page swap).
+  void _pushWorkspace() {
+    final navigator = Navigator.of(context);
+    // Avoid stacking a second desk if Home somehow fires again while one is
+    // already open; pop back to Home first, then push the requested desk.
+    if (navigator.canPop()) {
+      navigator.popUntil((route) => route.isFirst);
+    }
+    navigator
+        .push<void>(
+      PageRouteBuilder<void>(
+        settings: const RouteSettings(name: 'workspace'),
+        opaque: true,
+        // Drop Home's subtree while a workspace covers it so only the desk is
+        // mounted (same as the old page swap); popping rebuilds Home.
+        maintainState: false,
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            WorkspaceScreen(
+          key: const ValueKey('workspace-desk'),
+          dependencies: widget.dependencies,
+          initialWorkspace: _workspace,
+          initialRoom: _initialRoom,
+          initialRoomId: _initialRoomId,
+          onBackToFeed: _popToHome,
+          onWorkspaceChanged: _setWorkspace,
+        ),
+      ),
+    )
+        .whenComplete(_onReturnedHome);
+  }
+
+  /// After any pop back to Home (Home control or system back), land on chats.
+  void _onReturnedHome() {
+    if (!mounted) return;
+    setState(() => _mobileTab = HomeMobileTab.chats);
+  }
+
+  /// Workspace Home: pop every route above the feed. Home stays the first
+  /// route — never push or replace it.
+  void _popToHome() {
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.popUntil((route) => route.isFirst);
+    }
+  }
 
   void _setWorkspace(String name) => setState(() => _workspace = name);
 
   @override
   Widget build(BuildContext context) {
-    final feed = SearchFeedScreen(
+    // Home is always the shell body (navigator root). Workspaces are pushed
+    // on top and popped away; this feed is never replaced.
+    return SearchFeedScreen(
       key: ValueKey('search-feed-$_workspace-$_mobileTab'),
       dependencies: widget.dependencies,
       workspace: _workspace,
@@ -98,17 +140,5 @@ class _AppShellState extends State<AppShell> {
       onOpenSpaceRoom: _openWorkspaceRoom,
       initialMobileTab: _mobileTab,
     );
-    final desk = WorkspaceScreen(
-      key: const ValueKey('workspace-desk'),
-      dependencies: widget.dependencies,
-      initialWorkspace: _workspace,
-      initialRoom: _initialRoom,
-      initialRoomId: _initialRoomId,
-      onBackToFeed: _openFeed,
-      onWorkspaceChanged: _setWorkspace,
-    );
-    // Each page moves its own panels in and out, like a workspace switch,
-    // so the shell swaps them without a transition of its own.
-    return _page == 0 ? feed : desk;
   }
 }

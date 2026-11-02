@@ -3,15 +3,20 @@ import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar_editor.dart';
+import '../../../shared/widgets/bot_avatar.dart';
+import '../../../shared/widgets/fleet_metric.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import '../../../shared/widgets/panel_empty.dart';
 import '../../../shared/widgets/panel_header.dart';
+import '../../../shared/widgets/panel_scaffold.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/skeleton.dart';
-import '../../../shared/widgets/status_tag.dart';
+import '../../../shared/widgets/sky_ui.dart';
 import '../../tools/data/tools_api.dart';
 import '../../tools/domain/tool_models.dart';
 import '../../tools/presentation/app_frontend_screen.dart';
@@ -23,10 +28,18 @@ import 'agent_create_form.dart';
 /// shows the agents and apps the signed-in user created, and
 /// keeps them editable after they were created. Follows the app's panel
 /// convention: icon + title header, TabBar, and tabbed content.
+///
+/// When [embedded] is true the outer panel chrome is omitted so a parent
+/// (the Store hub) can host Library and Discover in one surface.
 class AgentsScreen extends StatefulWidget {
-  const AgentsScreen({super.key, required this.dependencies});
+  const AgentsScreen({
+    super.key,
+    required this.dependencies,
+    this.embedded = false,
+  });
 
   final AppDependencies dependencies;
+  final bool embedded;
 
   @override
   State<AgentsScreen> createState() => _AgentsScreenState();
@@ -311,87 +324,105 @@ class _AgentsScreenState extends State<AgentsScreen> {
     );
   }
 
+  List<Widget> get _createActions => [
+        AppPopupMenuButton<String>(
+          tooltip: 'Create',
+          onSelected: _create,
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+                value: 'agent',
+                child: QuietTile(
+                    icon: Icons.smart_toy_outlined,
+                    label: 'Agent',
+                    subtitle: 'An assistant with its own model',
+                    trailing: SizedBox.shrink())),
+            PopupMenuItem(
+                value: 'tool',
+                child: QuietTile(
+                    icon: Icons.apps_outlined,
+                    label: 'App',
+                    subtitle:
+                        'A backend and the frontend it is used through',
+                    trailing: SizedBox.shrink())),
+          ],
+          child: IgnorePointer(
+            child: FilledButton.icon(
+              onPressed: () {},
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Create'),
+            ),
+          ),
+        ),
+        IconButton(
+            tooltip: 'Refresh',
+            onPressed: _load,
+            icon: const Icon(Icons.refresh_rounded)),
+      ];
+
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 560;
+    final body = _loading
+        ? const SkeletonList(item: SkeletonCard(mediaHeight: 0), spacing: 10)
+        : _error != null
+            ? Center(child: Text(_error!))
+            : TabBarView(children: [
+                _AgentsTab(
+                  service: widget.dependencies.service,
+                  onAvatar: _setAvatar,
+                  agents: _agents,
+                  onChat: _chat,
+                  onEdit: _editAgent,
+                  onToggle: (b) =>
+                      _lifecycle(b, b.status == 'running' ? 'stop' : 'start'),
+                ),
+                _ToolsTab(
+                    service: widget.dependencies.service,
+                    onAvatar: _setAvatar,
+                    tools: _tools,
+                    onOpen: _openApp,
+                    onEdit: _editTool),
+              ]);
     return DefaultTabController(
       length: 2,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-            compact ? 16 : 26, compact ? 16 : 22, compact ? 16 : 26, 0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          PanelHeader(
-            icon: Icons.smart_toy_outlined,
-            title: 'My bots',
-            subtitle: 'Agents & apps you created across the network',
-            onClose: () => Navigator.pop(context),
-            actions: [
-              AppPopupMenuButton<String>(
-                tooltip: 'Create',
-                onSelected: _create,
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                      value: 'agent',
-                      child: ListTile(
-                          leading: Icon(Icons.smart_toy_outlined),
-                          title: Text('Agent'),
-                          subtitle: Text('An assistant with its own model'))),
-                  PopupMenuItem(
-                      value: 'tool',
-                      child: ListTile(
-                          leading: Icon(Icons.apps_outlined),
-                          title: Text('App'),
-                          subtitle: Text(
-                              'A backend and the frontend it is used through'))),
-                ],
-                child: IgnorePointer(
-                  child: FilledButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.add_rounded, size: 18),
-                    label: const Text('Create'),
-                  ),
+      child: widget.embedded
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: SegmentedTabBar(
+                        compact: true,
+                        alignment: Alignment.centerLeft,
+                        labels: ['Agents', 'Apps'],
+                        icons: [Icons.smart_toy_outlined, Icons.apps_outlined],
+                      ),
+                    ),
+                    ..._createActions,
+                  ],
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                Expanded(child: body),
+              ],
+            )
+          : PanelScaffold(
+              compact: compact,
+              header: PanelHeader(
+                icon: Icons.smart_toy_outlined,
+                title: 'My bots',
+                subtitle: 'Your agents and apps — create, run, refine',
+                onClose: () => Navigator.pop(context),
+                actions: _createActions,
               ),
-              IconButton(
-                  tooltip: 'Refresh',
-                  onPressed: _load,
-                  icon: const Icon(Icons.refresh_rounded)),
-            ],
-          ),
-          const SizedBox(height: 14),
-          SegmentedTabBar(
-            compact: compact,
-            alignment: Alignment.centerLeft,
-            labels: const ['Agents', 'Apps'],
-            icons: const [Icons.smart_toy_outlined, Icons.apps_outlined],
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: _loading
-                ? const SkeletonList(
-                    item: SkeletonCard(mediaHeight: 0), spacing: 10)
-                : _error != null
-                    ? Center(child: Text(_error!))
-                    : TabBarView(children: [
-                        _AgentsTab(
-                          service: widget.dependencies.service,
-                          onAvatar: _setAvatar,
-                          agents: _agents,
-                          onChat: _chat,
-                          onEdit: _editAgent,
-                          onToggle: (b) => _lifecycle(
-                              b, b.status == 'running' ? 'stop' : 'start'),
-                        ),
-                        _ToolsTab(
-                            service: widget.dependencies.service,
-                            onAvatar: _setAvatar,
-                            tools: _tools,
-                            onOpen: _openApp,
-                            onEdit: _editTool),
-                      ]),
-          ),
-        ]),
-      ),
+              toolbar: SegmentedTabBar(
+                compact: compact,
+                alignment: Alignment.centerLeft,
+                labels: const ['Agents', 'Apps'],
+                icons: const [Icons.smart_toy_outlined, Icons.apps_outlined],
+              ),
+              body: body,
+            ),
     );
   }
 }
@@ -416,30 +447,41 @@ class _AgentsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (agents.isEmpty) {
-      return const _PanelEmpty(
-          icon: Icons.smart_toy_outlined,
-          message: 'No agents yet — create one.');
+      return const PanelEmpty(
+        icon: Icons.smart_toy_outlined,
+        title: 'No agents yet',
+        message: 'Spin up an assistant with its own model and skills.',
+      );
     }
+    final running = agents.where((b) => b.status == 'running').length;
     return ListView(
       padding: const EdgeInsets.only(top: 4, bottom: 18),
       children: [
-        _SummaryRow(
-          cells: [
-            _Summary('Total', '${agents.length}'),
-            _Summary('Running',
-                '${agents.where((b) => b.status == 'running').length}'),
-          ],
-        ),
-        const SizedBox(height: 12),
-        ...agents.map((b) => _AgentCard(
-              key: ValueKey(b.id),
+        FleetMetricStrip(cells: [
+          FleetMetric(
+              label: 'Total',
+              value: '${agents.length}',
+              color: AppColors.primary),
+          FleetMetric(
+              label: 'Running',
+              value: '$running',
+              color: AppColors.success,
+              live: running > 0),
+        ]),
+        const SizedBox(height: 14),
+        for (var i = 0; i < agents.length; i++)
+          StaggerIn(
+            index: i,
+            child: _AgentCard(
+              key: ValueKey(agents[i].id),
               service: service,
-              onAvatar: (id) => onAvatar(b, id),
-              bot: b,
-              onChat: () => onChat(b),
-              onEdit: () => onEdit(b),
-              onToggle: () => onToggle(b),
-            )),
+              onAvatar: (id) => onAvatar(agents[i], id),
+              bot: agents[i],
+              onChat: () => onChat(agents[i]),
+              onEdit: () => onEdit(agents[i]),
+              onToggle: () => onToggle(agents[i]),
+            ),
+          ),
       ],
     );
   }
@@ -462,8 +504,11 @@ class _ToolsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (tools.isEmpty) {
-      return const _PanelEmpty(
-          icon: Icons.widgets_outlined, message: 'No apps yet — create one.');
+      return const PanelEmpty(
+        icon: Icons.apps_outlined,
+        title: 'No apps yet',
+        message: 'Build a backend and the frontend people use it through.',
+      );
     }
     return LayoutBuilder(builder: (context, box) {
       final columns = box.maxWidth > 900
@@ -473,31 +518,43 @@ class _ToolsTab extends StatelessWidget {
               : box.maxWidth > 380
                   ? 2
                   : 1;
-      final width = (box.maxWidth - (columns - 1) * 10) / columns;
+      final gap = 12.0;
+      final width = (box.maxWidth - (columns - 1) * gap) / columns;
       return ListView(
         padding: const EdgeInsets.only(top: 4, bottom: 18),
         children: [
-          _SummaryRow(
-            cells: [
-              _Summary('Total', '${tools.length}'),
-              _Summary('Managed',
-                  '${tools.where((b) => b.toolModeLabel.startsWith('Managed')).length}'),
-              _Summary('Installed',
-                  '${tools.where((b) => b.vmType == 'installed').length}'),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(spacing: 10, runSpacing: 10, children: [
-            for (final bot in tools)
+          FleetMetricStrip(cells: [
+            FleetMetric(
+                label: 'Total',
+                value: '${tools.length}',
+                color: AppColors.cyan),
+            FleetMetric(
+                label: 'Managed',
+                value:
+                    '${tools.where((b) => b.toolModeLabel.startsWith('Managed')).length}',
+                color: AppColors.primary),
+            FleetMetric(
+                label: 'Installed',
+                value:
+                    '${tools.where((b) => b.vmType == 'installed').length}',
+                color: AppColors.warning),
+          ]),
+          const SizedBox(height: 14),
+          Wrap(spacing: gap, runSpacing: gap, children: [
+            for (var i = 0; i < tools.length; i++)
               SizedBox(
-                  width: width,
+                width: width,
+                child: StaggerIn(
+                  index: i,
                   child: _ToolCard(
-                      key: ValueKey(bot.id),
+                      key: ValueKey(tools[i].id),
                       service: service,
-                      onAvatar: (id) => onAvatar(bot, id),
-                      bot: bot,
-                      onOpen: () => onOpen(bot),
-                      onEdit: () => onEdit(bot))),
+                      onAvatar: (id) => onAvatar(tools[i], id),
+                      bot: tools[i],
+                      onOpen: () => onOpen(tools[i]),
+                      onEdit: () => onEdit(tools[i])),
+                ),
+              ),
           ]),
         ],
       );
@@ -505,64 +562,21 @@ class _ToolsTab extends StatelessWidget {
   }
 }
 
-class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({required this.cells});
+Color _statusColor(BuildContext context, String status) => switch (status) {
+      'running' => AppColors.success,
+      'paused' => AppColors.warning,
+      'failed' => AppColors.danger,
+      _ => Theme.of(context).colorScheme.onSurfaceVariant,
+    };
 
-  final List<_Summary> cells;
-
-  @override
-  Widget build(BuildContext context) => Row(children: [
-        for (final c in cells) ...[
-          Expanded(child: c),
-          if (c != cells.last) const SizedBox(width: 10),
-        ],
-      ]);
-}
-
-class _Summary extends StatelessWidget {
-  const _Summary(this.label, this.value);
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: .45),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label,
-            style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
-        const SizedBox(height: 4),
-        Text(value,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-      ]),
-    );
-  }
-}
-
-class _PanelEmpty extends StatelessWidget {
-  const _PanelEmpty({required this.icon, required this.message});
-
-  final IconData icon;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 44, color: scheme.onSurfaceVariant),
-        const SizedBox(height: 10),
-        Text(message, style: TextStyle(color: scheme.onSurfaceVariant)),
-      ]),
-    );
-  }
-}
+String _statusLabel(String status) => switch (status) {
+      'running' => 'Running',
+      'paused' => 'Paused',
+      'stopped' => 'Stopped',
+      'pending' => 'Pending',
+      'failed' => 'Failed',
+      _ => status,
+    };
 
 class _AgentCard extends StatelessWidget {
   const _AgentCard({
@@ -584,63 +598,95 @@ class _AgentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final color = bot.status == 'running'
-        ? AppColors.success
-        : bot.status == 'paused'
-            ? AppColors.warning
-            : Theme.of(context).colorScheme.onSurfaceVariant;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: .45),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(children: [
-        AvatarEditor(
-          service: service,
-          avatar: bot.avatar,
-          initials: _initials(bot.name, 'AI'),
-          color: color,
-          radius: 21,
-          subject: 'agent picture',
-          onChanged: onAvatar,
-        ),
-        const SizedBox(width: 13),
-        Expanded(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Flexible(
-                child: Text(bot.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
+    final color = _statusColor(context, bot.status);
+    final running = bot.status == 'running';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm - 2),
+      child: SoftCard(
+        showOrb: false,
+        accent: color,
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.sm, AppSpacing.sm, AppSpacing.sm - 2, AppSpacing.sm),
+        child: Row(children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              BotAvatar(
+                bot: bot,
+                radius: 23,
+                userId: service.session?.accountId ?? '',
               ),
-              const SizedBox(width: 7),
-              StatusTag(bot.kind.toUpperCase(), color),
-            ]),
-            const SizedBox(height: 4),
-            Text('${bot.vmType} · ${bot.status}',
-                style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
+              Positioned(
+                right: -6,
+                bottom: -6,
+                child: Material(
+                  color: Theme.of(context).colorScheme.surface,
+                  shape: const CircleBorder(),
+                  child: AvatarEditor(
+                    service: service,
+                    avatar: bot.avatar,
+                    initials: _initials(bot.name, 'AI'),
+                    color: color,
+                    radius: 12,
+                    subject: 'agent picture',
+                    onChanged: onAvatar,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Flexible(
+                      child: Text(bot.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -.25,
+                              )),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    SoftMetaChip(label: 'AGENT', accent: color),
+                  ]),
+                  const SizedBox(height: AppSpacing.xs - 1),
+                  Wrap(spacing: 6, runSpacing: 6, children: [
+                    SoftMetaChip(label: bot.vmType),
+                    SoftMetaChip(
+                      label: _statusLabel(bot.status),
+                      accent: color,
+                      icon: running ? Icons.circle : null,
+                    ),
+                  ]),
+                ]),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          _ActionCapsule(children: [
+            _CapsuleButton(
+              tooltip: 'Chat',
+              icon: Icons.chat_bubble_outline_rounded,
+              onPressed: onChat,
+            ),
+            _CapsuleButton(
+              tooltip: 'Edit',
+              icon: Icons.edit_outlined,
+              onPressed: onEdit,
+            ),
+            _CapsuleButton(
+              tooltip: running ? 'Stop' : 'Start',
+              icon: running
+                  ? Icons.stop_rounded
+                  : Icons.play_arrow_rounded,
+              onPressed: onToggle,
+              accent: running ? AppColors.danger : AppColors.success,
+            ),
           ]),
-        ),
-        IconButton(
-            tooltip: 'Chat',
-            onPressed: onChat,
-            icon: const Icon(Icons.chat_bubble_outline_rounded)),
-        IconButton(
-            tooltip: 'Edit',
-            onPressed: onEdit,
-            icon: const Icon(Icons.edit_outlined)),
-        IconButton(
-          tooltip: bot.status == 'running' ? 'Stop' : 'Start',
-          onPressed: onToggle,
-          icon: Icon(bot.status == 'running'
-              ? Icons.stop_rounded
-              : Icons.play_arrow_rounded),
-        ),
-      ]),
+        ]),
+      ),
     );
   }
 }
@@ -663,64 +709,203 @@ class _ToolCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: scheme.surfaceContainerHighest.withValues(alpha: .45),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onOpen,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: scheme.outlineVariant),
+
+    return SoftCard(
+      onTap: onOpen,
+      showOrb: false,
+      accent: AppColors.cyan,
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            height: 44,
+            padding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.cyan.withValues(alpha: .16),
+                  AppColors.cyan.withValues(alpha: .04),
+                ],
+              ),
+            ),
+            child: Row(children: [
+              BotAvatar(bot: bot, radius: 15),
+              const SizedBox(width: 8),
+              AvatarEditor(
+                service: service,
+                avatar: bot.avatar,
+                initials: _initials(bot.name, 'T'),
+                color: AppColors.cyan,
+                radius: 12,
+                subject: 'app picture',
+                onChanged: onAvatar,
+              ),
+              const Spacer(),
+              if (bot.hasFrontend)
+                const SoftMetaChip(label: 'ELPIAN', accent: AppColors.cyan),
+              IconButton(
+                tooltip: 'Edit',
+                visualDensity: VisualDensity.compact,
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined, size: 18),
+              ),
+            ]),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                AvatarEditor(
-                  service: service,
-                  avatar: bot.avatar,
-                  initials: _initials(bot.name, 'T'),
-                  color: AppColors.cyan,
-                  radius: 17,
-                  subject: 'app picture',
-                  onChanged: onAvatar,
-                ),
-                const Spacer(),
-                if (bot.hasFrontend) const StatusTag('ELPIAN', AppColors.cyan),
-                IconButton(
-                  tooltip: 'Edit',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                ),
-              ]),
-              const SizedBox(height: 10),
-              Text(bot.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800)),
-              const SizedBox(height: 3),
-              Text('${bot.toolModeLabel} · ${bot.status}',
-                  style:
-                      TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
-              const SizedBox(height: 10),
-              Row(children: [
-                Icon(Icons.open_in_new_rounded,
-                    size: 14, color: scheme.onSurfaceVariant),
-                const SizedBox(width: 5),
-                Text('Open app',
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(bot.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        letterSpacing: -.2,
+                        fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text('${bot.toolModeLabel} · ${_statusLabel(bot.status)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 10, color: scheme.onSurfaceVariant)),
-              ]),
-            ],
+                        fontSize: 11, color: scheme.onSurfaceVariant)),
+                const SizedBox(height: 12),
+                Row(children: [
+                  Icon(Icons.arrow_outward_rounded,
+                      size: 14, color: scheme.primary),
+                  const SizedBox(width: 5),
+                  Text('Open',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: scheme.primary)),
+                ]),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
+}
+
+/// Clustered tonal controls for agent actions.
+class _ActionCapsule extends StatelessWidget {
+  const _ActionCapsule({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: .55),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .45)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: children),
+    );
+  }
+}
+
+class _CapsuleButton extends StatelessWidget {
+  const _CapsuleButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.accent,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final Color? accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      visualDensity: VisualDensity.compact,
+      style: IconButton.styleFrom(
+        foregroundColor: accent ?? scheme.onSurfaceVariant,
+        minimumSize: const Size(36, 36),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      icon: Icon(icon, size: 18),
+    );
+  }
+}
+
+/// Soft glowing indicator for live / running state.
+///
+/// Uses a finite breathe animation (not [AnimationController.repeat]) so
+/// widget tests that call [WidgetTester.pumpAndSettle] can complete.
+class _LiveDot extends StatefulWidget {
+  const _LiveDot({required this.color, this.size = 7});
+
+  final Color color;
+  final double size;
+
+  @override
+  State<_LiveDot> createState() => _LiveDotState();
+}
+
+class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    // Two soft breathes, then rest at a lit glow.
+    _pulse.forward().then((_) {
+      if (!mounted) return;
+      _pulse.reverse().then((_) {
+        if (!mounted) return;
+        _pulse.forward().then((_) {
+          if (mounted) _pulse.value = 1;
+        });
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _pulse,
+        builder: (context, _) {
+          final t = Curves.easeInOut.transform(_pulse.value);
+          return Container(
+            width: widget.size,
+            height: widget.size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: widget.color,
+              boxShadow: [
+                BoxShadow(
+                  color: widget.color.withValues(alpha: .3 + .4 * t),
+                  blurRadius: 3 + 5 * t,
+                  spreadRadius: .4 + .8 * t,
+                ),
+              ],
+            ),
+          );
+        },
+      );
 }
 
 /// Up to two letters of [name] for an avatar without a picture.
@@ -857,6 +1042,8 @@ class _AgentChatSheetState extends State<_AgentChatSheet> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final bot = widget.bot;
+    final statusColor = _statusColor(context, bot.status);
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
@@ -866,26 +1053,73 @@ class _AgentChatSheetState extends State<_AgentChatSheet> {
           height: MediaQuery.sizeOf(context).height * 0.7,
           child: Column(children: [
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 14, 8, 12),
               child: Row(children: [
-                const Icon(Icons.smart_toy_outlined),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text('Chat with ${widget.bot.name}',
-                      style: const TextStyle(fontWeight: FontWeight.w800)),
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: .14),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: statusColor.withValues(alpha: .28)),
+                  ),
+                  child: Icon(Icons.smart_toy_outlined,
+                      size: 20, color: statusColor),
                 ),
-                IconButton(
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(bot.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 16,
+                                letterSpacing: -.3,
+                                fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 2),
+                        Row(children: [
+                          if (bot.status == 'running') ...[
+                            const _LiveDot(color: AppColors.success, size: 5),
+                            const SizedBox(width: 5),
+                          ],
+                          Text(_statusLabel(bot.status),
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: statusColor)),
+                        ]),
+                      ]),
+                ),
+                IconButton.filledTonal(
+                  tooltip: 'Close',
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close_rounded),
                 ),
               ]),
             ),
-            const Divider(height: 1),
+            Divider(
+                height: 1,
+                color: scheme.outlineVariant.withValues(alpha: .5)),
             Expanded(
               child: _messages.isEmpty
                   ? Center(
-                      child: Text('Ask ${widget.bot.name} anything.',
-                          style: TextStyle(color: scheme.onSurfaceVariant)))
+                      child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.forum_outlined,
+                                size: 36, color: scheme.onSurfaceVariant),
+                            const SizedBox(height: 10),
+                            Text('Ask ${bot.name} anything.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    color: scheme.onSurfaceVariant)),
+                          ]),
+                    ))
                   : ListView.builder(
                       controller: scroll,
                       padding: const EdgeInsets.all(16),
@@ -923,7 +1157,7 @@ class _AgentChatSheetState extends State<_AgentChatSheet> {
                     child: CircularProgressIndicator(strokeWidth: 2)),
               ),
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
               child: Row(children: [
                 Expanded(
                   child: TextField(

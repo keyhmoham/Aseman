@@ -13,7 +13,7 @@ import '../../fake_aseman_service.dart';
 
 FeedPinSource heatmap() => const FeedPinSource(
   spaceId: FakeAsemanService.atlasId,
-  spaceName: 'Atlas Capital',
+  spaceName: 'Atlas Collective',
   roomId: 'a1',
   roomName: 'general',
   pin: DeskPin(
@@ -91,7 +91,7 @@ void main() {
     expect(placed.widgetMode, isTrue);
     expect(placed.rect.left, moved.left.roundToDouble());
     expect(placed.rect.top, moved.top.roundToDouble());
-    expect(placed.spaceName, 'Atlas Capital');
+    expect(placed.spaceName, 'Atlas Collective');
     expect(placed.minimized, isFalse);
   });
 
@@ -101,7 +101,7 @@ void main() {
     final local = FeedPlacement(
       id: 'local-1',
       spaceId: FakeAsemanService.atlasId,
-      spaceName: 'Atlas Capital',
+      spaceName: 'Atlas Collective',
       roomId: 'a1',
       roomName: 'general',
       pin: heatmap().pin,
@@ -186,7 +186,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CardWindow), findsNothing);
 
-    await tester.tap(find.byTooltip('Heatmap · Atlas Capital · general'));
+    await tester.tap(find.byTooltip('Heatmap · Atlas Collective · general'));
     await tester.pumpAndSettle();
     expect(find.byType(CardWindow), findsOneWidget);
 

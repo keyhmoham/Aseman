@@ -5,15 +5,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../core/settings/app_settings.dart';
-import '../../../core/theme/app_shape.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/avatar_editor.dart';
-import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import '../../../shared/widgets/sky_ui.dart';
 import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../account/presentation/account_panel.dart';
 import '../../assistant/assistant.dart';
+import '../../marketing/marketing_links.dart';
+import 'widgets/notify_prefs_panel.dart';
+import 'widgets/privacy_settings_panel.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, this.dependencies});
@@ -213,105 +216,133 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = AppSettingsScope.of(context);
-    final scheme = Theme.of(context).colorScheme;
     final wide = MediaQuery.sizeOf(context).width > 900;
     final textSize = _textSizes.keys.reduce(
       (a, b) => (a - textScale).abs() <= (b - textScale).abs() ? a : b,
     );
+    final side = wide ? 80.0 : AppSpacing.md;
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: scheme.surface,
       body: CustomScrollView(
         slivers: [
-          SliverAppBar.large(
-            title: const Text('Settings'),
-            backgroundColor: scheme.surface,
-            surfaceTintColor: Colors.transparent,
+          SliverToBoxAdapter(
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                    side, AppSpacing.md, side, AppSpacing.sm),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (Navigator.of(context).canPop()) ...[
+                      IconButton(
+                        tooltip: 'Back',
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        icon: const Icon(Icons.arrow_back_rounded),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                    ],
+                    const Expanded(
+                      child: SkySectionHeader(
+                        icon: Icons.settings_rounded,
+                        title: 'Settings',
+                        subtitle:
+                            'Appearance, account and how Aseman behaves',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
           SliverPadding(
-            padding: EdgeInsets.fromLTRB(wide ? 80 : 16, 4, wide ? 80 : 16, 32),
+            padding: EdgeInsets.fromLTRB(
+                side, AppSpacing.xxs, side, AppSpacing.xl),
             sliver: SliverList.list(
               children: [
-                _AccountCard(
-                  dependencies: widget.dependencies,
-                  onManage: () => _openAccount(AccountArea.account),
-                ),
-                const SizedBox(height: 16),
-                _Section(
-                  title: 'Appearance',
-                  icon: Icons.palette_outlined,
-                  children: [
-                    const _Label('Theme'),
-                    SizedBox(
-                      width: double.infinity,
-                      child: SegmentedButton<ThemeMode>(
-                        segments: const [
-                          ButtonSegment(
-                            value: ThemeMode.system,
-                            icon: Icon(Icons.brightness_auto_outlined),
-                            label: Text('System'),
-                          ),
-                          ButtonSegment(
-                            value: ThemeMode.light,
-                            icon: Icon(Icons.light_mode_outlined),
-                            label: Text('Light'),
-                          ),
-                          ButtonSegment(
-                            value: ThemeMode.dark,
-                            icon: Icon(Icons.dark_mode_outlined),
-                            label: Text('Dark'),
-                          ),
-                        ],
-                        selected: {settings.themeMode},
-                        onSelectionChanged: (value) =>
-                            settings.setThemeMode(value.first),
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    const _Label('Accent color'),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: _accents
-                          .map(
-                            (color) => _AccentChoice(
-                              color: color,
-                              selected: settings.accent == color,
-                              onTap: () => settings.setAccent(color),
+                  _AccountCard(
+                    dependencies: widget.dependencies,
+                    onProfile: _openProfile,
+                    onManage: () => _openAccount(AccountArea.account),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  _Section(
+                    title: 'Appearance',
+                    icon: Icons.palette_outlined,
+                    children: [
+                      const _Label('Theme'),
+                      SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<ThemeMode>(
+                          segments: const [
+                            ButtonSegment(
+                              value: ThemeMode.system,
+                              icon: Icon(Icons.brightness_auto_outlined),
+                              label: Text('System'),
                             ),
-                          )
-                          .toList(),
-                    ),
-                    const SizedBox(height: 22),
-                    Row(
-                      children: [
-                        const Expanded(child: _Label('Text size')),
-                        Text(
-                          'Aa',
-                          textScaler: TextScaler.linear(textSize),
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
+                            ButtonSegment(
+                              value: ThemeMode.light,
+                              icon: Icon(Icons.light_mode_outlined),
+                              label: Text('Light'),
+                            ),
+                            ButtonSegment(
+                              value: ThemeMode.dark,
+                              icon: Icon(Icons.dark_mode_outlined),
+                              label: Text('Dark'),
+                            ),
+                          ],
+                          selected: {settings.themeMode},
+                          onSelectionChanged: (value) =>
+                              settings.setThemeMode(value.first),
                         ),
-                      ],
-                    ),
-                    SizedBox(
-                      width: double.infinity,
-                      child: SegmentedButton<double>(
-                        showSelectedIcon: false,
-                        segments: [
-                          for (final e in _textSizes.entries)
-                            ButtonSegment(value: e.key, label: Text(e.value)),
-                        ],
-                        selected: {textSize},
-                        onSelectionChanged: (v) {
-                          setState(() => textScale = v.first);
-                          _save('textScale', v.first);
-                        },
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    _SwitchTile(
+                      const SizedBox(height: AppSpacing.lg),
+                      const _Label('Accent color'),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: _accents
+                            .map(
+                              (color) => _AccentChoice(
+                                color: color,
+                                selected: settings.accent == color,
+                                onTap: () => settings.setAccent(color),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Row(
+                        children: [
+                          const Expanded(child: _Label('Text size')),
+                          Text(
+                            'Aa',
+                            textScaler: TextScaler.linear(textSize),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<double>(
+                          showSelectedIcon: false,
+                          segments: [
+                            for (final e in _textSizes.entries)
+                              ButtonSegment(value: e.key, label: Text(e.value)),
+                          ],
+                          selected: {textSize},
+                          onSelectionChanged: (v) {
+                            setState(() => textScale = v.first);
+                            _save('textScale', v.first);
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm + 2),
+                      _SwitchTile(
                       icon: Icons.animation_rounded,
                       title: 'Reduce motion',
                       subtitle: 'Use simpler interface transitions',
@@ -321,7 +352,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     _SwitchTile(
                       icon: Icons.onetwothree_rounded,
-                      title: 'Compact market numbers',
+                      title: 'Compact numbers',
                       subtitle: 'Show 1.2K instead of 1,200',
                       value: compactNumbers,
                       onChanged: (v) => _toggle(
@@ -343,21 +374,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onTap: _openProfile,
                     ),
                     _SettingsTile(
-                      icon: Icons.workspace_premium_outlined,
+                      icon: Icons.account_balance_wallet_outlined,
                       title: 'Wallet',
-                      subtitle: 'Balance, top-ups and purchases',
+                      subtitle: 'Balance, top-ups, purchases and project usage',
                       onTap: () => _openAccount(AccountArea.wallet),
                     ),
-                    _SettingsTile(
-                      icon: Icons.query_stats_rounded,
-                      title: 'Usage',
-                      subtitle: 'What each project spent and on which models',
-                      onTap: () => _openAccount(AccountArea.usage),
-                    ),
                     const _SettingsTile(
-                      icon: Icons.account_balance_wallet_outlined,
-                      title: 'Trading accounts',
-                      subtitle: 'Exchanges, brokers and wallets',
+                      icon: Icons.apps_outlined,
+                      title: 'Connected apps',
+                      subtitle: 'Services, apps and wallets',
                     ),
                   ],
                 ),
@@ -394,14 +419,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 _Section(
-                  title: 'Trading & agents',
-                  icon: Icons.candlestick_chart,
+                  title: 'Agents & actions',
+                  icon: Icons.smart_toy_outlined,
                   children: [
                     _SwitchTile(
                       icon: Icons.fact_check_outlined,
-                      title: 'Confirm trade execution',
+                      title: 'Confirm sensitive actions',
                       subtitle:
-                          'Require confirmation before an agent submits an order',
+                          'Require confirmation before an agent takes a sensitive action',
                       value: tradeConfirmations,
                       onChanged: (v) => _toggle(
                         (x) => tradeConfirmations = x,
@@ -429,29 +454,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         AppChoice('EUR', 'EUR €'),
                         AppChoice('GBP', 'GBP £'),
                         AppChoice('JPY', 'JPY ¥'),
-                        AppChoice('BTC', 'BTC ₿'),
                       ],
                       onChanged: (v) =>
                           _choose((x) => currency = x, v, 'currency'),
                     ),
                     const SizedBox(height: 18),
                     AppChoiceField<String>(
-                      label: 'Market region',
+                      label: 'Region',
                       value: region,
                       choices: const [
                         AppChoice('Global', 'Global', icon: Icons.public),
                         AppChoice('US', 'US'),
                         AppChoice('EU', 'EU'),
                         AppChoice('Asia', 'Asia'),
-                        AppChoice('Offshore', 'Offshore'),
+                        AppChoice('Other', 'Other'),
                       ],
                       onChanged: (v) => _choose((x) => region = x, v, 'region'),
                     ),
                     const SizedBox(height: 8),
                     const _SettingsTile(
                       icon: Icons.shield_outlined,
-                      title: 'Risk defaults',
-                      subtitle: 'Position limits, drawdown and leverage',
+                      title: 'Agent limits',
+                      subtitle: 'Spending caps and allowed action defaults',
                     ),
                   ],
                 ),
@@ -459,9 +483,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: 'Notifications',
                   icon: Icons.notifications_none_rounded,
                   children: [
+                    if (widget.dependencies != null)
+                      _SettingsTile(
+                        icon: Icons.tune_rounded,
+                        title: 'Notification preferences',
+                        subtitle: 'Rooms, chats, calls and invites',
+                        onTap: () =>
+                            showNotifyPrefs(context, widget.dependencies!),
+                      ),
                     _SwitchTile(
-                      icon: Icons.show_chart_rounded,
-                      title: 'Price and strategy alerts',
+                      icon: Icons.notifications_active_outlined,
+                      title: 'Agent and workspace alerts',
                       value: priceAlerts,
                       onChanged: (v) =>
                           _toggle((x) => priceAlerts = x, v, 'priceAlerts'),
@@ -507,6 +539,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: 'Privacy & security',
                   icon: Icons.lock_outline_rounded,
                   children: [
+                    if (widget.dependencies != null)
+                      _SettingsTile(
+                        icon: Icons.privacy_tip_outlined,
+                        title: 'Who may contact you',
+                        subtitle:
+                            'Messages, voice calls, video calls and invites',
+                        onTap: () => showPrivacySettings(
+                            context, widget.dependencies!),
+                      ),
                     _SwitchTile(
                       icon: Icons.fingerprint_rounded,
                       title: 'Biometric unlock',
@@ -570,11 +611,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
-              ],
+                  _Section(
+                    title: 'About',
+                    icon: Icons.info_outline_rounded,
+                    children: [
+                      _SettingsTile(
+                        icon: Icons.payments_outlined,
+                        title: 'Pricing',
+                        subtitle: 'Credits and how billing works',
+                        onTap: () => showMarketingPage(context,
+                            title: 'Pricing', body: pricingBlurb),
+                      ),
+                      _SettingsTile(
+                        icon: Icons.route_outlined,
+                        title: 'How it works',
+                        subtitle: 'Projects, agents and Aseman',
+                        onTap: () => showMarketingPage(context,
+                            title: 'How it works', body: howItWorksBlurb),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
     );
   }
 
@@ -601,8 +662,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 class _AccountCard extends StatelessWidget {
-  const _AccountCard({this.dependencies, required this.onManage});
+  const _AccountCard({
+    this.dependencies,
+    required this.onProfile,
+    required this.onManage,
+  });
   final AppDependencies? dependencies;
+  final VoidCallback onProfile;
   final VoidCallback onManage;
 
   @override
@@ -614,16 +680,10 @@ class _AccountCard extends StatelessWidget {
     final initials = handle.isEmpty
         ? 'ME'
         : handle.substring(0, 1).toUpperCase();
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(AppShape.card),
-      ),
-      child: Row(
-        children: [
-          if (dependencies == null)
-            CircleAvatar(
+    final Widget avatar = dependencies == null
+        ? HaloRing(
+            accent: scheme.primary,
+            child: CircleAvatar(
               radius: 30,
               backgroundColor: scheme.primary,
               foregroundColor: scheme.onPrimary,
@@ -634,18 +694,25 @@ class _AccountCard extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-            )
-          else
-            AvatarEditor(
-              service: dependencies!.service,
-              avatar: dependencies!.sessionController.avatar,
-              initials: initials,
-              filled: true,
-              subject: 'profile picture',
-              enabled: accountId.isNotEmpty,
-              onChanged: dependencies!.sessionController.setAvatar,
             ),
-          const SizedBox(width: 16),
+          )
+        : AvatarEditor(
+            service: dependencies!.service,
+            avatar: dependencies!.sessionController.avatar,
+            initials: initials,
+            filled: true,
+            subject: 'profile picture',
+            enabled: accountId.isNotEmpty,
+            identity: accountId,
+            onChanged: dependencies!.sessionController.setAvatar,
+          );
+    return SoftCard(
+      radius: AppShape.card,
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          avatar,
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -656,8 +723,9 @@ class _AccountCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: scheme.onPrimaryContainer,
+                    letterSpacing: -.3,
+                    fontWeight: FontWeight.w900,
+                    color: scheme.onSurface,
                   ),
                 ),
                 Text(
@@ -666,16 +734,27 @@ class _AccountCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
-                    color: scheme.onPrimaryContainer.withValues(alpha: .75),
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          FilledButton(
-            onPressed: dependencies == null ? null : onManage,
-            child: const Text('Manage'),
+          const SizedBox(width: AppSpacing.xs),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            alignment: WrapAlignment.end,
+            children: [
+              OutlinedButton(
+                onPressed: dependencies == null ? null : onProfile,
+                child: const Text('Profile'),
+              ),
+              FilledButton(
+                onPressed: dependencies == null ? null : onManage,
+                child: const Text('Account'),
+              ),
+            ],
           ),
         ],
       ),
@@ -695,51 +774,37 @@ class _Section extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // Glass Material so list tiles paint ink on the frost.
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: GlassSurface(
-        borderRadius: BorderRadius.circular(AppShape.card),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: ShapeDecoration(
-                      color: scheme.secondaryContainer,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: Icon(
-                      icon,
-                      size: 21,
-                      color: scheme.onSecondaryContainer,
-                    ),
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: SoftCard(
+        radius: AppShape.card,
+        showOrb: false,
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg - 2, AppSpacing.md, AppSpacing.lg - 2, AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                SkyIconBadge(icon: icon, size: 40),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -.4,
+                          color: scheme.onSurface,
+                        ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ...children,
-            ],
-          ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ...children,
+          ],
         ),
       ),
     );
@@ -751,12 +816,14 @@ class _Label extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: Text(
-      text,
-      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-    ),
-  );
+        padding: const EdgeInsets.only(bottom: AppSpacing.sm - 2),
+        child: Text(
+          text,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+      );
 }
 
 class _SwitchTile extends StatelessWidget {
@@ -773,14 +840,13 @@ class _SwitchTile extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
   @override
-  Widget build(BuildContext context) => SwitchListTile(
-    contentPadding: EdgeInsets.zero,
-    secondary: Icon(icon),
-    title: Text(title),
-    subtitle: subtitle == null ? null : Text(subtitle!),
-    value: value,
-    onChanged: onChanged,
-  );
+  Widget build(BuildContext context) => QuietSwitchTile(
+        icon: icon,
+        label: title,
+        subtitle: subtitle,
+        value: value,
+        onChanged: onChanged,
+      );
 }
 
 /// A row that opens a related screen. Without [onTap] it is not available
@@ -799,30 +865,17 @@ class _SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      enabled: onTap != null,
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: subtitle == null ? null : Text(subtitle!),
-      trailing: onTap == null
-          ? Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                'Soon',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            )
-          : const Icon(Icons.chevron_right_rounded),
+    return QuietTile(
+      icon: icon,
+      label: title,
+      subtitle: subtitle,
       onTap: onTap,
+      trailing: onTap == null
+          ? SoftMetaChip(
+              label: 'Soon',
+              accent: scheme.onSurfaceVariant,
+            )
+          : null,
     );
   }
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/aseman/aseman/internal/plugins/entity"
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/pkg/jsonpatch"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 	"github.com/aseman/aseman/plugins/actions/message/models/message"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
@@ -36,6 +37,36 @@ func directKey(a, b identity.ID) string {
 		x, y = y, x
 	}
 	return x + ":" + y
+}
+
+// directFoundingPeer is the other account named by a Direct space's key —
+// the original conversation peer (person or agent). Self-chats and non-directs
+// have none. Extra agents installed later are not the founding peer.
+func (s *Service) directFoundingPeer(ctx context.Context, sp *space.Space, caller identity.ID) (identity.ID, bool) {
+	if sp == nil || !sp.Direct || sp.DirectKey == "" {
+		return identity.ID{}, false
+	}
+	parts := strings.Split(sp.DirectKey, ":")
+	if len(parts) != 2 {
+		return identity.ID{}, false
+	}
+	a, errA := identity.Parse(parts[0])
+	b, errB := identity.Parse(parts[1])
+	if errA != nil || errB != nil {
+		return identity.ID{}, false
+	}
+	if a == b {
+		return identity.ID{}, false // personal Aseman self-chat
+	}
+	caller = s.botAccountOf(ctx, caller)
+	switch {
+	case a == caller:
+		return b, true
+	case b == caller:
+		return a, true
+	default:
+		return identity.ID{}, false
+	}
 }
 
 func directActions(s *Service) []api.Action {
@@ -75,6 +106,11 @@ func (s *Service) openDirect(ctx context.Context, caller, peer identity.ID) (*sp
 	}
 	if callerAcc.IsBot() && peerAcc.IsBot() {
 		return nil, nil, false, errs.InvalidArgument("a direct conversation needs a person")
+	}
+	// Personal Aseman (built-in assistant / lead) lives in the self-chat —
+	// never a separate person↔Aseman Direct.
+	if person, ok := s.builtinAsemanPerson(ctx, callerAcc, peerAcc, caller, peer); ok {
+		return s.openSaved(ctx, person)
 	}
 	// People use apps in their projects; they do not chat with one.
 	if peerAcc.IsBot() && s.Bots != nil {
@@ -117,9 +153,9 @@ func (s *Service) openDirect(ctx context.Context, caller, peer identity.ID) (*sp
 	return sp, room, true, nil
 }
 
-// openSaved is a person's Saved Messages: a direct chat with themselves, for
-// notes, links and files. Like any room, agents added to it answer when
-// mentioned.
+// openSaved is a person's Aseman chat: a direct chat with themselves, for
+// notes, links and files, and the personal Aseman assistant. Like any room,
+// other agents added to it answer when mentioned.
 func (s *Service) openSaved(ctx context.Context, caller identity.ID) (*space.Space, *space.Room, bool, error) {
 	var acc account.Account
 	if err := s.R.Get(ctx, "accounts", caller, &acc); err != nil {
@@ -135,7 +171,7 @@ func (s *Service) openSaved(ctx context.Context, caller identity.ID) (*space.Spa
 	sp := s.findDirect(ctx, key)
 	if sp == nil {
 		var err error
-		if sp, err = s.createSpace(ctx, caller, "Saved Messages", "Your notes", key); err != nil {
+		if sp, err = s.createSpace(ctx, caller, "Aseman", "Your personal Aseman", key); err != nil {
 			return nil, nil, false, err
 		}
 		created = true
@@ -145,6 +181,35 @@ func (s *Service) openSaved(ctx context.Context, caller identity.ID) (*space.Spa
 		return nil, nil, false, err
 	}
 	return sp, room, created, nil
+}
+
+// builtinAsemanPerson reports the person whose Aseman self-chat should be used
+// when either side of a proposed Direct is the built-in assistant or lead.
+func (s *Service) builtinAsemanPerson(ctx context.Context, callerAcc, peerAcc account.Account, caller, peer identity.ID) (identity.ID, bool) {
+	if s.Bots == nil {
+		return identity.ID{}, false
+	}
+	if peerAcc.IsBot() && !callerAcc.IsBot() {
+		if rec, err := s.botForMember(ctx, peer); err == nil && rec.IsBuiltin() {
+			return caller, true
+		}
+	}
+	if callerAcc.IsBot() && !peerAcc.IsBot() {
+		if rec, err := s.botForMember(ctx, caller); err == nil && rec.IsBuiltin() {
+			return peer, true
+		}
+	}
+	return identity.ID{}, false
+}
+
+// isBuiltinDirectPeer reports whether a direct chat's other member is the
+// built-in Aseman assistant or lead (legacy separate chats to hide).
+func (s *Service) isBuiltinDirectPeer(ctx context.Context, peer identity.ID) bool {
+	if s.Bots == nil || peer.IsZero() {
+		return false
+	}
+	rec, err := s.botForMember(ctx, peer)
+	return err == nil && rec.IsBuiltin()
 }
 
 func (s *Service) findDirect(ctx context.Context, key string) *space.Space {
@@ -197,7 +262,8 @@ func (s *Service) importDirectHistory(ctx context.Context, spaceID, roomID, a, b
 // PostDirect mirrors a message sent through users.dm_send into the pair's
 // direct room, so the conversation reads the same in the messenger. It does
 // not start the agent: dm_send already delivers the message to it.
-func (s *Service) PostDirect(ctx context.Context, from, to identity.ID, body string) error {
+// directID (optional) is stamped on the room message for dm_react / hide / keep.
+func (s *Service) PostDirect(ctx context.Context, from, to identity.ID, body string, directID identity.ID) error {
 	sp, room, created, err := s.openDirect(ctx, from, to)
 	if err != nil || created {
 		// A new conversation already imported the message with its history.
@@ -206,8 +272,41 @@ func (s *Service) PostDirect(ctx context.Context, from, to identity.ID, body str
 	if blocked, byMe := s.directBlock(ctx, sp.ID, from); blocked {
 		return blockError(byMe)
 	}
-	_, err = s.storeRoomMessage(ctx, sp.ID, room.ID, from, body, message.KindMessage, "")
-	return err
+	return s.stampDirectMessage(ctx, sp.ID, room.ID, from, body, directID)
+}
+
+// PostSavedAnswer posts a personal Aseman reply into the person's Aseman chat
+// as the chat assistant. Brain answers must not open a separate person↔assistant
+// Direct: that left Talk / notes showing only the assistant side there, and
+// user notes only in the Aseman self-chat.
+//
+// The assistant is not added as a space member: the Aseman chat is identified as
+// a self-chat by having no other members, and enrichMessages still resolves the
+// sender account (kind=bot) for display.
+func (s *Service) PostSavedAnswer(ctx context.Context, person, assistant identity.ID, body string, directID identity.ID) error {
+	if person.IsZero() || assistant.IsZero() {
+		return errs.InvalidArgument("person and assistant are required")
+	}
+	sp, room, _, err := s.openSaved(ctx, person)
+	if err != nil {
+		return err
+	}
+	return s.stampDirectMessage(ctx, sp.ID, room.ID, assistant, body, directID)
+}
+
+func (s *Service) stampDirectMessage(ctx context.Context, spaceID, roomID, sender identity.ID, body string, directID identity.ID) error {
+	msgID, err := s.storeRoomMessage(ctx, spaceID, roomID, sender, body, message.KindMessage, "")
+	if err != nil || directID.IsZero() {
+		return err
+	}
+	msg := &message.Message{}
+	if err := s.R.Get(ctx, "messages", msgID, msg); err != nil {
+		return nil
+	}
+	msg.DirectID = directID.String()
+	msg.UpdatedAt = time.Now().UTC()
+	_ = s.R.Update(ctx, "messages", msgID, msg)
+	return nil
 }
 
 // directPeers lists the members of a direct space other than the caller.
@@ -226,6 +325,63 @@ func (s *Service) directPeers(ctx context.Context, spaceID, caller identity.ID) 
 		out = append(out, m.MemberID)
 	}
 	return out
+}
+
+// noteDmInstall records that [installer] added [botAccount] in a direct chat.
+// Each participant keeps their own agents/apps; the peer of a person↔agent
+// DM is always visible without this record.
+func (s *Service) noteDmInstall(ctx context.Context, spaceID, installer, botAccount identity.ID) {
+	if s.M == nil || installer.IsZero() || botAccount.IsZero() {
+		return
+	}
+	sp, err := s.GetSpace(ctx, spaceID)
+	if err != nil || sp == nil || !sp.Direct {
+		return
+	}
+	botAccount = s.botAccountOf(ctx, botAccount)
+	_ = s.M.Patch(ctx, spaceID, jsonpatch.Patch{{
+		Op:    "set",
+		Path:  "dm_installs/" + installer.String() + "/" + botAccount.String(),
+		Value: true,
+	}})
+}
+
+// clearDmInstall drops a bot from the caller's personal DM install set.
+func (s *Service) clearDmInstall(ctx context.Context, spaceID, installer, botAccount identity.ID) {
+	if s.M == nil || installer.IsZero() || botAccount.IsZero() {
+		return
+	}
+	botAccount = s.botAccountOf(ctx, botAccount)
+	_ = s.M.Patch(ctx, spaceID, jsonpatch.Patch{{
+		Op:   "remove",
+		Path: "dm_installs/" + installer.String() + "/" + botAccount.String(),
+	}})
+}
+
+// dmInstallVisible reports whether [botAccount] should appear in the caller's
+// DM bot list: the conversation peer, or something this caller installed.
+func (s *Service) dmInstallVisible(ctx context.Context, spaceID, caller, botAccount identity.ID) bool {
+	botAccount = s.botAccountOf(ctx, botAccount)
+	for _, peer := range s.directPeers(ctx, spaceID, caller) {
+		if peer == botAccount || s.botAccountOf(ctx, peer) == botAccount {
+			return true
+		}
+	}
+	if s.M == nil {
+		return true // no metadata: keep prior shared behaviour
+	}
+	rec, err := s.M.Get(ctx, spaceID)
+	if err != nil || rec == nil {
+		return true
+	}
+	root, _ := rec.Tree["dm_installs"].(map[string]any)
+	mine, _ := root[caller.String()].(map[string]any)
+	// No personal install set yet: keep prior shared memberships visible.
+	if mine == nil {
+		return true
+	}
+	_, ok := mine[botAccount.String()]
+	return ok
 }
 
 func (s *Service) directOpen(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
@@ -311,6 +467,11 @@ func (s *Service) chatList(ctx context.Context, req *api.ActionRequest) (*api.Ac
 			if sp.Direct {
 				row["kind"] = "direct"
 				if peers := s.directPeers(ctx, sp.ID, req.Caller.ID); len(peers) > 0 {
+					// Built-in Aseman lives in the self-chat; hide legacy
+					// person↔assistant / lead Directs from the inbox.
+					if s.isBuiltinDirectPeer(ctx, peers[0]) {
+						continue
+					}
 					row["peer"] = people.get(ctx, peers[0])
 					mine, theirs := blockedIn(tree, req.Caller.ID), blockedIn(tree, peers[0])
 					if mine {

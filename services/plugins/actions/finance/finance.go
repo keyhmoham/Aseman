@@ -15,6 +15,7 @@ import (
 	"github.com/aseman/aseman/internal/plugins/signing"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/auth/mechanisms/mail"
 	nodetypes "github.com/aseman/aseman/plugins/actions/federation/models/node"
 	financial "github.com/aseman/aseman/plugins/actions/finance/models"
 	"github.com/aseman/aseman/plugins/actions/finance/models/wallet"
@@ -34,6 +35,9 @@ type Service struct {
 	// chargesAsked is when each account's purchase revenue was last looked up.
 	chargesMu    sync.Mutex
 	chargesAsked map[string]time.Time
+
+	// Mail sends the credit request emails; nil until first used (see mailer).
+	Mail mail.Sender
 }
 
 // GetWallet loads a wallet by owner.
@@ -178,6 +182,11 @@ func (s *Service) pushReplica(ctx context.Context, url string, body []byte, priv
 // Mint creates credits on the central node (fiat -> credits) and credits the
 // target wallet.
 func (s *Service) Mint(ctx context.Context, operator, target identity.ID, amount int64, desc string) (*wallet.LedgerEntry, error) {
+	return s.mint(ctx, operator, target, amount, desc, false)
+}
+
+// mint is Mint; restricted credits can't be used on the Developer API or sent on.
+func (s *Service) mint(ctx context.Context, operator, target identity.ID, amount int64, desc string, restricted bool) (*wallet.LedgerEntry, error) {
 	if amount <= 0 {
 		return nil, errs.InvalidArgument("amount must be positive")
 	}
@@ -187,6 +196,9 @@ func (s *Service) Mint(ctx context.Context, operator, target identity.ID, amount
 	w, err := s.GetWallet(ctx, target)
 	if err != nil {
 		return nil, err
+	}
+	if restricted {
+		w.Restricted += amount
 	}
 	if _, err := s.credit(ctx, w, amount); err != nil {
 		return nil, err
@@ -214,11 +226,15 @@ func (s *Service) Transfer(ctx context.Context, from identity.ID, to identity.ID
 	if src.Available() < amount {
 		return nil, errs.New(errs.CodeFinance, "insufficient balance")
 	}
+	if src.Unrestricted() < amount {
+		return nil, errs.New(errs.CodeFinance, "complimentary credits can’t be sent to others or to the Developer API")
+	}
 	dst, err := s.GetWallet(ctx, to)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.debit(ctx, src, amount); err != nil {
+	// Only the unrestricted part can be sent, so the restricted credits stay put.
+	if err := s.debit(wallet.WithoutRestricted(ctx), src, amount); err != nil {
 		return nil, err
 	}
 	if _, err := s.credit(ctx, dst, amount); err != nil {
@@ -241,7 +257,7 @@ func (s *Service) PoolCreate(ctx context.Context, owner identity.ID, amount int6
 	if w.Available() < amount {
 		return nil, errs.New(errs.CodeFinance, "insufficient balance to lock pool")
 	}
-	w.Balance -= amount
+	w.Spent(ctx, amount)
 	w.Locked += amount
 	if err := s.persist(ctx, w); err != nil {
 		return nil, err
@@ -495,13 +511,13 @@ func (s *Service) ChargeLines(ctx context.Context, customer identity.ID, desc st
 			if e := tx.Get(ctx, "wallets", src.ID.String(), &source); e != nil {
 				return e
 			}
-			if source.Available() < total {
+			if source.Spendable(ctx) < total {
 				return errs.New(errs.CodeFinance, "insufficient balance for "+desc)
 			}
 			if e := s.chargeBudget(ctx, tx, execution.SpaceID, total); e != nil {
 				return e
 			}
-			source.Balance -= total
+			source.Spent(ctx, total)
 			source.UpdatedAt = time.Now().UTC()
 			if e := tx.Update(ctx, "wallets", src.ID.String(), &source); e != nil {
 				return e
@@ -595,9 +611,9 @@ func (s *Service) EnsureFunds(ctx context.Context, customer identity.ID, minCost
 	if err != nil {
 		return err
 	}
-	if w.Available() < minCost {
+	if w.Spendable(ctx) < minCost {
 		return errs.New(errs.CodeFinance,
-			"insufficient balance to run metered execution (needs "+itoa(minCost)+" credits, has "+itoa(w.Available())+")")
+			"insufficient balance to run metered execution (needs "+itoa(minCost)+" credits, has "+itoa(w.Spendable(ctx))+")")
 	}
 	return nil
 }
@@ -615,7 +631,7 @@ func (s *Service) credit(ctx context.Context, w *wallet.Wallet, amount int64) (*
 }
 
 func (s *Service) debit(ctx context.Context, w *wallet.Wallet, amount int64) error {
-	w.Balance -= amount
+	w.Spent(ctx, amount)
 	if err := s.persist(ctx, w); err != nil {
 		return err
 	}
@@ -696,7 +712,7 @@ func (a *walletGetAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 	if err != nil {
 		return nil, err
 	}
-	return helper.JSON(map[string]any{"balance": w.Balance, "locked": w.Locked, "available": w.Available()})
+	return helper.JSON(map[string]any{"balance": w.Balance, "locked": w.Locked, "available": w.Available(), "restricted": w.Restricted, "developer_available": w.Unrestricted()})
 }
 
 type walletMintAction struct{ s *Service }

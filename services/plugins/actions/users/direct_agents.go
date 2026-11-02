@@ -92,13 +92,18 @@ func (s *Service) deliverDirect(ctx context.Context, from, agentAccount, botID i
 	if err := s.R.CreateID(context.WithoutCancel(ctx), "directs", id, dm); err != nil && s.L != nil {
 		s.L.Warn("store agent direct reply", "bot", botID.String(), "error", err)
 	}
-	s.mirrorDirect(context.WithoutCancel(ctx), agentAccount, from, reply)
+	s.mirrorDirectID(context.WithoutCancel(ctx), agentAccount, from, reply, id)
 }
 
 // mirrorDirect posts a direct message into the pair's direct conversation
-// room (the spaces namespace), where the messenger shows it.
+// room (the spaces namespace), where the messenger shows it. directID links
+// the room row back to users.directs for react / hide / keep.
 func (s *Service) mirrorDirect(ctx context.Context, from, to identity.ID, body string) {
-	if err := bridge.Invoke(ctx, s.K, "spaces", "PostDirect", []any{ctx, from, to, body}); err != nil && s.L != nil {
+	s.mirrorDirectID(ctx, from, to, body, identity.ID{})
+}
+
+func (s *Service) mirrorDirectID(ctx context.Context, from, to identity.ID, body string, directID identity.ID) {
+	if err := bridge.Invoke(ctx, s.K, "spaces", "PostDirect", []any{ctx, from, to, body, directID}); err != nil && s.L != nil {
 		s.L.Debug("mirror direct message", "from", from.String(), "to", to.String(), "error", err)
 	}
 }

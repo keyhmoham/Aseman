@@ -3,12 +3,15 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
-import '../../core/theme/app_shape.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_surfaces.dart';
+import '../../core/theme/halo_ring_cache.dart';
 import '../../data/models/space.dart';
 import 'glass_surface.dart';
 import 'overlay_panels.dart';
 import 'skeleton.dart';
+import 'sky_ui.dart';
 
 /// Layout numbers for the floating glass [WorkspaceHeader] so every host
 /// page can reserve matching top space. Pass [compact] from the same
@@ -58,11 +61,11 @@ ButtonStyle _barIconStyle() => IconButton.styleFrom(
     );
 
 /// Shared floating top app bar of the workspace and the feed: a long glass
-/// pill over the page. ASEMAN sits in the middle, the account avatar (its
-/// menu) on the right. On the workspace the left edge is a Home pill that
-/// returns to the feed. On phones the navigation drawer opens from a menu on
-/// the desk below this bar, not from here. On the feed the left edge holds
-/// the notifications. On the workspace the switcher opens from the
+/// pill over the page. ASEMAN sits in the middle. On the right: the widgets /
+/// windows library, and on wide screens the account avatar beside it. Phones
+/// hide the avatar (profile lives in Home's You tab). On the workspace the
+/// left edge is a Home pill that returns to the feed. On the feed the left
+/// edge holds the notifications. On the workspace the switcher opens from the
 /// [SwitcherEdgeHandle] (hidden on the feed). Hosts overlay this bar and use
 /// [FloatingAppBarLayout.contentInset] so content starts clear of it.
 /// Optional callbacks hide the corresponding controls.
@@ -77,8 +80,10 @@ class WorkspaceHeader extends StatelessWidget {
     this.onBackToFeed,
     this.onGoHome,
     this.onOpenAdmin,
-    required this.onOpenProfile,
+    this.onOpenProfile,
+    this.onOpenWidgetsLibrary,
     this.handle = '',
+    this.accountId = '',
     this.avatar,
   });
 
@@ -93,14 +98,22 @@ class WorkspaceHeader extends StatelessWidget {
   final int unreadNotifications;
   final String handle;
 
-  /// The signed-in account's picture, shown over its initial.
+  /// Signed-in account id — binds the avatar ring in [HaloRingCache].
+  final String accountId;
+
+  /// The signed-in account's picture, shown over its initial (desktop only).
   final ImageProvider? avatar;
 
-  /// Leaves the workspace for the search feed (Home).
+  /// Pops back to the search feed (Home); must not push or replace Home.
   final VoidCallback? onBackToFeed;
   final VoidCallback? onGoHome;
   final VoidCallback? onOpenAdmin;
-  final VoidCallback onOpenProfile;
+
+  /// Opens the profile menu. Shown only on wide screens; phones use You.
+  final VoidCallback? onOpenProfile;
+
+  /// Opens the widgets / windows library (sheet on phones, modal on desktop).
+  final VoidCallback? onOpenWidgetsLibrary;
 
   @override
   Widget build(BuildContext context) {
@@ -161,12 +174,13 @@ class WorkspaceHeader extends StatelessWidget {
                 ],
               ])),
               SizedBox(width: compact ? 6 : 10),
-              const Text('ASEMAN',
+              Text('ASEMAN',
                   maxLines: 1,
                   style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.2)),
+                      fontSize: compact ? 13.5 : 14.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.4,
+                      color: Theme.of(context).colorScheme.onSurface)),
               SizedBox(width: compact ? 6 : 10),
               Expanded(
                   child: Row(
@@ -183,20 +197,35 @@ class WorkspaceHeader extends StatelessWidget {
                           icon: const Icon(Icons.space_dashboard_outlined)),
                       const SizedBox(width: 6),
                     ],
-                    InkWell(
-                        onTap: onOpenProfile,
-                        customBorder: const CircleBorder(),
-                        child: CircleAvatar(
-                            radius: FloatingAppBarLayout.avatarRadius,
-                            foregroundImage: avatar,
-                            onForegroundImageError:
-                                avatar == null ? null : (_, __) {},
-                            child: Text(
-                                handle.isEmpty ? 'ME' : handle[0].toUpperCase(),
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    height: 1))))
+                    if (onOpenWidgetsLibrary != null)
+                      IconButton(
+                          style: _barIconStyle(),
+                          tooltip: 'Widgets & windows',
+                          onPressed: onOpenWidgetsLibrary,
+                          icon: const Icon(Icons.widgets_outlined)),
+                    if (!compact && onOpenProfile != null) ...[
+                      if (onOpenWidgetsLibrary != null)
+                        const SizedBox(width: 4),
+                      InkWell(
+                          onTap: onOpenProfile,
+                          customBorder: const CircleBorder(),
+                          child: HaloRing(
+                              pad: 1.8,
+                              identity: HaloRingCache.person(accountId),
+                              child: CircleAvatar(
+                                  radius: FloatingAppBarLayout.avatarRadius,
+                                  foregroundImage: avatar,
+                                  onForegroundImageError:
+                                      avatar == null ? null : (_, __) {},
+                                  child: Text(
+                                      handle.isEmpty
+                                          ? 'ME'
+                                          : handle[0].toUpperCase(),
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          height: 1))))),
+                    ],
                   ])),
             ]),
           ),
@@ -220,25 +249,54 @@ class WorkspaceHeader extends StatelessWidget {
   }
 }
 
-/// Filled stadium control that returns to the feed from any workspace.
+/// Compact stadium back control that returns to the feed. Fixed height keeps
+/// it vertically centered with the avatar and bar icon buttons inside the
+/// short glass pill (a default [FilledButton] would grow to the full bar).
 class _HomePill extends StatelessWidget {
   const _HomePill({required this.onPressed});
   final VoidCallback? onPressed;
 
+  /// Matches the visual weight of [_barIconStyle] / the account avatar.
+  static const double _height = 28;
+
   @override
-  Widget build(BuildContext context) => FilledButton.icon(
-      onPressed: onPressed,
-      icon: const Icon(Icons.arrow_back_rounded, size: 16),
-      label: const Text('Home'),
-      style: FilledButton.styleFrom(
-          visualDensity: VisualDensity.compact,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          minimumSize: const Size(0, 28),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          textStyle: Theme.of(context)
-              .textTheme
-              .labelLarge
-              ?.copyWith(fontWeight: FontWeight.w600, fontSize: 13)));
+  Widget build(BuildContext context) {
+    final onPrimary = Theme.of(context).colorScheme.onPrimary;
+    return Tooltip(
+      message: 'Home',
+      child: SizedBox(
+        height: _height,
+        child: FilledButton(
+          onPressed: onPressed,
+          style: FilledButton.styleFrom(
+            visualDensity: VisualDensity.standard,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            minimumSize: const Size(_height, _height),
+            maximumSize: const Size(double.infinity, _height),
+            fixedSize: const Size.fromHeight(_height),
+            padding: const EdgeInsetsDirectional.only(start: 8, end: 12),
+            shape: const StadiumBorder(),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.arrow_back_rounded, size: 15, color: onPrimary),
+              const SizedBox(width: 5),
+              Text(
+                'Home',
+                style: TextStyle(
+                  color: onPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.5,
+                  height: 1.0,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// The workspace switcher's handle: a bump stuck to the screen's right edge,
@@ -309,15 +367,21 @@ class _LivePill extends StatelessWidget {
   const _LivePill();
   @override
   Widget build(BuildContext context) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-          color: Colors.green.withValues(alpha: .12),
-          borderRadius: BorderRadius.circular(20)),
+          color: AppColors.success.withValues(alpha: .12),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: AppColors.success.withValues(alpha: .22))),
       child: const Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.circle, color: Colors.greenAccent, size: 8),
+        Icon(Icons.circle, color: AppColors.success, size: 7),
         SizedBox(width: 7),
-        Text('Markets live',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700))
+        Text('Live now',
+            style: TextStyle(
+                fontSize: 11,
+                letterSpacing: -.1,
+                fontWeight: FontWeight.w700,
+                color: AppColors.success))
       ]));
 }
 
@@ -328,6 +392,9 @@ class _LivePill extends StatelessWidget {
 /// With [inBottomSheet] (or under [AppSheetScope]) the body stays transparent
 /// so the host sheet paints the glass.
 /// With [dense] tiles and type shrink for a narrow desktop rail.
+///
+/// Visual language: celestial "sky portals" — soft atmospheric glow, a docked
+/// current workspace, and luminous portal tiles with name-hashed accents.
 class WorkspacePicker extends StatefulWidget {
   const WorkspacePicker(
       {super.key,
@@ -418,24 +485,16 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
 
   Future<void> _create() async {
     final deps = widget.dependencies;
-    final name = await showAppDialog<String>(
-      context: context,
-      builder: (_) => const _CreateWorkspaceDialog(),
-    );
-    if (name == null || name.trim().isEmpty || deps == null || !mounted) return;
-    try {
-      final created = await deps.service.createSpace(name.trim(), '');
-      setState(() => spaces = [...spaces, created]);
-      widget.onPick(created.name);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Create failed: $e')));
-    }
+    if (deps == null) return;
+    final created = await promptCreateWorkspace(context, deps);
+    if (created == null || !mounted) return;
+    setState(() => spaces = [...spaces, created]);
+    widget.onPick(created.name);
   }
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final compact = MediaQuery.sizeOf(context).width < 820;
     final embedded = widget.embedded;
     final inSheet =
@@ -443,212 +502,168 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
     final dense = widget.dense;
     final names = _names;
     final showFeed = _showFeed;
+    final reduceMotion =
+        MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final pad = dense
+        ? AppSpacing.sm
+        : (embedded || inSheet ? AppSpacing.md : AppSpacing.xl - 2);
+
     // Sheet / floating panel / embedded rail paint the frost; keep clear.
     final body = Material(
         color: Colors.transparent,
-        child: Container(
-          width: embedded ? null : 760,
-          constraints: embedded
-              ? const BoxConstraints.expand()
-              : BoxConstraints(maxHeight: compact ? double.infinity : 620),
-          padding: EdgeInsets.all(dense ? 12 : (embedded || inSheet ? 16 : 26)),
-          decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppShape.card)),
-          child: Column(
-              mainAxisSize: embedded || inSheet
-                  ? MainAxisSize.max
-                  : MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: SizedBox(
+          width: embedded ? null : 780,
+          child: ConstrainedBox(
+            constraints: embedded
+                ? const BoxConstraints.expand()
+                : BoxConstraints(maxHeight: compact ? double.infinity : 640),
+            child: Stack(
               children: [
-                Row(children: [
-                  Icon(
-                      embedded
-                          ? Icons.workspaces_outline
-                          : Icons.blur_on_rounded,
-                      size: dense ? 22 : 30),
-                  const SizedBox(width: 10),
-                  Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                        Text(embedded ? 'Spaces' : 'Switch workspace',
-                            style: TextStyle(
-                                fontSize: dense ? 17 : 23,
-                                fontWeight: FontWeight.w900)),
-                        Text(
-                            embedded
-                                ? 'Open a workspace or start a new one'
-                                : 'Every workspace has its own rooms, desks and feed',
-                            style: TextStyle(fontSize: dense ? 10 : 11))
-                      ])),
-                  if (!embedded)
-                    IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close))
-                ]),
-                SizedBox(height: dense ? 12 : 18),
-                TextField(
-                    autofocus: !embedded,
-                    onChanged: (v) => setState(() => query = v),
-                    decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search_rounded),
-                        hintText: 'Search workspaces…')),
-                SizedBox(height: dense ? 12 : 18),
-                Flexible(
-                    child: LayoutBuilder(builder: (context, gridBox) {
-                  // Size columns to this panel, not the whole window — side
-                  // rails are much narrower than a phone or the modal sheet.
-                  final tileExtent = dense ? 118.0 : 154.0;
-                  final cols = math.max(
-                      1,
-                      (gridBox.maxWidth / (dense ? 140 : 180))
-                          .floor()
-                          .clamp(1, 3));
-                  if (loading) {
-                    return SkeletonGrid(
-                        maxCrossAxisExtent: 220, mainAxisExtent: tileExtent);
-                  }
-                  return GridView.builder(
-                            shrinkWrap: !embedded,
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: cols,
-                                    mainAxisSpacing: dense ? 8 : 12,
-                                    crossAxisSpacing: dense ? 8 : 12,
-                                    mainAxisExtent: tileExtent),
-                            itemCount: names.length + 1 + (showFeed ? 1 : 0),
-                            itemBuilder: (context, i) {
-                              if (showFeed) {
-                                if (i == 0) {
-                                  return _FeedTile(
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: SkyAtmospherePainter.of(scheme),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(pad),
+                  child: Column(
+                      mainAxisSize: embedded || inSheet
+                          ? MainAxisSize.max
+                          : MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SkySectionHeader(
+                          icon: embedded
+                              ? Icons.workspaces_rounded
+                              : Icons.rocket_launch_rounded,
+                          title: embedded ? 'Spaces' : 'Switch workspace',
+                          subtitle: embedded
+                              ? 'Open a workspace or start a new one'
+                              : 'Drift between rooms, desks and feeds',
+                          dense: dense,
+                          onClose: embedded
+                              ? null
+                              : () => Navigator.pop(context),
+                        ),
+                        SizedBox(height: dense ? AppSpacing.sm : AppSpacing.md),
+                        if (!dense) ...[
+                          _DockedHere(
+                            feedSelected: widget.feedSelected,
+                            currentName: widget.current,
+                            avatar: widget.feedSelected
+                                ? null
+                                : _avatarOf(widget.current),
+                            roomCount: widget.feedSelected
+                                ? null
+                                : _roomCountFor(widget.current),
+                            onOpenFeed: widget.onOpenFeed,
+                            onOpenCurrent: widget.feedSelected ||
+                                    widget.current.isEmpty
+                                ? null
+                                : () => widget.onPick(widget.current),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                        ],
+                        SoftSearchField(
+                          dense: dense,
+                          autofocus: !embedded,
+                          hintText: 'Search workspaces…',
+                          onChanged: (v) => setState(() => query = v),
+                        ),
+                        SizedBox(height: dense ? AppSpacing.sm : AppSpacing.md),
+                        Flexible(
+                            child: LayoutBuilder(builder: (context, gridBox) {
+                          final tileExtent = dense ? 126.0 : 168.0;
+                          final cols = math.max(
+                              1,
+                              (gridBox.maxWidth / (dense ? 132 : 176))
+                                  .floor()
+                                  .clamp(1, 3));
+                          if (loading) {
+                            return SkeletonGrid(
+                                maxCrossAxisExtent: 220,
+                                mainAxisExtent: tileExtent);
+                          }
+                          final count =
+                              names.length + 1 + (showFeed ? 1 : 0);
+                          return GridView.builder(
+                              shrinkWrap: !embedded,
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: cols,
+                                      mainAxisSpacing: dense ? 10 : 14,
+                                      crossAxisSpacing: dense ? 10 : 14,
+                                      mainAxisExtent: tileExtent),
+                              itemCount: count,
+                              itemBuilder: (context, i) {
+                                Widget tile;
+                                var stagger = i;
+                                if (showFeed) {
+                                  if (i == 0) {
+                                    tile = _PortalTile(
+                                      dense: dense,
                                       selected: widget.feedSelected,
-                                      onTap: widget.onOpenFeed!);
+                                      accent: scheme.primary,
+                                      title: 'Home',
+                                      subtitle: 'Your feed',
+                                      icon: Icons.home_rounded,
+                                      onTap: widget.onOpenFeed!,
+                                    );
+                                    return StaggerIn(
+                                        index: 0,
+                                        reduceMotion: reduceMotion,
+                                        child: tile);
+                                  }
+                                  i -= 1;
                                 }
-                                i -= 1;
-                              }
-                              if (i == names.length) {
-                                return InkWell(
-                                    onTap: _create,
-                                    borderRadius: BorderRadius.circular(24),
-                                    child: Container(
-                                        decoration: BoxDecoration(
-                                            border: Border.all(
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .outlineVariant),
-                                            borderRadius:
-                                                BorderRadius.circular(24)),
-                                        child: const Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Icon(Icons
-                                                  .add_circle_outline_rounded),
-                                              SizedBox(height: 8),
-                                              Text('New workspace',
-                                                  style: TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.w700))
-                                            ])));
-                              }
-                              final name = names[i];
-                              final selected =
-                                  !widget.feedSelected && name == widget.current;
-                              final space = spaces.firstWhere(
-                                  (s) => s.name == name,
-                                  orElse: () => Workspace(
-                                      id: '', ownerId: '', name: name));
-                              final radius = dense ? 18.0 : 24.0;
-                              return InkWell(
+                                if (i == names.length) {
+                                  tile = _NewPortalTile(
+                                      dense: dense, onTap: _create);
+                                  return StaggerIn(
+                                      index: stagger,
+                                      reduceMotion: reduceMotion,
+                                      child: tile);
+                                }
+                                final name = names[i];
+                                final selected = !widget.feedSelected &&
+                                    name == widget.current;
+                                final space = spaces.firstWhere(
+                                    (s) => s.name == name,
+                                    orElse: () => Workspace(
+                                        id: '', ownerId: '', name: name));
+                                final accent = portalAccentFor(name, scheme);
+                                tile = _PortalTile(
+                                  dense: dense,
+                                  selected: selected,
+                                  accent: accent,
+                                  title: name,
+                                  subtitle:
+                                      '${_roomCountFor(name)} rooms',
+                                  avatar: _avatarOf(name),
+                                  initials: name
+                                      .substring(
+                                          0, math.min(2, name.length))
+                                      .toUpperCase(),
                                   onTap: () => widget.onPick(name),
-                                  borderRadius: BorderRadius.circular(radius),
-                                  child: AnimatedContainer(
-                                      duration:
-                                          const Duration(milliseconds: 180),
-                                      padding: EdgeInsets.all(dense ? 10 : 16),
-                                      decoration: BoxDecoration(
-                                          color: selected
-                                              ? Theme.of(context)
-                                                  .colorScheme
-                                                  .primaryContainer
-                                              : Theme.of(context)
-                                                  .colorScheme
-                                                  .surfaceContainerHighest
-                                                  .withValues(alpha: .6),
-                                          borderRadius:
-                                              BorderRadius.circular(radius),
-                                          border: Border.all(
-                                              color: selected
-                                                  ? Theme.of(context)
-                                                      .colorScheme
-                                                      .primary
-                                                  : Colors.transparent)),
-                                      child: Stack(children: [
-                                        Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              CircleAvatar(
-                                                  radius: dense ? 16 : 20,
-                                                  foregroundImage:
-                                                      _avatarOf(name),
-                                                  onForegroundImageError:
-                                                      _avatarOf(name) == null
-                                                          ? null
-                                                          : (_, __) {},
-                                                  child: Text(name
-                                                      .substring(
-                                                          0,
-                                                          math.min(
-                                                              2, name.length))
-                                                      .toUpperCase())),
-                                              const Spacer(),
-                                              Text(name,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.w900,
-                                                      fontSize:
-                                                          dense ? 12 : 14)),
-                                              Text(
-                                                  '${_roomCountFor(name)} rooms',
-                                                  style: TextStyle(
-                                                      fontSize:
-                                                          dense ? 9 : 10)),
-                                              if (selected)
-                                                Align(
-                                                    alignment:
-                                                        Alignment.bottomRight,
-                                                    child: Icon(
-                                                        Icons
-                                                            .check_circle_rounded,
-                                                        size: dense
-                                                            ? 14
-                                                            : 17))
-                                            ]),
-                                        if (widget.onSettings != null &&
-                                            space.id.isNotEmpty)
-                                          Positioned(
-                                              top: 0,
-                                              right: 0,
-                                              child: IconButton(
-                                                  tooltip:
-                                                      'Settings for $name',
-                                                  visualDensity:
-                                                      VisualDensity.compact,
-                                                  onPressed: () =>
-                                                      widget.onSettings!(space),
-                                                  icon: Icon(
-                                                      Icons.settings_outlined,
-                                                      size: dense
-                                                          ? 16
-                                                          : 18)))
-                                      ])));
-                            });
-                })),
-              ]),
+                                  onSettings: widget.onSettings != null &&
+                                          space.id.isNotEmpty
+                                      ? () => widget.onSettings!(space)
+                                      : null,
+                                  settingsTooltip: 'Settings for $name',
+                                );
+                                return StaggerIn(
+                                    index: stagger,
+                                    reduceMotion: reduceMotion,
+                                    child: tile);
+                              });
+                        })),
+                      ]),
+                ),
+              ],
+            ),
+          ),
         ));
     if (embedded || inSheet) return body;
     return SafeArea(child: Center(child: body));
@@ -663,42 +678,464 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
   }
 }
 
-/// The feed's shortcut in the workspace switcher, laid out like a space.
-class _FeedTile extends StatelessWidget {
-  const _FeedTile({required this.selected, required this.onTap});
-  final bool selected;
-  final VoidCallback onTap;
+/// Slim "you're here" dock — current workspace or Home, with a halo ring.
+class _DockedHere extends StatelessWidget {
+  const _DockedHere({
+    required this.feedSelected,
+    required this.currentName,
+    this.avatar,
+    this.roomCount,
+    this.onOpenFeed,
+    this.onOpenCurrent,
+  });
+
+  final bool feedSelected;
+  final String currentName;
+  final ImageProvider? avatar;
+  final int? roomCount;
+  final VoidCallback? onOpenFeed;
+  final VoidCallback? onOpenCurrent;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return InkWell(
+    final isHome = feedSelected || currentName.isEmpty;
+    final title = isHome ? 'Home' : currentName;
+    final subtitle = isHome
+        ? 'Your feed'
+        : "${roomCount ?? 0} rooms · You're here";
+    final accent = isHome ? scheme.primary : portalAccentFor(title, scheme);
+    final onTap = isHome ? onOpenFeed : onOpenCurrent;
+
+    final avatarCore = HaloRing(
+      accent: accent,
+      child: isHome
+          ? CircleAvatar(
+              backgroundColor: accent.withValues(alpha: .2),
+              child: Icon(Icons.home_rounded, color: accent),
+            )
+          : CircleAvatar(
+              foregroundImage: avatar,
+              onForegroundImageError: avatar == null ? null : (_, __) {},
+              backgroundColor: accent.withValues(alpha: .18),
+              child: Text(
+                title.substring(0, math.min(2, title.length)).toUpperCase(),
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  color: accent,
+                ),
+              ),
+            ),
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(22),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                accent.withValues(alpha: .18),
+                scheme.surfaceContainerHighest.withValues(alpha: .35),
+              ],
+            ),
+            border: Border.all(color: accent.withValues(alpha: .35)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: accent.withValues(alpha: .2),
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: SweepGradient(
+                            colors: [
+                              accent,
+                              accent.withValues(alpha: .25),
+                              AppColors.cyan.withValues(alpha: .8),
+                              accent,
+                            ],
+                          ),
+                        ),
+                        padding: const EdgeInsets.all(2.5),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: scheme.surface,
+                          ),
+                          child: avatarCore,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'NOW',
+                        style: TextStyle(
+                          fontSize: 10,
+                          letterSpacing: 1.4,
+                          fontWeight: FontWeight.w800,
+                          color: accent,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15.5,
+                          letterSpacing: -.2,
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.north_east_rounded,
+                    size: 18, color: scheme.onSurfaceVariant),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A luminous workspace (or Home) portal tile.
+class _PortalTile extends StatelessWidget {
+  const _PortalTile({
+    required this.dense,
+    required this.selected,
+    required this.accent,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.avatar,
+    this.initials,
+    this.icon,
+    this.onSettings,
+    this.settingsTooltip,
+  });
+
+  final bool dense;
+  final bool selected;
+  final Color accent;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final ImageProvider? avatar;
+  final String? initials;
+  final IconData? icon;
+  final VoidCallback? onSettings;
+  final String? settingsTooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final radius = dense ? 20.0 : 26.0;
+    final avatarR = dense ? 18.0 : 22.0;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(radius),
         child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-                color: selected
-                    ? scheme.primaryContainer
-                    : scheme.surfaceContainerHighest.withValues(alpha: .6),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                    color: selected ? scheme.primary : Colors.transparent)),
-            child: Column(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.all(dense ? 12 : 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: selected
+                  ? [
+                      accent.withValues(alpha: .32),
+                      scheme.primaryContainer.withValues(alpha: .55),
+                    ]
+                  : [
+                      scheme.surfaceContainerHighest.withValues(alpha: .55),
+                      accent.withValues(alpha: .08),
+                    ],
+            ),
+            border: Border.all(
+              color: selected
+                  ? accent.withValues(alpha: .85)
+                  : AppSurfaces.cardBorder(scheme),
+              width: selected ? 1.6 : 1,
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: accent.withValues(alpha: .28),
+                      blurRadius: 22,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: .06),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -18,
+                top: -22,
+                child: IgnorePointer(
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          accent.withValues(alpha: selected ? .28 : .12),
+                          accent.withValues(alpha: 0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                      backgroundColor: scheme.primary,
-                      child: Icon(Icons.home_rounded, color: scheme.onPrimary)),
+                  Row(
+                    children: [
+                      HaloRing(
+                        accent: accent,
+                        child: CircleAvatar(
+                          radius: avatarR,
+                          backgroundColor: scheme.surface,
+                          foregroundImage: avatar,
+                          onForegroundImageError:
+                              avatar == null ? null : (_, __) {},
+                          child: icon != null
+                              ? Icon(icon, color: accent, size: dense ? 18 : 22)
+                              : Text(
+                                  initials ?? '?',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: dense ? 11 : 13,
+                                    color: accent,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const Spacer(),
+                      if (selected)
+                        Icon(Icons.check_circle_rounded,
+                            size: dense ? 16 : 18, color: accent),
+                    ],
+                  ),
                   const Spacer(),
-                  const Text('Home',
-                      style: TextStyle(fontWeight: FontWeight.w900)),
-                  const Text('Your feed', style: TextStyle(fontSize: 10)),
-                  if (selected)
-                    const Align(
-                        alignment: Alignment.bottomRight,
-                        child: Icon(Icons.check_circle_rounded, size: 17))
-                ])));
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: dense ? 12.5 : 14.5,
+                      letterSpacing: -.2,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: dense ? 9.5 : 11,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              if (onSettings != null)
+                Positioned(
+                  top: -4,
+                  right: -4,
+                  child: IconButton(
+                    tooltip: settingsTooltip,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onSettings,
+                    icon: Icon(
+                      Icons.settings_outlined,
+                      size: dense ? 15 : 17,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dashed "open a new portal" tile.
+class _NewPortalTile extends StatelessWidget {
+  const _NewPortalTile({required this.dense, required this.onTap});
+  final bool dense;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final radius = dense ? 20.0 : 26.0;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(radius),
+        child: CustomPaint(
+          painter: _DashedRRectPainter(
+            color: scheme.outlineVariant.withValues(alpha: .85),
+            radius: radius,
+          ),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: dense ? 36 : 44,
+                  height: dense ? 36 : 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: scheme.primary.withValues(alpha: .12),
+                  ),
+                  child: Icon(
+                    Icons.add_rounded,
+                    color: scheme.primary,
+                    size: dense ? 20 : 24,
+                  ),
+                ),
+                SizedBox(height: dense ? 8 : 10),
+                Text(
+                  'New workspace',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: dense ? 12 : 13.5,
+                    letterSpacing: -.15,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Open a portal',
+                  style: TextStyle(
+                    fontSize: dense ? 9 : 10.5,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedRRectPainter extends CustomPainter {
+  const _DashedRRectPainter({required this.color, required this.radius});
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(1, 1, size.width - 2, size.height - 2),
+      Radius.circular(radius),
+    );
+    final path = Path()..addRRect(rrect);
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4;
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      const dash = 6.0;
+      const gap = 5.0;
+      while (distance < metric.length) {
+        final next = math.min(distance + dash, metric.length);
+        canvas.drawPath(metric.extractPath(distance, next), paint);
+        distance = next + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedRRectPainter old) =>
+      old.color != color || old.radius != radius;
+}
+
+
+/// Asks for a workspace name and creates it — the same flow as the
+/// switcher's **New workspace** tile. Returns null if cancelled or create
+/// failed (failure shows a snackbar).
+Future<Workspace?> promptCreateWorkspace(
+  BuildContext context,
+  AppDependencies dependencies,
+) async {
+  final name = await showAppDialog<String>(
+    context: context,
+    builder: (_) => const _CreateWorkspaceDialog(),
+  );
+  if (name == null || name.trim().isEmpty || !context.mounted) return null;
+  try {
+    return await dependencies.service.createSpace(name.trim(), '');
+  } catch (e) {
+    if (!context.mounted) return null;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Create failed: $e')));
+    return null;
   }
 }
 

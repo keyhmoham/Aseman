@@ -60,7 +60,7 @@ class FakeAsemanService extends AsemanService {
 
   List<Workspace> _spaces = const [
     Workspace(id: homeId, ownerId: 'me', name: 'Home', home: true),
-    Workspace(id: atlasId, ownerId: 'me', name: 'Atlas Capital'),
+    Workspace(id: atlasId, ownerId: 'me', name: 'Atlas Collective'),
     Workspace(id: sharedId, ownerId: 'u1', name: 'Shared Desk'),
   ];
 
@@ -194,11 +194,11 @@ class FakeAsemanService extends AsemanService {
   }) async => switch (spaceId) {
     homeId => const [
       WorkspaceRoom(id: 'r1', spaceId: homeId, name: 'general'),
-      WorkspaceRoom(id: 'r2', spaceId: homeId, name: 'Crypto Alpha'),
+      WorkspaceRoom(id: 'r2', spaceId: homeId, name: 'Build Lab'),
     ],
     atlasId => const [
       WorkspaceRoom(id: 'a1', spaceId: atlasId, name: 'general'),
-      WorkspaceRoom(id: 'a2', spaceId: atlasId, name: 'Global Macro'),
+      WorkspaceRoom(id: 'a2', spaceId: atlasId, name: 'Ideas'),
     ],
     sharedId => const [
       WorkspaceRoom(id: 's1', spaceId: sharedId, name: 'general'),
@@ -221,7 +221,7 @@ class FakeAsemanService extends AsemanService {
                 id: 'ws-atlas',
                 authorId: homeId,
                 spaceId: atlasId,
-                body: 'Private note inside Atlas Capital.',
+                body: 'Private note inside Atlas Collective.',
                 createdAt: DateTime.now().subtract(const Duration(minutes: 3)),
                 tags: const ['UPDATE'],
                 likes: 4,
@@ -233,9 +233,9 @@ class FakeAsemanService extends AsemanService {
       SocialPost(
         id: 'p1',
         authorId: homeId,
-        body: 'BTC consolidating above weekly VWAP.',
+        body: 'Shipped the onboarding polish with AssistBot.',
         createdAt: DateTime.now().subtract(const Duration(minutes: 5)),
-        tags: const ['LONG', 'BTC'],
+        tags: const ['UPDATE', 'SHIP'],
         likes: 12,
       ),
     ];
@@ -332,7 +332,7 @@ class FakeAsemanService extends AsemanService {
               botId: 'bot-alpha',
               type: 'agent',
               name: 'AlphaBot',
-              description: 'Sizes trades',
+              description: 'Helps coordinate work',
             ),
             MarketListing(
               id: 'l2',
@@ -395,8 +395,8 @@ class FakeAsemanService extends AsemanService {
   @override
   Future<List<MarketQuote>> fetchMarketQuotes() async => const [
     MarketQuote(
-      symbol: 'BTC',
-      price: r'$68,245',
+      symbol: 'HELP',
+      price: '42 installs',
       change: 1.8,
       color: AppColors.warning,
     ),
@@ -447,8 +447,23 @@ class FakeAsemanService extends AsemanService {
   static const directId = '00000000000000010000000000000007';
   static const agentDirectId = '00000000000000010000000000000008';
 
-  /// The messenger's conversations: two direct chats and the Atlas rooms.
+  /// The messenger's conversations: personal Aseman, two directs, Atlas rooms.
   List<ChatSummary> chats = [
+    ChatSummary(
+      spaceId: '00000000000000010000000000000010',
+      roomId: 's1',
+      direct: true,
+      saved: true,
+      spaceName: 'Aseman',
+      roomName: 'general',
+      role: 'owner',
+      peer: const ChatPeer(
+        id: '00000000000000010000000000000001',
+        handle: 'test',
+      ),
+      lastBody: '',
+      updatedAt: DateTime(2026, 3, 4, 9, 50),
+    ),
     ChatSummary(
       spaceId: directId,
       roomId: 'd1',
@@ -481,7 +496,7 @@ class FakeAsemanService extends AsemanService {
         kind: 'bot',
         botId: 'bot-alpha',
       ),
-      lastBody: 'Entry 68,200 · stop 66,900 · size 0.31 BTC.',
+      lastBody: 'Synced notes with the Build Lab room.',
       lastSenderId: '00000000000000010000000000000043',
       lastSenderName: 'AlphaBot',
       updatedAt: DateTime(2026, 3, 4, 9, 20),
@@ -490,7 +505,7 @@ class FakeAsemanService extends AsemanService {
     ChatSummary(
       spaceId: atlasId,
       roomId: 'a1',
-      spaceName: 'Atlas Capital',
+      spaceName: 'Atlas Collective',
       roomName: 'general',
       role: 'owner',
       lastBody: 'Perfect, thanks!',
@@ -704,13 +719,17 @@ class FakeAsemanService extends AsemanService {
   );
 
   @override
-  Future<ChatSummary> openSaved() async => const ChatSummary(
-    spaceId: '00000000000000010000000000000010',
-    roomId: 's1',
-    direct: true,
-    saved: true,
-    role: 'owner',
-    peer: ChatPeer(id: '00000000000000010000000000000001', handle: 'test'),
+  Future<ChatSummary> openSaved() async => chats.firstWhere(
+    (c) => c.saved,
+    orElse: () => const ChatSummary(
+      spaceId: '00000000000000010000000000000010',
+      roomId: 's1',
+      direct: true,
+      saved: true,
+      spaceName: 'Aseman',
+      role: 'owner',
+      peer: ChatPeer(id: '00000000000000010000000000000001', handle: 'test'),
+    ),
   );
 
   /// Simulates the backend "working agent" signal for the room indicator.
@@ -871,7 +890,7 @@ class FakeAsemanService extends AsemanService {
           id: 'agent-1',
           ownerId: 'me',
           accountId: 'acct-1',
-          name: 'SignalBot',
+          name: 'AssistBot',
           kind: 'agent',
           vmType: 'langchain',
           status: 'running',
@@ -947,11 +966,11 @@ class FakeAsemanService extends AsemanService {
     final me = client.session?.accountId ?? '';
     return UserProfile(
       id: accountId,
-      handle: accountId == me ? 'me' : 'trader-$accountId',
+      handle: accountId == me ? 'me' : 'member-$accountId',
       kind: 'user',
       status: 'active',
-      displayName: 'Trader ${accountId.substring(0, 4)}',
-      bio: 'Systematic macro trader.',
+      displayName: 'Person ${accountId.substring(0, 4)}',
+      bio: 'Builds with people and agents.',
       followers: _follows.where((f) => f.endsWith('>$accountId')).length,
       following: _follows.where((f) => f.startsWith('$accountId>')).length,
       amFollowing: _follows.contains('$me>$accountId'),
@@ -978,7 +997,7 @@ class FakeAsemanService extends AsemanService {
   }) async => [
     const AccountSummary(
       id: 'u1',
-      handle: 'macroalex',
+      handle: 'alex',
       kind: 'user',
       status: 'active',
     ),
@@ -994,7 +1013,7 @@ class FakeAsemanService extends AsemanService {
   @override
   Future<BotProfile> fetchBotProfile(String botId) async => BotProfile(
     id: botId,
-    name: botId == 'agent-1' ? 'SignalBot' : 'Sandbox',
+    name: botId == 'agent-1' ? 'AssistBot' : 'Sandbox',
     kind: 'agent',
     vmType: 'langchain',
     status: 'running',
@@ -1013,7 +1032,7 @@ class FakeAsemanService extends AsemanService {
     final name = switch (spaceId) {
       homeId => 'Home',
       sharedId => 'Shared Desk',
-      _ => 'Atlas Capital',
+      _ => 'Atlas Collective',
     };
     final owner = switch (spaceId) {
       sharedId => 'u1',
@@ -1028,7 +1047,7 @@ class FakeAsemanService extends AsemanService {
       memberCount: spaceId == homeId ? 1 : 3,
       agentCount: 1,
       roomCount: 2,
-      rooms: const ['general', 'Crypto Alpha'],
+      rooms: const ['general', 'Build Lab'],
       postCount: 4,
       fileCount: 2,
       amMember: true,
@@ -1050,7 +1069,7 @@ class FakeAsemanService extends AsemanService {
     recentMessages: const [
       {
         'sender_id': 'u1',
-        'body': 'Morning levels look strong.',
+        'body': 'Morning standup notes look good.',
         'created_at': '2026-10-01T09:00:00Z',
       },
     ],
@@ -1096,7 +1115,7 @@ class FakeAsemanService extends AsemanService {
       sharedId => <Map<String, dynamic>>[
         {
           'member_id': 'u1',
-          'handle': 'trader-u1',
+          'handle': 'member-u1',
           'kind': 'user',
           'role': 'owner',
         },
@@ -1106,7 +1125,7 @@ class FakeAsemanService extends AsemanService {
         {'member_id': 'me', 'handle': 'test', 'kind': 'user', 'role': 'owner'},
         {
           'member_id': 'u1',
-          'handle': 'trader-u1',
+          'handle': 'member-u1',
           'kind': 'user',
           'role': 'member',
         },
@@ -1125,7 +1144,7 @@ class FakeAsemanService extends AsemanService {
     return [
       {
         'sender_id': 'u1',
-        'body': 'Morning levels look strong.',
+        'body': 'Morning standup notes look good.',
         'created_at': '2026-10-01T09:00:00Z',
       },
     ];
@@ -1151,7 +1170,7 @@ class FakeAsemanService extends AsemanService {
       },
       {
         'key': 'r2',
-        'label': 'Crypto Alpha',
+        'label': 'Build Lab',
         'requests': 2,
         'tokens_in': 450,
         'tokens_out': 180,
@@ -1161,7 +1180,7 @@ class FakeAsemanService extends AsemanService {
     'agents': [
       {
         'key': 'agent-1',
-        'label': 'SignalBot',
+        'label': 'AssistBot',
         'requests': 3,
         'tokens_in': 900,
         'tokens_out': 280,
@@ -1188,7 +1207,7 @@ class FakeAsemanService extends AsemanService {
   }) async => [
     {
       'space_id': spaceId,
-      'bot_name': 'SignalBot',
+      'bot_name': 'AssistBot',
       'tokens_in': 100,
       'tokens_out': 20,
       'cost': 1,
@@ -1204,7 +1223,7 @@ class FakeAsemanService extends AsemanService {
     return [
       {
         'id': atlasId,
-        'name': 'Atlas Capital',
+        'name': 'Atlas Collective',
         'description': 'Macro desk',
         'owner_id': 'me',
       },

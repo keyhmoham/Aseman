@@ -1,3 +1,5 @@
+import 'agent_humanoid.dart';
+
 /// A bot VM (an agent, or an app) as returned by the bots namespace.
 class Bot {
   const Bot({
@@ -11,6 +13,7 @@ class Bot {
     this.imageRef = '',
     this.hasFrontend = false,
     this.avatar = '',
+    this.humanoid,
   });
 
   final String id;
@@ -26,8 +29,16 @@ class Bot {
   /// Its picture: a stored file's id, "" when it has none.
   final String avatar;
 
+  /// Platform-default humanoid look (random at create). Personal overrides
+  /// live on-device per person and are not stored here.
+  final AgentHumanoid? humanoid;
+
   bool get isAgent => kind == 'agent';
   bool get isTool => kind == 'tool';
+
+  /// Built-in Aseman assistant or lead — personal Aseman chat, not a New-chat peer.
+  bool get isBuiltin =>
+      imageRef == 'aseman-chat' || imageRef == 'aseman.wasm';
 
   /// The space's own computer (its sandbox), shown as the space's files
   /// rather than as an app. Matches the backend [Bot.IsSandbox] rule.
@@ -69,6 +80,7 @@ class Bot {
         imageRef: imageRef,
         hasFrontend: hasFrontend,
         avatar: avatar,
+        humanoid: humanoid,
       );
 
   /// What it is, for display: an agent or an app.
@@ -85,6 +97,7 @@ class Bot {
         imageRef: json['image_ref'] as String? ?? '',
         hasFrontend: json['has_frontend'] as bool? ?? false,
         avatar: '${json['avatar'] ?? ''}',
+        humanoid: AgentHumanoid.tryParse(json['humanoid']),
       );
 }
 

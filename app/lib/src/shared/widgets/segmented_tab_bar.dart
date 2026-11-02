@@ -2,8 +2,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_surfaces.dart';
+import '../../core/theme/app_theme.dart';
+
 /// The app's signature segmented pill tab control (the same component used by
-/// the search feed's Global / Following / Traders tabs). A rounded container
+/// the search feed's Global / Following / People tabs). A rounded container
 /// hosts a [TabBar] whose indicator is a soft pill; icons render on wide
 /// screens and hide on compact ones. The controller is resolved from the
 /// enclosing [DefaultTabController] unless one is passed explicitly.
@@ -122,15 +125,14 @@ class _SegmentedTabBarState extends State<SegmentedTabBar>
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest.withValues(alpha: .7),
+            color: AppSurfaces.card(scheme),
             borderRadius: BorderRadius.circular(26),
-            border:
-                Border.all(color: scheme.outlineVariant.withValues(alpha: .5)),
+            border: Border.all(color: AppSurfaces.cardBorder(scheme)),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withValues(alpha: .12),
-                  blurRadius: 18,
-                  offset: const Offset(0, 7)),
+                  color: Colors.black.withValues(alpha: .05),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3)),
             ],
           ),
           child: TabBar(
@@ -140,16 +142,8 @@ class _SegmentedTabBarState extends State<SegmentedTabBar>
             tabAlignment: TabAlignment.start,
             dividerColor: Colors.transparent,
             indicatorSize: TabBarIndicatorSize.tab,
-            indicator: BoxDecoration(
-              color: scheme.primaryContainer,
-              borderRadius: BorderRadius.circular(22),
-              boxShadow: [
-                BoxShadow(
-                    color: scheme.primary.withValues(alpha: .15),
-                    blurRadius: 10),
-              ],
-            ),
-            labelColor: scheme.onPrimaryContainer,
+            indicator: AppFab.tabIndicatorOf(scheme),
+            labelColor: scheme.primary,
             unselectedLabelColor: scheme.onSurfaceVariant,
             labelStyle: selectedStyle,
             unselectedLabelStyle: unselectedStyle,

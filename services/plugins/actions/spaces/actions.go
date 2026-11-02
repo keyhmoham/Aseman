@@ -51,7 +51,7 @@ func BuildActions(s *Service) []api.Action {
 		&fileUploadAction{s: s}, &fileDownloadAction{s: s}, &fileGetAction{s: s},
 		&fileDeleteAction{s: s}, &fileListAction{s: s},
 		&kvSetAction{s: s}, &kvGetAction{s: s}, &kvListAction{s: s}, &kvDeleteAction{s: s},
-	}, append(append(clientActions(s), directActions(s)...), chatActions(s)...)...), append(agentActions(s), threadActions(s)...)...)
+	}, append(append(append(clientActions(s), directActions(s)...), chatActions(s)...), messageSocialActions(s)...)...), append(agentActions(s), threadActions(s)...)...)
 }
 
 // --- spaces ---
@@ -981,6 +981,7 @@ func (a *botAddAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	if err := a.s.AddBot(ctx, req.Caller.ID, spID, roomID, botID); err != nil {
 		return nil, err
 	}
+	a.s.noteDmInstall(ctx, spID, req.Caller.ID, botID)
 	a.s.installTool(ctx, spID, botID)
 	return helper.JSON(map[string]any{"ok": true})
 }
@@ -1008,6 +1009,16 @@ func (a *botRemoveAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 	if err := a.s.Can(ctx, spID, roomID, req.Caller.ID, permission.SpaceManageBots); err != nil {
 		return nil, err
 	}
+	// The founding peer of a person↔agent Direct is the conversation itself —
+	// only additionally installed subagents/apps may be removed.
+	if sp, err := a.s.GetSpace(ctx, spID); err == nil && sp != nil && sp.Direct {
+		if peer, ok := a.s.directFoundingPeer(ctx, sp, req.Caller.ID); ok {
+			if a.s.botAccountOf(ctx, botID) == peer {
+				return nil, errs.Permission("cannot remove the other participant from this chat")
+			}
+		}
+	}
+	a.s.clearDmInstall(ctx, spID, req.Caller.ID, botID)
 	// Both of the bot's ids may be what a membership was recorded with.
 	ids := map[string]bool{botID.String(): true, a.s.botAccountOf(ctx, botID).String(): true}
 	for id := range ids {
@@ -1050,6 +1061,8 @@ func (a *botsListAction) Handle(ctx context.Context, req *api.ActionRequest) (*a
 	// Agents need the shared sandbox as an app (bot id for routines, ask, …).
 	// People-facing clients omit it; it is a computer, not an installable app.
 	forAgents := a.s.isBotAccount(ctx, req.Caller.ID)
+	sp, _ := a.s.GetSpace(ctx, spID)
+	direct := sp != nil && sp.Direct
 	var mems []membership.Membership
 	if err := a.s.R.List(ctx, "memberships", database.Filter{
 		Equal: map[string]any{"space_id": spID.String(), "role": string(membership.RoleBot)},
@@ -1066,25 +1079,35 @@ func (a *botsListAction) Handle(ctx context.Context, req *api.ActionRequest) (*a
 		if !forAgents && rec.IsSandbox() {
 			continue
 		}
+		if direct && !forAgents && !a.s.dmInstallVisible(ctx, spID, req.Caller.ID, rec.AccountID) {
+			continue
+		}
 		if seen[rec.ID.String()] {
 			continue
 		}
 		seen[rec.ID.String()] = true
-		bots = append(bots, map[string]any{
-			"id":          rec.ID.String(),
-			"account_id":  rec.AccountID.String(),
-			"name":        rec.Name,
-			"kind":        string(rec.Kind),
-			"vm_type":     string(rec.VMType),
-			"status":      string(rec.Status),
-			"vm_id":       rec.VMID,
-			"member_id":   mems[i].MemberID.String(),
-			"description": a.s.toolDescription(ctx, rec),
-			"owner_id":    rec.OwnerID.String(),
-			"avatar":      a.s.participants().get(ctx, rec.AccountID)["avatar"],
-			"cost":        rec.Cost,
-			"resources":   rec.Resources,
-		})
+		person := a.s.participants().get(ctx, rec.AccountID)
+		row := map[string]any{
+			"id":           rec.ID.String(),
+			"account_id":   rec.AccountID.String(),
+			"name":         rec.Name,
+			"kind":         string(rec.Kind),
+			"vm_type":      string(rec.VMType),
+			"status":       string(rec.Status),
+			"vm_id":        rec.VMID,
+			"member_id":    mems[i].MemberID.String(),
+			"description":  a.s.toolDescription(ctx, rec),
+			"owner_id":     rec.OwnerID.String(),
+			"avatar":       person["avatar"],
+			"image_ref":    rec.ImageRef,
+			"has_frontend": rec.Frontend != "" || rec.FrontendRef != "",
+			"cost":         rec.Cost,
+			"resources":    rec.Resources,
+		}
+		if h, ok := person["humanoid"]; ok {
+			row["humanoid"] = h
+		}
+		bots = append(bots, row)
 	}
 	return helper.JSON(map[string]any{"bots": bots})
 }
@@ -1190,6 +1213,25 @@ func (a *msgSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	setTyping(roomID, req.Caller.ID, false) // the message is written
 	a.s.touchThread(ctx, roomID, in.Body)
 	a.s.notifyRoomMessage(msg)
+	// Saved Messages: hand the note to the person's Aseman (brain) without
+	// re-posting it into the room — the room already has it. Stamp the Direct
+	// id on the room message so react / hide / keep work from the messenger.
+	if sp, err := a.s.GetSpace(ctx, spID); err == nil && sp.DirectKey == directKey(req.Caller.ID, req.Caller.ID) && in.Body != "" {
+		var directID identity.ID
+		if err := bridge.Invoke(ctx, a.s.K, "users", "NoteSaved", []any{ctx, req.Caller.ID, in.Body, false}, &directID); err == nil && !directID.IsZero() {
+			msg.DirectID = directID.String()
+			msg.UpdatedAt = time.Now().UTC()
+			_ = a.s.R.Update(ctx, "messages", id, msg)
+		}
+	} else if sp != nil && sp.Direct && in.Body != "" {
+		// Person↔person direct: also keep a users.directs row so dm_* works.
+		var directID identity.ID
+		if err := bridge.Invoke(ctx, a.s.K, "users", "RecordDirect", []any{ctx, req.Caller.ID, sp.DirectKey, in.Body}, &directID); err == nil && !directID.IsZero() {
+			msg.DirectID = directID.String()
+			msg.UpdatedAt = time.Now().UTC()
+			_ = a.s.R.Update(ctx, "messages", id, msg)
+		}
+	}
 	// Deliver the message to the space's agents: mentioned agents are
 	// triggered to respond, others record it as conversation history.
 	// Hard enforcement: mentioning agents costs at least one credit each, so
@@ -1303,7 +1345,7 @@ func (a *msgListAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 		working, workingDetail = agent, detail
 	}
 	out := map[string]any{
-		"messages":       a.s.enrichMessages(ctx, msgs),
+		"messages":       a.s.enrichMessages(ctx, msgs, req.Caller.ID),
 		"has_more":       hasMore,
 		"working":        working,
 		"working_detail": workingDetail,
@@ -1408,7 +1450,7 @@ func (a *msgSearchAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 	if err != nil {
 		return nil, err
 	}
-	return helper.JSON(map[string]any{"messages": a.s.enrichMessages(ctx, msgs)})
+	return helper.JSON(map[string]any{"messages": a.s.enrichMessages(ctx, msgs, req.Caller.ID)})
 }
 
 // --- files ---

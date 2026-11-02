@@ -119,7 +119,7 @@ void main() {
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
 
-    // Atlas Capital's general room from the fake chat list.
+    // Atlas Collective's general room from the fake chat list.
     expect(find.text('general'), findsOneWidget);
     await tester.tap(find.text('general'));
     await tester.pumpAndSettle();

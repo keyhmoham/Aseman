@@ -137,3 +137,39 @@ func TestDirectConversationWithAnAgentAddressesIt(t *testing.T) {
 		t.Fatalf("a project room gained mentions: %v", got)
 	}
 }
+
+// The founding agent of a person↔agent Direct cannot be removed; an additional
+// subagent installed into that chat can.
+func TestDirectChatCannotRemoveFoundingAgentPeer(t *testing.T) {
+	s, ctx := fileToolHarness(t)
+	alice := directPerson(t, s, ctx, "00000000000000010000000000000001", "alice")
+	project, err := s.CreateSpace(ctx, alice, "project", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := addDevBotMember(t, s, ctx, project.ID)
+	sp, room, err := s.OpenDirect(ctx, alice, agent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := callErr(ctx, alice, (&botRemoveAction{s: s}).Handle, map[string]any{
+		"space": sp.ID.String(), "room": room.ID.String(), "bot": agent.String(),
+	}); err == nil {
+		t.Fatal("removed the founding agent peer")
+	}
+	sub := addAgent(t, s, ctx, project.ID, "helper", "helper-vm")
+	if err := s.AddBot(ctx, alice, sp.ID, identity.ID{}, sub.AccountID); err != nil {
+		t.Fatal(err)
+	}
+	if err := callErr(ctx, alice, (&botRemoveAction{s: s}).Handle, map[string]any{
+		"space": sp.ID.String(), "bot": sub.ID.String(),
+	}); err != nil {
+		t.Fatalf("could not remove a subagent: %v", err)
+	}
+	if _, err := s.SpaceMembership(ctx, sp.ID, agent); err != nil {
+		t.Fatal("founding agent peer was removed")
+	}
+	if _, err := s.SpaceMembership(ctx, sp.ID, sub.AccountID); err == nil {
+		t.Fatal("subagent is still a member")
+	}
+}

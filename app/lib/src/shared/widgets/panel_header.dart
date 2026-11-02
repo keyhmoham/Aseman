@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_spacing.dart';
+import 'sky_ui.dart';
+
 /// Responsive header for the app's modal panels. On wide screens the icon +
 /// title + subtitle sit on one line with the actions beside them; on narrow
 /// screens the title row stays on top and the actions wrap below, so nothing
 /// gets squeezed or clipped on mobile bottom sheets.
 ///
-/// When the available width is rail-sized (< 380), the heading scales down so
-/// side panels stay readable without oversized chrome.
+/// Uses the shared sky badge (circular primary→cyan gradient) so every panel
+/// matches the workspace switcher / You tab voice.
 class PanelHeader extends StatelessWidget {
   const PanelHeader({
     super.key,
@@ -25,70 +28,60 @@ class PanelHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final close = onClose == null
-        ? null
-        : IconButton.filledTonal(
-            tooltip: 'Close',
-            onPressed: onClose,
-            icon: const Icon(Icons.close_rounded));
-
     return LayoutBuilder(builder: (context, box) {
       final rail = box.maxWidth < 380;
-      final iconBox = rail ? 36.0 : 48.0;
-      final iconSize = rail ? 18.0 : 24.0;
-      final titleSize = rail ? 17.0 : 26.0;
-      final heading = Row(children: [
-        Container(
-          width: iconBox,
-          height: iconBox,
-          decoration: ShapeDecoration(
-            color: scheme.primaryContainer,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(rail ? 12 : 16)),
+      final heading = SkySectionHeader(
+        icon: icon,
+        title: title,
+        subtitle: subtitle,
+        dense: rail,
+        onClose: box.maxWidth < 560 ? onClose : null,
+      );
+
+      final actionRow = [
+        for (final a in actions) ...[
+          a,
+          if (a != actions.last) const SizedBox(width: AppSpacing.xs),
+        ],
+        if (box.maxWidth >= 560 && onClose != null) ...[
+          if (actions.isNotEmpty) const SizedBox(width: AppSpacing.xs),
+          IconButton(
+            tooltip: 'Close',
+            onPressed: onClose,
+            style: IconButton.styleFrom(
+              backgroundColor: Theme.of(context)
+                  .colorScheme
+                  .surfaceContainerHighest
+                  .withValues(alpha: .45),
+            ),
+            icon: const Icon(Icons.close_rounded),
           ),
-          child: Icon(icon, size: iconSize, color: scheme.onPrimaryContainer),
-        ),
-        SizedBox(width: rail ? 10 : 14),
-        Expanded(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: titleSize,
-                    height: 1.15,
-                    letterSpacing: -.5,
-                    fontWeight: FontWeight.w800)),
-            const SizedBox(height: 2),
-            Text(subtitle,
-                maxLines: rail ? 2 : 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: rail ? 11 : 13,
-                    color: scheme.onSurfaceVariant)),
-          ]),
-        ),
-      ]);
+        ],
+      ];
 
       if (box.maxWidth >= 560) {
         return Row(children: [
-          Expanded(child: heading),
-          for (final a in actions) a,
-          if (close != null) close,
+          Expanded(
+            child: SkySectionHeader(
+              icon: icon,
+              title: title,
+              subtitle: subtitle,
+              dense: false,
+            ),
+          ),
+          ...actionRow,
         ]);
       }
       return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(child: heading),
-          if (close != null) close,
-        ]),
+        heading,
         if (actions.isNotEmpty) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           Align(
             alignment: Alignment.centerRight,
-            child: Wrap(spacing: 8, runSpacing: 8, children: actions),
+            child: Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
+                children: actions),
           ),
         ],
       ]);

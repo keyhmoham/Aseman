@@ -103,12 +103,19 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 	if !openCode {
 		builder = "you build"
 	}
+	caller := helper.Actor(ctx)
+	sp, _ := s.GetSpace(ctx, spaceID)
+	direct := sp != nil && sp.Direct
 	for i := range mems {
 		rec, err := s.botForMember(ctx, mems[i].MemberID)
 		if err != nil {
 			continue
 		}
 		if rec.Kind != bot.KindTool {
+			continue
+		}
+		if direct && !caller.IsZero() && !rec.IsSandbox() &&
+			!s.dmInstallVisible(ctx, spaceID, caller, rec.AccountID) {
 			continue
 		}
 		if toolBots[rec.ID.String()] {

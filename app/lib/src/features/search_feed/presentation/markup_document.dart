@@ -81,7 +81,7 @@ extension DesignKindInfo on DesignKind {
 
 /// The kinds of `:::card` the designer offers, with their labels.
 const designCardKinds = [
-  ('user', 'Trader', Icons.person_rounded),
+  ('user', 'Person', Icons.person_rounded),
   ('agent', 'Agent', Icons.smart_toy_rounded),
   ('tool', 'App', Icons.apps_rounded),
   ('space', 'Workspace', Icons.hub_rounded),

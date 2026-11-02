@@ -34,6 +34,9 @@ func (s *Service) RoomWidgets(ctx context.Context, spaceID, roomID identity.ID) 
 	if err := s.R.List(ctx, "memberships", database.Filter{Equal: eq}, &mems); err != nil {
 		return nil, err
 	}
+	caller := helper.Actor(ctx)
+	sp, _ := s.GetSpace(ctx, spaceID)
+	direct := sp != nil && sp.Direct
 	var out []map[string]any
 	for i := range mems {
 		rec, err := s.botForMember(ctx, mems[i].MemberID)
@@ -45,6 +48,10 @@ func (s *Service) RoomWidgets(ctx context.Context, spaceID, roomID identity.ID) 
 		}
 		// The shared per-space sandbox is a computer, not a desk app.
 		if rec.IsSandbox() {
+			continue
+		}
+		if direct && !caller.IsZero() &&
+			!s.dmInstallVisible(ctx, spaceID, caller, rec.AccountID) {
 			continue
 		}
 		w := s.widgetFor(ctx, spaceID, roomID, rec)

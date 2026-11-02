@@ -3,15 +3,32 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/settings/app_settings.dart';
+import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/halo_ring_cache.dart';
+import '../../../data/models/agent_humanoid.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/space.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/bot_avatar.dart';
+import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import '../../../shared/widgets/segmented_tab_bar.dart';
+import '../../../shared/widgets/sky_ui.dart';
+import '../../brain/brain_avatar.dart';
+import '../../brain/brain_voice.dart';
+import '../../calls/call_page.dart';
+import '../../desk/data/desk_api.dart';
+import '../../desk/presentation/desk_controller.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
+import 'dm_desk_panel.dart';
+import 'dm_facility_sheet.dart';
 import 'report_dialog.dart';
+import 'widgets/brain_proposals.dart';
 
-/// Opens [chat]: on a wide screen a direct chat (or Saved Messages) is a
+/// Opens [chat]: on a wide screen a direct chat (or personal Aseman) is a
 /// floating modal; project rooms and compact widths keep a full-page push
 /// on the root navigator (so an embedded chats tab never hosts the chat).
 Future<void> showChat(
@@ -24,8 +41,8 @@ Future<void> showChat(
     return showFloatingPanel(
       context,
       ChatPage(dependencies: dependencies, chat: chat, asModal: true),
-      maxWidth: 560,
-      maxHeight: 780,
+      maxWidth: 720,
+      maxHeight: 860,
       barrierLabel: 'Close chat',
     );
   }
@@ -35,16 +52,18 @@ Future<void> showChat(
               ChatPage(dependencies: dependencies, chat: chat)));
 }
 
-/// One conversation of the messenger, direct or a project room. Both are rooms
-/// of a space (a direct chat is a one-room space shared by two accounts), so
-/// the page is the project room chat itself: files, voice, agent mentions,
-/// the message designer, agent work and routines all work the same.
+/// One conversation of the messenger, direct or a project room. Direct chats
+/// use a Chat/Desk dual-tab shell (like a space room); each participant has
+/// their own desk. AI / Aseman directs also get a collapsible avatar and a
+/// voice-call FAB.
 class ChatPage extends StatefulWidget {
   const ChatPage({
     super.key,
     required this.dependencies,
     required this.chat,
     this.asModal = false,
+    this.embedded = false,
+    this.bottomInset = 0,
   });
 
   final AppDependencies dependencies;
@@ -53,6 +72,12 @@ class ChatPage extends StatefulWidget {
   /// Shown as a floating desktop panel: close control instead of back-to-list.
   final bool asModal;
 
+  /// Hosted inside the home Aseman tab (no back/close; respects [bottomInset]).
+  final bool embedded;
+
+  /// Extra bottom padding when embedded under the home tab pill.
+  final double bottomInset;
+
   @override
   State<ChatPage> createState() => _ChatPageState();
 }
@@ -60,6 +85,7 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   RoomChatPage _page = const RoomChatPage();
   List<Bot> _agents = const [];
+  List<Bot> _apps = const [];
   Timer? _poll;
   bool _loading = false;
 
@@ -72,6 +98,20 @@ class _ChatPageState extends State<ChatPage> {
   /// The open thread of the chat's room; null for its main thread.
   RoomThread? _thread;
 
+  late final DeskController _desk = DeskController(
+    DeskApi.of(widget.dependencies.service),
+  );
+
+  /// 0 = Desk, 1 = Chat (same order as space mobile tabs).
+  int _surface = 1;
+  final _pages = PageController(initialPage: 1);
+
+  /// Collapse progress for the AI avatar header (0 expanded → 1 collapsed).
+  double _avatarCollapse = 0;
+
+  BrainAvatarPrefs _avatarPrefs = const BrainAvatarPrefs();
+  BrainVoiceClient? _voice;
+
   ChatSummary get chat => _chat;
 
   /// Where the open conversation's messages live: the thread, else the room.
@@ -80,19 +120,55 @@ class _ChatPageState extends State<ChatPage> {
   String get _me =>
       widget.dependencies.sessionController.session?.accountId ?? '';
 
+  bool get _isAiChat =>
+      chat.isAseman || (chat.direct && (chat.peer?.isAgent ?? false));
+
+  bool get _showDualTabs => chat.direct;
+
   @override
   void initState() {
     super.initState();
     _load();
     _loadAgents();
-    // Replies (agents answering, the other person writing) arrive on their own
-    // time, so the open chat is polled like a project room.
     _poll = Timer.periodic(const Duration(seconds: 3), (_) => _load());
+    if (_showDualTabs) {
+      _desk.attach(chat.spaceId, chat.roomId);
+    }
+    if (_isAiChat) {
+      _voice = BrainVoiceClient(_service)..addListener(_onVoice);
+      unawaited(_bootAvatar());
+    }
+  }
+
+  String get _avatarAgentId {
+    if (chat.saved) return '';
+    final peer = chat.peer;
+    if (peer == null) return '';
+    return peer.botId.isNotEmpty ? peer.botId : peer.id;
+  }
+
+  Future<void> _bootAvatar() async {
+    final prefs = await BrainAvatarPrefs.load(
+      agentId: _avatarAgentId,
+      userId: _me,
+      platform: chat.peer?.humanoid,
+    );
+    if (!mounted) return;
+    setState(() => _avatarPrefs = prefs);
+    await _voice?.loadConfig();
+  }
+
+  void _onVoice() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _poll?.cancel();
+    _pages.dispose();
+    _desk.dispose();
+    _voice?.removeListener(_onVoice);
+    _voice?.dispose();
     super.dispose();
   }
 
@@ -104,7 +180,6 @@ class _ChatPageState extends State<ChatPage> {
       final thread = _roomId;
       final res = await _service.fetchRoomChat(chat.spaceId, thread);
       if (!mounted) return;
-      // The thread was switched while this was loading: load the new one.
       if (thread != _roomId) {
         switched = true;
         return;
@@ -112,8 +187,7 @@ class _ChatPageState extends State<ChatPage> {
       final old = _page;
       final msgs = mergeNewestRoomMessages(old.messages, res.messages);
       final holdsOlder = msgs.length > res.messages.length;
-      final hasMore =
-          holdsOlder ? old.hasMore : res.hasMore;
+      final hasMore = holdsOlder ? old.hasMore : res.hasMore;
       final changed = msgs.length != old.messages.length ||
           List.generate(msgs.length, (i) => i).any((i) =>
               i >= old.messages.length ||
@@ -134,7 +208,6 @@ class _ChatPageState extends State<ChatPage> {
       }
       _markSeen(msgs);
     } catch (_) {
-      // The next poll can recover without clearing the conversation.
       if (_initialLoading && mounted) {
         setState(() => _initialLoading = false);
       }
@@ -161,14 +234,12 @@ class _ChatPageState extends State<ChatPage> {
         );
       });
     } catch (_) {
-      // Leave hasMore as-is so the user can try again.
     } finally {
       _loadingOlder = false;
       if (mounted) setState(() {});
     }
   }
 
-  // Reading the chat moves the read cursor to its newest message.
   void _markSeen(List<RoomMessage> msgs) {
     if (msgs.isEmpty) return;
     final newest =
@@ -182,7 +253,10 @@ class _ChatPageState extends State<ChatPage> {
     try {
       final bots = await _service.fetchSpaceBots(chat.spaceId);
       if (mounted) {
-        setState(() => _agents = bots.where((b) => b.isAgent).toList());
+        setState(() {
+          _agents = bots.where((b) => b.isAgent).toList();
+          _apps = bots.where((b) => b.isTool && !b.isSandbox).toList();
+        });
       }
     } catch (_) {}
   }
@@ -190,8 +264,6 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _send(
       String body, List<String> mentions, List<String> attachments,
       {String replyTo = ''}) async {
-    // Writing to an agent in its direct chat is addressed to it, so it runs a
-    // turn exactly as when it is mentioned in a project room.
     var to = mentions;
     final peer = chat.peer;
     if (to.isEmpty &&
@@ -233,7 +305,6 @@ class _ChatPageState extends State<ChatPage> {
   void _typing() => unawaited(
       _service.setTyping(chat.spaceId, _roomId, true).catchError((_) {}));
 
-  /// Switches to another thread of the room: its own history, loaded fresh.
   void _switchThread(RoomThread thread) {
     final next = thread.isMain || thread.id == chat.roomId ? null : thread;
     if (next?.id == _thread?.id) return;
@@ -266,7 +337,7 @@ class _ChatPageState extends State<ChatPage> {
         icon: const Icon(Icons.delete_sweep_outlined),
         title: const Text('Delete this chat?'),
         content: Text(chat.saved
-            ? 'Your saved messages are removed for you.'
+            ? 'Your Aseman notes are removed for you.'
             : 'It is deleted for you only; ${chat.title} keeps their copy. '
                 'It comes back if a new message arrives.'),
         actions: [
@@ -282,7 +353,9 @@ class _ChatPageState extends State<ChatPage> {
     if (ok != true) return;
     try {
       await _service.clearChat(chat.spaceId);
-      if (mounted) await Navigator.of(context).maybePop();
+      if (mounted && !widget.embedded) {
+        await Navigator.of(context).maybePop();
+      }
     } catch (e) {
       _say('Could not delete the chat: $e');
     }
@@ -334,6 +407,8 @@ class _ChatPageState extends State<ChatPage> {
             case 'report':
               unawaited(reportToAdmins(context, _service,
                   spaceId: chat.spaceId, roomId: chat.roomId));
+            case 'avatar':
+              unawaited(_editAvatar());
           }
         },
         itemBuilder: (context) => [
@@ -345,6 +420,13 @@ class _ChatPageState extends State<ChatPage> {
                       ? Icons.push_pin_rounded
                       : Icons.push_pin_outlined),
                   title: Text(chat.pinned ? 'Unpin chat' : 'Pin chat'))),
+          if (_isAiChat)
+            const PopupMenuItem(
+                value: 'avatar',
+                child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.face_retouching_natural_outlined),
+                    title: Text('Customize avatar'))),
           if (chat.direct)
             const PopupMenuItem(
                 value: 'clear',
@@ -369,140 +451,710 @@ class _ChatPageState extends State<ChatPage> {
         ],
       );
 
+  Future<void> _editAvatar() async {
+    final next = await showBrainAvatarSettings(
+      context,
+      prefs: _avatarPrefs.copyWith(agentId: _avatarAgentId, userId: _me),
+      appAccent: AppSettingsScope.maybeOf(context)?.accent ??
+          Theme.of(context).colorScheme.primary,
+    );
+    if (next != null && mounted) setState(() => _avatarPrefs = next);
+  }
+
+  bool get _canCall =>
+      chat.direct &&
+      !chat.saved &&
+      !chat.blocked &&
+      !(chat.peer?.isAgent ?? false) &&
+      (chat.peer?.id.isNotEmpty ?? false);
+
+  List<Widget> _callActions() {
+    if (!_canCall) return const [];
+    final peer = chat.peer!;
+    return [
+      IconButton(
+        tooltip: 'Voice call',
+        icon: const Icon(Icons.call_outlined),
+        onPressed: () => startDirectCall(
+          context,
+          widget.dependencies,
+          peerId: peer.id,
+          peerLabel: chat.title,
+        ),
+      ),
+      IconButton(
+        tooltip: 'Video call',
+        icon: const Icon(Icons.videocam_outlined),
+        onPressed: () => startDirectCall(
+          context,
+          widget.dependencies,
+          peerId: peer.id,
+          peerLabel: chat.title,
+          video: true,
+        ),
+      ),
+    ];
+  }
+
+  void _selectSurface(int value) {
+    if (_surface == value) return;
+    setState(() => _surface = value);
+    _pages.animateToPage(
+      value,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _openFacility() {
+    unawaited(showDmFacilitySheet(
+      context,
+      dependencies: widget.dependencies,
+      spaceId: chat.spaceId,
+      roomId: chat.roomId,
+      title: chat.title,
+      agents: _agents,
+      apps: _apps,
+      peer: chat.peer,
+      onChanged: _loadAgents,
+    ));
+  }
+
+  Future<void> _openVoiceSheet() async {
+    final voice = _voice;
+    if (voice == null) return;
+    await showFloatingPanel(
+      context,
+      _AgentVoiceSheet(
+        title: chat.title,
+        voice: voice,
+        avatarPrefs: _avatarPrefs,
+        picture: chat.peer?.avatar ?? '',
+        platform: chat.peer?.humanoid,
+        userId: _me,
+        onCustomize: _editAvatar,
+      ),
+      maxWidth: 420,
+      maxHeight: 640,
+      barrierLabel: 'Close voice call',
+    );
+  }
+
+  bool _onScroll(ScrollNotification n) {
+    if (!_isAiChat || _surface != 1) return false;
+    if (n.metrics.axis != Axis.vertical) return false;
+    final next = (n.metrics.pixels / 120).clamp(0.0, 1.0);
+    if ((next - _avatarCollapse).abs() > 0.02) {
+      setState(() => _avatarCollapse = next);
+    }
+    return false;
+  }
+
+  static const _tabsBarHeight = 62.0;
+
+  /// Matches [RoomChat] flat `bottomPad` (composer band) + a FAB gap.
+  static const _voiceFabBottom = 94.0 + 12.0;
+
+  double get _avatarExpanded => 132.0;
+
+  double get _avatarCollapsed => 56.0;
+
+  double get _avatarHeaderHeight {
+    if (!_isAiChat) return 0;
+    return _avatarExpanded +
+        (_avatarCollapsed - _avatarExpanded) * _avatarCollapse;
+  }
+
+  /// Avatar (when AI) + Desk/Chat tabs; rides up as the avatar collapses.
+  double get _chromeHeight {
+    if (!_showDualTabs) return 0;
+    return (_isAiChat ? _avatarHeaderHeight : 0) + _tabsBarHeight;
+  }
+
   @override
   Widget build(BuildContext context) {
     final peer = chat.peer;
     final canPop = Navigator.of(context).canPop();
     final modal = widget.asModal;
+    final embedded = widget.embedded;
     final receipts = chat.direct && !chat.saved && !(peer?.isAgent ?? false);
+    final topPad = MediaQuery.paddingOf(context).top;
+    final bottomInset = widget.bottomInset;
+    final chrome = _chromeHeight;
+    final useOuterAvatar = _isAiChat && _showDualTabs;
+
+    final chatBody = NotificationListener<ScrollNotification>(
+      onNotification: _onScroll,
+      child: RoomChat(
+        room: chat.title,
+        messages: _page.messages,
+        working: chat.saved && _page.working.isEmpty ? '' : _page.working,
+        workingDetail: _page.workingDetail,
+        me: _me,
+        dependencies: widget.dependencies,
+        spaceId: chat.spaceId,
+        roomId: _roomId,
+        threadRoomId: chat.roomId,
+        threadTitle: _thread?.title ?? '',
+        onThread: _switchThread,
+        canModerate: chat.canModerate,
+        loading: _initialLoading,
+        mentionable: _agents,
+        direct: chat.direct,
+        saved: chat.saved,
+        onSend: _send,
+        onEdit: (m, body) =>
+            _change(() => _service.editRoomMessage(m.id, body)),
+        onDelete: (m) =>
+            _change(() => _service.deleteRoomMessage(chat.spaceId, m.id)),
+        onReport: (m) => reportToAdmins(context, _service,
+            spaceId: chat.spaceId, roomId: _roomId, messageId: m.id),
+        onTyping: chat.saved ? null : _typing,
+        typing: _page.typing,
+        receipts: receipts,
+        peerSeenAt: _page.peerSeenAt,
+        composerNotice: chat.canSend
+            ? null
+            : chat.blocked
+                ? 'You blocked this chat. Unblock it from the menu to write.'
+                : 'You can\'t reply to this chat.',
+        headerActions: useOuterAvatar
+            ? const []
+            : [
+                if (_showDualTabs)
+                  IconButton(
+                    tooltip: 'Room',
+                    icon: const Icon(Icons.dashboard_customize_outlined),
+                    onPressed: _openFacility,
+                  ),
+                ..._callActions(),
+                const SizedBox(width: 2),
+                _menu(),
+              ],
+        bare: true,
+        flat: embedded || _showDualTabs,
+        showListHeader: !useOuterAvatar,
+        topContentInset: _showDualTabs ? topPad + chrome : 0,
+        bottomContentInset: embedded ? bottomInset : 0,
+        hint: chat.isAseman ? 'Message Aseman…' : 'Message ${chat.title}…',
+        subtitle: chat.isAseman
+            ? 'Your personal Aseman'
+            : chat.direct
+                ? (peer == null
+                    ? 'Direct chat'
+                    : [
+                        if (peer.handle.isNotEmpty) '@${peer.handle}',
+                        peer.isAgent ? 'Agent' : 'Direct chat',
+                      ].join(' · '))
+                : chat.spaceName,
+        memberNames: {
+          if (peer != null && peer.id.isNotEmpty) peer.id: peer.displayName,
+        },
+        leading: embedded || useOuterAvatar
+            ? null
+            : (modal || canPop
+                ? IconButton(
+                    tooltip: modal ? 'Close' : 'Back to chats',
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: Icon(modal
+                        ? Icons.close_rounded
+                        : Icons.arrow_back_rounded))
+                : null),
+        avatar: useOuterAvatar
+            ? null
+            : ChatAvatar(chat: chat, radius: 21, userId: _me),
+        hasMore: _page.hasMore,
+        loadingOlder: _loadingOlder,
+        onLoadOlder: _loadOlder,
+      ),
+    );
+
+    Widget body;
+    if (!_showDualTabs) {
+      body = Column(
+        children: [
+          if (chat.isAseman)
+            BrainProposalsBar(dependencies: widget.dependencies),
+          Expanded(child: chatBody),
+        ],
+      );
+    } else {
+      body = Stack(
+        children: [
+          Positioned.fill(
+            child: PageView(
+              controller: _pages,
+              onPageChanged: (v) => setState(() => _surface = v),
+              children: [
+                DmDeskPanel(
+                  dependencies: widget.dependencies,
+                  controller: _desk,
+                  spaceId: chat.spaceId,
+                  roomId: chat.roomId,
+                  title: chat.title,
+                  topInset: topPad + chrome,
+                  bottomInset: embedded ? bottomInset : 0,
+                ),
+                Column(
+                  children: [
+                    if (chat.isAseman)
+                      BrainProposalsBar(dependencies: widget.dependencies),
+                    Expanded(child: chatBody),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Avatar (AI) then Desk/Chat tabs — tabs sit under the avatar and
+          // ride up as it collapses.
+          Positioned(
+            top: topPad,
+            left: 0,
+            right: 0,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_isAiChat)
+                  _CollapsingAgentHeader(
+                    height: _avatarHeaderHeight,
+                    collapse: _avatarCollapse,
+                    title: chat.title,
+                    prefs: _avatarPrefs,
+                    picture: chat.peer?.avatar ?? '',
+                    platform: chat.peer?.humanoid,
+                    userId: _me,
+                    listening:
+                        _voice?.state.status == BrainVoiceStatus.listening,
+                    leading: embedded || !(modal || canPop)
+                        ? null
+                        : IconButton(
+                            tooltip: modal ? 'Close' : 'Back',
+                            onPressed: () =>
+                                Navigator.of(context).maybePop(),
+                            icon: Icon(modal
+                                ? Icons.close_rounded
+                                : Icons.arrow_back_rounded),
+                          ),
+                    onCustomize: _editAvatar,
+                    onRoom: _openFacility,
+                    menu: _menu(),
+                  ),
+                SizedBox(
+                  height: _tabsBarHeight,
+                  child: Center(
+                    child: SegmentedTabBar(
+                      selectedIndex: _surface,
+                      onTap: _selectSurface,
+                      labels: const ['Desk', 'Chat'],
+                      icons: const [
+                        Icons.dashboard_customize_outlined,
+                        Icons.forum_outlined,
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_isAiChat)
+            Positioned(
+              right: 18,
+              // RoomChat's flat composer sits in a ~94px bottom band; clear
+              // that band (+ gap) so the FAB floats above the message bar.
+              bottom: _voiceFabBottom + (embedded ? bottomInset : 0),
+              child: _VoiceFab(
+                active: (_voice?.state.status ?? BrainVoiceStatus.idle) !=
+                    BrainVoiceStatus.idle,
+                onPressed: _openVoiceSheet,
+              ),
+            ),
+        ],
+      );
+    }
+
+    // The home Aseman tab hosts this inside glass — stay clear so the frost
+    // shows. Full-page pushes and floating panels need an opaque theme fill
+    // or dark mode falls through to a white route backdrop.
+    final background = embedded
+        ? Colors.transparent
+        : Theme.of(context).scaffoldBackgroundColor;
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: background,
       body: SafeArea(
         top: false,
-        child: RoomChat(
-          room: chat.title,
-          messages: _page.messages,
-          working: _page.working,
-          workingDetail: _page.workingDetail,
-          me: _me,
-          dependencies: widget.dependencies,
-          spaceId: chat.spaceId,
-          roomId: _roomId,
-          threadRoomId: chat.roomId,
-          threadTitle: _thread?.title ?? '',
-          onThread: _switchThread,
-          canModerate: chat.canModerate,
-          loading: _initialLoading,
-          mentionable: _agents,
-          onSend: _send,
-          onEdit: (m, body) =>
-              _change(() => _service.editRoomMessage(m.id, body)),
-          onDelete: (m) =>
-              _change(() => _service.deleteRoomMessage(chat.spaceId, m.id)),
-          onReport: (m) => reportToAdmins(context, _service,
-              spaceId: chat.spaceId, roomId: _roomId, messageId: m.id),
-          onTyping: chat.saved ? null : _typing,
-          typing: _page.typing,
-          receipts: receipts,
-          peerSeenAt: _page.peerSeenAt,
-          composerNotice: chat.canSend
-              ? null
-              : chat.blocked
-                  ? 'You blocked this chat. Unblock it from the menu to write.'
-                  : 'You can\'t reply to this chat.',
-          headerActions: [const SizedBox(width: 2), _menu()],
-          bare: true,
-          hint: chat.saved ? 'Write a note…' : 'Message ${chat.title}…',
-          subtitle: chat.saved
-              ? 'Notes, links and files for yourself'
-              : chat.direct
-                  ? (peer == null
-                      ? 'Direct chat'
-                      : [
-                          if (peer.handle.isNotEmpty) '@${peer.handle}',
-                          peer.isAgent ? 'Agent' : 'Direct chat',
-                        ].join(' · '))
-                  : chat.spaceName,
-          memberNames: {
-            if (peer != null && peer.id.isNotEmpty) peer.id: peer.displayName,
-          },
-          leading: modal || canPop
-              ? IconButton(
-                  tooltip: modal ? 'Close' : 'Back to chats',
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: Icon(modal
-                      ? Icons.close_rounded
-                      : Icons.arrow_back_rounded))
-              : null,
-          avatar: ChatAvatar(chat: chat, radius: 21),
-          hasMore: _page.hasMore,
-          loadingOlder: _loadingOlder,
-          onLoadOlder: _loadOlder,
+        bottom: !embedded,
+        child: body,
+      ),
+    );
+  }
+}
+
+class _CollapsingAgentHeader extends StatelessWidget {
+  const _CollapsingAgentHeader({
+    required this.height,
+    required this.collapse,
+    required this.title,
+    required this.prefs,
+    required this.listening,
+    this.picture = '',
+    this.platform,
+    this.userId = '',
+    this.leading,
+    this.onCustomize,
+    this.onRoom,
+    this.menu,
+  });
+
+  final double height;
+  final double collapse;
+  final String title;
+  final BrainAvatarPrefs prefs;
+  final bool listening;
+  final String picture;
+  final AgentHumanoid? platform;
+  final String userId;
+  final Widget? leading;
+  final VoidCallback? onCustomize;
+  final VoidCallback? onRoom;
+  final Widget? menu;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    // Keep a usable avatar size when collapsed so actions stay aligned.
+    final size = 92.0 + (36.0 - 92.0) * collapse;
+    final subtitleOpacity = (1 - collapse * 1.35).clamp(0.0, 1.0);
+    final personal = prefs.agentId.isEmpty;
+    final titleSize = 17.0 - 2.5 * collapse;
+    return SizedBox(
+      height: height,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(8, 4 + 2 * (1 - collapse), 8, 4),
+        child: GlassSurface(
+          alpha: AppSurfaces.cardAlpha * (0.5 + 0.45 * collapse),
+          blur: AppSurfaces.blurSigma,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              children: [
+                if (leading != null) leading!,
+                AgentHumanoidAvatar(
+                  agentId: prefs.agentId,
+                  picture: picture,
+                  userId: userId,
+                  platform: platform,
+                  prefs: prefs,
+                  radius: size / 2,
+                  listening: listening,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: titleSize,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -.2,
+                        ),
+                      ),
+                      if (subtitleOpacity > 0.05)
+                        Opacity(
+                          opacity: subtitleOpacity,
+                          child: Text(
+                            personal ? 'Your personal Aseman' : 'AI agent',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              height: 1.15,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (onRoom != null)
+                  IconButton(
+                    tooltip: 'Room',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onRoom,
+                    icon: const Icon(Icons.dashboard_customize_outlined,
+                        size: 20),
+                  ),
+                if (onCustomize != null)
+                  IconButton(
+                    tooltip: 'Customize avatar',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onCustomize,
+                    icon: const Icon(Icons.face_retouching_natural_outlined,
+                        size: 20),
+                  ),
+                if (menu != null) menu!,
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
+class _VoiceFab extends StatelessWidget {
+  const _VoiceFab({required this.active, required this.onPressed});
+
+  final bool active;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => SkyFab(
+        heroTag: 'agent-voice-fab',
+        tooltip: active ? 'End voice call' : 'Voice call',
+        onPressed: onPressed,
+        danger: active,
+        icon: active ? Icons.call_end_rounded : Icons.graphic_eq_rounded,
+      );
+}
+
+class _AgentVoiceSheet extends StatelessWidget {
+  const _AgentVoiceSheet({
+    required this.title,
+    required this.voice,
+    required this.avatarPrefs,
+    this.picture = '',
+    this.platform,
+    this.userId = '',
+    this.onCustomize,
+  });
+
+  final String title;
+  final BrainVoiceClient voice;
+  final BrainAvatarPrefs avatarPrefs;
+  final String picture;
+  final AgentHumanoid? platform;
+  final String userId;
+  final VoidCallback? onCustomize;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListenableBuilder(
+      listenable: voice,
+      builder: (context, _) {
+        final st = voice.state;
+        final inCall = st.status != BrainVoiceStatus.idle;
+        final label = switch (st.status) {
+          BrainVoiceStatus.listening => 'Listening',
+          BrainVoiceStatus.thinking => 'Thinking',
+          BrainVoiceStatus.speaking => 'Speaking',
+          BrainVoiceStatus.idle => 'Idle',
+        };
+        return Material(
+          type: MaterialType.transparency,
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Spacer(),
+                      if (onCustomize != null)
+                        IconButton(
+                          tooltip: 'Customize avatar',
+                          onPressed: onCustomize,
+                          icon: const Icon(Icons.settings_outlined, size: 20),
+                        ),
+                      IconButton(
+                        tooltip: 'Close',
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                      ),
+                    ],
+                  ),
+                  AgentHumanoidAvatar(
+                    agentId: avatarPrefs.agentId,
+                    picture: picture,
+                    userId: userId,
+                    platform: platform,
+                    prefs: avatarPrefs,
+                    radius: 54,
+                    listening: st.status == BrainVoiceStatus.listening,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
+                  if (st.error.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(st.error,
+                        style: TextStyle(color: scheme.error, fontSize: 13)),
+                  ],
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (st.heard.isNotEmpty)
+                            Text('You: ${st.heard}',
+                                style: const TextStyle(fontSize: 14)),
+                          if (st.reply.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Text('$title: ${st.reply}',
+                                style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600)),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      if (inCall)
+                        IconButton.filledTonal(
+                          tooltip: 'Interrupt',
+                          onPressed: voice.interrupt,
+                          icon: const Icon(Icons.stop_rounded),
+                        ),
+                      const Spacer(),
+                      FilledButton.icon(
+                        onPressed: () async {
+                          if (inCall) {
+                            await voice.stop();
+                          } else {
+                            await voice.startCall();
+                          }
+                        },
+                        icon: Icon(inCall
+                            ? Icons.call_end_rounded
+                            : Icons.graphic_eq_rounded),
+                        label: Text(inCall ? 'End' : 'Talk'),
+                        style: inCall
+                            ? FilledButton.styleFrom(
+                                backgroundColor: scheme.error,
+                                foregroundColor: scheme.onError,
+                              )
+                            : null,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// A chat's picture: the person or agent of a direct chat, or the room's
 /// initial for a project room.
+///
+/// Agent directs use [BotAvatar] (soft 3D humanoid + picture badge).
 class ChatAvatar extends StatelessWidget {
-  const ChatAvatar({super.key, required this.chat, this.radius = 24});
+  const ChatAvatar({
+    super.key,
+    required this.chat,
+    this.radius = 24,
+    this.userId = '',
+  });
 
   final ChatSummary chat;
   final double radius;
+
+  /// Account viewing the list — keys personal humanoid customization.
+  final String userId;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final peer = chat.peer;
-    if (chat.saved) {
-      return CircleAvatar(
-        radius: radius,
-        backgroundColor: scheme.primary,
-        foregroundColor: scheme.onPrimary,
-        child: Icon(Icons.bookmark_rounded, size: radius),
+    if (chat.isAseman) {
+      return HaloRing(
+        identity: HaloRingCache.agent('aseman'),
+        accent: scheme.primary,
+        child: CircleAvatar(
+          radius: radius,
+          backgroundColor: scheme.primary,
+          foregroundColor: scheme.onPrimary,
+          child: Icon(Icons.auto_awesome_rounded, size: radius),
+        ),
       );
     }
     if (chat.direct) {
-      final agent = peer?.isAgent ?? false;
+      if (peer?.isAgent ?? false) {
+        final agentId =
+            peer!.botId.isNotEmpty ? peer.botId : peer.id;
+        // BotAvatar already draws the bound sweep ring.
+        return BotAvatar(
+          bot: Bot(
+            id: agentId,
+            ownerId: '',
+            accountId: peer.id,
+            name: peer.displayName,
+            kind: 'agent',
+            vmType: '',
+            status: '',
+            avatar: peer.avatar,
+            humanoid: peer.humanoid,
+          ),
+          radius: radius,
+          userId: BrainAvatarPrefs.resolveUserId(userId),
+        );
+      }
       final name = peer?.displayName.replaceFirst('@', '') ?? '';
       final picture = Avatars.of(peer?.avatar);
-      return CircleAvatar(
-        radius: radius,
-        foregroundImage: picture,
-        onForegroundImageError: picture == null ? null : (_, __) {},
-        backgroundColor:
-            agent ? scheme.tertiaryContainer : scheme.secondaryContainer,
-        foregroundColor:
-            agent ? scheme.onTertiaryContainer : scheme.onSecondaryContainer,
-        child: agent
-            ? Icon(Icons.smart_toy_rounded, size: radius)
-            : Text(name.isEmpty ? '?' : name.characters.first.toUpperCase(),
-                style: TextStyle(
-                    fontSize: radius * .8, fontWeight: FontWeight.w800)),
+      return HaloRing(
+        identity: HaloRingCache.person(peer?.id ?? ''),
+        accent: scheme.secondary,
+        child: CircleAvatar(
+          radius: radius,
+          foregroundImage: picture,
+          onForegroundImageError: picture == null ? null : (_, __) {},
+          backgroundColor: scheme.secondaryContainer,
+          foregroundColor: scheme.onSecondaryContainer,
+          child: Text(
+              name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+              style: TextStyle(
+                  fontSize: radius * .8, fontWeight: FontWeight.w800)),
+        ),
       );
     }
     final label = chat.roomName.isEmpty ? '#' : chat.roomName;
-    final room = Container(
-      width: radius * 2,
-      height: radius * 2,
-      alignment: Alignment.center,
-      decoration: ShapeDecoration(
-          color: scheme.primaryContainer,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(radius * .6))),
+    // Circle fits the sweep ring — rounded squares clash with it.
+    final room = CircleAvatar(
+      radius: radius,
+      backgroundColor: scheme.primaryContainer,
+      foregroundColor: scheme.onPrimaryContainer,
       child: Text(label.characters.first.toUpperCase(),
           style: TextStyle(
-              fontSize: radius * .8,
-              fontWeight: FontWeight.w800,
-              color: scheme.onPrimaryContainer)),
+              fontSize: radius * .8, fontWeight: FontWeight.w800)),
     );
-    // A project room shows its project's picture.
-    return AvatarPicture(
-        avatar: chat.spaceAvatar,
-        size: radius * 2,
-        radius: radius * .6,
-        fallback: room);
+    return HaloRing(
+      accent: scheme.primary,
+      child: AvatarPicture(
+          avatar: chat.spaceAvatar,
+          size: radius * 2,
+          fallback: room),
+    );
   }
 }

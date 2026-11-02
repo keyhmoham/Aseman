@@ -70,6 +70,26 @@ func TestSearchBotsPlatformWide(t *testing.T) {
 		}
 	}
 
+	// Built-in Aseman is the personal Aseman chat, not a New-chat peer.
+	assistID, _ := identity.New(1)
+	assist := &bot.Bot{
+		Entity:  entity.Entity{ID: assistID, CreatedAt: now, UpdatedAt: now},
+		OwnerID: owner, Name: "Aseman", Kind: bot.KindAgent,
+		VMType: bot.VMTypeDeepAgents, Status: bot.StatusRunning, ImageRef: bot.BuiltinChatImage,
+	}
+	if err := s.R.CreateID(ctx, "bots", assistID, assist); err != nil {
+		t.Fatal(err)
+	}
+	agentsAfter, err := s.SearchBots(ctx, "", "agent", 50, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range agentsAfter {
+		if b.IsBuiltin() {
+			t.Fatalf("builtin Aseman surfaced in search: %+v", b)
+		}
+	}
+
 	// name substring filter + pagination.
 	page1, err := s.SearchBots(ctx, "alpha", "", 1, 0)
 	if err != nil {

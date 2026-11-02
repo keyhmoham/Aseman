@@ -103,6 +103,8 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 		return nil, e
 	}
 	builtin := IsAseman(rec)
+	// The lead and the chat assistant run on no runtime of their own: editing their spec rebuilds nothing.
+	sharedRuntime := builtin || rec.IsChatAssistant()
 	if builtin && in.Instructions != nil {
 		return nil, errs.Permission("the built-in lead's instructions are managed by the node; you can change its name, avatar, username, model and price")
 	}
@@ -203,7 +205,7 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 			model = *in.Model
 		}
 		// Renaming the built-in lead must not pin it to today's default model.
-		if s.LLM != nil && (!builtin || in.Provider != nil || in.Model != nil) {
+		if s.LLM != nil && (!sharedRuntime || in.Provider != nil || in.Model != nil) {
 			p, m, e := s.LLM.Resolve(ctx, provider, model)
 			if e != nil {
 				return nil, e
@@ -217,7 +219,7 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 		}
 		rec.SpecYML = string(b)
 	}
-	if (changedSpec || in.Resources != nil) && rec.Kind == bot.KindAgent && !builtin {
+	if (changedSpec || in.Resources != nil) && rec.Kind == bot.KindAgent && !sharedRuntime {
 		// The built-in lead runs on the shared deep agents runtime: its spec is
 		// read per turn, so it keeps its VM and image.
 		vm := s.K.VMMFor(vmm.Type(rec.VMType))
@@ -278,12 +280,41 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 			return nil, e
 		}
 	}
+	// People see the assistant through its account's profile (chats show its name and picture), so what
+	// the administrator sets here is mirrored there.
+	if rec.IsChatAssistant() && (in.Name != nil || in.Descriptor != nil) {
+		if m, e := s.M.Get(ctx, rec.AccountID); e == nil {
+			profile, _ := m.Tree["profile"].(map[string]any)
+			m.Tree["profile"] = assistantProfile(profile, rec.Name, in.Descriptor)
+			if e = s.M.ReplaceTree(ctx, rec.AccountID, m.Tree); e != nil {
+				s.L.Warn("chat assistant profile not updated", "error", e)
+			}
+		}
+	}
 	if created.ID != "" && oldVM != "" {
 		if e = s.K.VMMFor(vmm.Type(rec.VMType)).DeleteVM(ctx, oldVM); e != nil {
 			s.L.Warn("retired agent runtime could not be removed", "vm", oldVM, "error", e)
 		}
 	}
 	return helper.JSON(map[string]any{"ok": true, "bot_id": rec.ID.String(), "status": rec.Status})
+}
+
+// assistantProfile is the assistant's public profile with its name, and its picture from a descriptor
+// that carries one (a descriptor without "avatar" removes it). The rest of the profile is kept.
+func assistantProfile(current map[string]any, name string, descriptor map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range current {
+		out[k] = v
+	}
+	out["displayName"] = name
+	if descriptor != nil {
+		if avatar, _ := descriptor["avatar"].(string); strings.TrimSpace(avatar) != "" {
+			out["avatar"] = avatar
+		} else {
+			delete(out, "avatar")
+		}
+	}
+	return out
 }
 
 // setOrDrop sets a spec key, or removes it when it no longer has a value.

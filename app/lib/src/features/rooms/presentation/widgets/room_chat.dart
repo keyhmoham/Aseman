@@ -8,13 +8,17 @@ import '../../../../agui/agui.dart';
 import '../../../../app_dependencies.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_shape.dart';
+import '../../../../core/theme/halo_ring_cache.dart';
+import '../../../../data/models/agent_humanoid.dart';
 import '../../../../data/models/bot.dart';
 import '../../../../data/models/space.dart';
 import '../../../../data/services/aseman_service.dart';
 import '../../../../shared/widgets/avatar.dart';
+import '../../../../shared/widgets/bot_avatar.dart';
 import '../../../../shared/widgets/mini_tag.dart';
 import '../../../../shared/widgets/overlay_panels.dart';
 import '../../../../shared/widgets/skeleton.dart';
+import '../../../../shared/widgets/sky_ui.dart';
 import '../../../assistant/assistant.dart';
 import '../../../home/presentation/widgets/routines_panel.dart';
 import '../../../search_feed/presentation/post_editor.dart';
@@ -49,6 +53,8 @@ class RoomChat extends StatefulWidget {
     this.onSend,
     this.flat = false,
     this.topContentInset = 0,
+    this.bottomContentInset = 0,
+    this.showListHeader = true,
     this.bare = false,
     this.leading,
     this.avatar,
@@ -72,6 +78,8 @@ class RoomChat extends StatefulWidget {
     this.threadRoomId = '',
     this.threadTitle = '',
     this.onThread,
+    this.direct = false,
+    this.saved = false,
   });
   final String room;
   final List<RoomMessage> messages;
@@ -90,6 +98,14 @@ class RoomChat extends StatefulWidget {
       {String replyTo})? onSend;
   final bool flat;
   final double topContentInset;
+
+  /// Extra space under the message list and composer so a floating home tab
+  /// bar can overlap the surface without covering content.
+  final double bottomContentInset;
+
+  /// When false, the in-list chat header is omitted (e.g. an outer avatar bar
+  /// already provides title and actions).
+  final bool showListHeader;
 
   /// Lays the header, messages and composer out without the floating panel
   /// frame, for a chat that fills its own page.
@@ -158,11 +174,23 @@ class RoomChat extends StatefulWidget {
 
   /// Switches the chat to another thread of the room.
   final void Function(RoomThread thread)? onThread;
+
+  /// Direct (person-to-person) chat.
+  final bool direct;
+
+  /// Personal Aseman chat (self-chat).
+  final bool saved;
   @override
   State<RoomChat> createState() => _RoomChatState();
 }
 
 class _RoomChatState extends State<RoomChat> {
+  /// Room message ids the caller hid this session (until the parent reloads).
+  final Set<String> _hiddenHere = {};
+
+  /// Optimistic reaction emoji by message id (until the next list refresh).
+  final Map<String, String> _myReaction = {};
+
   /// The message whose reply chips are offered (the newest, from an agent).
   String _repliesFor = '';
 
@@ -559,14 +587,11 @@ class _RoomChatState extends State<RoomChat> {
                           final b = agents[i];
                           final already = _mentions.contains(b.id);
                           return ListTile(
-                              leading: AvatarPicture(
-                                  avatar: b.avatar,
-                                  size: 28,
-                                  fallback: const SizedBox(
-                                      width: 28,
-                                      height: 28,
-                                      child: Icon(Icons.smart_toy_outlined,
-                                          size: 20))),
+                              leading: BotAvatar(
+                                bot: b,
+                                radius: 14,
+                                userId: widget.me,
+                              ),
                               title: Text(b.name,
                                   style: const TextStyle(fontSize: 13)),
                               subtitle: Text(b.kind,
@@ -676,12 +701,16 @@ class _RoomChatState extends State<RoomChat> {
     return null;
   }
 
+  static const _reactEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
   Future<void> _messageMenu(RoomMessage m, {Offset? at, BuildContext? anchor}) async {
     if (m.id.isEmpty || m.kind == 'log') return;
     final mine = m.senderId == widget.me;
     final canWrite = widget.onSend != null && widget.composerNotice == null;
+    final canSocial = widget.dependencies != null && m.id.isNotEmpty;
     final actions = <(IconData, String, String)>[
       if (canWrite) (Icons.reply_rounded, 'Reply', 'reply'),
+      if (canSocial) (Icons.add_reaction_outlined, 'React', 'react'),
       if (widget.dependencies != null &&
           (m.body.trim().isNotEmpty || m.attachments.isNotEmpty))
         (Icons.forward_rounded, 'Forward', 'forward'),
@@ -690,6 +719,10 @@ class _RoomChatState extends State<RoomChat> {
         (Icons.edit_outlined, 'Edit', 'edit'),
       if (m.edited && widget.dependencies != null)
         (Icons.history_rounded, 'Edit history', 'history'),
+      if (canSocial && !mine && m.attachments.isNotEmpty)
+        (Icons.bookmark_add_outlined, 'Keep files', 'keep'),
+      if (canSocial)
+        (Icons.visibility_off_outlined, 'Hide for me', 'hide'),
       if ((mine || widget.canModerate) && widget.onDelete != null)
         (Icons.delete_outline_rounded, 'Delete for everyone', 'delete'),
       if (!mine && widget.onReport != null)
@@ -721,6 +754,8 @@ class _RoomChatState extends State<RoomChat> {
           _editing = null;
           _replyTo = m;
         });
+      case 'react':
+        await _pickReaction(m);
       case 'copy':
         await Clipboard.setData(ClipboardData(text: m.body));
         if (mounted) {
@@ -752,6 +787,10 @@ class _RoomChatState extends State<RoomChat> {
           await showMessageEditHistory(context,
               service: service, message: m);
         }
+      case 'keep':
+        await _keepFiles(m);
+      case 'hide':
+        await _hideForMe(m);
       case 'delete':
         final ok = await showAppDialog<bool>(
           context: context,
@@ -773,6 +812,123 @@ class _RoomChatState extends State<RoomChat> {
       case 'report':
         await widget.onReport?.call(m);
     }
+  }
+
+  Future<void> _pickReaction(RoomMessage m) async {
+    final emoji = await showAppPicker<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              for (final e in _reactEmojis)
+                InkWell(
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: () => Navigator.pop(context, e),
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Text(e, style: const TextStyle(fontSize: 28)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || emoji == null) return;
+    await _react(m, emoji);
+  }
+
+  Future<void> _react(RoomMessage m, String emoji) async {
+    final service = widget.dependencies?.service;
+    if (service == null) return;
+    try {
+      await service.messageReact(widget.spaceId, m.id, emoji: emoji);
+      if (mounted) {
+        setState(() => _myReaction[m.id] = emoji);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Reacted $emoji')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not react: $e')));
+      }
+    }
+  }
+
+  Future<void> _hideForMe(RoomMessage m) async {
+    final service = widget.dependencies?.service;
+    if (service == null) return;
+    try {
+      await service.messageHide(widget.spaceId, m.id);
+      if (mounted) {
+        setState(() => _hiddenHere.add(m.id));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Hidden for you')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not hide: $e')));
+      }
+    }
+  }
+
+  List<RoomMessage> get _visibleMessages => widget.messages
+      .where((m) => !_hiddenHere.contains(m.id))
+      .toList(growable: false);
+
+  Future<void> _keepFiles(RoomMessage m) async {
+    final service = widget.dependencies?.service;
+    if (service == null) return;
+    try {
+      await service.messageKeep(widget.spaceId, m.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Kept in your storage')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not keep files: $e')));
+      }
+    }
+  }
+
+  Widget _reactionChips(RoomMessage m, Color fg) {
+    final counts = <String, int>{};
+    for (final r in m.reactions) {
+      counts[r.emoji] = (counts[r.emoji] ?? 0) + 1;
+    }
+    final mine = _myReaction[m.id];
+    if (mine != null && mine.isNotEmpty) {
+      counts[mine] = (counts[mine] ?? 0) + 1;
+    }
+    if (counts.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          for (final e in counts.entries)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: fg.withValues(alpha: .08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                e.value > 1 ? '${e.key} ${e.value}' : e.key,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   // The banner above the composer while replying to or changing a message.
@@ -842,11 +998,38 @@ class _RoomChatState extends State<RoomChat> {
     return '';
   }
 
+  /// Prefs key for an agent sender: bot record id when known.
+  String _agentPrefsId(RoomMessage m) {
+    for (final b in widget.mentionable) {
+      if (b.id == m.senderId || b.accountId == m.senderId) {
+        return b.id.isNotEmpty ? b.id : b.accountId;
+      }
+    }
+    return m.senderId;
+  }
+
+  AgentHumanoid? _agentHumanoidOf(RoomMessage m) {
+    for (final b in widget.mentionable) {
+      if (b.id == m.senderId || b.accountId == m.senderId) {
+        return b.humanoid;
+      }
+    }
+    return null;
+  }
+
+  Bot? _agentBotOf(RoomMessage m) {
+    for (final b in widget.mentionable) {
+      if (b.id == m.senderId || b.accountId == m.senderId) return b;
+    }
+    return null;
+  }
+
   ({String name, bool agent}) _senderOf(RoomMessage m) {
     var sender = _sender(m.senderId);
     if (m.senderName.isNotEmpty &&
         !widget.memberNames.containsKey(m.senderId) &&
-        !widget.mentionable.any((b) => b.id == m.senderId)) {
+        !widget.mentionable.any(
+            (b) => b.id == m.senderId || b.accountId == m.senderId)) {
       sender = (name: m.senderName, agent: m.senderIsAgent);
     }
     return sender;
@@ -1226,7 +1409,7 @@ class _RoomChatState extends State<RoomChat> {
   Widget build(BuildContext context) {
     // Show the conversation chronologically (oldest→newest). message_list
     // returns newest-first, so sort by createdAt with the id as a tiebreaker.
-    final messages = [...widget.messages]..sort((a, b) {
+    final messages = [..._visibleMessages]..sort((a, b) {
         final c = a.createdAt.compareTo(b.createdAt);
         return c != 0 ? c : a.id.compareTo(b.id);
       });
@@ -1240,6 +1423,7 @@ class _RoomChatState extends State<RoomChat> {
     }
     final working = _workingIndicator();
     if (widget.flat) {
+      final bottomPad = 94 + widget.bottomContentInset;
       return _Panel(
           flat: true,
           child: Stack(children: [
@@ -1249,12 +1433,17 @@ class _RoomChatState extends State<RoomChat> {
                   Theme.of(context).colorScheme.primary, widget.room),
               child: ListView(
                   controller: _chatScroll,
-                  padding:
-                      EdgeInsets.fromLTRB(12, widget.topContentInset, 12, 94),
+                  padding: EdgeInsets.fromLTRB(
+                      12, widget.topContentInset, 12, bottomPad),
                   children: _messageChildren(context, messages, working,
-                      withHeader: true)),
+                      withHeader: widget.showListHeader)),
             )),
-            Positioned(left: 10, right: 10, bottom: 10, child: _composer()),
+            Positioned(
+              left: 10,
+              right: 10,
+              bottom: 10 + widget.bottomContentInset,
+              child: _composer(),
+            ),
           ]));
     }
     return _Panel(
@@ -1625,7 +1814,9 @@ class _RoomChatState extends State<RoomChat> {
   // known by name, other members fall back to a short id.
   ({String name, bool agent}) _sender(String id) {
     for (final b in widget.mentionable) {
-      if (b.id == id) return (name: b.name, agent: true);
+      if (b.id == id || b.accountId == id) {
+        return (name: b.name, agent: true);
+      }
     }
     final known = widget.memberNames[id];
     if (known != null && known.isNotEmpty) return (name: known, agent: false);
@@ -1712,6 +1903,7 @@ class _RoomChatState extends State<RoomChat> {
                         title: _proxyTitle(m.body) ?? 'Sandbox service',
                         service: deps.service,
                         page: _proxyPathIn(m.body) ?? '')),
+              _reactionChips(m, fg),
               const SizedBox(height: 2),
               Row(mainAxisSize: MainAxisSize.min, children: [
                 if (m.edited)
@@ -1739,22 +1931,37 @@ class _RoomChatState extends State<RoomChat> {
               ]),
             ])));
     final avatar = SizedBox(
-        width: 30,
+        width: 36,
         child: continued
             ? null
-            : CircleAvatar(
-                radius: 15,
-                foregroundImage: Avatars.of(_avatarOf(m)),
-                onForegroundImageError:
-                    Avatars.of(_avatarOf(m)) == null ? null : (_, __) {},
-                backgroundColor: sender.agent
-                    ? scheme.tertiaryContainer
-                    : scheme.secondaryContainer,
-                child: sender.agent
-                    ? Icon(Icons.smart_toy_rounded,
-                        size: 16, color: scheme.onTertiaryContainer)
-                    : Icon(Icons.person_rounded,
-                        size: 17, color: scheme.onSecondaryContainer)));
+            : sender.agent
+                ? BotAvatar(
+                    bot: _agentBotOf(m) ??
+                        Bot(
+                          id: _agentPrefsId(m),
+                          ownerId: '',
+                          accountId: m.senderId,
+                          name: sender.name,
+                          vmType: '',
+                          status: '',
+                          avatar: _avatarOf(m),
+                          humanoid: _agentHumanoidOf(m),
+                        ),
+                    radius: 15,
+                    userId: widget.me,
+                  )
+                : HaloRing(
+                    identity: HaloRingCache.person(m.senderId),
+                    accent: scheme.secondary,
+                    child: CircleAvatar(
+                        radius: 15,
+                        foregroundImage: Avatars.of(_avatarOf(m)),
+                        onForegroundImageError: Avatars.of(_avatarOf(m)) == null
+                            ? null
+                            : (_, __) {},
+                        backgroundColor: scheme.secondaryContainer,
+                        child: Icon(Icons.person_rounded,
+                            size: 17, color: scheme.onSecondaryContainer))));
     return Padding(
         padding: EdgeInsets.only(top: continued ? 2 : 10),
         child: Row(

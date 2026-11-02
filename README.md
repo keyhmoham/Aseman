@@ -225,6 +225,23 @@ dependency. See [`services/README.md`](services/README.md#tools-one-form-three-b
 - **Decision Model:** Optionally pick a decision model such as TypeSafe AI's Jev on Vercel AI Gateway (**Admin → Decision model**). Agents then use it for tool selection, routing and work checks together with their own model; turned off, every agent decides with its own model.
 - **First Boot Bootstrap:** To automatically seed an initial LLM provider on startup, set `ASEMAN_LLM_API_KEY` (and optionally `ASEMAN_LLM_MODEL`) in your `.env`.
 
+## Personal Aseman, calls and social
+
+- **Aseman chat is your personal Aseman:** the former Saved Messages self-chat
+  is where notes are kept or answered by your personal brain (OpenViking memory,
+  room access, proposals with Confirm, reminders, `work_on_it` jobs, live voice
+  under Admin → Agents). There is no separate Aseman assistant Direct — opening
+  the built-in assistant or lead out of space lands here. Mentions of `@aseman`
+  in other personal chats still use the chat assistant; room agents stay
+  mentionable in projects, scoped to whoever prompts them.
+- **Voice and video calls** between people (WebRTC; media never hits the node).
+  Configure TURN with `ASEMAN_TURN_*`. Privacy settings control who may message,
+  call or invite you; notification prefs mute kinds of push.
+- **Push:** APNs (iOS) and FCM (Android, `ASEMAN_FCM_SERVICE_ACCOUNT`).
+- **Credits:** people can apply for complimentary credits; admins resolve them
+  and edit transactional email templates (Admin → Emails).
+- **Orbit:** project workspaces show agents, people and tools in an orbit strip.
+
 ## Governance, proactive work and connections
 
 - **Every agent action is decided and recorded.** A CEL policy (Admin →

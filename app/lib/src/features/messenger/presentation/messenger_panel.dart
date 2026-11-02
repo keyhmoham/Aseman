@@ -6,14 +6,19 @@ import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/space.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/bot_avatar.dart';
 import '../../../shared/widgets/overlay_panels.dart';
-import '../../../shared/widgets/panel_header.dart';
+import '../../../shared/widgets/panel_empty.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/skeleton.dart';
+import '../../../shared/widgets/sky_ui.dart';
+import '../../../shared/widgets/workspace_header.dart'
+    show promptCreateWorkspace;
 import '../../search_feed/presentation/rich_post_parser.dart'
     show markupPreview;
 import 'chat_page.dart';
@@ -48,7 +53,9 @@ class MessengerPanel extends StatefulWidget {
     required this.dependencies,
     this.embedded = false,
     this.dense = false,
+    this.topContentInset = 0,
     this.onOpenSpaceRoom,
+    this.onOpenWorkspace,
   });
 
   final AppDependencies dependencies;
@@ -59,11 +66,19 @@ class MessengerPanel extends StatefulWidget {
   /// Narrow desktop rail sizing; leave false on the mobile chats tab.
   final bool dense;
 
+  /// Extra top padding inside the scroll (home floating app bar). Content
+  /// starts clear of the bar and scrolls under it — same pattern as Explore.
+  final double topContentInset;
+
   /// Opens a project's room on the workspace page (its desk, chat, and the
   /// rest). Set on the home chats list. When null, a room still opens as a
   /// chat — the floating messenger.
   final void Function(String spaceName, String roomName, String roomId)?
   onOpenSpaceRoom;
+
+  /// Opens a newly created space on the workspace page (same as picking it
+  /// in the workspace switcher). Set on the home chats list.
+  final ValueChanged<String>? onOpenWorkspace;
 
   @override
   State<MessengerPanel> createState() => _MessengerPanelState();
@@ -95,7 +110,9 @@ class _MessengerPanelState extends State<MessengerPanel> {
               dependencies: widget.dependencies,
               embedded: widget.embedded,
               dense: widget.dense,
+              topContentInset: widget.topContentInset,
               onOpenSpaceRoom: widget.onOpenSpaceRoom,
+              onOpenWorkspace: widget.onOpenWorkspace,
               onClose: widget.embedded
                   ? null
                   : () => Navigator.of(context).pop(),
@@ -148,7 +165,9 @@ class _ChatList extends StatefulWidget {
     this.onClose,
     this.embedded = false,
     this.dense = false,
+    this.topContentInset = 0,
     this.onOpenSpaceRoom,
+    this.onOpenWorkspace,
   });
 
   final AppDependencies dependencies;
@@ -160,9 +179,15 @@ class _ChatList extends StatefulWidget {
   /// Compact chrome for a desktop side rail.
   final bool dense;
 
+  /// See [MessengerPanel.topContentInset].
+  final double topContentInset;
+
   /// See [MessengerPanel.onOpenSpaceRoom].
   final void Function(String spaceName, String roomName, String roomId)?
   onOpenSpaceRoom;
+
+  /// See [MessengerPanel.onOpenWorkspace].
+  final ValueChanged<String>? onOpenWorkspace;
 
   @override
   State<_ChatList> createState() => _ChatListState();
@@ -246,19 +271,6 @@ class _ChatListState extends State<_ChatList> {
     });
   }
 
-  Future<void> _openSaved() async {
-    try {
-      final chat = await _service.openSaved();
-      if (!mounted) return;
-      await _open(chat);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open Saved Messages: $e')),
-      );
-    }
-  }
-
   // Long-pressing a chat pins or unpins it (and deletes a direct chat for
   // the caller).
   Future<void> _chatMenu(
@@ -324,6 +336,61 @@ class _ChatListState extends State<_ChatList> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Could not start chat: $e')));
+    }
+  }
+
+  /// Same create flow as the workspace switcher's **New workspace** tile.
+  Future<void> _newSpace() async {
+    final created = await promptCreateWorkspace(context, widget.dependencies);
+    if (created == null || !mounted) return;
+    final open = widget.onOpenWorkspace;
+    if (open != null) {
+      open(created.name);
+      return;
+    }
+    await _load();
+  }
+
+  Future<void> _composeMenu(BuildContext fabContext) async {
+    final box = fabContext.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return;
+    final overlay = Overlay.of(fabContext).context.findRenderObject();
+    if (overlay is! RenderBox) return;
+    final topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
+    final bottomRight = box.localToGlobal(
+      box.size.bottomRight(Offset.zero),
+      ancestor: overlay,
+    );
+    final picked = await showAppMenu<String>(
+      context: fabContext,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(topLeft, bottomRight),
+        Offset.zero & overlay.size,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: 'space',
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.workspaces_outline),
+            title: Text('New space'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'chat',
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.edit_square),
+            title: Text('New chat'),
+          ),
+        ),
+      ],
+    );
+    if (!mounted || picked == null) return;
+    if (picked == 'space') {
+      await _newSpace();
+    } else if (picked == 'chat') {
+      await _newChat();
     }
   }
 
@@ -441,85 +508,43 @@ class _ChatListState extends State<_ChatList> {
     // The desktop rail and the floating messenger keep that chrome fixed and
     // scroll only the list.
     final pageScroll = widget.embedded && !dense;
-    final top = dense || compact || widget.embedded ? 8.0 : 22.0;
-    // On the phone chats tab, clear the floating tab pill.
-    // The desktop rail has no bar under it.
+    final top = (dense || compact || widget.embedded ? 6.0 : 18.0) +
+        widget.topContentInset;
+    // Phone chats tab: clear the floating tab pill.
     final listBottom = pageScroll
         ? 90 + MediaQuery.viewPaddingOf(context).bottom
         : 24.0;
     final waiting = _loading || _error != null || shown.isEmpty;
-    final chrome = <Widget>[
-      PanelHeader(
-        icon: Icons.forum_outlined,
-        title: widget.embedded ? 'Chats' : 'Messages',
-        subtitle: 'Direct chats and your spaces',
-        onClose: widget.onClose,
-        actions: [
-          IconButton(
-            tooltip: 'Saved Messages',
-            onPressed: _openSaved,
-            icon: const Icon(Icons.bookmark_outline_rounded),
-          ),
-          if (dense)
-            IconButton.filled(
-              tooltip: 'New chat',
-              onPressed: _newChat,
-              icon: const Icon(Icons.edit_square, size: 18),
-            )
-          else
-            FilledButton.icon(
-              onPressed: _newChat,
-              icon: const Icon(Icons.edit_square, size: 18),
-              label: const Text('New chat'),
-            ),
-        ],
-      ),
-      SizedBox(height: dense ? 10 : 14),
-      TextField(
-        controller: _search,
-        onChanged: (_) => setState(() {}),
-        decoration: InputDecoration(
-          hintText: 'Search chats',
-          isDense: dense,
-          prefixIcon: const Icon(Icons.search_rounded),
-          suffixIcon: _search.text.isEmpty
-              ? null
-              : IconButton(
-                  tooltip: 'Clear',
-                  onPressed: () => setState(_search.clear),
-                  icon: const Icon(Icons.close_rounded),
-                ),
-        ),
-      ),
-      SizedBox(height: dense ? 8 : 12),
-      SegmentedTabBar(
-        alignment: Alignment.center,
-        compact: compact,
-        selectedIndex: _filter.index,
-        onTap: (i) => setState(() => _filter = _Filter.values[i]),
-        labels: [
-          _label('All', _unread(null)),
-          _label('Direct', _unread(true)),
-          _label('Spaces', _unread(false)),
-        ],
-        icons: const [
-          Icons.all_inbox_rounded,
-          Icons.person_outline_rounded,
-          Icons.workspaces_outline,
-        ],
-      ),
-      if (_requests > 0) ...[
-        const SizedBox(height: 10),
-        _RequestsBanner(
-          count: _requests,
-          onTap: () async {
-            await showRequestsPanel(context, widget.dependencies);
-            if (mounted) unawaited(_load());
-          },
-        ),
+    final unreadAll = _unread(null);
+    final chrome = _MessengerChrome(
+      title: widget.embedded ? 'Chats' : 'Messages',
+      subtitle: unreadAll > 0
+          ? (unreadAll == 1
+              ? '1 unread across your chats'
+              : '$unreadAll unread across your chats')
+          : 'People, agents & your spaces',
+      dense: dense,
+      compact: compact,
+      search: _search,
+      onSearchChanged: () => setState(() {}),
+      onClearSearch: () => setState(_search.clear),
+      filterIndex: _filter.index,
+      onFilter: (i) => setState(() => _filter = _Filter.values[i]),
+      filterLabels: [
+        _label('All', unreadAll),
+        _label('Direct', _unread(true)),
+        _label('Spaces', _unread(false)),
       ],
-      const SizedBox(height: 8),
-    ];
+      onCompose: _composeMenu,
+      onClose: widget.onClose,
+      requests: _requests,
+      onRequests: _requests <= 0
+          ? null
+          : () async {
+              await showRequestsPanel(context, widget.dependencies);
+              if (mounted) unawaited(_load());
+            },
+    );
     final tiles = _chatTiles(shown, dense);
 
     if (pageScroll) {
@@ -533,8 +558,11 @@ class _ChatListState extends State<_ChatList> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.fromLTRB(gutter, top, gutter, listBottom),
             children: [
-              ...chrome,
-              if (waiting) _listPlaceholder(shown, expand: false) else ...tiles,
+              chrome,
+              if (waiting)
+                _listPlaceholder(shown, expand: false)
+              else
+                ...tiles,
             ],
           ),
         ),
@@ -550,7 +578,7 @@ class _ChatListState extends State<_ChatList> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ...chrome,
+            chrome,
             Expanded(
               child: waiting
                   ? _listPlaceholder(shown, expand: true)
@@ -761,7 +789,11 @@ class _SpaceChatTile extends StatelessWidget {
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    ChatAvatar(chat: latest, radius: dense ? 18 : 24),
+                    ChatAvatar(
+                      chat: latest,
+                      radius: dense ? 18 : 24,
+                      userId: me,
+                    ),
                     if (space.working)
                       Positioned(
                         right: -1,
@@ -908,13 +940,13 @@ class _SpaceRooms extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(
             left: BorderSide(
-              color: scheme.primary.withValues(alpha: .4),
-              width: 3,
+              color: scheme.outlineVariant.withValues(alpha: .55),
+              width: 1,
             ),
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.only(left: 6),
+          padding: const EdgeInsets.only(left: 8),
           child: Column(
             children: [
               for (final room in rooms)
@@ -959,6 +991,11 @@ class _ChatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final unread = chat.unread > 0;
+    // Agent humanoid may wear a picture badge at BR; park the working
+    // indicator at TR so they do not overlap.
+    final agentRow =
+        chat.direct && !chat.isAseman && (chat.peer?.isAgent ?? false);
+    // Flat rows (not SoftCards): a light unread wash only.
     return Material(
       color: unread
           ? scheme.primaryContainer.withValues(alpha: .35)
@@ -969,8 +1006,6 @@ class _ChatTile extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        onLongPress: null,
-        onSecondaryTap: null,
         child: GestureDetector(
           behavior: HitTestBehavior.deferToChild,
           onLongPressStart: (d) => onMenu(d.globalPosition, context),
@@ -988,11 +1023,13 @@ class _ChatTile extends StatelessWidget {
                     ChatAvatar(
                       chat: chat,
                       radius: topic ? (dense ? 15 : 18) : (dense ? 18 : 24),
+                      userId: me,
                     ),
                     if (chat.working)
                       Positioned(
                         right: -1,
-                        bottom: -1,
+                        top: agentRow ? -1 : null,
+                        bottom: agentRow ? null : -1,
                         child: Container(
                           width: 13,
                           height: 13,
@@ -1035,7 +1072,7 @@ class _ChatTile extends StatelessWidget {
                             ),
                           ],
                           if (chat.direct &&
-                              !chat.saved &&
+                              !chat.isAseman &&
                               (chat.peer?.isAgent ?? false)) ...[
                             const SizedBox(width: 6),
                             _Tag('AI', scheme.tertiary),
@@ -1139,7 +1176,7 @@ String _chatPreview(ChatSummary chat, String me) {
             : '📎 ${chat.lastAttachments} attachments')
       : '';
   if (text.isEmpty) {
-    if (chat.saved) return 'Notes, links and files for yourself';
+    if (chat.isAseman) return 'Notes & voice';
     return chat.direct ? 'Say hello' : 'No messages yet';
   }
   if (chat.lastSenderId == me) return 'You: $text';
@@ -1185,6 +1222,186 @@ class _Tag extends StatelessWidget {
   );
 }
 
+/// Chats header composition: editorial title, search + compose command bar,
+/// and the All / Direct / Spaces filter. Personal Aseman is a normal list row.
+class _MessengerChrome extends StatelessWidget {
+  const _MessengerChrome({
+    required this.title,
+    required this.subtitle,
+    required this.dense,
+    required this.compact,
+    required this.search,
+    required this.onSearchChanged,
+    required this.onClearSearch,
+    required this.filterIndex,
+    required this.onFilter,
+    required this.filterLabels,
+    required this.onCompose,
+    this.onClose,
+    this.requests = 0,
+    this.onRequests,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool dense;
+  final bool compact;
+  final TextEditingController search;
+  final VoidCallback onSearchChanged;
+  final VoidCallback onClearSearch;
+  final int filterIndex;
+  final ValueChanged<int> onFilter;
+  final List<String> filterLabels;
+  final Future<void> Function(BuildContext fabContext) onCompose;
+  final VoidCallback? onClose;
+  final int requests;
+  final VoidCallback? onRequests;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final gap = dense ? 10.0 : 14.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _titleRow(context, scheme),
+        SizedBox(height: dense ? 4 : 6),
+        Text(
+          subtitle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontSize: dense ? 11.5 : 13,
+                height: 1.35,
+                color: scheme.onSurfaceVariant,
+              ),
+        ),
+        SizedBox(height: gap),
+        _SearchComposeBar(
+          dense: dense,
+          search: search,
+          onSearchChanged: onSearchChanged,
+          onClearSearch: onClearSearch,
+          onCompose: onCompose,
+        ),
+        SizedBox(height: dense ? 10 : 14),
+        SegmentedTabBar(
+          alignment: Alignment.center,
+          compact: compact,
+          selectedIndex: filterIndex,
+          onTap: onFilter,
+          labels: filterLabels,
+          icons: const [
+            Icons.all_inbox_rounded,
+            Icons.person_outline_rounded,
+            Icons.workspaces_outline,
+          ],
+        ),
+        if (requests > 0 && onRequests != null) ...[
+          SizedBox(height: dense ? 8 : 10),
+          _RequestsBanner(count: requests, onTap: onRequests!),
+        ],
+        SizedBox(height: dense ? 6 : 10),
+      ],
+    );
+  }
+
+  Widget _titleRow(BuildContext context, ColorScheme scheme) {
+    final titleStyle = (dense
+            ? Theme.of(context).textTheme.titleLarge
+            : Theme.of(context).textTheme.headlineSmall)
+        ?.copyWith(
+          fontWeight: FontWeight.w900,
+          letterSpacing: -0.7,
+          height: 1.05,
+        );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
+              const SizedBox(height: 8),
+              Container(
+                width: dense ? 28 : 36,
+                height: 3,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  gradient: LinearGradient(
+                    colors: [
+                      scheme.primary,
+                      AppColors.cyan.withValues(alpha: .85),
+                      scheme.primary.withValues(alpha: .15),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (onClose != null)
+          IconButton.filledTonal(
+            tooltip: 'Close',
+            onPressed: onClose,
+            icon: const Icon(Icons.close_rounded),
+          ),
+      ],
+    );
+  }
+}
+
+/// Search field with the compose FAB docked on its trailing edge.
+class _SearchComposeBar extends StatelessWidget {
+  const _SearchComposeBar({
+    required this.dense,
+    required this.search,
+    required this.onSearchChanged,
+    required this.onClearSearch,
+    required this.onCompose,
+  });
+
+  final bool dense;
+  final TextEditingController search;
+  final VoidCallback onSearchChanged;
+  final VoidCallback onClearSearch;
+  final Future<void> Function(BuildContext fabContext) onCompose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: SoftSearchField(
+            controller: search,
+            dense: dense,
+            hintText: 'Search chats',
+            onChanged: (_) => onSearchChanged(),
+            trailing: search.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Clear',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onClearSearch,
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                  ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Builder(
+          builder: (fabContext) => SkyFab(
+            mini: true,
+            tooltip: 'New',
+            icon: Icons.add_rounded,
+            onPressed: () => onCompose(fabContext),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _RequestsBanner extends StatelessWidget {
   const _RequestsBanner({required this.count, required this.onTap});
   final int count;
@@ -1192,36 +1409,23 @@ class _RequestsBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: AppColors.warning.withValues(alpha: .14),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppShape.inner),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              const Icon(Icons.help_outline_rounded, color: AppColors.warning),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  count == 1
-                      ? '1 question is waiting for your answer'
-                      : '$count questions are waiting for your answer',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
-            ],
-          ),
+    return DockedBanner(
+      eyebrow: 'REQUESTS',
+      accent: AppColors.warning,
+      title: count == 1
+          ? '1 question is waiting'
+          : '$count questions are waiting',
+      subtitle: 'Tap to answer',
+      onTap: onTap,
+      leading: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: AppColors.warning.withValues(alpha: .16),
+          borderRadius: BorderRadius.circular(11),
         ),
+        child: const Icon(Icons.help_outline_rounded,
+            size: 18, color: AppColors.warning),
       ),
     );
   }
@@ -1243,38 +1447,7 @@ class _Empty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final message = Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: ShapeDecoration(
-              color: scheme.secondaryContainer,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-            ),
-            child: Icon(icon, size: 34, color: scheme.onSecondaryContainer),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            body,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: scheme.onSurfaceVariant),
-          ),
-        ],
-      ),
-    );
+    final message = PanelEmpty(icon: icon, title: title, message: body);
     if (!expand) return Align(alignment: Alignment.topCenter, child: message);
     return Center(child: SingleChildScrollView(child: message));
   }
@@ -1305,7 +1478,8 @@ class _NewChatPageState extends State<_NewChatPage> {
         .fetchBots()
         .then((bots) {
           if (mounted)
-            setState(() => _agents = bots.where((b) => b.isAgent).toList());
+            setState(() => _agents =
+                bots.where((b) => b.isAgent && !b.isBuiltin).toList());
         })
         .catchError((_) {});
   }
@@ -1346,7 +1520,7 @@ class _NewChatPageState extends State<_NewChatPage> {
             _results = found.where((a) => a.id != me).toList();
             _foundAgents = bots
                 .map(Bot.fromJson)
-                .where((b) => !mine.contains(b.id))
+                .where((b) => !b.isBuiltin && !mine.contains(b.id))
                 .toList();
           });
         }
@@ -1453,7 +1627,10 @@ class _NewChatPageState extends State<_NewChatPage> {
                     _PickTile(
                       icon: Icons.smart_toy_outlined,
                       title: b.name,
-                      avatar: b.avatar,
+                      bot: b,
+                      userId: widget.dependencies.sessionController
+                              .session?.accountId ??
+                          '',
                       subtitle: 'Agent',
                       onTap: () => Navigator.of(
                         context,
@@ -1476,7 +1653,10 @@ class _NewChatPageState extends State<_NewChatPage> {
                       _PickTile(
                         icon: Icons.smart_toy_outlined,
                         title: b.name,
-                        avatar: b.avatar,
+                        bot: b,
+                        userId: widget.dependencies.sessionController
+                                .session?.accountId ??
+                            '',
                         subtitle: 'Agent',
                         onTap: () => Navigator.of(
                           context,
@@ -1513,11 +1693,17 @@ class _PickTile extends StatelessWidget {
     required this.subtitle,
     required this.onTap,
     this.avatar = '',
+    this.bot,
+    this.userId = '',
   });
   final IconData icon;
 
   /// The picture shown over [icon], when there is one.
   final String avatar;
+
+  /// When set (an agent), shows the unified humanoid + picture badge.
+  final Bot? bot;
+  final String userId;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
@@ -1527,11 +1713,15 @@ class _PickTile extends StatelessWidget {
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(AppShape.control),
     ),
-    leading: CircleAvatar(
-      foregroundImage: Avatars.of(avatar),
-      onForegroundImageError: avatar.isEmpty ? null : (_, __) {},
-      child: Icon(icon),
-    ),
+    leading: bot != null
+        ? BotAvatar(bot: bot!, radius: 20, userId: userId)
+        : HaloRing(
+            child: CircleAvatar(
+              foregroundImage: Avatars.of(avatar),
+              onForegroundImageError: avatar.isEmpty ? null : (_, __) {},
+              child: Icon(icon),
+            ),
+          ),
     title: Text(
       title,
       maxLines: 1,

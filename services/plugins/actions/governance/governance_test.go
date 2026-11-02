@@ -281,6 +281,31 @@ func TestSecretsArePutInAndRedacted(t *testing.T) {
 	}
 }
 
+// In a shared project, the prompting actor only unlocks their own vault entry —
+// another member's secret of the same name stays out of reach.
+func TestSecretValueDoesNotFallBackToAnotherMembersSecret(t *testing.T) {
+	s, _, ctx := harness(t)
+	owner, other := mustID(t, ownerHex), mustID(t, otherHex)
+	if _, err := s.StoreSecret(ctx, owner, spaceHex, "api_token", "", "owner-secret"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.StoreSecret(ctx, other, spaceHex, "api_token", "", "other-secret"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.secretValue(ctx, spaceHex, ownerHex, "api_token")
+	if err != nil || got != "owner-secret" {
+		t.Fatalf("owner's secret: %q %v", got, err)
+	}
+	got, err = s.secretValue(ctx, spaceHex, otherHex, "api_token")
+	if err != nil || got != "other-secret" {
+		t.Fatalf("other's secret: %q %v", got, err)
+	}
+	stranger := "00000000000000010000000000000077"
+	if _, err := s.secretValue(ctx, spaceHex, stranger, "api_token"); err == nil {
+		t.Fatal("a third person must not unlock another member's secret by name")
+	}
+}
+
 func TestSecretBoxRoundTrip(t *testing.T) {
 	s, spaces, ctx := harness(t)
 	done := make(chan string, 1)

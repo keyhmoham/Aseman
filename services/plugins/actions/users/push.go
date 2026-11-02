@@ -29,7 +29,7 @@ import (
 )
 
 // Push notifications for the iOS app, sent straight to Apple (APNs) with the
-// node's own key. A device registers its token when a person signs in on it
+// node's own key (the Android app's, to Firebase, are in push_fcm.go). A device registers its token when a person signs in on it
 // and removes it when they sign out; the rest of the node calls Push with the
 // people to tell and what to say.
 //
@@ -65,6 +65,9 @@ type PushNote struct {
 	Kind  string `json:"kind"`
 	Space string `json:"space,omitempty"`
 	Room  string `json:"room,omitempty"`
+	// Peer is the person a direct message ("dm") is from: tapping it opens
+	// that conversation.
+	Peer string `json:"peer,omitempty"`
 	// Collapse replaces an earlier notification with the same value instead of
 	// stacking under it.
 	Collapse string `json:"collapse,omitempty"`
@@ -103,8 +106,8 @@ func (s *Service) pushRegister(ctx context.Context, req *api.ActionRequest) (*ap
 	if in.Token == "" || len(in.Token) > 512 {
 		return nil, errs.InvalidArgument("device token required")
 	}
-	if in.Platform != "ios" {
-		return nil, errs.InvalidArgument("only ios devices can be registered")
+	if in.Platform != "ios" && in.Platform != "android" {
+		return nil, errs.InvalidArgument("only ios and android devices can be registered")
 	}
 	if in.Environment != "development" {
 		in.Environment = "production"
@@ -122,7 +125,11 @@ func (s *Service) pushRegister(ctx context.Context, req *api.ActionRequest) (*ap
 	if err != nil {
 		return nil, err
 	}
-	return helper.JSON(map[string]any{"ok": true, "enabled": apns().configured()})
+	enabled := apns().configured()
+	if in.Platform == "android" {
+		enabled = fcm().configured()
+	}
+	return helper.JSON(map[string]any{"ok": true, "enabled": enabled})
 }
 
 func (s *Service) pushUnregister(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
@@ -147,25 +154,45 @@ func (s *Service) pushUnregister(ctx context.Context, req *api.ActionRequest) (*
 	return helper.JSON(map[string]any{"ok": true})
 }
 
-// Push tells each of the given people, on every device they are signed in on,
-// and keeps the notification in their in-app inbox.
+// Push tells each of the given people, on every device they are signed in on.
 // It never fails its caller: a notification is a courtesy on top of the thing
 // that happened, which has already been stored.
 func (s *Service) Push(ctx context.Context, to []identity.ID, note PushNote) {
 	for _, account := range to {
 		s.keep(ctx, account, note)
 	}
-	client := apns()
-	if !client.configured() || len(to) == 0 {
+	client, android := apns(), fcm()
+	if (!client.configured() && !android.configured()) || len(to) == 0 {
 		return
 	}
 	for _, account := range to {
+		// What the person turned off, and the rooms and chats they muted.
+		if !s.wantsPush(ctx, account, note) {
+			continue
+		}
 		var devices []PushDevice
 		if err := s.R.List(ctx, "push_devices", database.Filter{Equal: map[string]any{"account": account.String()}}, &devices); err != nil {
 			continue
 		}
 		for i := range devices {
 			d := devices[i]
+			if d.Platform == "android" {
+				if !android.configured() {
+					continue
+				}
+				gone, err := android.send(ctx, d.Token, note)
+				if gone {
+					if key, e := identity.Parse(d.ID); e == nil {
+						_ = s.R.Delete(ctx, "push_devices", key)
+					}
+				} else if err != nil && s.L != nil {
+					s.L.Warn("push not delivered", "account", account.String(), "platform", "android", "error", err)
+				}
+				continue
+			}
+			if !client.configured() {
+				continue
+			}
 			gone, env, err := client.send(ctx, d.Token, d.Environment, note)
 			switch {
 			case gone:
@@ -319,11 +346,14 @@ func apnsPayload(note PushNote) ([]byte, error) {
 	if note.Space != "" {
 		// One stack per project in Notification Centre.
 		aps["thread-id"] = note.Space
+	} else if note.Peer != "" {
+		// And one per conversation.
+		aps["thread-id"] = "dm:" + note.Peer
 	}
 	// What the app needs to open the right screen. It goes under "body": the
 	// app's notification library hands the app that part of a remote
 	// notification and nothing else.
-	return json.Marshal(map[string]any{"aps": aps, "body": map[string]any{"kind": note.Kind, "space": note.Space, "room": note.Room}})
+	return json.Marshal(map[string]any{"aps": aps, "body": map[string]any{"kind": note.Kind, "space": note.Space, "room": note.Room, "peer": note.Peer}})
 }
 
 // send delivers one notification to one device. A token is issued by one of

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/sky_ui.dart';
 
 /// A tool's mark: an icon that fits its name, on a tonal container whose hue
 /// is the tool's own (the same everywhere: window, dock, pinned desk).
@@ -70,11 +71,10 @@ class ToolAvatar extends StatelessWidget {
     if (n == 'files') return Icons.folder_copy_rounded;
     if (n == 'computer') return Icons.desktop_windows_rounded;
     if (has(['weather', 'forecast', 'climate'])) return Icons.wb_sunny_rounded;
-    if (has(
-        ['market', 'stock', 'price', 'crypto', 'trade', 'ticker', 'quote'])) {
-      return Icons.candlestick_chart_rounded;
+    if (has(['market', 'store', 'catalog', 'listing'])) {
+      return Icons.storefront_rounded;
     }
-    if (has(['portfolio', 'wallet', 'bank', 'finance'])) {
+    if (has(['wallet', 'bank', 'finance', 'billing'])) {
       return Icons.account_balance_wallet_rounded;
     }
     if (has(['chart', 'analytic', 'stats', 'metric', 'dashboard'])) {
@@ -111,13 +111,16 @@ class ToolAvatar extends StatelessWidget {
           size: size * .54,
           color: selected ? scheme.onPrimary : scheme.onPrimaryContainer),
     );
-    return ValueListenableBuilder<Map<String, String>>(
-      valueListenable: pictures,
-      builder: (context, avatars, _) => AvatarPicture(
-          avatar: avatars[tool],
-          size: size,
-          radius: selected ? size * .32 : size / 2,
-          fallback: mark),
+    return HaloRing(
+      accent: scheme.primary,
+      child: ValueListenableBuilder<Map<String, String>>(
+        valueListenable: pictures,
+        builder: (context, avatars, _) => AvatarPicture(
+            avatar: avatars[tool],
+            size: size,
+            radius: selected ? size * .32 : size / 2,
+            fallback: mark),
+      ),
     );
   }
 }

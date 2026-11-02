@@ -10,6 +10,7 @@ import (
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/support/fileref"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
@@ -331,10 +332,11 @@ func (s *Service) accountDelete(ctx context.Context, req *api.ActionRequest) (*a
 	if e := s.R.List(ctx, "files", database.Filter{Equal: map[string]any{"owner_id": id.String()}}, &files); e == nil {
 		fs := s.K.FS()
 		for _, fl := range files {
-			if fs != nil && fl.StorageKey != "" {
-				_ = fs.Delete(ctx, fl.StorageKey)
-			}
+			// Record first, then the bytes, and only if nobody else's record (a kept copy) uses them.
 			_ = s.R.Delete(ctx, "files", fl.ID)
+			if fs != nil {
+				_ = fileref.Release(ctx, s.R, fs, fl.StorageKey)
+			}
 		}
 	}
 

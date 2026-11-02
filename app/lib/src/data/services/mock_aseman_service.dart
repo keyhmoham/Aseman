@@ -11,36 +11,36 @@ class MockAsemanService implements BackendService {
   @override
   Future<List<MarketQuote>> fetchMarketQuotes() async => const [
         MarketQuote(
-            symbol: 'BTC',
-            price: r'$68,245',
+            symbol: 'HELP',
+            price: '42 installs',
             change: 1.8,
             color: AppColors.warning),
         MarketQuote(
-            symbol: 'ETH',
-            price: r'$3,540',
+            symbol: 'NOTE',
+            price: '18 installs',
             change: 2.3,
             color: Color(0xFF8497FF)),
         MarketQuote(
-            symbol: 'SOL',
-            price: r'$172.34',
+            symbol: 'SYNC',
+            price: '31 installs',
             change: 4.9,
             color: AppColors.success),
         MarketQuote(
-            symbol: 'AVAX',
-            price: r'$41.20',
+            symbol: 'ROOM',
+            price: '9 installs',
             change: -0.8,
             color: AppColors.danger),
       ];
 
   @override
   Future<List<Room>> fetchRooms() async => const [
-        Room(name: 'Crypto Alpha', members: '2.1k members', status: '9 online'),
+        Room(name: 'Build Lab', members: '2.1k members', status: '9 online'),
         Room(
-            name: 'The Daily Bagholders',
+            name: 'Open Studio',
             members: '8.9k members',
             status: '126 online'),
         Room(
-            name: 'Macro Signals',
+            name: 'Agent Lounge',
             members: '4.7k members',
             status: '82 online'),
       ];
@@ -49,21 +49,21 @@ class MockAsemanService implements BackendService {
   Future<List<Message>> fetchMessages(String roomId) async => const [
         Message(
             author: 'David L.',
-            body: r'BTC testing resistance at $68k. Breakout imminent?',
+            body: 'Anyone free to review the onboarding flow tonight?',
             sentAt: '14:28'),
         Message(
             author: 'BotAlpha',
             body:
-                r'Analysis: strong volume confirms the upward trend. Target $69,500.',
+                'I drafted a checklist and pinned open questions in the room.',
             sentAt: '14:29',
             isAgent: true),
         Message(
             author: 'Sarah K.',
-            body: 'Agreed. Long position opened. SOL looks ready too.',
+            body: 'Looks good. I will add the mobile screenshots next.',
             sentAt: '14:30'),
         Message(
             author: 'Agent73',
-            body: 'Funding rates increasing. Local high potential.',
+            body: 'Reminder: standup notes are due in 20 minutes.',
             sentAt: '14:31',
             isAgent: true),
       ];

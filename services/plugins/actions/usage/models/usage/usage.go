@@ -34,6 +34,7 @@ func RequestIDFrom(ctx context.Context) string {
 // Kind labels the interaction that produced the usage.
 const (
 	KindAsk      = "ask"      // direct ask to an agent
+	KindChat     = "chat"     // an agent answering in a person's chat (no room)
 	KindMention  = "mention"  // agent triggered by a room chat mention
 	KindMessage  = "message"  // direct message to a bot
 	KindSandbox  = "sandbox"  // shared sandbox command execution

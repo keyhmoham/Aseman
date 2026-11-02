@@ -18,7 +18,7 @@ func TestNoticeBody(t *testing.T) {
 		{"several files", "Ada", "  ", 3, "Ada: Sent files"},
 		{"nothing at all", "", "", 0, "Sent a message"},
 		{"no sender known", "", "hello", 0, "hello"},
-		{"a shared post", "Ada", "look\n\n:::post {\"id\":\"p\",\"author_id\":\"a\",\"name\":\"Bob\",\"body\":\"**Long** BTC\"}", 0, "Ada: look Forwarded post from Bob: Long BTC"},
+		{"a shared post", "Ada", "look\n\n:::post {\"id\":\"p\",\"author_id\":\"a\",\"name\":\"Bob\",\"body\":\"**Ready** notes\"}", 0, "Ada: look Forwarded post from Bob: Ready notes"},
 	}
 	for _, c := range cases {
 		if got := noticeBody(c.sender, c.body, c.attachments); got != c.want {

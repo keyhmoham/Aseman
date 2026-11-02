@@ -11,7 +11,7 @@ void main() {
     final p = SocialPost.fromJson({
       'id': 'p1',
       'author_id': 'a1',
-      'body': 'Long BTC',
+      'body': 'Ready notes',
       'created_at': '2026-10-01T00:00:00Z',
       'source': 'coinmarketcap',
       'attachments': [

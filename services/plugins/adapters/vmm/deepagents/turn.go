@@ -27,7 +27,10 @@ type session struct {
 	botID   string
 	spaceID string
 	roomID  string
-	base    context.Context
+	// personal is a person-scoped OpenCode chat session (Aseman self-chat / Talk),
+	// not a room agent turn: serveCall dispatches as the person with no space lock.
+	personal bool
+	base     context.Context
 
 	// started and the token counters are what the turn has used so far, which
 	// the node gates each model call against (the budget and the wallet).
@@ -161,7 +164,15 @@ func (a *Adapter) open(ctx context.Context, vmID string, turn vmm.AgentTurn) (*s
 	if err != nil {
 		return nil, turnRequest{}, err
 	}
-	if spec.ContextWindow == 0 && a.platform != nil {
+	// The engine is read first: an OpenCode turn must not resolve the platform
+	// LLM, decision, memory or Code Mode resources at all.
+	engine := "deepagents"
+	if a.platform != nil {
+		if e, err := a.platform.AgentEngine(ctx); err == nil && (e == "opencode" || e == "deepagents") {
+			engine = e
+		}
+	}
+	if engine == "deepagents" && spec.ContextWindow == 0 && a.platform != nil {
 		// The runtime summarizes the agent's history against the model's
 		// window: tell it the window of the model the turn will really use.
 		if provider, err := a.platform.ResolveChat(ctx, spec.Provider, spec.Model); err == nil && provider.ContextWindow > 0 {
@@ -174,13 +185,16 @@ func (a *Adapter) open(ctx context.Context, vmID string, turn vmm.AgentTurn) (*s
 	}
 	token := hex.EncodeToString(raw)
 	base := context.WithoutCancel(ctx)
-	// Sandbox OpenCode (and any other in-turn tool) reuses this credential so
-	// its completions hit the same metered /llm proxy as the agent runtime.
-	base = vmm.WithTurnLLM(base, vmm.TurnLLM{
-		Token:   token,
-		BaseURL: a.nodeURL + gatewayPrefix + "/llm",
-		Model:   "aseman/default",
-	})
+	if engine == "deepagents" {
+		// Sandbox OpenCode (and any other in-turn tool) reuses this credential so
+		// its completions hit the same metered /llm proxy as the agent runtime.
+		// The OpenCode engine uses its own free models, so it gets no such handle.
+		base = vmm.WithTurnLLM(base, vmm.TurnLLM{
+			Token:   token,
+			BaseURL: a.nodeURL + gatewayPrefix + "/llm",
+			Model:   "aseman/default",
+		})
+	}
 	s := &session{
 		token: token, def: def, account: account,
 		botID: turn.Agent.BotID, spaceID: turn.SpaceID, roomID: turn.RoomID,
@@ -199,6 +213,18 @@ func (a *Adapter) open(ctx context.Context, vmID string, turn vmm.AgentTurn) (*s
 		Token: s.token, Gateway: a.nodeURL + gatewayPrefix,
 		Agent: agentPayload{Spec: spec, BotID: turn.Agent.BotID, AccountID: turn.Agent.AccountID, VMID: vmID},
 		Turn:  turn,
+		// Unknown or unread: the Deep Agents runtime, as before.
+		AgentEngine: engine,
+	}
+	if a.platform != nil {
+		// The programmer switch is independent of the engine; keep it truthful.
+		on, err := a.platform.OpenCodeEnabled(ctx)
+		req.OpenCode = err == nil && on
+	}
+	if engine != "deepagents" {
+		// OpenCode brings its own models and tools: no platform decision,
+		// memory, timeline or Code Mode payloads cross the turn.
+		return s, req, nil
 	}
 	if a.platform != nil {
 		// Off or unusable, the turn runs as it always has.
@@ -213,14 +239,6 @@ func (a *Adapter) open(ctx context.Context, vmID string, turn vmm.AgentTurn) (*s
 		// call apps, platform tools and the timeline by writing JS against
 		// one OpenAPI surface (search + execute).
 		req.CodeMode = true
-		// Off (or unknown), the agents build and code themselves.
-		on, err := a.platform.OpenCodeEnabled(ctx)
-		req.OpenCode = err == nil && on
-		// Unknown or unread: the Deep Agents runtime, as before.
-		req.AgentEngine = "deepagents"
-		if engine, err := a.platform.AgentEngine(ctx); err == nil && (engine == "opencode" || engine == "deepagents") {
-			req.AgentEngine = engine
-		}
 	}
 	return s, req, nil
 }

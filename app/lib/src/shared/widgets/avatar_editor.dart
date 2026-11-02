@@ -1,8 +1,10 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/theme/halo_ring_cache.dart';
 import '../../data/services/aseman_service.dart';
 import 'overlay_panels.dart';
+import 'sky_ui.dart';
 
 /// The largest picture taken as an avatar.
 const int maxAvatarBytes = 5 * 1024 * 1024;
@@ -40,6 +42,8 @@ class AvatarEditor extends StatefulWidget {
     this.radius = 30,
     this.enabled = true,
     this.subject = 'avatar',
+    this.identity = '',
+    this.agent = false,
   });
 
   final AsemanService service;
@@ -63,6 +67,12 @@ class AvatarEditor extends StatefulWidget {
 
   /// What the avatar is called in its menu and messages.
   final String subject;
+
+  /// Person account id or agent id — binds the ring gradient in local cache.
+  final String identity;
+
+  /// When true, [identity] is treated as an agent id.
+  final bool agent;
 
   @override
   State<AvatarEditor> createState() => _AvatarEditorState();
@@ -174,17 +184,24 @@ class _AvatarEditorState extends State<AvatarEditor> {
     final color = widget.color ?? scheme.primary;
     final image = widget.service.avatarImage(_avatar);
     final radius = widget.radius;
-    final avatar = CircleAvatar(
-      radius: radius,
-      backgroundColor: widget.filled ? color : color.withValues(alpha: .18),
-      foregroundImage: image,
-      onForegroundImageError: image == null ? null : (_, __) {},
-      child: Text(
-        widget.initials,
-        style: TextStyle(
-          color: widget.filled ? scheme.onPrimary : color,
-          fontWeight: FontWeight.w800,
-          fontSize: (radius * .62).clamp(10, 26).toDouble(),
+    final ringId = widget.agent
+        ? HaloRingCache.agent(widget.identity)
+        : HaloRingCache.person(widget.identity);
+    final avatar = HaloRing(
+      identity: ringId,
+      accent: color,
+      child: CircleAvatar(
+        radius: radius,
+        backgroundColor: widget.filled ? color : color.withValues(alpha: .18),
+        foregroundImage: image,
+        onForegroundImageError: image == null ? null : (_, __) {},
+        child: Text(
+          widget.initials,
+          style: TextStyle(
+            color: widget.filled ? scheme.onPrimary : color,
+            fontWeight: FontWeight.w800,
+            fontSize: (radius * .62).clamp(10, 26).toDouble(),
+          ),
         ),
       ),
     );

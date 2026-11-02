@@ -243,7 +243,11 @@ done is never refused, so a run can finish at most one step past the cap.
 - **spaces** — spaces, rooms, memberships, invitations, the modular permission
   system, metadata, messages, files and per-bot isolated key-value storage.
 - **users** — accounts, JSON-tree metadata with public/private paths, files,
-  direct messaging.
+  direct messaging, and the personal Aseman brain (`dm_*`, `voice_config`,
+  `voice_speak`, `voice_turn`). Live voice is mic audio → node STT
+  (`llm.Transcribe` / Parakeet V3) → brain agent → TTS (`llm.Speak` /
+  Kokoro-class) → reply audio; enable roles under Admin → AI → Voice, or run
+  the compact OpenAI-compatible sidecar in `deploy/voice`.
 - **bots** — VM lifecycle, bot metadata (`kind` agent or tool — an app), the
   elpian `frontend` bundle of an app (`frontend_set`/`frontend_get`), bot host
   functions (global KV, network ops) and direct bot messaging.
@@ -537,7 +541,7 @@ The platform's own APIs are the agents' transport:
 
 | what | transport |
 |---|---|
-| people ↔ agents | room messages (`spaces.message_send` / `message_list`) and direct chats: a one-room space per pair (`spaces.direct_open`, listed with project rooms by `spaces.chat_list`, pinned chats first); `users.dm_send` / `dm_list` still work and mirror into that room. A direct chat with oneself is Saved Messages. Any room: `message_edit` and `message_delete` by the sender (in a project a manager can delete any message), `typing_set`, `chat_pin`, `message_report` (a copy of the last messages goes to the admins: `admin_chat_reports`, `admin_chat_report_resolve`); a direct chat only: `chat_clear` (deleted for the caller until a newer message) and `direct_block` (neither side can write). `message_list` carries `typing` and, for a direct chat, `peer_seen_at`, `blocked` and `can_send` |
+| people ↔ agents | room messages (`spaces.message_send` / `message_list`) and direct chats: a one-room space per pair (`spaces.direct_open`, listed with project rooms by `spaces.chat_list`, pinned chats first); `users.dm_send` / `dm_list` still work and mirror into that room. A direct chat with oneself is the personal Aseman chat (formerly Saved Messages); opening a Direct with the built-in assistant or lead redirects there. Any room: `message_edit` and `message_delete` by the sender (in a project a manager can delete any message), `typing_set`, `chat_pin`, `message_report` (a copy of the last messages goes to the admins: `admin_chat_reports`, `admin_chat_report_resolve`); a direct chat only: `chat_clear` (deleted for the caller until a newer message) and `direct_block` (neither side can write). `message_list` carries `typing` and, for a direct chat, `peer_seen_at`, `blocked` and `can_send` |
 | lead ↔ subagents (and any agent ↔ agent) | room messages: the delegating agent mentions the agent it hands work to; the agent's answer is a message whose `reply_to` is the hand-off |
 | agents → tools | `spaces.ask`: the shared sandbox (`raw` shell commands), apps, and platform tools (`tool` + `args`: files, images, previews, routines) |
 | work logs and live status | `spaces.agent_log` (log messages in the room + the room's live activity) |

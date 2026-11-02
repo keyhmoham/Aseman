@@ -7,7 +7,7 @@
 // The server runs in trusted mode: every request carries the root key and
 // names the account and user it acts as. A space is an account, an agent a
 // user of it; the identifiers below must match the runtime's
-// (aseman_agents/memory.py).
+// (decillion_agents/memory.py).
 package openviking
 
 import (
@@ -64,6 +64,29 @@ func SpaceAccount(spaceID string) string {
 // AgentUser is the user of an agent (by its bot id).
 func AgentUser(botID string) string { return id("agent-", botID) }
 
+// PersonAccount is the account of a person's own memory: what their Aseman
+// (their notes to themselves, Saved Messages) knows of them. Nothing of a space
+// is in it, and nothing of it is in any space.
+func PersonAccount(personID string) string { return id("person-", personID) }
+
+// Peer is a person as OpenViking's peer: whom a recall is made for.
+func Peer(personID string) string { return id("", personID) }
+
+// The brain is the one user of a person's account: its notes about the person
+// and the session of their notes to themselves.
+const (
+	BrainUser    = "aseman"
+	BrainSession = "saved"
+)
+
+// BrainNotes is what the brain keeps about its person: lasting facts,
+// preferences and instructions, one a line. It goes into every answer.
+const BrainNotes = "viking://user/" + BrainUser + "/memories/notes.md"
+
+// Resources is where a space's shared knowledge lives (its notes, the files
+// people attached): what a person's brain may recall of a room it can read.
+const Resources = "viking://resources"
+
 // Client talks to one OpenViking server.
 type Client struct {
 	URL  string
@@ -103,9 +126,9 @@ func Busy(err error) bool {
 	return ok && (e.Code == "CONFLICT" || e.Code == "RESOURCE_BUSY" || e.Status == http.StatusConflict)
 }
 
-// as says whom a request acts as.
+// as says whom a request acts as (and, for a recall, whom it is made for).
 type as struct {
-	account, user, role string
+	account, user, role, peer string
 }
 
 func (c *Client) do(ctx context.Context, who as, method, path string, query url.Values, body any) (json.RawMessage, error) {
@@ -139,6 +162,9 @@ func (c *Client) do(ctx context.Context, who as, method, path string, query url.
 	}
 	if who.role != "" {
 		req.Header.Set("X-OpenViking-Role", who.role)
+	}
+	if who.peer != "" {
+		req.Header.Set("X-OpenViking-Actor-Peer", who.peer)
 	}
 	client := c.HTTP
 	if client == nil {
@@ -195,6 +221,88 @@ func (c *Client) Read(ctx context.Context, account, user, uri string) (string, e
 func (c *Client) Write(ctx context.Context, account, user, uri, content string) error {
 	_, err := c.do(ctx, as{account: account, user: user}, http.MethodPost, "/api/v1/content/write", nil,
 		map[string]any{"uri": uri, "content": content, "mode": "replace"})
+	return err
+}
+
+// Append adds text to the end of a file (creating it when missing). It is only
+// embedded, not summarized: notes need to be found, and they are read whole.
+func (c *Client) Append(ctx context.Context, account, user, uri, content string) error {
+	_, err := c.do(ctx, as{account: account, user: user}, http.MethodPost, "/api/v1/content/write", nil,
+		map[string]any{"uri": uri, "content": content, "mode": "append", "processing_mode": "vectors_only"})
+	return err
+}
+
+// Recall says what to search and for whom.
+type Recall struct {
+	// Session is the conversation the query belongs to: OpenViking leaves out
+	// what it is already showing and reads a follow-up in its light.
+	Session string
+	// Peer is the person the recall is for (their memories first).
+	Peer string
+	// Targets narrows the search to these uris (all of the account when empty).
+	Targets []string
+	// MaxTokens is the most the rendered result may hold.
+	MaxTokens int
+}
+
+// Recall is what an account's memory holds about a query, rendered for a
+// model ("" when nothing is relevant). The query is taken by its words and
+// meaning only: expanding it would cost a model call on every message.
+func (c *Client) Recall(ctx context.Context, account, user, query string, r Recall) (string, error) {
+	if len(query) > 4000 {
+		query = query[len(query)-4000:]
+	}
+	body := map[string]any{"query": query, "mode": "context", "limit": 10, "purpose": "chat",
+		"query_expansion": "off", "max_tokens": max(r.MaxTokens, 64)}
+	if r.Session != "" {
+		body["session_id"] = r.Session
+	}
+	if len(r.Targets) > 0 {
+		body["target_uri"] = r.Targets
+	}
+	raw, err := c.do(ctx, as{account: account, user: user, peer: r.Peer}, http.MethodPost, "/api/v1/search/search", nil, body)
+	if err != nil {
+		return "", err
+	}
+	var out struct {
+		Rendered string `json:"rendered"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out.Rendered), nil
+}
+
+// Message is one message of a session: Role is "user" or "assistant".
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+	// PeerID is who said it, for a person's message.
+	PeerID string `json:"peer_id,omitempty"`
+}
+
+// AddMessages adds messages to a session (creating it when missing).
+// OpenViking archives the session and extracts long-term memories from it in
+// the background, as its commit policy says.
+func (c *Client) AddMessages(ctx context.Context, account, user, session string, messages []Message) error {
+	_, err := c.do(ctx, as{account: account, user: user}, http.MethodPost,
+		"/api/v1/sessions/"+url.PathEscape(session)+"/messages/batch", nil, map[string]any{"messages": messages})
+	return err
+}
+
+// CommitPolicy is when OpenViking commits a session by itself (extracts its
+// memories): once this many messages or tokens gathered, or once it has been
+// quiet this long.
+type CommitPolicy struct {
+	Messages    int `json:"message_count_threshold"`
+	Tokens      int `json:"pending_token_threshold"`
+	IdleSeconds int `json:"idle_timeout_seconds"`
+}
+
+// SetCommitPolicy sets a session's commit policy. The session must exist.
+func (c *Client) SetCommitPolicy(ctx context.Context, account, user, session string, p CommitPolicy) error {
+	_, err := c.do(ctx, as{account: account, user: user}, http.MethodPatch,
+		"/api/v1/sessions/"+url.PathEscape(session)+"/config", nil, map[string]any{"auto_commit_policy": p})
 	return err
 }
 

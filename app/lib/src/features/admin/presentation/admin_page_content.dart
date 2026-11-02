@@ -232,6 +232,7 @@ class _AppPageContentState extends State<AdminPageContent> {
     'Models' => _models(),
     'Decision model' => _decision(),
     'Image model' => _imageModel(),
+    'Voice' => _voice(),
     'Memory models' => _memoryModels(),
     'Agentic engine' => _agentEngine(),
     'OpenCode' => _openCode(),
@@ -3719,7 +3720,7 @@ class _AppPageContentState extends State<AdminPageContent> {
             title: 'Agentic engine',
             icon: Icons.hub_rounded,
             subtitle:
-                'Applies on the next step of any agent. The programmer OpenCode switch stays as it is.',
+                'Applies on the next step of any agent and on personal Aseman (notes / Talk). The programmer OpenCode switch stays as it is.',
             child: Column(
               children: [
                 AppSwitchCard(
@@ -3739,7 +3740,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                   icon: Icons.terminal_rounded,
                   title: 'OpenCode',
                   subtitle:
-                      'Headless OpenCode CLI. Its own free-model gateway. Swarm, team, handoff and app generation run as OpenCode agents.',
+                      'Headless OpenCode CLI. Its own free-model gateway. Room agents and personal Aseman (notes / Talk) use free OpenCode models.',
                   value: engine == 'opencode',
                   onChanged: setting.isEmpty
                       ? null
@@ -3918,6 +3919,182 @@ class _AppPageContentState extends State<AdminPageContent> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Live voice chat models (Admin → AI → Voice): transcription hears the
+  /// person, speech speaks Aseman's reply. Mark models Speech / Transcription
+  /// (or Live) on the Models page so they appear here.
+  Widget _voice() {
+    final setting = _map(widget.results['llm.llm_voice_get']);
+    final roles = _map(setting['roles']);
+    final providers = _listOfMaps(setting['providers']);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AdminSectionCard(
+            title: 'Live voice',
+            icon: Icons.record_voice_over_rounded,
+            subtitle:
+                'Powers Talk on the home Aseman sheet: mic → transcription → Aseman → speech. Run deploy/voice (Parakeet V3 + Kokoro) as an OpenAI-compatible provider, mark its models Speech / Transcription, then enable the roles below.',
+            child: Text(
+              providers.isEmpty
+                  ? 'No enabled LLM provider with an API key yet. Add one under AI › Providers first.'
+                  : 'Each role needs a model marked for that purpose on AI › Models.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _voiceRoleCard(
+            role: 'transcription',
+            title: 'Transcription (STT)',
+            icon: Icons.mic_none_rounded,
+            subtitle:
+                'Turns the person\'s spoken audio into text before Aseman answers. Mark a model "Transcription" on the Models page (e.g. parakeet-tdt-0.6b-v3).',
+            roles: roles,
+            providers: providers,
+            showVoiceName: false,
+          ),
+          const SizedBox(height: 16),
+          _voiceRoleCard(
+            role: 'speech',
+            title: 'Speech (TTS)',
+            icon: Icons.volume_up_outlined,
+            subtitle:
+                'Speaks Aseman\'s reply aloud. Mark a model "Speech" on the Models page (e.g. kokoro). Optional voice name is passed to the provider.',
+            roles: roles,
+            providers: providers,
+            showVoiceName: true,
+          ),
+          const SizedBox(height: 16),
+          _voiceRoleCard(
+            role: 'live',
+            title: 'Live (realtime)',
+            icon: Icons.stream_rounded,
+            subtitle:
+                'Optional end-to-end realtime model. Leave off when using separate transcription + speech (recommended for the local sidecar).',
+            roles: roles,
+            providers: providers,
+            showVoiceName: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _voiceRoleCard({
+    required String role,
+    required String title,
+    required IconData icon,
+    required String subtitle,
+    required Map<String, dynamic> roles,
+    required List<Map<String, dynamic>> providers,
+    required bool showVoiceName,
+  }) {
+    final r = _map(roles[role]);
+    final enabled = r['enabled'] == true;
+    final active = r['active'] == true;
+    final providerId = '${r['provider_id'] ?? ''}';
+    final modelId = '${r['model_id'] ?? ''}';
+    final voice = '${r['voice'] ?? ''}';
+    final status = '${r['status'] ?? ''}';
+    Map<String, dynamic> body({
+      bool? on,
+      String? provider,
+      String? model,
+      String? voiceName,
+    }) =>
+        {
+          'role': role,
+          'enabled': on ?? enabled,
+          'provider_id': provider ?? providerId,
+          'model_id': model ?? modelId,
+          'voice': voiceName ?? voice,
+        };
+    List<Map<String, dynamic>> roleModels(String id) {
+      final p = providers.cast<Map<String, dynamic>?>().firstWhere(
+            (x) => '${x?['id']}' == id,
+            orElse: () => null,
+          );
+      final byRole = _map(p?['models']);
+      return _listOfMaps(byRole[role]);
+    }
+
+    return AdminSectionCard(
+      title: title,
+      icon: icon,
+      subtitle: subtitle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (status.isNotEmpty) ...[
+            Text(
+              status,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: active
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          AppSwitchCard(
+            icon: icon,
+            title: enabled ? (active ? 'On' : 'On, but unusable') : 'Off',
+            subtitle: enabled
+                ? (active
+                    ? 'This role uses the model below.'
+                    : 'Enabled, but the model is missing or misconfigured — check Providers and Models.')
+                : modelId.isEmpty
+                    ? 'Pick a provider and model below to turn it on.'
+                    : 'Role is off; Talk will not use it.',
+            value: enabled,
+            onChanged: modelId.isEmpty && !enabled
+                ? null
+                : (value) => widget.onDirectAction(
+                      'llm',
+                      'llm_voice_set',
+                      body(on: value),
+                    ),
+          ),
+          const SizedBox(height: 20),
+          _modelPicker(
+            slot: 'voice-$role',
+            providers: providers,
+            providerId: providerId,
+            modelId: modelId,
+            modelsOf: roleModels,
+            onSelect: (provider, model) => widget.onDirectAction(
+              'llm',
+              'llm_voice_set',
+              body(on: true, provider: provider, model: model),
+            ),
+          ),
+          if (showVoiceName) ...[
+            const SizedBox(height: 18),
+            TextFormField(
+              key: ValueKey('voice-name-$role-$voice'),
+              initialValue: voice,
+              textInputAction: TextInputAction.done,
+              decoration: const InputDecoration(
+                labelText: 'Voice name (optional)',
+                hintText: 'af_heart, alloy, Puck…',
+                border: OutlineInputBorder(),
+                helperText: 'Press Enter to save. Leave blank for the model default.',
+              ),
+              onFieldSubmitted: (value) => widget.onDirectAction(
+                'llm',
+                'llm_voice_set',
+                body(voiceName: value.trim()),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -6274,9 +6451,11 @@ class _ModelEditorDialogState extends State<_ModelEditorDialog> {
         'Makes images: the node\'s image model and the developer API. Priced per image, by its tokens, or both.',
     'video': 'Makes videos for the developer API, priced per second.',
     'speech':
-        'Turns text into speech for the developer API, priced per character.',
+        'Turns text into speech for Talk (Admin → AI → Voice) and the developer API, priced per character.',
     'transcription':
-        'Turns audio into text for the developer API, priced per minute.',
+        'Turns audio into text for Talk (Admin → AI → Voice) and the developer API, priced per minute.',
+    'live':
+        'Optional realtime speech-to-speech model for Talk. Prefer separate Speech + Transcription for the local sidecar.',
     'rerank':
         'Reranks search results for the developer API, priced per search.',
   };
@@ -8681,6 +8860,7 @@ const _modelKinds = <(String, String)>[
   ('video', 'Video'),
   ('speech', 'Speech'),
   ('transcription', 'Transcription'),
+  ('live', 'Live'),
   ('rerank', 'Rerank'),
 ];
 

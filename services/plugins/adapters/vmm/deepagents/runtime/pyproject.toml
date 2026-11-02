@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dynamic = ["dependencies"]
 
 [tool.setuptools]
-packages = ["aseman_agents", "aseman_agents.decision", "aseman_agents.swarm", "aseman_agents.improve"]
+packages = ["aseman_agents", "aseman_agents.decision", "aseman_agents.swarm", "aseman_agents.improve", "aseman_agents.opencode_engine"]
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }

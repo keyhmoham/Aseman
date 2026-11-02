@@ -20,9 +20,9 @@ Finder profileAvatar() => find.descendant(
 );
 
 Future<void> openAtlas(WidgetTester tester) async {
-  await tester.tap(find.byTooltip('Toolbox'));
+  await tester.tap(find.text('Atlas Collective').first);
   await tester.pumpAndSettle();
-  await tester.tap(find.byTooltip('Open Atlas Capital'));
+  await tester.tap(find.text('general').first);
   await tester.pumpAndSettle();
 }
 
@@ -79,6 +79,11 @@ void main() {
   Finder inMessenger(Finder finder) =>
       find.descendant(of: find.byType(MessengerPanel), matching: finder);
 
+  /// Matches inside the open chat only — the workspace under a floating
+  /// direct-chat modal can host another [RoomChat] with the same chrome.
+  Finder inChat(Finder finder) =>
+      find.descendant(of: find.byType(ChatPage), matching: finder);
+
   Future<_MessengerService> openMessenger(WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({
       'aseman.session':
@@ -104,17 +109,35 @@ void main() {
   }
 
   testWidgets(
-    'the menu opens wallet, invitations, usage and account directly',
+    'the feed profile menu opens store and wallet without invitations',
     (tester) async {
-      await openMessenger(tester);
-      await tester.tap(find.byTooltip('Close'));
+      SharedPreferences.setMockInitialValues({
+        'aseman.session':
+            '{"account_id":"00000000000000010000000000000001","handle":"test",'
+            '"token":"x","private_key":"","public_key":"",'
+            '"home_space_id":"00000000000000010000000000000002"}',
+      });
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        AsemanApp(dependencies: AppDependencies.withService(_MessengerService())),
+      );
       await tester.pumpAndSettle();
       await tester.tap(profileAvatar());
       await tester.pumpAndSettle();
-      expect(find.text('Account, billing, payouts & usage'), findsNothing);
-      for (final item in ['Wallet', 'Invitations', 'Usage', 'Account']) {
-        expect(find.text(item), findsWidgets, reason: item);
-      }
+      expect(find.text('Store'), findsOneWidget);
+      expect(find.text('Wallet'), findsOneWidget);
+      expect(find.text('Invitations'), findsNothing);
+      await tester.tapAt(const Offset(8, 8));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Notifications'));
+      await tester.pumpAndSettle();
+      expect(find.text('All'), findsOneWidget);
+      expect(find.text('Invites'), findsOneWidget);
+      await tester.tap(find.text('Invites'));
+      await tester.pumpAndSettle();
+      expect(find.text('No invitations'), findsOneWidget);
     },
   );
 
@@ -124,19 +147,19 @@ void main() {
     await openMessenger(tester);
     expect(inMessenger(find.text('Maya Chen')), findsOneWidget);
     expect(inMessenger(find.text('AlphaBot')), findsOneWidget);
-    expect(inMessenger(find.text('Atlas Capital')), findsOneWidget);
+    expect(inMessenger(find.text('Atlas Collective')), findsOneWidget);
     // A space's rooms stay folded until that space is spread open.
     expect(inMessenger(find.text('general')), findsNothing);
 
     await tester.tap(find.text('Direct · 2'));
     await tester.pumpAndSettle();
     expect(inMessenger(find.text('Maya Chen')), findsOneWidget);
-    expect(inMessenger(find.text('Atlas Capital')), findsNothing);
+    expect(inMessenger(find.text('Atlas Collective')), findsNothing);
 
     await tester.tap(find.text('Spaces').last);
     await tester.pumpAndSettle();
     expect(inMessenger(find.text('Maya Chen')), findsNothing);
-    expect(inMessenger(find.text('Atlas Capital')), findsOneWidget);
+    expect(inMessenger(find.text('Atlas Collective')), findsOneWidget);
   });
 
   testWidgets(
@@ -146,8 +169,8 @@ void main() {
       await tester.tap(inMessenger(find.text('Maya Chen')));
       await tester.pumpAndSettle();
       expect(find.text('Message Maya Chen…'), findsOneWidget);
-      expect(find.byTooltip('Work'), findsOneWidget);
-      expect(find.byTooltip('Attach file'), findsOneWidget);
+      expect(inChat(find.byTooltip('Work')), findsOneWidget);
+      expect(inChat(find.byTooltip('Attach file')), findsOneWidget);
       // Direct chats float above the messenger: close the chat, not the list.
       final closeChat = find.descendant(
         of: find.byType(ChatPage),
@@ -166,7 +189,7 @@ void main() {
     tester,
   ) async {
     await openMessenger(tester);
-    await tester.tap(inMessenger(find.text('Atlas Capital')));
+    await tester.tap(inMessenger(find.text('Atlas Collective')));
     await tester.pumpAndSettle();
     await tester.tap(inMessenger(find.text('general')));
     await tester.pumpAndSettle();
@@ -235,7 +258,7 @@ void main() {
   }
 
   Future<void> openAtlasRoomFromChats(WidgetTester tester) async {
-    await tester.tap(inMessenger(find.text('Atlas Capital')));
+    await tester.tap(inMessenger(find.text('Atlas Collective')));
     await tester.pumpAndSettle();
     await tester.tap(inMessenger(find.text('general')));
     await tester.pumpAndSettle();
@@ -247,7 +270,11 @@ void main() {
     await openHomeChats(tester, const Size(1440, 900));
     expect(inMessenger(find.text('Maya Chen')), findsOneWidget);
 
-    await tester.tap(inMessenger(find.byTooltip('New chat')));
+    await tester.tap(inMessenger(find.byTooltip('New')));
+    await tester.pumpAndSettle();
+    expect(find.text('New space'), findsOneWidget);
+    expect(find.text('New chat'), findsOneWidget);
+    await tester.tap(find.text('New chat'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
@@ -272,6 +299,21 @@ void main() {
     );
   });
 
+  testWidgets('new space from the chats FAB opens the create workspace dialog', (
+    tester,
+  ) async {
+    await openHomeChats(tester, const Size(1440, 900));
+
+    await tester.tap(inMessenger(find.byTooltip('New')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('New space'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('New workspace'), findsOneWidget);
+    expect(find.text('Workspace name'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Create'), findsOneWidget);
+  });
+
   testWidgets(
     'a room in the desktop chats rail opens that room in its workspace',
     (tester) async {
@@ -281,9 +323,9 @@ void main() {
       expect(find.byType(ChatPage), findsNothing);
       expect(find.byType(WorkspaceScreen), findsOneWidget);
       expect(find.text('general desk'), findsOneWidget);
-      expect(find.text('My trading desk'), findsNothing);
+      expect(find.text('My desk'), findsNothing);
       expect(find.text('Message room…'), findsOneWidget);
-      expect(find.text('Private note inside Atlas Capital.'), findsNothing);
+      expect(find.text('Private note inside Atlas Collective.'), findsNothing);
       expect(find.byTooltip('Workspace home'), findsOneWidget);
     },
   );
@@ -299,12 +341,12 @@ void main() {
       expect(find.byType(HomeTabBar), findsNothing);
       expect(find.byType(WorkspaceScreen), findsOneWidget);
       expect(find.text('general desk'), findsOneWidget);
-      expect(find.text('My trading desk'), findsNothing);
+      expect(find.text('My desk'), findsNothing);
 
       await tester.tap(find.text('Chat'));
       await tester.pumpAndSettle();
       expect(find.text('Message room…'), findsOneWidget);
-      expect(find.text('Private note inside Atlas Capital.'), findsNothing);
+      expect(find.text('Private note inside Atlas Collective.'), findsNothing);
     },
   );
 
@@ -419,8 +461,8 @@ void main() {
     final service = await openMessenger(tester);
     await tester.tap(inMessenger(find.text('AlphaBot')));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).last, 'Size a BTC long');
-    await tester.tap(find.byTooltip('Send'));
+    await tester.enterText(inChat(find.byType(TextField)).last, 'Draft the kickoff agenda');
+    await tester.tap(inChat(find.byTooltip('Send')));
     await tester.pumpAndSettle();
     expect(service.sent, hasLength(1));
     expect(service.sent.single.space, FakeAsemanService.agentDirectId);
@@ -501,8 +543,8 @@ void main() {
     await tester.tap(find.text('Reply'));
     await tester.pumpAndSettle();
     expect(find.text('Reply to Maya Chen'), findsOneWidget);
-    await tester.enterText(find.byType(TextField).last, 'Sure');
-    await tester.tap(find.byTooltip('Send'));
+    await tester.enterText(inChat(find.byType(TextField)).last, 'Sure');
+    await tester.tap(inChat(find.byTooltip('Send')));
     await tester.pumpAndSettle();
     expect(service.sent.single.replyTo, 'm1');
     expect(find.text('Reply to Maya Chen'), findsNothing);
@@ -512,8 +554,8 @@ void main() {
     await tester.tap(find.text('Edit'));
     await tester.pumpAndSettle();
     expect(find.text('Edit message'), findsOneWidget);
-    await tester.enterText(find.byType(TextField).last, 'Yes, at ten');
-    await tester.tap(find.byTooltip('Send'));
+    await tester.enterText(inChat(find.byType(TextField)).last, 'Yes, at ten');
+    await tester.tap(inChat(find.byTooltip('Send')));
     await tester.pumpAndSettle();
     expect(service.chatCalls, contains('edit:m2'));
     expect(find.text('Yes, at ten'), findsOneWidget);
@@ -555,7 +597,7 @@ void main() {
   ) async {
     final service = await openMessenger(tester);
     await openMaya(tester);
-    await tester.tap(find.byTooltip('Chat options'));
+    await tester.tap(inChat(find.byTooltip('Chat options')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Block'));
     await tester.pumpAndSettle();
@@ -563,13 +605,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(service.chatCalls, contains('block:${FakeAsemanService.directId}'));
     expect(find.textContaining('You blocked this chat'), findsOneWidget);
-    expect(find.byTooltip('Send'), findsNothing);
+    expect(inChat(find.byTooltip('Send')), findsNothing);
 
-    await tester.tap(find.byTooltip('Chat options'));
+    await tester.tap(inChat(find.byTooltip('Chat options')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Unblock'));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('Send'), findsOneWidget);
+    expect(inChat(find.byTooltip('Send')), findsOneWidget);
   });
 
   testWidgets('a long-pressed direct chat is pinned to the top of the list', (
@@ -593,7 +635,7 @@ void main() {
       ChatSummary(
         spaceId: FakeAsemanService.atlasId,
         roomId: 'a2',
-        spaceName: 'Atlas Capital',
+        spaceName: 'Atlas Collective',
         roomName: 'research',
         role: 'owner',
         lastBody: 'Charts are in',
@@ -603,17 +645,17 @@ void main() {
     // The list reloads on its own; the next poll picks up the new room.
     await tester.pump(const Duration(seconds: 8));
     await tester.pumpAndSettle();
-    expect(inMessenger(find.text('Atlas Capital')), findsOneWidget);
+    expect(inMessenger(find.text('Atlas Collective')), findsOneWidget);
     expect(inMessenger(find.text('general')), findsNothing);
     expect(inMessenger(find.text('research')), findsNothing);
 
-    await tester.longPress(inMessenger(find.text('Atlas Capital')));
+    await tester.longPress(inMessenger(find.text('Atlas Collective')));
     await tester.pumpAndSettle();
     expect(find.text('Pin to top'), findsNothing);
     expect(inMessenger(find.text('general')), findsOneWidget);
     expect(inMessenger(find.text('research')), findsOneWidget);
     // Still one space row, with its rooms nested under it.
-    expect(inMessenger(find.text('Atlas Capital')), findsOneWidget);
+    expect(inMessenger(find.text('Atlas Collective')), findsOneWidget);
 
     await tester.tap(inMessenger(find.text('research')));
     await tester.pumpAndSettle();
@@ -626,7 +668,7 @@ void main() {
     await openMessenger(tester);
     expect(inMessenger(find.text('general')), findsNothing);
     await tester.tap(
-      inMessenger(find.text('Atlas Capital')),
+      inMessenger(find.text('Atlas Collective')),
       buttons: kSecondaryButton,
     );
     await tester.pumpAndSettle();
@@ -634,13 +676,16 @@ void main() {
     expect(find.text('Pin to top'), findsNothing);
   });
 
-  testWidgets('Saved Messages opens the chat with oneself', (tester) async {
-    await openMessenger(tester);
-    await tester.tap(find.byTooltip('Saved Messages'));
+  testWidgets('Aseman opens the chat with oneself', (tester) async {
+    // Personal Aseman is a normal inbox row on the chats rail (not a header
+    // shortcut). The home Aseman tab may already host the same chat.
+    await openHomeChats(tester, const Size(1440, 900));
+    expect(inMessenger(find.text('Aseman')), findsOneWidget);
+    await tester.tap(inMessenger(find.text('Aseman')));
     await tester.pumpAndSettle();
-    expect(find.text('Write a note…'), findsOneWidget);
-    expect(find.text('Notes, links and files for yourself'), findsOneWidget);
-    await tester.tap(find.byTooltip('Chat options'));
+    expect(find.text('Message Aseman…'), findsWidgets);
+    expect(find.text('Your personal Aseman'), findsWidgets);
+    await tester.tap(find.byTooltip('Chat options').last);
     await tester.pumpAndSettle();
     expect(find.text('Block'), findsNothing);
     expect(find.text('Report chat'), findsNothing);

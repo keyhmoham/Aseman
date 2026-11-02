@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/theme/app_shape.dart';
+import '../../../core/theme/app_surfaces.dart';
 import '../../../data/models/space.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/skeleton.dart';
+import '../../../shared/widgets/sky_ui.dart';
 import '../../messenger/presentation/chat_page.dart' show ChatAvatar;
 import '../domain/feed_post.dart';
 import 'post_actions.dart';
@@ -318,12 +321,14 @@ class _SharePostSheetState extends State<SharePostSheet> {
                                   onTap: () => setState(
                                     () => _toggle(_feeds, _publicFeed),
                                   ),
-                                  child: CircleAvatar(
-                                    radius: 26,
-                                    backgroundColor: scheme.primaryContainer,
-                                    child: Icon(
-                                      Icons.public_rounded,
-                                      color: scheme.onPrimaryContainer,
+                                  child: HaloRing(
+                                    child: CircleAvatar(
+                                      radius: 26,
+                                      backgroundColor: scheme.primaryContainer,
+                                      child: Icon(
+                                        Icons.public_rounded,
+                                        color: scheme.onPrimaryContainer,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -333,27 +338,26 @@ class _SharePostSheetState extends State<SharePostSheet> {
                                   selected: _feeds.contains(s.id),
                                   onTap: () =>
                                       setState(() => _toggle(_feeds, s.id)),
-                                  child: AvatarPicture(
-                                    avatar: s.avatar,
-                                    size: 52,
-                                    radius: 16,
-                                    fallback: Container(
-                                      width: 52,
-                                      height: 52,
-                                      alignment: Alignment.center,
-                                      decoration: BoxDecoration(
-                                        color: scheme.secondaryContainer,
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      child: Text(
-                                        s.name.isEmpty
-                                            ? '#'
-                                            : s.name.characters.first
-                                                  .toUpperCase(),
-                                        style: TextStyle(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w800,
-                                          color: scheme.onSecondaryContainer,
+                                  child: HaloRing(
+                                    accent: scheme.secondary,
+                                    child: AvatarPicture(
+                                      avatar: s.avatar,
+                                      size: 52,
+                                      fallback: CircleAvatar(
+                                        radius: 26,
+                                        backgroundColor:
+                                            scheme.secondaryContainer,
+                                        foregroundColor:
+                                            scheme.onSecondaryContainer,
+                                        child: Text(
+                                          s.name.isEmpty
+                                              ? '#'
+                                              : s.name.characters.first
+                                                    .toUpperCase(),
+                                          style: const TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w800,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -396,6 +400,9 @@ class _SharePostSheetState extends State<SharePostSheet> {
                         return _ChatTarget(
                           chat: c,
                           selected: on,
+                          userId: widget.dependencies.sessionController
+                                  .session?.accountId ??
+                              '',
                           onTap: () =>
                               setState(() => _toggle(_chatKeys, c.key)),
                         );
@@ -491,11 +498,7 @@ class SharePostPreview extends StatelessWidget {
     final text = markupPreview(post.body);
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: .5),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .4)),
-      ),
+      decoration: AppSurfaces.cardDecoration(context, radius: AppShape.inner),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -504,6 +507,7 @@ class SharePostPreview extends StatelessWidget {
             color: post.color,
             radius: 18,
             avatar: post.isForward ? post.forwardAvatar : post.avatar,
+            identity: post.isForward ? post.forwardAuthorId : post.authorId,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -514,7 +518,8 @@ class SharePostPreview extends StatelessWidget {
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                      letterSpacing: -.2, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -523,6 +528,7 @@ class SharePostPreview extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12.5,
+                    height: 1.35,
                     color: scheme.onSurfaceVariant,
                   ),
                 ),
@@ -549,8 +555,11 @@ class _QuickAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: scheme.secondaryContainer.withValues(alpha: .6),
-      borderRadius: BorderRadius.circular(14),
+      color: AppSurfaces.card(scheme),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppShape.control),
+        side: BorderSide(color: AppSurfaces.cardBorder(scheme)),
+      ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
@@ -559,7 +568,7 @@ class _QuickAction extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 19, color: scheme.onSecondaryContainer),
+              Icon(icon, size: 19, color: scheme.primary),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
@@ -567,7 +576,7 @@ class _QuickAction extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: scheme.onSecondaryContainer,
+                    color: scheme.onSurface,
                   ),
                 ),
               ),
@@ -679,16 +688,18 @@ class _ChatTarget extends StatelessWidget {
     required this.chat,
     required this.selected,
     required this.onTap,
+    this.userId = '',
   });
   final ChatSummary chat;
   final bool selected;
   final VoidCallback onTap;
+  final String userId;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final subtitle = chat.saved
-        ? 'Just you'
+        ? 'Aseman'
         : chat.direct
         ? (chat.peer?.isAgent ?? false)
               ? 'Agent'
@@ -708,7 +719,7 @@ class _ChatTarget extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
           child: Row(
             children: [
-              ChatAvatar(chat: chat, radius: 20),
+              ChatAvatar(chat: chat, radius: 20, userId: userId),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

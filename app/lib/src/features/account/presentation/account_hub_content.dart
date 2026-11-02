@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/fleet_metric.dart';
+import '../../../shared/widgets/sky_ui.dart';
 import '../../admin/presentation/admin_widgets.dart';
 import 'account_panel.dart';
-import '../../../shared/widgets/glass_surface.dart';
 
 typedef AccountAction = Future<void> Function(
     String namespace, String action, Map<String, dynamic> initialBody);
@@ -53,32 +55,52 @@ class _AccountHubContentState extends State<AccountHubContent> {
           icon: Icons.mark_email_read_outlined);
     return Column(children: [
       for (final invite in rows)
-        AppCard(
-          margin: const EdgeInsets.only(bottom: 10),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(14),
-            leading: CircleAvatar(
-                foregroundImage: Avatars.of(invite['space_avatar']),
-                onForegroundImageError:
-                    Avatars.of(invite['space_avatar']) == null
-                        ? null
-                        : (_, __) {},
-                child: const Icon(Icons.folder_shared_outlined)),
-            title: Text(
-                '${_map(invite['space'])['name'] ?? invite['space_name'] ?? 'Project invitation'}',
-                style: const TextStyle(fontWeight: FontWeight.w900)),
-            subtitle: Text(
-                'Invited by @${invite['inviter_handle'] ?? _map(invite['inviter'])['handle'] ?? 'a teammate'} · ${_date(invite['created_at'])}'),
-            trailing: Wrap(spacing: 8, children: [
-              OutlinedButton(
-                  onPressed: () => widget.onAction('spaces',
-                      'invitation_decline', {'invitation': invite['id']}),
-                  child: const Text('Decline')),
-              FilledButton(
-                  onPressed: () => widget.onAction('spaces',
-                      'invitation_accept', {'invitation': invite['id']}),
-                  child: const Text('Accept')),
-            ]),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: SoftCard(
+            showOrb: false,
+            padding: const EdgeInsets.all(AppSpacing.sm + 2),
+            child: Row(
+              children: [
+                HaloRing(
+                  child: CircleAvatar(
+                      foregroundImage: Avatars.of(invite['space_avatar']),
+                      onForegroundImageError:
+                          Avatars.of(invite['space_avatar']) == null
+                              ? null
+                              : (_, __) {},
+                      child: const Icon(Icons.folder_shared_outlined)),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                          '${_map(invite['space'])['name'] ?? invite['space_name'] ?? 'Project invitation'}',
+                          style: const TextStyle(fontWeight: FontWeight.w900)),
+                      Text(
+                          'Invited by @${invite['inviter_handle'] ?? _map(invite['inviter'])['handle'] ?? 'a teammate'} · ${_date(invite['created_at'])}',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+                Wrap(spacing: 8, children: [
+                  OutlinedButton(
+                      onPressed: () => widget.onAction('spaces',
+                          'invitation_decline', {'invitation': invite['id']}),
+                      child: const Text('Decline')),
+                  FilledButton(
+                      onPressed: () => widget.onAction('spaces',
+                          'invitation_accept', {'invitation': invite['id']}),
+                      child: const Text('Accept')),
+                ]),
+              ],
+            ),
           ),
         ),
     ]);
@@ -101,28 +123,41 @@ class _AccountHubContentState extends State<AccountHubContent> {
         .toList()
       ..sort((a, b) => '${a['expires_at']}'.compareTo('${b['expires_at']}'));
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      AdminGrid(minTileWidth: 150, children: [
-        AdminStatCard(
+      Wrap(spacing: 10, runSpacing: 10, children: [
+        SizedBox(
+          width: 168,
+          child: FleetMetric(
             label: 'Available balance',
             value: _credits(balance),
             hint: _usd(balance),
-            icon: Icons.account_balance_wallet_outlined,
-            tone: AppColors.success),
-        AdminStatCard(
+            color: AppColors.success,
+            live: true,
+          ),
+        ),
+        SizedBox(
+          width: 168,
+          child: FleetMetric(
             label: 'Locked',
             value: _credits(wallet['locked'] ?? account['locked']),
             hint: 'Reserved for active work',
-            icon: Icons.lock_clock_outlined),
-        AdminStatCard(
+          ),
+        ),
+        SizedBox(
+          width: 168,
+          child: FleetMetric(
             label: 'Lifetime bought',
             value: _credits(account['bought']),
             hint: '${purchases.length} credit packs',
-            icon: Icons.shopping_bag_outlined),
-        AdminStatCard(
+          ),
+        ),
+        SizedBox(
+          width: 168,
+          child: FleetMetric(
             label: 'Lifetime spent',
             value: _credits(account['spent']),
             hint: 'Across projects',
-            icon: Icons.query_stats_outlined),
+          ),
+        ),
       ]),
       if (active.isNotEmpty) ...[
         const SizedBox(height: 18),
@@ -139,14 +174,10 @@ class _AccountHubContentState extends State<AccountHubContent> {
             ])),
       ],
       const SizedBox(height: 18),
+      _creditRequests(),
+      const SizedBox(height: 18),
       Row(children: [
-        Expanded(
-            child: Text('WALLET ACTIVITY',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: .8,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant))),
+        const Expanded(child: EyebrowLabel('Wallet activity')),
         FilledButton.icon(
             onPressed: () =>
                 widget.onAction('finance', 'purchase_confirm', const {}),
@@ -178,26 +209,45 @@ class _AccountHubContentState extends State<AccountHubContent> {
       ),
       if (purchases.isNotEmpty) ...[
         const SizedBox(height: 18),
-        AdminSectionCard(
-            title: 'Purchases',
-            child: Column(children: [
-              for (final p in purchases)
-                ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.receipt_long_outlined),
-                    title: Text(
-                        '${p['product_id'] ?? p['product'] ?? 'Credit pack'}'),
-                    subtitle: Text(_date(p['created_at'])),
-                    trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(_credits(p['amount'] ?? p['credits']),
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w800)),
-                          AdminStatusPill('${p['status'] ?? 'credited'}')
-                        ]))
-            ])),
+        SoftCard(
+          showOrb: false,
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.sm, AppSpacing.md, AppSpacing.sm, AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const EyebrowLabel('Purchases'),
+              const SizedBox(height: AppSpacing.sm),
+              QuietList(
+                children: [
+                  for (final p in purchases)
+                    QuietTile(
+                      icon: Icons.receipt_long_outlined,
+                      label:
+                          '${p['product_id'] ?? p['product'] ?? 'Credit pack'}',
+                      subtitle: _date(p['created_at']),
+                      trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(_credits(p['amount'] ?? p['credits']),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w800)),
+                            AdminStatusPill('${p['status'] ?? 'credited'}')
+                          ]),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+      // Usage is melted into the wallet so spend and balance live together.
+      if (widget.results.containsKey('usage.projects')) ...[
+        const SizedBox(height: 28),
+        const EyebrowLabel('Usage'),
+        const SizedBox(height: 12),
+        _usage(),
       ],
     ]);
   }
@@ -207,22 +257,32 @@ class _AccountHubContentState extends State<AccountHubContent> {
     final rows = _maps(response['projects']);
     final total = rows.fold<double>(0, (sum, row) => sum + _num(row['spent']));
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      AdminGrid(minTileWidth: 150, children: [
-        AdminStatCard(
+      Wrap(spacing: 10, runSpacing: 10, children: [
+        SizedBox(
+          width: 168,
+          child: FleetMetric(
             label: 'Total spend',
             value: _credits(total),
             hint: _usd(total),
-            icon: Icons.query_stats_rounded),
-        AdminStatCard(
+            color: AppColors.primary,
+          ),
+        ),
+        SizedBox(
+          width: 168,
+          child: FleetMetric(
             label: 'Projects',
             value: '${rows.length}',
             hint: 'With recorded usage',
-            icon: Icons.folder_outlined),
-        AdminStatCard(
+          ),
+        ),
+        SizedBox(
+          width: 168,
+          child: FleetMetric(
             label: 'Events',
             value: '${response['events'] ?? response['event_count'] ?? 0}',
             hint: 'Billable activity',
-            icon: Icons.bolt_outlined),
+          ),
+        ),
       ]),
       const SizedBox(height: 18),
       AdminDataTable(
@@ -254,6 +314,42 @@ class _AccountHubContentState extends State<AccountHubContent> {
         ],
       ),
     ]);
+  }
+
+  Widget _creditRequests() {
+    final requests =
+        _maps(_map(widget.results['finance.credit_requests_mine'])['requests']);
+    final pending =
+        requests.where((r) => '${r['status']}' == 'pending').toList();
+    return AdminSectionCard(
+      title: 'Complimentary credits',
+      subtitle: pending.isEmpty
+          ? 'Ask the node admin for free credits when you need them.'
+          : 'You have a request waiting for review.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final r in pending.take(3))
+            AdminKeyValue(
+              '${r['reason'] ?? 'Credit request'}',
+              'pending · ${_date(r['created_at'])}',
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: pending.isNotEmpty
+                  ? null
+                  : () =>
+                      widget.onAction('finance', 'credit_request', const {}),
+              icon: const Icon(Icons.volunteer_activism_outlined, size: 17),
+              label: Text(pending.isNotEmpty
+                  ? 'Request pending'
+                  : 'Apply for credits'),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _account() {

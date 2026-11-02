@@ -8,7 +8,7 @@ class _Service extends FakeAsemanService {
   final requests = <Map<String, dynamic>>[
     {
       'id': 'r1',
-      'title': 'Quant researcher for a BTC desk',
+      'title': 'Research partner for an agent workspace',
       'category': 'Research',
       'description': 'Backtest and size momentum strategies.',
       'budget_type': 'monthly',
@@ -57,7 +57,7 @@ void main() {
   testWidgets('lists the requests a person posted and closes one',
       (tester) async {
     final service = await open(tester);
-    expect(find.text('Quant researcher for a BTC desk'), findsOneWidget);
+    expect(find.text('Research partner for an agent workspace'), findsOneWidget);
     expect(find.textContaining(r'$6000 / month'), findsOneWidget);
     await tester.tap(find.byTooltip('Request options'));
     await tester.pumpAndSettle();
@@ -82,7 +82,7 @@ void main() {
     expect(service.created, isEmpty);
 
     await tester.enterText(find.widgetWithText(TextField, 'What you need'),
-        'Build the trading desk screens of a Flutter app with charts and live quotes.');
+        'Build the home and chat screens of a Flutter social app.');
     await tester.enterText(find.widgetWithText(TextField, 'Amount'), '2500');
     await tester.enterText(
         find.widgetWithText(TextField, 'Company or project'), 'Atlas');

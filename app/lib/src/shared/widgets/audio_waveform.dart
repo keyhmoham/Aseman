@@ -14,6 +14,7 @@ class AudioWaveform extends StatelessWidget {
     this.activeColor,
     this.inactiveColor,
     this.height = 30,
+    this.bars,
   });
 
   final String seed;
@@ -24,6 +25,9 @@ class AudioWaveform extends StatelessWidget {
   final Color? activeColor;
   final Color? inactiveColor;
   final double height;
+
+  /// Real loudness bars 0–100 from the upload; when set, preferred over [seed].
+  final List<int>? bars;
 
   /// [count] bar heights between .18 and 1, smoothed so they read as speech
   /// or music rather than noise.
@@ -54,6 +58,17 @@ class AudioWaveform extends StatelessWidget {
     return LayoutBuilder(builder: (context, box) {
       final width = box.maxWidth.isFinite ? box.maxWidth : 180.0;
       final count = (width / 4.5).floor().clamp(12, 72);
+      final real = bars;
+      final List<double> wave;
+      if (real != null && real.isNotEmpty) {
+        wave = [
+          for (var i = 0; i < count; i++)
+            (.18 + .82 * (real[(i * real.length) ~/ count].clamp(0, 100) / 100))
+                .clamp(.18, 1.0),
+        ];
+      } else {
+        wave = levels(seed, count);
+      }
       void seek(Offset at) =>
           onSeek?.call((at.dx / width).clamp(0.0, 1.0).toDouble());
       return Semantics(
@@ -67,7 +82,7 @@ class AudioWaveform extends StatelessWidget {
           child: CustomPaint(
             size: Size(width, height),
             painter: _WavePainter(
-                levels: levels(seed, count),
+                levels: wave,
                 progress: progress.clamp(0.0, 1.0).toDouble(),
                 active: active,
                 inactive: inactive),

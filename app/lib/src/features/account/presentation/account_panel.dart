@@ -4,6 +4,7 @@ import '../../../app_dependencies.dart';
 import '../../../core/notifications/push_notification_service.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_header.dart';
+import '../../../shared/widgets/panel_scaffold.dart';
 import '../../../shared/widgets/skeleton.dart';
 import 'account_forms.dart';
 import 'account_hub_content.dart';
@@ -25,10 +26,12 @@ enum AccountArea {
       'Project invitations waiting for you',
       [_Endpoint('spaces', 'invitations_list')]),
   wallet('Wallet', Icons.account_balance_wallet_outlined,
-      'Balance, activity, top-ups and purchases', [
+      'Balance, activity, top-ups and project usage', [
     _Endpoint('finance', 'account'),
     _Endpoint('finance', 'wallet_get'),
     _Endpoint('finance', 'purchases_mine'),
+    _Endpoint('finance', 'credit_requests_mine'),
+    _Endpoint('usage', 'projects'),
   ]),
   usage('Usage', Icons.query_stats_outlined,
       'Project spend, events and model token accounting', [
@@ -151,36 +154,31 @@ class _AccountPanelState extends State<AccountPanel> {
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 720;
     final area = widget.area;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          compact ? 14 : 24, compact ? 14 : 20, compact ? 14 : 24, 0),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        PanelHeader(
-          icon: area.icon,
-          title: area.label,
-          subtitle: area.description,
-          onClose: () => Navigator.pop(context),
-          actions: [
-            IconButton(
-                onPressed: load,
-                tooltip: 'Refresh',
-                icon: const Icon(Icons.refresh_rounded))
-          ],
-        ),
-        const SizedBox(height: 14),
-        Expanded(
-            child: loading
-                ? const SkeletonPage(padding: EdgeInsets.zero)
-                : AccountHubContent(
-                    key: ValueKey(area),
-                    area: area,
-                    results: results,
-                    onAction: (namespace, action, body) =>
-                        run(_Endpoint(namespace, action, body)),
-                    onNotifications: setNotifications,
-                    notificationsSupported: PushNotificationService.supported,
-                  )),
-      ]),
+    return PanelScaffold(
+      compact: compact,
+      header: PanelHeader(
+        icon: area.icon,
+        title: area.label,
+        subtitle: area.description,
+        onClose: () => Navigator.pop(context),
+        actions: [
+          IconButton(
+              onPressed: load,
+              tooltip: 'Refresh',
+              icon: const Icon(Icons.refresh_rounded))
+        ],
+      ),
+      body: loading
+          ? const SkeletonPage(padding: EdgeInsets.zero)
+          : AccountHubContent(
+              key: ValueKey(area),
+              area: area,
+              results: results,
+              onAction: (namespace, action, body) =>
+                  run(_Endpoint(namespace, action, body)),
+              onNotifications: setNotifications,
+              notificationsSupported: PushNotificationService.supported,
+            ),
     );
   }
 }

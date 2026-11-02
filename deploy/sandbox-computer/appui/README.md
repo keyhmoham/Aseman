@@ -63,7 +63,7 @@ OPENCODE_RUN_TIMEOUT_SECS=600              # per OpenCode session wall clock
 ## Desk
 
 Generated App UIs open on the **room desk where the person asked**. Pass
-`room=home` only to put a card on the space hall (“My trading desk”).
+`room=home` only to put a card on the space hall (“My desk”).
 
 ## Default UI framework
 

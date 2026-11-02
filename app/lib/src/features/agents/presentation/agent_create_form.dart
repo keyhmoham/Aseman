@@ -190,12 +190,12 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
       _provider?.models.where((m) => m.id == model).firstOrNull;
 
   static const _capabilityPool = [
-    ('Market scanner', Icons.candlestick_chart_rounded),
-    ('Risk analysis', Icons.shield_outlined),
-    ('Execution', Icons.bolt_rounded),
     ('Research', Icons.travel_explore_rounded),
+    ('Writing', Icons.edit_note_rounded),
+    ('Coordination', Icons.hub_outlined),
+    ('Coding', Icons.code_rounded),
     ('Reports', Icons.description_outlined),
-    ('Signals', Icons.waves_rounded),
+    ('Monitoring', Icons.visibility_outlined),
   ];
 
   @override
@@ -268,7 +268,7 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
         },
         children: [
           _field(context, 'Name', name,
-              hint: 'e.g. Nova Quant', autofocus: true),
+              hint: 'e.g. Nova Helper', autofocus: true),
           _field(context, 'Description', description,
               hint: 'What does it do?', maxLines: 2),
           ..._agentFields(context),

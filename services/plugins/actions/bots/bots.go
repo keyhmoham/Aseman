@@ -4,6 +4,7 @@ package bots
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"fmt"
 	settings "github.com/aseman/aseman/plugins/actions/settings/models"
@@ -275,8 +276,14 @@ func (s *Service) CreateBot(ctx context.Context, owner identity.ID, req CreateBo
 	if err := s.R.CreateID(ctx, "accounts", accID, acc); err != nil {
 		return nil, err
 	}
+	profile := map[string]any{"displayName": req.Name, "type": string(req.VMType)}
+	// Every agent gets a random platform humanoid at create; people may
+	// customize it locally for themselves without changing this default.
+	if req.Kind == bot.KindAgent {
+		profile["humanoid"] = randomHumanoid()
+	}
 	meta := &metadata.Record{Owner: accID.String(),
-		Tree:        metadata.Tree{"profile": map[string]any{"displayName": req.Name, "type": string(req.VMType)}},
+		Tree:        metadata.Tree{"profile": profile},
 		PublicPaths: []string{"/profile"}, Version: 1, UpdatedAt: now}
 	if err := s.R.CreateID(ctx, "metadatas", accID, meta); err != nil {
 		return nil, err
@@ -584,6 +591,7 @@ func BuildActions(s *Service) []api.Action {
 		&botProfileAction{s: s},
 		&botSearchAction{s: s},
 		&builtinAsemanAction{s: s},
+		&chatAssistantAction{s: s},
 		&botLifecycleAction{s: s}, &botDeleteAction{s: s}, &botUsageAction{s: s},
 		&botResizeAction{s: s},
 		&botMessageAction{s: s}, &botMetaViewAction{s: s}, &botMetaPatchAction{s: s},
@@ -665,6 +673,9 @@ func (a *botListAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 		b, _ := json.Marshal(list[i])
 		_ = json.Unmarshal(b, &row)
 		row["avatar"] = a.s.avatarOf(ctx, list[i].AccountID)
+		if h := a.s.humanoidOf(ctx, list[i].AccountID); h != nil {
+			row["humanoid"] = h
+		}
 		out = append(out, row)
 	}
 	return helper.JSON(map[string]any{"bots": out})
@@ -679,6 +690,55 @@ func (s *Service) avatarOf(ctx context.Context, accountID identity.ID) string {
 		return helper.TreeAvatar(m.Tree)
 	}
 	return ""
+}
+
+// skinCount / hairCount match the Flutter humanoid palettes.
+const humanoidSkinCount = 6
+const humanoidHairCount = 5
+
+// randomHumanoid picks a platform-default look for a newly created agent.
+func randomHumanoid() map[string]any {
+	var b [2]byte
+	if _, err := cryptorand.Read(b[:]); err != nil {
+		return map[string]any{"skin": 2, "hair": 1}
+	}
+	return map[string]any{
+		"skin": int(b[0]) % humanoidSkinCount,
+		"hair": int(b[1]) % humanoidHairCount,
+	}
+}
+
+// humanoidOf is the platform-default humanoid look stored on a bot's profile.
+func (s *Service) humanoidOf(ctx context.Context, accountID identity.ID) map[string]any {
+	if accountID.IsZero() || s.M == nil {
+		return nil
+	}
+	m, err := s.M.Get(ctx, accountID)
+	if err != nil || m == nil {
+		return nil
+	}
+	profile, _ := m.Tree["profile"].(map[string]any)
+	if profile == nil {
+		return nil
+	}
+	raw, _ := profile["humanoid"].(map[string]any)
+	if raw == nil {
+		return nil
+	}
+	out := map[string]any{}
+	if v, ok := raw["skin"]; ok {
+		out["skin"] = v
+	}
+	if v, ok := raw["hair"]; ok {
+		out["hair"] = v
+	}
+	if v, ok := raw["accent"]; ok {
+		out["accent"] = v
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 type botGetAction struct{ s *Service }
@@ -713,10 +773,15 @@ func (a *botGetAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 			keys = append(keys, it.Key)
 		}
 	}
-	return helper.JSON(map[string]any{"id": rec.ID.String(), "owner_id": rec.OwnerID.String(),
-		"name": rec.Name, "kind": rec.Kind, "vm_type": rec.VMType, "status": rec.Status, "vm_id": rec.VMID,
+	out := map[string]any{"id": rec.ID.String(), "owner_id": rec.OwnerID.String(),
+		"account_id": rec.AccountID.String(),
+		"name":       rec.Name, "kind": rec.Kind, "vm_type": rec.VMType, "status": rec.Status, "vm_id": rec.VMID,
 		"image_ref": rec.ImageRef, "has_frontend": rec.Frontend != "" || rec.FrontendRef != "",
-		"avatar": a.s.avatarOf(ctx, rec.AccountID), "entities": keys})
+		"avatar": a.s.avatarOf(ctx, rec.AccountID), "entities": keys}
+	if h := a.s.humanoidOf(ctx, rec.AccountID); h != nil {
+		out["humanoid"] = h
+	}
+	return helper.JSON(out)
 }
 
 type botLifecycleAction struct{ s *Service }

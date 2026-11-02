@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net"
 	"net/http"
 	"net/smtp"
@@ -35,6 +36,21 @@ type Sender interface {
 	Send(ctx context.Context, to, subject, body string) error
 	// Transport names the delivery mechanism ("resend", "smtp", or "log").
 	Transport() string
+}
+
+// HTMLSender is a Sender that can also deliver an HTML version beside the text one.
+type HTMLSender interface {
+	Sender
+	SendHTML(ctx context.Context, to, subject, text, html string) error
+}
+
+// Deliver sends a message with an HTML version when the sender supports it,
+// else as plain text only.
+func Deliver(ctx context.Context, s Sender, to, subject, text, html string) error {
+	if h, ok := s.(HTMLSender); ok && html != "" {
+		return h.SendHTML(ctx, to, subject, text, html)
+	}
+	return s.Send(ctx, to, subject, text)
 }
 
 // FromEnv returns the configured email sender:
@@ -82,11 +98,18 @@ type resendSender struct {
 func (r *resendSender) Transport() string { return "resend" }
 
 func (r *resendSender) Send(ctx context.Context, to, subject, body string) error {
+	return r.SendHTML(ctx, to, subject, body, "")
+}
+
+func (r *resendSender) SendHTML(ctx context.Context, to, subject, body, html string) error {
 	payload := map[string]any{
 		"from":    r.from,
 		"to":      []string{to},
 		"subject": subject,
 		"text":    body,
+	}
+	if html != "" {
+		payload["html"] = html
 	}
 
 	jsonBytes, err := json.Marshal(payload)
@@ -122,6 +145,10 @@ type smtpSender struct{ addr, from, user, password string }
 func (s smtpSender) Transport() string { return "smtp" }
 
 func (s smtpSender) Send(ctx context.Context, to, subject, body string) error {
+	return s.SendHTML(ctx, to, subject, body, "")
+}
+
+func (s smtpSender) SendHTML(ctx context.Context, to, subject, body, html string) error {
 	if strings.ContainsAny(to, "\r\n") || strings.ContainsAny(subject, "\r\n") {
 		return fmt.Errorf("invalid mail header")
 	}
@@ -133,16 +160,24 @@ func (s smtpSender) Send(ctx context.Context, to, subject, body string) error {
 	if s.user != "" {
 		auth = smtp.PlainAuth("", s.user, s.password, host)
 	}
-	msg := strings.Join([]string{
+	head := []string{
 		"From: " + s.from,
 		"To: " + to,
-		"Subject: " + subject,
+		"Subject: " + mime.QEncoding.Encode("utf-8", subject),
 		"Date: " + time.Now().UTC().Format(time.RFC1123Z),
 		"MIME-Version: 1.0",
-		"Content-Type: text/plain; charset=UTF-8",
-		"",
-		body,
-	}, "\r\n")
+	}
+	var msg string
+	if html == "" {
+		msg = strings.Join(append(head, "Content-Type: text/plain; charset=UTF-8", "", body), "\r\n")
+	} else {
+		const boundary = "aseman-alt-boundary"
+		msg = strings.Join(append(head,
+			"Content-Type: multipart/alternative; boundary="+boundary, "",
+			"--"+boundary, "Content-Type: text/plain; charset=UTF-8", "", body,
+			"--"+boundary, "Content-Type: text/html; charset=UTF-8", "", html,
+			"--"+boundary+"--", ""), "\r\n")
+	}
 	done := make(chan error, 1)
 	go func() { done <- smtp.SendMail(s.addr, auth, s.from, []string{to}, []byte(msg)) }()
 	select {

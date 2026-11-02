@@ -166,7 +166,7 @@ void main() {
     id: id,
     authorId: author,
     authorHandle: author == _me ? 'test' : 'alice',
-    body: 'Long **BTC**',
+    body: 'Ready **notes**',
     createdAt: DateTime.now(),
     forwardOf: forwardOf,
     forwardAuthorId: forwardOf.isEmpty ? '' : _alice,
@@ -303,7 +303,7 @@ void main() {
     expect(find.text('Share via…'), findsOneWidget);
 
     await tester.tap(find.text('Public feed'));
-    await tester.tap(find.text('Atlas Capital').first);
+    await tester.tap(find.text('Atlas Collective').first);
     final chat = (await service.fetchChats()).first;
     await tester.tap(find.text(chat.title).last);
     await tester.pumpAndSettle();

@@ -145,11 +145,13 @@ const (
 	CapabilitySpeech        = "speech"
 	CapabilityTranscription = "transcription"
 	CapabilityRerank        = "rerank"
+	// CapabilityLive marks a model that hears and answers in voice over one connection (a realtime model).
+	CapabilityLive = "live"
 )
 
 // Capabilities lists every capability a model can have.
 var Capabilities = []string{CapabilityChat, CapabilityDecision, CapabilityEmbedding, CapabilityImage, CapabilityVideo,
-	CapabilitySpeech, CapabilityTranscription, CapabilityRerank}
+	CapabilitySpeech, CapabilityTranscription, CapabilityRerank, CapabilityLive}
 
 // Has reports whether the model has a capability (as the node treats it).
 func (m Model) Has(c string) bool { return m.WithCapabilities().has(c) }

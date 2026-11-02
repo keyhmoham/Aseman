@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/bridge"
 	"github.com/aseman/aseman/internal/plugins/entity"
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
@@ -443,6 +444,13 @@ func (s *Service) HomeSpace(ctx context.Context, owner identity.ID) (*space.Spac
 
 // Invite creates a pending invitation.
 func (s *Service) Invite(ctx context.Context, inviter, spaceID, roomID, invitee identity.ID, role membership.Role) (*invitation.Invitation, error) {
+	// A person chooses who may invite them (and a block always wins): the users
+	// service holds those choices. Without it there are none to honour.
+	if s.K != nil {
+		if err := bridge.Invoke(ctx, s.K, "users", "AllowsInvite", []any{ctx, inviter, invitee}); err != nil && errs.CodeOf(err) == errs.CodePermission {
+			return nil, err
+		}
+	}
 	id, err := identity.New(s.K.NodeID())
 	if err != nil {
 		return nil, err

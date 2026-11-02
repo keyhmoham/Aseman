@@ -131,7 +131,7 @@ void main() {
 
     await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Nova');
     await tester.enterText(
-        find.widgetWithText(TextField, 'Instructions'), 'Trade carefully.');
+        find.widgetWithText(TextField, 'Instructions'), 'Stay careful.');
     await tester.ensureVisible(find.widgetWithText(FilledButton, 'Create'));
     await tester.tap(find.widgetWithText(FilledButton, 'Create'));
     await tester.pumpAndSettle();

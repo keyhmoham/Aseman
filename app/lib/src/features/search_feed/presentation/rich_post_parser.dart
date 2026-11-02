@@ -404,7 +404,7 @@ PostCard _card(String rest) {
     _ => CardKind.user,
   };
   return PostCard(
-      k, target.isEmpty ? (k == CardKind.user ? '@trader' : 'Entity') : target);
+      k, target.isEmpty ? (k == CardKind.user ? '@person' : 'Entity') : target);
 }
 
 bool _isTableSeparator(String line) {

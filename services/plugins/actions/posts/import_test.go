@@ -12,16 +12,16 @@ func importItems(from, to int) []ImportItem {
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	var items []ImportItem
 	for i := from; i < to; i++ {
-		items = append(items, ImportItem{Source: "coinmarketcap", SourceID: fmt.Sprint(i),
-			Body: fmt.Sprintf("cmc post %d", i), At: base.Add(time.Duration(i) * time.Hour).Format(time.RFC3339)})
+		items = append(items, ImportItem{Source: "external", SourceID: fmt.Sprint(i),
+			Body: fmt.Sprintf("imported post %d", i), At: base.Add(time.Duration(i) * time.Hour).Format(time.RFC3339)})
 	}
 	return items
 }
 
 func TestImportPublishesEachSourcePostOnceAndNeverChangesIt(t *testing.T) {
 	s, ctx := feedHarness(t)
-	trader, _ := identity.New(1)
-	first, err := s.Import(ctx, trader, importItems(0, 3))
+	author, _ := identity.New(1)
+	first, err := s.Import(ctx, author, importItems(0, 3))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestImportPublishesEachSourcePostOnceAndNeverChangesIt(t *testing.T) {
 	}
 	again := importItems(0, 4)
 	again[0].Body = "edited at the source"
-	second, err := s.Import(ctx, trader, again)
+	second, err := s.Import(ctx, author, again)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,16 +45,16 @@ func TestImportPublishesEachSourcePostOnceAndNeverChangesIt(t *testing.T) {
 		t.Fatal("the new one is published")
 	}
 	p, err := s.Get(ctx, identity.MustParse(first[0].PostID))
-	if err != nil || p.Body != "cmc post 0" {
+	if err != nil || p.Body != "imported post 0" {
 		t.Fatalf("the existing post was overridden: %v %q", err, p.Body)
 	}
 }
 
-func TestGlobalFeedShowsTradersLatestImportedPostsFirst(t *testing.T) {
+func TestGlobalFeedShowsAuthorsLatestImportedPostsFirst(t *testing.T) {
 	s, ctx := feedHarness(t)
-	trader, _ := identity.New(1)
+	author, _ := identity.New(1)
 	someone, _ := identity.New(1)
-	if _, err := s.Import(ctx, trader, importItems(0, 12)); err != nil {
+	if _, err := s.Import(ctx, author, importItems(0, 12)); err != nil {
 		t.Fatal(err)
 	}
 	// Posts made here afterwards are newer, yet come after the featured ones.
@@ -71,9 +71,9 @@ func TestGlobalFeedShowsTradersLatestImportedPostsFirst(t *testing.T) {
 		t.Fatalf("every post is in the feed once: %d", len(feed))
 	}
 	for i := 0; i < FeaturedPerAuthor; i++ {
-		want := fmt.Sprintf("cmc post %d", 11-i)
+		want := fmt.Sprintf("imported post %d", 11-i)
 		if feed[i].Body != want {
-			t.Fatalf("feed[%d] = %q, want %q (the trader's latest %d first, newest first)", i, feed[i].Body, want, FeaturedPerAuthor)
+			t.Fatalf("feed[%d] = %q, want %q (the author's latest %d first, newest first)", i, feed[i].Body, want, FeaturedPerAuthor)
 		}
 	}
 	// Paging walks the same order without repeats or gaps.
@@ -97,10 +97,10 @@ func TestGlobalFeedShowsTradersLatestImportedPostsFirst(t *testing.T) {
 
 func TestImportedMediaAreImagesOrVideos(t *testing.T) {
 	s, ctx := feedHarness(t)
-	trader, _ := identity.New(1)
+	author, _ := identity.New(1)
 	item := importItems(0, 1)[0]
 	item.Media = []ImportMedia{{Name: "a.html", Mime: "text/html", Data: []byte("<html>")}}
-	res, err := s.Import(ctx, trader, []ImportItem{item})
+	res, err := s.Import(ctx, author, []ImportItem{item})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,10 +108,10 @@ func TestImportedMediaAreImagesOrVideos(t *testing.T) {
 		t.Fatalf("a post whose media are not images or videos is not published: %+v", res[0])
 	}
 	item.Media = make([]ImportMedia, maxImportMedia+1)
-	if res, _ := s.Import(ctx, trader, []ImportItem{item}); res[0].Created {
+	if res, _ := s.Import(ctx, author, []ImportItem{item}); res[0].Created {
 		t.Fatal("too many media are refused")
 	}
-	feed, _ := s.Feed(ctx, trader, identity.ID{}, false, 10, 0)
+	feed, _ := s.Feed(ctx, author, identity.ID{}, false, 10, 0)
 	if len(feed) != 0 {
 		t.Fatalf("nothing was published: %d", len(feed))
 	}

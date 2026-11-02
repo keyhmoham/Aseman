@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_shape.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_surfaces.dart';
+import '../../../shared/widgets/panel_empty.dart';
+import '../../../shared/widgets/sky_ui.dart';
 import '../domain/desk_models.dart';
 import 'desk_controller.dart';
 import 'tool_avatar.dart';
@@ -33,81 +38,44 @@ class PinnedDesk extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: maxWidth),
         child: Container(
-          margin: EdgeInsets.fromLTRB(12, 12, 12, bottomInset),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(32),
-            border:
-                Border.all(color: scheme.outlineVariant.withValues(alpha: .6)),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: .18),
-                  blurRadius: 32,
-                  offset: const Offset(0, 12)),
-            ],
+          margin: EdgeInsets.fromLTRB(
+              AppSpacing.sm, AppSpacing.sm, AppSpacing.sm, bottomInset),
+          decoration: softSurfaceDecoration(
+            scheme,
+            accent: scheme.primary,
+            secondary: scheme.tertiary,
+            radius: AppShape.card + 4,
+            elevated: true,
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(24, 18, 12, 8),
-                child: Row(children: [
-                  Icon(Icons.space_dashboard_rounded, color: scheme.primary),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Pinned desk',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w800)),
-                        Text('Windows you pinned, ready to open again',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: scheme.onSurfaceVariant)),
-                      ],
-                    ),
-                  ),
-                  IconButton.filledTonal(
-                    tooltip: 'Back to the desk',
-                    onPressed: () => controller.setPinnedOpen(false),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ]),
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg, AppSpacing.md + 2, AppSpacing.sm, AppSpacing.xs),
+                child: SkySectionHeader(
+                  icon: Icons.space_dashboard_rounded,
+                  title: 'Pinned desk',
+                  subtitle: 'Windows you pinned, ready to open again',
+                  dense: true,
+                  onClose: () => controller.setPinnedOpen(false),
+                ),
               ),
               Expanded(
                 child: pins.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.push_pin_outlined,
-                                    size: 40, color: scheme.outline),
-                                const SizedBox(height: 12),
-                                Text('Nothing pinned yet',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium),
-                                const SizedBox(height: 4),
-                                Text(
-                                    'Pin a window from its title bar to keep it here.',
-                                    textAlign: TextAlign.center,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
-                                            color: scheme.onSurfaceVariant)),
-                              ]),
-                        ),
+                    ? const PanelEmpty(
+                        icon: Icons.push_pin_outlined,
+                        title: 'Nothing pinned yet',
+                        message:
+                            'Pin a window from its title bar to keep it here.',
                       )
                     : GridView.builder(
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                        padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.md + 4,
+                            AppSpacing.xs,
+                            AppSpacing.md + 4,
+                            AppSpacing.md + 4),
                         gridDelegate:
                             const SliverGridDelegateWithMaxCrossAxisExtent(
                           maxCrossAxisExtent: 240,
@@ -161,6 +129,7 @@ class _PinTileState extends State<_PinTile> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final pin = widget.pin;
+    final accent = portalAccentFor(pin.tool, scheme);
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
@@ -168,87 +137,83 @@ class _PinTileState extends State<_PinTile> {
         scale: _hover ? 1.02 : 1,
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutBack,
-        child: Material(
-          color: scheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(24),
-          clipBehavior: Clip.antiAlias,
-          elevation: _hover ? 6 : 1,
-          shadowColor: Colors.black26,
-          child: InkWell(
-            onTap: widget.onOpen,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 4, 6),
-                  child: Row(children: [
-                    ToolAvatar(tool: pin.tool, name: pin.name, size: 30),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(pin.label,
+        child: SoftCard(
+          onTap: widget.onOpen,
+          accent: accent,
+          radius: 24,
+          padding: EdgeInsets.zero,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.sm, AppSpacing.sm - 2, 4, AppSpacing.xs - 2),
+                child: Row(children: [
+                  ToolAvatar(tool: pin.tool, name: pin.name, size: 30),
+                  const SizedBox(width: AppSpacing.sm - 2),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(pin.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700)),
+                        if (pin.argsSummary.isNotEmpty)
+                          Text(pin.argsSummary,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context)
                                   .textTheme
-                                  .titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700)),
-                          if (pin.argsSummary.isNotEmpty)
-                            Text(pin.argsSummary,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(color: scheme.onSurfaceVariant)),
-                        ],
-                      ),
+                                  .labelSmall
+                                  ?.copyWith(color: scheme.onSurfaceVariant)),
+                      ],
                     ),
-                    IconButton(
-                      tooltip: 'Unpin',
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 18,
-                      onPressed: widget.onUnpin,
-                      icon: Icon(Icons.push_pin, color: scheme.primary),
-                    ),
-                  ]),
-                ),
-                // A live preview of the window, scaled to the tile.
-                Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: scheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                          color: scheme.outlineVariant.withValues(alpha: .5)),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: IgnorePointer(
-                      child: FittedBox(
-                        fit: BoxFit.cover,
-                        alignment: Alignment.topCenter,
-                        child: SizedBox(
-                          width: pin.size.width,
-                          height: pin.size.height,
-                          child: widget.preview,
-                        ),
+                  ),
+                  IconButton(
+                    tooltip: 'Unpin',
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 18,
+                    onPressed: widget.onUnpin,
+                    icon: Icon(Icons.push_pin, color: accent),
+                  ),
+                ]),
+              ),
+              // A live preview of the window, scaled to the tile.
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: scheme.surface.withValues(alpha: .72),
+                    borderRadius: BorderRadius.circular(AppShape.control),
+                    border: Border.all(color: AppSurfaces.cardBorder(scheme)),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: IgnorePointer(
+                    child: FittedBox(
+                      fit: BoxFit.cover,
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        width: pin.size.width,
+                        height: pin.size.height,
+                        child: widget.preview,
                       ),
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: FilledButton.tonalIcon(
-                    onPressed: widget.onOpen,
-                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                    label: const Text('Open on desk'),
-                  ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.sm - 2),
+                child: FilledButton.tonalIcon(
+                  onPressed: widget.onOpen,
+                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                  label: const Text('Open on desk'),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

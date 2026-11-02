@@ -18,11 +18,11 @@ import (
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
-// Imported posts are the ones a trader published somewhere else (their
-// CoinMarketCap posts) put on the trader's account here. An import publishes
-// each source post once, as a global post, and never edits or replaces it
-// afterwards; the author's newest FeaturedPerAuthor imported posts are
-// featured: the global feed shows them above every other post.
+// Imported posts are the ones a person published somewhere else (their
+// posts on another network) put on the person's account here. An import
+// publishes each source post once, as a global post, and never edits or
+// replaces it afterwards; the author's newest FeaturedPerAuthor imported
+// posts are featured: the global feed shows them above every other post.
 
 // FeaturedPerAuthor is how many of an author's imported posts are featured.
 const FeaturedPerAuthor = 10

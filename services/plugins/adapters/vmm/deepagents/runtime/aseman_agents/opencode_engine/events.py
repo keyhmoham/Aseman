@@ -124,5 +124,20 @@ def _stringify(value: object) -> str:
     if isinstance(value, str):
         return value.strip()
     if isinstance(value, dict):
-        return str(value.get("message") or value.get("error") or "").strip()
+        # Current builds: {"type":"error","error":{"type":"provider.free-limit",
+        # "message":"…","status":429}}. Older/nested shapes put the message
+        # under data or only carry a name/type.
+        for key in ("message", "error", "cause"):
+            nested = _stringify(value.get(key) or "")
+            if nested:
+                return nested
+        data = value.get("data")
+        if isinstance(data, dict):
+            nested = _stringify(data)
+            if nested:
+                return nested
+        for key in ("name", "type"):
+            label = value.get(key)
+            if isinstance(label, str) and label.strip():
+                return label.strip()
     return ""

@@ -8,6 +8,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../shared/widgets/sky_ui.dart';
 import '../core/elpian_services.dart';
 import '../core/event_dispatcher.dart';
 import '../core/node_events.dart';
@@ -207,10 +208,12 @@ class ElpianListTile {
           final avatar = textProp(node, 'leadingAvatar');
           final image = _imageUrl(textProp(node, 'leadingImage'));
           if (leading == null && image != null) {
-            leading = CircleAvatar(
-              radius: 20,
-              backgroundImage: NetworkImage(image),
-              backgroundColor: scheme.primaryContainer,
+            leading = HaloRing(
+              child: CircleAvatar(
+                radius: 20,
+                backgroundImage: NetworkImage(image),
+                backgroundColor: scheme.primaryContainer,
+              ),
             );
           } else if (leading == null && avatar != null) {
             final initials = avatar
@@ -220,13 +223,15 @@ class ElpianListTile {
                 .take(2)
                 .map((w) => w.characters.first.toUpperCase())
                 .join();
-            leading = CircleAvatar(
-              radius: 20,
-              backgroundColor: scheme.primaryContainer,
-              foregroundColor: scheme.onPrimaryContainer,
-              child: Text(
-                initials,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+            leading = HaloRing(
+              child: CircleAvatar(
+                radius: 20,
+                backgroundColor: scheme.primaryContainer,
+                foregroundColor: scheme.onPrimaryContainer,
+                child: Text(
+                  initials,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
             );
           } else if (leading == null && node.props['leading'] != null) {

@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
+import '../../../core/theme/app_surfaces.dart';
 import '../../../data/models/space.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import '../../../shared/widgets/panel_empty.dart';
 import '../../../shared/widgets/panel_header.dart';
+import '../../../shared/widgets/panel_scaffold.dart';
 import '../../../shared/widgets/skeleton.dart';
 
 /// Opens the questions people and agents asked the caller and are waiting on
@@ -80,49 +83,45 @@ class _RequestsPanelState extends State<RequestsPanel> {
     final scheme = Theme.of(context).colorScheme;
     final compact = MediaQuery.sizeOf(context).width < 560;
     final me = widget.dependencies.sessionController.session?.accountId ?? '';
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          compact ? 16 : 26, compact ? 16 : 22, compact ? 16 : 26, 0),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        PanelHeader(
-          icon: Icons.help_outline_rounded,
-          title: 'Requests',
-          subtitle: 'Questions people and agents are waiting on you for',
-          onClose: () => Navigator.pop(context),
-          actions: [
-            IconButton(
-                tooltip: 'Refresh',
-                onPressed: _load,
-                icon: const Icon(Icons.refresh_rounded)),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Expanded(
-          child: _loading
-              ? const SkeletonList()
-              : _error != null
-                  ? Center(
-                      child: Text(_error!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: scheme.onSurfaceVariant)))
-                  : _requests.isEmpty
-                      ? Center(
-                          child: Text('No open requests.',
-                              style: TextStyle(color: scheme.onSurfaceVariant)))
-                      : ListView.separated(
-                          padding: const EdgeInsets.only(bottom: 28),
-                          itemCount: _requests.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 8),
-                          itemBuilder: (context, i) => _PacketCard(
-                            packet: _requests[i],
-                            incoming: _requests[i].toId == me,
-                            needsAnswer: true,
-                            onAnswer: () => _answer(_requests[i]),
-                          ),
-                        ),
-        ),
-      ]),
+    return PanelScaffold(
+      compact: compact,
+      header: PanelHeader(
+        icon: Icons.help_outline_rounded,
+        title: 'Requests',
+        subtitle: 'Questions people and agents are waiting on you for',
+        onClose: () => Navigator.pop(context),
+        actions: [
+          IconButton(
+              tooltip: 'Refresh',
+              onPressed: _load,
+              icon: const Icon(Icons.refresh_rounded)),
+        ],
+      ),
+      body: _loading
+          ? const SkeletonList()
+          : _error != null
+              ? Center(
+                  child: Text(_error!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: scheme.onSurfaceVariant)))
+              : _requests.isEmpty
+                  ? const PanelEmpty(
+                      icon: Icons.inbox_outlined,
+                      title: 'No open requests',
+                      message:
+                          'Questions people and agents ask you will land here.',
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.only(bottom: 28),
+                      itemCount: _requests.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, i) => _PacketCard(
+                        packet: _requests[i],
+                        incoming: _requests[i].toId == me,
+                        needsAnswer: true,
+                        onAnswer: () => _answer(_requests[i]),
+                      ),
+                    ),
     );
   }
 }
@@ -163,10 +162,16 @@ class _PacketCard extends StatelessWidget {
             : peer;
     return Material(
       color: needsAnswer
-          ? scheme.primaryContainer.withValues(alpha: .55)
-          : scheme.surfaceContainerLow,
+          ? scheme.primaryContainer.withValues(alpha: .4)
+          : AppSurfaces.card(scheme),
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.inner + 2)),
+        borderRadius: BorderRadius.circular(AppShape.inner),
+        side: BorderSide(
+          color: needsAnswer
+              ? scheme.primary.withValues(alpha: .22)
+              : AppSurfaces.cardBorder(scheme),
+        ),
+      ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onAnswer,
@@ -175,7 +180,7 @@ class _PacketCard extends StatelessWidget {
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Stack(clipBehavior: Clip.none, children: [
               AppAvatar(peer.isEmpty ? '?' : peer.substring(0, 2).toUpperCase(),
-                  color: color, radius: 22),
+                  color: color, radius: 22, identity: peer),
               Positioned(
                 right: -4,
                 bottom: -4,
@@ -282,14 +287,14 @@ class _ReplyFormState extends State<_ReplyForm> {
       children: [
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(AppShape.control),
-            border: Border(left: BorderSide(color: scheme.primary, width: 4)),
-          ),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          decoration: AppSurfaces.cardDecoration(context,
+              radius: AppShape.control),
           child: Text(widget.ask.body,
-              style: const TextStyle(fontSize: 14, height: 1.4)),
+              style: TextStyle(
+                  fontSize: 14,
+                  height: 1.4,
+                  color: scheme.onSurfaceVariant)),
         ),
         TextField(
           controller: controller,

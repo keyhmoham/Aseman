@@ -84,6 +84,42 @@ func TestATurnSaysWhetherOpenCodeBuildsApps(t *testing.T) {
 	}
 }
 
+func TestAnOpenCodeTurnDoesNotResolvePlatformModels(t *testing.T) {
+	a, _, _ := newTestAdapter(t)
+	a.platform = fakePlatform{
+		provider:        vmm.ProviderConfig{Model: "m1", ContextWindow: 200000},
+		decision:        &vmm.ProviderConfig{Model: "decide"},
+		memoryChat:      &vmm.ProviderConfig{Model: "memory-chat"},
+		memoryEmbedding: &vmm.ProviderConfig{Model: "memory-embed"},
+		timeline:        func(string, []byte) ([]byte, error) { return nil, nil },
+		agentEngine:     "opencode",
+		openCode:        true,
+	}
+	turn := testTurn()
+	turn.Agent.AccountID = mustID(t)
+	s, req, err := a.open(context.Background(), onlyVM(t, a), turn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.close(s)
+	if req.AgentEngine != "opencode" {
+		t.Fatalf("agent_engine = %q", req.AgentEngine)
+	}
+	if req.Agent.ContextWindow != 0 {
+		t.Fatalf("the platform chat model was resolved for an opencode turn: %+v", req.Agent)
+	}
+	if req.Decision != nil || req.Memory.Recall || req.Memory.Learn || req.Timeline || req.CodeMode {
+		t.Fatalf("platform resources crossed an opencode turn: %+v", req)
+	}
+	if llm := vmm.TurnLLMFrom(s.base); llm.Token != "" || llm.BaseURL != "" {
+		t.Fatalf("the platform LLM gateway was handed to an opencode turn: %+v", llm)
+	}
+	// The programmer switch is a different setting and stays truthful.
+	if !req.OpenCode {
+		t.Fatal("the programmer switch was dropped")
+	}
+}
+
 func TestATurnUsesTheAgenticEngineTheAdminJustSet(t *testing.T) {
 	for _, engine := range []string{"deepagents", "opencode"} {
 		a, rt, _ := newTestAdapter(t)

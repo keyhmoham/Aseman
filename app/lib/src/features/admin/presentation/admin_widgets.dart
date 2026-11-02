@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/glass_surface.dart';
+import '../../../shared/widgets/sky_ui.dart';
 
 /// Building blocks of the admin console, drawn in the Material 3 Expressive
 /// style: tonal surfaces instead of outlines, generous corner radii, bold
@@ -396,15 +397,9 @@ class AdminAvatar extends StatelessWidget {
         ? '?'
         : words.take(2).map((w) => w[0].toUpperCase()).join();
     final color = palette[name.hashCode.abs() % palette.length];
-    final fallback = Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: ShapeDecoration(
-        color: color.withValues(alpha: .2),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(size * .36)),
-      ),
+    final fallback = CircleAvatar(
+      radius: size / 2,
+      backgroundColor: color.withValues(alpha: .2),
       child: icon != null
           ? Icon(icon, size: size * .5, color: color)
           : Text(initials,
@@ -413,8 +408,10 @@ class AdminAvatar extends StatelessWidget {
                   fontSize: size * .36,
                   fontWeight: FontWeight.w800)),
     );
-    return AvatarPicture(
-        avatar: avatar, size: size, radius: size * .36, fallback: fallback);
+    return HaloRing(
+      accent: color,
+      child: AvatarPicture(avatar: avatar, size: size, fallback: fallback),
+    );
   }
 }
 

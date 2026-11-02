@@ -88,15 +88,15 @@ func TestManagedAccounts(t *testing.T) {
 	}
 
 	// Refused: a plain user, a tool outside the admins space, a tool working for a non-admin.
-	if _, err := create(ctx, api.Caller{ID: bob.ID, Kind: "user"}, "x_trader"); errs.CodeOf(err) != errs.CodePermission {
+	if _, err := create(ctx, api.Caller{ID: bob.ID, Kind: "user"}, "x_member"); errs.CodeOf(err) != errs.CodePermission {
 		t.Fatalf("a user created an account: %v", err)
 	}
 	octx, otool := asTool(other, alice.ID)
-	if _, err := create(octx, otool, "x_trader"); errs.CodeOf(err) != errs.CodePermission {
+	if _, err := create(octx, otool, "x_member"); errs.CodeOf(err) != errs.CodePermission {
 		t.Fatalf("a tool outside the admins space created an account: %v", err)
 	}
 	bctx, btool := asTool(admins, bob.ID)
-	if _, err := create(bctx, btool, "x_trader"); errs.CodeOf(err) != errs.CodePermission {
+	if _, err := create(bctx, btool, "x_member"); errs.CodeOf(err) != errs.CodePermission {
 		t.Fatalf("a tool working for a non-admin created an account: %v", err)
 	}
 

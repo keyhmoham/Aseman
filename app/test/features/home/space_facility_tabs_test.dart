@@ -230,9 +230,9 @@ void main() {
 
     expect(find.text('Saved'), findsWidgets);
     // Each agent's own notes are a chip away.
-    await tester.ensureVisible(find.text('SignalBot').last);
+    await tester.ensureVisible(find.text('AssistBot').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('SignalBot').last);
+    await tester.tap(find.text('AssistBot').last);
     await tester.pumpAndSettle();
     expect(service.calls.last, 'read .aseman/agents/agent-1/AGENTS.md');
     expect(find.text('# Own notes'), findsOneWidget);
@@ -274,7 +274,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital').last);
+    await tester.tap(find.text('Atlas Collective').last);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Apps'));

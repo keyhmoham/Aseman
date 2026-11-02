@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/halo_ring_cache.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/code_highlight.dart';
 import '../../../shared/widgets/network_content_image.dart';
 import '../../../shared/widgets/skeleton.dart';
+import '../../../shared/widgets/sky_ui.dart';
 import '../../rooms/presentation/widgets/audio_bubble.dart';
 import '../../rooms/presentation/widgets/video_bubble.dart';
 import 'rich_post_parser.dart';
@@ -568,7 +570,7 @@ class _InfoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final (icon, color, title) = switch (card.kind) {
-      CardKind.user => (Icons.person_rounded, AppColors.cyan, 'Trader'),
+      CardKind.user => (Icons.person_rounded, AppColors.cyan, 'Person'),
       CardKind.agent => (Icons.smart_toy_rounded, AppColors.primary, 'Agent'),
       CardKind.tool => (Icons.apps_rounded, AppColors.warning, 'App'),
       CardKind.space => (Icons.hub_rounded, AppColors.success, 'Workspace'),
@@ -646,6 +648,7 @@ class _ForwardedPost extends StatelessWidget {
           name: name,
           handle: handle,
           avatar: '${data['avatar'] ?? ''}',
+          authorId: authorId,
           onTap: authorId.isEmpty
               ? null
               : () => PostLinks.open(context, authorId, handle),
@@ -668,10 +671,12 @@ class ForwardedTag extends StatelessWidget {
       required this.name,
       this.handle = '',
       this.avatar = '',
+      this.authorId = '',
       this.onTap});
   final String name;
   final String handle;
   final String avatar;
+  final String authorId;
   final VoidCallback? onTap;
 
   @override
@@ -694,17 +699,21 @@ class ForwardedTag extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(4, 3, 10, 3),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              CircleAvatar(
-                radius: 10,
-                backgroundColor: scheme.primary.withValues(alpha: .2),
-                foregroundImage: Avatars.of(avatar),
-                onForegroundImageError:
-                    avatar.isEmpty ? null : (_, __) {},
-                child: Text(initial,
-                    style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        color: scheme.primary)),
+              HaloRing(
+                pad: 1.5,
+                identity: HaloRingCache.person(authorId),
+                child: CircleAvatar(
+                  radius: 10,
+                  backgroundColor: scheme.primary.withValues(alpha: .2),
+                  foregroundImage: Avatars.of(avatar),
+                  onForegroundImageError:
+                      avatar.isEmpty ? null : (_, __) {},
+                  child: Text(initial,
+                      style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          color: scheme.primary)),
+                ),
               ),
               const SizedBox(width: 6),
               Icon(Icons.shortcut_rounded, size: 14, color: scheme.primary),

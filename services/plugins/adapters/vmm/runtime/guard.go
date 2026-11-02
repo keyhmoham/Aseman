@@ -299,6 +299,20 @@ func (p *guardedVMM) ForgetRoom(ctx context.Context, spaceID, roomID string) err
 	return port.ForgetRoom(ctx, spaceID, roomID)
 }
 
+// PersonalChat forwards vmm.PersonalChatter (Aseman self-chat / Talk under OpenCode).
+func (p *guardedVMM) PersonalChat(ctx context.Context, chat vmm.PersonalChat) (string, error) {
+	ctx, release, err := p.gate.Acquire(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer release()
+	port, ok := p.port.(vmm.PersonalChatter)
+	if !ok {
+		return "", errs.New(errs.CodeUnavailable, "adapter cannot answer personal chats")
+	}
+	return port.PersonalChat(ctx, chat)
+}
+
 func Guard(port vmm.VMM, gate *lifetime.Gate) vmm.VMM {
 	return &guardedVMM{port: port, gate: gate}
 }

@@ -25,6 +25,7 @@ import (
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/pkg/jsonpatch"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 )
 
 // Desk geometry every client follows.
@@ -755,11 +756,51 @@ func deskKey(roomID identity.ID) string {
 	return roomID.String()
 }
 
+// deskPath is the metadata path for a desk. Project rooms share one desk per
+// room (desktop/<room>). Direct chats keep a desk per participant
+// (desktop/<room>/<userId>) so each person sees their own layout, agents and
+// apps — the conversation is shared, the desk is not.
+func (s *Service) deskPath(ctx context.Context, spaceID, roomID identity.ID) string {
+	key := deskKey(roomID)
+	sp, err := s.GetSpace(ctx, spaceID)
+	if err != nil || sp == nil || !sp.Direct {
+		return key
+	}
+	actor := helper.Actor(ctx)
+	if actor.IsZero() {
+		return key
+	}
+	return key + "/" + actor.String()
+}
+
 type deskStore struct {
 	mu sync.Mutex
 	// mem holds desks when the node has no metadata service (tests, minimal
 	// nodes).
 	mem map[string]Desktop
+}
+
+// desktopAt walks desktop/<path> where path may be "home", a room id, or
+// "roomId/userId" for a direct-chat participant desk.
+func desktopAt(tree map[string]any, room string) (any, bool) {
+	cur, ok := tree["desktop"]
+	if !ok {
+		return nil, false
+	}
+	for _, part := range strings.Split(room, "/") {
+		if part == "" {
+			continue
+		}
+		node, ok := cur.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		cur, ok = node[part]
+		if !ok {
+			return nil, false
+		}
+	}
+	return cur, true
 }
 
 func (s *Service) loadDesktop(ctx context.Context, spaceID identity.ID, room string) (Desktop, error) {
@@ -771,12 +812,10 @@ func (s *Service) loadDesktop(ctx context.Context, spaceID identity.ID, room str
 		return Desktop{}, nil // no metadata yet: an empty desk
 	}
 	var d Desktop
-	if node, ok := rec.Tree["desktop"].(map[string]any); ok {
-		if raw, ok := node[room]; ok {
-			b, _ := json.Marshal(raw)
-			if err := json.Unmarshal(b, &d); err != nil {
-				return Desktop{}, nil
-			}
+	if raw, ok := desktopAt(rec.Tree, room); ok {
+		b, _ := json.Marshal(raw)
+		if err := json.Unmarshal(b, &d); err != nil {
+			return Desktop{}, nil
 		}
 	}
 	return d, nil
@@ -796,12 +835,12 @@ func (s *Service) saveDesktop(ctx context.Context, spaceID identity.ID, room str
 	return s.M.Patch(ctx, spaceID, jsonpatch.Patch{{Op: "set", Path: "desktop/" + room, Value: value}})
 }
 
-// Desk reads a room's desk.
+// Desk reads a room's desk (per-participant for direct chats).
 func (s *Service) Desk(ctx context.Context, spaceID, roomID identity.ID) (Desktop, error) {
 	roomID = s.mainRoom(ctx, roomID) // a thread shares its room's desk
 	s.desks.mu.Lock()
 	defer s.desks.mu.Unlock()
-	d, err := s.loadDesktop(ctx, spaceID, deskKey(roomID))
+	d, err := s.loadDesktop(ctx, spaceID, s.deskPath(ctx, spaceID, roomID))
 	if d.Windows == nil {
 		d.Windows = []DeskWindow{}
 	}
@@ -812,7 +851,7 @@ func (s *Service) Desk(ctx context.Context, spaceID, roomID identity.ID) (Deskto
 }
 
 // UpdateDesk applies ops to a room's desk atomically. It returns the desk
-// and, per op, the id it produced.
+// and, per op, the id it produced. Direct chats write the caller's own desk.
 func (s *Service) UpdateDesk(ctx context.Context, spaceID, roomID identity.ID, actor string, ops []DeskOp) (Desktop, []string, error) {
 	if len(ops) == 0 || len(ops) > 100 {
 		return Desktop{}, nil, errs.InvalidArgument("1..100 desk ops")
@@ -820,7 +859,7 @@ func (s *Service) UpdateDesk(ctx context.Context, spaceID, roomID identity.ID, a
 	roomID = s.mainRoom(ctx, roomID) // a thread shares its room's desk
 	s.desks.mu.Lock()
 	defer s.desks.mu.Unlock()
-	room := deskKey(roomID)
+	room := s.deskPath(ctx, spaceID, roomID)
 	d, err := s.loadDesktop(ctx, spaceID, room)
 	if err != nil {
 		return Desktop{}, nil, err

@@ -7,7 +7,10 @@ import (
 	"time"
 
 	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
 	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 	"github.com/aseman/aseman/plugins/actions/message/models/message"
 	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
@@ -116,7 +119,7 @@ func TestBlockedDirectChatTakesNoMessages(t *testing.T) {
 	if blocked, _ := s.DirectBlocked(ctx, bob, alice); !blocked {
 		t.Fatal("users.dm_send would still deliver")
 	}
-	if err := s.PostDirect(ctx, bob, alice, "around the block"); err == nil {
+	if err := s.PostDirect(ctx, bob, alice, "around the block", identity.ID{}); err == nil {
 		t.Fatal("a mirrored direct message got through")
 	}
 	mine, theirs := listIn(t, s, ctx, alice, sp.ID, room.ID), listIn(t, s, ctx, bob, sp.ID, room.ID)
@@ -236,8 +239,8 @@ func (s *Service) mustProject(t *testing.T, ctx context.Context, owner identity.
 	return sp.ID
 }
 
-// Saved Messages is a direct chat with oneself: always the same one, listed
-// among chats, with no one to block.
+// Aseman (formerly Saved Messages) is a direct chat with oneself: always the
+// same one, listed among chats, with no one to block.
 func TestSavedMessagesIsADirectChatWithOneself(t *testing.T) {
 	s, ctx := fileToolHarness(t)
 	alice := directPerson(t, s, ctx, "00000000000000010000000000000001", "alice")
@@ -247,18 +250,94 @@ func TestSavedMessagesIsADirectChatWithOneself(t *testing.T) {
 	}
 	again, _, err := s.OpenDirect(ctx, alice, alice)
 	if err != nil || again.ID != sp.ID || !sp.Direct {
-		t.Fatalf("saved messages: %v", err)
+		t.Fatalf("aseman chat: %v", err)
+	}
+	if sp.Name != "Aseman" {
+		t.Fatalf("aseman space name: %q", sp.Name)
 	}
 	sendIn(t, s, ctx, alice, sp.ID, room.ID, "remember the milk")
 	chats := chatsOf(t, s, ctx, alice)
 	if len(chats) != 1 || chats[0]["saved"] != true {
-		t.Fatalf("saved messages row: %v", chats)
+		t.Fatalf("aseman chat row: %v", chats)
 	}
 	if got := listIn(t, s, ctx, alice, sp.ID, room.ID); !got.Saved || len(got.Messages) != 1 {
-		t.Fatalf("saved list: %+v", got)
+		t.Fatalf("aseman list: %+v", got)
 	}
 	if err := callErr(ctx, alice, s.directBlockSet, map[string]any{"space": sp.ID.String()}); err == nil {
 		t.Fatal("blocked oneself")
+	}
+}
+
+// Opening a Direct with the built-in Aseman assistant lands in the personal
+// Aseman self-chat — never a separate person↔assistant conversation.
+func TestOpenDirectWithBuiltinAssistantUsesAsemanChat(t *testing.T) {
+	s, ctx := fileToolHarness(t)
+	alice := directPerson(t, s, ctx, "00000000000000010000000000000001", "alice")
+	now := time.Now().UTC()
+	assistantAcc := idFromHex(t, "00000000000000010000000000000009")
+	if err := s.R.CreateID(ctx, "accounts", assistantAcc, &account.Account{
+		Entity: entity.Entity{ID: assistantAcc, CreatedAt: now, UpdatedAt: now},
+		Kind:   account.KindBot, Handle: "aseman-chat", Status: account.StatusActive, MetadataID: assistantAcc,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	botID := idFromHex(t, "0000000000000001000000000000000a")
+	if err := s.R.CreateID(ctx, "bots", botID, &bot.Bot{
+		Entity:  entity.Entity{ID: botID, CreatedAt: now, UpdatedAt: now},
+		OwnerID: assistantAcc, AccountID: assistantAcc, Name: "Aseman", Kind: bot.KindAgent,
+		VMType: bot.VMTypeDeepAgents, Status: bot.StatusRunning, ImageRef: bot.BuiltinChatImage,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	saved, _, err := s.OpenDirect(ctx, alice, alice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened, _, err := s.OpenDirect(ctx, alice, assistantAcc)
+	if err != nil || opened.ID != saved.ID || !opened.Direct {
+		t.Fatalf("builtin open: space=%v err=%v", opened, err)
+	}
+	chats := chatsOf(t, s, ctx, alice)
+	if len(chats) != 1 || chats[0]["saved"] != true {
+		t.Fatalf("inbox after builtin open: %v", chats)
+	}
+}
+
+// Personal Aseman replies land in the Aseman chat as the assistant — not in a
+// separate person↔assistant Direct that would only ever hold the assistant side.
+func TestPostSavedAnswerKeepsTheThreadInSavedMessages(t *testing.T) {
+	s, ctx := fileToolHarness(t)
+	alice := directPerson(t, s, ctx, "00000000000000010000000000000001", "alice")
+	assistant := directPerson(t, s, ctx, "00000000000000010000000000000009", "aseman-chat")
+	sp, room, err := s.OpenDirect(ctx, alice, alice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sendIn(t, s, ctx, alice, sp.ID, room.ID, "what is on my plate today?")
+	directID := identity.MustParse("00000000000000010000000000000a01")
+	if err := s.PostSavedAnswer(ctx, alice, assistant, "You have the launch review at 3.", directID); err != nil {
+		t.Fatal(err)
+	}
+	got := listIn(t, s, ctx, alice, sp.ID, room.ID)
+	if len(got.Messages) != 2 {
+		t.Fatalf("saved thread: %+v", got)
+	}
+	// Newest first.
+	if got.Messages[0]["body"] != "You have the launch review at 3." || got.Messages[0]["sender_id"] != assistant.String() {
+		t.Fatalf("assistant reply: %+v", got.Messages[0])
+	}
+	if got.Messages[1]["body"] != "what is on my plate today?" || got.Messages[1]["sender_id"] != alice.String() {
+		t.Fatalf("user note: %+v", got.Messages[1])
+	}
+	if got.Messages[0]["direct_id"] != directID.String() {
+		t.Fatalf("direct id stamp: %+v", got.Messages[0])
+	}
+	// Must not have opened a separate Direct with the assistant.
+	for _, chat := range chatsOf(t, s, ctx, alice) {
+		if chat["saved"] == true {
+			continue
+		}
+		t.Fatalf("unexpected non-saved chat: %v", chat)
 	}
 }
 

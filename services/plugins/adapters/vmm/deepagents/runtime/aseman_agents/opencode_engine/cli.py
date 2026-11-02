@@ -23,6 +23,9 @@ STRIP_ENV = frozenset({
     "GROQ_API_KEY", "MISTRAL_API_KEY", "TOGETHER_API_KEY", "FIREWORKS_API_KEY",
     "DEEPSEEK_API_KEY", "OPENROUTER_API_KEY", "AI_GATEWAY_API_KEY", "VERCEL_OIDC_TOKEN",
     "OPENCODE_CONFIG",
+    # The runtime's working directory is its source tree, not the turn's
+    # scratch dir; leaving it in makes OpenCode treat that tree as the project.
+    "PWD",
 })
 
 PROGRAMMER_CONFIG = "/etc/opencode/opencode.json"
@@ -61,7 +64,8 @@ def isolated_env(home: Path, config: Path, base: dict[str, str] | None = None,
 def run_argv(*, binary: str, agent: str, model: str, directory: str, message: str,
              session: str = "", title: str = "") -> list[str]:
     """``opencode run`` for one turn or one swarm task."""
-    if not model.startswith("opencode/") or "aseman" in model:
+    from .models import is_opencode_model
+    if not is_opencode_model(model):
         raise ValueError(f"refusing a non-OpenCode model: {model}")
     cmd = [binary, "run", "--standalone", "--format", "json", "--auto", "--agent", agent, "--model", model]
     if title:
@@ -93,7 +97,11 @@ class RunSpec:
                         message=self.message, session=self.session, title=self.title)
 
     def env(self) -> dict[str, str]:
-        return isolated_env(self.home, self.config, self.base_env, self.extra_env)
+        env = isolated_env(self.home, self.config, self.base_env, self.extra_env)
+        # OpenCode resolves the project it runs in from PWD as well as cwd.
+        # Inherit neither the runtime's own tree nor whatever the caller had.
+        env["PWD"] = str(self.directory)
+        return env
 
 
 @dataclass

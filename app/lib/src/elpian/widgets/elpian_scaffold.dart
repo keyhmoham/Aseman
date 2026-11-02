@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../core/theme/app_theme.dart';
 import '../core/event_enabled_widget.dart';
 import '../core/node_events.dart';
 import '../models/elpian_node.dart';
@@ -185,13 +187,14 @@ class ElpianScaffold {
 /// `style.backgroundColor` and `style.width` apply; `props.elevation`.
 class ElpianDrawer {
   static Widget build(ElpianNode node, List<Widget> children) {
+    final content = children.length == 1
+        ? children.first
+        : ListView(padding: EdgeInsets.zero, children: children);
     return Drawer(
       backgroundColor: node.style?.backgroundColor,
       width: node.style?.width,
       elevation: sizeProp(node, 'elevation')?.toDouble(),
-      child: children.length == 1
-          ? children.first
-          : ListView(padding: EdgeInsets.zero, children: children),
+      child: content,
     );
   }
 }
@@ -220,6 +223,8 @@ class ElpianFloatingActionButton {
     return Builder(
       builder: (context) {
         final scheme = Theme.of(context).colorScheme;
+        final fabTheme = Theme.of(context).floatingActionButtonTheme;
+        // Default matches app soft-mist FAB theme. `filled` stays saturated.
         final (Color bg, Color fg) = switch (node.props['variant']) {
           'secondary' => (
             scheme.secondaryContainer,
@@ -228,10 +233,14 @@ class ElpianFloatingActionButton {
           'tertiary' => (scheme.tertiaryContainer, scheme.onTertiaryContainer),
           'surface' => (scheme.surfaceContainerHigh, scheme.primary),
           'filled' => (scheme.primary, scheme.onPrimary),
-          _ => (scheme.primaryContainer, scheme.onPrimaryContainer),
+          _ => (
+            fabTheme.backgroundColor ?? AppFab.mistOf(scheme),
+            fabTheme.foregroundColor ?? AppFab.inkOf(scheme),
+          ),
         };
         final background = node.style?.backgroundColor ?? bg;
         final foreground = node.style?.color ?? fg;
+        final mistShape = fabTheme.shape ?? AppFab.shapeOf(scheme);
         final iconSize = switch (size) {
           'large' => 36.0,
           'small' => 20.0,
@@ -255,15 +264,13 @@ class ElpianFloatingActionButton {
               backgroundColor: background,
               foregroundColor: foreground,
               tooltip: tooltip,
-              elevation: elevation,
+              elevation: elevation ?? 0,
               heroTag: heroTag,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
+              shape: mistShape,
               icon: icon,
               label: Text(
                 label,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
           );
@@ -274,8 +281,9 @@ class ElpianFloatingActionButton {
             backgroundColor: background,
             foregroundColor: foreground,
             tooltip: tooltip,
-            elevation: elevation,
+            elevation: elevation ?? 0,
             heroTag: heroTag,
+            shape: mistShape,
             child: icon,
           ),
           'small' => FloatingActionButton.small(
@@ -283,8 +291,9 @@ class ElpianFloatingActionButton {
             backgroundColor: background,
             foregroundColor: foreground,
             tooltip: tooltip,
-            elevation: elevation,
+            elevation: elevation ?? 0,
             heroTag: heroTag,
+            shape: mistShape,
             child: icon,
           ),
           _ => FloatingActionButton(
@@ -292,8 +301,9 @@ class ElpianFloatingActionButton {
             backgroundColor: background,
             foregroundColor: foreground,
             tooltip: tooltip,
-            elevation: elevation,
+            elevation: elevation ?? 0,
             heroTag: heroTag,
+            shape: mistShape,
             child: icon,
           ),
         };

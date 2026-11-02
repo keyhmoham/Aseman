@@ -14,6 +14,7 @@ import 'package:aseman/src/features/agents/presentation/agents_screen.dart';
 import 'package:aseman/src/features/home/presentation/space_settings_panel.dart';
 import 'package:aseman/src/features/home/presentation/widgets/routines_panel.dart';
 import 'package:aseman/src/features/home/presentation/widgets/space_facility_tabs.dart';
+import 'package:aseman/src/features/market/presentation/bots_store_screen.dart';
 import 'package:aseman/src/features/market/presentation/market_screen.dart';
 import 'package:aseman/src/features/messenger/presentation/chat_page.dart';
 import 'package:aseman/src/features/messenger/presentation/messenger_panel.dart';
@@ -28,6 +29,17 @@ Finder profileAvatar() => find.descendant(
   of: find.byType(WorkspaceHeader),
   matching: find.byType(CircleAvatar),
 );
+
+Future<void> openProfile(WidgetTester tester, {required bool phone}) async {
+  if (phone) {
+    await tester.tap(
+      find.descendant(of: find.byType(HomeTabBar), matching: find.text('You')),
+    );
+  } else {
+    await tester.tap(profileAvatar());
+  }
+  await tester.pumpAndSettle();
+}
 
 /// Renders every main screen at phone and desktop sizes and fails on any
 /// layout error. Writes screenshots when UI_SHOTS names a directory.
@@ -119,12 +131,21 @@ void main() {
   final screens = <String, Widget Function(AppDependencies)>{
     'settings': (d) => SettingsScreen(dependencies: d),
     'messenger': (d) => MessengerPanel(dependencies: d),
-    'chat_direct': (d) =>
-        ChatPage(dependencies: d, chat: FakeAsemanService().chats.first),
-    'chat_agent': (d) =>
-        ChatPage(dependencies: d, chat: FakeAsemanService().chats[1]),
+    'chat_direct': (d) => ChatPage(
+          dependencies: d,
+          chat: FakeAsemanService()
+              .chats
+              .firstWhere((c) => c.direct && !c.saved && !(c.peer?.isAgent ?? false)),
+        ),
+    'chat_agent': (d) => ChatPage(
+          dependencies: d,
+          chat: FakeAsemanService()
+              .chats
+              .firstWhere((c) => c.peer?.isAgent ?? false),
+        ),
     'market': (d) => MarketScreen(dependencies: d),
     'my_bots': (d) => AgentsScreen(dependencies: d),
+    'bots_store': (d) => BotsStoreScreen(dependencies: d),
     for (final area in AccountArea.values)
       'account_${area.name}': (d) => AccountPanel(dependencies: d, area: area),
     // The space's facility tabs, at the left panel's width.
@@ -157,7 +178,7 @@ void main() {
         space: const Workspace(
           id: FakeAsemanService.atlasId,
           ownerId: 'me',
-          name: 'Atlas Capital',
+          name: 'Atlas Collective',
         ),
       ),
     ),
@@ -194,7 +215,7 @@ void main() {
       msg(
         'm1',
         '00000000000000010000000000000042',
-        'Morning team. BTC broke above the weekly range overnight.',
+        'Morning team. The onboarding flow is ready for review.',
         0,
       ),
       msg(
@@ -206,14 +227,14 @@ void main() {
       msg(
         'm3',
         'bot-alpha',
-        'Plan: fetch order book, compute ATR stop, size.',
+        'Plan: gather feedback, draft fixes, share with the room.',
         3,
         kind: 'log',
       ),
       msg(
         'm4',
         'bot-alpha',
-        'Entry 68,200 · stop 66,900 · size 0.31 BTC (2% of equity).',
+        'Assigned AssistBot to summarize open threads before standup.',
         4,
       ),
       msg('m5', '00000000000000010000000000000001', 'Perfect, thanks!', 5),
@@ -263,72 +284,108 @@ void main() {
         expect(errors, isEmpty, reason: name);
       }
 
-      // Opens Atlas Capital from the feed desk's toolbox.
+      // Opens Atlas Collective from the home chats list.
       Future<void> openAtlas() async {
-        if (size.key == 'phone') {
-          await tester.tap(
-            find.descendant(
-              of: find.byType(HomeTabBar),
-              matching: find.text('Desk'),
-            ),
-          );
-          await tester.pumpAndSettle();
-        }
-        await tester.tap(find.byTooltip('Toolbox'));
+        await tester.tap(find.text('Atlas Collective').first);
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('Open Atlas Capital'));
+        await tester.tap(find.text('general').first);
+        await tester.pumpAndSettle();
       }
 
+      final phone = size.key == 'phone';
       await app('feed');
-      await app('profile_menu', () => tester.tap(profileAvatar()));
+      await app('profile_menu', () => openProfile(tester, phone: phone));
+      await app('widgets_library', () async {
+        await tester.tap(find.byTooltip('Widgets & windows'));
+        await tester.pumpAndSettle();
+      });
       await app('workspace', openAtlas);
       await app('room', () async {
         await openAtlas();
         await tester.pumpAndSettle();
-        if (size.key == 'phone') {
+        if (phone) {
           await tester.tap(find.byTooltip('Rooms and workspace').first);
           await tester.pumpAndSettle();
         }
         await tester.tap(find.text('general').first);
-        if (size.key == 'phone') {
+        if (phone) {
           await tester.pumpAndSettle();
           await tester.tap(find.text('Chat').last);
         }
       }, roomService());
-      for (final item in ['Wallet', 'Invitations', 'Usage', 'Account']) {
-        await app('menu_${item.toLowerCase()}', () async {
-          await tester.tap(profileAvatar());
-          await tester.pumpAndSettle();
-          await tester.tap(find.text(item).last);
-        });
-      }
+      await app('menu_wallet', () async {
+        await openProfile(tester, phone: phone);
+        await tester.tap(find.text('Wallet').last);
+      });
+      await app('menu_invitations', () async {
+        await tester.tap(find.byTooltip('Notifications'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Invites').last);
+      });
       await app('messenger', () async {
         await openAtlas();
         await tester.pumpAndSettle();
-        await tester.tap(profileAvatar());
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Messages').last);
+        if (phone) {
+          // Profile/Messages are Home-only on phones; open messenger via feed.
+          await tester.tap(find.widgetWithText(FilledButton, 'Home'));
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.descendant(
+              of: find.byType(HomeTabBar),
+              matching: find.text('Chats'),
+            ),
+          );
+        } else {
+          await tester.tap(profileAvatar());
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Messages').last);
+        }
       }, roomService());
       await app('messenger_spaces', () async {
         await openAtlas();
         await tester.pumpAndSettle();
-        await tester.tap(profileAvatar());
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Messages').last);
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Spaces').last);
+        if (phone) {
+          await tester.tap(find.widgetWithText(FilledButton, 'Home'));
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.descendant(
+              of: find.byType(HomeTabBar),
+              matching: find.text('Chats'),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Spaces').last);
+        } else {
+          await tester.tap(profileAvatar());
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Messages').last);
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Spaces').last);
+        }
       }, roomService());
       await app('messenger_chat', () async {
         await openAtlas();
         await tester.pumpAndSettle();
-        await tester.tap(profileAvatar());
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Messages').last);
-        await tester.pumpAndSettle();
+        if (phone) {
+          await tester.tap(find.widgetWithText(FilledButton, 'Home'));
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.descendant(
+              of: find.byType(HomeTabBar),
+              matching: find.text('Chats'),
+            ),
+          );
+          await tester.pumpAndSettle();
+        } else {
+          await tester.tap(profileAvatar());
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Messages').last);
+          await tester.pumpAndSettle();
+        }
         await tester.tap(
           find.descendant(
             of: find.byType(MessengerPanel),
-            matching: find.text('Atlas Capital'),
+            matching: find.text('Atlas Collective'),
           ),
         );
         await tester.pumpAndSettle();
@@ -350,7 +407,7 @@ void main() {
       });
       await app('feed_explore', () async {
         await tester.tap(
-          find.text('Search Aseman — signals, traders, agents…'),
+          find.text('Search Aseman…'),
         );
         await tester.pumpAndSettle();
         await tester.enterText(find.byType(TextField).last, 'a');

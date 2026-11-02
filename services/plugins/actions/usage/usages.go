@@ -46,7 +46,7 @@ func NewService(k api.Kernel, r *repo.Repo, log *logger.Logger) *Service {
 
 // Record appends one usage event to the ledger.
 func (s *Service) Record(ctx context.Context, u *usage.Usage) error {
-	if u.SpaceID.IsZero() {
+	if u.SpaceID.IsZero() && u.Kind != usage.KindChat {
 		return errs.InvalidArgument("usage space required")
 	}
 	if u.TokensIn <= 0 && u.TokensOut <= 0 && u.Images <= 0 && u.DecisionIn <= 0 && u.DecisionOut <= 0 {

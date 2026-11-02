@@ -80,7 +80,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('ASEMAN'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Capital').last);
+    await tester.tap(find.text('Atlas Collective').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('general'));
     await tester.pumpAndSettle();
@@ -97,7 +97,7 @@ void main() {
             turnId: 't1',
             roomId: 'a1',
             botId: 'bot',
-            botName: 'SignalBot',
+            botName: 'AssistBot',
             prompt: 'Summarise the market',
             durationMs: 4000),
         WorkEntry(
@@ -112,7 +112,7 @@ void main() {
     await open(tester, service);
     await tester.tap(find.byTooltip('Work'));
     await tester.pumpAndSettle();
-    expect(find.text('SignalBot'), findsOneWidget);
+    expect(find.text('AssistBot'), findsOneWidget);
     expect(find.textContaining('Summarise the market'), findsOneWidget);
     expect(find.text('OtherRoomBot'), findsNothing);
     await tester.pumpWidget(const SizedBox());
@@ -155,7 +155,7 @@ void main() {
       (tester) async {
     final service = _Service();
     service.roomMessages['${FakeAsemanService.atlasId}/a2'] = [
-      _message('macro', 'a2', 'Macro room content')
+      _message('ideas', 'a2', 'Ideas room content')
     ];
     await open(tester, service);
     final composer = find.byWidgetPredicate((widget) =>
@@ -168,7 +168,7 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
     expect(service.pendingCalls, 1,
         reason: 'Do not overlap polls for one room');
-    await tester.tap(find.text('Global Macro'));
+    await tester.tap(find.text('Ideas'));
     await tester.pumpAndSettle();
     expect(find.text('Macro room content'), findsOneWidget);
     expect(tester.widget<TextField>(composer).controller!.text, isEmpty);

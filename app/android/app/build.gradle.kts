@@ -47,3 +47,11 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Soft FCM path: present at compile time so MainActivity can reflect into
+    // FirebaseMessaging. Tokens only work after android/app/google-services.json
+    // is added and the Google Services Gradle plugin is applied.
+    implementation("com.google.firebase:firebase-messaging:24.1.1")
+}
+

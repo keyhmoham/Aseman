@@ -4,7 +4,9 @@ import '../../../app_dependencies.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
 import '../../../shared/widgets/glass_surface.dart';
+import '../../../shared/widgets/sky_ui.dart';
 import '../../tools/connect/mcp_sign_in.dart';
+import 'admin_ai_email_pages.dart';
 import 'admin_forms.dart';
 import 'admin_page_content.dart';
 import 'admin_trust_pages.dart';
@@ -285,6 +287,14 @@ class _AppScreenState extends State<AdminScreen> {
         actions: [_Call('llm', 'llm_image_set')],
       ),
       _Page(
+        'Voice',
+        'Speech and transcription for Talk',
+        Icons.record_voice_over_outlined,
+        Icons.record_voice_over_rounded,
+        calls: [_Call('llm', 'llm_voice_get')],
+        actions: [_Call('llm', 'llm_voice_set')],
+      ),
+      _Page(
         'Memory models',
         'Learning and semantic recall',
         Icons.psychology_outlined,
@@ -307,6 +317,20 @@ class _AppScreenState extends State<AdminScreen> {
         Icons.terminal_rounded,
         calls: [_Call('spaces', 'opencode_get')],
         actions: [_Call('spaces', 'opencode_set')],
+      ),
+      _Page(
+        'AI log',
+        'What people asked their Aseman',
+        Icons.history_edu_outlined,
+        Icons.history_edu_rounded,
+        custom: adminAILogPage,
+      ),
+      _Page(
+        'Email templates',
+        'Site emails and wording',
+        Icons.email_outlined,
+        Icons.email_rounded,
+        custom: adminEmailTemplatesPage,
       ),
     ]),
     _Section('Governance', [
@@ -682,6 +706,7 @@ class _AppScreenState extends State<AdminScreen> {
         'llm_decision_set',
         'llm_memory_set',
         'llm_image_set',
+        'llm_voice_set',
         'opencode_set',
         'agent_engine_set',
         'plugins_load',
@@ -896,7 +921,8 @@ class _AppScreenState extends State<AdminScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 20,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -.3,
                   ),
                 ),
                 Text(
@@ -943,7 +969,9 @@ class _AppScreenState extends State<AdminScreen> {
                     color: scheme.surface,
                     clipBehavior: Clip.antiAlias,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppShape.card + 4),
+                      borderRadius:
+                          BorderRadius.circular(AppShape.card + 4),
+                      side: BorderSide(color: AppSurfaces.cardBorder(scheme)),
                     ),
                     child: content,
                   ),
@@ -978,63 +1006,19 @@ class _Navigation extends StatelessWidget {
     final list = ListView(
       padding: const EdgeInsets.fromLTRB(12, 18, 12, 24),
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: ShapeDecoration(
-                  color: scheme.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: Icon(
-                  Icons.admin_panel_settings_rounded,
-                  color: scheme.onPrimary,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Aseman',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 18,
-                        height: 1.1,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Text(
-                      'Admin console',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+        const Padding(
+          padding: EdgeInsets.fromLTRB(12, 4, 12, 8),
+          child: SkySectionHeader(
+            icon: Icons.admin_panel_settings_rounded,
+            title: 'Aseman',
+            subtitle: 'Admin console',
+            dense: true,
           ),
         ),
         for (var s = 0; s < sections.length; s++) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
-            child: Text(
-              sections[s].label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: scheme.primary,
-              ),
-            ),
+            child: EyebrowLabel(sections[s].label, color: scheme.primary),
           ),
           for (var p = 0; p < sections[s].pages.length; p++)
             _NavTile(

@@ -113,10 +113,13 @@ class AttachmentBubble extends StatelessWidget {
           url: _url,
           headers: headers,
           mime: file.mime,
-          durationLabel: file.humanSize,
+          durationLabel: file.durationMs > 0
+              ? _fmtMs(file.durationMs)
+              : file.humanSize,
           mine: mine,
           voice: _voiceNote,
           seed: file.id.isEmpty ? _url : file.id,
+          waveform: file.waveform.isEmpty ? null : file.waveform,
           width: (maxWidth - 60).clamp(120.0, 260.0),
         );
         // A voice note is just its player; a track also names itself.
@@ -133,8 +136,14 @@ class AttachmentBubble extends StatelessWidget {
 
   /// A recording (voice_….webm, an ogg/opus note) rather than a track.
   bool get _voiceNote =>
+      file.voice ||
       file.name.toLowerCase().contains('voice') ||
       const ['ogg', 'opus', 'amr', 'webm'].contains(file.extension);
+
+  static String _fmtMs(int ms) {
+    final s = (ms / 1000).round();
+    return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+  }
 
   /// A saved web page or shortcut (.html, .url, .webloc).
   bool get _isLink =>

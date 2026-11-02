@@ -18,7 +18,7 @@ func wallets() database.Model {
 		Table: "wallets",
 		Fields: []database.Field{
 			f("id", database.KindString), f("owner_id", database.KindString),
-			f("balance", database.KindInt64), f("locked", database.KindInt64),
+			f("balance", database.KindInt64), f("locked", database.KindInt64), f("restricted", database.KindInt64),
 			f("updated_at", database.KindTime),
 		},
 	}

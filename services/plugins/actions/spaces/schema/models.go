@@ -8,7 +8,44 @@ import (
 func f(name string, k database.Kind) database.Field { return database.Field{Name: name, Kind: k} }
 
 func Models() []database.Model {
-	return append(shared.Models(), []database.Model{spaces(), rooms(), memberships(), files(), proxies(), invitations(), turns(), executionEvents(), executionArtifacts(), chatReports(), appKeys(), openCode(), agentEngine()}...)
+	return append(shared.Models(), []database.Model{spaces(), rooms(), memberships(), files(), proxies(), invitations(), turns(), executionEvents(), executionArtifacts(), chatReports(), appKeys(), openCode(), agentEngine(), messageReactions(), messageHidden(), keptRoomFiles()}...)
+}
+
+func messageReactions() database.Model {
+	return database.Model{
+		Name:  "message_reactions",
+		Table: "message_reactions",
+		Fields: []database.Field{
+			f("id", database.KindString), f("message_id", database.KindString),
+			f("user_id", database.KindString), f("emoji", database.KindString),
+			f("created_at", database.KindTime),
+		},
+	}
+}
+
+func messageHidden() database.Model {
+	return database.Model{
+		Name:  "message_hidden",
+		Table: "message_hidden",
+		Fields: []database.Field{
+			f("id", database.KindString), f("user_id", database.KindString),
+			f("message_id", database.KindString), f("created_at", database.KindTime),
+		},
+	}
+}
+
+func keptRoomFiles() database.Model {
+	return database.Model{
+		Name:  "kept_room_files",
+		Table: "kept_room_files",
+		Fields: []database.Field{
+			f("id", database.KindString), f("owner_id", database.KindString),
+			f("from_id", database.KindString), f("source_id", database.KindString),
+			f("message_id", database.KindString), f("name", database.KindString),
+			f("mime", database.KindString), f("size", database.KindInt64),
+			f("created_at", database.KindTime),
+		},
+	}
 }
 
 func spaces() database.Model {

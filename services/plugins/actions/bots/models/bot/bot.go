@@ -217,6 +217,78 @@ const BuiltinAsemanImage = "aseman.wasm"
 // IsBuiltinLead reports whether the bot is the built-in lead agent.
 func (b *Bot) IsBuiltinLead() bool { return b != nil && b.ImageRef == BuiltinAsemanImage }
 
+// BuiltinChatImage is the reserved image ref marking the built-in chat assistant: the
+// "@aseman" people mention in notes and personal chats (identified by this, not by name).
+const BuiltinChatImage = "aseman-chat"
+
+// IsChatAssistant reports whether the bot is the built-in chat assistant.
+func (b *Bot) IsChatAssistant() bool { return b != nil && b.ImageRef == BuiltinChatImage }
+
+// IsBuiltin reports whether the bot is a reserved platform agent (lead or chat assistant).
+func (b *Bot) IsBuiltin() bool { return b.IsBuiltinLead() || b.IsChatAssistant() }
+
+// ReasoningEfforts are the effort levels an agent can be set to; blank leaves it to the provider's default.
+var ReasoningEfforts = []string{"low", "medium", "high"}
+
+// NormalizeEffort lowercases an effort level and says whether it is one the node accepts (blank is: no setting).
+func NormalizeEffort(raw string) (string, bool) {
+	level := strings.ToLower(strings.TrimSpace(raw))
+	if level == "" {
+		return "", true
+	}
+	for _, known := range ReasoningEfforts {
+		if level == known {
+			return level, true
+		}
+	}
+	return "", false
+}
+
+// AgentEffort is the reasoning effort in an agent's yml spec ("" when none is set).
+func AgentEffort(specYML string) string {
+	var spec struct {
+		ReasoningEffort string `yaml:"reasoning_effort"`
+	}
+	if strings.TrimSpace(specYML) == "" || yaml.Unmarshal([]byte(specYML), &spec) != nil {
+		return ""
+	}
+	return spec.ReasoningEffort
+}
+
+// AgentVoiceEffort is the reasoning effort for live voice calls in an agent's yml spec ("" when none is set).
+func AgentVoiceEffort(specYML string) string {
+	var spec struct {
+		VoiceReasoningEffort string `yaml:"voice_reasoning_effort"`
+	}
+	if strings.TrimSpace(specYML) == "" || yaml.Unmarshal([]byte(specYML), &spec) != nil {
+		return ""
+	}
+	return spec.VoiceReasoningEffort
+}
+
+// AgentVoiceBackbone is the model a live voice chat uses instead of the agent's own ("" when none is set).
+func AgentVoiceBackbone(specYML string) (provider, model string) {
+	var spec struct {
+		Provider string `yaml:"voice_provider"`
+		Model    string `yaml:"voice_model"`
+	}
+	if strings.TrimSpace(specYML) == "" || yaml.Unmarshal([]byte(specYML), &spec) != nil {
+		return "", ""
+	}
+	return spec.Provider, spec.Model
+}
+
+// AgentInstructions is the instructions in an agent's yml spec ("" when none).
+func AgentInstructions(specYML string) string {
+	var spec struct {
+		Instructions string `yaml:"instructions"`
+	}
+	if strings.TrimSpace(specYML) == "" || yaml.Unmarshal([]byte(specYML), &spec) != nil {
+		return ""
+	}
+	return strings.TrimSpace(spec.Instructions)
+}
+
 // AgentBackbone extracts the LLM provider and model from an agent's yml spec.
 func AgentBackbone(specYML string) (provider, model string) {
 	var spec struct {

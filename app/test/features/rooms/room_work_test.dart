@@ -148,7 +148,7 @@ void main() {
             agent: 'Ada',
             roomId: 'room-1',
             question: 'Which audience?',
-            options: ['Builders', 'Traders']),
+            options: ['Builders', 'People']),
         // Another room's question stays there.
         AgentQuestion(
             id: 'q2',
@@ -164,9 +164,9 @@ void main() {
     expect(find.text('Which audience?'), findsNothing);
     expect(find.text('Somewhere'), findsNothing);
     expect(find.widgetWithText(TextField, 'Answer Ada…'), findsOneWidget);
-    await tester.tap(find.text('Traders'));
+    await tester.tap(find.text('People'));
     await tester.pump(const Duration(milliseconds: 100));
-    expect(node.answers, ['q1:Traders']);
+    expect(node.answers, ['q1:People']);
     expect(find.text('Answer Ada'), findsNothing);
     await _close(tester);
   });

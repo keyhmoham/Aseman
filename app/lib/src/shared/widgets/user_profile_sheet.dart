@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 
 import '../../app_dependencies.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_shape.dart';
+import '../../core/theme/app_spacing.dart';
 import '../../data/models/bot.dart';
 import '../../data/models/post.dart';
 import '../../features/search_feed/presentation/feed_post_card.dart';
@@ -13,8 +15,10 @@ import '../../features/search_feed/presentation/search_feed_view_model.dart'
 import 'avatar.dart';
 import 'avatar_editor.dart';
 import 'mini_tag.dart';
-import 'skeleton.dart';
 import 'overlay_panels.dart';
+import 'panel_empty.dart';
+import 'skeleton.dart';
+import 'sky_ui.dart';
 
 /// User profile sheet shown from the profile menu. Server-backed: the header
 /// shows the signed-in account, the stats reflect the live wallet/bots/posts,
@@ -143,99 +147,93 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
     final handle = session?.handle ?? 'guest';
     final initials = handle.isEmpty ? '?' : handle[0].toUpperCase();
     return ListView(
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 28),
-        children: [
-          _ProfileHeader(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg - 4, AppSpacing.md, AppSpacing.lg - 4, AppSpacing.xl),
+      children: [
+        _ProfileHeader(
+            initials: initials,
+            handle: handle,
+            avatar: AvatarEditor(
+              service: widget.dependencies.service,
+              avatar: widget.dependencies.sessionController.avatar,
               initials: initials,
-              handle: handle,
-              avatar: AvatarEditor(
-                service: widget.dependencies.service,
-                avatar: widget.dependencies.sessionController.avatar,
-                initials: initials,
-                radius: 34,
-                subject: 'profile picture',
-                enabled: session?.isLoggedIn ?? false,
-                onChanged: (id) async {
-                  await widget.dependencies.sessionController.setAvatar(id);
-                  if (mounted) setState(() {});
-                },
-              ),
-              onShare: _share,
-              onEdit: _edit),
-          const SizedBox(height: 12),
-          _ProfileStats(
-            balance: _balance,
-            bots: _bots,
-            posts: _posts.length,
-            workspaces: _workspaces,
-          ),
-          const SizedBox(height: 14),
-          Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(22)),
-              child: Column(children: [
-                Row(children: [
-                  AppAvatar(initials,
-                      color: AppColors.primary,
-                      radius: 17,
-                      image: widget.dependencies.service.avatarImage(
-                          widget.dependencies.sessionController.avatar)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                      child: TextField(
-                          controller: composer,
-                          minLines: 1,
-                          maxLines: 4,
-                          decoration: const InputDecoration.collapsed(
-                              hintText: 'Share a thesis, chart or signal…'))),
-                ]),
-                const SizedBox(height: 10),
-                Row(children: [
-                  const _ProfileComposerAction(
-                      icon: Icons.show_chart_rounded, label: 'Chart'),
-                  const _ProfileComposerAction(
-                      icon: Icons.image_outlined, label: 'Media'),
-                  const _ProfileComposerAction(
-                      icon: Icons.tag_rounded, label: 'Ticker'),
-                  const Spacer(),
-                  FilledButton.icon(
-                      onPressed: _publishing ? null : _publish,
-                      icon: const Icon(Icons.arrow_upward_rounded, size: 17),
-                      label: Text(_publishing ? 'Publishing…' : 'Publish'))
-                ])
-              ])),
-          const SizedBox(height: 20),
-          Row(children: [
-            const Text('Signal stream',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-            const SizedBox(width: 8),
-            Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(9)),
-                child: Text('${_posts.length}',
-                    style: const TextStyle(
-                        fontSize: 9, fontWeight: FontWeight.w900))),
-            const Spacer(),
+              radius: 34,
+              subject: 'profile picture',
+              enabled: session?.isLoggedIn ?? false,
+              identity: session?.accountId ?? '',
+              onChanged: (id) async {
+                await widget.dependencies.sessionController.setAvatar(id);
+                if (mounted) setState(() {});
+              },
+            ),
+            onShare: _share,
+            onEdit: _edit),
+        const SizedBox(height: AppSpacing.sm),
+        _ProfileStats(
+          balance: _balance,
+          bots: _bots,
+          posts: _posts.length,
+          workspaces: _workspaces,
+        ),
+        const SizedBox(height: AppSpacing.sm + 2),
+        SoftCard(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: Column(children: [
+              Row(children: [
+                AppAvatar(initials,
+                    color: AppColors.primary,
+                    radius: 17,
+                    image: widget.dependencies.service.avatarImage(
+                        widget.dependencies.sessionController.avatar)),
+                const SizedBox(width: AppSpacing.sm - 2),
+                Expanded(
+                    child: TextField(
+                        controller: composer,
+                        minLines: 1,
+                        maxLines: 4,
+                        decoration: const InputDecoration.collapsed(
+                            hintText: 'Share a thesis, chart or signal…'))),
+              ]),
+              const SizedBox(height: AppSpacing.sm - 2),
+              Row(children: [
+                const _ProfileComposerAction(
+                    icon: Icons.show_chart_rounded, label: 'Chart'),
+                const _ProfileComposerAction(
+                    icon: Icons.image_outlined, label: 'Media'),
+                const _ProfileComposerAction(
+                    icon: Icons.tag_rounded, label: 'Ticker'),
+                const Spacer(),
+                FilledButton.icon(
+                    onPressed: _publishing ? null : _publish,
+                    icon: const Icon(Icons.arrow_upward_rounded, size: 17),
+                    label: Text(_publishing ? 'Publishing…' : 'Publish'))
+              ])
+            ])),
+        const SizedBox(height: AppSpacing.lg - 2),
+        SkySectionHeader(
+          dense: true,
+          title: 'Signal stream',
+          subtitle: 'Your published posts',
+          icon: Icons.sensors_rounded,
+          actions: [
+            SoftMetaChip(label: '${_posts.length}'),
             IconButton(
                 tooltip: 'Filter posts',
                 onPressed: () {},
-                icon: const Icon(Icons.tune_rounded, size: 19))
-          ]),
-          const SizedBox(height: 6),
-          if (_loading)
-            const SkeletonList(itemCount: 2, item: SkeletonPost())
-          else if (_posts.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Center(
-                child: Text('No posts yet — publish your first signal above.',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                icon: const Icon(Icons.tune_rounded, size: 19)),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        if (_loading)
+          const SkeletonList(itemCount: 2, item: SkeletonPost())
+        else if (_posts.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: PanelEmpty(
+              compact: true,
+              icon: Icons.edit_note_rounded,
+                title: 'No posts yet',
+                message: 'Publish your first signal above.',
               ),
             )
           else
@@ -250,7 +248,8 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
                       _posts = _posts.where((old) => old.id != p.id).toList()),
                   onShared: _load,
                 )),
-        ]);
+      ],
+    );
   }
 
   void _replace(String id, SocialPost Function(SocialPost) change) =>
@@ -305,90 +304,92 @@ class _ProfileHeader extends StatelessWidget {
   final VoidCallback? onEdit;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
-        final compact = box.maxWidth < 500;
-        return Container(
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(26)),
-            child: Column(children: [
-              Container(
-                  height: compact ? 76 : 92,
-                  decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                        Theme.of(context).colorScheme.primary,
-                        Theme.of(context).colorScheme.tertiary,
-                        const Color(0xff16b8a6)
-                      ])),
-                  child: Stack(children: [
-                    Positioned(
-                        right: -24,
-                        top: -34,
-                        child: Icon(Icons.blur_circular_rounded,
-                            size: 144,
-                            color: Colors.white.withValues(alpha: .17))),
-                    const Positioned(
-                        left: 18,
-                        top: 14,
-                        child: MiniTag('MEMBER', Colors.white))
-                  ])),
-              Transform.translate(
-                  offset: const Offset(0, -27),
-                  child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(children: [
-                        Row(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: BoxDecoration(
-                                      color:
-                                          Theme.of(context).colorScheme.surface,
-                                      shape: BoxShape.circle),
-                                  child: avatar ??
-                                      CircleAvatar(
-                                          radius: 34,
-                                          child: Text(initials,
-                                              style: const TextStyle(
-                                                  fontSize: 20,
-                                                  fontWeight:
-                                                      FontWeight.w900)))),
-                              const Spacer(),
-                              IconButton.filledTonal(
-                                  tooltip: 'Share profile',
-                                  onPressed: onShare,
-                                  icon: const Icon(Icons.ios_share_rounded,
-                                      size: 18)),
-                              const SizedBox(width: 6),
-                              FilledButton.tonalIcon(
-                                  onPressed: onEdit,
-                                  icon:
-                                      const Icon(Icons.edit_outlined, size: 17),
-                                  label: const Text('Edit')),
-                            ]),
-                        const SizedBox(height: 9),
-                        Align(
-                            alignment: Alignment.centerLeft,
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(handle,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w900)),
-                                  Text('@$handle',
-                                      style: const TextStyle(fontSize: 11))
-                                ])),
-                        const SizedBox(height: 10),
-                      ])))
-            ]));
-      });
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return LayoutBuilder(builder: (context, box) {
+      final compact = box.maxWidth < 500;
+      return SoftCard(
+          radius: AppShape.card - 2,
+          padding: EdgeInsets.zero,
+          child: Column(children: [
+            Container(
+                height: compact ? 76 : 92,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                      scheme.primary,
+                      scheme.tertiary,
+                      AppColors.cyan,
+                    ])),
+                child: Stack(children: [
+                  Positioned(
+                      right: -24,
+                      top: -34,
+                      child: Icon(Icons.blur_circular_rounded,
+                          size: 144,
+                          color: Colors.white.withValues(alpha: .17))),
+                  const Positioned(
+                      left: 18,
+                      top: 14,
+                      child: MiniTag('MEMBER', Colors.white))
+                ])),
+            Transform.translate(
+                offset: const Offset(0, -27),
+                child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md),
+                    child: Column(children: [
+                      Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            avatar ??
+                                HaloRing(
+                                  pad: 3,
+                                  child: CircleAvatar(
+                                      radius: 34,
+                                      child: Text(initials,
+                                          style: const TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w900))),
+                                ),
+                            const Spacer(),
+                            IconButton.filledTonal(
+                                tooltip: 'Share profile',
+                                onPressed: onShare,
+                                icon: const Icon(Icons.ios_share_rounded,
+                                    size: 18)),
+                            const SizedBox(width: AppSpacing.xs - 2),
+                            FilledButton.tonalIcon(
+                                onPressed: onEdit,
+                                icon:
+                                    const Icon(Icons.edit_outlined, size: 17),
+                                label: const Text('Edit')),
+                          ]),
+                      const SizedBox(height: AppSpacing.sm - 3),
+                      Align(
+                          alignment: Alignment.centerLeft,
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(handle,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w900,
+                                        color: scheme.onSurface)),
+                                Text('@$handle',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: scheme.onSurfaceVariant))
+                              ])),
+                      const SizedBox(height: AppSpacing.sm - 2),
+                    ])))
+          ]));
+    });
+  }
 }
 
 /// Single profile stat metric used across profile surfaces.
@@ -397,23 +398,26 @@ class ProfileStat extends StatelessWidget {
   final String value, label;
   final VoidCallback? onTap;
   @override
-  Widget build(BuildContext context) => Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(15),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-          onTap: onTap,
-          child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-              child: Column(children: [
-                Text(value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 2),
-                Text(label, style: const TextStyle(fontSize: 9))
-              ]))));
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SoftCard(
+      onTap: onTap,
+      radius: 15,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+      child: Column(children: [
+        Text(value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: scheme.onSurface)),
+        const SizedBox(height: 2),
+        Text(label,
+            style: TextStyle(fontSize: 9, color: scheme.onSurfaceVariant))
+      ]),
+    );
+  }
 }
 
 class _ProfileStats extends StatelessWidget {
@@ -486,7 +490,7 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
             autofocus: true,
             decoration: const InputDecoration(labelText: 'Display name'),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: bioController,
             maxLines: 3,

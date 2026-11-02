@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/halo_ring_cache.dart';
+import 'sky_ui.dart';
+
 /// Turns an avatar reference (a stored picture's id, its content path or a
 /// web address) into the picture to show. The app points [resolve] at its
 /// service once it has one, so any avatar can show its picture.
@@ -19,7 +22,9 @@ class AppAvatar extends StatelessWidget {
       required this.color,
       this.radius = 19,
       this.image,
-      this.avatar});
+      this.avatar,
+      this.identity = '',
+      this.agent = false});
   final String text;
   final Color color;
   final double radius;
@@ -31,10 +36,22 @@ class AppAvatar extends StatelessWidget {
   /// An avatar reference whose picture is shown when [image] is not given.
   final String? avatar;
 
+  /// Person account id or agent id — binds the ring gradient in local cache.
+  final String identity;
+
+  /// When true, [identity] is treated as an agent id.
+  final bool agent;
+
   @override
   Widget build(BuildContext context) {
     final picture = image ?? Avatars.of(avatar);
-    return CircleAvatar(
+    final ringId = agent
+        ? HaloRingCache.agent(identity)
+        : HaloRingCache.person(identity);
+    return HaloRing(
+      identity: ringId,
+      accent: color,
+      child: CircleAvatar(
         radius: radius,
         backgroundColor: color.withValues(alpha: .18),
         foregroundImage: picture,
@@ -42,7 +59,8 @@ class AppAvatar extends StatelessWidget {
         child: Text(text,
             style: TextStyle(
                 color: color, fontWeight: FontWeight.w800, fontSize: 12)),
-      );
+      ),
+    );
   }
 }
 

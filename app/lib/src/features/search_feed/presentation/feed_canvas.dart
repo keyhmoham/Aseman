@@ -11,6 +11,7 @@ import '../../../data/models/space.dart';
 import '../../../elpian/core/media.dart';
 import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import '../../../shared/widgets/panel_empty.dart';
 import '../../desk/data/desk_api.dart';
 import '../../desk/domain/desk_models.dart';
 import '../../desk/presentation/card_window.dart';
@@ -1041,40 +1042,28 @@ class _EmptyDesk extends StatelessWidget {
   final VoidCallback onOpen;
 
   @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.widgets_outlined, size: 42, color: scheme.primary),
-            const SizedBox(height: 12),
-            const Text(
-              'Your desk',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 6),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 320),
-              child: Text(
-                'Open the toolbox and place a pinned window from any space. Drag it anywhere on this desk.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const PanelEmpty(
+                icon: Icons.widgets_outlined,
+                title: 'Your desk',
+                message:
+                    'Open the toolbox and place a pinned window from any space. Drag it anywhere on this desk.',
               ),
-            ),
-            const SizedBox(height: 14),
-            FilledButton.tonalIcon(
-              onPressed: onOpen,
-              icon: const Icon(Icons.handyman_rounded, size: 18),
-              label: const Text('Toolbox'),
-            ),
-          ],
+              const SizedBox(height: 14),
+              FilledButton.tonalIcon(
+                onPressed: onOpen,
+                icon: const Icon(Icons.handyman_rounded, size: 18),
+                label: const Text('Toolbox'),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
+      );
 }
 
 class _Taskbar extends StatelessWidget {

@@ -38,8 +38,8 @@ Some **bold** and *italic* with a [link](https://example.com) and `code`.
 :::chart {"type":"bar","labels":["A"],"values":[3]}
 :::video https://cdn/clip.mp4
 :::audio https://cdn/note.mp3
-:::card agent SignalBot
-:::card space Atlas Capital
+:::card agent AssistBot
+:::card space Atlas Collective
 ''';
     final blocks = parseRichMarkdown(md);
     expect(blocks.any((b) => b.kind == BlockKind.image), isTrue);
@@ -57,7 +57,7 @@ Some **bold** and *italic* with a [link](https://example.com) and `code`.
     final cards = blocks.where((b) => b.kind == BlockKind.card).toList();
     expect(cards.length, 2);
     expect(cards[0].card?.kind, CardKind.agent);
-    expect(cards[0].card?.target, 'SignalBot');
+    expect(cards[0].card?.target, 'AssistBot');
     expect(cards[1].card?.kind, CardKind.space);
   });
 
@@ -87,7 +87,7 @@ Some **bold** and *italic* with a [link](https://example.com) and `code`.
   });
 
   test('parses code fence and mentions', () {
-    final md = '```dart\nvoid main() {}\n```\nHello @trader!';
+    final md = '```dart\nvoid main() {}\n```\nHello @person!';
     final blocks = parseRichMarkdown(md);
     expect(blocks.any((b) => b.kind == BlockKind.code), isTrue);
     final code = blocks.firstWhere((b) => b.kind == BlockKind.code);
@@ -95,7 +95,7 @@ Some **bold** and *italic* with a [link](https://example.com) and `code`.
     final para = blocks.firstWhere((b) => b.kind == BlockKind.paragraph);
     expect(
         para.inline.first
-            .any((t) => t.kind == InlineKind.mention && t.text == '@trader'),
+            .any((t) => t.kind == InlineKind.mention && t.text == '@person'),
         isTrue);
   });
 

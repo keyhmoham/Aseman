@@ -6,19 +6,22 @@ package users
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 	"io"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/aseman/aseman/internal/plugins/api"
-	"github.com/aseman/aseman/internal/plugins/bridge"
 	"github.com/aseman/aseman/internal/plugins/entity"
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/pkg/jsonpatch"
 	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/pkg/openviking"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 	"github.com/aseman/aseman/plugins/actions/message/models/message"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/filedata"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
@@ -34,6 +37,40 @@ type Service struct {
 	R *repo.Repo
 	M *metasvc.Service
 	L *logger.Logger
+
+	// FileAccess replaces the file server's rule (spaces.CanReadFile) in tests: whether the caller may read the file.
+	FileAccess func(ctx context.Context, file, caller identity.ID) error
+
+	// StorageLimit replaces the admin's Storage setting in tests: the most one person's files may use, in bytes (0 = none).
+	StorageLimit func(ctx context.Context) int64
+
+	// assistantFn and answerFn replace the bots namespace in tests: who the chat assistant is, and how it answers.
+	// workFn and turnFn replace the spaces plugin in tests: starting work in the person's workspace, and how it stands.
+	workFn func(ctx context.Context, me identity.ID, request string) (workStart, error)
+	turnFn func(ctx context.Context, me identity.ID, turn string) (turnResult, error)
+
+	// voiceActiveFn, speakFn, transcribeFn and voiceAnswerFn replace llm/bots/brain in tests.
+	voiceActiveFn func(ctx context.Context) map[string]bool
+	speakFn       func(ctx context.Context, me identity.ID, text string) (*vmm.Speech, error)
+	transcribeFn  func(ctx context.Context, me identity.ID, audio []byte, mime string) (*vmm.Transcription, error)
+	voiceAnswerFn func(ctx context.Context, me identity.ID, text string) (string, error)
+
+	// webFn replaces fetching a web page (read_webpage) in tests.
+	webFn func(ctx context.Context, address string) (string, error)
+
+	assistantFn func(ctx context.Context) (*bot.Bot, error)
+	answerFn    func(ctx context.Context, person identity.ID, rec *bot.Bot, turns []map[string]string, onText func(string)) (string, error)
+
+	// The person's Aseman (brain.go) in tests: its memory, the decision model, its answers and the rooms it reads.
+	memoryFn      func() *openviking.Client
+	decideFn      func(ctx context.Context, body string) brainPlan
+	brainAnswerFn func(ctx context.Context, person identity.ID, rec *bot.Bot, brief string, turns []map[string]string, onText func(string)) (string, error)
+	roomsFn       func(ctx context.Context, person identity.ID) ([]brainRoom, error)
+	linesFn       func(ctx context.Context, person identity.ID, space string) []brainLine
+	// What it does for the person (brain_tools.go) in tests: its answers with tools, and the actions it runs as them.
+	actFn      func(ctx context.Context, person identity.ID, brief string, turns []map[string]string, run func(name, args string) string) (string, error)
+	dispatchFn func(ctx context.Context, person identity.ID, namespace, action string, body any) (json.RawMessage, error)
+	fundsFn    func(ctx context.Context, person identity.ID) error
 }
 
 // Actions returns the users namespace actions.
@@ -54,6 +91,14 @@ func BuildActions(s *Service) []api.Action {
 		&metadataReplaceAction{s: s},
 		&metadataPublicAction{s: s},
 		&dmSendAction{s: s},
+		&dmAgentAskAction{s: s},
+		&dmAssistantAction{s: s},
+		brainConfirmAction(s),
+		adminAILogAction(s),
+		voiceConfigAction(s),
+		voiceSpeakAction(s),
+		voiceTurnAction(s),
+		brainRetryAction(s),
 		&dmListAction{s: s},
 		&dmThreadsAction{s: s},
 		&fileUploadAction{s: s},
@@ -61,7 +106,7 @@ func BuildActions(s *Service) []api.Action {
 		&fileDeleteAction{s: s},
 		&fileIngestAction{s: s},
 		&hostMarkupAction{s: s},
-	}, append(accountActions(s), append(pushActions(s), notificationActions(s)...)...)...)
+	}, append(append(append(append(append(append(append(append(append(append(accountActions(s), pushActions(s)...), notificationActions(s)...), directActions(s)...), directLiveActions(s)...), reportActions(s)...), callActions(s)...), dmFileActions(s)...), notifyActions(s)...), privacyActions(s)...), brainActions(s)...)...)
 }
 
 // GetAccount resolves an account by universal id or handle.
@@ -175,7 +220,7 @@ func (a *accountGetAction) Handle(ctx context.Context, req *api.ActionRequest) (
 	})
 }
 
-// searchAction implements users.search: find people by handle/email.
+// searchAction implements users.search: find accounts by handle/email.
 type searchAction struct{ s *Service }
 
 func (a *searchAction) Meta() api.ActionMeta {
@@ -320,13 +365,17 @@ func (a *dmSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 		return nil, err
 	}
 	var in struct {
-		To   string `json:"to"`
-		Body string `json:"body"`
+		To          string   `json:"to"`
+		Body        string   `json:"body"`
+		ReplyTo     string   `json:"reply_to,omitempty"`
+		Attachments []string `json:"attachments,omitempty"`
+		// Voice: the note was spoken in a live voice chat, so its answer is wanted fast and short (brain.go).
+		Voice bool `json:"voice,omitempty"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
 	}
-	if in.Body == "" {
+	if in.Body == "" && len(in.Attachments) == 0 {
 		return nil, errs.InvalidArgument("body required")
 	}
 	if resp, ok, err := helper.ProxyIfRemote(ctx, a.s.K, in.To, "users", "dm_send", req); ok {
@@ -336,14 +385,47 @@ func (a *dmSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	if err != nil {
 		return nil, err
 	}
-	// A direct chat either side blocked takes no messages (the spaces
-	// namespace keeps who blocked whom, with the conversation's room).
-	var blocked bool
-	if err := bridge.Invoke(ctx, a.s.K, "spaces", "DirectBlocked", []any{ctx, req.Caller.ID, to}, &blocked); err == nil && blocked {
-		return nil, errs.Permission("You can't message this person.")
+	// Built-in Aseman assistant / lead is the personal Aseman chat (self), not
+	// a separate person↔bot Direct or AskDirect turn.
+	if rec, ok := a.s.botOf(ctx, to); ok && rec.IsBuiltin() {
+		to = req.Caller.ID
+	}
+	if blocked, byMe, err := a.s.directBlocked(ctx, req.Caller.ID, to); err != nil {
+		return nil, err
+	} else if blocked && byMe {
+		return nil, errs.New(errs.CodePermission, "You blocked this person. Unblock them to send a message.")
+	} else if blocked {
+		return nil, errs.New(errs.CodePermission, "You can't message this person.")
+	}
+	if err := a.s.messageAllowed(ctx, req.Caller.ID, to); err != nil {
+		return nil, err
 	}
 	if err := a.s.directAllowed(ctx, req.Caller.ID, to); err != nil {
 		return nil, err
+	}
+	if in.ReplyTo != "" {
+		// A reply answers a message of this same conversation.
+		rid, err := identity.Parse(in.ReplyTo)
+		if err != nil {
+			return nil, err
+		}
+		orig, err := a.s.getDirect(ctx, rid)
+		if err != nil {
+			return nil, errs.InvalidArgument("the message you reply to is not there")
+		}
+		pair := orig.From == req.Caller.ID && orig.To == to || orig.From == to && orig.To == req.Caller.ID
+		if !pair {
+			return nil, errs.InvalidArgument("you can only reply to a message of this conversation")
+		}
+	}
+	files, err := a.s.claimAttachments(ctx, req.Caller.ID, to, in.Attachments)
+	if err != nil {
+		return nil, err
+	}
+	if len(files) > 0 {
+		if err := a.s.canSendFiles(ctx, req.Caller.ID, to); err != nil {
+			return nil, err
+		}
 	}
 	id, err := identity.New(a.s.K.NodeID())
 	if err != nil {
@@ -352,12 +434,37 @@ func (a *dmSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	now := time.Now().UTC()
 	dm := &message.Direct{
 		Entity: entity.Entity{ID: id, CreatedAt: now, UpdatedAt: now},
-		From:   req.Caller.ID, To: to, Body: in.Body, SentAt: now,
+		From:   req.Caller.ID, To: to, Body: in.Body, SentAt: now, ReplyTo: in.ReplyTo,
 	}
-	if err := a.s.R.CreateID(ctx, "directs", id, dm); err != nil {
+	if len(files) > 0 {
+		ids := make([]string, len(files))
+		for i, f := range files {
+			ids[i] = f.ID
+		}
+		raw, _ := json.Marshal(ids)
+		dm.AttachmentIDs = string(raw)
+	}
+	if err := a.s.storeDirect(ctx, dm); err != nil {
 		return nil, err
 	}
-	a.s.mirrorDirect(ctx, req.Caller.ID, to, in.Body)
+	a.s.linkAttachments(ctx, files, id.String())
+	// Writing to someone means you have read the conversation so far, and
+	// that you stopped typing.
+	_, _ = a.s.updateDirectState(ctx, req.Caller.ID, to, func(st *directState) { st.ReadAt = now })
+	typing.set(req.Caller.ID, to, false)
+	// Keep the messenger's direct / Saved Messages room in sync (with Direct id).
+	a.s.mirrorDirectID(ctx, req.Caller.ID, to, in.Body, id)
+	if _, agent := a.s.agentAccount(ctx, to); !agent && to != req.Caller.ID {
+		go a.s.notifyDirect(context.WithoutCancel(ctx), *dm)
+	}
+	// A note to oneself is read by one's own Aseman: kept, or answered.
+	if to == req.Caller.ID {
+		names := make([]string, len(files))
+		for i, f := range files {
+			names[i] = f.Name
+		}
+		a.s.startBrain(ctx, req.Caller.ID, brainNote{msg: dm, files: names, voice: in.Voice})
+	}
 	// A message to an agent is a conversation with it: the agent answers in
 	// the same direct thread, without holding up this request. An agent
 	// messaging another agent inside a run keeps that run's scope.
@@ -406,13 +513,50 @@ func (a *dmListAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	}, &mine); err != nil {
 		return nil, err
 	}
-	if err := a.s.R.List(ctx, "directs", database.Filter{
-		Equal:   map[string]any{"from_id": peer.String(), "to_id": req.Caller.ID.String()},
-		OrderBy: "created_at", Asc: false, Limit: in.Limit,
-	}, &theirs); err != nil {
+	// Saved Messages (a conversation with oneself) is one direction only.
+	if peer != req.Caller.ID {
+		if err := a.s.R.List(ctx, "directs", database.Filter{
+			Equal:   map[string]any{"from_id": peer.String(), "to_id": req.Caller.ID.String()},
+			OrderBy: "created_at", Asc: false, Limit: in.Limit,
+		}, &theirs); err != nil {
+			return nil, err
+		}
+	}
+	me, _, err := a.s.directStateOf(ctx, req.Caller.ID, peer)
+	if err != nil {
 		return nil, err
 	}
-	out := append(mine, theirs...)
+	them, _, err := a.s.directStateOf(ctx, peer, req.Caller.ID)
+	if err != nil {
+		return nil, err
+	}
+	hidden, err := a.s.hiddenDirects(ctx, req.Caller.ID)
+	if err != nil {
+		return nil, err
+	}
+	all := append(mine, theirs...)
+	// A message its sender took back is gone from the conversation for both
+	// sides (no "deleted" placeholder), and a reply to it no longer quotes it.
+	gone := map[string]bool{}
+	for _, dm := range all {
+		if !dm.DeletedAt.IsZero() {
+			gone[dm.ID.String()] = true
+		}
+	}
+	out := all[:0]
+	replyGone := map[string]bool{}
+	for _, dm := range all {
+		// A conversation the caller deleted shows only what came after.
+		if !me.ClearedAt.IsZero() && !dm.CreatedAt.After(me.ClearedAt) || !dm.DeletedAt.IsZero() || hidden[dm.ID.String()] {
+			continue // before the caller cleared the chat, taken back, or deleted for the caller
+		}
+		if gone[dm.ReplyTo] || hidden[dm.ReplyTo] {
+			// The message it answered is not there for the caller: the reply
+			// says so instead of passing for a message of its own.
+			replyGone[dm.ID.String()] = true
+		}
+		out = append(out, dm)
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
 	if len(out) > in.Limit {
 		out = out[:in.Limit]
@@ -420,7 +564,67 @@ func (a *dmListAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
 		out[i], out[j] = out[j], out[i]
 	}
-	return helper.JSON(map[string]any{"messages": out})
+	reacted := a.s.directReactions(ctx, out)
+	// Which of the files the caller has kept.
+	var fileIDs []string
+	for i := range out {
+		fileIDs = append(fileIDs, attachmentIDs(&out[i])...)
+	}
+	kept := a.s.keptOf(ctx, req.Caller.ID, fileIDs)
+	views := make([]map[string]any, 0, len(out))
+	agents := map[string]map[string]any{}
+	for i := range out {
+		a.s.openDirect(&out[i])
+		v := directView(out[i])
+		if replyGone[out[i].ID.String()] {
+			v["reply_deleted"] = true
+		}
+		if rs := reacted[out[i].ID.String()]; len(rs) > 0 {
+			v["reactions"] = rs
+		}
+		if atts := a.s.attachmentsOf(ctx, &out[i]); len(atts) > 0 {
+			for _, att := range atts {
+				if id, _ := att["id"].(string); kept[id] != "" {
+					att["kept"] = true
+				}
+			}
+			v["attachments"] = atts
+		}
+		// An agent's answer in the notes carries who wrote it.
+		if aid := out[i].AgentID; aid != "" {
+			if agents[aid] == nil {
+				if id, err := identity.Parse(aid); err == nil {
+					agents[aid] = a.s.publicRef(ctx, req.Caller.ID, id)
+				}
+			}
+			if ref := agents[aid]; ref != nil {
+				v["agent"] = ref
+			}
+		}
+		views = append(views, v)
+	}
+	view := map[string]any{"messages": views,
+		// Calls between the two, finished, to show in the chat among the messages.
+		"calls":       a.s.callHistory(ctx, req.Caller.ID, peer, me.ClearedAt, in.Limit),
+		"peer_typing": typing.is(peer, req.Caller.ID),
+		// How far the peer has read: the client marks the caller's messages up to it as seen.
+		"peer_read_at": nullTime(them.ReadAt),
+		"blocked":      me.Blocked,
+		"can_send":     !me.Blocked && !them.Blocked && a.s.messageAllowed(ctx, req.Caller.ID, peer) == nil,
+		// A block, either way: what stops a call as well (calls have their own choices).
+		"blocked_either": me.Blocked || them.Blocked,
+	}
+	// The assistant still writing an answer in this conversation (shown as "thinking", then its text as it grows).
+	view["agents_working"] = a.s.workingAsks(ctx, req.Caller.ID, convKey(req.Caller.ID, peer))
+	return helper.JSON(view)
+}
+
+// nullTime is a time for JSON, or null when it was never set.
+func nullTime(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t
 }
 
 // dmThreadsAction users.dm_threads: the caller's conversations, newest first,
@@ -448,25 +652,74 @@ func (a *dmThreadsAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 	if err := a.s.R.List(ctx, "directs", database.Filter{Equal: map[string]any{"to_id": req.Caller.ID.String()}, OrderBy: "created_at", Asc: false, Limit: 1000}, &received); err != nil {
 		return nil, err
 	}
-	all := append(sent, received...)
+	states, err := a.s.directStates(ctx, req.Caller.ID)
+	if err != nil {
+		return nil, err
+	}
+	hidden, err := a.s.hiddenDirects(ctx, req.Caller.ID)
+	if err != nil {
+		return nil, err
+	}
+	// What the caller has not read yet: the peer's messages after both the
+	// caller's read point and the point they deleted the conversation.
+	unread := map[string]int{}
+	for _, dm := range received {
+		if dm.From == req.Caller.ID {
+			continue // a note to oneself is never unread
+		}
+		st := states[dm.From.String()]
+		if dm.DeletedAt.IsZero() && !hidden[dm.ID.String()] && dm.CreatedAt.After(st.ReadAt) && dm.CreatedAt.After(st.ClearedAt) {
+			unread[dm.From.String()]++
+		}
+	}
+	all := append([]message.Direct{}, sent...)
+	for _, dm := range received {
+		if dm.From != req.Caller.ID { // notes to oneself are already among the sent
+			all = append(all, dm)
+		}
+	}
 	sort.Slice(all, func(i, j int) bool { return all[i].CreatedAt.After(all[j].CreatedAt) })
 	threads := []map[string]any{}
+	pinnedAt := map[string]time.Time{}
 	seen := map[string]bool{}
+	total := 0
 	for _, dm := range all {
 		peer := dm.To
 		if dm.To == req.Caller.ID {
 			peer = dm.From
 		}
-		if seen[peer.String()] {
-			continue
+		st := states[peer.String()]
+		if seen[peer.String()] || !st.ClearedAt.IsZero() && !dm.CreatedAt.After(st.ClearedAt) {
+			continue // a deleted conversation returns only with a newer message
+		}
+		if !dm.DeletedAt.IsZero() || hidden[dm.ID.String()] {
+			continue // the preview is the newest message still there for the caller
 		}
 		seen[peer.String()] = true
-		threads = append(threads, map[string]any{"peer": a.s.publicRef(ctx, req.Caller.ID, peer), "last": dm})
-		if len(threads) >= in.Limit {
-			break
+		a.s.openDirect(&dm)
+		n := unread[peer.String()]
+		total += n
+		thread := map[string]any{"peer": a.s.publicRef(ctx, req.Caller.ID, peer), "last": a.s.directViewWithFiles(ctx, dm), "unread": n, "blocked": st.Blocked,
+			"typing": typing.is(peer, req.Caller.ID), "saved": peer == req.Caller.ID}
+		if !st.PinnedAt.IsZero() {
+			thread["pinned_at"] = st.PinnedAt
+			pinnedAt[peer.String()] = st.PinnedAt
 		}
+		threads = append(threads, thread)
 	}
-	return helper.JSON(map[string]any{"threads": threads})
+	// Pinned chats first, the latest pinned on top; the rest stay newest first.
+	// The limit applies after, so a pinned chat is never cut for a newer one.
+	sort.SliceStable(threads, func(i, j int) bool {
+		pi, pj := pinnedAt[threadPeer(threads[i])], pinnedAt[threadPeer(threads[j])]
+		if pi.IsZero() != pj.IsZero() {
+			return !pi.IsZero()
+		}
+		return pi.After(pj)
+	})
+	if len(threads) > in.Limit {
+		threads = threads[:in.Limit]
+	}
+	return helper.JSON(map[string]any{"threads": threads, "unread_total": total})
 }
 
 // fileUploadAction users.file_upload
@@ -516,6 +769,10 @@ func (a *fileDownloadAction) Meta() api.ActionMeta {
 	return api.ActionMeta{Namespace: "users", Name: "file_download", Summary: "Download a file"}
 }
 func (a *fileDownloadAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+	// A file is for the people it was shared with: knowing its id is not enough.
+	if err := helper.RequireAuthenticated(req); err != nil {
+		return nil, err
+	}
 	var in struct {
 		File string `json:"file"`
 	}
@@ -524,6 +781,9 @@ func (a *fileDownloadAction) Handle(ctx context.Context, req *api.ActionRequest)
 	}
 	id, err := identity.Parse(in.File)
 	if err != nil {
+		return nil, err
+	}
+	if err := a.s.canReadFile(ctx, id, req.Caller.ID); err != nil {
 		return nil, err
 	}
 	file, rc, err := a.s.DownloadFile(ctx, id)
@@ -568,11 +828,16 @@ func (a *fileDeleteAction) Handle(ctx context.Context, req *api.ActionRequest) (
 	if file.OwnerID != req.Caller.ID {
 		return nil, errs.Permission("not the file owner")
 	}
-	if fs := a.s.K.FS(); fs != nil {
-		_ = fs.Delete(ctx, file.StorageKey)
-	}
 	if err := a.s.R.Delete(ctx, "files", id); err != nil {
 		return nil, err
 	}
+	a.s.releaseFileBytes(ctx, file)
 	return helper.JSON(map[string]any{"ok": true})
+}
+
+// threadPeer is the id of a thread row's peer.
+func threadPeer(t map[string]any) string {
+	ref, _ := t["peer"].(map[string]any)
+	id, _ := ref["id"].(string)
+	return id
 }

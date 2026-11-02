@@ -16,6 +16,11 @@ func NewPlugin() api.Plugin {
 		r := repo.New(d.Kernel)
 		log := d.Logger
 		s := &Service{K: d.Kernel, R: r, L: log, M: &metasvc.Service{K: d.Kernel, R: r}}
-		return module.Instance{Models: schema.Models(), Service: s, Actions: BuildActions(s)}, nil
+		mount := func(ctx context.Context) error {
+			s.startReminders() // what people asked their Aseman to remind them of
+			s.startJobs()      // work handed to their workspace, written up in their notes when it is finished
+			return s.encryptLegacyDirects(ctx)
+		}
+		return module.Instance{Models: schema.Models(), Service: s, Mount: mount, Actions: BuildActions(s)}, nil
 	})
 }

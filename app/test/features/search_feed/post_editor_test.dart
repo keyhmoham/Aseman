@@ -13,7 +13,7 @@ void main() {
           body: SingleChildScrollView(
             child: RichPostContent(
               '# Title\n\nSome **bold text** and *italic*.\n\n'
-              ':::card agent SignalBot\n\n'
+              ':::card agent AssistBot\n\n'
               '| A | B |\n|---|---|\n| 1 | 2 |',
             ),
           ),
@@ -27,7 +27,7 @@ void main() {
     );
     expect(find.textContaining('italic.', findRichText: true), findsOneWidget);
     expect(find.text('AGENT'), findsOneWidget);
-    expect(find.text('SignalBot'), findsOneWidget);
+    expect(find.text('AssistBot'), findsOneWidget);
     expect(find.text('A', findRichText: true), findsOneWidget);
   });
 
@@ -106,18 +106,18 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextField, 'List item').first,
-      'BTC holds support',
+      'Notes stay pinned',
     );
     await tester.testTextInput.receiveAction(TextInputAction.next);
     await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextField, 'List item').last,
-      'ETH lags',
+      'Docs lag',
     );
     await tester.pumpAndSettle();
 
     // Bold through the formatting bar: select the text, then Bold.
-    final item = find.widgetWithText(TextField, 'ETH lags');
+    final item = find.widgetWithText(TextField, 'Docs lag');
     final controller = tester.widget<TextField>(item).controller!;
     controller.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
     await tester.pumpAndSettle();
@@ -128,7 +128,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       await result(),
-      '## Weekly outlook\n\n- BTC holds support\n- **ETH** lags',
+      '## Weekly outlook\n\n- Notes stay pinned\n- **Docs** lag',
     );
   });
 
@@ -138,7 +138,7 @@ void main() {
     const post =
         '# Title\n\n'
         ':::chart {"type":"line","labels":["A","B"],"values":[1,2]}\n\n'
-        '| Coin | Price |\n|---|---|\n| BTC | 100 |';
+        '| Item | Count |\n|---|---|\n| Notes | 100 |';
     final result = await openEditor(
       tester,
       const Size(1440, 900),
@@ -149,7 +149,7 @@ void main() {
 
     // The chart is edited point by point and the table cell by cell.
     expect(find.widgetWithText(TextField, 'Label'), findsNWidgets(2));
-    expect(find.widgetWithText(TextField, 'BTC'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Notes'), findsOneWidget);
     await tester.enterText(find.widgetWithText(TextField, '100'), '120');
     await tester.pumpAndSettle();
 
@@ -159,7 +159,7 @@ void main() {
       await result(),
       '# Title\n\n'
       ':::chart {"type":"line","labels":["A","B"],"values":[1,2]}\n\n'
-      '| Coin | Price |\n|---|---|\n| BTC | 120 |',
+      '| Item | Count |\n|---|---|\n| Notes | 120 |',
     );
   });
 }

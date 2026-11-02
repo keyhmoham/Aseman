@@ -9,6 +9,7 @@ import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/halo_ring_cache.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/post.dart';
 import '../../../data/models/profile.dart';
@@ -17,13 +18,16 @@ import '../../../data/models/uploaded_file.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../elpian/core/media.dart' show ElpianMediaScope;
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/bot_avatar.dart';
 import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import '../../../shared/widgets/panel_empty.dart';
 import '../../../shared/widgets/profile_menu.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/skeleton.dart';
+import '../../../shared/widgets/sky_ui.dart';
 import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../../shared/widgets/workspace_panel_motion.dart';
@@ -38,6 +42,7 @@ import '../../desk/presentation/desk_controller.dart';
 import '../../desk/presentation/floating_desk.dart';
 import '../../desk/presentation/frontend_presentation.dart';
 import '../../desk/presentation/tool_avatar.dart';
+import '../../desk/presentation/widgets_library.dart';
 import '../../files/domain/file_types.dart';
 import '../../files/presentation/file_tree.dart';
 import '../../files/presentation/file_viewer.dart';
@@ -45,6 +50,7 @@ import '../../messenger/presentation/chat_page.dart';
 import '../../messenger/presentation/report_dialog.dart';
 import '../../rooms/presentation/widgets/attachment_bubble.dart';
 import '../../rooms/presentation/widgets/new_room_dialog.dart';
+import '../../rooms/presentation/widgets/orbit_strip.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import '../../rooms/presentation/widgets/shared_file_viewer.dart';
 import '../../search_feed/presentation/feed_post_card.dart';
@@ -931,6 +937,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                     handle:
                         widget.dependencies.sessionController.session?.handle ??
                         '',
+                    accountId: widget.dependencies.sessionController.session
+                            ?.accountId ??
+                        '',
                     avatar: widget.dependencies.service.avatarImage(
                       widget.dependencies.sessionController.avatar,
                     ),
@@ -947,11 +956,18 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                               ),
                             ),
                           ),
-                    onOpenProfile: () => showProfileMenu(
+                    onOpenWidgetsLibrary: () => showWidgetsLibrary(
                       context,
                       widget.dependencies,
-                      showMessages: true,
+                      onOpenSpace: (name) => unawaited(switchWorkspace(name)),
                     ),
+                    onOpenProfile: compact
+                        ? null
+                        : () => showProfileMenu(
+                              context,
+                              widget.dependencies,
+                              showMessages: true,
+                            ),
                   ),
                 ),
               ),
@@ -1435,6 +1451,18 @@ class _LibraryPanel extends StatelessWidget {
                     ],
                   ],
                 ),
+                if (spaceBots.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  OrbitStrip(
+                    agents: spaceBots.where((b) => b.isAgent).toList(),
+                    tools: spaceBots
+                        .where((b) => b.isTool && !b.isSandbox)
+                        .toList(),
+                    userId: dependencies
+                            ?.sessionController.session?.accountId ??
+                        '',
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Expanded(
                   child: AnimatedSwitcher(
@@ -1526,6 +1554,9 @@ class _LibraryPanel extends StatelessWidget {
               label: 'Add agent',
               icon: Icons.smart_toy_outlined,
               candidates: candidates,
+              userId: dependencies
+                      ?.sessionController.session?.accountId ??
+                  '',
               onAdd: (b) => onAddBot?.call(b),
             );
           }
@@ -1578,6 +1609,9 @@ class _LibraryPanel extends StatelessWidget {
               label: 'Add app',
               icon: Icons.widgets_outlined,
               candidates: candidates,
+              userId: dependencies
+                      ?.sessionController.session?.accountId ??
+                  '',
               onAdd: (b) => onAddBot?.call(b),
             );
           }
@@ -1585,6 +1619,7 @@ class _LibraryPanel extends StatelessWidget {
           final connection = appConnections[bot.id];
           final connect = onConnectApp;
           return _LibraryToolCard(
+            bot: bot,
             label: bot.name,
             subtitle:
                 personalApp(connection?.auth ?? '') && !connection!.connected
@@ -1615,30 +1650,12 @@ class _LibraryEmpty extends StatelessWidget {
   final IconData icon;
   final String message;
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 30,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 10,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
+  Widget build(BuildContext context) => PanelEmpty(
+        compact: true,
+        icon: icon,
+        title: 'Nothing here',
+        message: message,
+      );
 }
 
 /// File-backed library content for the Docs/Links/GIFs/Media/Audio tabs.
@@ -2041,9 +2058,6 @@ class _LibraryBotCard extends StatelessWidget {
   final VoidCallback? onRemove;
   @override
   Widget build(BuildContext context) {
-    final color = bot.status == 'running'
-        ? AppColors.success
-        : Theme.of(context).colorScheme.onSurfaceVariant;
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(17),
@@ -2060,23 +2074,12 @@ class _LibraryBotCard extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           child: Row(
             children: [
-              AvatarPicture(
-                avatar: bot.avatar,
-                size: 36,
-                radius: 12,
-                fallback: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: .18),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.smart_toy_outlined,
-                    size: 19,
-                    color: AppColors.primary,
-                  ),
-                ),
+              BotAvatar(
+                bot: bot,
+                radius: 18,
+                userId: dependencies
+                        ?.sessionController.session?.accountId ??
+                    '',
               ),
               const SizedBox(width: 9),
               Expanded(
@@ -2186,11 +2189,13 @@ class _AddBotTile extends StatelessWidget {
     required this.icon,
     required this.candidates,
     required this.onAdd,
+    this.userId = '',
   });
   final String label;
   final IconData icon;
   final List<Bot> candidates;
   final ValueChanged<Bot> onAdd;
+  final String userId;
 
   void _pick(BuildContext context) {
     if (candidates.isEmpty) {
@@ -2237,14 +2242,10 @@ class _AddBotTile extends StatelessWidget {
                   itemBuilder: (context, i) {
                     final b = candidates[i];
                     return ListTile(
-                      leading: AvatarPicture(
-                        avatar: b.avatar,
-                        size: 32,
-                        fallback: const SizedBox(
-                          width: 32,
-                          height: 32,
-                          child: Icon(Icons.smart_toy_outlined),
-                        ),
+                      leading: BotAvatar(
+                        bot: b,
+                        radius: 16,
+                        userId: userId,
                       ),
                       title: Text(b.name, style: const TextStyle(fontSize: 13)),
                       subtitle: Text(
@@ -2310,6 +2311,7 @@ class _LibraryToolCard extends StatelessWidget {
   const _LibraryToolCard({
     required this.label,
     required this.icon,
+    this.bot,
     this.subtitle,
     this.onTap,
     this.onRemove,
@@ -2320,6 +2322,7 @@ class _LibraryToolCard extends StatelessWidget {
   });
   final String label;
   final IconData icon;
+  final Bot? bot;
   final String? subtitle;
   final VoidCallback? onTap;
   final VoidCallback? onRemove;
@@ -2344,17 +2347,26 @@ class _LibraryToolCard extends StatelessWidget {
         padding: const EdgeInsets.all(10),
         child: Row(
           children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: .14),
-                borderRadius: BorderRadius.circular(12),
+            if (bot != null)
+              BotAvatar(
+                bot: bot!,
+                radius: 18,
+                userId: dependencies
+                        ?.sessionController.session?.accountId ??
+                    '',
+              )
+            else
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: .14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, size: 19, color: AppColors.primary),
               ),
-              child: Icon(icon, size: 19, color: AppColors.primary),
-            ),
             const SizedBox(width: 9),
             Expanded(
               child: Column(
@@ -2508,7 +2520,7 @@ class _CenterDesk extends StatelessWidget {
             SizedBox(height: 150, child: _MachineFace(pointer: pointer)),
             const SizedBox(height: 8),
             Text(
-              room == null ? 'My trading desk' : '$room desk',
+              room == null ? 'My desk' : '$room desk',
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 6),
@@ -3968,18 +3980,10 @@ class _SearchResultsState extends State<_SearchResults> {
             builder: (context) {
               if (_loading) return const SkeletonList();
               if (_items.isEmpty) {
-                return const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.search_off_rounded, size: 42),
-                      SizedBox(height: 10),
-                      Text(
-                        'No matching results',
-                        style: TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                    ],
-                  ),
+                return const PanelEmpty(
+                  icon: Icons.search_off_rounded,
+                  title: 'No matching results',
+                  message: 'Try another query or clear filters.',
                 );
               }
               return ListView.builder(
@@ -4251,13 +4255,32 @@ class _SearchResultCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: color.withValues(alpha: .18),
-                foregroundImage: Avatars.of(avatar),
-                onForegroundImageError: avatar.isEmpty ? null : (_, __) {},
-                child: Icon(_sectionIcon(section), color: color, size: 18),
-              ),
+              section == 'Agents' || section == 'Apps'
+                  ? BotAvatar.fromFields(
+                      id: title,
+                      name: title,
+                      kind: section == 'Apps' ? 'tool' : 'agent',
+                      avatar: avatar,
+                      radius: 18,
+                      userId: dependencies
+                              ?.sessionController.session?.accountId ??
+                          '',
+                    )
+                  : HaloRing(
+                      accent: color,
+                      child: CircleAvatar(
+                        radius: 18,
+                        backgroundColor: color.withValues(alpha: .18),
+                        foregroundImage: Avatars.of(avatar),
+                        onForegroundImageError:
+                            avatar.isEmpty ? null : (_, __) {},
+                        child: Icon(
+                          _sectionIcon(section),
+                          color: color,
+                          size: 18,
+                        ),
+                      ),
+                    ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -4766,7 +4789,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
   }
 
   String get singular => switch (widget.section) {
-    'Users' => 'Trader',
+    'Users' => 'Person',
     'Agents' => 'Agent',
     'Apps' => 'App',
     'Workspaces' => 'Workspace',
@@ -4991,23 +5014,44 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Container(
-                            width: 70,
-                            height: 70,
-                            decoration: BoxDecoration(
-                              color: scheme.primaryContainer,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: scheme.surface,
-                                width: 4,
-                              ),
-                            ),
-                            child: AvatarPicture(
-                              avatar: _avatar,
-                              size: 62,
-                              fallback: Center(child: Icon(icon, size: 31)),
-                            ),
-                          ),
+                          _bot != null
+                              ? BotAvatar(
+                                  bot: Bot(
+                                    id: _bot!.id,
+                                    ownerId: _bot!.ownerId,
+                                    accountId: '',
+                                    name: _bot!.name,
+                                    kind: _bot!.kind.isEmpty
+                                        ? (widget.section == 'Apps'
+                                            ? 'tool'
+                                            : 'agent')
+                                        : _bot!.kind,
+                                    vmType: _bot!.vmType,
+                                    status: _bot!.status,
+                                    avatar: _bot!.avatar,
+                                  ),
+                                  radius: 31,
+                                  userId: widget.dependencies
+                                          ?.sessionController
+                                          .session
+                                          ?.accountId ??
+                                      '',
+                                )
+                              : HaloRing(
+                                  pad: 3,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: scheme.primaryContainer,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: AvatarPicture(
+                                      avatar: _avatar,
+                                      size: 62,
+                                      fallback: Center(
+                                          child: Icon(icon, size: 31)),
+                                    ),
+                                  ),
+                                ),
                           const Spacer(),
                           if (action != null)
                             FilledButton.icon(
@@ -5094,7 +5138,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
           ),
         const SizedBox(height: 18),
         if (_user case final u?)
-          _TraderProfileDetail(
+          _PersonProfileDetail(
             user: u,
             posts: _posts,
             dependencies: widget.dependencies,
@@ -5172,16 +5216,19 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
                                   handle: list[i].handle,
                                 );
                               },
-                              leading: CircleAvatar(
-                                radius: 16,
-                                foregroundImage: Avatars.of(list[i].avatar),
-                                onForegroundImageError: list[i].avatar.isEmpty
-                                    ? null
-                                    : (_, __) {},
-                                child: Text(
-                                  list[i].handle.isEmpty
-                                      ? '?'
-                                      : list[i].handle[0].toUpperCase(),
+                              leading: HaloRing(
+                                identity: HaloRingCache.person(list[i].id),
+                                child: CircleAvatar(
+                                  radius: 16,
+                                  foregroundImage: Avatars.of(list[i].avatar),
+                                  onForegroundImageError: list[i].avatar.isEmpty
+                                      ? null
+                                      : (_, __) {},
+                                  child: Text(
+                                    list[i].handle.isEmpty
+                                        ? '?'
+                                        : list[i].handle[0].toUpperCase(),
+                                  ),
                                 ),
                               ),
                               title: Text(
@@ -5259,8 +5306,8 @@ class _EmptyNote extends StatelessWidget {
   );
 }
 
-class _TraderProfileDetail extends StatelessWidget {
-  const _TraderProfileDetail({
+class _PersonProfileDetail extends StatelessWidget {
+  const _PersonProfileDetail({
     required this.user,
     required this.posts,
     this.dependencies,

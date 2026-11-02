@@ -3,7 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Aseman writes down what you say when you dictate a message.</string>
+	<string>Aseman uses the microphone for voice messages, dictation, and calls.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Aseman uses the camera for video calls.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

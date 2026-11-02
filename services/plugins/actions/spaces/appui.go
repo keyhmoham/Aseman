@@ -262,7 +262,7 @@ type appuiJob struct {
 func appuiPublishFile(dir string) string { return dir + "/.aseman/publish.json" }
 
 // appuiDeskPlace resolves where an app opens: on the desk of the room where
-// the person asked; room=home targets the hall ("My trading desk"); an
+// the person asked; room=home targets the hall ("My desk"); an
 // explicit room id uses that room.
 func appuiDeskPlace(roomID, target identity.ID, room string) (desk string, arrange identity.ID) {
 	switch r := strings.TrimSpace(room); {
@@ -317,7 +317,13 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 		job.ID = newAppUIID()
 	}
 	if job.Dir == "" {
-		job.Dir = appuiRoot + "/" + job.ID
+		// Direct chats share the caller's personal sandbox; hosted apps for
+		// that DM are scoped under /workspace/dms/<directSpace>/appui.
+		root := appuiRoot
+		if sp, err := s.GetSpace(ctx, spaceID); err == nil && sp != nil && sp.Direct {
+			root = "/workspace/dms/" + spaceID.EntityString() + "/appui"
+		}
+		job.Dir = root + "/" + job.ID
 	}
 	if !strings.HasPrefix(job.Dir, "/workspace/") {
 		return "", errs.InvalidArgument("dir must be under /workspace/")
@@ -823,7 +829,11 @@ func (s *Service) opencodeRunTool(ctx context.Context, spaceID identity.ID, args
 	}
 	dir := strings.TrimSpace(in.Dir)
 	if dir == "" {
-		dir = appuiRoot + "/tasks/" + newAppUIID()
+		root := appuiRoot
+		if sp, err := s.GetSpace(ctx, spaceID); err == nil && sp != nil && sp.Direct {
+			root = "/workspace/dms/" + spaceID.EntityString() + "/appui"
+		}
+		dir = root + "/tasks/" + newAppUIID()
 	}
 	if !strings.HasPrefix(dir, "/workspace/") {
 		return "", errs.InvalidArgument("dir must be under /workspace/")

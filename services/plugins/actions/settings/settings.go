@@ -7,6 +7,9 @@
 //     agents' time (read by bots through Pricing);
 //   - machine: the size of a project's computer — sold size, idle reserve and
 //     ceiling (read by spaces and the Modal adapter through Machine);
+//   - storage: the most one person's files may add up to (read by users
+//     through Storage);
+//   - email_templates: the wording of site emails (read through EmailTemplates);
 //   - admins_space: the project every platform administrator is kept a member
 //     of (read and set by spaces through AdminsSpace and SetAdminsSpace).
 package settings
@@ -20,6 +23,7 @@ import (
 	"github.com/aseman/aseman/internal/plugins/module"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/plugins/actions/settings/models"
+	"github.com/aseman/aseman/plugins/actions/support/emailtpl"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/actions/support/repo"
 	"math"
@@ -33,11 +37,11 @@ type Service struct {
 	R *repo.Repo
 }
 
-var allowedKeys = map[string]bool{"categories": true, "universal_system_prompt": true, "pricing": true, "machine": true, "admins_space": true}
+var allowedKeys = map[string]bool{"categories": true, "universal_system_prompt": true, "pricing": true, "machine": true, "storage": true, "email_templates": true, "admins_space": true}
 
 func (s *Service) id() string { return s.K.NodeID().String() + "0000000000000001" }
 func defaults() map[string]any {
-	return map[string]any{"categories": []string{"general", "research", "coding", "design", "marketing", "operations", "finance", "education", "support"}, "universal_system_prompt": "", "pricing": models.DefaultPricing(), "machine": models.Machine{}, "admins_space": ""}
+	return map[string]any{"categories": []string{"general", "research", "coding", "design", "marketing", "operations", "finance", "education", "support"}, "universal_system_prompt": "", "pricing": models.DefaultPricing(), "machine": models.Machine{}, "storage": models.Storage{}, "admins_space": ""}
 }
 
 // Pricing returns the node's execution price list.
@@ -73,6 +77,123 @@ func parsePricing(v any) (models.Pricing, error) {
 		return models.Pricing{}, errs.InvalidArgument("prices cannot be negative")
 	}
 	return p, nil
+}
+
+// Storage returns the limit on one person's files (zero limit_mb = none).
+func (s *Service) Storage(ctx context.Context) (models.Storage, error) {
+	row, e := s.Get(ctx)
+	if e != nil {
+		return models.Storage{}, e
+	}
+	st, err := parseStorage(row.Values["storage"])
+	if err != nil {
+		return models.Storage{}, nil
+	}
+	return st, nil
+}
+
+// parseStorage reads a stored or submitted storage setting; a missing one is
+// no limit, and unknown fields or negative limits are refused.
+func parseStorage(v any) (models.Storage, error) {
+	if v == nil {
+		return models.Storage{}, nil
+	}
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return models.Storage{}, err
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	var st models.Storage
+	if err := dec.Decode(&st); err != nil {
+		return models.Storage{}, errs.InvalidArgument("invalid storage setting: " + err.Error())
+	}
+	if st.LimitMB < 0 || st.LimitMB > models.MaxStorageLimitMB {
+		return models.Storage{}, errs.InvalidArgument("the storage limit must be between 0 (none) and 100 TB")
+	}
+	return st, nil
+}
+
+// EmailTemplates returns the wording the admin saved for each email, by key.
+func (s *Service) EmailTemplates(ctx context.Context) (map[string]emailtpl.Content, error) {
+	row, e := s.Get(ctx)
+	if e != nil {
+		return nil, e
+	}
+	return parseEmailTemplates(row.Values["email_templates"])
+}
+
+// parseEmailTemplates reads stored or submitted wording: only known emails,
+// each valid for its values.
+func parseEmailTemplates(v any) (map[string]emailtpl.Content, error) {
+	out := map[string]emailtpl.Content{}
+	if v == nil {
+		return out, nil
+	}
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, errs.InvalidArgument("invalid email templates: " + err.Error())
+	}
+	for key, c := range out {
+		def, ok := emailtpl.Find(key)
+		if !ok {
+			return nil, errs.InvalidArgument("unknown email " + key)
+		}
+		if err := emailtpl.Validate(def, c); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// emailTemplatesAction lists every email with its default and current wording.
+func (s *Service) emailTemplatesAction(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+	if e := helper.RequireNodeAdmin(ctx, s.R, req, s.K.Env()["admin_handle"]); e != nil {
+		return nil, e
+	}
+	saved, e := s.EmailTemplates(ctx)
+	if e != nil {
+		saved = map[string]emailtpl.Content{}
+	}
+	out := []map[string]any{}
+	for _, d := range emailtpl.Definitions() {
+		c, custom := saved[d.Key]
+		if !custom {
+			c = d.Default
+		}
+		out = append(out, map[string]any{
+			"key": d.Key, "name": d.Name, "description": d.Description, "vars": d.Vars,
+			"default": d.Default, "content": c, "customized": custom,
+		})
+	}
+	return helper.JSON(map[string]any{"templates": out})
+}
+
+// emailPreviewAction renders an email (a draft, or what is saved) with sample values.
+func (s *Service) emailPreviewAction(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+	if e := helper.RequireNodeAdmin(ctx, s.R, req, s.K.Env()["admin_handle"]); e != nil {
+		return nil, e
+	}
+	var in struct {
+		Key     string            `json:"key"`
+		Content *emailtpl.Content `json:"content"`
+	}
+	if e := helper.Decode(req, &in); e != nil {
+		return nil, e
+	}
+	def, ok := emailtpl.Find(in.Key)
+	if !ok {
+		return nil, errs.NotFound("email")
+	}
+	if in.Content != nil {
+		if e := emailtpl.Validate(def, *in.Content); e != nil {
+			return nil, e
+		}
+	}
+	return helper.JSON(emailtpl.Render(def, in.Content, emailtpl.Samples(def)))
 }
 
 // Machine returns the size of a project's computer with every field filled in:
@@ -232,11 +353,17 @@ func (s *Service) getAction(ctx context.Context, req *api.ActionRequest) (*api.A
 	} else {
 		out["machine"] = effectiveMachine(models.Machine{}, s.K.Env())
 	}
+	if st, err := parseStorage(out["storage"]); err == nil {
+		out["storage"] = st
+	} else {
+		out["storage"] = models.Storage{}
+	}
 	for k := range out {
 		if !allowedKeys[k] { // drop keys from older policy versions
 			delete(out, k)
 		}
 	}
+	delete(out, "email_templates") // read through email_templates
 	text, _ := out["universal_system_prompt"].(string)
 	out["universal_system_prompt_set"] = strings.TrimSpace(text) != ""
 	if helper.RequireNodeAdmin(ctx, s.R, req, s.K.Env()["admin_handle"]) != nil {
@@ -292,6 +419,18 @@ func (s *Service) save(ctx context.Context, in map[string]any) error {
 				return err
 			}
 			v = m
+		case "storage":
+			st, err := parseStorage(v)
+			if err != nil {
+				return err
+			}
+			v = st
+		case "email_templates":
+			t, err := parseEmailTemplates(v)
+			if err != nil {
+				return err
+			}
+			v = t
 		case "admins_space":
 			id, ok := v.(string)
 			if !ok {
@@ -336,6 +475,6 @@ func (s *Service) save(ctx context.Context, in map[string]any) error {
 func NewPlugin() api.Plugin {
 	return module.New(api.Info{Name: "settings-ns", Version: "1.0.0", Provides: []string{"service/settings"}}, func(ctx context.Context, d *api.Dependencies) (module.Instance, error) {
 		s := &Service{K: d.Kernel, R: repo.New(d.Kernel)}
-		return module.Instance{Service: s, Models: models.Models(), Actions: []api.Action{helper.Action{Namespace: "settings", Name: "get", Summary: "Read platform policy", Handler: s.getAction}, helper.Action{Namespace: "settings", Name: "update", Summary: "Update platform policy", Handler: s.updateAction}}}, nil
+		return module.Instance{Service: s, Models: models.Models(), Actions: []api.Action{helper.Action{Namespace: "settings", Name: "get", Summary: "Read platform policy", Handler: s.getAction}, helper.Action{Namespace: "settings", Name: "update", Summary: "Update platform policy", Handler: s.updateAction}, helper.Action{Namespace: "settings", Name: "email_templates", Summary: "Admin: the site's emails and their wording", Handler: s.emailTemplatesAction}, helper.Action{Namespace: "settings", Name: "email_preview", Summary: "Admin: preview an email with sample values", Handler: s.emailPreviewAction}}}, nil
 	})
 }

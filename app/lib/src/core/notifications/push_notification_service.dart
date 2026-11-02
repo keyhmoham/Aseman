@@ -4,7 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/services/aseman_service.dart';
 
-/// Coordinates the iOS APNs token with the signed-in backend account.
+/// Coordinates the device push token (APNs on iOS, FCM on Android) with the
+/// signed-in backend account.
 class PushNotificationService {
   PushNotificationService(this.service);
 
@@ -15,7 +16,14 @@ class PushNotificationService {
   final AsemanService service;
 
   static bool get supported =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.android);
+
+  static String get _platform {
+    if (defaultTargetPlatform == TargetPlatform.android) return 'android';
+    return 'ios';
+  }
 
   Future<bool> isEnabled() async {
     if (!supported) return false;
@@ -29,7 +37,7 @@ class PushNotificationService {
     if (token == null || token.isEmpty) return false;
     await service.invokeAction('users', 'push_register', body: {
       'token': token,
-      'platform': 'ios',
+      'platform': _platform,
       'environment': kReleaseMode ? 'production' : 'development',
     });
     final preferences = await SharedPreferences.getInstance();
@@ -46,7 +54,7 @@ class PushNotificationService {
     if (token == null || token.isEmpty) return;
     await service.invokeAction('users', 'push_register', body: {
       'token': token,
-      'platform': 'ios',
+      'platform': _platform,
       'environment': kReleaseMode ? 'production' : 'development',
     });
     await (await SharedPreferences.getInstance()).setString(_tokenKey, token);

@@ -201,12 +201,27 @@ func (s *Service) fileMeta(ctx context.Context, f *filedata.File) map[string]any
 // resolving each message's attachment file ids into rich metadata so clients
 // can render previews (photo, gif, video, audio, voice, document) without a
 // separate round trip per file.
-func (s *Service) enrichMessages(ctx context.Context, msgs []message.Message) []map[string]any {
+func (s *Service) enrichMessages(ctx context.Context, msgs []message.Message, viewer identity.ID) []map[string]any {
+	hidden := s.hiddenMessagesFor(ctx, viewer)
+	msgIDs := make([]string, 0, len(msgs))
+	for i := range msgs {
+		msgIDs = append(msgIDs, msgs[i].ID.String())
+	}
+	reactions := s.reactionsForMessages(ctx, msgIDs)
 	out := make([]map[string]any, 0, len(msgs))
 	people := s.participants()
 	for i := range msgs {
+		if hidden[msgs[i].ID.String()] {
+			continue
+		}
 		m := messageToMap(&msgs[i])
 		m["sender"] = people.get(ctx, msgs[i].SenderID)
+		if msgs[i].DirectID != "" {
+			m["direct_id"] = msgs[i].DirectID
+		}
+		if rs := reactions[msgs[i].ID.String()]; len(rs) > 0 {
+			m["reactions"] = rs
+		}
 		ids := msgs[i].ParseAttachments()
 		atts := make([]map[string]any, 0, len(ids))
 		for _, ref := range ids {
@@ -247,6 +262,9 @@ func messageToMap(m *message.Message) map[string]any {
 		"reply_to":       m.ReplyTo,
 		"created_at":     m.CreatedAt,
 		"updated_at":     m.UpdatedAt,
+	}
+	if m.DirectID != "" {
+		out["direct_id"] = m.DirectID
 	}
 	if !m.EditedAt.IsZero() {
 		out["edited_at"] = m.EditedAt

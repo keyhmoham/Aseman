@@ -3,22 +3,34 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_surfaces.dart';
 import '../../../data/models/bot.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/app_inputs.dart';
-import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/bot_avatar.dart';
+import '../../../shared/widgets/panel_empty.dart';
 import '../../../shared/widgets/panel_header.dart';
+import '../../../shared/widgets/panel_scaffold.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/skeleton.dart';
-import '../../../shared/widgets/status_tag.dart';
+import '../../../shared/widgets/sky_ui.dart';
 
 /// Marketplace — a modal panel (dialog on desktop, bottom sheet on mobile) to
 /// browse and publish agents and apps, and install agents. Uses the app's
 /// TabBar panel convention.
+///
+/// When [embedded] is true the outer panel chrome is omitted so the Store
+/// hub can host Library and Discover together.
 class MarketScreen extends StatefulWidget {
-  const MarketScreen({super.key, required this.dependencies});
+  const MarketScreen({
+    super.key,
+    required this.dependencies,
+    this.embedded = false,
+  });
 
   final AppDependencies dependencies;
+  final bool embedded;
 
   @override
   State<MarketScreen> createState() => _MarketScreenState();
@@ -135,96 +147,99 @@ class _MarketScreenState extends State<MarketScreen> {
     if (published == true) await _load();
   }
 
+  Widget _toolbar({required bool compact}) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SoftSearchField(
+            controller: search,
+            dense: true,
+            hintText: 'Search agents & apps…',
+            onSubmitted: (_) => _load(),
+            trailing: IconButton(
+              onPressed: _load,
+              icon: const Icon(Icons.arrow_forward_rounded),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SegmentedTabBar(
+            compact: compact,
+            alignment: Alignment.centerLeft,
+            labels: const ['Agents', 'Apps'],
+            icons: const [Icons.smart_toy_outlined, Icons.apps_outlined],
+          ),
+        ],
+      );
+
+  List<Widget> get _actions => [
+        FilledButton.icon(
+          onPressed: _openPublish,
+          icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+          label: const Text('Publish'),
+        ),
+        IconButton(
+          tooltip: 'Refresh',
+          onPressed: _load,
+          icon: const Icon(Icons.refresh_rounded),
+        ),
+      ];
+
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 560;
+    final body = _loading
+        ? const SkeletonList(
+            item: SkeletonCard(mediaHeight: 0),
+            spacing: 10,
+          )
+        : _error != null
+            ? Center(child: Text(_error!))
+            : TabBarView(
+                children: [
+                  _ListingList(
+                    items: _agents,
+                    hasMore: _hasMore,
+                    loadingMore: _loadingMore,
+                    onLoadMore: () => _load(more: true),
+                    onInstall: _install,
+                  ),
+                  _ListingList(
+                    items: _tools,
+                    hasMore: _hasMore,
+                    loadingMore: _loadingMore,
+                    onLoadMore: () => _load(more: true),
+                  ),
+                ],
+              );
     return DefaultTabController(
       length: 2,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          compact ? 16 : 26,
-          compact ? 16 : 22,
-          compact ? 16 : 26,
-          0,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            PanelHeader(
-              icon: Icons.storefront_outlined,
-              title: 'Market',
-              subtitle: 'Publish agents and apps',
-              onClose: () => Navigator.pop(context),
-              actions: [
-                FilledButton.icon(
-                  onPressed: _openPublish,
-                  icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                  label: const Text('Publish'),
-                ),
-                IconButton(
-                  tooltip: 'Refresh',
-                  onPressed: _load,
-                  icon: const Icon(Icons.refresh_rounded),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
+      child: widget.embedded
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: search,
-                    onSubmitted: (_) => _load(),
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      hintText: 'Search agents & apps…',
-                      isDense: true,
-                      suffixIcon: IconButton(
-                        onPressed: _load,
-                        icon: const Icon(Icons.arrow_forward_rounded),
-                      ),
-                    ),
-                  ),
+                Row(
+                  children: [
+                    const Spacer(),
+                    ..._actions,
+                  ],
                 ),
+                const SizedBox(height: AppSpacing.xs),
+                _toolbar(compact: true),
+                const SizedBox(height: AppSpacing.sm),
+                Expanded(child: body),
               ],
-            ),
-            const SizedBox(height: 12),
-            SegmentedTabBar(
+            )
+          : PanelScaffold(
               compact: compact,
-              alignment: Alignment.centerLeft,
-              labels: const ['Agents', 'Apps'],
-              icons: const [Icons.smart_toy_outlined, Icons.apps_outlined],
+              header: PanelHeader(
+                icon: Icons.storefront_outlined,
+                title: 'Market',
+                subtitle: 'Discover, install, and publish agents & apps',
+                onClose: () => Navigator.pop(context),
+                actions: _actions,
+              ),
+              toolbar: _toolbar(compact: compact),
+              body: body,
             ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: _loading
-                  ? const SkeletonList(
-                      item: SkeletonCard(mediaHeight: 0),
-                      spacing: 10,
-                    )
-                  : _error != null
-                  ? Center(child: Text(_error!))
-                  : TabBarView(
-                      children: [
-                        _ListingList(
-                          items: _agents,
-                          hasMore: _hasMore,
-                          loadingMore: _loadingMore,
-                          onLoadMore: () => _load(more: true),
-                          onInstall: _install,
-                        ),
-                        _ListingList(
-                          items: _tools,
-                          hasMore: _hasMore,
-                          loadingMore: _loadingMore,
-                          onLoadMore: () => _load(more: true),
-                        ),
-                      ],
-                    ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -248,26 +263,20 @@ class _ListingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     if (items.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.storefront_outlined,
-              size: 44,
-              color: scheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Nothing published here yet.',
-              style: TextStyle(color: scheme.onSurfaceVariant),
-            ),
-          ],
-        ),
+      return PanelEmpty(
+        icon: onInstall == null
+            ? Icons.apps_outlined
+            : Icons.smart_toy_outlined,
+        title: 'Nothing published here yet',
+        message: onInstall == null
+            ? 'Apps appear here when creators publish them.'
+            : 'Browse and install agents once they hit the market.',
       );
     }
+    // Resolve the wide/narrow layout once for the list — avoids a
+    // LayoutBuilder on every card during scroll.
+    final wide = MediaQuery.sizeOf(context).width >= 560;
     return NotificationListener<ScrollNotification>(
       onNotification: (n) {
         if (hasMore && !loadingMore && n.metrics.extentAfter < 250) {
@@ -285,6 +294,7 @@ class _ListingList extends StatelessWidget {
           }
           return _ListingCard(
             listing: items[i],
+            wide: wide,
             onInstall: onInstall == null ? null : () => onInstall!(items[i]),
           );
         },
@@ -294,151 +304,144 @@ class _ListingList extends StatelessWidget {
 }
 
 class _ListingCard extends StatelessWidget {
-  const _ListingCard({required this.listing, this.onInstall});
+  const _ListingCard({
+    required this.listing,
+    required this.wide,
+    this.onInstall,
+  });
 
   final MarketListing listing;
+  final bool wide;
   final VoidCallback? onInstall;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final color = listing.isApp ? AppColors.cyan : AppColors.primary;
-    final header = Row(
+    final price =
+        listing.price == 0 ? 'Free' : formatLedgerCredits(listing.price);
+
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AppAvatar(
-          listing.name,
-          color: color,
-          radius: 22,
-          avatar: listing.avatar.isNotEmpty
-              ? listing.avatar
-              : listing.bot?.avatar ?? '',
-        ),
-        const SizedBox(width: 13),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
+        Row(children: [
+          BotAvatar(
+            bot: listing.bot ??
+                Bot(
+                  id: listing.botId,
+                  ownerId: listing.publisherId,
+                  accountId: '',
+                  name: listing.name,
+                  kind: listing.isApp ? 'tool' : 'agent',
+                  vmType: '',
+                  status: '',
+                  avatar: listing.avatar,
+                ),
+            radius: 22,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
                   Flexible(
                     child: Text(
                       listing.name,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 14,
+                        fontSize: 14.5,
+                        letterSpacing: -.2,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  StatusTag(listing.type.toUpperCase(), color),
+                  SoftMetaChip(
+                    label: listing.kindLabel.toUpperCase(),
+                    accent: color,
+                  ),
+                ]),
+                if (listing.category.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    listing.category,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
                 ],
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
-    );
-    final meta = Row(
-      children: [
-        Icon(Icons.download_rounded, size: 13, color: scheme.onSurfaceVariant),
-        const SizedBox(width: 4),
-        Text(
-          '${listing.installs} installs',
-          style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
-        ),
-        const SizedBox(width: 16),
-        Icon(Icons.stars_rounded, size: 13, color: scheme.onSurfaceVariant),
-        const SizedBox(width: 4),
-        Text(
-          listing.price == 0 ? 'Free' : formatLedgerCredits(listing.price),
-          style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
-        ),
+        ]),
+        if (listing.description.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            listing.description,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              color: scheme.onSurfaceVariant,
+              height: 1.4,
+            ),
+          ),
+        ],
+        const SizedBox(height: 10),
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          SoftMetaChip(
+            icon: Icons.download_rounded,
+            label: '${listing.installs} installs',
+            accent: scheme.onSurfaceVariant,
+          ),
+          SoftMetaChip(
+            icon: Icons.stars_rounded,
+            label: price,
+            accent: listing.price == 0 ? AppColors.success : scheme.primary,
+          ),
+        ]),
       ],
     );
 
-    return Container(
+    final install = onInstall == null
+        ? null
+        : FilledButton.tonal(
+            onPressed: onInstall,
+            style: wide
+                ? null
+                : FilledButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+            child: const Text('Install'),
+          );
+
+    return SoftCard(
+      showOrb: false,
+      accent: color,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: .45),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: LayoutBuilder(
-        builder: (context, box) {
-          if (box.maxWidth >= 460) {
-            return Row(
+      child: wide && install != null
+          ? Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      header,
-                      if (listing.description.isNotEmpty) ...[
-                        const SizedBox(height: 7),
-                        Text(
-                          listing.description,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: scheme.onSurfaceVariant,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 9),
-                      meta,
-                    ],
-                  ),
-                ),
-                if (onInstall != null) ...[
-                  const SizedBox(width: 12),
-                  FilledButton.tonal(
-                    onPressed: onInstall,
-                    child: const Text('Install'),
-                  ),
+                Expanded(child: body),
+                const SizedBox(width: 12),
+                install,
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                body,
+                if (install != null) ...[
+                  const SizedBox(height: 10),
+                  Align(alignment: Alignment.centerRight, child: install),
                 ],
               ],
-            );
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              header,
-              if (listing.description.isNotEmpty) ...[
-                const SizedBox(height: 7),
-                Text(
-                  listing.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: scheme.onSurfaceVariant,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 9),
-              Row(
-                children: [
-                  Expanded(child: meta),
-                  if (onInstall != null) ...[
-                    const SizedBox(width: 10),
-                    FilledButton.tonal(
-                      onPressed: onInstall,
-                      style: FilledButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      child: const Text('Install'),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          );
-        },
-      ),
+            ),
     );
   }
 }
@@ -566,29 +569,30 @@ class _PublishDialogState extends State<_PublishDialog> {
                   child: Material(
                     color: _selected?.id == b.id
                         ? scheme.secondaryContainer
-                        : scheme.surfaceContainerHighest.withValues(alpha: .5),
+                        : AppSurfaces.card(scheme),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(AppShape.control),
+                      side: BorderSide(
+                        color: _selected?.id == b.id
+                            ? scheme.primary.withValues(alpha: .35)
+                            : AppSurfaces.cardBorder(scheme),
+                      ),
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: ListTile(
                       onTap: () => setState(() => _selected = b),
-                      leading: CircleAvatar(
-                        foregroundImage: Avatars.of(b.avatar),
-                        onForegroundImageError: b.avatar.isEmpty
-                            ? null
-                            : (_, __) {},
-                        child: Icon(
-                          b.kind == 'agent'
-                              ? Icons.smart_toy_outlined
-                              : Icons.extension_outlined,
-                        ),
+                      leading: BotAvatar(
+                        bot: b,
+                        radius: 20,
+                        userId: widget.dependencies.sessionController
+                                .session?.accountId ??
+                            '',
                       ),
                       title: Text(
                         b.name,
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
-                      subtitle: Text('${b.kind} · ${b.status}'),
+                      subtitle: Text('${b.kindLabel} · ${b.status}'),
                       trailing: _selected?.id == b.id
                           ? Icon(
                               Icons.check_circle_rounded,

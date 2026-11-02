@@ -98,15 +98,35 @@ type sandboxState struct {
 
 // Bots is the bot service used to provision the sandbox VM. It is injected by
 // the composition root to avoid an import cycle at the package level.
+// personalSandboxSpace resolves the caller's personal computer for a direct
+// chat: one home-space sandbox shared across that person's DMs. Project spaces
+// keep their own shared sandbox. Returns spaceID unchanged when not a DM.
+func (s *Service) personalSandboxSpace(ctx context.Context, spaceID identity.ID) identity.ID {
+	sp, err := s.GetSpace(ctx, spaceID)
+	if err != nil || sp == nil || !sp.Direct {
+		return spaceID
+	}
+	actor := helper.Actor(ctx)
+	if actor.IsZero() {
+		return spaceID
+	}
+	home, err := s.HomeSpace(ctx, actor)
+	if err != nil || home == nil {
+		return spaceID
+	}
+	return home.ID
+}
+
 // SandboxEnsure returns (creating if needed) the shared sandbox bot for
 // a space — a docker container when sandbox.backend=docker (default), a Modal
 // remote sandbox when sandbox.backend=modal. It is owned by the space owner,
 // runs as a member of the space and is addressed via spaces.ask — agents call
-// sandbox_exec on it.
+// sandbox_exec on it. Direct chats reuse the caller's home-space sandbox.
 func (s *Service) SandboxEnsure(ctx context.Context, spaceID identity.ID) (*bot.Bot, error) {
 	if vmm.ExecutionFrom(ctx).NoSandbox {
 		return nil, errs.Permission("sandbox access is disabled for this request")
 	}
+	spaceID = s.personalSandboxSpace(ctx, spaceID)
 	s.sandboxEnsureMu.Lock()
 	defer s.sandboxEnsureMu.Unlock()
 	sp, err := s.GetSpace(ctx, spaceID)

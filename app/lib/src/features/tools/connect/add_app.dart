@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_form.dart';
-import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/bot_avatar.dart';
 import '../../../shared/widgets/skeleton.dart';
 import 'mcp_connect_dialog.dart';
 import 'mcp_sign_in.dart';
@@ -260,14 +260,13 @@ class _AddAppDialogState extends State<AddAppDialog> {
               for (final t in _catalog)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: AvatarPicture(
-                      avatar: t.avatar,
-                      size: 28,
-                      radius: 8,
-                      fallback: const SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: Icon(Icons.hub_outlined))),
+                  leading: BotAvatar.fromFields(
+                    id: t.id,
+                    name: t.name.isEmpty ? t.id : t.name,
+                    kind: 'tool',
+                    avatar: t.avatar,
+                    radius: 14,
+                  ),
                   title: Text(t.name.isEmpty ? t.id : t.name),
                   subtitle: Text(personalApp(t.auth)
                       ? 'Sign in with your own account'

@@ -30,7 +30,13 @@ var runtimeTuning = []string{"ASEMAN_MAX_MODEL_CALLS", "ASEMAN_DEFAULT_CONTEXT_W
 	"ASEMAN_OPENCODE_ENGINE_API_KEY", "ASEMAN_OPENCODE_ENGINE_AUTH",
 	"ASEMAN_OPENCODE_ENGINE_AUTH_HOME", "ASEMAN_OPENCODE_ENGINE_HOME",
 	"ASEMAN_OPENCODE_ENGINE_TIMEOUT", "ASEMAN_OPENCODE_ENGINE_RETRY_DELAY",
-	"ASEMAN_OPENCODE_BIN"}
+	"ASEMAN_OPENCODE_BIN",
+	// DeepSeek Harness agentic engine: its binary and home, how long a run may
+	// take, and optionally its own DeepSeek key (ASEMAN_DSH_ENGINE_LLM=deepseek;
+	// by default it runs on the agents' platform models) and web tools.
+	"ASEMAN_DSH_BIN", "ASEMAN_DSH_ENGINE_HOME", "ASEMAN_DSH_ENGINE_TIMEOUT",
+	"ASEMAN_DSH_ENGINE_TOOL_TIMEOUT", "ASEMAN_DSH_ENGINE_LLM", "ASEMAN_DSH_ENGINE_API_KEY",
+	"ASEMAN_DSH_ENGINE_MODEL", "ASEMAN_DSH_ENGINE_WEB"}
 
 // healthTTL is how long a successful health check is trusted.
 const healthTTL = 30 * time.Second

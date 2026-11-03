@@ -12,17 +12,14 @@ import (
 
 // PersonalChat implements vmm.PersonalChatter: one Aseman self-chat / Talk
 // answer under the node's agentic engine. When the engine is OpenCode, the
-// runtime uses a free OpenCode model. WithTools mints a person-scoped gateway
-// session so MCP space tools work the same way as on a room turn.
+// runtime uses a free OpenCode model. When it is DeepSeek Harness, the
+// harness runs on the assistant's platform model through a person-scoped
+// gateway session (its tokens metered into chat.Usage). WithTools lets that
+// session's MCP space tools act as the person, the same way as on a room turn.
 func (a *Adapter) PersonalChat(ctx context.Context, chat vmm.PersonalChat) (string, error) {
-	engine := "deepagents"
-	if a.platform != nil {
-		if e, err := a.platform.AgentEngine(ctx); err == nil && e != "" {
-			engine = e
-		}
-	}
-	if engine != "opencode" {
-		return "", errs.New(errs.CodeUnavailable, "personal chat through the runtime is only used when the agentic engine is OpenCode")
+	engine := a.engine(ctx)
+	if engine != "opencode" && engine != "deepseek" {
+		return "", errs.New(errs.CodeUnavailable, "personal chat through the runtime is only used when the agentic engine is OpenCode or DeepSeek Harness")
 	}
 	if err := a.ensureRuntime(ctx); err != nil {
 		return "", err
@@ -36,16 +33,28 @@ func (a *Adapter) PersonalChat(ctx context.Context, chat vmm.PersonalChat) (stri
 		"with_tools":   chat.WithTools,
 	}
 
-	if chat.WithTools {
+	// DeepSeek Harness reaches its model through the person's session even
+	// without tools.
+	if chat.WithTools || engine == "deepseek" {
 		person, err := identity.Parse(strings.TrimSpace(chat.PersonID))
 		if err != nil || person.IsZero() {
-			return "", errs.InvalidArgument("personal chat with tools needs person_id")
+			return "", errs.InvalidArgument("personal chat through the runtime needs person_id")
 		}
 		s, err := a.openPersonal(ctx, person)
 		if err != nil {
 			return "", err
 		}
 		defer a.close(s)
+		if engine == "deepseek" {
+			s.chat = &Spec{Name: "Aseman", Provider: chat.Provider, Model: chat.Model}
+			if chat.Usage != nil {
+				defer func() {
+					s.mu.Lock()
+					chat.Usage.TokensIn, chat.Usage.TokensOut = s.tokIn, s.tokOut
+					s.mu.Unlock()
+				}()
+			}
+		}
 		body["gateway"] = a.nodeURL + gatewayPrefix
 		body["token"] = s.token
 		body["account_id"] = person.String()

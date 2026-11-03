@@ -134,8 +134,9 @@ class TurnContext:
     # writes code, briefed by the agents; off, the agents build and code
     # themselves. Not the agentic engine.
     opencode: bool = False
-    # Which runtime runs this turn: "deepagents" or "opencode". "opencode"
-    # drives the headless CLI on OpenCode's own free models.
+    # Which runtime runs this turn: "deepagents", "opencode" or "deepseek".
+    # "opencode" drives the headless CLI on OpenCode's own free models;
+    # "deepseek" drives headless DeepSeek Harness on the platform's models.
     agent_engine: str = "deepagents"
     # The agent's own chat model for side calls (the swarm's planning and team
     # setup): a LangChain chat model behind the turn's metered LLM endpoint.

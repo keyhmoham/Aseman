@@ -1,6 +1,7 @@
 package spaces
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/aseman/aseman/pkg/errs"
@@ -67,5 +68,60 @@ func TestAgentEngineDoesNotTouchTheProgrammerSwitch(t *testing.T) {
 	}
 	if on, _ = s.OpenCodeEnabled(ctx); !on {
 		t.Fatal("programmer switch must still be on")
+	}
+}
+
+func TestDeepSeekHarnessIsTheThirdEngine(t *testing.T) {
+	s, ctx := messageToolHarness(t)
+	if _, err := s.SetAgentEngine(ctx, AgentEngineDeepSeek); err != nil {
+		t.Fatal(err)
+	}
+	if engine, err := s.AgentEngine(ctx); err != nil || engine != AgentEngineDeepSeek {
+		t.Fatalf("after set: %q %v", engine, err)
+	}
+	view, err := s.agentEngineView(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view["llm"] != "platform" || !strings.Contains(view["status"].(string), "own memory and swarm") {
+		t.Fatalf("deepseek view: %v", view)
+	}
+	engines, _ := view["engines"].([]string)
+	if len(engines) != 3 || engines[2] != AgentEngineDeepSeek {
+		t.Fatalf("engines: %v", engines)
+	}
+	mappings, _ := view["mappings"].(map[string][]map[string]string)
+	rows := mappings[AgentEngineDeepSeek]
+	how := map[string]string{}
+	for _, row := range rows {
+		how[row["platform"]] = row["how"]
+	}
+	for _, mechanism := range []string{"Memory", "Swarm", "Agent team", "Subagents", "Task handoff / dispatch",
+		"Planning & workflow", "Questions to people", "Creator mode / plugin creation", "Agentic loop"} {
+		if how[mechanism] == "" {
+			t.Fatalf("no deepseek mapping for %s: %v", mechanism, rows)
+		}
+	}
+	if !strings.Contains(how["Memory"], "DeepSeek Harness's own") || !strings.Contains(how["Swarm"], "DeepSeek Harness's own") {
+		t.Fatalf("memory and swarm must be the harness's own: %v", how)
+	}
+	if len(mappings[AgentEngineOpenCode]) == 0 || mappings[AgentEngineOpenCode][0]["how"] == "" {
+		t.Fatalf("opencode mapping: %v", mappings[AgentEngineOpenCode])
+	}
+}
+
+func TestTheMemoryScreenFallsBackWhenNoRuntimeKeepsTheEnginesMemory(t *testing.T) {
+	s, ctx := messageToolHarness(t)
+	owner := idFromHex(t, "00000000000000010000000000000001")
+	sp, err := s.CreateSpace(ctx, owner, "notes", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetAgentEngine(ctx, AgentEngineDeepSeek); err != nil {
+		t.Fatal(err)
+	}
+	_, ok, err := s.engineMemoryNotes(ctx, AgentEngineDeepSeek, sp.ID, "read", spaceNotesPath, "", "")
+	if ok || err != nil {
+		t.Fatalf("without a runtime the sandbox serves the notes: ok=%v err=%v", ok, err)
 	}
 }

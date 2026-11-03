@@ -523,8 +523,8 @@ Configuration: `ASEMAN_TOOL_RUNTIME_IMAGE`, `ASEMAN_TOOL_RUNTIME_NETWORK`,
 
 Every agent — the built-in **aseman** lead of each space and every
 specialist — runs on [LangChain Deep Agents](https://github.com/langchain-ai/deepagents)
-(on LangGraph), unless an admin sets the agentic engine to OpenCode
-(below). The engine is a modular VMM adapter,
+(on LangGraph), unless an admin sets the agentic engine to OpenCode or
+DeepSeek Harness (below). The engine is a modular VMM adapter,
 `plugins/adapters/vmm/deepagents`:
 
 - the **Go adapter** registers agents as VMs (`vm_type: deepagents`), runs the
@@ -744,6 +744,50 @@ change the programmer switch:
   and app generation is the `aseman-app-builder` subagent (sandbox files,
   then `appui_publish`). It does not call `opencode_run`, `appui_create`, or
   `aseman-appui`, and it does not load `/etc/opencode`.
+- **deepseek** — the runtime drives [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+  (`dsh`, an all-plugin Cordis harness), headless: `dsh --profile headless
+  --patch <overlay> --json`, one dsh Session per agent per thread
+  (`--session-id`). The package is `runtime/aseman_agents/deepseek_engine`.
+  The harness brings **its own agentic modules** and the overlay wires them
+  to the platform:
+  - **loop, planning, goals, workflows** — dsh's own (`todo_write`, plan
+    mode, `create_goal`, `workflow`); todos and swarms show in the agent's
+    work log.
+  - **memory** — dsh's own, not OpenViking: the `aseman-memory` dsh plugin
+    (`deepseek_engine/plugins/aseman-memory.mjs`) keeps a store per space
+    (shared `AGENTS.md`) and per agent (its `AGENTS.md` and a journal of every
+    turn, written from the Session's own events), with `memory_remember` /
+    `memory_rewrite` / `memory_search` / `memory_read`; each run works in the
+    agent's directory, so dsh's own `agent-instructions` loader puts both
+    notes in every turn. The project's Memory screen (`sandbox_files` on
+    `AGENTS.md`, `.aseman/agents/<agent>/AGENTS.md`, read-only
+    `.aseman/agents/<agent>/JOURNAL.md`) reads and corrects it through
+    `vmm.EngineMemory` (runtime `GET/POST /v1/engines/deepseek/memory`).
+  - **swarm and team** — dsh's own: parallel subagents (`subagent` returns
+    at once; `wait_agent`, `send_message`, `list_agents`) and, for leads on
+    dsh 0.2.2+, the Agent Teams task board (`team_task_*`). Other Aseman
+    agents are teammates through `delegate_task` (a room task their own turn
+    answers), `recruit_agent` and `hire_agent`.
+  - **models** — the agent's own provider and model through the turn
+    gateway's metered `/llm` (a `llm-pi-ai` route with the turn token), so
+    every token is billed to the turn; or the engine's own DeepSeek key
+    (`ASEMAN_DSH_ENGINE_LLM=deepseek`, `ASEMAN_DSH_ENGINE_API_KEY`).
+  - **the space** — the `aseman` MCP server (`deepseek_engine/mcp_server.py`)
+    mounted into dsh: the same space, messaging, recruit/hire and personal
+    tools as the OpenCode bridge, `ask_user` (the run ends, the question waits
+    in Aseman, the Session resumes with the answer), the timeline and Code
+    Mode forwarded from the gateway, and **creator mode**: `create_app` /
+    `create_plugin` / `app_status` / `publish_app` are Aseman's on-demand app
+    generation (`appui_*`). dsh's `plugin_manager`, shell, files and web tools
+    are off: the runtime container is shared, plugins are Aseman apps.
+  - **personal Aseman** (notes / Talk) runs on dsh too, on the assistant's
+    model through a person-scoped gateway session (its tokens billed to the
+    person), with a memory per person.
+  Rows the installed dsh lacks (they differ between releases) are left out
+  of the overlay: the engine reads the profile's rows and headless flags once
+  per dsh version. The image pins `DSH_VERSION` (`0.2.1-rc.5`); a
+  `0.2.2-alpha.*` build adds Agent Teams and `--approval-policy never`, which
+  the engine then uses.
 
 When an agent takes a turn in a space, the runtime reads the space's tools
 (`spaces.tools_list`) — every app installed in the space **plus the

@@ -3696,16 +3696,42 @@ class _AppPageContentState extends State<AdminPageContent> {
   }
 
   /// Which runtime runs every agent turn. Deep Agents uses the platform LLM
-  /// gateway. OpenCode uses its own CLI and free models. Neither choice
-  /// changes the programmer OpenCode switch (who builds apps).
+  /// gateway. OpenCode uses its own CLI and free models. DeepSeek Harness
+  /// brings its own memory and swarm and runs on the platform's models.
+  /// None of them changes the programmer OpenCode switch (who builds apps).
   Widget _agentEngine() {
     final setting = _map(widget.results['spaces.agent_engine_get']);
     final engine = '${setting['engine'] ?? 'deepagents'}';
-    final mapping = _listOfMaps(setting['mapping']);
+    final mappings = _engineMappings(setting);
     void choose(String id) {
       if (setting.isEmpty || engine == id) return;
       widget.onDirectAction('spaces', 'agent_engine_set', {'engine': id});
     }
+
+    Widget card(String id, IconData icon, String title, String subtitle) {
+      return AppSwitchCard(
+        icon: icon,
+        title: title,
+        subtitle: subtitle,
+        value: engine == id,
+        onChanged: setting.isEmpty
+            ? null
+            : (value) {
+                if (value) choose(id);
+              },
+      );
+    }
+
+    const titles = {
+      'opencode': 'When OpenCode runs the agents',
+      'deepseek': 'When DeepSeek Harness runs the agents',
+    };
+    const subtitles = {
+      'opencode':
+          'Platform work, and the OpenCode mechanism that does it. Separate from the programmer that builds apps.',
+      'deepseek':
+          'Platform work, and the DeepSeek Harness module that does it. Its memory and swarm are its own.',
+    };
 
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 760),
@@ -3724,65 +3750,84 @@ class _AppPageContentState extends State<AdminPageContent> {
                 'Applies on the next step of any agent and on personal Aseman (notes / Talk). The programmer OpenCode switch stays as it is.',
             child: Column(
               children: [
-                AppSwitchCard(
-                  icon: Icons.account_tree_rounded,
-                  title: 'Deep Agents',
-                  subtitle:
-                      'LangGraph runtime. Swarm, team and handoff stay on the platform, and models come from the platform LLM gateway.',
-                  value: engine == 'deepagents',
-                  onChanged: setting.isEmpty
-                      ? null
-                      : (value) {
-                          if (value) choose('deepagents');
-                        },
+                card(
+                  'deepagents',
+                  Icons.account_tree_rounded,
+                  'Deep Agents',
+                  'LangGraph runtime. Swarm, team and handoff stay on the platform, and models come from the platform LLM gateway.',
                 ),
                 const SizedBox(height: 8),
-                AppSwitchCard(
-                  icon: Icons.terminal_rounded,
-                  title: 'OpenCode',
-                  subtitle:
-                      'Headless OpenCode CLI. Its own free-model gateway. Room agents and personal Aseman (notes / Talk) use free OpenCode models.',
-                  value: engine == 'opencode',
-                  onChanged: setting.isEmpty
-                      ? null
-                      : (value) {
-                          if (value) choose('opencode');
-                        },
+                card(
+                  'opencode',
+                  Icons.terminal_rounded,
+                  'OpenCode',
+                  'Headless OpenCode CLI. Its own free-model gateway. Room agents and personal Aseman (notes / Talk) use free OpenCode models.',
+                ),
+                const SizedBox(height: 8),
+                card(
+                  'deepseek',
+                  Icons.memory_rounded,
+                  'DeepSeek Harness',
+                  'Headless DeepSeek Harness (dsh). Its own memory, swarm of subagents, Agent Teams, planning and workflows, on the agents\' platform models (metered).',
                 ),
               ],
             ),
           ),
-          if (mapping.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            AdminSectionCard(
-              title: 'When OpenCode runs the agents',
-              icon: Icons.account_tree_outlined,
-              subtitle:
-                  'Platform work, and the OpenCode mechanism that does it. Separate from the programmer that builds apps.',
-              child: Column(
-                children: [
-                  for (final row in mapping)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${row['platform']}',
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 2),
-                          Text('${row['opencode']}'),
-                        ],
+          for (final entry in mappings.entries)
+            if (entry.value.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              AdminSectionCard(
+                title: titles[entry.key] ?? 'When ${entry.key} runs the agents',
+                icon: Icons.account_tree_outlined,
+                subtitle: subtitles[entry.key] ?? '',
+                child: Column(
+                  children: [
+                    for (final row in entry.value)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${row['platform']}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text('${row['how'] ?? row[entry.key] ?? ''}'),
+                          ],
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
         ],
       ),
     );
+  }
+
+  /// Each CLI engine's mapping (platform mechanism → how that engine does
+  /// it): the node's `mappings`, or its older `mapping` (OpenCode only). The
+  /// engine that runs the agents comes first.
+  Map<String, List<Map<String, dynamic>>> _engineMappings(
+    Map<String, dynamic> setting,
+  ) {
+    final out = <String, List<Map<String, dynamic>>>{};
+    final raw = setting['mappings'];
+    if (raw is Map) {
+      for (final entry in raw.entries) {
+        out['${entry.key}'] = _listOfMaps(entry.value);
+      }
+    }
+    if (out.isEmpty) {
+      final legacy = _listOfMaps(setting['mapping']);
+      if (legacy.isNotEmpty) out['opencode'] = legacy;
+    }
+    final engine = '${setting['engine'] ?? ''}';
+    if (!out.containsKey(engine)) return out;
+    return {engine: out[engine]!, ...out};
   }
 
   /// The node's OpenCode switch: on, OpenCode builds, tests and repairs the

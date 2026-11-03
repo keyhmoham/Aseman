@@ -3,7 +3,9 @@
     GET  /healthz                     → {"ok": true}
     POST /v1/turns                    run a turn         → {reply, status, answered, error}
     POST /v1/answers                  answer a question  → {reply, status, answered, error}
-    POST /v1/chat                     personal Aseman chat (OpenCode engine) → {reply, status, error}
+    GET  /v1/engines/deepseek/memory  DeepSeek Harness's own memory of a space (?space=&agent=)
+    POST /v1/engines/deepseek/memory  replace its notes {space, agent?, content}
+    POST /v1/chat                     personal Aseman chat (OpenCode / DeepSeek Harness engine) → {reply, status, error}
     GET  /v1/questions?vm=&space=     open questions     → {questions: [...]}
     POST /v1/playbooks/reset          forget what agents learned → {reset: n}
     POST /v1/rooms/forget             forget agents' conversations of a room thread → {forgotten: n}
@@ -102,15 +104,16 @@ def create_app(runner_factory: Any = None, *, secret: str | None = None, data_di
 
     @app.post("/v1/chat")
     async def chat(request: Request) -> JSONResponse:
-        """Personal Aseman chat under the OpenCode agentic engine.
+        """Personal Aseman chat under a CLI agentic engine (OpenCode or DeepSeek Harness).
 
         When ``with_tools`` is set, ``gateway`` + ``token`` are a person-scoped
         session (same MCP space tools as a room turn).
         """
         authorize(request)
         body = await request.json()
-        if str(body.get("agent_engine") or "") != "opencode":
-            raise HTTPException(status_code=400, detail="agent_engine must be opencode")
+        engine = str(body.get("agent_engine") or "")
+        if engine not in ("opencode", "deepseek"):
+            raise HTTPException(status_code=400, detail="agent_engine must be opencode or deepseek")
         system = str(body.get("system") or "")
         messages = body.get("messages") or []
         if not isinstance(messages, list):
@@ -126,6 +129,7 @@ def create_app(runner_factory: Any = None, *, secret: str | None = None, data_di
             reply, error = await request.app.state.runner.chat(
                 system=system, messages=messages, thread_id=thread_id,
                 with_tools=with_tools, gateway=gateway, token=token, account_id=account_id,
+                agent_engine=engine,
             )
         except Exception as exc:  # noqa: BLE001
             log.exception("personal chat crashed")
@@ -133,6 +137,27 @@ def create_app(runner_factory: Any = None, *, secret: str | None = None, data_di
         if error and not reply:
             return JSONResponse({"reply": "", "status": "failed", "error": error})
         return JSONResponse({"reply": reply, "status": "done", "error": error or ""})
+
+    @app.get("/v1/engines/deepseek/memory")
+    async def deepseek_memory(request: Request, space: str = "", agent: str = "") -> dict[str, Any]:
+        """DeepSeek Harness's own memory of a space: its shared notes and, for
+        an agent (bot id), its notes and latest journal."""
+        authorize(request)
+        if not space:
+            raise HTTPException(status_code=400, detail="space is required")
+        return request.app.state.runner.deepseek_memory(space, agent)
+
+    @app.post("/v1/engines/deepseek/memory")
+    async def write_deepseek_memory(request: Request) -> dict[str, Any]:
+        """Replace the space's (or an agent's) DeepSeek Harness notes:
+        {"space", "agent"?, "content"}."""
+        authorize(request)
+        body = await request.json()
+        space, content = str(body.get("space") or ""), str(body.get("content") or "")
+        if not space or not content.strip():
+            raise HTTPException(status_code=400, detail="space and content are required")
+        request.app.state.runner.write_deepseek_memory(space, content, str(body.get("agent") or ""))
+        return {"saved": True}
 
     @app.get("/v1/questions")
     async def questions(request: Request, vm: str = "", space: str = "") -> dict[str, Any]:

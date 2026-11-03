@@ -203,9 +203,10 @@ dependency. See [`services/README.md`](services/README.md#tools-one-form-three-b
 ## Personal Aseman, calls and social
 
 - **Aseman chat is your personal Aseman:** the former Saved Messages self-chat
-  is where notes are kept or answered by your personal brain (your own memory,
-  room access, proposals with Confirm, reminders, `work_on_it` jobs, live voice
-  under Admin → Agents). There is no separate Aseman assistant Direct — opening
+  is where notes are kept or answered by your personal Aseman, which acts for
+  you on DeepSeek Harness with your access across the app (your own memory,
+  room access, `ask_user` before anything that cannot be undone, app-wide
+  plugins, live voice under Admin → Agents). There is no separate Aseman assistant Direct — opening
   the built-in assistant or lead out of space lands here. Mentions of `@aseman`
   in other personal chats still use the chat assistant; room agents stay
   mentionable in projects, scoped to whoever prompts them.

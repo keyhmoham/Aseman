@@ -27,6 +27,24 @@
   meaning, learned from finished turns, billed to the project.
 - **Timeline:** kept in the node's own database; agents search their own
   project's (`ASEMAN_TIMELINE=off` turns it off).
+- **Plugins (Creator mode):** agents make plugins — an Elpian screen drawn
+  natively in the app with a QuickJS backend (`create_plugin`). Made in the
+  personal Aseman chat, a plugin is the person's own and app-wide; made in a
+  space or direct chat, it lives in that space's sandbox, shared by its
+  members, and reaches only that space. A plugin's screen calls its backend
+  (`tools.plugin_invoke`) and the platform actions it declared
+  (`tools.plugin_call`), as the person using it. Plugins open from a Plugins
+  button in chats and the workspace panel, as a side panel, a page or a desk
+  window, and from My bots → Your plugins (remove, restore).
+- **Typed API catalog:** `aseman_api_search` shows each action's body fields,
+  read from the source by `cmd/gen-action-schemas` (kept current by a test).
+- **Confinement:** a room agent, and a space's plugin, may name only its own
+  space and the rooms and threads in it, whatever the field is called.
+- **Personal Aseman:** acts only on DeepSeek Harness; its older in-node tools
+  (proposals, reminders, `work_on_it` jobs) are gone. Proposals and work they
+  already stored are still answered and delivered.
+- **Fix:** reports of direct messages have their own `direct_reports` table;
+  they shared `chat_reports` with room reports, which lost who was reported.
 
 ## Unreleased: deep theme system
 

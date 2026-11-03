@@ -637,6 +637,7 @@ class _ChatPageState extends State<ChatPage> {
                   spaceId: chat.isAseman ? '' : chat.spaceId,
                   roomId: chat.isAseman ? '' : chat.roomId,
                   appWideOnly: chat.isAseman,
+                  desk: _showDualTabs ? _desk : null,
                 ),
                 const SizedBox(width: 2),
                 _menu(),

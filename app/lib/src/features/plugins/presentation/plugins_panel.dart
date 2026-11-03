@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../desk/presentation/desk_controller.dart';
 import '../../tools/data/tools_api.dart';
 import '../../tools/presentation/tool_frontend_view.dart';
 import '../data/plugins_api.dart';
@@ -43,11 +44,19 @@ class PluginView extends StatelessWidget {
   }
 }
 
-/// Opens a plugin where it belongs: beside the conversation on a wide screen
-/// (a panel), else (and for a page) a screen of its own.
+/// Opens a plugin where it belongs: a desk plugin as a window on the room's
+/// desk (when there is one on screen), a panel beside the conversation on a
+/// wide screen, else (and for a page) a screen of its own.
 Future<void> openPlugin(BuildContext context, AppDependencies dependencies,
     PluginInfo plugin,
-    {String spaceId = '', String roomId = ''}) {
+    {String spaceId = '', String roomId = '', DeskController? desk}) async {
+  desk ??= DeskScope.maybeOf(context);
+  if (plugin.placement == PluginPlacement.desk && desk != null) {
+    // Close the list it was picked from; the window opens on the desk.
+    Navigator.of(context).maybePop();
+    await desk.open(plugin.id, title: plugin.name);
+    return;
+  }
   final view = PluginView(
       dependencies: dependencies,
       plugin: plugin,
@@ -55,7 +64,7 @@ Future<void> openPlugin(BuildContext context, AppDependencies dependencies,
       roomId: roomId);
   final wide = MediaQuery.sizeOf(context).width >= 900;
   if (wide && plugin.placement != PluginPlacement.page) {
-    return showGeneralDialog(
+    return showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
       barrierLabel: plugin.name,
@@ -76,7 +85,7 @@ Future<void> openPlugin(BuildContext context, AppDependencies dependencies,
       ),
     );
   }
-  return Navigator.of(context).push(MaterialPageRoute(
+  return Navigator.of(context).push<void>(MaterialPageRoute(
     builder: (context) => Scaffold(
       appBar: AppBar(title: Text(plugin.name)),
       body: SafeArea(child: view),
@@ -113,6 +122,7 @@ class PluginsList extends StatefulWidget {
     this.roomId = '',
     this.appWideOnly = false,
     this.showRemoved = false,
+    this.desk,
   });
 
   final AppDependencies dependencies;
@@ -120,6 +130,9 @@ class PluginsList extends StatefulWidget {
   final String roomId;
   final bool appWideOnly;
   final bool showRemoved;
+
+  /// The room's desk, for desk plugins (a sheet is not under the page's).
+  final DeskController? desk;
 
   @override
   State<PluginsList> createState() => _PluginsListState();
@@ -222,7 +235,9 @@ class _PluginsListState extends State<PluginsList> {
               onTap: p.removed
                   ? null
                   : () => openPlugin(context, widget.dependencies, p,
-                      spaceId: widget.spaceId, roomId: widget.roomId),
+                      spaceId: widget.spaceId,
+                      roomId: widget.roomId,
+                      desk: widget.desk),
               trailing: p.ownerId == me
                   ? IconButton(
                       tooltip: p.removed ? 'Restore' : 'Remove',
@@ -245,6 +260,7 @@ class PluginsButton extends StatelessWidget {
     this.spaceId = '',
     this.roomId = '',
     this.appWideOnly = false,
+    this.desk,
   });
 
   final AppDependencies dependencies;
@@ -252,11 +268,18 @@ class PluginsButton extends StatelessWidget {
   final String roomId;
   final bool appWideOnly;
 
+  /// The desk desk plugins open on (else the page's [DeskScope], if any).
+  final DeskController? desk;
+
   @override
   Widget build(BuildContext context) => IconButton(
         tooltip: 'Plugins',
         icon: const Icon(Icons.extension_outlined),
-        onPressed: () => showModalBottomSheet<void>(
+        onPressed: () => _show(context, desk ?? DeskScope.maybeOf(context)),
+      );
+
+  void _show(BuildContext context, DeskController? desk) =>
+      showModalBottomSheet<void>(
           context: context,
           showDragHandle: true,
           isScrollControlled: true,
@@ -276,12 +299,12 @@ class PluginsButton extends StatelessWidget {
                       dependencies: dependencies,
                       spaceId: spaceId,
                       roomId: roomId,
-                      appWideOnly: appWideOnly),
+                      appWideOnly: appWideOnly,
+                      desk: desk),
                 ),
               ]),
             ),
           ),
-        ),
       );
 }
 

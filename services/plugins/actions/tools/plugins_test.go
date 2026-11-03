@@ -15,6 +15,7 @@ import (
 	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/actions/support/repo"
+	"github.com/aseman/aseman/plugins/actions/tools/models"
 	"github.com/aseman/aseman/plugins/adapters/database/memory"
 	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 	dbmodel "github.com/aseman/aseman/plugins/testutil"
@@ -54,7 +55,7 @@ func pluginHarness(t *testing.T) (*Service, *pluginRouter, context.Context) {
 	t.Helper()
 	db := memory.New(logger.Global())
 	ctx := helper.WithInternalAccess(context.Background())
-	for _, m := range append(dbmodel.Models(), pluginModel()) {
+	for _, m := range append(append(dbmodel.Models(), models.Models()...), pluginModel()) {
 		if err := db.RegisterModel(ctx, m); err != nil {
 			t.Fatal(err)
 		}
@@ -74,6 +75,12 @@ func pluginHarness(t *testing.T) (*Service, *pluginRouter, context.Context) {
 	member(pSpaceA, pBob)
 	router := &pluginRouter{}
 	s := &Service{K: pluginKernel{router: router}, R: r}
+	s.roomSpaceFn = func(_ context.Context, room string) (string, error) {
+		if sp, ok := map[string]string{"r1": pSpaceA, "r2": pSpaceB}[room]; ok {
+			return sp, nil
+		}
+		return "", errs.NotFound("room")
+	}
 	put := func(p Plugin) {
 		p.CreatedAt, p.UpdatedAt = time.Now().UTC(), time.Now().UTC()
 		if err := db.Create(ctx, pluginsTable, p.ID, &p); err != nil {
@@ -133,6 +140,11 @@ func TestASpacePluginWorksForItsMembersInsideItsSpaceOnly(t *testing.T) {
 	}
 	if _, err := call(s, ctx, pBob, map[string]any{"plugin": "space", "namespace": "spaces", "action": "message_list", "body": map[string]any{"space": pSpaceB}}); errs.CodeOf(err) != errs.CodePermission {
 		t.Fatalf("another space = %v", err)
+	}
+	for _, body := range []map[string]any{{"room": "r2"}, {"space": pSpaceA, "thread_id": "r2"}, {"room_id": "nowhere"}} {
+		if _, err := call(s, ctx, pBob, map[string]any{"plugin": "space", "namespace": "spaces", "action": "message_list", "body": body}); errs.CodeOf(err) != errs.CodePermission {
+			t.Fatalf("a room of another space %v = %v", body, err)
+		}
 	}
 	if _, err := call(s, ctx, pBob, map[string]any{"plugin": "space", "namespace": "themes", "action": "apply"}); errs.CodeOf(err) != errs.CodePermission {
 		t.Fatalf("an account action from a space plugin = %v", err)
@@ -242,5 +254,36 @@ func TestOnlyPeopleWhoMayUseAPluginReachItsBackend(t *testing.T) {
 		if err := invoke(c.who, c.plugin); errs.CodeOf(err) != errs.CodeNotFound {
 			t.Fatalf("%s on %s = %v", c.who, c.plugin, err)
 		}
+	}
+}
+
+// A plugin's window anywhere (a desk, a panel) learns it is a plugin, so it
+// talks through the plugin gate; only people who may use it are told.
+func TestAPluginsFrontendSaysItIsAPlugin(t *testing.T) {
+	s, _, ctx := pluginHarness(t)
+	const bot = "0000000000000001000000000000b0b0"
+	if err := s.R.DB.Create(ctx, "tool_registry", bot, &models.Tool{ID: bot, BotID: bot, Owner: pAnn}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if err := s.R.DB.Create(ctx, pluginsTable, bot, &Plugin{ID: bot, Owner: pAnn, Scope: PluginAccount, Name: "Budget", Placement: PlacementDesk,
+		Status: pluginInstalled, CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	get := func(who string) map[string]any {
+		raw, _ := json.Marshal(map[string]any{"bot": bot, "space": pSpaceA})
+		resp, err := s.frontendGet(ctx, &api.ActionRequest{Caller: api.Caller{ID: identity.MustParse(who), Kind: "user"}, Body: raw})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out map[string]any
+		_ = json.Unmarshal(resp.Body, &out)
+		return out
+	}
+	if p, _ := get(pAnn)["plugin"].(map[string]any); p == nil || p["placement"] != PlacementDesk || p["scope"] != PluginAccount {
+		t.Fatalf("the owner's frontend: %v", get(pAnn))
+	}
+	if get(pBob)["plugin"] != nil {
+		t.Fatal("someone else was told of an app-wide plugin")
 	}
 }

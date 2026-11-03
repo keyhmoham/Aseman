@@ -24,6 +24,9 @@ class ToolsApi {
 
   final ActionCall _call;
 
+  /// The node actions it runs, for APIs built on the same connection.
+  ActionCall get call => _call;
+
   /// A generated frontend may be produced by a model on first use.
   static const generationTimeout = Duration(minutes: 4);
 

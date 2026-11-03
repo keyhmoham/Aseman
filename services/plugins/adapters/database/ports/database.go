@@ -155,3 +155,26 @@ type AtomicUpdater interface {
 // AtomicUpdateSupport lets resolving/guarded ports report the current provider's
 // optional capability without claiming that their forwarding method implements it.
 type AtomicUpdateSupport interface{ SupportsAtomicUpdates() bool }
+
+// VectorHit is one result of a vector search: a stored id and its cosine
+// distance from the query (0 = same direction, 2 = opposite).
+type VectorHit struct {
+	ID       string
+	Distance float64
+}
+
+// VectorIndex is an optional provider capability: nearest-neighbour search
+// over embeddings kept beside a model's records (PostgreSQL with pgvector).
+// Each vector belongs to one scope; a search covers the scopes it names and
+// only vectors of the query's dimension, so changing the embedding model
+// never mixes spaces of different sizes. Providers without it remain usable:
+// callers fall back to exact search over the embeddings they stored.
+type VectorIndex interface {
+	VectorUpsert(ctx context.Context, collection, id, scope string, vector []float32) error
+	VectorDelete(ctx context.Context, collection, id string) error
+	VectorSearch(ctx context.Context, collection string, scopes []string, vector []float32, limit int) ([]VectorHit, error)
+}
+
+// VectorIndexSupport lets wrapping ports report whether the provider they
+// forward to really has the VectorIndex capability.
+type VectorIndexSupport interface{ SupportsVectorIndex() bool }

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/pkg/agentpolicy"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
@@ -32,64 +33,10 @@ import (
 // person's own surfaces (posts, wallet, themes, following, agents of their
 // account) are the person's assistant's, not a space agent's.
 
-var deniedNamespaces = map[string]bool{
-	"admin": true, "auth": true, "plugins": true, "federation": true, "developer": true,
-	"usage": true, "llm": true, "settings": true, "hostaccess": true, "enterprise": true,
-}
-
-var deniedActions = map[string]bool{
-	"finance.transfer": true, "finance.faucet": true, "finance.wallet_mint": true, "finance.pay_bot": true,
-	"finance.pool_create": true, "finance.pool_consume": true, "finance.pool_free": true,
-	"spaces.space_list_all": true, "spaces.admin_files": true,
-	"spaces.admin_work_log": true, "spaces.admin_terminate_sandbox": true,
-	"spaces.admin_sandboxes": true, "spaces.admin_storage": true,
-	"spaces.admin_chat_reports": true, "spaces.admin_chat_report_resolve": true,
-	"users.accounts_list": true, "users.account_update": true,
-	"users.account_password": true, "users.account_delete": true,
-	"users.account_create": true,
-	"bots.entity_put": true, "bots.entity_delete": true,
-	"market.approve": true, "market.deny": true, "market.stats": true,
-	"posts.admin_post_reports": true, "posts.admin_post_report_resolve": true,
-}
-
-// agentAllows reports whether an agent session may call namespace.action.
-func agentAllows(name string) bool {
-	name = strings.TrimSpace(name)
-	ns, action, ok := strings.Cut(name, ".")
-	if !ok || ns == "" || action == "" {
-		return false
-	}
-	if deniedNamespaces[ns] || deniedActions[name] {
-		return false
-	}
-	// Administrative actions of any namespace are the node admin's.
-	return !strings.HasPrefix(action, "admin_")
-}
-
-// roomNamespaces are the space-bound namespaces a room agent works in.
-var roomNamespaces = map[string]bool{"spaces": true, "routines": true, "tools": true, "message": true}
-
-// roomGlobal are the account-wide actions a room agent may also call.
-var roomGlobal = map[string]bool{
-	"users.search": true, "users.account_get": true, "users.dm_send": true, "users.dm_list": true,
-	"market.catalog": true, "market.get": true, "market.recommend": true, "market.list": true,
-	"themes.get": true, "talent.list_project": true,
-}
-
-// roomDenied are actions of the space-bound namespaces that reach beyond one space.
-var roomDenied = map[string]bool{
-	"spaces.space_create": true, "spaces.space_list": true, "spaces.space_search": true,
-	"spaces.chat_list": true, "spaces.direct_open": true, "spaces.space_delete": true,
-}
-
-// roomAllows reports whether a room agent may call namespace.action.
-func roomAllows(name string) bool {
-	if !agentAllows(name) || roomDenied[name] {
-		return false
-	}
-	ns, _, _ := strings.Cut(name, ".")
-	return roomNamespaces[ns] || roomGlobal[name]
-}
+// agentAllows reports whether an agent session in the account scope may call
+// namespace.action; roomAllows, in a space.
+func agentAllows(name string) bool { return agentpolicy.Allows(agentpolicy.Account, name) }
+func roomAllows(name string) bool  { return agentpolicy.Allows(agentpolicy.Space, name) }
 
 func (s *session) allows(name string) bool {
 	if s.personal {

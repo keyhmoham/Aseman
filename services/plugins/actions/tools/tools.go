@@ -818,7 +818,7 @@ func NewPlugin() api.Plugin {
 			helper.Action{Namespace: "tools", Name: "app_rpc", Summary: "A tool's app (MCP Apps) asks its server: resources/read or tools/call, as the person in the space", Handler: s.appRPC},
 		)
 		var release func()
-		return module.Instance{Service: s, Models: append(schema.Models(), models.Models()...), Actions: append(append(actions, oauthActions(s)...), brokerActions(s)...),
+		return module.Instance{Service: s, Models: append(append(schema.Models(), models.Models()...), pluginModel()), Actions: append(append(append(actions, oauthActions(s)...), brokerActions(s)...), pluginActions(s)...),
 			Mount: func(context.Context) error {
 				// The gateway managed and installed backends reach the node by.
 				binder, ok := d.Kernel.(api.NetworkBindings)

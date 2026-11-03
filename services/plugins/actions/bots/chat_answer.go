@@ -104,7 +104,6 @@ func (s *Service) ChatAnswerStream(ctx context.Context, customer, botID identity
 	return s.answerStream(ctx, customer, botID, turns, chatAnswerSystem, false, onText)
 }
 
-
 // answerStream is ChatAnswerStream with the system prompt system makes. A
 // personal answer (the person's own Aseman) runs on the agent runtime as the
 // person; any other agent's chat answer is one streamed model call.
@@ -175,8 +174,6 @@ func (s *Service) answerStream(ctx context.Context, customer, botID identity.ID,
 // harnessChatTimeout bounds one personal answer on the agent runtime. Cold
 // starts (runtime schedule + first model call) need longer than a chat answer.
 const harnessChatTimeout = 8 * time.Minute
-
-
 
 // answerViaEngine answers a personal chat on the agent runtime (DeepSeek
 // Harness), as the person, with their access across the app. It runs on the

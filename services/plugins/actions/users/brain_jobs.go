@@ -60,15 +60,6 @@ type workStart struct {
 	TurnID  string `json:"turn_id"`
 }
 
-func (s *Service) startWork(ctx context.Context, me identity.ID, request string) (workStart, error) {
-	if s.workFn != nil {
-		return s.workFn(ctx, me, request)
-	}
-	var out workStart
-	err := bridge.Invoke(ctx, s.K, "spaces", "BrainWork", []any{ctx, me, request}, &out)
-	return out, err
-}
-
 func (s *Service) turnResult(ctx context.Context, me identity.ID, turn string) (turnResult, error) {
 	if s.turnFn != nil {
 		return s.turnFn(ctx, me, turn)

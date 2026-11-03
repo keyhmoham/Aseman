@@ -388,14 +388,7 @@ func (s *Service) runBrain(ctx context.Context, me identity.ID, rec *bot.Bot, no
 	defer endSavedAsk(me, noteID)
 	// The admin's AI log: what was asked, what it did and what came of it (logged when this returns).
 	entry := aiEntry{person: me, kind: aiKindAseman, prompt: body, plan: "answer", status: aiOK, started: time.Now()}
-	tally := &toolTally{}
-	// Cards the answer's tools show (rooms, charts) are stored with it.
-	box := &cardBox{}
-	ctx = withCards(ctx, box)
-	defer func() {
-		entry.tools = tally.list()
-		s.logAI(context.WithoutCancel(ctx), entry)
-	}()
+	defer func() { s.logAI(context.WithoutCancel(ctx), entry) }()
 
 	// "Yes" (or "no") to what it just proposed: done (or not), with no model asked.
 	if yes, no := sayYes.MatchString(body), sayNo.MatchString(body); yes || no {
@@ -502,15 +495,14 @@ func (s *Service) runBrain(ctx context.Context, me identity.ID, rec *bot.Bot, no
 		setSavedAskDeciding(me, noteID, false)
 		setSavedAskText(me, noteID, text)
 	}
-	// Something to do (or no decision model to say it is not): the answer may
-	// use its tools, and what it proposes waits for a yes. Otherwise it streams.
+	// Something to do (or no decision model to say it is not): Aseman acts on
+	// the agent runtime, as the person. Otherwise it streams an answer.
 	var (
-		reply    string
-		err      error
-		proposed []brainStep
+		reply string
+		err   error
 	)
 	if plan.act || !plan.decided {
-		reply, err = s.brainAct(ctx, me, rec, brainBrief(notes, rooms)+s.jobsBrief(ctx, me)+voiceBrief(note.voice), turns, tally.wrap(s.brainRun(ctx, me, &proposed, map[string]string{})), shown)
+		reply, err = s.brainAct(ctx, me, rec, brainBrief(notes, rooms)+s.jobsBrief(ctx, me)+voiceBrief(note.voice), turns, shown)
 	} else {
 		reply, err = s.brainAnswer(ctx, me, rec, brainBrief(notes, rooms)+s.jobsBrief(ctx, me)+voiceBrief(note.voice), turns, shown)
 	}
@@ -536,7 +528,7 @@ func (s *Service) runBrain(ctx context.Context, me identity.ID, rec *bot.Bot, no
 	if reply == "" {
 		return ""
 	}
-	s.storeAnswer(ctx, me, me, rec, noteID, reply, encodeProposal(proposed, box.list()))
+	s.storeAnswer(ctx, me, me, rec, noteID, reply, "")
 	if err == nil {
 		s.brainRecord(ctx, me, said, reply)
 	}
@@ -667,18 +659,18 @@ func (s *Service) brainAnswer(ctx context.Context, me identity.ID, rec *bot.Bot,
 	return reply, err
 }
 
-// brainAct has the assistant answer as the person's Aseman with its tools
-// (brain_tools.go): run carries out what it calls.
-func (s *Service) brainAct(ctx context.Context, me identity.ID, rec *bot.Bot, brief string, turns []map[string]string, run func(name, args string) string, onText func(string)) (string, error) {
+// brainAct has the person's Aseman act for them on the agent runtime (DeepSeek
+// Harness), as the person, with the runtime's tools and their access.
+func (s *Service) brainAct(ctx context.Context, me identity.ID, rec *bot.Bot, brief string, turns []map[string]string, onText func(string)) (string, error) {
 	if s.actFn != nil {
-		reply, err := s.actFn(ctx, me, brief, turns, run)
+		reply, err := s.actFn(ctx, me, brief, turns)
 		if reply != "" && onText != nil {
 			onText(reply)
 		}
 		return reply, err
 	}
 	var reply string
-	err := bridge.Invoke(ctx, s.K, "bots", "BrainAct", []any{ctx, me, rec.ID, brief, turns, brainTools(), run, onText}, &reply)
+	err := bridge.Invoke(ctx, s.K, "bots", "BrainAct", []any{ctx, me, rec.ID, brief, turns, onText}, &reply)
 	return reply, err
 }
 

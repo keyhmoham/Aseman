@@ -17,7 +17,7 @@ import (
 )
 
 // chatReportsTable holds what people reported in their direct messages.
-const chatReportsTable = "chat_reports"
+const chatReportsTable = "direct_reports"
 
 // reportReasons are what a person can report a message or a chat for.
 var reportReasons = map[string]bool{"spam": true, "harassment": true, "inappropriate": true, "scam": true, "other": true}

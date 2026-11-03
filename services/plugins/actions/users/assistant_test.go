@@ -45,7 +45,7 @@ func newAssistantFixture(t *testing.T) *assistantFixture {
 	f.s.brainAnswerFn = func(ctx context.Context, person identity.ID, rec *bot.Bot, _ string, turns []map[string]string, onText func(string)) (string, error) {
 		return f.s.answerFn(ctx, person, rec, turns, onText)
 	}
-	f.s.actFn = func(ctx context.Context, person identity.ID, _ string, turns []map[string]string, _ func(name, args string) string) (string, error) {
+	f.s.actFn = func(ctx context.Context, person identity.ID, _ string, turns []map[string]string) (string, error) {
 		return f.s.answerFn(ctx, person, f.rec, turns, func(string) {})
 	}
 	f.s.decideFn = func(context.Context, string) brainPlan { return brainPlan{decided: true} }

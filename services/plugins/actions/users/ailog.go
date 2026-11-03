@@ -93,27 +93,6 @@ func (s *Service) logAI(ctx context.Context, e aiEntry) {
 	}
 }
 
-// toolTally collects the names of the tools a run called, for the log.
-type toolTally struct {
-	mu    sync.Mutex
-	names []string
-}
-
-func (t *toolTally) wrap(run func(name, args string) string) func(name, args string) string {
-	return func(name, args string) string {
-		t.mu.Lock()
-		t.names = append(t.names, name)
-		t.mu.Unlock()
-		return run(name, args)
-	}
-}
-
-func (t *toolTally) list() []string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return append([]string(nil), t.names...)
-}
-
 var aiLogPurged sync.Mutex
 var aiLogPurgedAt time.Time
 

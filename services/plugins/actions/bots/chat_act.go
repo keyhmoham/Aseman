@@ -13,21 +13,11 @@ import (
 // A person's Aseman doing things for them: it acts on the agent runtime
 // (DeepSeek Harness) as the person, with the runtime's own tools.
 
-// BrainTool is one thing a person's Aseman can do: a function tool.
-type BrainTool struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Parameters  map[string]any `json:"parameters"`
-}
-
-// BrainAct is BrainAnswerStream with the person's tools: their Aseman acts in
-// the app for them on the agent runtime (DeepSeek Harness), as the person and
-// with their access across the app (the agents' policy applies), then
-// answers. The answer comes whole, through onText. Billed like any chat
-// answer. tools and run are what older callers offer; the runtime brings its
-// own tools now.
-func (s *Service) BrainAct(ctx context.Context, customer, botID identity.ID, brief string, turns []ChatTurn, tools []BrainTool,
-	run func(name, args string) string, onText func(string)) (string, error) {
+// BrainAct is BrainAnswerStream acting: the person's Aseman does things in the
+// app for them on the agent runtime (DeepSeek Harness), as the person and with
+// their access across the app (the agents' policy applies), then answers. The
+// answer comes whole, through onText. Billed like any chat answer.
+func (s *Service) BrainAct(ctx context.Context, customer, botID identity.ID, brief string, turns []ChatTurn, onText func(string)) (string, error) {
 	return s.brainActViaHarness(ctx, customer, botID, brief, turns, onText)
 }
 

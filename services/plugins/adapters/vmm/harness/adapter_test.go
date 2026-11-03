@@ -226,7 +226,14 @@ func TestGatewayDispatchesAllowedActionsInTheTurnScope(t *testing.T) {
 	if r := call("tok", `{"namespace":"spaces","action":"message_send","body":{"space":"other"}}`); r.Status != http.StatusForbidden {
 		t.Fatalf("other space: %d", r.Status)
 	}
-	if r := call("tok", `{"namespace":"spaces","action":"message_send","body":{"space":"space-1","body":"hi"}}`); r.Status != http.StatusOK {
+	// Rooms and threads are checked too, whatever the field is called.
+	a.platform = fakePlatform{rooms: map[string]string{"room-1": "space-1", "room-9": "other"}}
+	for _, body := range []string{`{"space_id":"other"}`, `{"room":"room-9"}`, `{"space":"space-1","thread":"room-9"}`, `{"room_id":"unknown"}`} {
+		if r := call("tok", `{"namespace":"spaces","action":"message_send","body":`+body+`}`); r.Status != http.StatusForbidden {
+			t.Fatalf("%s: %d", body, r.Status)
+		}
+	}
+	if r := call("tok", `{"namespace":"spaces","action":"message_send","body":{"space":"space-1","room":"room-1","body":"hi"}}`); r.Status != http.StatusOK {
 		t.Fatalf("allowed action: %d %s", r.Status, r.Body)
 	}
 	got := router.calls[len(router.calls)-1]

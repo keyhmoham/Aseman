@@ -15,6 +15,7 @@ import (
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/internal/plugins/bridge"
 	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/agentpolicy"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/plugins/actions/governance/models/gate"
 	"github.com/aseman/aseman/plugins/actions/usage/models/usage"
@@ -72,6 +73,8 @@ type platform interface {
 	TimelineEnabled(ctx context.Context) (bool, error)
 	TimelineSearch(ctx context.Context, spaceID string, query []byte) ([]byte, error)
 	TimelineEntry(ctx context.Context, spaceID, id string) ([]byte, error)
+	// RoomSpace is the space a room (or thread) is in.
+	RoomSpace(ctx context.Context, roomID string) (string, error)
 }
 
 type kernelPlatform struct{ K api.Kernel }
@@ -110,6 +113,20 @@ func (p kernelPlatform) TimelineEntry(ctx context.Context, spaceID, id string) (
 	var out []byte
 	err := bridge.Invoke(ctx, p.K, "timeline", "EntryJSON", []any{ctx, spaceID, id}, &out)
 	return out, err
+}
+
+func (p kernelPlatform) RoomSpace(ctx context.Context, roomID string) (string, error) {
+	id, err := identity.Parse(roomID)
+	if err != nil {
+		return "", errs.InvalidArgument("not a room id: " + roomID)
+	}
+	var room struct {
+		SpaceID string `json:"space_id"`
+	}
+	if err := bridge.Invoke(ctx, p.K, "spaces", "GetRoom", []any{ctx, id}, &room); err != nil {
+		return "", err
+	}
+	return room.SpaceID, nil
 }
 
 // timelineOn reports whether turns get the timeline (an error means the
@@ -161,12 +178,16 @@ func (a *Adapter) serveCall(ctx context.Context, req *network.Request) (*network
 	}
 	// A room agent works only inside the space of its turn. Personal Aseman
 	// acts as the person across their rooms (authorization still applies).
+	// Every space, room and thread the body names must be the turn's.
 	if !s.personal {
-		var scope struct {
-			Space string `json:"space"`
+		roomSpace := func(ctx context.Context, room string) (string, error) {
+			if a.platform == nil {
+				return "", errs.New(errs.CodeUnavailable, "rooms cannot be checked")
+			}
+			return a.platform.RoomSpace(scoped{Context: ctx, values: s.base}, room)
 		}
-		if json.Unmarshal(in.Body, &scope) == nil && scope.Space != "" && scope.Space != s.spaceID {
-			return errorResponse(errs.Permission("an agent acts only inside the space of its turn")), nil
+		if err := agentpolicy.Confine(ctx, in.Body, s.spaceID, roomSpace); err != nil {
+			return errorResponse(errs.Permission("an agent acts only inside the space of its turn: " + err.Error())), nil
 		}
 	}
 	// Every action is decided and recorded before it runs, and runs with the

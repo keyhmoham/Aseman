@@ -169,7 +169,7 @@ func New(log *logger.Logger) *Adapter {
 			Log:         log,
 		},
 		image: defaultImage, alias: defaultAlias, port: defaultPort, volume: defaultVolume, memory: newMemoryMeter(),
-		learnSlots: make(chan struct{}, 2),
+		learnSlots:           make(chan struct{}, 2),
 		client:               &http.Client{},
 		llmCallTimeout:       envDuration(EnvLLMCallTimeout, defaultLLMCallTimeout),
 		llmFirstEventTimeout: envDuration(EnvLLMFirstEventTimeout, defaultLLMFirstEventTimeout),

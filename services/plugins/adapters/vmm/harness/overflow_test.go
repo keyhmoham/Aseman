@@ -20,6 +20,8 @@ type fakePlatform struct {
 	memoryChat, memoryEmbedding *vmm.ProviderConfig
 	// timeline answers the spaces' timeline searches; nil means it is off.
 	timeline func(spaceID string, query []byte) ([]byte, error)
+	// rooms maps a room id to its space.
+	rooms map[string]string
 }
 
 func (p fakePlatform) ResolveMemoryChat(context.Context) (vmm.ProviderConfig, error) {
@@ -50,6 +52,13 @@ func (p fakePlatform) TimelineEntry(_ context.Context, spaceID, id string) ([]by
 		return nil, errs.New(errs.CodeUnavailable, "the timeline is off")
 	}
 	return p.timeline(spaceID, []byte(`{"id":"`+id+`"}`))
+}
+
+func (p fakePlatform) RoomSpace(_ context.Context, roomID string) (string, error) {
+	if sp, ok := p.rooms[roomID]; ok {
+		return sp, nil
+	}
+	return "", errs.NotFound("room")
 }
 
 func (p fakePlatform) ResolveChat(context.Context, string, string) (vmm.ProviderConfig, error) {

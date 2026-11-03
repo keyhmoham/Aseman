@@ -55,7 +55,9 @@ const (
 
 func memoryModels() []database.Model {
 	f := func(name string, k database.Kind) database.Field { return database.Field{Name: name, Kind: k} }
-	ix := func(name string, k database.Kind) database.Field { return database.Field{Name: name, Kind: k, Index: true} }
+	ix := func(name string, k database.Kind) database.Field {
+		return database.Field{Name: name, Kind: k, Index: true}
+	}
 	return []database.Model{
 		{Name: notesModel, Table: notesModel, Fields: []database.Field{
 			f("id", database.KindString), f("scope", database.KindString), f("content", database.KindString),
@@ -464,7 +466,7 @@ func (m *memoryStore) learn(ctx context.Context, scope memoryScope, t transcript
 	}
 	exchange := fmt.Sprintf("REQUEST:\n%s\n\nTOOLS USED: %s\n\nANSWER:\n%s", clip(t.Message, 6000), strings.Join(t.Tools, ", "), clip(t.Reply, 6000))
 	up, err := providerRequest(ctx, provider, "/chat/completions", map[string]any{
-		"messages": []map[string]any{{"role": "system", "content": learnPrompt}, {"role": "user", "content": exchange}},
+		"messages":    []map[string]any{{"role": "system", "content": learnPrompt}, {"role": "user", "content": exchange}},
 		"temperature": 0,
 	})
 	if err != nil {

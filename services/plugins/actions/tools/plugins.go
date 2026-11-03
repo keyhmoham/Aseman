@@ -485,10 +485,9 @@ func (s *Service) pluginCall(ctx context.Context, req *api.ActionRequest) (*api.
 		}
 	}
 	if p.Scope == PluginSpace {
-		for _, key := range []string{"space", "space_id"} {
-			if v, ok := body[key]; ok && v != p.SpaceID {
-				return nil, errs.Permission("this plugin works inside its own space only")
-			}
+		// Every space, room and thread it names must be its space's.
+		if err := agentpolicy.Confine(ctx, in.Body, p.SpaceID, s.roomSpace); err != nil {
+			return nil, errs.Permission(p.Name + ": " + err.Error())
 		}
 		if _, ok := body["space"]; !ok {
 			body["space"] = p.SpaceID
@@ -496,6 +495,24 @@ func (s *Service) pluginCall(ctx context.Context, req *api.ActionRequest) (*api.
 	}
 	raw, _ := json.Marshal(body)
 	return s.K.Actions().Dispatch(ctx, in.Namespace, in.Action, &api.ActionRequest{Caller: req.Caller, Body: raw})
+}
+
+// roomSpace is the space a room (or thread) is in.
+func (s *Service) roomSpace(ctx context.Context, roomID string) (string, error) {
+	if s.roomSpaceFn != nil {
+		return s.roomSpaceFn(ctx, roomID)
+	}
+	id, err := identity.Parse(roomID)
+	if err != nil {
+		return "", errs.InvalidArgument("not a room id")
+	}
+	var room struct {
+		SpaceID string `json:"space_id"`
+	}
+	if err := bridge.Invoke(ctx, s.K, "spaces", "GetRoom", []any{ctx, id}, &room); err != nil {
+		return "", err
+	}
+	return room.SpaceID, nil
 }
 
 // pluginInvoke implements tools.plugin_invoke: a plugin's screen calls its

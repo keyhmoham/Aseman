@@ -41,6 +41,8 @@ type Service struct {
 	Compiler *Compiler
 	// Words reads plain-words requests to apps (llm.Complete when nil).
 	Words WordsModel
+	// roomSpaceFn replaces the spaces plugin in tests: the space a room is in.
+	roomSpaceFn func(ctx context.Context, room string) (string, error)
 
 	// commandCache holds what each connected app offers, per person and
 	// project, for a few minutes: agents ask for it at the start of every turn.

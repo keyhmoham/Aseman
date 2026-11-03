@@ -43,4 +43,3 @@ func (a *Adapter) openPersonal(ctx context.Context, person identity.ID) (*sessio
 	a.mu.Unlock()
 	return s, nil
 }
-

@@ -52,7 +52,7 @@ type memoryMeter struct {
 	// people are the accounts metered for their own memory (personal chat),
 	// charged with no project.
 	people map[string]bool
-	stop    chan struct{}
+	stop   chan struct{}
 }
 
 func newMemoryMeter() *memoryMeter {

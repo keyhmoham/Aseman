@@ -37,10 +37,10 @@ var deniedActions = map[string]bool{
 	"finance.transfer": true, "finance.faucet": true, "finance.wallet_mint": true, "finance.pay_bot": true,
 	"finance.pool_create": true, "finance.pool_consume": true, "finance.pool_free": true,
 	"spaces.space_list_all": true,
-	"users.accounts_list": true, "users.account_update": true,
+	"users.accounts_list":   true, "users.account_update": true,
 	"users.account_password": true, "users.account_delete": true,
 	"users.account_create": true,
-	"bots.entity_put": true, "bots.entity_delete": true,
+	"bots.entity_put":      true, "bots.entity_delete": true,
 	"market.approve": true, "market.deny": true, "market.stats": true,
 	// A plugin's own calls are gated by plugin_call; model code never calls it
 	// for another plugin.

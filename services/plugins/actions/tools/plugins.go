@@ -498,6 +498,50 @@ func (s *Service) pluginCall(ctx context.Context, req *api.ActionRequest) (*api.
 	return s.K.Actions().Dispatch(ctx, in.Namespace, in.Action, &api.ActionRequest{Caller: req.Caller, Body: raw})
 }
 
+// pluginInvoke implements tools.plugin_invoke: a plugin's screen calls its
+// own backend (tool.call), as the person using it. A space plugin's backend
+// runs in its space's sandbox; an app-wide plugin's is the person's, in no
+// space (room and space only say where the person opened it).
+func (s *Service) pluginInvoke(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+	if err := helper.RequireUser(req); err != nil {
+		return nil, err
+	}
+	var in struct {
+		Plugin   string         `json:"plugin"`
+		Function string         `json:"function"`
+		Payload  map[string]any `json:"payload"`
+		Room     string         `json:"room"`
+	}
+	if err := helper.Decode(req, &in); err != nil {
+		return nil, err
+	}
+	p, err := s.plugin(ctx, in.Plugin)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.usable(ctx, req.Caller.ID, p); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(in.Function) == "" {
+		return nil, errs.InvalidArgument("function required")
+	}
+	exec := vmm.ExecutionFrom(ctx)
+	exec.ActorID, exec.SpaceID, exec.RoomID = req.Caller.ID.String(), p.SpaceID, ""
+	if p.Scope == PluginSpace && in.Room != "" {
+		exec.RoomID = in.Room
+	}
+	body, _ := json.Marshal(map[string]any{"function": in.Function, "payload": in.Payload})
+	reply, err := s.InvokeTool(vmm.WithExecution(ctx, exec), p.ID, string(body))
+	if err != nil {
+		return nil, err
+	}
+	var result any
+	if json.Unmarshal([]byte(reply), &result) != nil {
+		result = map[string]any{"text": reply}
+	}
+	return helper.JSON(map[string]any{"result": result})
+}
+
 func firstNonEmptyString(values ...string) string {
 	for _, v := range values {
 		if v != "" {
@@ -513,6 +557,7 @@ func pluginActions(s *Service) []api.Action {
 		helper.Action{Namespace: "tools", Name: "plugin_list", Summary: "The plugins a person can use: their app-wide ones and a space's", Handler: s.pluginList},
 		helper.Action{Namespace: "tools", Name: "plugin_remove", Summary: "Remove a plugin (it can be restored)", Handler: s.pluginSetStatus(pluginRemoved)},
 		helper.Action{Namespace: "tools", Name: "plugin_restore", Summary: "Restore a removed plugin", Handler: s.pluginSetStatus(pluginInstalled)},
+		helper.Action{Namespace: "tools", Name: "plugin_invoke", Summary: "A plugin's screen calls its own backend, as the person using it", Handler: s.pluginInvoke},
 		helper.Action{Namespace: "tools", Name: "plugin_call", Summary: "A plugin's screen calls a platform action it declared, as the person using it", Handler: s.pluginCall},
 	}
 }

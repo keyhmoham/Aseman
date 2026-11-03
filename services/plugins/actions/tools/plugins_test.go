@@ -230,3 +230,17 @@ func TestPluginInputAndOwner(t *testing.T) {
 		t.Fatalf("a person's own Aseman makes app-wide plugins: %v %v %v", owner, space, err)
 	}
 }
+
+func TestOnlyPeopleWhoMayUseAPluginReachItsBackend(t *testing.T) {
+	s, _, ctx := pluginHarness(t)
+	invoke := func(who, plugin string) error {
+		raw, _ := json.Marshal(map[string]any{"plugin": plugin, "function": "get", "payload": map[string]any{"key": "k"}})
+		_, err := s.pluginInvoke(ctx, &api.ActionRequest{Caller: api.Caller{ID: identity.MustParse(who), Kind: "user"}, Body: raw})
+		return err
+	}
+	for _, c := range []struct{ who, plugin string }{{pBob, "acct"}, {pCarol, "space"}, {pAnn, "gone"}} {
+		if err := invoke(c.who, c.plugin); errs.CodeOf(err) != errs.CodeNotFound {
+			t.Fatalf("%s on %s = %v", c.who, c.plugin, err)
+		}
+	}
+}

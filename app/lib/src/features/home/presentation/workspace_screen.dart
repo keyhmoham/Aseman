@@ -75,6 +75,7 @@ import '../../tools/presentation/mcp_app_view.dart';
 import '../../tools/presentation/tool_frontend_view.dart';
 import '../../tools/presentation/tool_screen.dart';
 import '../../tools/runtime/tool_media.dart';
+import '../../plugins/presentation/plugins_panel.dart';
 import 'space_settings_panel.dart';
 import 'widgets/space_facility_tabs.dart';
 
@@ -1475,6 +1476,12 @@ class _LibraryPanel extends StatelessWidget {
                         icon: const Icon(Icons.add_rounded, size: 19),
                       ),
                     ],
+                    if (dependencies != null && spaceId.isNotEmpty)
+                      PluginsButton(
+                        dependencies: dependencies!,
+                        spaceId: spaceId,
+                        roomId: roomId,
+                      ),
                   ],
                 ),
                 if (spaceBots.isNotEmpty) ...[

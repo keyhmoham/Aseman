@@ -26,6 +26,7 @@ class ToolFrontendView extends StatefulWidget {
     this.shown,
     this.onLoaded,
     this.onConnected,
+    this.extraHandlers = const {},
   });
 
   final ToolsApi api;
@@ -40,6 +41,10 @@ class ToolFrontendView extends StatefulWidget {
 
   /// Called once the person connected their own account to the tool here.
   final VoidCallback? onConnected;
+
+  /// Host calls added to (or replacing) the tool host's: a plugin's screen
+  /// reaches its backend and the platform through its own gate.
+  final Map<String, HostCallHandler> extraHandlers;
 
   @override
   State<ToolFrontendView> createState() => _ToolFrontendViewState();
@@ -224,7 +229,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
                     bytecode: payload.bytecode!,
                     engine: _engine,
                     stylesheet: stylesheet,
-                    hostHandlers: host.handlers(),
+                    hostHandlers: {...host.handlers(), ...widget.extraHandlers},
                   )
                 : ElpianVmWidget.fromCode(
                     machineId: machineId,
@@ -232,7 +237,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
                     runtime: ElpianRuntime.quickJs,
                     engine: _engine,
                     stylesheet: stylesheet,
-                    hostHandlers: host.handlers(),
+                    hostHandlers: {...host.handlers(), ...widget.extraHandlers},
                   );
         if (!compact) return program;
         return _StaticCompact(summary: _summary, program: program);

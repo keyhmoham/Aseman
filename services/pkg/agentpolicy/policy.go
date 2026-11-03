@@ -44,7 +44,7 @@ var deniedActions = map[string]bool{
 	"market.approve": true, "market.deny": true, "market.stats": true,
 	// A plugin's own calls are gated by plugin_call; model code never calls it
 	// for another plugin.
-	"tools.plugin_call": true,
+	"tools.plugin_call": true, "tools.plugin_invoke": true,
 }
 
 // spaceNamespaces are the space-bound namespaces.

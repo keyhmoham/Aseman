@@ -143,7 +143,7 @@ func (s *Service) InstallChatAssistant(ctx context.Context) (*bot.Bot, error) {
 	rec := &bot.Bot{
 		Entity:  entity.Entity{ID: botID, CreatedAt: now, UpdatedAt: now},
 		OwnerID: identity.ID{}, AccountID: accID, Name: "Aseman",
-		Kind: bot.KindAgent, VMType: bot.VMTypeDeepAgents, VMID: chatAssistantVMID,
+		Kind: bot.KindAgent, VMType: bot.VMTypeHarness, VMID: chatAssistantVMID,
 		Status: bot.StatusRunning, ImageRef: bot.BuiltinChatImage, SpecYML: chatAssistantSpec(""),
 	}
 	if err := s.R.CreateID(ctx, "bots", botID, rec); err != nil {

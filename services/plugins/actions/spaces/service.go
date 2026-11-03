@@ -32,7 +32,9 @@ const zeroRoom = "00000000000000000000000000000000"
 
 // Service implements space operations and permission resolution.
 type Service struct {
-	teams teamRuns
+	// agentMemoryFn replaces the agent runtime's memory (tests).
+	agentMemoryFn func() vmm.EngineMemory
+	teams         teamRuns
 	desks deskStore
 	// threadRooms caches which room each room id is a thread of (see threads.go).
 	threadRooms     sync.Map

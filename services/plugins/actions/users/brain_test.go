@@ -2,80 +2,64 @@ package users
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/aseman/aseman/internal/plugins/identity"
-	"github.com/aseman/aseman/pkg/openviking"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 )
 
-// fakeViking is an OpenViking server holding files, recording what it is sent.
-type fakeViking struct {
+// fakeMemory is a person's memory in the agent runtime, recording its use.
+type fakeMemory struct {
 	mu       sync.Mutex
-	files    map[string]string // account|uri → text
-	recalled string
-	sessions []map[string]any
-	searches []map[string]any
+	notes    map[string]string // person → notes
+	recalled []string
+	queries  []string
+	learned  []string // person|said
 }
 
-func newFakeViking(t *testing.T) (*fakeViking, *openviking.Client) {
-	v := &fakeViking{files: map[string]string{}}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]any
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		account := r.Header.Get("X-OpenViking-Account")
-		v.mu.Lock()
-		defer v.mu.Unlock()
-		reply := func(result any) { _ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "result": result}) }
-		switch {
-		case r.URL.Path == "/api/v1/content/read":
-			text, ok := v.files[account+"|"+r.URL.Query().Get("uri")]
-			if !ok {
-				w.WriteHeader(404)
-				_ = json.NewEncoder(w).Encode(map[string]any{"status": "error", "error": map[string]any{"code": "NOT_FOUND", "message": "no"}})
-				return
-			}
-			reply(text)
-		case r.URL.Path == "/api/v1/content/write":
-			key := account + "|" + body["uri"].(string)
-			if body["mode"] == "append" {
-				v.files[key] += body["content"].(string)
-			} else {
-				v.files[key] = body["content"].(string)
-			}
-			reply(map[string]any{})
-		case r.URL.Path == "/api/v1/search/search":
-			v.searches = append(v.searches, body)
-			reply(map[string]any{"rendered": v.recalled})
-		case strings.HasSuffix(r.URL.Path, "/messages/batch"):
-			body["account"] = account
-			v.sessions = append(v.sessions, body)
-			reply(map[string]any{})
-		default:
-			reply(map[string]any{})
-		}
-	}))
-	t.Cleanup(srv.Close)
-	return v, &openviking.Client{URL: srv.URL, Key: "root"}
+func newFakeMemory() *fakeMemory { return &fakeMemory{notes: map[string]string{}} }
+
+func (m *fakeMemory) PersonNotes(_ context.Context, person string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.notes[person], nil
 }
 
-func (v *fakeViking) file(account, uri string) string {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	return v.files[account+"|"+uri]
+func (m *fakeMemory) PersonSetNotes(_ context.Context, person, content string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.notes[person] = content
+	return nil
+}
+
+func (m *fakeMemory) PersonRecall(_ context.Context, _ string, query string, _ int) ([]string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.queries = append(m.queries, query)
+	return m.recalled, nil
+}
+
+func (m *fakeMemory) PersonLearn(_ context.Context, person, said, _ string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.learned = append(m.learned, person+"|"+said)
+}
+
+func (m *fakeMemory) note(person string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.notes[person]
 }
 
 // brainFixture is the assistant harness with a memory server and a brain whose
 // decisions and answers the test chooses.
 type brainFixture struct {
 	*assistantFixture
-	viking *fakeViking
+	memory *fakeMemory
 	plan   brainPlan
 	briefs []string
 	rooms  []brainRoom
@@ -84,9 +68,8 @@ type brainFixture struct {
 
 func newBrainFixture(t *testing.T) *brainFixture {
 	f := &brainFixture{assistantFixture: newAssistantFixture(t), plan: brainPlan{decided: true}, lines: map[string][]brainLine{}}
-	viking, client := newFakeViking(t)
-	f.viking = viking
-	f.s.memoryFn = func() *openviking.Client { return client }
+	f.memory = newFakeMemory()
+	f.s.memoryFn = func() vmm.PersonMemory { return f.memory }
 	f.s.decideFn = func(context.Context, string) brainPlan {
 		f.mu.Lock()
 		defer f.mu.Unlock()
@@ -162,10 +145,10 @@ func TestANoteToKeepIsKeptWithoutAnAnswer(t *testing.T) {
 	}
 	// It is still remembered.
 	time.Sleep(20 * time.Millisecond)
-	f.viking.mu.Lock()
-	defer f.viking.mu.Unlock()
-	if len(f.viking.sessions) == 0 || f.viking.sessions[0]["account"] != openviking.PersonAccount(f.alice.ID.String()) {
-		t.Fatalf("the note was not given to the person's own memory: %v", f.viking.sessions)
+	f.memory.mu.Lock()
+	defer f.memory.mu.Unlock()
+	if len(f.memory.learned) == 0 || !strings.HasPrefix(f.memory.learned[0], f.alice.ID.String()+"|") {
+		t.Fatalf("the note was not given to the person's own memory: %v", f.memory.learned)
 	}
 }
 
@@ -189,9 +172,8 @@ func TestNamingAsemanAlwaysGetsAnAnswer(t *testing.T) {
 
 func TestAQuestionIsAnsweredWithWhatItKnowsAndRecalls(t *testing.T) {
 	f := newBrainFixture(t)
-	account := openviking.PersonAccount(f.alice.ID.String())
-	f.viking.files[account+"|"+openviking.BrainNotes] = "- I am vegetarian (2026-10-01)\n"
-	f.viking.recalled = "Alice's sister Sara visits in November."
+	f.memory.notes[f.alice.ID.String()] = "- I am vegetarian (2026-10-01)\n"
+	f.memory.recalled = []string{"Alice's sister Sara visits in November."}
 	f.note("what should I cook for Sara?")
 	answer := f.answerIn(f.alice, f.alice)
 	if answer["body"] != "an answer" {
@@ -208,23 +190,22 @@ func TestAQuestionIsAnsweredWithWhatItKnowsAndRecalls(t *testing.T) {
 	if !strings.Contains(last, "Sara visits in November") || !strings.HasSuffix(last, "what should I cook for Sara?") {
 		t.Fatalf("recall is not with the message: %q", last)
 	}
-	f.viking.mu.Lock()
-	search := f.viking.searches[0]
-	f.viking.mu.Unlock()
-	if search["session_id"] != openviking.BrainSession || search["query_expansion"] != "off" {
-		t.Fatalf("search %v", search)
+	f.memory.mu.Lock()
+	query := f.memory.queries[0]
+	f.memory.mu.Unlock()
+	if !strings.Contains(query, "what should I cook for Sara?") {
+		t.Fatalf("recall query %q", query)
 	}
 }
 
 func TestALastingFactIsRememberedButNotASecret(t *testing.T) {
 	f := newBrainFixture(t)
 	f.plan = brainPlan{decided: true, save: true, remember: true}
-	account := openviking.PersonAccount(f.alice.ID.String())
 	f.note("My daughter Mina starts school in September")
 	f.settled()
 	f.note("wifi password is hunter2")
 	f.settled()
-	notes := f.viking.file(account, openviking.BrainNotes)
+	notes := f.memory.note(f.alice.ID.String())
 	if !strings.Contains(notes, "My daughter Mina starts school in September") {
 		t.Fatalf("not remembered: %q", notes)
 	}

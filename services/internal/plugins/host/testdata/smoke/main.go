@@ -123,14 +123,14 @@ func main() {
 		}
 	}))
 	defer runtime.Close()
-	_, err = k.LoadPlugin(ctx, filepath.Join(root, "bin/plugins/adapters/deepagents.so"), map[string]any{"options": map[string]string{"runtime_url": runtime.URL, "runtime_secret": "smoke-secret", "node_url": "http://127.0.0.1:1"}})
+	_, err = k.LoadPlugin(ctx, filepath.Join(root, "bin/plugins/adapters/harness.so"), map[string]any{"options": map[string]string{"runtime_url": runtime.URL, "runtime_secret": "smoke-secret", "node_url": "http://127.0.0.1:1"}})
 	must(err)
 	must(bridge.Invoke(ctx, k, "llm", "SeedStatic", []any{ctx, vmm.ProviderConfig{Kind: "openai", BaseURL: runtime.URL, APIKey: "test-key", Model: "mock-model"}}))
 	actorCtx := helper.WithActor(ctx, admin.ID)
 	// Agent turns are metered: the asking account pays.
 	must(bridge.Invoke(ctx, k, "finance", "Mint", []any{ctx, admin.ID, admin.ID, int64(1_000_000), "smoke credits"}, &json.RawMessage{}))
 	var agent bot.Bot
-	must(bridge.Invoke(actorCtx, k, "bots", "CreateBot", []any{actorCtx, admin.ID, map[string]any{"name": "smoke-agent", "kind": "agent", "vm_type": "deepagents", "instructions": "Reply briefly", "model": "mock-model"}}, &agent))
+	must(bridge.Invoke(actorCtx, k, "bots", "CreateBot", []any{actorCtx, admin.ID, map[string]any{"name": "smoke-agent", "kind": "agent", "vm_type": "harness", "instructions": "Reply briefly", "model": "mock-model"}}, &agent))
 	must(bridge.Invoke(actorCtx, k, "bots", "Lifecycle", []any{actorCtx, agent.ID, "start"}, &agent))
 	var reply string
 	must(bridge.Invoke(actorCtx, k, "bots", "SendMessage", []any{actorCtx, agent.ID, "hello", []vmm.FileAttachment(nil), []vmm.ChatMessage(nil)}, &reply))

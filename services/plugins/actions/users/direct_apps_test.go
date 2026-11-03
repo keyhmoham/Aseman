@@ -18,7 +18,7 @@ func TestPeopleDoNotMessageAppsDirectly(t *testing.T) {
 		}
 	}
 	add("00000000000000010000000000000070", "00000000000000010000000000000071", bot.KindTool, bot.VMTypeMCP, "Google")
-	add("00000000000000010000000000000080", "00000000000000010000000000000081", bot.KindAgent, bot.VMTypeDeepAgents, "Ada")
+	add("00000000000000010000000000000080", "00000000000000010000000000000081", bot.KindAgent, bot.VMTypeHarness, "Ada")
 	app, agent := mustID(t, "00000000000000010000000000000071"), mustID(t, "00000000000000010000000000000081")
 	if err := s.directAllowed(ctx, alice, app); err == nil {
 		t.Fatal("a person does not message an app")

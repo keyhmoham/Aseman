@@ -137,6 +137,10 @@ func (c *Config) ApplyEnv() {
 	}
 	for i := range c.Plugins.Adapters {
 		p := &c.Plugins.Adapters[i]
+		// The agent runtime was the "deepagents" plugin before DeepSeek Harness.
+		if p.Name == "deepagents" {
+			p.Name = "harness"
+		}
 		switch p.Name {
 		case "postgres":
 			setIf(p, "dsn", os.Getenv(EnvDatabaseDSN))
@@ -147,7 +151,7 @@ func (c *Config) ApplyEnv() {
 		case "docker":
 			setOption(p, "host", os.Getenv(EnvDockerHost))
 			setOption(p, "network", os.Getenv(EnvSandboxDockerNetwork))
-		case "deepagents":
+		case "harness":
 			setOption(p, "node_url", os.Getenv(EnvAgentNodeURL))
 			setOption(p, "image", os.Getenv(EnvAgentRuntimeImage))
 			setOption(p, "runtime_url", os.Getenv(EnvAgentRuntimeURL))
@@ -244,7 +248,7 @@ func (c *Config) AutoAdapters() []PluginSpec {
 			agentOpts["network"] = n
 		}
 	}
-	add("deepagents", map[string]any{"options": agentOpts})
+	add("harness", map[string]any{"options": agentOpts})
 	if c.Modal.TokenID != "" && c.Modal.TokenSecret != "" {
 		opts := map[string]any{"modal_token_id": c.Modal.TokenID, "modal_token_secret": c.Modal.TokenSecret}
 		if c.Modal.Environment != "" {

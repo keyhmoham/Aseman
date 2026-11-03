@@ -16,7 +16,6 @@ import (
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/crypto"
 	"github.com/aseman/aseman/pkg/errs"
-	"github.com/aseman/aseman/pkg/openviking"
 	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 	"github.com/aseman/aseman/plugins/actions/message/models/message"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
@@ -185,7 +184,11 @@ func brainTools() []brainTool {
 				if ov == nil {
 					return "", errs.New(errs.CodeUnavailable, "this node keeps no memory")
 				}
-				if err := ov.Append(ctx, openviking.PersonAccount(me.String()), openviking.BrainUser, openviking.BrainNotes, line); err != nil {
+				notes, err := ov.PersonNotes(ctx, me.String())
+				if err != nil {
+					return "", err
+				}
+				if err := ov.PersonSetNotes(ctx, me.String(), notes+line); err != nil {
 					return "", err
 				}
 				forgetCachedNotes(me)

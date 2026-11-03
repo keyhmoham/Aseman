@@ -8,7 +8,7 @@ import (
 func f(name string, k database.Kind) database.Field { return database.Field{Name: name, Kind: k} }
 
 func Models() []database.Model {
-	return append(shared.Models(), []database.Model{spaces(), rooms(), memberships(), files(), proxies(), invitations(), turns(), executionEvents(), executionArtifacts(), chatReports(), appKeys(), openCode(), agentEngine(), messageReactions(), messageHidden(), keptRoomFiles()}...)
+	return append(shared.Models(), []database.Model{spaces(), rooms(), memberships(), files(), proxies(), invitations(), turns(), executionEvents(), executionArtifacts(), chatReports(), appKeys(), messageReactions(), messageHidden(), keptRoomFiles()}...)
 }
 
 func messageReactions() database.Model {
@@ -203,27 +203,4 @@ func appKeys() database.Model {
 	}
 }
 
-// agentEngine is which runtime runs agent turns (spaces.agent_engine_get / agent_engine_set).
-func agentEngine() database.Model {
-	return database.Model{
-		Name:  "spaces_agent_engine",
-		Table: "spaces_agent_engine",
-		Fields: []database.Field{
-			f("id", database.KindString), f("engine", database.KindString),
-			f("updated_at", database.KindTime),
-		},
-	}
-}
 
-// openCode is the node's OpenCode switch (spaces.opencode_get / opencode_set).
-// Who writes code. Separate from agentEngine, which chooses the agent loop.
-func openCode() database.Model {
-	return database.Model{
-		Name:  "spaces_opencode",
-		Table: "spaces_opencode",
-		Fields: []database.Field{
-			f("id", database.KindString), f("enabled", database.KindBool),
-			f("updated_at", database.KindTime),
-		},
-	}
-}

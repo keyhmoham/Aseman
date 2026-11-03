@@ -91,7 +91,7 @@ func TestCodeModeOpenAPIFromApps(t *testing.T) {
 func TestCodeModeServesEveryPlatformBuiltin(t *testing.T) {
 	native := map[string]bool{"sandbox_exec": true, "file_edit": true, "file_read": true,
 		"message_send": true, "room_info": true, "ask_user": true}
-	for _, tool := range vmm.BuiltinsFor(true) {
+	for _, tool := range vmm.Builtins() {
 		if !native[tool.Name] && !codeModePlatform[tool.Name] {
 			t.Errorf("builtin %s is neither native nor served under /platform", tool.Name)
 		}

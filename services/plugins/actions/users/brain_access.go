@@ -12,8 +12,8 @@ import (
 	"github.com/aseman/aseman/internal/plugins/bridge"
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
-	"github.com/aseman/aseman/pkg/openviking"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // Which rooms a person's Aseman may read, and what it knows of them.
@@ -126,7 +126,7 @@ func (s *Service) brainRoomContext(ctx context.Context, me identity.ID) []brainR
 	const scan = 2 * brainRooms
 	ctx, cancel := context.WithTimeout(ctx, brainRecallTimeout)
 	defer cancel()
-	ov := s.brainMemory()
+	mem, _ := s.K.VMMFor(vmm.TypeHarness).(vmm.EngineMemory)
 	var wg sync.WaitGroup
 	for i := range views {
 		if i == scan {
@@ -136,11 +136,11 @@ func (s *Service) brainRoomContext(ctx context.Context, me identity.ID) []brainR
 		go func(v *brainRoomView) {
 			defer wg.Done()
 			v.Lines = s.brainLinesOf(ctx, me, v.ID)
-			if ov == nil || len(v.Lines) == 0 {
+			if mem == nil || len(v.Lines) == 0 {
 				return
 			}
-			if text, err := ov.Read(ctx, openviking.SpaceAccount(v.ID), "people", openviking.SpaceNotes); err == nil {
-				v.Notes = clipNotes(text, brainRoomNotes)
+			if view, err := mem.EngineMemoryRead(ctx, "harness", v.ID, ""); err == nil {
+				v.Notes = clipNotes(view.SpaceNotes, brainRoomNotes)
 			}
 		}(&views[i])
 	}
@@ -258,7 +258,7 @@ func brainActions(s *Service) []api.Action {
 					return nil, errs.New(errs.CodeUnavailable, "this node keeps no memory")
 				}
 				notes := strings.TrimSpace(in.Notes) + "\n"
-				if err := ov.Write(ctx, openviking.PersonAccount(req.Caller.ID.String()), openviking.BrainUser, openviking.BrainNotes, notes); err != nil {
+				if err := ov.PersonSetNotes(ctx, req.Caller.ID.String(), notes); err != nil {
 					return nil, errs.Wrap(errs.CodeUnavailable, err, "your Aseman's memory is unavailable right now")
 				}
 				forgetCachedNotes(req.Caller.ID)

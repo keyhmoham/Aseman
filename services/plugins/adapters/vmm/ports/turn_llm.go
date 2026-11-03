@@ -3,15 +3,15 @@ package vmm
 import "context"
 
 // TurnLLM is the metered OpenAI-compatible LLM endpoint of the current agent
-// turn. Sandbox tools (OpenCode) use the same Token + BaseURL as the runtime
+// turn. Sandbox tools (an app build) use the same Token + BaseURL as the runtime
 // so completions are gated and billed through serveChat → meter → billAgentTurn.
 type TurnLLM struct {
-	// Token is the turn bearer accepted by /deepagents/v1/llm/*.
+	// Token is the turn bearer accepted by /harness/v1/llm/*.
 	Token string
-	// BaseURL is the OpenAI-compatible root (…/deepagents/v1/llm); clients
+	// BaseURL is the OpenAI-compatible root (…/harness/v1/llm); clients
 	// append /chat/completions and /models.
 	BaseURL string
-	// Model is the client-facing model id OpenCode should request. The gateway
+	// Model is the client-facing model id an in-turn tool should request. The gateway
 	// rewrites it to the agent's admin-configured provider model.
 	Model string
 }

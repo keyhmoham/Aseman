@@ -7,7 +7,6 @@ import (
 
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/pkg/errs"
-	"github.com/aseman/aseman/pkg/openviking"
 	"github.com/aseman/aseman/plugins/actions/llm/models"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
@@ -61,8 +60,6 @@ func (s *Service) SetMemory(ctx context.Context, in MemoryInput) (*llmprovider.M
 		return nil, err
 	}
 	creating := m.UpdatedAt.IsZero()
-	embeddingChanged := m.EmbeddingProviderID != in.EmbeddingProviderID || m.EmbeddingModelID != in.EmbeddingModelID
-	hadEmbedding := m.EmbeddingModelID != ""
 	m.ChatProviderID, m.ChatModelID = in.ChatProviderID, in.ChatModelID
 	m.EmbeddingProviderID, m.EmbeddingModelID = in.EmbeddingProviderID, in.EmbeddingModelID
 	m.UpdatedAt = time.Now().UTC()
@@ -74,55 +71,9 @@ func (s *Service) SetMemory(ctx context.Context, in MemoryInput) (*llmprovider.M
 	if err != nil {
 		return nil, err
 	}
-	if embeddingChanged && (hadEmbedding || m.EmbeddingModelID != "") {
-		// Vectors of another model (or none, when memories were kept without
-		// one) are meaningless to the new one.
-		go s.reindexMemory(m.EmbeddingModelID)
-	}
+	// A new embedding model needs no reindex: memories embedded by another
+	// model have another dimension and are never compared with the new one's.
 	return m, nil
-}
-
-// reindexMemory has OpenViking recompute every space's vectors with the
-// current embedding model, in the background.
-func (s *Service) reindexMemory(model string) {
-	ov := openviking.FromEnv()
-	if ov == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	accounts, err := ov.Accounts(ctx, "space-*")
-	if err != nil {
-		s.L.Warn("memory reindex: list spaces", "error", err)
-		return
-	}
-	failed := 0
-	for _, account := range accounts {
-		for _, uri := range []string{"viking://resources", "viking://user"} {
-			if err := reindexOne(ctx, ov, account, uri); err != nil && !openviking.NotFound(err) {
-				failed++
-				s.L.Warn("memory reindex", "account", account, "uri", uri, "error", err)
-			}
-		}
-	}
-	s.L.Info("memory reindex started", "embedding_model", model, "spaces", len(accounts), "failed", failed)
-}
-
-// reindexOne starts the reindex of one tree, waiting out the moments it is
-// busy (OpenViking is still processing what was just written to it).
-func reindexOne(ctx context.Context, ov *openviking.Client, account, uri string) error {
-	var err error
-	for attempt := 0; attempt < 6; attempt++ {
-		if err = ov.Reindex(ctx, account, uri); err == nil || !openviking.Busy(err) {
-			return err
-		}
-		select {
-		case <-ctx.Done():
-			return err
-		case <-time.After(time.Duration(attempt+1) * 5 * time.Second):
-		}
-	}
-	return err
 }
 
 // memoryModel resolves a provider (by id) and one of its models with the
@@ -188,12 +139,12 @@ func (s *Service) resolveMemory(ctx context.Context, capability string) (vmm.Pro
 		ContextWindow: ContextWindow(m), InputPrice: m.InputPrice, OutputPrice: m.OutputPrice, OwnerID: p.OwnerID.String()}, nil
 }
 
-// ResolveMemoryChat is the endpoint of the model OpenViking extracts memories with.
+// ResolveMemoryChat is the endpoint of the model the agents' memory learns from turns with.
 func (s *Service) ResolveMemoryChat(ctx context.Context) (vmm.ProviderConfig, error) {
 	return s.resolveMemory(ctx, llmprovider.CapabilityChat)
 }
 
-// ResolveMemoryEmbedding is the endpoint of the model OpenViking embeds memories with.
+// ResolveMemoryEmbedding is the endpoint of the model the agents' memory embeds memories with.
 func (s *Service) ResolveMemoryEmbedding(ctx context.Context) (vmm.ProviderConfig, error) {
 	return s.resolveMemory(ctx, llmprovider.CapabilityEmbedding)
 }
@@ -253,7 +204,7 @@ func (s *Service) memoryView(ctx context.Context) (map[string]any, error) {
 		"chat_provider_id": setting.ChatProviderID, "chat_model_id": setting.ChatModelID,
 		"embedding_provider_id": setting.EmbeddingProviderID, "embedding_model_id": setting.EmbeddingModelID,
 		"chat_active": chatOK, "embedding_active": embedOK, "active": chatOK && embedOK, "status": status,
-		"server": openviking.FromEnv() != nil, "providers": providers,
+		"server": true, "providers": providers,
 	}, nil
 }
 

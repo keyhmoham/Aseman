@@ -121,7 +121,7 @@ func TestEnsureFundsGatesExecution(t *testing.T) {
 	rec := &bot.Bot{
 		Entity:  entity.Entity{ID: botID, CreatedAt: now, UpdatedAt: now},
 		OwnerID: customer, Name: "priced", Kind: bot.KindAgent,
-		VMType: bot.VMTypeDeepAgents, Status: bot.StatusRunning,
+		VMType: bot.VMTypeHarness, Status: bot.StatusRunning,
 		Cost: `{"per_minute":4}`,
 	}
 	if err := s.R.CreateID(ctx, "bots", botID, rec); err != nil {
@@ -195,7 +195,7 @@ func TestLLMChargeUsesAdminProviderPrices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec := &bot.Bot{Kind: bot.KindAgent, VMType: bot.VMTypeDeepAgents,
+	rec := &bot.Bot{Kind: bot.KindAgent, VMType: bot.VMTypeHarness,
 		SpecYML: "name: a\nprovider: \"" + p.ID.String() + "\"\nmodel: \"gpt-5.4\"\n"}
 	// 3000 in × 1000/1M = 3, 500 out × 4000/1M = 2, plus 20 credits of images.
 	amount, payee := s.llmCharge(ctx, rec, &bot.CostModel{TokenInRate: 99, TokenOutRate: 99}, 3000, 500, 20)
@@ -256,9 +256,9 @@ func TestCostForAppliesPlatformPricing(t *testing.T) {
 			bot.CostModel{PerMinute: 3, CPUPerMin: 1}},
 		{"a tool keeps its own rates", bot.Bot{Name: "render", Kind: bot.KindTool, VMType: bot.VMType("mcp"), Cost: `{"per_minute":0,"cpu_per_min":4}`},
 			bot.CostModel{CPUPerMin: 4}},
-		{"an agent without a rate gets the agent default", bot.Bot{Name: "coder", Kind: bot.KindAgent, VMType: bot.VMTypeDeepAgents, Cost: `{"token_in_rate":2}`},
+		{"an agent without a rate gets the agent default", bot.Bot{Name: "coder", Kind: bot.KindAgent, VMType: bot.VMTypeHarness, Cost: `{"token_in_rate":2}`},
 			bot.CostModel{PerMinute: 7, TokenInRate: 2}},
-		{"an agent keeps its own rate", bot.Bot{Name: "pro", Kind: bot.KindAgent, VMType: bot.VMTypeDeepAgents, Cost: `{"per_minute":9}`},
+		{"an agent keeps its own rate", bot.Bot{Name: "pro", Kind: bot.KindAgent, VMType: bot.VMTypeHarness, Cost: `{"per_minute":9}`},
 			bot.CostModel{PerMinute: 9}},
 	}
 	for _, c := range cases {
@@ -283,7 +283,7 @@ func TestBillUsageLeavesRuntimeAgentsToTheirTurns(t *testing.T) {
 	botID, _ := identity.New(1)
 	now := time.Now().UTC()
 	rec := &bot.Bot{Entity: entity.Entity{ID: botID, CreatedAt: now, UpdatedAt: now}, OwnerID: mustID(t, "00000000000000010000000000000009"),
-		Name: "coder", Kind: bot.KindAgent, VMType: bot.VMTypeDeepAgents, Status: bot.StatusRunning, Cost: `{"per_minute":3}`}
+		Name: "coder", Kind: bot.KindAgent, VMType: bot.VMTypeHarness, Status: bot.StatusRunning, Cost: `{"per_minute":3}`}
 	if err := s.R.CreateID(ctx, "bots", botID, rec); err != nil {
 		t.Fatal(err)
 	}

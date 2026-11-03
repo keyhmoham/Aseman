@@ -8,7 +8,7 @@ import (
 func TestTurnLLMRoundTrip(t *testing.T) {
 	ctx := WithTurnLLM(context.Background(), TurnLLM{
 		Token:   "tok",
-		BaseURL: "http://aseman:8080/deepagents/v1/llm",
+		BaseURL: "http://aseman:8080/harness/v1/llm",
 		Model:   "aseman/default",
 	})
 	got := TurnLLMFrom(ctx)

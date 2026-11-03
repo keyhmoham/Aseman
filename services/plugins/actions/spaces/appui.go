@@ -14,7 +14,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path"
 	"regexp"
 	"strconv"
@@ -368,14 +367,6 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	if err := s.sandboxWriteBytes(opCtx, spaceID, appsPath, catalog); err != nil {
 		return "", err
 	}
-	openCode := s.openCodeOn(ctx)
-	if openCode {
-		// Point OpenCode at this turn's metered LLM gateway (same backbone +
-		// billing as the agent). CreateBot Env alone cannot carry the turn token.
-		if err := s.ensureOpenCodeAuth(opCtx, spaceID); err != nil {
-			return "", err
-		}
-	}
 	// The app's server uses the space's agents and apps too: with the token
 	// of the person using it (sent with each request), or, for work nobody
 	// is in front of, with the app's key, which acts for and bills the person
@@ -414,35 +405,12 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	}
 	flags := fmt.Sprintf(`--dir %s --brief-file %s --apps-file %s --title %s --port %d --mode %s --ui %s`,
 		shellQuote(dir), shellQuote(briefPath), shellQuote(appsPath), shellQuote(job.Title), job.Port, job.Mode, job.UI)
-	if !openCode {
-		return s.appuiAgentsBuild(opCtx, spaceID, job, flags)
-	}
-	out, err := s.SandboxExec(opCtx, spaceID,
-		`. /etc/opencode/env.sh 2>/dev/null || true; unset OPENCODE_API_KEY; export OPENCODE_MODEL=${OPENCODE_MODEL:-aseman/default}; aseman-appui build `+flags)
-	// Prefer READY.json on disk; fall back to parsing build stdout (status prints it).
-	readyRaw, readErr := s.sandboxReadText(opCtx, spaceID, dir+"/READY.json")
-	ready, ok := parseAppuiReadyJSON(readyRaw)
-	if !ok {
-		ready, ok = parseAppuiReadyJSON(out)
-	}
-	if !ok {
-		if readErr != nil && err != nil {
-			return "", errs.New(errs.CodeUnavailable, "appui build failed: "+clipTrace(out, 4000))
-		}
-		var failed appuiReady
-		_ = json.Unmarshal([]byte(strings.TrimSpace(readyRaw)), &failed)
-		msg := failed.Error
-		if msg == "" {
-			msg = "OpenCode did not produce a tested READY.json"
-		}
-		return "", errs.Conflict("appui not ready: " + msg + "\n" + clipTrace(out, 2000))
-	}
-	return s.appuiOpen(opCtx, ctx, spaceID, agentName, job, ready, "opencode")
+	return s.appuiAgentsBuild(opCtx, spaceID, job, flags)
 }
 
-// appuiAgentsBuild hands an app to the space's agents (OpenCode off): the
-// sandbox lays the project out exactly as for OpenCode, and the calling
-// agent gets the same build task (TASK.md) with its own tools. It builds,
+// appuiAgentsBuild hands an app to the space's agents: the sandbox lays the
+// project out, and the calling agent gets the build task (TASK.md) to do
+// with its own tools. It builds,
 // tests and drives the app, then calls appui_publish.
 func (s *Service) appuiAgentsBuild(ctx context.Context, spaceID identity.ID, job appuiJob, flags string) (string, error) {
 	out, err := s.appuiExec(ctx, spaceID, "aseman-appui prepare "+flags)
@@ -460,7 +428,7 @@ func (s *Service) appuiAgentsBuild(ctx context.Context, spaceID identity.ID, job
 	if terr != nil || strings.TrimSpace(task) == "" {
 		task = strings.TrimPrefix(out, "exit=0\n")
 	}
-	next := "Build the app now, exactly as the task says (or hand the whole task to a developer agent of the space with this dir and TASK.md): plan, build, test, drive it end to end with aseman-elpian, write READY.json. Then call appui_publish {\"dir\": \"" + job.Dir + "\"}: the platform verifies it and opens it on the desk, or answers with what to fix. With Code Mode, do the whole build in one codemode_execute: every file in one /sandbox/write_files, the tests and aseman-elpian checks through /sandbox/exec, READY.json and /platform/appui_publish, returning only the outcome."
+	next := "Build the app now, exactly as the task says (or hand the whole task to a developer agent of the space with this dir and TASK.md): plan, build, test, drive it end to end with aseman-elpian, write READY.json. Then call appui_publish {\"dir\": \"" + job.Dir + "\"}: the platform verifies it and opens it on the desk, or answers with what to fix."
 	b, _ := json.Marshal(map[string]any{
 		"state":   "building",
 		"builder": "agents",
@@ -739,138 +707,13 @@ func (s *Service) appuiArrangeHint(ctx context.Context, spaceID, roomID identity
 	return err
 }
 
-// ensureOpenCodeAuth points the sandbox OpenCode at this agent turn's metered
-// LLM gateway (same /deepagents/v1/llm backbone agents use). Completions are
-// gated and billed on the turn via serveChat → meter → billAgentTurn.
-func (s *Service) ensureOpenCodeAuth(ctx context.Context, spaceID identity.ID) error {
-	llm := vmm.TurnLLMFrom(ctx)
-	if strings.TrimSpace(llm.Token) == "" || strings.TrimSpace(llm.BaseURL) == "" {
-		return errs.New(errs.CodeUnavailable, "OpenCode needs the agent turn's LLM gateway (call appui_create / opencode_run during a turn)")
-	}
-	model := strings.TrimSpace(llm.Model)
-	if model == "" {
-		model = "aseman/default"
-	}
-	if override := strings.TrimSpace(os.Getenv("OPENCODE_MODEL")); override != "" && override != "free" {
-		model = override
-	}
-	baseURL := strings.TrimRight(strings.TrimSpace(llm.BaseURL), "/")
-	envBody := strings.Join([]string{
-		"export ASEMAN_LLM_BASE_URL=" + shellQuote(baseURL),
-		"export ASEMAN_LLM_API_KEY=" + shellQuote(llm.Token),
-		"export OPENCODE_MODEL=" + shellQuote(model),
-		// Prefer Aseman backbone; ignore leftover Zen free-tier keys.
-		"unset OPENCODE_API_KEY 2>/dev/null || true",
-	}, "\n") + "\n"
-	cfg, err := openCodeAsemanConfig(baseURL, model)
-	if err != nil {
-		return err
-	}
-	authJSON := fmt.Sprintf(`{"aseman":{"type":"api","key":%s}}`, mustJSONString(llm.Token))
-	cmd := fmt.Sprintf(`set -eu
-mkdir -p /etc/opencode /root/.config/opencode /root/.local/share/opencode
-printf '%%s' %s > /etc/opencode/env.sh
-printf '%%s' %s > /etc/opencode/opencode.json
-printf '%%s' %s > /root/.config/opencode/opencode.json
-printf '%%s' %s > /root/.local/share/opencode/auth.json
-grep -q '/etc/opencode/env.sh' /etc/profile 2>/dev/null || echo '. /etc/opencode/env.sh' >> /etc/profile
-`, shellQuote(envBody), shellQuote(string(cfg)), shellQuote(string(cfg)), shellQuote(authJSON))
-	_, err = s.SandboxExec(ctx, spaceID, cmd)
-	return err
-}
 
-// openCodeAsemanConfig is the OpenCode provider file that targets Aseman's
-// OpenAI-compatible, metered LLM proxy for the current turn.
-func openCodeAsemanConfig(baseURL, model string) ([]byte, error) {
-	// model is "aseman/default"; OpenCode splits provider/model.
-	modelID := "default"
-	if i := strings.LastIndex(model, "/"); i >= 0 && i+1 < len(model) {
-		modelID = model[i+1:]
-	}
-	doc := map[string]any{
-		"$schema": "https://opencode.ai/config.json",
-		"model":   model,
-		"provider": map[string]any{
-			"aseman": map[string]any{
-				"npm":  "@ai-sdk/openai-compatible",
-				"name": "Aseman",
-				"options": map[string]any{
-					"baseURL": baseURL,
-					"apiKey":  "{env:ASEMAN_LLM_API_KEY}",
-				},
-				"models": map[string]any{
-					modelID: map[string]any{"name": "Aseman agent model"},
-				},
-			},
-		},
-		"permission": map[string]any{"*": "allow"},
-	}
-	return json.MarshalIndent(doc, "", "  ")
-}
 
 func mustJSONString(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
 }
 
-// opencodeRunTool distributes a coding/programming task to OpenCode in the sandbox.
-func (s *Service) opencodeRunTool(ctx context.Context, spaceID identity.ID, argsJSON string) (string, error) {
-	var in struct {
-		Message string `json:"message"`
-		Dir     string `json:"dir"`
-		Model   string `json:"model"`
-	}
-	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
-		return "", errs.InvalidArgument("opencode_run args: {\"message\":\"…\"}")
-	}
-	msg := strings.TrimSpace(in.Message)
-	if msg == "" {
-		return "", errs.InvalidArgument("opencode_run needs message")
-	}
-	dir := strings.TrimSpace(in.Dir)
-	if dir == "" {
-		root := appuiRoot
-		if sp, err := s.GetSpace(ctx, spaceID); err == nil && sp != nil && sp.Direct {
-			root = "/workspace/dms/" + spaceID.EntityString() + "/appui"
-		}
-		dir = root + "/tasks/" + newAppUIID()
-	}
-	if !strings.HasPrefix(dir, "/workspace/") {
-		return "", errs.InvalidArgument("dir must be under /workspace/")
-	}
-	if err := s.ensureOpenCodeAuth(ctx, spaceID); err != nil {
-		return "", err
-	}
-	cmd := fmt.Sprintf(`. /etc/opencode/env.sh 2>/dev/null || true; unset OPENCODE_API_KEY; aseman-appui run --dir %s --message %s`, shellQuote(dir), shellQuote(msg))
-	if m := strings.TrimSpace(in.Model); m != "" && m != "free" && !strings.HasPrefix(m, "opencode/") {
-		cmd = "OPENCODE_MODEL=" + shellQuote(m) + " " + cmd
-	}
-	runCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), appuiBuildWait)
-	defer cancel()
-	out, err := s.SandboxExec(runCtx, spaceID, cmd)
-	if err != nil {
-		return clipTrace(out, 8000), err
-	}
-	status, _ := s.sandboxReadText(ctx, spaceID, dir+"/STATUS.json")
-	ready, _ := s.sandboxReadText(ctx, spaceID, dir+"/READY.json")
-	res := map[string]any{"dir": dir, "output": clipTrace(out, 4000)}
-	if status != "" {
-		var st any
-		if json.Unmarshal([]byte(status), &st) == nil {
-			res["status"] = st
-		} else {
-			res["status_raw"] = status
-		}
-	}
-	if ready != "" {
-		var rd any
-		if json.Unmarshal([]byte(ready), &rd) == nil {
-			res["ready"] = rd
-		}
-	}
-	b, _ := json.Marshal(res)
-	return string(b), nil
-}
 
 // appuiStatusTool reads a project's STATUS.json / READY.json (whoever builds
 // it): appui_status, and opencode_status while OpenCode is on.
@@ -890,37 +733,7 @@ func (s *Service) appuiStatusTool(ctx context.Context, spaceID identity.ID, args
 	return out, nil
 }
 
-func (s *Service) opencodeModelsTool(ctx context.Context, spaceID identity.ID) (string, error) {
-	out, err := s.SandboxExec(ctx, spaceID, "aseman-appui models")
-	if err != nil {
-		return out, err
-	}
-	return out, nil
-}
 
-// openCodeBuiltinApp is listed beside space apps so agents see OpenCode as a
-// builtin coding app with microtool-style platform commands.
-func openCodeBuiltinApp() vmm.Tool {
-	str := func(d string) map[string]any { return map[string]any{"type": "string", "description": d} }
-	obj := func(props map[string]any, req ...string) map[string]any {
-		s := map[string]any{"type": "object", "properties": props}
-		if len(req) > 0 {
-			s["required"] = req
-		}
-		return s
-	}
-	return vmm.Tool{
-		Name:        "opencode",
-		Kind:        "tool",
-		Description: "Built-in OpenCode coding agent in the space sandbox. Uses the same metered Aseman LLM gateway as agents (usage billed on the turn). Distribute programming tasks with opencode_run; build interactive fullstack App UIs with appui_create (a native Elpian frontend in Material 3 Expressive by default, @material/web M3E when web is asked for; Aseman light/dark+accent theming; mix OpenUI agent islands with programmed UI via _aseman/kit/openui and _aseman/api/ask); check progress with opencode_status; list models with opencode_models. Generated apps call space apps via _aseman/api/call and open as DeskWeb card windows.",
-		Commands: []vmm.ToolCommand{
-			{Name: "run", Description: "Send a coding task to OpenCode (platform: opencode_run).", Schema: obj(map[string]any{"message": str("Task"), "dir": str("Optional /workspace/… dir"), "model": str("Optional model; default aseman/default")}, "message")},
-			{Name: "status", Description: "Status of an OpenCode / App UI job (platform: opencode_status).", Schema: obj(map[string]any{"dir": str("Project dir under /workspace")})},
-			{Name: "models", Description: "Show Aseman LLM backbone / model (platform: opencode_models).", Schema: obj(map[string]any{})},
-			{Name: "build", Description: "Build a tested fullstack App UI from a brief (platform: appui_create; M3 Expressive UI by default).", Schema: obj(map[string]any{"brief": str("What to build; omit UI framework to get Material 3 Expressive"), "title": str("Window title"), "apps": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "tool": str("Optional dock tool bot id"), "port": map[string]any{"type": "integer"}}, "brief")},
-		},
-	}
-}
 
 // proxyPathID finds a preview's id in proxy_create's output.
 var proxyPathID = regexp.MustCompile(`/v1/proxy/([0-9a-f]{32})/`)

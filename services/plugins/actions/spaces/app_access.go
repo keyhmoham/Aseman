@@ -1,7 +1,7 @@
 package spaces
 
 // App server access: the backend of an app served from the space's sandbox
-// (an App UI OpenCode built, any proxied web service) uses the space's agents
+// (an App UI the agents built, any proxied web service) uses the space's agents
 // and apps through the same page API its pages use (_aseman/api/*), served to
 // servers at the node's /appapi/v1/<op>. Every call runs as a person of the
 // space and is billed to that person's wallet, through the same path a
@@ -253,7 +253,7 @@ func sandboxAppAPIURL() string {
 	if u := strings.TrimSpace(os.Getenv("ASEMAN_SANDBOX_APP_API_URL")); u != "" {
 		return strings.TrimRight(u, "/")
 	}
-	base := strings.TrimSuffix(sandboxLLMBaseURL(), "/deepagents/v1/llm")
+	base := strings.TrimSuffix(sandboxLLMBaseURL(), "/harness/v1/llm")
 	if u, err := url.Parse(base); err != nil || u.Host == "" {
 		base = "http://aseman:8080"
 	}

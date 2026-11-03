@@ -1,6 +1,7 @@
 package users
 
 import (
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 	"context"
 	"errors"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/internal/plugins/entity"
 	"github.com/aseman/aseman/internal/plugins/identity"
-	"github.com/aseman/aseman/pkg/openviking"
 	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 )
 
@@ -49,7 +49,7 @@ func newAssistantFixture(t *testing.T) *assistantFixture {
 		return f.s.answerFn(ctx, person, f.rec, turns, func(string) {})
 	}
 	f.s.decideFn = func(context.Context, string) brainPlan { return brainPlan{decided: true} }
-	f.s.memoryFn = func() *openviking.Client { return nil }
+	f.s.memoryFn = func() vmm.PersonMemory { return nil }
 	f.s.roomsFn = func(context.Context, identity.ID) ([]brainRoom, error) { return nil, nil }
 	return f
 }

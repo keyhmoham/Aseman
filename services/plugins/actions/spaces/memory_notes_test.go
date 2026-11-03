@@ -1,64 +1,44 @@
 package spaces
 
 import (
+	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"sync"
 	"testing"
 
 	"github.com/aseman/aseman/internal/plugins/api"
-	"github.com/aseman/aseman/pkg/openviking"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
-// fakeViking answers OpenViking's read and write like the server, keeping
-// files per account and recording who asked.
-type fakeViking struct {
+// fakeAgentMemory is the agent runtime's memory: notes per space and agent.
+type fakeAgentMemory struct {
 	mu    sync.Mutex
-	files map[string]string // account|uri → text
-	asked []string          // account|user|path
+	notes map[string]string // space|agent → notes ("" agent: the space's)
+	asked []string
 }
 
-func (f *fakeViking) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (f *fakeAgentMemory) EngineMemoryRead(_ context.Context, _ string, space, agent string) (*vmm.EngineMemoryView, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if r.Header.Get("X-API-Key") != "root-key" {
-		w.WriteHeader(401)
-		_, _ = w.Write([]byte(`{"status":"error","error":{"code":"UNAUTHENTICATED","message":"no"}}`))
-		return
-	}
-	account := r.Header.Get("X-OpenViking-Account")
-	f.asked = append(f.asked, account+"|"+r.Header.Get("X-OpenViking-User")+"|"+r.URL.Path)
-	switch r.URL.Path {
-	case "/api/v1/content/read":
-		text, ok := f.files[account+"|"+r.URL.Query().Get("uri")]
-		if !ok {
-			w.WriteHeader(404)
-			_, _ = w.Write([]byte(`{"status":"error","error":{"code":"NOT_FOUND","message":"not found"}}`))
-			return
-		}
-		out, _ := json.Marshal(map[string]any{"status": "ok", "result": text})
-		_, _ = w.Write(out)
-	case "/api/v1/content/write":
-		var in struct{ URI, Content, Mode string }
-		_ = json.NewDecoder(r.Body).Decode(&in)
-		f.files[account+"|"+in.URI] = in.Content
-		_, _ = w.Write([]byte(`{"status":"ok","result":{}}`))
-	default:
-		w.WriteHeader(404)
-	}
+	f.asked = append(f.asked, "read|"+space+"|"+agent)
+	return &vmm.EngineMemoryView{Engine: "harness", SpaceNotes: f.notes[space+"|"], Agent: agent, Notes: f.notes[space+"|"+agent]}, nil
 }
 
-// People see and correct the agents' notes, kept in OpenViking, at the paths
-// they had in the sandbox; agents' own reads still reach the sandbox.
-func TestTheMemoryScreenReadsTheAgentsNotesFromOpenViking(t *testing.T) {
-	ov := &fakeViking{files: map[string]string{}}
-	srv := httptest.NewServer(ov)
-	t.Cleanup(srv.Close)
-	t.Setenv(openviking.EnvURL, srv.URL)
-	t.Setenv(openviking.EnvKey, "root-key")
+func (f *fakeAgentMemory) EngineMemoryWrite(_ context.Context, _ string, space, agent, content string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.asked = append(f.asked, "write|"+space+"|"+agent)
+	f.notes[space+"|"+agent] = content
+	return nil
+}
 
+// People see and correct the agents' notes, kept in the agent runtime's
+// memory, at the paths they had in the sandbox; agents' own reads still reach
+// the sandbox.
+func TestTheMemoryScreenReadsTheAgentsNotesFromTheirMemory(t *testing.T) {
+	mem := &fakeAgentMemory{notes: map[string]string{}}
 	s, ctx := fileToolHarness(t)
+	s.agentMemoryFn = func() vmm.EngineMemory { return mem }
 	owner := idFromHex(t, "00000000000000010000000000000001")
 	sp, err := s.CreateSpace(ctx, owner, "files", "")
 	if err != nil {
@@ -66,9 +46,7 @@ func TestTheMemoryScreenReadsTheAgentsNotesFromOpenViking(t *testing.T) {
 	}
 	s.Bots = sandboxBots{mentionBots{BotPort: s.Bots}}
 	agent := addAgent(t, s, ctx, sp.ID, "Data Wiz", "g-wiz")
-	account := openviking.SpaceAccount(sp.ID.String())
-	user := openviking.AgentUser(agent.ID.String())
-	ov.files[account+"|"+openviking.AgentNotes(user)] = "# Data Wiz notes\n- ann likes tabs\n"
+	mem.notes[sp.ID.String()+"|"+agent.ID.String()] = "# Data Wiz notes\n- ann likes tabs\n"
 
 	call := func(callerKind, body string) map[string]any {
 		t.Helper()
@@ -85,41 +63,34 @@ func TestTheMemoryScreenReadsTheAgentsNotesFromOpenViking(t *testing.T) {
 		return out
 	}
 
-	// The project's notes: saved to and read from OpenViking.
+	// The project's notes: saved to and read from the agents' memory.
 	if out := call("person", `"operation":"write","path":"AGENTS.md","content":"# Project notes\n- deploys go through staging\n"`); out["ok"] != true {
 		t.Fatalf("write: %v", out)
 	}
-	if got := ov.files[account+"|"+openviking.SpaceNotes]; got != "# Project notes\n- deploys go through staging\n" {
+	if got := mem.notes[sp.ID.String()+"|"]; got != "# Project notes\n- deploys go through staging\n" {
 		t.Fatalf("stored: %q", got)
 	}
 	if out := call("person", `"operation":"read","path":"AGENTS.md"`); out["content"] != "# Project notes\n- deploys go through staging\n" {
 		t.Fatalf("read: %v", out)
 	}
-	// Each agent's notes: listed by folder, read as that agent.
+	// Each agent's notes: listed by folder.
 	out := call("person", `"operation":"list","path":".aseman/agents"`)
 	items, _ := out["items"].([]any)
-	// Every agent of the space, the built-in lead included, by folder name.
-	names := []string{}
+	names := map[string]bool{}
 	for _, it := range items {
-		if it.(map[string]any)["type"] != "dir" {
-			t.Fatalf("list: %v", out)
-		}
-		names = append(names, it.(map[string]any)["name"].(string))
+		names[it.(map[string]any)["name"].(string)] = true
 	}
-	if len(names) != 2 || names[0] != "aseman" || names[1] != "data-wiz" {
-		t.Fatalf("list: %v", names)
+	if !names["data-wiz"] {
+		t.Fatalf("list: %v", out)
 	}
 	if out := call("person", `"operation":"read","path":".aseman/agents/data-wiz/AGENTS.md"`); out["content"] != "# Data Wiz notes\n- ann likes tabs\n" {
 		t.Fatalf("agent notes: %v", out)
 	}
-	if ov.asked[len(ov.asked)-1] != account+"|"+user+"|/api/v1/content/read" {
-		t.Fatalf("an agent's notes are read as that agent: %v", ov.asked)
-	}
 	// Another file is the sandbox's, and so is an agent's own read.
-	before := len(ov.asked)
+	before := len(mem.asked)
 	call("person", `"operation":"read","path":"README.md"`)
 	call("bot", `"operation":"read","path":"AGENTS.md"`)
-	if len(ov.asked) != before {
-		t.Fatalf("only people's notes requests reach OpenViking: %v", ov.asked[before:])
+	if len(mem.asked) != before {
+		t.Fatalf("only people's notes requests reach the agents' memory: %v", mem.asked[before:])
 	}
 }

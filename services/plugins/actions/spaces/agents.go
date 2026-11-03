@@ -33,11 +33,11 @@ import (
 
 // isAgentRuntime reports whether a bot is an agent served by the runtime.
 func isAgentRuntime(rec *bot.Bot) bool {
-	return rec != nil && rec.Kind == bot.KindAgent && bot.AgentVMType(rec.VMType) == bot.VMTypeDeepAgents
+	return rec != nil && rec.Kind == bot.KindAgent && bot.AgentVMType(rec.VMType) == bot.VMTypeHarness
 }
 
 func (s *Service) agentRuntime(rec *bot.Bot) (vmm.AgentRuntime, error) {
-	rt, ok := s.K.VMMFor(vmm.TypeDeepAgents).(vmm.AgentRuntime)
+	rt, ok := s.K.VMMFor(vmm.TypeHarness).(vmm.AgentRuntime)
 	if !ok || rt == nil {
 		return nil, errs.New(errs.CodeUnavailable, "the agent runtime is not active on this node")
 	}
@@ -531,7 +531,7 @@ func (s *Service) runAgentTurn(ctx context.Context, spaceID, roomID identity.ID,
 
 // AgentQuestions lists the questions the space's agents are waiting on.
 func (s *Service) AgentQuestions(ctx context.Context, spaceID identity.ID) ([]vmm.AgentQuestion, error) {
-	lister, ok := s.K.VMMFor(vmm.TypeDeepAgents).(vmm.QuestionLister)
+	lister, ok := s.K.VMMFor(vmm.TypeHarness).(vmm.QuestionLister)
 	if !ok || lister == nil {
 		return []vmm.AgentQuestion{}, nil
 	}

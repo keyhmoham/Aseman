@@ -93,8 +93,8 @@ func (s *Service) InstallAseman(ctx context.Context) (*bot.Bot, error) {
 		Equal: map[string]any{"image_ref": builtinAsemanImage}, // not by name: the admin may rename it
 	}, &existing); err == nil && len(existing) > 0 {
 		rec := &existing[0]
-		if spec := asemanSpec(rec.SpecYML); rec.VMType != bot.VMTypeDeepAgents || rec.VMID != asemanVMID || rec.SpecYML != spec || hasLegacyCost(rec) {
-			rec.VMType, rec.VMID, rec.SpecYML = bot.VMTypeDeepAgents, asemanVMID, spec
+		if spec := asemanSpec(rec.SpecYML); rec.VMType != bot.VMTypeHarness || rec.VMID != asemanVMID || rec.SpecYML != spec || hasLegacyCost(rec) {
+			rec.VMType, rec.VMID, rec.SpecYML = bot.VMTypeHarness, asemanVMID, spec
 			// The lead is priced by the platform's agent rate.
 			if hasLegacyCost(rec) {
 				rec.Cost, rec.Resources = "", ""
@@ -148,7 +148,7 @@ func (s *Service) InstallAseman(ctx context.Context) (*bot.Bot, error) {
 	rec := &bot.Bot{
 		Entity:  entity.Entity{ID: botID, CreatedAt: now, UpdatedAt: now},
 		OwnerID: identity.ID{}, AccountID: accID, Name: "aseman",
-		Kind: bot.KindAgent, VMType: bot.VMTypeDeepAgents, VMID: asemanVMID,
+		Kind: bot.KindAgent, VMType: bot.VMTypeHarness, VMID: asemanVMID,
 		Status: bot.StatusRunning, ImageRef: builtinAsemanImage, SpecYML: asemanSpec(""),
 		// No cost of its own: the lead is billed at the platform's agent rate
 		// (Settings → Pricing) plus its model's token prices.

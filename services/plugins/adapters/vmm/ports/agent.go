@@ -90,24 +90,23 @@ type RoomForgetter interface {
 	ForgetRoom(ctx context.Context, spaceID, roomID string) error
 }
 
-// PersonalChat is a one-shot chat answered by the agentic engine without a
-// room turn (the personal Aseman brain). When the node engine is "opencode",
-// the runtime uses OpenCode's free-model gateway instead of platform LLMs;
-// when it is "deepseek", DeepSeek Harness runs it on the assistant's
-// platform model through the person's gateway session.
+// PersonalChat is one answer of the person's own Aseman (the assistant chat
+// and Talk) without a room turn: the agent runtime (DeepSeek Harness) runs it
+// on the assistant's platform model, as the person, through the person's
+// gateway session.
 type PersonalChat struct {
 	System   string        `json:"system"`
 	Messages []ChatMessage `json:"messages"`
-	// ThreadID keeps OpenCode session continuity across voice turns for one person.
+	// ThreadID keeps one conversation (dsh Session) across turns for one person.
 	ThreadID string `json:"thread_id,omitempty"`
 	// PersonID is who the gateway session acts as (required when WithTools).
 	PersonID string `json:"person_id,omitempty"`
-	// WithTools mints a person-scoped turn gateway and enables OpenCode MCP
+	// WithTools mints a person-scoped turn gateway and gives the assistant its
 	// space tools (same bridge room turns use).
 	WithTools bool `json:"with_tools,omitempty"`
 	// Provider and Model are the assistant's platform model. An engine on the
 	// platform's models (DeepSeek Harness) calls it through the person's
-	// gateway session; OpenCode ignores them.
+	// gateway session.
 	Provider string `json:"provider,omitempty"`
 	Model    string `json:"model,omitempty"`
 	// Usage, when set, receives the tokens the platform's models used, for
@@ -171,4 +170,16 @@ func WithAgentAsk(ctx context.Context) context.Context {
 func AgentAskDepth(ctx context.Context) int {
 	d, _ := ctx.Value(agentAskKey{}).(int)
 	return d
+}
+
+// PersonMemory is implemented by the agent runtime that keeps a person's own
+// memory with their Aseman (personal chat): notes always in context and
+// long-term memories recalled by meaning. Only the person's own surfaces use
+// it; nothing of it reaches any space.
+type PersonMemory interface {
+	PersonNotes(ctx context.Context, person string) (string, error)
+	PersonSetNotes(ctx context.Context, person, content string) error
+	PersonRecall(ctx context.Context, person, query string, limit int) ([]string, error)
+	// PersonLearn learns from one exchange in the background (best effort).
+	PersonLearn(ctx context.Context, person, said, reply string)
 }

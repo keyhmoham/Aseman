@@ -13,11 +13,11 @@ import (
 	"github.com/aseman/aseman/internal/plugins/entity"
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
-	"github.com/aseman/aseman/pkg/openviking"
 	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 	"github.com/aseman/aseman/plugins/actions/message/models/message"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
 	database "github.com/aseman/aseman/plugins/adapters/database/ports"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // A person's Aseman: their notes to themselves (the Aseman chat) are a
@@ -28,16 +28,16 @@ import (
 // One message, fast:
 //
 //	note ─┬─ decision model: keep or answer? lasting fact? about their rooms?
-//	      ├─ recall: what their memory holds about it (OpenViking, their own account)
+//	      ├─ recall: what their memory holds about it (their own, in the agent runtime's memory)
 //	      └─ their rooms: the ones they let it read (brain_access.go)
 //	      → keep: ✓, and remembered
 //	      → answer: one streamed call (bots.BrainAnswerStream) with what it knows of them
 //
 // Each step has a deadline and none is needed: without the decision model the
-// answer model itself may keep a note silently (brainSilent); without
-// OpenViking it answers from the conversation and the rooms alone.
+// answer model itself may keep a note silently (brainSilent); without memory
+// models it answers from the conversation, its notes and the rooms alone.
 //
-// The memory is the person's own (openviking.PersonAccount): nothing of a room
+// The memory is the person's own (vmm.PersonMemory): nothing of a room
 // is copied into it, and nothing of it reaches any room. Rooms are read as the
 // person, when a message is about them (their latest messages and shared
 // notes), never searched by meaning: that would spend the room's memory budget
@@ -79,10 +79,6 @@ const (
 // brainSilent is how the answer model says "nothing to answer" when there is no
 // decision model to ask first.
 const brainSilent = "<saved>"
-
-// brainCommit is when OpenViking extracts long-term memories from the notes:
-// once enough has gathered or the notes have been quiet a while.
-var brainCommit = openviking.CommitPolicy{Messages: 20, Tokens: 24000, IdleSeconds: 1800}
 
 // brainPlan is what the brain does with one note.
 type brainPlan struct {
@@ -179,12 +175,17 @@ func silentSoFar(text string) bool {
 
 // ── memory ──────────────────────────────────────────────────────────────────
 
-// brainMemory is the node's OpenViking (nil when it has none: no memory).
-func (s *Service) brainMemory() *openviking.Client {
+// brainMemory is the person's memory in the agent runtime (nil when the node
+// has none).
+func (s *Service) brainMemory() vmm.PersonMemory {
 	if s.memoryFn != nil {
 		return s.memoryFn()
 	}
-	return openviking.FromEnv()
+	if s.K == nil {
+		return nil
+	}
+	pm, _ := s.K.VMMFor(vmm.TypeHarness).(vmm.PersonMemory)
+	return pm
 }
 
 // brainNotesCache keeps each person's notes for a little while: they go into
@@ -213,10 +214,7 @@ func (s *Service) brainNotes(ctx context.Context, me identity.ID) (string, error
 	if ov == nil {
 		return "", nil
 	}
-	text, err := ov.Read(ctx, openviking.PersonAccount(me.String()), openviking.BrainUser, openviking.BrainNotes)
-	if openviking.NotFound(err) {
-		text, err = "", nil
-	}
+	text, err := ov.PersonNotes(ctx, me.String())
 	if err != nil {
 		return "", err
 	}
@@ -232,26 +230,14 @@ func forgetCachedNotes(me identity.ID) {
 	brainNotesCache.Unlock()
 }
 
-// brainSessions are the people whose notes session this process has set the commit policy of.
-var brainSessions sync.Map
-
-// brainRecord adds what was said to the person's notes session, from which
-// OpenViking learns about them in the background. Best effort.
-func (s *Service) brainRecord(ctx context.Context, me identity.ID, msgs []openviking.Message) {
+// brainRecord hands what was said to the person's memory, which learns about
+// them in the background. Best effort.
+func (s *Service) brainRecord(ctx context.Context, me identity.ID, said, reply string) {
 	ov := s.brainMemory()
-	if ov == nil || len(msgs) == 0 {
+	if ov == nil || strings.TrimSpace(said) == "" {
 		return
 	}
-	account := openviking.PersonAccount(me.String())
-	if err := ov.AddMessages(ctx, account, openviking.BrainUser, openviking.BrainSession, msgs); err != nil {
-		s.warn("brain: record notes", me, err)
-		return
-	}
-	if _, set := brainSessions.Load(me); !set {
-		if err := ov.SetCommitPolicy(ctx, account, openviking.BrainUser, openviking.BrainSession, brainCommit); err == nil {
-			brainSessions.Store(me, true)
-		}
-	}
+	ov.PersonLearn(ctx, me.String(), said, reply)
 }
 
 func (s *Service) warn(msg string, me identity.ID, err error) {
@@ -392,11 +378,11 @@ func (s *Service) runBrain(ctx context.Context, me identity.ID, rec *bot.Bot, no
 	ctx, cancel := context.WithTimeout(ctx, savedAskTimeout)
 	defer cancel()
 	body := strings.TrimSpace(note.msg.Body)
-	said := []openviking.Message{{Role: "user", Content: brainSaid(body, note.files), PeerID: openviking.Peer(me.String())}}
+	said := brainSaid(body, note.files)
 	if !answering {
 		// The person already waits for as many answers as allowed: this note
 		// is remembered, not answered (and not marked kept: it may be a question).
-		s.brainRecord(ctx, me, said)
+		s.brainRecord(ctx, me, said, "")
 		return ""
 	}
 	defer endSavedAsk(me, noteID)
@@ -421,7 +407,7 @@ func (s *Service) runBrain(ctx context.Context, me identity.ID, rec *bot.Bot, no
 				entry.status, entry.err = aiError, err
 			}
 			s.storeAnswer(ctx, me, me, rec, noteID, result, "")
-			s.brainRecord(ctx, me, append(said, openviking.Message{Role: "assistant", Content: result}))
+			s.brainRecord(ctx, me, said, result)
 			return result
 		}
 	}
@@ -489,7 +475,7 @@ func (s *Service) runBrain(ctx context.Context, me identity.ID, rec *bot.Bot, no
 	if plan.remember {
 		if line := rememberLine(body, note.msg.CreatedAt); line != "" {
 			if ov := s.brainMemory(); ov != nil {
-				if err := ov.Append(ctx, openviking.PersonAccount(me.String()), openviking.BrainUser, openviking.BrainNotes, line); err != nil {
+				if err := ov.PersonSetNotes(ctx, me.String(), notes+line); err != nil {
 					s.warn("brain: remember", me, err)
 				} else {
 					forgetCachedNotes(me)
@@ -501,7 +487,7 @@ func (s *Service) runBrain(ctx context.Context, me identity.ID, rec *bot.Bot, no
 	if plan.save {
 		entry.status = aiSaved
 		s.markSaved(ctx, note.msg.ID)
-		s.brainRecord(ctx, me, said)
+		s.brainRecord(ctx, me, said, "")
 		return ""
 	}
 
@@ -532,7 +518,7 @@ func (s *Service) runBrain(ctx context.Context, me identity.ID, rec *bot.Bot, no
 	if err == nil && !plan.decided && silentSoFar(reply) {
 		entry.status, entry.plan = aiSaved, "save"
 		s.markSaved(ctx, note.msg.ID)
-		s.brainRecord(ctx, me, said)
+		s.brainRecord(ctx, me, said, "")
 		return ""
 	}
 	entry.answer = reply
@@ -552,7 +538,7 @@ func (s *Service) runBrain(ctx context.Context, me identity.ID, rec *bot.Bot, no
 	}
 	s.storeAnswer(ctx, me, me, rec, noteID, reply, encodeProposal(proposed, box.list()))
 	if err == nil {
-		s.brainRecord(ctx, me, append(said, openviking.Message{Role: "assistant", Content: reply}))
+		s.brainRecord(ctx, me, said, reply)
 	}
 	return reply
 }
@@ -658,15 +644,17 @@ func (s *Service) brainRecall(ctx context.Context, me identity.ID, body string, 
 	}
 	ctx, cancel := context.WithTimeout(ctx, brainRecallTimeout)
 	defer cancel()
-	out, err := ov.Recall(ctx, openviking.PersonAccount(me.String()), openviking.BrainUser, query,
-		openviking.Recall{Session: openviking.BrainSession, Peer: openviking.Peer(me.String()), MaxTokens: brainRecallTokens})
+	out, err := ov.PersonRecall(ctx, me.String(), query, 8)
 	if err != nil {
-		if ctx.Err() == nil && !openviking.NotFound(err) {
+		if ctx.Err() == nil {
 			s.warn("brain: recall", me, err)
 		}
 		return ""
 	}
-	return out
+	if len(out) == 0 {
+		return ""
+	}
+	return "- " + strings.Join(out, "\n- ")
 }
 
 // brainAnswer has the assistant answer as the person's Aseman.

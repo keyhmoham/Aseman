@@ -49,7 +49,7 @@ func (f *fakeAgentRuntime) Name() string                                  { retu
 func (f *fakeAgentRuntime) Init(context.Context, *api.Dependencies) error { return nil }
 func (f *fakeAgentRuntime) Start(context.Context) error                   { return nil }
 func (f *fakeAgentRuntime) Stop(context.Context) error                    { return nil }
-func (f *fakeAgentRuntime) SupportedTypes() []vmm.Type                    { return []vmm.Type{vmm.TypeDeepAgents} }
+func (f *fakeAgentRuntime) SupportedTypes() []vmm.Type                    { return []vmm.Type{vmm.TypeHarness} }
 
 func (f *fakeAgentRuntime) Prompt(ctx context.Context, vmID string, turn vmm.AgentTurn) (string, error) {
 	f.mu.Lock()
@@ -145,7 +145,7 @@ func addAgent(t *testing.T, s *Service, ctx context.Context, spaceID identity.ID
 	}
 	botID, _ := identity.New(s.K.NodeID())
 	rec := &bot.Bot{Entity: entity.Entity{ID: botID, CreatedAt: now}, OwnerID: accID, AccountID: accID, Name: name,
-		Kind: bot.KindAgent, VMType: bot.VMTypeDeepAgents, Status: bot.StatusRunning, VMID: vmID}
+		Kind: bot.KindAgent, VMType: bot.VMTypeHarness, Status: bot.StatusRunning, VMID: vmID}
 	if err := s.R.CreateID(ctx, "bots", botID, rec); err != nil {
 		t.Fatal(err)
 	}

@@ -29,7 +29,7 @@ func TestMinimalConfigAutoWiresFromEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := names(cfg.Plugins.Adapters)
-	for _, n := range []string{"postgres", "local-cache", "local", "http", "nomad", "docker", "deepagents", "modal", "wasm"} {
+	for _, n := range []string{"postgres", "local-cache", "local", "http", "nomad", "docker", "harness", "modal", "wasm"} {
 		if _, ok := got[n]; !ok {
 			t.Errorf("adapter %s not wired", n)
 		}
@@ -137,13 +137,13 @@ func TestSandboxBackendConfig(t *testing.T) {
 
 func TestAgentRuntimeWiredFromEnv(t *testing.T) {
 	t.Setenv(EnvAgentNodeURL, "http://aseman:8080")
-	t.Setenv(EnvAgentRuntimeImage, "aseman/deepagents:test")
+	t.Setenv(EnvAgentRuntimeImage, "aseman/harness:test")
 	t.Setenv(EnvSandboxDockerNetwork, "aseman_default")
 	cfg := &Config{}
 	got := names(cfg.AutoAdapters())
-	opts, ok := got["deepagents"].Config["options"].(map[string]any)
-	if !ok || opts["node_url"] != "http://aseman:8080" || opts["image"] != "aseman/deepagents:test" || opts["network"] != "aseman_default" {
-		t.Fatalf("deepagents options = %v", got["deepagents"].Config)
+	opts, ok := got["harness"].Config["options"].(map[string]any)
+	if !ok || opts["node_url"] != "http://aseman:8080" || opts["image"] != "aseman/harness:test" || opts["network"] != "aseman_default" {
+		t.Fatalf("harness options = %v", got["harness"].Config)
 	}
 	for _, removed := range []string{"langchain", "grok"} {
 		if _, ok := got[removed]; ok {

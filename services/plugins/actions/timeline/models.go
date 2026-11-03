@@ -10,19 +10,19 @@ func f(name string, k database.Kind) database.Field { return database.Field{Name
 
 // Models belongs to this namespace and is registered by its plugin lifecycle.
 func Models() []database.Model {
-	return []database.Model{spaceModel(), cursorModel(), stateModel()}
+	return []database.Model{entryModel(), cursorModel()}
 }
 
 const (
-	spacesTable  = "timeline_spaces"
+	entriesTable = "timeline_entries"
 	cursorsTable = "timeline_cursors"
-	stateTable   = "timeline_state"
 )
 
-func spaceModel() database.Model {
-	return database.Model{Name: spacesTable, Table: spacesTable, Fields: []database.Field{
-		f("id", database.KindString), f("kb_id", database.KindString), f("source_id", database.KindString),
-		f("secret", database.KindString), f("created_at", database.KindTime), f("updated_at", database.KindTime),
+func entryModel() database.Model {
+	return database.Model{Name: entriesTable, Table: entriesTable, Fields: []database.Field{
+		f("id", database.KindString), {Name: "space_id", Kind: database.KindString, Index: true}, f("kind", database.KindString),
+		{Name: "at", Kind: database.KindTime, Index: true}, f("summary", database.KindString), f("subjects", database.KindString),
+		f("recorded_at", database.KindTime),
 	}}
 }
 
@@ -32,35 +32,24 @@ func cursorModel() database.Model {
 	}}
 }
 
-func stateModel() database.Model {
-	return database.Model{Name: stateTable, Table: stateTable, Fields: []database.Field{
-		f("id", database.KindString), f("secret", database.KindString), f("updated_at", database.KindTime),
-	}}
+// Entry is one dated thing that happened in a space: what (Summary, rendered
+// from its statements), to whom (Subjects) and when (At). Kind is the feed it
+// came from (requests, tools, messages, usage, files, members, rooms,
+// routines, …). Its id says what it states, so an entry is never edited: a
+// changed record becomes a new entry.
+type Entry struct {
+	ID         string    `db:"id" json:"id"`
+	SpaceID    string    `db:"space_id" json:"space_id"`
+	Kind       string    `db:"kind" json:"kind"`
+	At         time.Time `db:"at" json:"at"`
+	Summary    string    `db:"summary" json:"summary"`
+	Subjects   string    `db:"subjects" json:"subjects"`
+	RecordedAt time.Time `db:"recorded_at" json:"recorded_at"`
 }
 
-// Space is a space's timeline: its knowledge base in Utopia and the source the
-// node pushes the space's events to. Secret is the source's push key, sealed
-// with the node key.
-type Space struct {
-	ID        string    `db:"id" json:"id"`
-	KBID      string    `db:"kb_id" json:"kb_id"`
-	SourceID  string    `db:"source_id" json:"source_id"`
-	Secret    string    `db:"secret" json:"-"`
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
-}
-
-// Cursor is how far into one feed the node has pushed.
+// Cursor is how far into one feed the node has read.
 type Cursor struct {
 	ID        string    `db:"id" json:"id"`
 	At        time.Time `db:"at" json:"at"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
-}
-
-// State is the node's own standing in Utopia: the read token agents' timeline
-// queries go out with, sealed with the node key.
-type State struct {
-	ID        string    `db:"id" json:"id"`
-	Secret    string    `db:"secret" json:"-"`
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }

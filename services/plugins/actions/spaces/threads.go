@@ -151,7 +151,7 @@ func (s *Service) DeleteThread(ctx context.Context, thread *space.Room) error {
 		}
 	}
 	if s.K != nil {
-		if f, ok := s.K.VMMFor(vmm.TypeDeepAgents).(vmm.RoomForgetter); ok && f != nil {
+		if f, ok := s.K.VMMFor(vmm.TypeHarness).(vmm.RoomForgetter); ok && f != nil {
 			if err := f.ForgetRoom(ctx, thread.SpaceID.String(), thread.ID.String()); err != nil && s.L != nil {
 				s.L.Warn("agents' thread conversations not forgotten", "thread", thread.ID.String(), "error", err)
 			}

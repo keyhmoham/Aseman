@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aseman/aseman/plugins/adapters/vmm/deepagents"
+	"github.com/aseman/aseman/plugins/adapters/vmm/harness"
 
 	"gopkg.in/yaml.v3"
 )
@@ -22,7 +22,7 @@ func TestRenderAgentSpec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var agent deepagents.Spec
+	var agent harness.Spec
 	if err := yaml.Unmarshal([]byte(spec), &agent); err != nil {
 		t.Fatalf("spec must parse as agent yml: %v\n%s", err, spec)
 	}

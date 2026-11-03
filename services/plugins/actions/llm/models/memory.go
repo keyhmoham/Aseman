@@ -7,7 +7,7 @@ import (
 )
 
 // Memory is the node's memory models setting, chosen by the admin: the models
-// the agents' memory server (OpenViking) works with. The chat model reads
+// the agents' memory (the agent runtime's, kept by the node in pgvector) works with. The chat model reads
 // finished conversations and writes down what is worth remembering; the
 // embedding model turns memories into vectors so they are found by meaning.
 // Unset, agents still keep and read their notes, but nothing is recalled by

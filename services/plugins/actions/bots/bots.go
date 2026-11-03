@@ -116,8 +116,8 @@ func (s *Service) EnsureVM(ctx context.Context, rec *bot.Bot) error {
 	if rec == nil || rec.VMID == "" {
 		return errs.InvalidArgument("bot has no vm id")
 	}
-	if rec.VMType == bot.VMTypeDeepAgents || rec.VMType == bot.VMTypeMCP || rec.VMType == bot.VMTypeInstalled {
-		vm := s.K.VMMFor(vmm.Type(rec.VMType))
+	if bot.AgentVMType(rec.VMType) == bot.VMTypeHarness && rec.Kind == bot.KindAgent || rec.VMType == bot.VMTypeMCP || rec.VMType == bot.VMTypeInstalled {
+		vm := s.K.VMMFor(vmm.Type(rec.VMMType()))
 		if vm == nil {
 			return errs.New(errs.CodeUnavailable, "no "+string(rec.VMType)+" VMM adapter active")
 		}
@@ -136,7 +136,7 @@ func (s *Service) EnsureVM(ctx context.Context, rec *bot.Bot) error {
 // workspace volume is found by name), which only the bot record still knows
 // after a restart.
 func (s *Service) adoptVM(rec *bot.Bot) {
-	vm := s.K.VMMFor(vmm.Type(rec.VMType))
+	vm := s.K.VMMFor(vmm.Type(rec.VMMType()))
 	if vm == nil {
 		return
 	}
@@ -151,7 +151,7 @@ func (s *Service) adoptVM(rec *bot.Bot) {
 		res = &bot.ResourceProfile{}
 	}
 	ad.Adopt(rec.VMID, vmm.VMSpec{
-		Name: rec.Name, Type: vmm.Type(rec.VMType), ImageRef: rec.ImageRef, Args: []string{"sleep", "infinity"},
+		Name: rec.Name, Type: vmm.Type(rec.VMMType()), ImageRef: rec.ImageRef, Args: []string{"sleep", "infinity"},
 		Resources: vmm.ResourceSpec{CPU: res.CPU, MemoryMB: res.Memory, DiskMB: res.Disk, MaxRuntimeSec: res.MaxRuntimeSec},
 		Labels:    map[string]string{"aseman.bot_id": rec.ID.String()},
 	})
@@ -226,7 +226,7 @@ func (s *Service) CreateBot(ctx context.Context, owner identity.ID, req CreateBo
 		if req.SpecYML == "" {
 			// The agent's backbone must be one of the LLM providers + models
 			// the node admin configured (empty picks the defaults).
-			if s.LLM != nil && req.VMType == bot.VMTypeDeepAgents {
+			if s.LLM != nil && req.VMType == bot.VMTypeHarness {
 				p, m, err := s.LLM.Resolve(ctx, req.Provider, req.Model)
 				if err != nil {
 					return nil, err
@@ -307,7 +307,7 @@ func (s *Service) CreateBot(ctx context.Context, owner identity.ID, req CreateBo
 	}
 	// Deploy the VM.
 	vspec := vmm.VMSpec{
-		Name: req.Name, Type: vmm.Type(rec.VMType), ImageRef: req.ImageRef,
+		Name: req.Name, Type: vmm.Type(rec.VMMType()), ImageRef: req.ImageRef,
 		Resources: vmm.ResourceSpec{CPU: req.Resources.CPU, MemoryMB: req.Resources.Memory,
 			DiskMB: req.Resources.Disk, MaxRuntimeSec: req.Resources.MaxRuntimeSec},
 		Environment: req.Env, Args: req.Args, YML: req.SpecYML,
@@ -476,7 +476,7 @@ func (s *Service) Lifecycle(ctx context.Context, id identity.ID, op string) (*bo
 			return nil, err
 		}
 	}
-	vm := s.K.VMMFor(vmm.Type(rec.VMType))
+	vm := s.K.VMMFor(vmm.Type(rec.VMMType()))
 	if vm == nil {
 		return nil, errs.New(errs.CodeUnavailable, "no VMM adapter active")
 	}
@@ -514,7 +514,7 @@ func (s *Service) Usage(ctx context.Context, id identity.ID) (vmm.Usage, error) 
 	if err != nil {
 		return vmm.Usage{}, err
 	}
-	vm := s.K.VMMFor(vmm.Type(rec.VMType))
+	vm := s.K.VMMFor(vmm.Type(rec.VMMType()))
 	if vm == nil {
 		return vmm.Usage{}, errs.New(errs.CodeUnavailable, "no VMM adapter active")
 	}
@@ -533,7 +533,7 @@ func (s *Service) SendMessage(ctx context.Context, botID identity.ID, body strin
 	if err := s.EnsureVM(ctx, rec); err != nil {
 		return "", err
 	}
-	vm := s.K.VMMFor(vmm.Type(rec.VMType))
+	vm := s.K.VMMFor(vmm.Type(rec.VMMType()))
 	if vm == nil {
 		return "", errs.New(errs.CodeUnavailable, "no VMM adapter active")
 	}
@@ -541,7 +541,7 @@ func (s *Service) SendMessage(ctx context.Context, botID identity.ID, body strin
 	// caller's space. Wasm app backends answer through their exported ask
 	// host function. Everything else is recorded with no synchronous reply.
 	switch rec.VMType {
-	case bot.VMTypeDeepAgents:
+	case bot.VMTypeHarness:
 		if s.Agents == nil {
 			return "", errs.New(errs.CodeUnavailable, "agent routing not wired")
 		}
@@ -563,7 +563,7 @@ func (s *Service) Resize(ctx context.Context, id identity.ID, res bot.ResourcePr
 	if err != nil {
 		return nil, err
 	}
-	vm := s.K.VMMFor(vmm.Type(rec.VMType))
+	vm := s.K.VMMFor(vmm.Type(rec.VMMType()))
 	if vm == nil {
 		return nil, errs.New(errs.CodeUnavailable, "no VMM adapter active")
 	}
@@ -832,7 +832,7 @@ func (s *Service) DeleteBot(ctx context.Context, caller, botID identity.ID) erro
 	if rec.OwnerID != caller && rec.AccountID != caller {
 		return errs.Permission("not the bot owner")
 	}
-	if vm := s.K.VMMFor(vmm.Type(rec.VMType)); vm != nil {
+	if vm := s.K.VMMFor(vmm.Type(rec.VMMType())); vm != nil {
 		s.adoptVM(rec)
 		if err := vm.DeleteVM(ctx, rec.VMID); err != nil {
 			s.L.Warn("delete bot vm", "bot", botID.String(), "vm", rec.VMID, "error", err)

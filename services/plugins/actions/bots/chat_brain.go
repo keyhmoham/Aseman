@@ -71,7 +71,7 @@ const brainNewcomer = "You know nothing of this person yet: they may be new. Be 
 func (s *Service) BrainAnswerStream(ctx context.Context, customer, botID identity.ID, brief string, turns []ChatTurn, onText func(string)) (string, error) {
 	return s.answerStream(ctx, customer, botID, turns, func(platform string, spec agentChatSpec, name string) string {
 		return brainSystem(platform, spec, name, brief)
-	}, onText)
+	}, true, onText)
 }
 
 // chatDecideHTTP calls the decision provider; each call has its own deadline.

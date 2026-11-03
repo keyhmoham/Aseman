@@ -193,7 +193,7 @@ func (s *Service) agentRecruit(ctx context.Context, req *api.ActionRequest) (*ap
 	_, _ = rand.Read(suffix)
 	name := clipText(slug, 40) + "-" + hex.EncodeToString(suffix)
 	rec, err := s.Bots.CreateBot(helper.WithActor(ctx, owner), owner, bots.CreateBotRequest{
-		Name: name, Kind: bot.KindAgent, VMType: bot.VMTypeDeepAgents,
+		Name: name, Kind: bot.KindAgent, VMType: bot.VMTypeHarness,
 		Description: in.Description, Instructions: in.Instructions,
 		Provider: in.Provider, Model: in.Model, Skills: in.Skills,
 	})

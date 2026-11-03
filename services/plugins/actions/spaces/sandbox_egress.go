@@ -34,7 +34,7 @@ func (s *Service) egressEnabled() bool {
 
 // sandboxEnv is a new computer's environment.
 func (s *Service) sandboxEnv() map[string]string {
-	env := sandboxOpenCodeEnv()
+	env := sandboxLLMEnv()
 	if !s.egressEnabled() {
 		return env
 	}

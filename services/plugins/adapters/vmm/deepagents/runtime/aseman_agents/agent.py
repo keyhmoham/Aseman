@@ -77,6 +77,8 @@ _OVERFLOW = ("context_length_exceeded", "context length", "context window", "con
              "prompt is too long", "input is too long", "too many input tokens", "input token count",
              "maximum number of tokens allowed", "reduce the length of the messages")
 APPROVE = re.compile(r"^\s*(y|yes|ok|okay|approve[d]?|go( ahead)?|allow(ed)?|sure|confirm(ed)?|👍)\b", re.I)
+#: The runtimes a turn can run on (the node's Admin → Agentic engine).
+ENGINES = ("deepagents", "opencode", "deepseek")
 
 ModelFactory = Callable[[AgentDef, Gateway], BaseChatModel]
 
@@ -151,11 +153,36 @@ class Runner:
             self._opencode_engine = engine
         return engine
 
+    def _deepseek(self):
+        """The DeepSeek Harness engine, created on the first turn (or memory read) that needs it."""
+        engine = getattr(self, "_deepseek_engine", None)
+        if engine is None:
+            from .deepseek_engine import DeepSeekEngine
+            engine = DeepSeekEngine(self.store)
+            self._deepseek_engine = engine
+        return engine
+
+    def deepseek_memory(self, space: str, agent: str = "") -> dict[str, Any]:
+        """DeepSeek Harness's own memory of a space (and an agent), for the platform."""
+        return self._deepseek().memory.view(space, agent)
+
+    def write_deepseek_memory(self, space: str, content: str, agent: str = "") -> None:
+        self._deepseek().memory.write_notes(space, content, agent)
+
+    def _engine(self, name: str):
+        """The CLI engine that runs a turn, or None for Deep Agents itself."""
+        if name == "opencode":
+            return self._opencode()
+        if name == "deepseek":
+            return self._deepseek()
+        return None
+
     async def chat(self, *, system: str, messages: list, thread_id: str = "aseman-chat",
                    with_tools: bool = False, gateway: str = "", token: str = "",
-                   account_id: str = "") -> tuple[str, str]:
-        """Personal Aseman chat through the OpenCode agentic engine."""
-        return await self._opencode().chat(
+                   account_id: str = "", agent_engine: str = "opencode") -> tuple[str, str]:
+        """Personal Aseman chat through a CLI agentic engine (OpenCode or DeepSeek Harness)."""
+        engine = self._engine(agent_engine) or self._opencode()
+        return await engine.chat(
             system=system, messages=messages, thread_id=thread_id,
             with_tools=with_tools, gateway=gateway, token=token, account_id=account_id,
         )
@@ -168,8 +195,9 @@ class Runner:
         try:
             async with self._lock(ctx.thread_id):
                 pending = self.store.question_for_thread(ctx.thread_id)
-                if ctx.agent_engine == "opencode":
-                    return await self._opencode().prompt(ctx, pending)
+                engine = self._engine(ctx.agent_engine)
+                if engine is not None:
+                    return await engine.prompt(ctx, pending)
                 if pending is not None:
                     # The room moved on while the agent waited: the open
                     # question is closed with the new message, which the
@@ -201,8 +229,9 @@ class Runner:
                 if pending is None or (ctx.turn.question_id and ctx.turn.question_id != pending.id):
                     return Outcome(reply="", answered=False)
                 who = ctx.turn.sender_name or "A person"
-                if ctx.agent_engine == "opencode":
-                    outcome = await self._opencode().answer(ctx, pending)
+                engine = self._engine(ctx.agent_engine)
+                if engine is not None:
+                    outcome = await engine.answer(ctx, pending)
                     outcome.answered = True
                     return outcome
                 outcome = await self._resume(ctx, pending, f"{who}: {ctx.turn.message}",
@@ -222,6 +251,10 @@ class Runner:
         if not space_id or not room_id:
             return 0
         threads = set(self.store.forget_room(space_id, room_id))
+        deepseek = getattr(self, "_deepseek_engine", None)
+        if deepseek is not None:
+            # The harness's own Sessions of the room's threads go with them.
+            deepseek.forget_room(space_id, room_id)
         conn = getattr(self.checkpointer, "conn", None)
         if conn is not None:
             from .store import _room_patterns
@@ -266,13 +299,18 @@ class Runner:
         ctx.codemode = bool(req.get("codemode"))
         ctx.opencode = bool(req.get("opencode"))
         engine = str(req.get("agent_engine") or "deepagents")
-        ctx.agent_engine = engine if engine in ("deepagents", "opencode") else "deepagents"
+        ctx.agent_engine = engine if engine in ENGINES else "deepagents"
         if ctx.agent_engine == "opencode":
             # The OpenCode CLI brings its own models. Skip platform memory
             # (its embeddings are a platform model) and the LangGraph tools.
             ctx.memory = None
             ctx.timeline = False
             ctx.codemode = False
+        elif ctx.agent_engine == "deepseek":
+            # DeepSeek Harness brings its own memory (the aseman-memory dsh
+            # plugin); the platform's timeline and Code Mode stay, through its
+            # Aseman MCP bridge.
+            ctx.memory = None
         else:
             ctx.memory = memlib.Memory.for_turn(ctx, self.memory_settings)
         models = req.get("memory")

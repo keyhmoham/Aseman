@@ -41,9 +41,10 @@ var personalDeniedActions = map[string]bool{
 	"market.approve": true, "market.deny": true, "market.stats": true,
 }
 
-// openPersonal mints a person-scoped gateway session for OpenCode personal
-// Aseman chat. The runtime presents the token like a room turn; serveCall
-// dispatches as the person (Kind user), with no single-space lock.
+// openPersonal mints a person-scoped gateway session for personal Aseman chat
+// under a CLI engine (OpenCode, DeepSeek Harness). The runtime presents the
+// token like a room turn; serveCall dispatches as the person (Kind user), with
+// no single-space lock.
 func (a *Adapter) openPersonal(ctx context.Context, person identity.ID) (*session, error) {
 	if person.IsZero() {
 		return nil, errs.InvalidArgument("personal chat needs a person")

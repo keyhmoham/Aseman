@@ -26,9 +26,13 @@ class _EngineService extends FakeAsemanService {
         ...(data['spaces.agent_engine_get'] as Map),
         'engine': engine,
         'llm': engine == 'opencode' ? 'opencode-free' : 'platform',
-        'status': engine == 'opencode'
-            ? 'OpenCode CLI runs every agent turn on its own free-model gateway.'
-            : 'Deep Agents runs every agent turn.',
+        'status': switch (engine) {
+          'opencode' =>
+            'OpenCode CLI runs every agent turn on its own free-model gateway.',
+          'deepseek' =>
+            'DeepSeek Harness runs every agent turn with its own memory and swarm.',
+          _ => 'Deep Agents runs every agent turn.',
+        },
       };
       return data['spaces.agent_engine_get'];
     }
@@ -59,8 +63,13 @@ void main() {
 
     expect(find.text('Deep Agents'), findsOneWidget);
     expect(find.textContaining('Headless OpenCode CLI'), findsOneWidget);
+    expect(find.text('DeepSeek Harness'), findsOneWidget);
     expect(find.textContaining('platform LLM gateway'), findsWidgets);
-    expect(find.text('Swarm'), findsOneWidget);
+    // Each CLI engine's mapping: Swarm is in both.
+    expect(find.text('Swarm'), findsNWidgets(2));
+    expect(find.text('When DeepSeek Harness runs the agents'), findsOneWidget);
+    expect(find.text('When OpenCode runs the agents'), findsOneWidget);
+    expect(find.textContaining('aseman-memory dsh plugin'), findsOneWidget);
     expect(
       find.textContaining('OpenCode CLI runs every agent turn'),
       findsNothing,
@@ -75,6 +84,16 @@ void main() {
     ]);
     expect(
       find.textContaining('OpenCode CLI runs every agent turn'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.textContaining('Headless DeepSeek Harness'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(service.sets.last, {'engine': 'deepseek'});
+    expect(
+      find.textContaining('own memory and swarm'),
       findsOneWidget,
     );
   });

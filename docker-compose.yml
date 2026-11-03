@@ -285,6 +285,15 @@ services:
       OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
       ASEMAN_OPENCODE_ENGINE_API_KEY: ${ASEMAN_OPENCODE_ENGINE_API_KEY:-}
       ASEMAN_OPENCODE_ENGINE_AUTH: ${ASEMAN_OPENCODE_ENGINE_AUTH:-}
+      # DeepSeek Harness agentic engine (Admin → Agentic engine = DeepSeek
+      # Harness). By default it runs on the agents' platform models through
+      # the metered gateway; set ASEMAN_DSH_ENGINE_LLM=deepseek with a key to
+      # use the engine's own DeepSeek account instead.
+      ASEMAN_DSH_ENGINE_LLM: ${ASEMAN_DSH_ENGINE_LLM:-}
+      ASEMAN_DSH_ENGINE_API_KEY: ${ASEMAN_DSH_ENGINE_API_KEY:-}
+      ASEMAN_DSH_ENGINE_MODEL: ${ASEMAN_DSH_ENGINE_MODEL:-}
+      ASEMAN_DSH_ENGINE_WEB: ${ASEMAN_DSH_ENGINE_WEB:-}
+      ASEMAN_DSH_ENGINE_TIMEOUT: ${ASEMAN_DSH_ENGINE_TIMEOUT:-}
       # The agents' memory: the self-hosted OpenViking above, as the runtime
       # reaches it, and how much it recalls with each message (tokens).
       ASEMAN_OPENVIKING_URL: ${ASEMAN_OPENVIKING_URL:-http://openviking:1933}

@@ -92,7 +92,9 @@ type RoomForgetter interface {
 
 // PersonalChat is a one-shot chat answered by the agentic engine without a
 // room turn (the personal Aseman brain). When the node engine is "opencode",
-// the runtime uses OpenCode's free-model gateway instead of platform LLMs.
+// the runtime uses OpenCode's free-model gateway instead of platform LLMs;
+// when it is "deepseek", DeepSeek Harness runs it on the assistant's
+// platform model through the person's gateway session.
 type PersonalChat struct {
 	System   string        `json:"system"`
 	Messages []ChatMessage `json:"messages"`
@@ -103,12 +105,53 @@ type PersonalChat struct {
 	// WithTools mints a person-scoped turn gateway and enables OpenCode MCP
 	// space tools (same bridge room turns use).
 	WithTools bool `json:"with_tools,omitempty"`
+	// Provider and Model are the assistant's platform model. An engine on the
+	// platform's models (DeepSeek Harness) calls it through the person's
+	// gateway session; OpenCode ignores them.
+	Provider string `json:"provider,omitempty"`
+	Model    string `json:"model,omitempty"`
+	// Usage, when set, receives the tokens the platform's models used, for
+	// the caller to bill.
+	Usage *ChatUsage `json:"-"`
+}
+
+// ChatUsage is what a personal chat used of the platform's models.
+type ChatUsage struct {
+	TokensIn  int64
+	TokensOut int64
 }
 
 // PersonalChatter is implemented by agent runtimes that can answer personal
 // Aseman chats under the node's agentic engine setting.
 type PersonalChatter interface {
 	PersonalChat(ctx context.Context, chat PersonalChat) (string, error)
+}
+
+// EngineMemoryView is what an agentic engine that keeps its own memory (DeepSeek
+// Harness) holds about a space: its shared notes and, for one agent, that
+// agent's notes and latest journal.
+type EngineMemoryView struct {
+	Engine     string                `json:"engine"`
+	SpaceNotes string                `json:"space_notes"`
+	Agents     []string              `json:"agents"`
+	Agent      string                `json:"agent,omitempty"`
+	Notes      string                `json:"notes,omitempty"`
+	Journal    []EngineMemoryJournal `json:"journal,omitempty"`
+}
+
+// EngineMemoryJournal is one day of an agent's journal.
+type EngineMemoryJournal struct {
+	Day  string `json:"day"`
+	Text string `json:"text"`
+}
+
+// EngineMemory is implemented by agent runtimes whose engine keeps its own
+// memory, so the platform (the project's Memory screen) reads and corrects
+// what that engine's agents really read. agentID is the agent's bot id; empty
+// is the space's shared notes.
+type EngineMemory interface {
+	EngineMemoryRead(ctx context.Context, engine, spaceID, agentID string) (*EngineMemoryView, error)
+	EngineMemoryWrite(ctx context.Context, engine, spaceID, agentID, content string) error
 }
 
 // MaxAgentAskDepth bounds chains of agents asking agents.

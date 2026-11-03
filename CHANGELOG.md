@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased: DeepSeek Harness agentic engine
+
+- **Third agentic engine** (`spaces.agent_engine_set` `engine: "deepseek"`,
+  Admin → AI → Agentic engine): agent turns and personal Aseman run on
+  headless [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+  (`dsh --profile headless --json`), one dsh Session per agent per thread.
+- **Its own memory**: the `aseman-memory` dsh plugin keeps per-space and
+  per-agent notes and a journal of every turn; dsh's own instruction loader
+  puts the notes in context. The project's Memory screen reads and corrects
+  it (`vmm.EngineMemory`, runtime `/v1/engines/deepseek/memory`).
+- **Its own swarm**: parallel subagents, Agent Teams for leads, plan mode,
+  goals and workflows; swarms and todos show in the work log.
+- **Wired to Aseman**: models through the turn's metered LLM gateway (or the
+  engine's own DeepSeek key), and the `aseman` MCP bridge for space tools,
+  questions, hand-offs to other agents, timeline, Code Mode and creator mode
+  (`create_app` / `create_plugin` → on-demand app generation).
+- The runtime image ships dsh `0.2.2-alpha.3` by default (`DSH_VERSION`).
+
 ## Unreleased: deep theme system
 
 - **Installable theme packs** (`aseman.theme/v1`): colors, glass, radii,

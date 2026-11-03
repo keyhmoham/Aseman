@@ -27,10 +27,15 @@ type session struct {
 	botID   string
 	spaceID string
 	roomID  string
-	// personal is a person-scoped OpenCode chat session (Aseman self-chat / Talk),
-	// not a room agent turn: serveCall dispatches as the person with no space lock.
+	// personal is a person-scoped chat session (Aseman self-chat / Talk under
+	// a CLI engine), not a room agent turn: serveCall dispatches as the person
+	// with no space lock.
 	personal bool
-	base     context.Context
+	// chat is a personal session's model (the assistant's), served on /llm
+	// to an engine on the platform's models (DeepSeek Harness). Nil: the
+	// session has no model (OpenCode brings its own).
+	chat *Spec
+	base context.Context
 
 	// started and the token counters are what the turn has used so far, which
 	// the node gates each model call against (the budget and the wallet).
@@ -123,9 +128,11 @@ type turnRequest struct {
 	// does the coding (agents brief it); off, the agents build and code
 	// themselves. Independent of AgentEngine.
 	OpenCode bool `json:"opencode"`
-	// AgentEngine is "deepagents" (LangGraph, platform LLM gateway) or
-	// "opencode" (headless OpenCode CLI, its own free models). Read for
-	// this turn, so an admin change is already in effect.
+	// AgentEngine is "deepagents" (LangGraph, platform LLM gateway),
+	// "opencode" (headless OpenCode CLI, its own free models) or "deepseek"
+	// (headless DeepSeek Harness with its own memory and swarm, on the
+	// platform LLM gateway). Read for this turn, so an admin change is
+	// already in effect.
 	AgentEngine string `json:"agent_engine"`
 }
 
@@ -137,6 +144,20 @@ type turnResult struct {
 	// thread waits for the answer) or "failed".
 	Status string `json:"status"`
 	Error  string `json:"error"`
+}
+
+// agentEngines are the engines the runtime can run a turn on.
+var agentEngines = map[string]bool{"deepagents": true, "opencode": true, "deepseek": true}
+
+// engine is the node's agentic engine for the next turn (deepagents when
+// unknown or unread).
+func (a *Adapter) engine(ctx context.Context) string {
+	if a.platform != nil {
+		if e, err := a.platform.AgentEngine(ctx); err == nil && agentEngines[e] {
+			return e
+		}
+	}
+	return "deepagents"
 }
 
 // open starts a turn: it checks the agent can work and mints the turn token.
@@ -166,13 +187,9 @@ func (a *Adapter) open(ctx context.Context, vmID string, turn vmm.AgentTurn) (*s
 	}
 	// The engine is read first: an OpenCode turn must not resolve the platform
 	// LLM, decision, memory or Code Mode resources at all.
-	engine := "deepagents"
-	if a.platform != nil {
-		if e, err := a.platform.AgentEngine(ctx); err == nil && (e == "opencode" || e == "deepagents") {
-			engine = e
-		}
-	}
-	if engine == "deepagents" && spec.ContextWindow == 0 && a.platform != nil {
+	engine := a.engine(ctx)
+	platformModels := engine == "deepagents" || engine == "deepseek"
+	if platformModels && spec.ContextWindow == 0 && a.platform != nil {
 		// The runtime summarizes the agent's history against the model's
 		// window: tell it the window of the model the turn will really use.
 		if provider, err := a.platform.ResolveChat(ctx, spec.Provider, spec.Model); err == nil && provider.ContextWindow > 0 {
@@ -185,7 +202,7 @@ func (a *Adapter) open(ctx context.Context, vmID string, turn vmm.AgentTurn) (*s
 	}
 	token := hex.EncodeToString(raw)
 	base := context.WithoutCancel(ctx)
-	if engine == "deepagents" {
+	if platformModels {
 		// Sandbox OpenCode (and any other in-turn tool) reuses this credential so
 		// its completions hit the same metered /llm proxy as the agent runtime.
 		// The OpenCode engine uses its own free models, so it gets no such handle.
@@ -220,6 +237,16 @@ func (a *Adapter) open(ctx context.Context, vmID string, turn vmm.AgentTurn) (*s
 		// The programmer switch is independent of the engine; keep it truthful.
 		on, err := a.platform.OpenCodeEnabled(ctx)
 		req.OpenCode = err == nil && on
+	}
+	if engine == "deepseek" {
+		// DeepSeek Harness brings its own memory and swarm (no OpenViking or
+		// decision payloads); the space's timeline and Code Mode reach it
+		// through its Aseman MCP bridge.
+		if a.platform != nil {
+			req.Timeline = a.timelineOn(ctx)
+			req.CodeMode = true
+		}
+		return s, req, nil
 	}
 	if engine != "deepagents" {
 		// OpenCode brings its own models and tools: no platform decision,

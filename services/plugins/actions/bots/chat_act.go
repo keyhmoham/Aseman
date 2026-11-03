@@ -49,12 +49,12 @@ type toolCall struct {
 // and returns what came of it, for the model) before it answers. The answer
 // comes whole, through onText, once it is written. Billed like any chat answer.
 //
-// When the agentic engine is OpenCode, acting goes through the same free-model
-// + MCP space-tool gateway path as room turns (person-scoped session), not the
-// platform LLM function-calling loop below.
+// When the agentic engine is OpenCode or DeepSeek Harness, acting goes through
+// that engine with the same MCP space tools as room turns (person-scoped
+// session), not the platform LLM function-calling loop below.
 func (s *Service) BrainAct(ctx context.Context, customer, botID identity.ID, brief string, turns []ChatTurn, tools []BrainTool,
 	run func(name, args string) string, onText func(string)) (string, error) {
-	if s.agentEngine(ctx) == "opencode" {
+	if runtimeEngine(s.agentEngine(ctx)) {
 		return s.brainActViaOpenCode(ctx, customer, botID, brief, turns, onText)
 	}
 	rec, err := s.GetBot(ctx, botID)
@@ -139,8 +139,9 @@ func (s *Service) BrainAct(ctx context.Context, customer, botID identity.ID, bri
 	return text, err
 }
 
-// brainActViaOpenCode answers with tools through the OpenCode free-model path
-// and a person-scoped MCP gateway (same space tools as room OpenCode turns).
+// brainActViaOpenCode answers with tools through the runtime's CLI engine
+// (OpenCode's free models, or DeepSeek Harness on the assistant's model) and a
+// person-scoped MCP gateway (same space tools as room turns).
 func (s *Service) brainActViaOpenCode(ctx context.Context, customer, botID identity.ID, brief string, turns []ChatTurn, onText func(string)) (string, error) {
 	rec, err := s.GetBot(ctx, botID)
 	if err != nil {
@@ -159,7 +160,7 @@ func (s *Service) brainActViaOpenCode(ctx context.Context, customer, botID ident
 	var platform string
 	_ = bridge.Invoke(ctx, s.K, "settings", "Instructions", []any{ctx}, &platform)
 	system := brainActOpenCodeSystem(platform, spec, rec.Name, brief)
-	return s.answerViaOpenCode(ctx, customer, rec, system, turns, onText)
+	return s.answerViaEngine(ctx, customer, rec, used, system, turns, onText)
 }
 
 // brainActSystem is the brain's system prompt when it may do things (Deep Agents /
@@ -184,7 +185,7 @@ func brainActSystem(platform string, spec agentChatSpec, name, brief string) str
 // tools on a person-scoped gateway (same surface as a room OpenCode turn).
 func brainActOpenCodeSystem(platform string, spec agentChatSpec, name, brief string) string {
 	return brainSystem(platform, spec, name, brief) + "\n\n" +
-		"You act as this person on their account through OpenCode MCP tools on their gateway. " +
+		"You act as this person on their account through the Aseman MCP tools on their gateway. " +
 		"You can operate spaces, rooms, threads, chats, participants, agents, apps, messages, " +
 		"files, posts, explore/search, marketplace installs, follows, wallet — anything they " +
 		"can do in the app (authorization is still theirs). Prefer named tools " +

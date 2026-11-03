@@ -65,6 +65,14 @@ type fakeRuntime struct {
 	adapter   *Adapter
 	// gatewayLive records whether the turn token worked while the turn ran.
 	gatewayLive bool
+	// chats are the personal chats asked of the runtime; onChat runs while one
+	// is answered (the engine's model calls on its gateway session).
+	chats  []map[string]any
+	onChat func(body map[string]any)
+	// memory is the engine memory the runtime serves; memoryWrites what was saved.
+	memory       map[string]any
+	memoryWrites []map[string]any
+	memoryQuery  string
 }
 
 func (f *fakeRuntime) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -80,6 +88,24 @@ func (f *fakeRuntime) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	case "/v1/questions":
 		_ = json.NewEncoder(w).Encode(map[string]any{"questions": f.questions})
+	case "/v1/chat":
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		f.chats = append(f.chats, body)
+		if f.onChat != nil {
+			f.onChat(body)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"reply": "hello from the engine", "status": "done"})
+	case "/v1/engines/deepseek/memory":
+		if r.Method == http.MethodPost {
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			f.memoryWrites = append(f.memoryWrites, body)
+			_, _ = w.Write([]byte(`{"saved":true}`))
+			return
+		}
+		f.memoryQuery = r.URL.RawQuery
+		_ = json.NewEncoder(w).Encode(f.memory)
 	case "/v1/turns", "/v1/answers":
 		var req turnRequest
 		_ = json.NewDecoder(r.Body).Decode(&req)

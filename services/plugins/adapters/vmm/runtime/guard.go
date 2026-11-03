@@ -299,7 +299,7 @@ func (p *guardedVMM) ForgetRoom(ctx context.Context, spaceID, roomID string) err
 	return port.ForgetRoom(ctx, spaceID, roomID)
 }
 
-// PersonalChat forwards vmm.PersonalChatter (Aseman self-chat / Talk under OpenCode).
+// PersonalChat forwards vmm.PersonalChatter (Aseman self-chat / Talk under a CLI engine).
 func (p *guardedVMM) PersonalChat(ctx context.Context, chat vmm.PersonalChat) (string, error) {
 	ctx, release, err := p.gate.Acquire(ctx)
 	if err != nil {
@@ -311,6 +311,34 @@ func (p *guardedVMM) PersonalChat(ctx context.Context, chat vmm.PersonalChat) (s
 		return "", errs.New(errs.CodeUnavailable, "adapter cannot answer personal chats")
 	}
 	return port.PersonalChat(ctx, chat)
+}
+
+// EngineMemoryRead forwards vmm.EngineMemory (an engine's own memory).
+func (p *guardedVMM) EngineMemoryRead(ctx context.Context, engine, spaceID, agentID string) (*vmm.EngineMemoryView, error) {
+	ctx, release, err := p.gate.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	port, ok := p.port.(vmm.EngineMemory)
+	if !ok {
+		return nil, errs.New(errs.CodeUnavailable, "adapter keeps no engine memory")
+	}
+	return port.EngineMemoryRead(ctx, engine, spaceID, agentID)
+}
+
+// EngineMemoryWrite forwards vmm.EngineMemory.
+func (p *guardedVMM) EngineMemoryWrite(ctx context.Context, engine, spaceID, agentID, content string) error {
+	ctx, release, err := p.gate.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	port, ok := p.port.(vmm.EngineMemory)
+	if !ok {
+		return errs.New(errs.CodeUnavailable, "adapter keeps no engine memory")
+	}
+	return port.EngineMemoryWrite(ctx, engine, spaceID, agentID, content)
 }
 
 func Guard(port vmm.VMM, gate *lifetime.Gate) vmm.VMM {

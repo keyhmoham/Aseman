@@ -361,6 +361,34 @@ Map<String, dynamic> adminFixtures() {
           'opencode': 'aseman-app-builder, then appui_publish'
         },
       ],
+      'engines': ['deepagents', 'opencode', 'deepseek'],
+      'mappings': {
+        'opencode': [
+          {
+            'platform': 'Swarm',
+            'how': 'Parallel opencode run processes, one per task'
+          },
+          {
+            'platform': 'Agent team',
+            'how': 'OpenCode agents, primary and subagents'
+          },
+        ],
+        'deepseek': [
+          {
+            'platform': 'Memory',
+            'how':
+                'DeepSeek Harness\'s own: the aseman-memory dsh plugin per space and agent'
+          },
+          {
+            'platform': 'Swarm',
+            'how': 'DeepSeek Harness\'s own: parallel subagents, collected with wait_agent'
+          },
+          {
+            'platform': 'Creator mode / plugin creation',
+            'how': 'create_app / create_plugin → Aseman\'s on-demand app generation'
+          },
+        ],
+      },
     },
     'spaces.opencode_get': {
       'enabled': false,

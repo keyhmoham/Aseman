@@ -121,7 +121,7 @@ func TestAnOpenCodeTurnDoesNotResolvePlatformModels(t *testing.T) {
 }
 
 func TestATurnUsesTheAgenticEngineTheAdminJustSet(t *testing.T) {
-	for _, engine := range []string{"deepagents", "opencode"} {
+	for _, engine := range []string{"deepagents", "opencode", "deepseek"} {
 		a, rt, _ := newTestAdapter(t)
 		a.platform = fakePlatform{provider: vmm.ProviderConfig{Model: "m1"}, agentEngine: engine, openCode: engine == "deepagents"}
 		turn := testTurn()

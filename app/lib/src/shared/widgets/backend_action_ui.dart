@@ -448,7 +448,11 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('enabled', type: BackendFieldType.boolean, required: true),
   ],
   'spaces.agent_engine_set': [
-    _FieldTemplate('engine', required: true, hint: 'deepagents or opencode'),
+    _FieldTemplate(
+      'engine',
+      required: true,
+      hint: 'deepagents, opencode or deepseek',
+    ),
   ],
   'llm.llm_memory_set': [
     _FieldTemplate('chat_provider_id'),

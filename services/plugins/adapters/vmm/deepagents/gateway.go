@@ -302,9 +302,10 @@ func (a *Adapter) serveChat(ctx context.Context, req *network.Request) (*network
 		return openAIError(401, "invalid or expired agent turn token"), nil
 	}
 	defer s.begin()()
-	s.def.mu.Lock()
-	spec := s.def.spec
-	s.def.mu.Unlock()
+	spec, ok := s.modelSpec()
+	if !ok {
+		return openAIError(http.StatusForbidden, "this session has no model on the platform"), nil
+	}
 	endGate := vmm.Trace(s.base, "llm.gate", "")
 	gateErr := a.gate(s)
 	endGate()
@@ -549,14 +550,27 @@ func contextOverflow(status int, data []byte) (string, bool) {
 	return "", false
 }
 
+// modelSpec is the model a session's /llm serves: the agent's on a turn, the
+// assistant's on a personal session that has one.
+func (s *session) modelSpec() (Spec, bool) {
+	if s.def != nil {
+		s.def.mu.Lock()
+		defer s.def.mu.Unlock()
+		return s.def.spec, true
+	}
+	if s.chat != nil {
+		return *s.chat, true
+	}
+	return Spec{}, false
+}
+
 func (a *Adapter) serveModels(ctx context.Context, req *network.Request) (*network.Response, error) {
 	s := a.byToken(bearer(req.Header))
 	if s == nil {
 		return openAIError(401, "invalid or expired agent turn token"), nil
 	}
-	s.def.mu.Lock()
-	model := s.def.spec.Model
-	s.def.mu.Unlock()
+	spec, _ := s.modelSpec()
+	model := spec.Model
 	if model == "" {
 		model = "default"
 	}
@@ -716,10 +730,12 @@ func (a *Adapter) meter(s *session, in, out int64) {
 	if in == 0 && out == 0 {
 		return
 	}
-	s.def.mu.Lock()
-	s.def.tokensIn += in
-	s.def.tokensOut += out
-	s.def.mu.Unlock()
+	if s.def != nil {
+		s.def.mu.Lock()
+		s.def.tokensIn += in
+		s.def.tokensOut += out
+		s.def.mu.Unlock()
+	}
 	s.mu.Lock()
 	s.tokIn += in
 	s.tokOut += out

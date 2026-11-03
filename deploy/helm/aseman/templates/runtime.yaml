@@ -37,15 +37,11 @@ spec:
           ports: [{ name: http, containerPort: 8000 }]
           env:
             - { name: ASEMAN_NODE_URL, value: "http://{{ $fn }}-node:8080" }
+            - { name: ASEMAN_GATEWAY_URL, value: "http://{{ $fn }}-node:8080/harness/v1" }
             - { name: ASEMAN_RUNTIME_PORT, value: "8000" }
             - { name: ASEMAN_DATA_DIR, value: /data }
             - name: ASEMAN_RUNTIME_SECRET
               valueFrom: { secretKeyRef: { name: {{ include "aseman.secretName" . }}, key: ASEMAN_AGENT_RUNTIME_SECRET } }
-            {{- if .Values.openviking.enabled }}
-            - { name: ASEMAN_OPENVIKING_URL, value: "http://{{ $fn }}-openviking:1933" }
-            - name: ASEMAN_OPENVIKING_API_KEY
-              valueFrom: { secretKeyRef: { name: {{ include "aseman.secretName" . }}, key: ASEMAN_OPENVIKING_API_KEY } }
-            {{- end }}
             {{- with .Values.runtime.svidFile }}
             - { name: ASEMAN_SVID_FILE, value: {{ . | quote }} }
             {{- end }}

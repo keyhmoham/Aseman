@@ -167,7 +167,7 @@ type CreateBotRequest = dto.CreateBotRequest
 // CreateBot deploys a bot: account, wallet, metadata, record and VM.
 func (s *Service) CreateBot(ctx context.Context, owner identity.ID, req CreateBotRequest) (*bot.Bot, error) {
 	if req.Kind == "" || req.Kind == bot.KindAgent {
-		// Every agent runs on the deep agents runtime, whatever engine an
+		// Every agent runs on the agent runtime, whatever engine an
 		// older client asks for.
 		req.VMType = bot.AgentVMType(req.VMType)
 	}
@@ -430,7 +430,7 @@ func (s *Service) GetBot(ctx context.Context, id identity.ID) (*bot.Bot, error) 
 }
 
 // migrateAgentEngine moves an agent recorded on an engine this node no longer
-// runs onto the deep agents runtime. Its spec is engine-neutral (name, model,
+// runs onto the agent runtime. Its spec is engine-neutral (name, model,
 // instructions, skills), so nothing else changes.
 // migrateRetiredKinds turns bots stored under the retired "miniapp" kind into
 // tools: an app is a tool, whatever it was created as.
@@ -461,7 +461,7 @@ func (s *Service) migrateAgentEngine(ctx context.Context, rec *bot.Bot) {
 		s.L.Warn("migrate agent engine", "bot", rec.ID.String(), "error", err)
 		return
 	}
-	s.L.Info("agent moved to the deep agents runtime", "bot", rec.ID.String(), "name", rec.Name)
+	s.L.Info("agent moved to the agent runtime", "bot", rec.ID.String(), "name", rec.Name)
 }
 
 // Lifecycle maps a bot action onto the VMM and persists the status.

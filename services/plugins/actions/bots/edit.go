@@ -220,7 +220,7 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 		rec.SpecYML = string(b)
 	}
 	if (changedSpec || in.Resources != nil) && rec.Kind == bot.KindAgent && !sharedRuntime {
-		// The built-in lead runs on the shared deep agents runtime: its spec is
+		// The built-in lead runs on the shared agent runtime: its spec is
 		// read per turn, so it keeps its VM and image.
 		vm := s.K.VMMFor(vmm.Type(rec.VMMType()))
 		if vm == nil {

@@ -144,7 +144,7 @@ func (s *Service) agentAnswer(ctx context.Context, req *api.ActionRequest) (*api
 
 var handleChars = regexp.MustCompile(`[^a-z0-9]+`)
 
-// agentRecruit creates a specialist agent on the deep agents runtime and adds
+// agentRecruit creates a specialist agent on the agent runtime and adds
 // it to the space, where people can message it and the lead (or any agent) can
 // delegate to it. Inside a run the person who started the run owns and pays for
 // it; it uses the recruiting agent's model unless one is given.

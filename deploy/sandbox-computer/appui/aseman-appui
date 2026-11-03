@@ -1,38 +1,14 @@
 #!/usr/bin/env bash
-# Aseman App UI helper. Two builders share one app system: OpenCode (when the
-# node's OpenCode is on: `build` drives it against Aseman's metered LLM
-# gateway, the same backbone agents use), or the space's own agents (OpenCode
-# off: `prepare` lays out the project and their task, they build it, `verify`
-# checks it). Either way the project, the guides, the toolchain and the
-# platform's checks are the same, and READY.json follows passing tests.
+# Aseman App UI helper. The space's agents build apps: `prepare` lays out the
+# project and their task, they build it with their own tools, and `verify`
+# runs the platform's checks on it. READY.json follows passing tests.
 set -euo pipefail
 
 ROOT="${ASEMAN_APPUI_ROOT:-/opt/aseman-appui}"
-OPENCODE_BIN="${OPENCODE_BIN:-$(command -v opencode || true)}"
-CONFIG_DIR="${OPENCODE_CONFIG_DIR:-/etc/opencode}"
-export OPENCODE_CONFIG="${OPENCODE_CONFIG:-$CONFIG_DIR/opencode.json}"
-
-# Credentials / base URL from ensureOpenCodeAuth (turn-scoped). Must load
-# before reading OPENCODE_MODEL — CreateBot may still inject a stale "free".
-# shellcheck disable=SC1091
-[[ -f /etc/opencode/env.sh ]] && . /etc/opencode/env.sh
-# Prefer Aseman backbone; never keep the Zen "free" alias.
-MODEL_FLAG="${OPENCODE_MODEL:-aseman/default}"
-if [[ "$MODEL_FLAG" == "free" || "$MODEL_FLAG" == opencode/* ]]; then
-  MODEL_FLAG="aseman/default"
-fi
-unset OPENCODE_API_KEY 2>/dev/null || true
 
 die() { echo "aseman-appui: $*" >&2; exit 1; }
 
-need_opencode() {
-  [[ -n "$OPENCODE_BIN" && -x "$OPENCODE_BIN" ]] || die "opencode is not installed in this sandbox image"
-}
 
-need_llm() {
-  [[ -n "${ASEMAN_LLM_API_KEY:-}" && -n "${ASEMAN_LLM_BASE_URL:-}" ]] || \
-    die "Aseman LLM gateway not configured (ASEMAN_LLM_BASE_URL / ASEMAN_LLM_API_KEY). Run via appui_create during an agent turn."
-}
 
 write_file() {
   local path="$1"
@@ -49,14 +25,6 @@ same_file() {
   [[ "$a" == "$b" ]]
 }
 
-cmd_models() {
-  need_opencode
-  echo "backbone: aseman metered LLM gateway"
-  echo "base_url: ${ASEMAN_LLM_BASE_URL:-unset}"
-  echo "api_key: ${ASEMAN_LLM_API_KEY:+set}"
-  echo "model: ${MODEL_FLAG}"
-  "$OPENCODE_BIN" models 2>/dev/null || true
-}
 
 cmd_status() {
   local dir="${1:-.}"
@@ -75,58 +43,7 @@ cmd_status() {
   echo '{"state":"idle"}'
 }
 
-run_opencode() {
-  local dir="$1"
-  shift
-  local message="$*"
-  need_opencode
-  need_llm
-  mkdir -p "$dir"
-  local logfile="$dir/opencode.log"
-  local statusfile="$dir/STATUS.json"
-  local model="${MODEL_FLAG}"
-  # Bound the coding session; platform owns the outer appui build deadline.
-  local secs="${OPENCODE_RUN_TIMEOUT_SECS:-600}"
-  write_file "$statusfile" <<EOF
-{"state":"running","model":"$model","backbone":"aseman","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
-EOF
-  echo "aseman-appui: opencode run model=$model base=${ASEMAN_LLM_BASE_URL} timeout=${secs}s" | tee -a "$logfile"
-  set +e
-  (
-    cd "$dir"
-    timeout -k 15s "${secs}s" "$OPENCODE_BIN" run --auto --model "$model" --format default --title "aseman-appui" -- "$message"
-  ) >>"$logfile" 2>&1
-  local ec=$?
-  set -e
-  if [[ $ec -eq 0 ]]; then
-    write_file "$statusfile" <<EOF
-{"state":"completed","model":"$model","backbone":"aseman","finished_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
-EOF
-    return 0
-  fi
-  write_file "$statusfile" <<EOF
-{"state":"failed","model":"$model","backbone":"aseman","finished_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","error":"opencode failed (exit $ec); see opencode.log"}
-EOF
-  echo "aseman-appui: opencode failed (exit $ec); see $logfile" >&2
-  return 1
-}
 
-cmd_run() {
-  local dir="."
-  local message=""
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --dir) dir="$2"; shift 2 ;;
-      --message) message="$2"; shift 2 ;;
-      -*) die "unknown flag $1" ;;
-      *) message="${message:+$message }$1"; shift ;;
-    esac
-  done
-  [[ -n "$message" ]] || die "run needs a message"
-  dir=$(mkdir -p "$dir" && cd "$dir" && pwd)
-  run_opencode "$dir" "$message"
-  cmd_status "$dir"
-}
 
 # kit_file is a tool of the platform's checks: the platform's own copy (so a
 # project's vendored copy, missing or edited, never decides whether it
@@ -209,7 +126,7 @@ verify_app() {
 
 # check_elpian checks an Elpian frontend against the running server: the
 # server serves the bundle, the program runs on QuickJS (check.mjs), and
-# (for the app itself) the end-to-end scenarios OpenCode wrote while driving
+# (for the app itself) the end-to-end scenarios the builder wrote while driving
 # it headlessly replay (drive.mjs run elpian/e2e).
 check_elpian() {
   local dir="$1" port="$2" entry="$3" mode="$4" code out
@@ -273,7 +190,7 @@ check_ready() {
 }
 
 build_prompt() {
-  local dir="$1" port="$2" mode="$3" ui="${4:-elpian}" engine="${5:-opencode}" task frontend tools="" finish=""
+  local dir="$1" port="$2" mode="$3" ui="${4:-elpian}" engine="${5:-agents}" task frontend tools="" finish=""
   if [[ "$mode" == "update" ]]; then
     task="This is an existing app (BRIEF.md is what it was built for). Make the change requested last in CHANGES.md and keep everything else working. Read the project before editing; change only what the request needs. With an Elpian frontend, replay the existing end-to-end scenarios (elpian/e2e) first, then drive the changed and new parts headlessly step by step, and update or add scenarios so they cover them."
   else
@@ -432,7 +349,7 @@ PROMPT
 }
 
 repair_prompt() {
-  local port="$1" problem="$2" engine="${3:-opencode}" after=""
+  local port="$1" problem="$2" engine="${3:-agents}" after=""
   if [[ "$engine" == "agents" ]]; then
     after="
 Your elpian_* tools are the aseman-elpian command (aseman-elpian tools lists
@@ -478,7 +395,7 @@ parse_job() {
   job_dir=$(mkdir -p "$job_dir" && cd "$job_dir" && pwd)
 }
 
-# prepare_project lays out the project for its builder (opencode or agents):
+# prepare_project lays out the project for the agents that build it:
 # the guides, the SDKs and the Elpian toolchain, BRIEF.md (+ CHANGES.md for
 # an update), APPS.json and JOB.json.
 prepare_project() {
@@ -542,44 +459,10 @@ check_app() {
   fi
 }
 
-cmd_build() {
-  parse_job "$@"
-  local dir="$job_dir" port="$job_port"
-  prepare_project opencode
 
-  # OpenCode builds; the platform then checks the result itself (READY.json,
-  # and that the app really starts and answers) and sends what it found back
-  # to OpenCode for up to ASEMAN_APPUI_REPAIRS rounds.
-  local rounds="${ASEMAN_APPUI_REPAIRS:-2}" round=0 problem=""
-  if ! run_opencode "$dir" "$(build_prompt "$dir" "$port" "$job_mode" "$job_ui" opencode)"; then
-    problem="the OpenCode session failed or timed out (see opencode.log); finish the work"
-  fi
-  while true; do
-    if [[ -z "$problem" ]]; then
-      problem=$(check_app "$dir") || true
-    fi
-    if [[ -z "$problem" ]]; then
-      echo "aseman-appui: verified: the app starts and answers on port $port"
-      break
-    fi
-    if (( round >= rounds )); then
-      echo "aseman-appui: not ready after $round repair round(s): $problem" >&2
-      jq -n --arg e "$problem" '{ok:false, error:$e}' >"$dir/READY.json"
-      cmd_status "$dir"
-      return 1
-    fi
-    round=$((round + 1))
-    echo "aseman-appui: repair round $round: $problem" | tee -a "$dir/opencode.log"
-    rm -f "$dir/READY.json"
-    run_opencode "$dir" "$(repair_prompt "$port" "$problem")" || true
-    problem=""
-  done
-  cmd_status "$dir"
-}
-
-# cmd_prepare lays out a project for the space's agents to build (OpenCode
-# off) and prints their task (TASK.md): the same plan, build, test and
-# end-to-end steps OpenCode is given, with the agents' own tools.
+# cmd_prepare lays out a project for the space's agents to build and prints
+# their task (TASK.md): plan, build, test and drive it end to end with their
+# own tools.
 cmd_prepare() {
   parse_job "$@"
   local dir="$job_dir"
@@ -589,9 +472,8 @@ cmd_prepare() {
   cat "$dir/TASK.md"
 }
 
-# cmd_verify runs the platform's checks on an app the agents built (the same
-# ones `build` runs after OpenCode): ready, or the problem and how to repair
-# it (also in REPAIR.md) with exit 1.
+# cmd_verify runs the platform's checks on an app the agents built: ready, or
+# the problem and how to repair it (also in REPAIR.md) with exit 1.
 cmd_verify() {
   local dir="."
   while [[ $# -gt 0 ]]; do
@@ -625,25 +507,16 @@ usage() {
   cat <<EOF
 Usage: aseman-appui <command> [flags]
 
-Apps are built by OpenCode (build, run) or by the space's agents (prepare,
-then verify); both get the same project, guides, toolchain and checks.
-OpenCode uses Aseman's metered LLM gateway (ASEMAN_LLM_*), the same backbone
-as space agents. Token usage is billed on the agent turn.
+Apps are built by the space's agents: prepare lays the project out and prints
+their task, they build it, and verify runs the platform's checks.
 
 Commands:
-  models                 Show backbone / model selection
-  run --dir DIR --message TEXT
-                         Distribute a coding task to OpenCode
-  build --dir DIR --brief-file FILE [--apps-file FILE] [--title T] [--port N] [--mode new|update] [--ui elpian|web]
-                         Full App UI build: OpenCode plans, builds and tests; the
-                         platform then starts the app and checks that it answers,
-                         with repair rounds (ASEMAN_APPUI_REPAIRS, default 2).
-                         update changes an existing app in place (CHANGES.md).
-                         --ui elpian (default: an Elpian program, ELPIAN.md) or web
-                         (only when the person asked for web technology).
-  prepare (the flags of build)
+  prepare --dir DIR --brief-file FILE [--apps-file FILE] [--title T] [--port N] [--mode new|update] [--ui elpian|web]
                          Lay out the project for an agent to build and print its
-                         task (TASK.md); OpenCode is not involved.
+                         task (TASK.md). update changes an existing app in place
+                         (CHANGES.md). --ui elpian (default: an Elpian program,
+                         ELPIAN.md) or web (only when the person asked for web
+                         technology).
   verify [--dir] DIR     The platform's checks of a built app (READY.json, start
                          and answer, Elpian bundle, QuickJS, end-to-end
                          scenarios); exit 1 with the problem (REPAIR.md).
@@ -655,9 +528,6 @@ main() {
   local cmd="${1:-}"
   shift || true
   case "$cmd" in
-    models) cmd_models "$@" ;;
-    run) cmd_run "$@" ;;
-    build) cmd_build "$@" ;;
     prepare) cmd_prepare "$@" ;;
     verify) cmd_verify "$@" ;;
     status) cmd_status "${1:-.}" ;;

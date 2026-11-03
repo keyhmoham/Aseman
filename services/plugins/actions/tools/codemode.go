@@ -50,7 +50,7 @@ const codeModeResultMaxChars = 24_000
 var codeModeSlug = regexp.MustCompile(`[^a-z0-9_]+`)
 
 // Platform builtins served through Code Mode (not as one LLM tool each).
-// sandbox_exec / file_edit stay on the deepagents FS+shell; message_send,
+// sandbox_exec / file_edit stay on the runtime's sandbox shell and files; message_send,
 // room_info and ask_user stay as native communication / HITL tools; file_read
 // stays the agent's native read_attachment, because an image it returns is
 // vision input only as a tool result, not as Code Mode's text result.

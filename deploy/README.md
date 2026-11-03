@@ -41,7 +41,7 @@ the pull only (and logs out again), re-tags them to the names `docker-compose.ym
 `docker compose up -d --no-build`. Runtime settings remain in the server's `.env`.
 The workflow's own token is enough for GHCR; no extra secret.
 
-The stack on the server: postgres, nomad, the deep agents runtime, the node, the
+The stack on the server: postgres, nomad, the agent runtime (DeepSeek Harness), the node, the
 web app, and **Caddy** as the only public entrypoint (HTTPS, automatic certificates).
 
 ## One-time setup
@@ -91,13 +91,11 @@ The platform needs nothing from GHCR: with the default `docker` sandbox backend 
 its own `aseman/sandbox-computer` image. Only for **Modal** add to `.env`:
 `ASEMAN_SANDBOX_BACKEND=modal` and
 `ASEMAN_SANDBOX_IMAGE=ghcr.io/<owner-lowercase>/aseman-sandbox-computer:latest`.
-The agents' memory server (OpenViking) needs nothing here: its root key
-(`ASEMAN_OPENVIKING_ROOT_KEY`) is generated into `.env` on the first deploy,
-and its models are picked in the app under **Admin → Memory models**.
-The projects' timelines (Utopia, on the stack's own Postgres) need nothing either:
-the node's password there (`ASEMAN_TIMELINE_PASSWORD`) is generated into `.env`
-the same way. The Postgres image now carries pgvector (`deploy/postgres`, same
-`postgres:16-alpine` base), so the existing data volume is used as it is.
+The agents' memory and the projects' timelines live in the stack's own
+Postgres and need nothing here; the memory models are picked in the app under
+**Admin → Memory models**. The Postgres image carries pgvector
+(`deploy/postgres`, same `postgres:16-alpine` base), so the existing data
+volume is used as it is.
 Everything else in [`.env.example`](../.env.example) is optional. The
 deploy stops with a clear message if `.env` is missing. Editing `.env` needs no
 redeploy of code: run the `docker compose ... up -d` line from "Day to day".

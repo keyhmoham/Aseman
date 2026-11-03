@@ -107,7 +107,7 @@ class _CreateBotDialog extends StatefulWidget {
 
 class _CreateBotDialogState extends State<_CreateBotDialog> {
   final String kind = 'agent';
-  final String vmType = 'langchain';
+  final String vmType = 'harness';
 
   final name = TextEditingController();
   final description = TextEditingController();

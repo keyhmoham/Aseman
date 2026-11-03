@@ -8,7 +8,7 @@ import (
 )
 
 // Skill is a professional capability of an agent. The runtime writes each one
-// into the shared sandbox as a deep agents skill (SKILL.md), so the agent loads
+// with the agent's definition; the runtime lists it and the agent loads
 // its full instructions only when the skill is relevant.
 type Skill struct {
 	Name         string   `yaml:"name" json:"name"`
@@ -34,7 +34,7 @@ type Spec struct {
 	AllowedTools []string `yaml:"allowed_tools" json:"allowed_tools,omitempty"`
 	Skills       []Skill  `yaml:"skills" json:"skills,omitempty"`
 	// InterruptOn names tools that wait for a person's approval before they
-	// run (deep agents human-in-the-loop), e.g. ["execute", "file_send"].
+	// run, e.g. ["execute", "file_send"].
 	InterruptOn []string `yaml:"interrupt_on" json:"interrupt_on,omitempty"`
 	// ReasoningEffort is passed to reasoning models.
 	ReasoningEffort string `yaml:"reasoning_effort" json:"reasoning_effort,omitempty"`

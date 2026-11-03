@@ -31,7 +31,7 @@ class _Owner extends FakeAsemanService {
             ownerId: 'me',
             accountId: 'acct-mine',
             name: 'Nova Helper',
-            vmType: 'deepagents',
+            vmType: 'harness',
             status: 'running'),
       ];
 
@@ -43,7 +43,7 @@ class _Owner extends FakeAsemanService {
         'id': botId,
         'name': 'Nova Helper',
         'kind': 'agent',
-        'vm_type': 'deepagents',
+        'vm_type': 'harness',
         'description': 'Helps with research',
         'resources': {'cpu': 2, 'memory_mb': 1024, 'disk_mb': 1024},
         'agent': {

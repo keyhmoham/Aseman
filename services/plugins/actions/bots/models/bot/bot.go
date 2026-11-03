@@ -14,7 +14,7 @@ import (
 )
 
 // Kind classifies what a bot is used for. Agents are LLM-driven assistants
-// (served by the deep agents runtime); a tool is an app: a backend (MCP,
+// (served by the agent runtime); a tool is an app: a backend (MCP,
 // wasm, a program) and the frontend it is used through.
 type Kind string
 

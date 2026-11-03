@@ -8,7 +8,7 @@
   "bin": { "aseman-harness": "./bin/aseman-harness.js" },
   "scripts": {
     "start": "node bin/aseman-harness.js",
-    "test": "node --test test/"
+    "test": "node --test --test-timeout=300000 test/unit.test.js test/integration.test.js"
   },
   "dependencies": {
     "@deepseek-ai/dsh": "0.2.2-alpha.3",

@@ -39,7 +39,7 @@ class _MessengerService extends FakeAsemanService {
             id: 'bot-alpha',
             ownerId: 'me',
             accountId: '00000000000000010000000000000043',
-            vmType: 'deepagents',
+            vmType: 'harness',
             status: 'running',
             name: 'AlphaBot',
             kind: 'agent',

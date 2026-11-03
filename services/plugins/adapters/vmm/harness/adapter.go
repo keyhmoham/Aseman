@@ -302,7 +302,7 @@ func (a *Adapter) DeleteImage(context.Context, string) error { return nil }
 // CreateVM registers an agent.
 func (a *Adapter) CreateVM(ctx context.Context, spec vmm.VMSpec) (vmm.VM, error) {
 	if spec.Type != vmm.TypeHarness {
-		return vmm.VM{}, errs.InvalidArgument("the deep agents runtime runs agents only")
+		return vmm.VM{}, errs.InvalidArgument("the agent runtime runs agents only")
 	}
 	def, err := ParseSpec(spec.YML)
 	if err != nil {

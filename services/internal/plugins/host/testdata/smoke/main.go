@@ -86,7 +86,7 @@ func main() {
 	controlRequest.Body = []byte(`{"name":"memory"}`)
 	_, err = k.Control(ctx, "plugins_load", controlRequest)
 	must(err)
-	// A fake deep agents runtime exercises agent creation, direct asks, room
+	// A fake agent runtime exercises agent creation, direct asks, room
 	// turns, provider resolution and turn tokens through dynamically loaded
 	// modules.
 	for _, name := range []string{"ASEMAN_LLM_BASE_URL", "ASEMAN_LLM_API_KEY", "ASEMAN_LLM_MODEL", "ASEMAN_IMAGE_MODEL"} {

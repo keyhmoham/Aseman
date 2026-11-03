@@ -32,10 +32,6 @@ import (
 // else the project's owner. A project that cannot pay gets no memory model
 // calls until it can.
 
-// MemoryAccountHeader names the OpenViking account (the project) a memory
-// model call is for.
-const MemoryAccountHeader = "X-Aseman-Memory-Account"
-
 // memoryBillEvery is how often metered memory use is charged.
 const memoryBillEvery = 30 * time.Second
 

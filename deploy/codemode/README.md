@@ -4,7 +4,7 @@ This Worker wraps Aseman's capability surface with Cloudflare's **search-and-exe
 
 Agents (or any MCP client) get two tools — `search` and `execute` — and write JavaScript against one OpenAPI document of the space's connected apps, platform tools and project timeline. Intermediate results stay in the Worker sandbox; only the return value enters the model context.
 
-The Aseman node already serves the same pattern natively at `/deepagents/v1/codemode/mcp` for in-platform agents. Deploy this Worker when you want:
+The Aseman node serves the same OpenAPI surface at `/tools/v1/codemode/{openapi,request,mcp}` for external hosts. Deploy this Worker when you want:
 
 - External MCP clients (Claude, Cursor, …) to use Aseman capabilities through Code Mode
 - Cloudflare's isolated Dynamic Worker executor instead of the node's goja sandbox
@@ -46,4 +46,4 @@ Connect an MCP client to `https://<worker>/mcp?space=<space-id>` with the person
 
 ## In-platform agents
 
-No Worker required: deepagents turns receive `codemode: true` and use `codemode_search` / `codemode_execute` against `/deepagents/v1/codemode/mcp`. Apps, platform tools, the timeline, the shared computer (`/sandbox/…`) and the space's agents (`/agents/…`) are injected into that OpenAPI surface automatically, and agents are told to do straightforward jobs in one execute. Messaging, `ask_user`, the native sandbox FS/shell, planning and swarm remain native harness tools.
+No Worker required: agents on the DeepSeek Harness runtime get the same capabilities as native tools (the space's apps and platform builtins, the shared computer, the space's agents and the whole Aseman API).

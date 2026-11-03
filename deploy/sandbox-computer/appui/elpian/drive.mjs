@@ -26,7 +26,7 @@
 //   node drive.mjs run [elpian/e2e …] [--bundle elpian/app.js] [--server URL | --start "node server.js" --port 8787] [--apps APPS.json] [--json]
 //   node drive.mjs snapshot [--bundle …] [--server …] [--viewport phone|desk|WxH]
 //
-// drive-mcp.mjs serves sessions to OpenCode as tools (elpian_open, elpian_tap, …);
+// drive-mcp.mjs serves sessions to MCP clients as tools (elpian_open, elpian_tap, …);
 // elpian-cli.mjs (aseman-elpian) serves the same tools to Aseman agents on the shell.
 
 import fs from "node:fs";

@@ -2,8 +2,7 @@ package spaces
 
 // App UI generation: on-demand fullstack apps built in the space sandbox,
 // calling space apps and agents via the preview `_aseman/api/*` API, opened
-// as desk card windows. The node's OpenCode switch (opencode.go) picks the
-// builder: OpenCode, briefed by the agents, or the space's agents themselves.
+// as desk card windows. The space's agents build them.
 // Both share the project layout, guides and toolchain (aseman-appui), and
 // the platform verifies every app the same way before it opens.
 
@@ -32,7 +31,7 @@ import (
 const (
 	appuiRoot        = "/workspace/appui"
 	appuiDefaultPort = 8787
-	// OpenCode fullstack builds can take several minutes, and a build that
+	// Fullstack builds can take several minutes, and a build that
 	// fails its checks gets repair rounds (aseman-appui build); verifying an
 	// app (aseman-appui verify) replays its end-to-end scenarios.
 	appuiBuildWait = 30 * time.Minute
@@ -146,7 +145,7 @@ func (s *Service) sandboxReadText(ctx context.Context, spaceID identity.ID, p st
 	return string(data), nil
 }
 
-// appuiCatalog is what OpenCode is told about the space it builds for
+// appuiCatalog is what the builder is told about the space it builds for
 // (APPS.json): the apps whose microtools the software may call, with their
 // argument schemas, and the agents it may ask, so it wires real names and
 // real argument shapes instead of guessing. [apps] / [agents] narrow the
@@ -278,9 +277,8 @@ func appuiDeskPlace(roomID, target identity.ID, room string) (desk string, arran
 
 // appuiCreateTool implements appui_create. It prepares the project (brief,
 // the space's apps and agents, the app's server API settings), then the
-// node's builder builds it: OpenCode when it is on (build, test, repair,
-// then the platform verifies and opens it, all in this call), else the
-// space's agents, who get their task back and finish with appui_publish.
+// space's agents build it: the calling agent gets the build task back and
+// finishes with appui_publish, which verifies and opens the app.
 func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.ID, agentName, argsJSON string) (string, error) {
 	var in struct {
 		Brief   string       `json:"brief"`
@@ -345,7 +343,7 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 
 	// App UI builds routinely exceed the short deadlines that wrap agent / Code
 	// Mode tool calls. Keep values (actor, run id, TurnLLM, stop) but detach
-	// the clock so READY.json can still be read after a long OpenCode build.
+	// the clock so READY.json can still be read after a long build.
 	opCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), appuiBuildWait)
 	defer cancel()
 
@@ -481,7 +479,7 @@ func (s *Service) appuiExec(ctx context.Context, spaceID identity.ID, cmd string
 // Elpian frontend bundled, run on QuickJS against its server and its
 // end-to-end scenarios replayed), then the app opens on the desk. A failed
 // check answers with the problem and how to repair it; fix and call again.
-// It also re-verifies and reopens an app OpenCode built.
+// It also re-verifies and reopens any app.
 func (s *Service) appuiPublishTool(ctx context.Context, spaceID, roomID identity.ID, agentName, argsJSON string) (string, error) {
 	var in struct {
 		Dir   string   `json:"dir"`
@@ -716,7 +714,7 @@ func mustJSONString(s string) string {
 
 
 // appuiStatusTool reads a project's STATUS.json / READY.json (whoever builds
-// it): appui_status, and opencode_status while OpenCode is on.
+// it): appui_status.
 func (s *Service) appuiStatusTool(ctx context.Context, spaceID identity.ID, argsJSON string) (string, error) {
 	var in struct {
 		Dir string `json:"dir"`

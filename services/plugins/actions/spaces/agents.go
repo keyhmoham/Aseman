@@ -24,7 +24,7 @@ import (
 	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
-// Every agent runs on the deep agents runtime and is reached only through
+// Every agent runs on the agent runtime and is reached only through
 // space messaging: a room message (or ask) becomes a turn, the reply goes back
 // into the room as an answer to that message, and everything else the agent
 // does on the platform goes through the space's action API (spaces.ask for

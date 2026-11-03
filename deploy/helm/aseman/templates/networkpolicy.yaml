@@ -2,8 +2,8 @@
 {{- $fn := include "aseman.fullname" . -}}
 {{- $root := . -}}
 {{- if .Values.postgres.enabled }}
-# Only the node and the timeline read the database. Project computers have a
-# shell, so nothing they run may reach it.
+# Only the node reads the database. Project computers have a shell, so
+# nothing they run may reach it.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -17,13 +17,11 @@ spec:
     - from:
         - podSelector:
             matchLabels: {{- include "aseman.selector" (dict "root" . "component" "node") | nindent 14 }}
-        - podSelector:
-            matchLabels: {{- include "aseman.selector" (dict "root" . "component" "timeline") | nindent 14 }}
       ports: [{ port: 5432 }]
 {{- end }}
-{{- range $component := list "openviking" "timeline" "runtime" }}
+{{- range $component := list "runtime" }}
 ---
-# {{ $component }} answers the node and the agent runtime only.
+# The agent runtime answers the node only (and its own pods).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

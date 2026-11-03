@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The Elpian headless driver (drive.mjs) as an MCP server (stdio), so a
-// coding agent (OpenCode) can use the Elpian app it built the way a person
+// coding agent can use the Elpian app it built the way a person
 // does, step by step, and see that every screen and control works — no
 // screenshots: the screen is a text outline with refs.
 //
@@ -13,7 +13,7 @@
 //   elpian_save_scenario   save the session's steps as elpian/e2e/<name>.json
 //   elpian_run_scenarios   replay elpian/e2e (what the platform runs before READY)
 //
-// Register it in opencode.json: "mcp": {"elpian-driver": {"type": "local",
+// Register it with an MCP client, e.g. "mcp": {"elpian-driver": {"type": "local",
 // "command": ["node", "/opt/aseman-appui/elpian/drive-mcp.mjs"]}}.
 
 import fs from "node:fs";

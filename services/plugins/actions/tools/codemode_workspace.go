@@ -41,7 +41,10 @@ const codeModeWorkspace = "/workspace"
 const codeModeWriteChunk = 48 << 10
 
 // The space's built-in lead (nobody delegates up to it; see subagents.py).
-const codeModeLeadVM = "deepagents-aseman"
+const codeModeLeadVM = "harness-aseman"
+
+// codeModeLegacyLeadVM is the lead's id before it moved to the harness.
+const codeModeLegacyLeadVM = "deepagents-aseman"
 
 var codeModeSandboxOps = []struct {
 	name, summary string
@@ -150,11 +153,11 @@ func (s *Service) codeModeAgents(ctx context.Context, spaceID string) ([]codeMod
 	used := map[string]bool{}
 	var out []codeModeAgent
 	for _, b := range listed.Bots {
-		if b.Kind != "agent" || b.ID == self || b.VMID == codeModeLeadVM {
+		if b.Kind != "agent" || b.ID == self || b.VMID == codeModeLeadVM || b.VMID == codeModeLegacyLeadVM {
 			continue
 		}
 		switch b.VMType {
-		case "deepagents", "langchain", "grok", "":
+		case "harness", "deepagents", "opencode", "deepseek", "langchain", "grok", "":
 		default:
 			continue
 		}

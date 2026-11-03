@@ -336,67 +336,6 @@ Map<String, dynamic> adminFixtures() {
       'status': 'Partly in effect: memories are learned but not recalled.',
       'providers': [providers.first],
     },
-    'spaces.agent_engine_get': {
-      'engine': 'deepagents',
-      'llm': 'platform',
-      'active': true,
-      'status':
-          'Deep Agents runs every agent turn. Models come from the platform LLM gateway. The programmer OpenCode switch still decides who writes code.',
-      'programmer': 'spaces.opencode_get',
-      'mapping': [
-        {
-          'platform': 'Swarm',
-          'opencode': 'Parallel opencode run processes, one per task'
-        },
-        {
-          'platform': 'Agent team',
-          'opencode': 'OpenCode agents, primary and subagents'
-        },
-        {
-          'platform': 'Task handoff',
-          'opencode': 'OpenCode task tool'
-        },
-        {
-          'platform': 'App generation',
-          'opencode': 'aseman-app-builder, then appui_publish'
-        },
-      ],
-      'engines': ['deepagents', 'opencode', 'deepseek'],
-      'mappings': {
-        'opencode': [
-          {
-            'platform': 'Swarm',
-            'how': 'Parallel opencode run processes, one per task'
-          },
-          {
-            'platform': 'Agent team',
-            'how': 'OpenCode agents, primary and subagents'
-          },
-        ],
-        'deepseek': [
-          {
-            'platform': 'Memory',
-            'how':
-                'DeepSeek Harness\'s own: the aseman-memory dsh plugin per space and agent'
-          },
-          {
-            'platform': 'Swarm',
-            'how': 'DeepSeek Harness\'s own: parallel subagents, collected with wait_agent'
-          },
-          {
-            'platform': 'Creator mode / plugin creation',
-            'how': 'create_app / create_plugin → Aseman\'s on-demand app generation'
-          },
-        ],
-      },
-    },
-    'spaces.opencode_get': {
-      'enabled': false,
-      'builder': 'agents',
-      'status':
-          'Off: the spaces\' own agents build, test and repair on-demand apps (and write any other code) with the same project layout, guides, Elpian validator and headless driver; the platform verifies each app before it opens. OpenCode is not used.',
-      'updated_at': '0001-01-01T00:00:00Z',
-    },
     'admin.plugins_list': {
       'plugins': [
         {

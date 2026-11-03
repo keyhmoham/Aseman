@@ -33,7 +33,7 @@ type session struct {
 	personal bool
 	// chat is a personal session's model (the assistant's), served on /llm
 	// to an engine on the platform's models (DeepSeek Harness). Nil: the
-	// session has no model (OpenCode brings its own).
+	// session has no model.
 	chat *Spec
 	base context.Context
 

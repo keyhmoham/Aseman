@@ -23,8 +23,9 @@ import (
 // orchestrator's bot record (kept stable so existing records stay recognised).
 const builtinAsemanImage = bot.BuiltinAsemanImage
 
-// asemanVMID is the deep agents runtime VM id of the built-in lead.
-const asemanVMID = "deepagents-aseman"
+// asemanVMID is the agent runtime VM id of the built-in lead (a lead recorded
+// with an earlier id is moved to it on start).
+const asemanVMID = "harness-aseman"
 
 // IsAseman reports whether a bot record is the built-in orchestrator agent.
 func IsAseman(rec *bot.Bot) bool {
@@ -84,7 +85,7 @@ func hasLegacyCost(rec *bot.Bot) bool {
 }
 
 // InstallAseman creates (idempotently) the built-in "aseman" lead agent.
-// It runs on the deep agents runtime like every agent, with the lead role.
+// It runs on the agent runtime like every agent, with the lead role.
 // Older records are upgraded in place. Returns the bot record.
 func (s *Service) InstallAseman(ctx context.Context) (*bot.Bot, error) {
 	// Idempotent: reuse an existing built-in aseman bot.
@@ -104,7 +105,7 @@ func (s *Service) InstallAseman(ctx context.Context) (*bot.Bot, error) {
 			if err := s.R.Update(ctx, "bots", rec.ID, rec); err != nil {
 				return nil, err
 			}
-			s.L.Info("builtin aseman lead moved to the deep agents runtime", "bot_id", rec.ID.String())
+			s.L.Info("builtin aseman lead moved to the agent runtime", "bot_id", rec.ID.String())
 		}
 		return rec, nil
 	}

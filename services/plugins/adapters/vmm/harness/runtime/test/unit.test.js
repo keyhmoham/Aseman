@@ -10,6 +10,7 @@ import { wrap, wrapped } from '../lib/untrusted.js'
 import { personaFor, notesText } from '../lib/persona.js'
 import { formatMemories } from '../lib/tools/memory.js'
 import { syntaxError, CREATOR_GUIDE } from '../lib/tools/creator.js'
+import { bodyLine } from '../lib/tools/api.js'
 import { Gateway, GatewayError } from '../lib/gateway.js'
 import { Store } from '../lib/store.js'
 import { mkdtempSync } from 'node:fs'
@@ -208,4 +209,11 @@ test('creator checks programs before they reach the node', () => {
   assert.match(syntaxError('function (', 'backend'), /^backend: /)
   assert.match(personaFor({ name: 'Ava' }), /Plugins \(Creator mode\)/)
   assert.match(CREATOR_GUIDE, /aseman\.call/)
+})
+
+test('catalog bodies read in one line', () => {
+  const schema = { type: 'object', properties: { space: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } }, when: { type: 'object', properties: { at: { type: 'string' } } }, raw: {} } }
+  assert.equal(bodyLine(schema), '{space: string, tags: [string], when: {at: string}, raw: any}')
+  assert.equal(bodyLine({ type: 'object', properties: {} }), '{}')
+  assert.equal(bodyLine(undefined), 'any')
 })

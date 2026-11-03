@@ -8,6 +8,7 @@ import (
 
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/pkg/actionschema"
 	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
 
@@ -102,5 +103,24 @@ func TestTimelineReadsUseTheTurnsOwnSpace(t *testing.T) {
 	_ = json.Unmarshal(resp.Body, &body)
 	if resp.Status != 401 {
 		t.Fatalf("catalog without a turn = %d %v", resp.Status, body)
+	}
+}
+
+// The catalog's input schemas are read from the actions' source: regenerate
+// them (go generate ./plugins/adapters/vmm/harness) when an action's body changes.
+func TestActionSchemasAreCurrent(t *testing.T) {
+	schemas, err := actionschema.Generate("../../../..", "plugins/actions")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := actionschema.Encode(schemas)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != string(actionSchemasJSON) {
+		t.Fatal("action_schemas.json is stale: run go generate ./plugins/adapters/vmm/harness")
+	}
+	if s := actionSchemas()["routines.create"]; s == nil || s["properties"].(map[string]any)["task"] == nil {
+		t.Fatalf("routines.create: %v", s)
 	}
 }

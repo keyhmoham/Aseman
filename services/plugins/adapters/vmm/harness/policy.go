@@ -2,11 +2,13 @@ package harness
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/pkg/agentpolicy"
@@ -45,12 +47,27 @@ func (s *session) allows(name string) bool {
 	return roomAllows(name)
 }
 
-// catalogEntry is one callable action, as agents search for it.
+// catalogEntry is one callable action, as agents search for it: with the
+// fields its body takes, when the source says (action_schemas.json).
 type catalogEntry struct {
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
-	Summary   string `json:"summary,omitempty"`
+	Namespace string         `json:"namespace"`
+	Name      string         `json:"name"`
+	Summary   string         `json:"summary,omitempty"`
+	Input     map[string]any `json:"input,omitempty"`
 }
+
+// actionSchemas are the actions' input schemas, read from their source by
+// cmd/gen-action-schemas (TestActionSchemasAreCurrent keeps them current).
+//
+//go:generate go run ../../../../cmd/gen-action-schemas -module ../../../.. -out action_schemas.json
+//go:embed action_schemas.json
+var actionSchemasJSON []byte
+
+var actionSchemas = sync.OnceValue(func() map[string]map[string]any {
+	out := map[string]map[string]any{}
+	_ = json.Unmarshal(actionSchemasJSON, &out)
+	return out
+})
 
 // catalog lists the actions a session may call, filtered by words and namespace.
 func catalog(router api.ActionRouter, allows func(string) bool, query, namespace string, limit int) []catalogEntry {
@@ -81,7 +98,7 @@ func catalog(router api.ActionRouter, allows func(string) bool, query, namespace
 			if len(words) > 0 && score == 0 {
 				continue
 			}
-			all = append(all, scored{catalogEntry{Namespace: m.Namespace, Name: m.Name, Summary: m.Summary}, score})
+			all = append(all, scored{catalogEntry{Namespace: m.Namespace, Name: m.Name, Summary: m.Summary, Input: actionSchemas()[m.Namespace+"."+m.Name]}, score})
 		}
 	}
 	sort.SliceStable(all, func(i, j int) bool {

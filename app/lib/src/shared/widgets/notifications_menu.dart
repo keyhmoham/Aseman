@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/theme_chrome.dart';
+import '../../core/theme/theme_roles.dart';
 import '../../core/theme/app_surfaces.dart';
 import '../../data/models/app_notification.dart';
 import 'avatar.dart';
+import 'avatar_face.dart';
 import 'overlay_panels.dart';
 import 'panel_empty.dart';
 import 'segmented_tab_bar.dart';
@@ -49,7 +52,7 @@ Future<void> showNotificationsMenu(
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Close notifications',
-      barrierColor: AppSurfaces.barrier,
+      barrierColor: AppSurfaces.barrierOf(context),
       transitionDuration: const Duration(milliseconds: 420),
       pageBuilder: (dialogContext, _, __) => SafeArea(
         child: Align(
@@ -338,7 +341,6 @@ class _InviteTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm - 2),
       child: SoftCard(
-        accent: scheme.tertiary,
         showOrb: false,
         padding: const EdgeInsets.all(AppSpacing.sm + 2),
         child: Column(
@@ -347,14 +349,24 @@ class _InviteTile extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                HaloRing(
-                  child: CircleAvatar(
-                    foregroundImage: Avatars.of(avatar),
-                    onForegroundImageError:
-                        Avatars.of(avatar) == null ? null : (_, __) {},
-                    child: const Icon(Icons.folder_shared_outlined),
-                  ),
-                ),
+                Builder(builder: (context) {
+                  const radius = 20.0;
+                  final size = radius * 2;
+                  final corners = context.avatarBorderRadius(size);
+                  final picture = Avatars.of(avatar);
+                  return HaloRing(
+                    borderRadius: corners,
+                    child: AvatarFace(
+                      size: size,
+                      borderRadius: corners,
+                      backgroundColor: ThemeRoles.wellFill(context),
+                      foregroundImage: picture,
+                      onImageError: picture == null ? null : (_, __) {},
+                      child: Icon(Icons.folder_shared_outlined,
+                          color: ThemeRoles.wellInk(context)),
+                    ),
+                  );
+                }),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Column(
@@ -427,7 +439,6 @@ class _NotificationTile extends StatelessWidget {
     final accent = invite ? scheme.tertiary : scheme.primary;
     return SoftCard(
       onTap: onTap,
-      accent: accent,
       selected: !note.read,
       showOrb: false,
       radius: 16,

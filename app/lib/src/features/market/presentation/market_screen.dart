@@ -5,6 +5,8 @@ import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/theme_roles.dart';
+import '../../../core/theme/aseman_tokens.dart';
 import '../../../data/models/bot.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/app_inputs.dart';
@@ -317,7 +319,7 @@ class _ListingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final color = listing.isApp ? AppColors.cyan : AppColors.primary;
+    final color = listing.isApp ? AppColors.cyanOf(context) : AppColors.primaryOf(context);
     final price =
         listing.price == 0 ? 'Free' : formatLedgerCredits(listing.price);
 
@@ -401,7 +403,7 @@ class _ListingCard extends StatelessWidget {
           SoftMetaChip(
             icon: Icons.stars_rounded,
             label: price,
-            accent: listing.price == 0 ? AppColors.success : scheme.primary,
+            accent: listing.price == 0 ? AppColors.successOf(context) : scheme.primary,
           ),
         ]),
       ],
@@ -421,7 +423,6 @@ class _ListingCard extends StatelessWidget {
 
     return SoftCard(
       showOrb: false,
-      accent: color,
       padding: const EdgeInsets.all(14),
       child: wide && install != null
           ? Row(
@@ -568,10 +569,10 @@ class _PublishDialogState extends State<_PublishDialog> {
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Material(
                     color: _selected?.id == b.id
-                        ? scheme.secondaryContainer
-                        : AppSurfaces.card(scheme),
+                        ? ThemeRoles.selectedFill(context)
+                        : AppSurfaces.card(scheme, tokens: AsemanTokens.maybeOf(context)),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppShape.control),
+                      borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
                       side: BorderSide(
                         color: _selected?.id == b.id
                             ? scheme.primary.withValues(alpha: .35)

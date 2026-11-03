@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../../../../core/theme/theme_roles.dart';
 import '../../../../shared/widgets/audio_waveform.dart';
 
 /// An inline playable audio/voice bubble using just_audio: a round play
@@ -143,9 +144,9 @@ class _AudioBubbleState extends State<AudioBubble> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final tint = widget.mine ? scheme.onPrimaryContainer : scheme.primary;
+    final tint = widget.mine ? ThemeRoles.selectedInk(context) : scheme.primary;
     final muted = widget.mine
-        ? scheme.onPrimaryContainer.withValues(alpha: .7)
+        ? ThemeRoles.selectedInk(context).withValues(alpha: .7)
         : scheme.onSurfaceVariant;
     final ready = !_failed && _player != null;
     return Row(mainAxisSize: MainAxisSize.min, children: [
@@ -166,7 +167,7 @@ class _AudioBubbleState extends State<AudioBubble> {
                       child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: widget.mine
-                              ? scheme.primaryContainer
+                              ? scheme.onPrimary
                               : scheme.onPrimary))
                   : Icon(
                       _failed
@@ -176,7 +177,7 @@ class _AudioBubbleState extends State<AudioBubble> {
                               : Icons.play_arrow_rounded,
                       size: 26,
                       color: widget.mine
-                          ? scheme.primaryContainer
+                          ? scheme.onPrimary
                           : scheme.onPrimary),
             ),
           ),

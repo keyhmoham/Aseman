@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../app_dependencies.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_roles.dart';
 import '../../../../data/models/bot.dart';
 import '../../../../shared/widgets/app_form.dart';
 import '../../../../shared/widgets/app_inputs.dart';
@@ -39,11 +40,27 @@ String _statusOf(Map<String, dynamic> r) => r['status'] as String? ?? 'active';
 
 /// Label, colour and icon for a routine status, shared by the filter tabs and
 /// the status pill on each card.
-(String, Color, IconData) _statusStyle(String status, ColorScheme scheme) =>
+(String, Color, IconData) _statusStyle(
+  BuildContext context,
+  String status,
+  ColorScheme scheme,
+) =>
     switch (status) {
-      'paused' => ('Paused', AppColors.warning, Icons.pause_circle_outline),
-      'done' => ('Done', AppColors.success, Icons.check_circle_outline),
-      'failed' => ('Failed', AppColors.danger, Icons.error_outline_rounded),
+      'paused' => (
+          'Paused',
+          AppColors.warningOf(context),
+          Icons.pause_circle_outline
+        ),
+      'done' => (
+          'Done',
+          AppColors.successOf(context),
+          Icons.check_circle_outline
+        ),
+      'failed' => (
+          'Failed',
+          AppColors.dangerOf(context),
+          Icons.error_outline_rounded
+        ),
       _ => ('Active', scheme.primary, Icons.bolt_rounded),
     };
 
@@ -205,7 +222,8 @@ class _RoutinesPanelState extends State<RoutinesPanel> {
   }
 
   String _filterLabel(String filter, ColorScheme scheme) {
-    final name = filter == 'all' ? 'All' : _statusStyle(filter, scheme).$1;
+    final name =
+        filter == 'all' ? 'All' : _statusStyle(context, filter, scheme).$1;
     final n = _count(filter);
     return n > 0 ? '$name · $n' : name;
   }
@@ -280,7 +298,9 @@ class _RoutinesPanelState extends State<RoutinesPanel> {
                               label: const Text('Create first routine')))
                       : shown.isEmpty
                           ? _Empty(
-                              icon: _statusStyle(_filters[_filter], scheme).$3,
+                              icon: _statusStyle(
+                                      context, _filters[_filter], scheme)
+                                  .$3,
                               title: 'No ${_filters[_filter]} routines',
                               body: 'Routines show up here when they are '
                                   '${_filters[_filter]}.')
@@ -322,9 +342,9 @@ class _NextRunBanner extends StatelessWidget {
     final name = routine['name'] as String? ?? '';
     final next = _parseT(routine['next_run_at']);
     return Material(
-      color: scheme.primaryContainer.withValues(alpha: .55),
+      color: ThemeRoles.selectedFill(context),
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.inner)),
+          borderRadius: BorderRadius.circular(AppShape.innerOf(context))),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
@@ -385,10 +405,10 @@ class _Empty extends StatelessWidget {
             width: 72,
             height: 72,
             decoration: ShapeDecoration(
-                color: scheme.secondaryContainer,
+                color: ThemeRoles.wellFill(context),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24))),
-            child: Icon(icon, size: 34, color: scheme.onSecondaryContainer),
+                    borderRadius: AppShape.borderRadius(context, 24))),
+            child: Icon(icon, size: 34, color: ThemeRoles.wellInk(context)),
           ),
           const SizedBox(height: 16),
           Text(title,
@@ -430,7 +450,7 @@ class _RoutineCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final periodic = (routine['type'] as String? ?? 'delayed') == 'periodic';
     final status = _statusOf(routine);
-    final (label, color, icon) = _statusStyle(status, scheme);
+    final (label, color, icon) = _statusStyle(context, status, scheme);
     final paused = status == 'paused';
     final finished = status == 'done' || status == 'failed';
     final name = (routine['name'] as String? ?? '').trim();
@@ -469,7 +489,7 @@ class _RoutineCard extends StatelessWidget {
     return Material(
       color: scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.inner + 2)),
+          borderRadius: BorderRadius.circular(AppShape.innerOf(context)+ 2)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onEdit,
@@ -480,11 +500,11 @@ class _RoutineCard extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: ShapeDecoration(
-                  color: scheme.secondaryContainer,
+                  color: ThemeRoles.wellFill(context),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppShape.control))),
+                      borderRadius: BorderRadius.circular(AppShape.controlOf(context)))),
               child: Icon(periodic ? Icons.loop_rounded : Icons.timer_outlined,
-                  size: 22, color: scheme.onSecondaryContainer),
+                  size: 22, color: ThemeRoles.wellInk(context)),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -550,10 +570,10 @@ class _RoutineCard extends StatelessWidget {
                             horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
                           color: status == 'failed'
-                              ? AppColors.danger.withValues(alpha: .12)
+                              ? AppColors.dangerOf(context).withValues(alpha: .12)
                               : scheme.surfaceContainerHighest
                                   .withValues(alpha: .55),
-                          borderRadius: BorderRadius.circular(AppShape.control),
+                          borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
                         ),
                         child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -564,7 +584,7 @@ class _RoutineCard extends StatelessWidget {
                                       : Icons.receipt_long_outlined,
                                   size: 16,
                                   color: status == 'failed'
-                                      ? AppColors.danger
+                                      ? AppColors.dangerOf(context)
                                       : scheme.onSurfaceVariant),
                               const SizedBox(width: 8),
                               Expanded(
@@ -783,18 +803,18 @@ class _RoutineFormDialogState extends State<_RoutineFormDialog> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: scheme.secondaryContainer,
-            borderRadius: BorderRadius.circular(AppShape.control),
+            color: ThemeRoles.wellFill(context),
+            borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
           ),
           child: Row(children: [
             Icon(Icons.schedule_rounded,
-                size: 18, color: scheme.onSecondaryContainer),
+                size: 18, color: ThemeRoles.wellInk(context)),
             const SizedBox(width: 10),
             Expanded(
               child: Text('Runs $_preview',
                   style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      color: scheme.onSecondaryContainer)),
+                      color: ThemeRoles.wellInk(context))),
             ),
           ]),
         ),

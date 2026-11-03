@@ -4,8 +4,7 @@ import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_spacing.dart';
 import 'sky_ui.dart';
 
-/// Wallet / KPI card aligned with [FleetMetric]: quiet label, large value,
-/// optional tinted hint. Soft gradient surface matching the You-tab language.
+/// Wallet / KPI card: quiet pack surface, accent only on change text.
 class StatCard extends StatelessWidget {
   const StatCard(
       {super.key,
@@ -20,19 +19,20 @@ class StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return SoftCard(
-      accent: color,
       radius: AppShape.inner,
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        EyebrowLabel(title, color: color, size: 10),
+        EyebrowLabel(title, color: scheme.onSurfaceVariant, size: 10),
         const SizedBox(height: 6),
         Text(value,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 24,
                 letterSpacing: -.4,
                 height: 1.1,
-                fontWeight: FontWeight.w900)),
+                fontWeight: FontWeight.w900,
+                color: scheme.onSurface)),
         const SizedBox(height: 5),
         Text(change,
             maxLines: 1,

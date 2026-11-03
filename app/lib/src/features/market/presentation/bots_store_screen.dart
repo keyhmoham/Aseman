@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/shell_layout.dart';
+import '../../../core/theme/shell_layout_builder.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/panel_scaffold.dart';
@@ -9,9 +11,11 @@ import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/sky_ui.dart';
 import '../../agents/presentation/agents_screen.dart';
 import 'market_screen.dart';
+import 'themes_store_screen.dart';
 
 /// App-store hub that melts **My bots** and **Market** into one surface:
-/// Library for what you own, Discover for what you can install.
+/// Library for what you own, Discover for what you can install, Themes for
+/// installable visual packs.
 Future<void> showBotsStore(
   BuildContext context,
   AppDependencies dependencies,
@@ -31,22 +35,31 @@ class BotsStoreScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 560;
     final scheme = Theme.of(context).colorScheme;
+    final tabs = storeTabsOf(context);
+    final resolved = tabs.isEmpty
+        ? const [
+            ShellTabMeta(
+                FeatureSlots.storeLibrary, 'Library', Icons.grid_view_rounded),
+            ShellTabMeta(FeatureSlots.storeDiscover, 'Discover',
+                Icons.travel_explore_rounded),
+            ShellTabMeta(
+                FeatureSlots.storeThemes, 'Themes', Icons.palette_rounded),
+          ]
+        : tabs;
     return DefaultTabController(
-      length: 2,
+      length: resolved.length,
       child: PanelScaffold(
         compact: compact,
         header: PanelHeader(
           icon: Icons.storefront_rounded,
           title: 'Store',
-          subtitle: 'Your library and the market — create, install, publish',
+          subtitle: 'Library, market, and themes — create, install, publish',
           onClose: () => Navigator.pop(context),
         ),
         toolbar: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SoftCard(
-              accent: scheme.primary,
-              secondary: scheme.tertiary,
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.md,
                 AppSpacing.sm + 2,
@@ -58,7 +71,6 @@ class BotsStoreScreen extends StatelessWidget {
                   SkyIconBadge(
                     icon: Icons.auto_awesome_rounded,
                     size: 44,
-                    accent: scheme.primary,
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
@@ -68,7 +80,7 @@ class BotsStoreScreen extends StatelessWidget {
                         const EyebrowLabel('STOREFRONT'),
                         const SizedBox(height: 2),
                         Text(
-                          'Agents & apps',
+                          'Agents, apps & themes',
                           style:
                               Theme.of(context).textTheme.titleSmall?.copyWith(
                                     fontWeight: FontWeight.w800,
@@ -77,7 +89,7 @@ class BotsStoreScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Build in Library · browse & install in Discover',
+                          'Build in Library · browse Discover · restyle with Themes',
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: scheme.onSurfaceVariant,
@@ -91,17 +103,25 @@ class BotsStoreScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
-            const SegmentedTabBar(
+            SegmentedTabBar(
               alignment: Alignment.center,
-              labels: ['Library', 'Discover'],
-              icons: [Icons.grid_view_rounded, Icons.travel_explore_rounded],
+              labels: [for (final t in resolved) t.label],
+              icons: [for (final t in resolved) t.icon],
             ),
           ],
         ),
         body: TabBarView(
           children: [
-            AgentsScreen(dependencies: dependencies, embedded: true),
-            MarketScreen(dependencies: dependencies, embedded: true),
+            for (final tab in resolved)
+              switch (tab.slot) {
+                FeatureSlots.storeLibrary =>
+                  AgentsScreen(dependencies: dependencies, embedded: true),
+                FeatureSlots.storeDiscover =>
+                  MarketScreen(dependencies: dependencies, embedded: true),
+                FeatureSlots.storeThemes =>
+                  ThemesStoreScreen(dependencies: dependencies, embedded: true),
+                _ => const SizedBox.shrink(),
+              },
           ],
         ),
       ),

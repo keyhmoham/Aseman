@@ -1,11 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/theme_chrome.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/sky_ui.dart';
 
-/// A tool's mark: an icon that fits its name, on a tonal container whose hue
-/// is the tool's own (the same everywhere: window, dock, pinned desk).
+/// A tool's mark: an icon that fits its name, on a tonal well whose hue is
+/// derived from the **active pack palette** (stable per tool id).
 class ToolAvatar extends StatelessWidget {
   const ToolAvatar({
     super.key,
@@ -22,14 +25,6 @@ class ToolAvatar extends StatelessWidget {
   /// Filled with the tool's strong color, the shape squarer (M3 expressive
   /// selection: color and shape change together).
   final bool selected;
-
-  static const List<Color> _seeds = [
-    Color(0xFF2A78D6), Color(0xFFEB6834), Color(0xFF1BAF7A), //
-    Color(0xFFB8860B), Color(0xFFD55181), Color(0xFF2E7D32),
-    Color(0xFF6250D6), Color(0xFFE34948), Color(0xFF00838F),
-  ];
-
-  static final Map<(int, Brightness), ColorScheme> _schemes = {};
 
   /// The pictures the tools were given, by tool (bot) id, as the workspace's
   /// bots were last loaded. A tool with one shows it over its icon.
@@ -49,25 +44,23 @@ class ToolAvatar extends StatelessWidget {
     if (!mapEquals(next, pictures.value)) pictures.value = next;
   }
 
-  /// The tool's tonal palette.
-  static ColorScheme schemeFor(String tool, Brightness brightness) {
-    final seed =
-        tool.codeUnits.fold<int>(7, (a, b) => (a * 31 + b) & 0x7fffffff) %
-            _seeds.length;
-    return _schemes.putIfAbsent(
-        (seed, brightness),
-        () => ColorScheme.fromSeed(
-            seedColor: _seeds[seed], brightness: brightness));
-  }
+  /// Pack-aware accent for [tool] (replaces the old private seed palette).
+  static Color accentFor(BuildContext context, String tool) =>
+      ThemeRoles.identity(context, tool);
+
+  /// Legacy helper for call sites without a [BuildContext]. Prefer [accentFor].
+  /// Uses a neutral seed — decorative tool colour comes from [accentFor].
+  static ColorScheme schemeFor(String tool, Brightness brightness) =>
+      ColorScheme.fromSeed(
+        seedColor: AppColors.primary,
+        brightness: brightness,
+      );
 
   static IconData iconFor(String name) {
     final n = name.toLowerCase();
     bool has(List<String> words) => words.any(n.contains);
-    // Agents' composed widgets share one dock entry.
     if (n == 'widgets') return Icons.dashboard_customize_rounded;
-    // Web pages agents built, of no tool.
     if (n == 'web pages') return Icons.language_rounded;
-    // Workspace files open in the app's file viewer.
     if (n == 'files') return Icons.folder_copy_rounded;
     if (n == 'computer') return Icons.desktop_windows_rounded;
     if (has(['weather', 'forecast', 'climate'])) return Icons.wb_sunny_rounded;
@@ -97,28 +90,33 @@ class ToolAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = schemeFor(tool, Theme.of(context).brightness);
+    final ambient = Theme.of(context).colorScheme;
+    final accent = accentFor(context, tool);
+    final corners = context.avatarBorderRadius(size);
+    final well = selected
+        ? accent
+        : Color.alphaBlend(accent.withValues(alpha: .16), ambient.surface);
+    final ink = selected ? ambient.onPrimary : accent;
     final mark = AnimatedContainer(
       duration: const Duration(milliseconds: 320),
       curve: Curves.easeOutBack,
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: selected ? scheme.primary : scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(selected ? size * .32 : size / 2),
+        color: well,
+        borderRadius: corners,
       ),
-      child: Icon(iconFor(name),
-          size: size * .54,
-          color: selected ? scheme.onPrimary : scheme.onPrimaryContainer),
+      child: Icon(iconFor(name), size: size * .54, color: ink),
     );
     return HaloRing(
-      accent: scheme.primary,
+      accent: accent,
+      borderRadius: corners,
       child: ValueListenableBuilder<Map<String, String>>(
         valueListenable: pictures,
         builder: (context, avatars, _) => AvatarPicture(
             avatar: avatars[tool],
             size: size,
-            radius: selected ? size * .32 : size / 2,
+            borderRadius: corners,
             fallback: mark),
       ),
     );

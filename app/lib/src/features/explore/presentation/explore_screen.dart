@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/repositories/room_repository.dart';
@@ -176,13 +175,11 @@ class _ExploreListingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final color = listing.isApp ? AppColors.cyan : AppColors.primary;
     final description = listing.description.isEmpty
         ? '${listing.kindLabel} · ${listing.installs} installs'
         : listing.description;
     return SoftCard(
       showOrb: false,
-      accent: color,
       padding: const EdgeInsets.all(AppSpacing.sm + 2),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -210,7 +207,7 @@ class _ExploreListingCard extends StatelessWidget {
                     letterSpacing: -.2,
                     fontWeight: FontWeight.w800)),
           ),
-          SoftMetaChip(label: listing.kindLabel.toUpperCase(), accent: color),
+          SoftMetaChip(label: listing.kindLabel.toUpperCase()),
         ]),
         const SizedBox(height: 10),
         Text(description,
@@ -222,7 +219,6 @@ class _ExploreListingCard extends StatelessWidget {
         SoftMetaChip(
           icon: Icons.download_rounded,
           label: '${listing.installs} installs',
-          accent: AppColors.success,
         ),
       ]),
     );
@@ -266,7 +262,7 @@ class _RoomCard extends StatelessWidget {
               Text(members,
                   style: TextStyle(
                       fontSize: 12, color: scheme.onSurfaceVariant)),
-              SoftMetaChip(label: status, accent: AppColors.success),
+              SoftMetaChip(label: status),
             ],
           ),
         ],

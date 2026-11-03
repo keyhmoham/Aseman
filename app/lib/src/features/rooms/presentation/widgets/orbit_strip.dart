@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/halo_ring_cache.dart';
+import '../../../../core/theme/theme_chrome.dart';
+import '../../../../core/theme/theme_roles.dart';
 import '../../../../data/models/bot.dart';
 import '../../../../shared/widgets/avatar.dart';
 import '../../../../shared/widgets/bot_avatar.dart';
@@ -116,9 +118,9 @@ class _OrbitAvatar extends StatelessWidget {
   final String userId;
 
   @override
-  Widget build(BuildContext context) => _mark();
+  Widget build(BuildContext context) => _mark(context);
 
-  Widget _mark() {
+  Widget _mark(BuildContext context) {
     final bot = item.bot;
     // Face diameter stays [size]; HaloRing (inside BotAvatar / here) sits outside.
     final face = size / 2;
@@ -131,20 +133,24 @@ class _OrbitAvatar extends StatelessWidget {
         : item.label.trim().characters.first.toUpperCase();
     final personId =
         item.keyId.startsWith('p:') ? item.keyId.substring(2) : item.keyId;
+    final corners = context.avatarBorderRadius(size);
     return HaloRing(
       identity: HaloRingCache.person(personId),
       accent: scheme.secondary,
-      child: CircleAvatar(
-        radius: face,
+      borderRadius: corners,
+      child: AvatarFace(
+        size: size,
+        borderRadius: corners,
         foregroundImage: picture,
-        onForegroundImageError: picture == null ? null : (_, __) {},
-        backgroundColor: scheme.secondaryContainer,
-        foregroundColor: scheme.onSecondaryContainer,
+        onImageError: picture == null ? null : (_, __) {},
+        backgroundColor: ThemeRoles.wellFill(context),
         child: picture != null
             ? null
             : Text(initial,
                 style: TextStyle(
-                    fontSize: size * .4, fontWeight: FontWeight.w800)),
+                    fontSize: size * .4,
+                    fontWeight: FontWeight.w800,
+                    color: ThemeRoles.wellInk(context))),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/theme_roles.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_form.dart';
@@ -228,12 +229,12 @@ class _AddAppDialogState extends State<AddAppDialog> {
               width: 52,
               height: 52,
               decoration: ShapeDecoration(
-                color: scheme.primaryContainer,
+                color: ThemeRoles.wellFill(context),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18)),
               ),
               child: Icon(Icons.extension_outlined,
-                  color: scheme.onPrimaryContainer, size: 26),
+                  color: ThemeRoles.wellInk(context), size: 26),
             ),
             const SizedBox(height: 16),
             const Text('Add an app',

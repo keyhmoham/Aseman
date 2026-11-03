@@ -2,6 +2,8 @@
 library;
 
 import 'dart:math' as math;
+import '../../../core/theme/app_shape.dart';
+import '../../../core/theme/theme_roles.dart';
 
 import 'package:aseman/src/elpian/core/lenient.dart';
 import 'package:flutter/material.dart';
@@ -126,9 +128,9 @@ class PivotTable extends StatelessWidget {
       subtitle: looseStr(props['subtitle']),
       child: LayoutBuilder(builder: (context, box) {
         Widget out = ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppShape.borderRadius(context, 16),
           child: DecoratedBox(
-            decoration: BoxDecoration(border: Border.all(color: p.grid), borderRadius: BorderRadius.circular(16)),
+            decoration: BoxDecoration(border: Border.all(color: p.grid), borderRadius: AppShape.borderRadius(context, 16)),
             child: table,
           ),
         );
@@ -178,10 +180,10 @@ class Leaderboard extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Material(
-                color: me ? p.scheme.secondaryContainer : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
+                color: me ? ThemeRoles.selectedFill(context) : Colors.transparent,
+                borderRadius: AppShape.borderRadius(context, 16),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppShape.borderRadius(context, 16),
                   onTap: onSelect == null ? null : () => onSelect!({'index': i, 'rank': rank + 1, 'row': r}),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

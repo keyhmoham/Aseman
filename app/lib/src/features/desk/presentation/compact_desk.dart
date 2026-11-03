@@ -642,7 +642,7 @@ class CompactWidgetTile extends StatelessWidget {
             end: Alignment.bottomRight,
             colors: [
               accent.withValues(alpha: lifted || fresh ? .28 : .16),
-              tool.primaryContainer.withValues(alpha: .22),
+              scheme.primary.withValues(alpha: .12),
               scheme.surfaceContainerHighest.withValues(alpha: .45),
             ],
           ),
@@ -936,7 +936,6 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                   ),
                   SoftMetaChip(
                     label: _sizeLabels[_size] ?? _size,
-                    accent: scheme.primary,
                   ),
                 ],
               ),
@@ -994,6 +993,7 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                                   accent: scheme.primary,
                                   radius: 14,
                                   selected: selected,
+                                  context: context,
                                 ),
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,

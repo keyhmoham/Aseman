@@ -272,7 +272,7 @@ class _McpConnectDialogState extends State<McpConnectDialog> {
                     padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
                     decoration: BoxDecoration(
                       color: scheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(AppShape.inner),
+                      borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
                     ),
                     child: Row(
                       children: [

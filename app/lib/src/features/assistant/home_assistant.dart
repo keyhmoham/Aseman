@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
+import '../../core/theme/theme_roles.dart';
 import '../../shared/widgets/glass_surface.dart';
 import 'assistant_common.dart';
 import 'tasks_panel.dart';
@@ -197,7 +198,7 @@ class _HomeAssistantState extends State<HomeAssistant>
     final scheme = Theme.of(context).colorScheme;
     final recipients = jsonStrings(a['recipients']);
     return GlassSurface(
-      color: scheme.tertiaryContainer,
+      color: ThemeRoles.wellFill(context),
       alpha: .82,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
@@ -209,7 +210,7 @@ class _HomeAssistantState extends State<HomeAssistant>
                 Icon(
                   Icons.verified_user_outlined,
                   size: 18,
-                  color: scheme.onTertiaryContainer,
+                  color: ThemeRoles.wellInk(context),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -217,7 +218,7 @@ class _HomeAssistantState extends State<HomeAssistant>
                     '${a['summary']}',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      color: scheme.onTertiaryContainer,
+                      color: scheme.onSurface,
                     ),
                   ),
                 ),
@@ -228,7 +229,7 @@ class _HomeAssistantState extends State<HomeAssistant>
                 if ('${a['agent_name'] ?? ''}'.isNotEmpty) '${a['agent_name']}',
                 if (recipients.isNotEmpty) 'to ${recipients.join(', ')}',
               ].join(' · '),
-              style: TextStyle(fontSize: 12, color: scheme.onTertiaryContainer),
+              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
             ),
             if ('${a['text'] ?? ''}'.isNotEmpty)
               Padding(
@@ -237,7 +238,7 @@ class _HomeAssistantState extends State<HomeAssistant>
                   '${a['text']}',
                   maxLines: 4,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: scheme.onTertiaryContainer),
+                  style: TextStyle(color: scheme.onSurfaceVariant),
                 ),
               ),
             Wrap(

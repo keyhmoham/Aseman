@@ -1,5 +1,69 @@
 # Changelog
 
+## Unreleased: deep theme system
+
+- **Installable theme packs** (`aseman.theme/v1`): colors, glass, radii,
+  typography, motion, graphics, component styles, and shell layout (home /
+  store / settings / profile slots) as safe JSON — no arbitrary Dart from the
+  Store.
+- **Design languages** reshape control anatomy (shape/fill/border/ink/shadow)
+  for button, chip, input, card, sheet, FAB, nav, dialog, menu: presets for
+  Material Expressive, Material 3, Fluent, Cupertino, Glass, Flat, Neo-brutal,
+  Dense modern, plus Custom recipes. Theme Studio picks a language, edits
+  recipes with live preview, or authors full JSON.
+- **Store → Themes** tab, Theme Studio, Settings Appearance pack picker;
+  builtins Sky / High contrast / Compact / Fluent / Cupertino / Neo-brutal;
+  publish + install via marketplace type `theme`.
+- **Per-pack color palettes**: each theme proposes its own accent / secondary /
+  status swatches in Settings (no global Material color list); switching packs
+  snaps to a palette that pack actually offers.
+- **Design-language chrome**: SoftCard / GlassSurface / QuietList / FABs / chips
+  honor pack shape (sharp / stadium / cut), fill, border, ink, and shadow —
+  not only Material RRect + ripple with remapped radii.
+- **Selection & continuous controls**: switch / checkbox / radio / slider /
+  progress follow pack `toggle` and `slider` recipes; sharp languages use
+  rectangular [PackSwitch] instead of platform-adaptive Cupertino switches.
+- **Rich graphical recipes**: each control slot can declare gradients, effects
+  (glow / sheen / grain / blur / opacity / focus ring), motion (press scale,
+  hover lift, curves), typography, iconography, and per-state deltas
+  (hovered / pressed / focused / selected / disabled). Extra named slots +
+  `language.extras` cover arbitrary widgets; [ThemeChrome.look] /
+  [ControlLook] resolve them for SoftCard and other chrome.
+- **Quiet surfaces**: cards / sheets / bubbles no longer fill with the accent;
+  Material `surfaceTint` is cleared and container roles are neutralized so
+  palette choice colours buttons and chips, not every panel. Builtin packs use
+  solid neutral cards and muted secondaries.
+- **Palette wiring audit**: shared, admin, rooms, assistant, desk, feed, and
+  market screens resolve status / identity / selection colours through
+  [ThemeRoles] (`selectedFill`, `wellFill`, `bubbleFill`, `identity`, `status`)
+  and `AppColors.*Of(context)` instead of hard-coded Material accents or
+  loud `primaryContainer` washes; SoftCard accents no longer tint post cards.
+- **Shaped avatars**: avatar faces use the same pack radius as their halo ring
+  via [AvatarFace] / `avatarBorderRadius` (Fluent rounded, Neo-brutal sharp,
+  Theme Studio `radiusControl`) instead of hard-coded circles.
+- **Unified accent + part colours**: by default one selected palette accent
+  colours every decorative UI part (identity, halos, selection, secondary /
+  cyan fold into the brand). Packs may set `parts.unified: false` with
+  per-part accents (`nav`, `feed`, `desk`, …); Theme Studio exposes the toggle
+  and overrides. Status (success / warning / danger) stays semantic.
+- **Theme ↔ Elpian UI composition**: packs declare `ui.disabled` (hide any
+  shell / chrome slot) and `ui.surfaces` (inline trees or live QuickJS programs
+  that replace / wrap / decorate slots via [ThemeSlotHost]). Chrome aliases
+  (`chrome.feed.composer` ↔ `home.composer`, …) resolve together. Wrap mode
+  embeds the built-in widget through `ThemeHostChild`.
+- **Theme UI plugins (islands)**: packs declare `ui.islands` (`island.*`) as
+  working Elpian panels — home tabs, profile entries, or full pages. Live
+  panels run under [ThemeElpianHost] with the Aseman Elpian SDK plus
+  `Aseman.api(namespace, action, body)` → signed-in core `/v1/{ns}/{action}`
+  calls ([ThemeRuntimeScope]). Programs may also be inline `code` or loaded
+  from `program` URL/asset. [AppFrontendTheme] ships pack tokens into
+  stylesheets; VM hosts hot-reload on theme change.
+- **Backend** `themes` namespace (`create`, `edit`, `get`, `apply`, `active`,
+  `uninstall`, `import_samples`) with `KindTheme` bots and account-scoped
+  active theme sync.
+- **Aseman assistant** `create_theme` / `install_theme` propose tools generate
+  and apply packs from a design brief.
+
 ## Unreleased: personal Aseman, calls and social parity
 
 - **Personal brain** in Saved Messages: keep/answer, memory, proposals,

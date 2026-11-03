@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/settings/app_settings.dart';
+import '../../core/theme/theme_chrome.dart';
+import '../../core/theme/theme_roles.dart';
+import '../../shared/widgets/avatar_face.dart';
 import '../../data/models/agent_humanoid.dart';
 import '../../shared/widgets/avatar.dart';
 
@@ -328,9 +331,10 @@ class _BrainAvatarState extends State<BrainAvatar>
   Widget build(BuildContext context) {
     final ring = widget.prefs.accentOr(widget.accent);
     final size = widget.size;
+    final corners = context.avatarBorderRadius(size);
     final shell = DecoratedBox(
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
+        borderRadius: corners,
         boxShadow: [
           BoxShadow(
             color: ring.withValues(alpha: widget.listening ? .42 : .2),
@@ -339,7 +343,9 @@ class _BrainAvatarState extends State<BrainAvatar>
           ),
         ],
       ),
-      child: _life == null
+      child: ClipRRect(
+        borderRadius: corners,
+        child: _life == null
           ? CustomPaint(
               painter: _Soft3dAvatarPainter(
                 skin: widget.prefs.skinColor,
@@ -375,6 +381,7 @@ class _BrainAvatarState extends State<BrainAvatar>
                 );
               },
             ),
+      ),
     );
     return SizedBox(width: size, height: size, child: shell);
   }
@@ -515,31 +522,34 @@ class _AgentHumanoidAvatarState extends State<AgentHumanoidAvatar> {
             Positioned(
               right: -2,
               bottom: -2,
-              child: Container(
-                width: badge,
-                height: badge,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: scheme.surface,
-                  border: Border.all(color: scheme.surface, width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: .18),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: CircleAvatar(
-                  radius: badge / 2 - 2,
-                  foregroundImage: picture,
-                  onForegroundImageError: (_, __) {},
-                  backgroundColor: scheme.tertiaryContainer,
-                  foregroundColor: scheme.onTertiaryContainer,
-                  child: Icon(Icons.smart_toy_rounded, size: badge * .4),
-                ),
-              ),
+              child: Builder(builder: (context) {
+                final corners = context.avatarBorderRadius(badge);
+                return Container(
+                  width: badge,
+                  height: badge,
+                  decoration: BoxDecoration(
+                    borderRadius: corners,
+                    color: scheme.surface,
+                    border: Border.all(color: scheme.surface, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: .18),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: AvatarFace(
+                    size: badge,
+                    borderRadius: corners,
+                    foregroundImage: picture,
+                    onImageError: (_, __) {},
+                    backgroundColor: ThemeRoles.wellFill(context),
+                    child: Icon(Icons.smart_toy_rounded, size: badge * .4),
+                  ),
+                );
+              }),
             ),
         ],
       ),

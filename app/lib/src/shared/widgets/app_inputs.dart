@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_shape.dart';
+import '../../core/theme/theme_roles.dart';
 import 'glass_surface.dart';
 import 'overlay_panels.dart';
 
@@ -185,9 +186,9 @@ class AppSwitchCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return GlassSurface(
-      color: value ? scheme.secondaryContainer : null,
+      color: value ? ThemeRoles.selectedFill(context) : null,
       alpha: value ? .7 : null,
-      borderRadius: BorderRadius.circular(AppShape.inner),
+      borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
       onTap: onChanged == null ? null : () => onChanged!(!value),
       child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
@@ -195,7 +196,7 @@ class AppSwitchCard extends StatelessWidget {
             if (icon != null) ...[
               Icon(icon,
                   color: value
-                      ? scheme.onSecondaryContainer
+                      ? ThemeRoles.selectedInk(context)
                       : scheme.onSurfaceVariant),
               const SizedBox(width: 14),
             ],
@@ -327,7 +328,7 @@ class AppAmountField extends StatelessWidget {
         label,
         hint: hint,
         trailing: Material(
-          color: scheme.primaryContainer,
+          color: ThemeRoles.selectedFill(context),
           shape: const StadiumBorder(),
           child: InkWell(
             customBorder: const StadiumBorder(),
@@ -342,11 +343,11 @@ class AppAmountField extends StatelessWidget {
                       style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: scheme.onPrimaryContainer)),
+                          color: ThemeRoles.selectedInk(context))),
                 ),
                 const SizedBox(width: 6),
                 Icon(Icons.edit_rounded,
-                    size: 15, color: scheme.onPrimaryContainer),
+                    size: 15, color: ThemeRoles.selectedInk(context)),
               ]),
             ),
           ),
@@ -525,7 +526,7 @@ class _AppPasswordFieldState extends State<AppPasswordField> {
     setState(() => obscure = false);
   }
 
-  static (double, String, Color) strength(String value) {
+  static (double, String, Color) strength(String value, [BuildContext? context]) {
     var score = 0;
     if (value.length >= 8) score++;
     if (value.length >= 12) score++;
@@ -537,15 +538,37 @@ class _AppPasswordFieldState extends State<AppPasswordField> {
     if (RegExp(r'[^A-Za-z0-9]').hasMatch(value)) score++;
     if (value.isEmpty)
       return (0, 'Enter or generate a password', AppColors.muted);
-    if (value.length < 8) return (.15, 'Too short', AppColors.danger);
-    if (score <= 3) return (.45, 'Fair', AppColors.warning);
-    if (score <= 4) return (.7, 'Good', AppColors.cyan);
-    return (1, 'Strong', AppColors.success);
+    if (value.length < 8) {
+      return (
+        .15,
+        'Too short',
+        context != null ? AppColors.dangerOf(context) : AppColors.danger,
+      );
+    }
+    if (score <= 3) {
+      return (
+        .45,
+        'Fair',
+        context != null ? AppColors.warningOf(context) : AppColors.warning,
+      );
+    }
+    if (score <= 4) {
+      return (
+        .7,
+        'Good',
+        context != null ? AppColors.cyanOf(context) : AppColors.cyan,
+      );
+    }
+    return (
+      1,
+      'Strong',
+      context != null ? AppColors.successOf(context) : AppColors.success,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final (value, label, color) = strength(widget.controller.text);
+    final (value, label, color) = strength(widget.controller.text, context);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       TextFormField(
         controller: widget.controller,
@@ -679,7 +702,7 @@ class AppConfirmCheck extends StatelessWidget {
     return Material(
       color: scheme.errorContainer.withValues(alpha: .45),
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.inner)),
+          borderRadius: BorderRadius.circular(AppShape.innerOf(context))),
       clipBehavior: Clip.antiAlias,
       child: CheckboxListTile(
         value: value,

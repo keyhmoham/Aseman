@@ -4,10 +4,18 @@ import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_surfaces.dart';
+import '../../core/theme/aseman_tokens.dart';
+import '../../core/theme/design_language.dart';
 import '../../core/theme/halo_ring_cache.dart';
+import '../../core/theme/shell_layout.dart';
+import '../../core/theme/theme_chrome.dart';
+import '../../core/theme/theme_roles.dart';
+import '../../core/theme/theme_ui_spec.dart';
 import '../../data/models/space.dart';
+import 'avatar_face.dart';
 import 'glass_surface.dart';
 import 'overlay_panels.dart';
 import 'skeleton.dart';
@@ -46,18 +54,28 @@ abstract final class FloatingAppBarLayout {
   static double contentInset(bool compact) =>
       topMargin(compact) + height + contentGap;
 
+  /// Like [contentInset], but collapses when the active theme disables the
+  /// floating workspace header / app bar slot.
+  static double contentInsetOf(BuildContext context, bool compact) {
+    final ui = AsemanTokens.maybeOf(context)?.ui;
+    if (ui != null &&
+        (ui.isDisabled(FeatureSlots.workspaceHeader) ||
+            ui.isDisabled(ThemeChromeSlots.workspaceHeader) ||
+            ui.isDisabled(ThemeChromeSlots.floatingAppBar))) {
+      return contentGap;
+    }
+    return contentInset(compact);
+  }
+
   static EdgeInsets margin(bool compact) => EdgeInsets.fromLTRB(
       horizontalMargin(compact), topMargin(compact), horizontalMargin(compact), 0);
 }
 
 /// Icon buttons inside the short pill: the theme's 48px target would force
-/// the bar taller than the avatar.
-ButtonStyle _barIconStyle() => IconButton.styleFrom(
-      visualDensity: VisualDensity.compact,
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      minimumSize: const Size(32, 32),
-      padding: const EdgeInsets.all(4),
-      iconSize: 18,
+/// the bar taller than the avatar. Shape / ink follow the active pack.
+ButtonStyle _barIconStyle(BuildContext context) =>
+    context.barIconButtonStyle(
+      iconSize: (AsemanTokens.maybeOf(context)?.language.iconSize ?? 22) - 4,
     );
 
 /// Shared floating top app bar of the workspace and the feed: a long glass
@@ -117,22 +135,25 @@ class WorkspaceHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(FloatingAppBarLayout.height);
-    final bar = DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .12),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    final header = context.panelHeaderRecipe;
+    final radius = header.shape == ShapeKind.stadium
+        ? BorderRadius.circular(FloatingAppBarLayout.height)
+        : header.borderRadius;
+    final shape = RoundedRectangleBorder(borderRadius: radius);
+    final iconStyle = _barIconStyle(context);
+    // Material paints elevation shadows that follow [shape], so pack radii
+    // apply to the floating bar's shadow — not only its glass fill.
+    final bar = Material(
+      color: Colors.transparent,
+      elevation: math.max(header.elevation, 6),
+      shadowColor: Colors.black.withValues(alpha: .35),
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
       child: GlassSurface(
-        alpha: AppSurfaces.cardAlpha,
-        blur: AppSurfaces.blurSigma,
+        alpha: AppSurfaces.cardAlphaOf(context),
+        blur: AppSurfaces.blurSigmaOf(context),
         borderRadius: radius,
+        border: false,
         child: SizedBox(
           height: FloatingAppBarLayout.height,
           child: Padding(
@@ -142,7 +163,7 @@ class WorkspaceHeader extends StatelessWidget {
                   child: Row(children: [
                 if (feed && onOpenNotifications != null)
                   IconButton(
-                      style: _barIconStyle(),
+                      style: iconStyle,
                       tooltip: 'Notifications',
                       onPressed: onOpenNotifications,
                       icon: Badge(
@@ -161,7 +182,7 @@ class WorkspaceHeader extends StatelessWidget {
                   const Icon(Icons.chevron_right_rounded, size: 18),
                   if (onGoHome != null)
                     IconButton(
-                        style: _barIconStyle(),
+                        style: iconStyle,
                         onPressed: onGoHome,
                         tooltip: 'Workspace home',
                         icon: const Icon(Icons.home_outlined)),
@@ -192,39 +213,57 @@ class WorkspaceHeader extends StatelessWidget {
                     ],
                     if (!compact && onOpenAdmin != null) ...[
                       IconButton.filledTonal(
-                          style: _barIconStyle(),
+                          style: iconStyle,
                           onPressed: onOpenAdmin,
                           icon: const Icon(Icons.space_dashboard_outlined)),
                       const SizedBox(width: 6),
                     ],
                     if (onOpenWidgetsLibrary != null)
                       IconButton(
-                          style: _barIconStyle(),
+                          style: iconStyle,
                           tooltip: 'Widgets & windows',
                           onPressed: onOpenWidgetsLibrary,
                           icon: const Icon(Icons.widgets_outlined)),
                     if (!compact && onOpenProfile != null) ...[
                       if (onOpenWidgetsLibrary != null)
                         const SizedBox(width: 4),
-                      InkWell(
+                      Builder(builder: (context) {
+                        final ar = FloatingAppBarLayout.avatarRadius;
+                        final size = ar * 2;
+                        final corners = context.avatarBorderRadius(size);
+                        final circular = corners.topLeft.x >= ar * .95;
+                        final face = AvatarFace(
+                          size: size,
+                          borderRadius: corners,
+                          backgroundColor: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: .18),
+                          foregroundImage: avatar,
+                          onImageError: avatar == null ? null : (_, __) {},
+                          child: Text(
+                            handle.isEmpty ? 'ME' : handle[0].toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              height: 1,
+                            ),
+                          ),
+                        );
+                        return InkWell(
                           onTap: onOpenProfile,
-                          customBorder: const CircleBorder(),
+                          customBorder: circular
+                              ? const CircleBorder()
+                              : RoundedRectangleBorder(
+                                  borderRadius: corners),
                           child: HaloRing(
-                              pad: 1.8,
-                              identity: HaloRingCache.person(accountId),
-                              child: CircleAvatar(
-                                  radius: FloatingAppBarLayout.avatarRadius,
-                                  foregroundImage: avatar,
-                                  onForegroundImageError:
-                                      avatar == null ? null : (_, __) {},
-                                  child: Text(
-                                      handle.isEmpty
-                                          ? 'ME'
-                                          : handle[0].toUpperCase(),
-                                      style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          height: 1))))),
+                            pad: 1.8,
+                            identity: HaloRingCache.person(accountId),
+                            borderRadius: corners,
+                            child: face,
+                          ),
+                        );
+                      }),
                     ],
                   ])),
             ]),
@@ -262,6 +301,7 @@ class _HomePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final onPrimary = Theme.of(context).colorScheme.onPrimary;
+    final shape = context.buttonRecipe.border();
     return Tooltip(
       message: 'Home',
       child: SizedBox(
@@ -275,7 +315,7 @@ class _HomePill extends StatelessWidget {
             maximumSize: const Size(double.infinity, _height),
             fixedSize: const Size.fromHeight(_height),
             padding: const EdgeInsetsDirectional.only(start: 8, end: 12),
-            shape: const StadiumBorder(),
+            shape: shape,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -324,7 +364,7 @@ class SwitcherEdgeHandle extends StatelessWidget {
                             behavior: HitTestBehavior.opaque,
                             child: CustomPaint(
                                 painter: _BumpPainter(
-                                    fill: scheme.primaryContainer,
+                                    fill: ThemeRoles.selectedFill(context),
                                     shadow: scheme.shadow),
                                 child: SizedBox(
                                     width: _width,
@@ -334,8 +374,8 @@ class SwitcherEdgeHandle extends StatelessWidget {
                                         child: Icon(
                                             Icons.rocket_launch_rounded,
                                             size: 17,
-                                            color: scheme
-                                                .onPrimaryContainer)))))))))); 
+                                            color: ThemeRoles.selectedInk(
+                                                context)))))))))));
   }
 }
 
@@ -366,23 +406,26 @@ class _BumpPainter extends CustomPainter {
 class _LivePill extends StatelessWidget {
   const _LivePill();
   @override
-  Widget build(BuildContext context) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-          color: AppColors.success.withValues(alpha: .12),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-              color: AppColors.success.withValues(alpha: .22))),
-      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.circle, color: AppColors.success, size: 7),
-        SizedBox(width: 7),
+  Widget build(BuildContext context) {
+    final success = AppColors.successOf(context);
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: context.chipRecipe.paddingH.clamp(6, 12),
+        vertical: context.chipRecipe.paddingV.clamp(3, 8),
+      ),
+      decoration: context.metaChipDecoration(accent: success),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.circle, color: success, size: 7),
+        const SizedBox(width: 7),
         Text('Live now',
             style: TextStyle(
                 fontSize: 11,
                 letterSpacing: -.1,
                 fontWeight: FontWeight.w700,
-                color: AppColors.success))
-      ]));
+                color: success))
+      ]),
+    );
+  }
 }
 
 /// Workspace switcher dialog/sheet with a searchable grid of the user's real
@@ -633,7 +676,8 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                                     (s) => s.name == name,
                                     orElse: () => Workspace(
                                         id: '', ownerId: '', name: name));
-                                final accent = portalAccentFor(name, scheme);
+                                final accent =
+                                    portalAccentFor(name, scheme, context);
                                 tile = _PortalTile(
                                   dense: dense,
                                   selected: selected,
@@ -704,20 +748,29 @@ class _DockedHere extends StatelessWidget {
     final subtitle = isHome
         ? 'Your feed'
         : "${roomCount ?? 0} rooms · You're here";
-    final accent = isHome ? scheme.primary : portalAccentFor(title, scheme);
+    final accent = isHome
+        ? scheme.primary
+        : portalAccentFor(title, scheme, context);
     final onTap = isHome ? onOpenFeed : onOpenCurrent;
 
+    const faceSize = 40.0;
+    final faceCorners = context.avatarBorderRadius(faceSize);
     final avatarCore = HaloRing(
       accent: accent,
+      borderRadius: faceCorners,
       child: isHome
-          ? CircleAvatar(
+          ? AvatarFace(
+              size: faceSize,
+              borderRadius: faceCorners,
               backgroundColor: accent.withValues(alpha: .2),
               child: Icon(Icons.home_rounded, color: accent),
             )
-          : CircleAvatar(
-              foregroundImage: avatar,
-              onForegroundImageError: avatar == null ? null : (_, __) {},
+          : AvatarFace(
+              size: faceSize,
+              borderRadius: faceCorners,
               backgroundColor: accent.withValues(alpha: .18),
+              foregroundImage: avatar,
+              onImageError: avatar == null ? null : (_, __) {},
               child: Text(
                 title.substring(0, math.min(2, title.length)).toUpperCase(),
                 style: TextStyle(
@@ -729,14 +782,17 @@ class _DockedHere extends StatelessWidget {
             ),
     );
 
+    final tileCorners = ThemeChrome.softCardCorners(context);
+    final ringOuter = context.avatarBorderRadius(56);
+    final ringInner = context.avatarBorderRadius(48);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: tileCorners,
         child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: tileCorners,
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
@@ -761,7 +817,7 @@ class _DockedHere extends StatelessWidget {
                         width: 56,
                         height: 56,
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
+                          borderRadius: ringOuter,
                           border: Border.all(
                             color: accent.withValues(alpha: .2),
                             width: 1.5,
@@ -772,23 +828,23 @@ class _DockedHere extends StatelessWidget {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
+                          borderRadius: ringInner,
                           gradient: SweepGradient(
                             colors: [
                               accent,
                               accent.withValues(alpha: .25),
-                              AppColors.cyan.withValues(alpha: .8),
+                              AppColors.cyanOf(context).withValues(alpha: .8),
                               accent,
                             ],
                           ),
                         ),
                         padding: const EdgeInsets.all(2.5),
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
+                        child: ClipRRect(
+                          borderRadius: faceCorners,
+                          child: ColoredBox(
                             color: scheme.surface,
+                            child: avatarCore,
                           ),
-                          child: avatarCore,
                         ),
                       ),
                     ],
@@ -873,27 +929,31 @@ class _PortalTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final radius = dense ? 20.0 : 26.0;
+    final corners = ThemeChrome.softCardCorners(
+      context,
+      dense ? AppShape.inner : AppShape.card,
+    );
     final avatarR = dense ? 18.0 : 22.0;
+    final glowCorners = context.avatarBorderRadius(72);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(radius),
+        borderRadius: corners,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
           padding: EdgeInsets.all(dense ? 12 : 16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(radius),
+            borderRadius: corners,
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: selected
                   ? [
-                      accent.withValues(alpha: .32),
-                      scheme.primaryContainer.withValues(alpha: .55),
+                      accent.withValues(alpha: .18),
+                      ThemeRoles.selectedFill(context),
                     ]
                   : [
                       scheme.surfaceContainerHighest.withValues(alpha: .55),
@@ -932,7 +992,7 @@ class _PortalTile extends StatelessWidget {
                     width: 72,
                     height: 72,
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
+                      borderRadius: glowCorners,
                       gradient: RadialGradient(
                         colors: [
                           accent.withValues(alpha: selected ? .28 : .12),
@@ -948,26 +1008,32 @@ class _PortalTile extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      HaloRing(
-                        accent: accent,
-                        child: CircleAvatar(
-                          radius: avatarR,
-                          backgroundColor: scheme.surface,
-                          foregroundImage: avatar,
-                          onForegroundImageError:
-                              avatar == null ? null : (_, __) {},
-                          child: icon != null
-                              ? Icon(icon, color: accent, size: dense ? 18 : 22)
-                              : Text(
-                                  initials ?? '?',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: dense ? 11 : 13,
-                                    color: accent,
+                      Builder(builder: (context) {
+                        final size = avatarR * 2;
+                        final faceCorners = context.avatarBorderRadius(size);
+                        return HaloRing(
+                          accent: accent,
+                          borderRadius: faceCorners,
+                          child: AvatarFace(
+                            size: size,
+                            borderRadius: faceCorners,
+                            backgroundColor: scheme.surface,
+                            foregroundImage: avatar,
+                            onImageError: avatar == null ? null : (_, __) {},
+                            child: icon != null
+                                ? Icon(icon,
+                                    color: accent, size: dense ? 18 : 22)
+                                : Text(
+                                    initials ?? '?',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: dense ? 11 : 13,
+                                      color: accent,
+                                    ),
                                   ),
-                                ),
-                        ),
-                      ),
+                          ),
+                        );
+                      }),
                       const Spacer(),
                       if (selected)
                         Icon(Icons.check_circle_rounded,
@@ -1029,26 +1095,31 @@ class _NewPortalTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final radius = dense ? 20.0 : 26.0;
+    final corners = ThemeChrome.softCardCorners(
+      context,
+      dense ? AppShape.inner : AppShape.card,
+    );
+    final iconSize = dense ? 36.0 : 44.0;
+    final iconCorners = context.avatarBorderRadius(iconSize);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(radius),
+        borderRadius: corners,
         child: CustomPaint(
           painter: _DashedRRectPainter(
             color: scheme.outlineVariant.withValues(alpha: .85),
-            radius: radius,
+            borderRadius: corners,
           ),
           child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: dense ? 36 : 44,
-                  height: dense ? 36 : 44,
+                  width: iconSize,
+                  height: iconSize,
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
+                    borderRadius: iconCorners,
                     color: scheme.primary.withValues(alpha: .12),
                   ),
                   child: Icon(
@@ -1084,15 +1155,17 @@ class _NewPortalTile extends StatelessWidget {
 }
 
 class _DashedRRectPainter extends CustomPainter {
-  const _DashedRRectPainter({required this.color, required this.radius});
+  const _DashedRRectPainter({
+    required this.color,
+    required this.borderRadius,
+  });
   final Color color;
-  final double radius;
+  final BorderRadius borderRadius;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final rrect = RRect.fromRectAndRadius(
+    final rrect = borderRadius.toRRect(
       Rect.fromLTWH(1, 1, size.width - 2, size.height - 2),
-      Radius.circular(radius),
     );
     final path = Path()..addRRect(rrect);
     final paint = Paint()
@@ -1113,7 +1186,7 @@ class _DashedRRectPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _DashedRRectPainter old) =>
-      old.color != color || old.radius != radius;
+      old.color != color || old.borderRadius != borderRadius;
 }
 
 

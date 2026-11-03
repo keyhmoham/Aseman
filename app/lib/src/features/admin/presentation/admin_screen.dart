@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/sky_ui.dart';
 import '../../tools/connect/mcp_sign_in.dart';
@@ -788,14 +789,14 @@ class _AppScreenState extends State<AdminScreen> {
                     width: 52,
                     height: 52,
                     decoration: ShapeDecoration(
-                      color: scheme.primaryContainer,
+                      color: ThemeRoles.wellFill(context),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(18),
                       ),
                     ),
                     child: Icon(
                       current.selectedIcon,
-                      color: scheme.onPrimaryContainer,
+                      color: ThemeRoles.selectedInk(context),
                       size: 26,
                     ),
                   ),
@@ -970,7 +971,7 @@ class _AppScreenState extends State<AdminScreen> {
                     clipBehavior: Clip.antiAlias,
                     shape: RoundedRectangleBorder(
                       borderRadius:
-                          BorderRadius.circular(AppShape.card + 4),
+                          BorderRadius.circular(AppShape.cardOf(context)+ 4),
                       side: BorderSide(color: AppSurfaces.cardBorder(scheme)),
                     ),
                     child: content,
@@ -1031,7 +1032,7 @@ class _Navigation extends StatelessWidget {
     );
     if (permanent) {
       return GlassSurface(
-        alpha: AppSurfaces.overlayAlpha,
+        alpha: AppSurfaces.overlayAlphaOf(context),
         borderRadius: BorderRadius.zero,
         border: false,
         child: list,
@@ -1058,12 +1059,12 @@ class _NavTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final color = selected
-        ? scheme.onSecondaryContainer
+        ? ThemeRoles.selectedInk(context)
         : scheme.onSurfaceVariant;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 1),
       child: Material(
-        color: selected ? scheme.secondaryContainer : Colors.transparent,
+        color: selected ? ThemeRoles.selectedFill(context) : Colors.transparent,
         shape: const StadiumBorder(),
         clipBehavior: Clip.antiAlias,
         child: InkWell(

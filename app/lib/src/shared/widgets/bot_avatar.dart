@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/halo_ring_cache.dart';
+import '../../core/theme/theme_chrome.dart';
 import '../../data/models/bot.dart';
 import '../../features/brain/brain_avatar.dart';
 import 'avatar.dart';
@@ -56,47 +57,38 @@ class BotAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = radius * 2;
     final scheme = Theme.of(context).colorScheme;
+    final corners = context.avatarBorderRadius(size);
     final Widget mark;
     if (bot.isAgent) {
-      mark = AgentHumanoidAvatar(
-        agentId: bot.id.isNotEmpty ? bot.id : bot.accountId,
-        picture: bot.avatar,
-        userId: BrainAvatarPrefs.resolveUserId(userId),
-        platform: bot.humanoid,
-        radius: radius,
-        listening: listening,
+      mark = ClipRRect(
+        borderRadius: corners,
+        child: AgentHumanoidAvatar(
+          agentId: bot.id.isNotEmpty ? bot.id : bot.accountId,
+          picture: bot.avatar,
+          userId: BrainAvatarPrefs.resolveUserId(userId),
+          platform: bot.humanoid,
+          radius: radius,
+          listening: listening,
+        ),
       );
     } else {
-      final corner = radius * .55;
-      final picture = Avatars.of(bot.avatar);
-      mark = Container(
-        width: size,
-        height: size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: scheme.primary.withValues(alpha: .14),
-          borderRadius: BorderRadius.circular(corner),
-          image: picture == null
-              ? null
-              : DecorationImage(
-                  image: picture,
-                  fit: BoxFit.cover,
-                  onError: (_, __) {},
-                ),
+      mark = AvatarFace(
+        size: size,
+        borderRadius: corners,
+        backgroundColor: scheme.primary.withValues(alpha: .14),
+        foregroundImage: Avatars.of(bot.avatar),
+        child: Icon(
+          Icons.extension_rounded,
+          size: radius * .95,
+          color: scheme.primary,
         ),
-        child: picture != null
-            ? null
-            : Icon(
-                Icons.extension_rounded,
-                size: radius * .95,
-                color: scheme.primary,
-              ),
       );
     }
     final id = bot.id.isNotEmpty ? bot.id : bot.accountId;
     return HaloRing(
       identity: HaloRingCache.agent(id),
       accent: bot.isAgent ? scheme.tertiary : scheme.primary,
+      borderRadius: corners,
       child: mark,
     );
   }

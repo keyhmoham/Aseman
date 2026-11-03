@@ -1,10 +1,11 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/theme/app_surfaces.dart';
+import '../../core/theme/theme_chrome.dart';
+import '../../core/theme/theme_roles.dart';
 import '../../shared/widgets/glass_surface.dart';
 import '../messenger/presentation/chat_page.dart';
 import 'brain_avatar.dart';
@@ -307,9 +308,9 @@ class _NoteField extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return GlassSurface(
-      alpha: AppSurfaces.cardAlpha,
-      blur: AppSurfaces.blurSigma,
-      borderRadius: BorderRadius.circular(16),
+      alpha: AppSurfaces.cardAlphaOf(context),
+      blur: AppSurfaces.blurSigmaOf(context),
+      borderRadius: ThemeChrome.inputShell(context).radius,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
         child: Row(
@@ -361,14 +362,14 @@ class _SetupBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: scheme.tertiaryContainer.withValues(alpha: .55),
+        color: ThemeRoles.wellFill(context),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: scheme.outlineVariant.withValues(alpha: .5)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.tune_rounded, size: 18, color: scheme.onTertiaryContainer),
+          Icon(Icons.tune_rounded, size: 18, color: ThemeRoles.wellInk(context)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -376,7 +377,7 @@ class _SetupBanner extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 height: 1.35,
-                color: scheme.onTertiaryContainer,
+                color: ThemeRoles.wellInk(context),
               ),
             ),
           ),
@@ -491,28 +492,24 @@ class AsemanBrainButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final dark = scheme.brightness == Brightness.dark;
     final accent =
         AppSettingsScope.maybeOf(context)?.accent ?? scheme.primary;
 
     void open() => openSavedMessages(context, dependencies);
 
     if (chip) {
+      final fab = context.fabRecipe;
+      final shell = ThemeChrome.floatingShell(context, lift: 2);
+      final radius = fab.borderRadius;
       return DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: dark ? .35 : .14),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          borderRadius: radius,
+          boxShadow: shell.boxShadow,
         ),
         child: GlassSurface(
-          alpha: AppSurfaces.overlayAlpha,
-          blur: AppSurfaces.blurSigma,
-          borderRadius: BorderRadius.circular(999),
+          alpha: AppSurfaces.overlayAlphaOf(context),
+          blur: AppSurfaces.blurSigmaOf(context),
+          borderRadius: radius,
           onTap: open,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(10, 8, 14, 8),
@@ -536,21 +533,16 @@ class AsemanBrainButton extends StatelessWidget {
       );
     }
 
+    final shell = ThemeChrome.floatingShell(context, lift: 2);
     return DecoratedBox(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: dark ? .35 : .14),
-            blurRadius: 22,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        boxShadow: shell.boxShadow,
       ),
       child: GlassSurface(
-        alpha: AppSurfaces.overlayAlpha,
-        blur: AppSurfaces.blurSigma,
-        borderRadius: BorderRadius.circular(999),
+        alpha: AppSurfaces.overlayAlphaOf(context),
+        blur: AppSurfaces.blurSigmaOf(context),
+        borderRadius: context.fabRecipe.borderRadius,
         onTap: open,
         child: SizedBox(
           width: size,

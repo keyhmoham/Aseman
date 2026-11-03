@@ -30,7 +30,8 @@ import (
 //	look things up   at once: rooms, chats, members, agents, apps, balance, people, reminders
 //	their own        at once: remember a fact, set or cancel a reminder
 //	change something only proposed: create a room, hand work, invite, message,
-//	                               post in a room, recruit/hire an agent
+//	                               post in a room, recruit/hire an agent,
+//	                               create/install a UI theme
 //
 // A proposal is stored with the answer that makes it (message.Direct.Action,
 // sealed) and runs when the person confirms it: the button in the app
@@ -476,6 +477,78 @@ func brainTools() []brainTool {
 				}
 				addCard(ctx, brainCard{Type: cardRoom, ID: room.ID, Title: room.Name, Subtitle: "Agent hired"})
 				return "hired into " + room.Name + ": " + clip(string(raw), 500), nil
+			}},
+		{Name: "create_theme", Description: "Create an installable UI theme pack (aseman.theme/v1 JSON) from the person's design brief, " +
+			"optionally publish it to the Store, and apply it to their account. Themes set a design language " +
+			"(material_expressive, material, fluent, cupertino, glass, flat, neo_brutal, dense_modern, or custom) with " +
+			"control recipes (shape/fill/radius/border/ink) for button, chip, input, card, sheet, fab, nav_pill, dialog, menu, " +
+			"plus tokens, graphics, component overrides, and shell layout FeatureSlot ids. Proposed: they confirm it.",
+			Parameters: params([]string{"name", "pack"}, map[string]any{
+				"name":        str("short theme name"),
+				"description": str("marketplace pitch"),
+				"pack":        str("full aseman.theme/v1 JSON (schema, meta, language, tokens.light/dark, optional graphics/components/shell/bridges)"),
+				"publish":     map[string]any{"type": "boolean", "description": "also submit to the marketplace (default true)"},
+				"apply":       map[string]any{"type": "boolean", "description": "apply to their account after create (default true)"},
+			}),
+			propose: true,
+			summary: func(a map[string]any) string {
+				return "Create theme “" + arg(a, "name") + "”"
+			},
+			run: func(ctx context.Context, s *Service, me identity.ID, args map[string]any) (string, error) {
+				name, pack := arg(args, "name"), arg(args, "pack")
+				if name == "" || pack == "" {
+					return "", errs.InvalidArgument("a theme needs a name and pack JSON")
+				}
+				publish := true
+				if v, ok := args["publish"].(bool); ok {
+					publish = v
+				}
+				apply := true
+				if v, ok := args["apply"].(bool); ok {
+					apply = v
+				}
+				raw, err := s.actAs(ctx, me, "themes", "create", map[string]any{
+					"name": name, "description": arg(args, "description"), "pack": pack, "publish": publish,
+				})
+				if err != nil {
+					return "", err
+				}
+				var created struct {
+					ThemeID   string `json:"theme_id"`
+					ListingID string `json:"listing_id"`
+					Status    string `json:"status"`
+				}
+				_ = json.Unmarshal(raw, &created)
+				if apply && created.ThemeID != "" {
+					body := map[string]any{"theme": created.ThemeID}
+					if created.ListingID != "" {
+						body = map[string]any{"listing": created.ListingID}
+					}
+					if _, err := s.actAs(ctx, me, "themes", "apply", body); err != nil {
+						return "", err
+					}
+				}
+				addCard(ctx, brainCard{Type: cardRoom, ID: created.ThemeID, Title: name, Subtitle: "Theme created"})
+				return "theme created: " + clip(string(raw), 500), nil
+			}},
+		{Name: "install_theme", Description: "Install a theme from the marketplace onto the person's account. Proposed: they confirm it. Use list_apps with type theme, or market.list via call_action.",
+			Parameters: params([]string{"listing"}, map[string]any{
+				"listing": str("the marketplace theme listing id"),
+			}),
+			propose: true,
+			summary: func(a map[string]any) string {
+				return "Install marketplace theme " + arg(a, "listing")
+			},
+			run: func(ctx context.Context, s *Service, me identity.ID, args map[string]any) (string, error) {
+				listing := arg(args, "listing")
+				if listing == "" {
+					return "", errs.InvalidArgument("listing id required")
+				}
+				raw, err := s.actAs(ctx, me, "market", "install", map[string]any{"listing": listing})
+				if err != nil {
+					return "", err
+				}
+				return "theme installed: " + clip(string(raw), 500), nil
 			}},
 		{Name: "call_action", Description: "Call any other platform action as the person (spaces, users, posts, market, bots, " +
 			"routines, finance, …): namespace + action + JSON body. Use when no named tool fits — explore, threads, " +

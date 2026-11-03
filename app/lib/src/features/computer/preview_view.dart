@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../core/theme/app_shape.dart';
+import '../../core/theme/theme_roles.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -423,12 +425,12 @@ class _Preparing extends StatelessWidget {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: scheme.primaryContainer,
+                  color: ThemeRoles.wellFill(context),
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: Icon(
                   Icons.rocket_launch_rounded,
-                  color: scheme.onPrimaryContainer,
+                  color: ThemeRoles.wellInk(context),
                 ),
               ),
               const SizedBox(height: 16),
@@ -578,7 +580,7 @@ class PreviewThumbnail extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppShape.borderRadius(context, 12),
         border: Border.all(color: scheme.outlineVariant.withValues(alpha: .6)),
       ),
       clipBehavior: Clip.antiAlias,

@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/aseman_tokens.dart';
+import '../../../core/theme/theme_chrome.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../data/models/space.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/overlay_panels.dart';
@@ -321,16 +324,25 @@ class _SharePostSheetState extends State<SharePostSheet> {
                                   onTap: () => setState(
                                     () => _toggle(_feeds, _publicFeed),
                                   ),
-                                  child: HaloRing(
-                                    child: CircleAvatar(
-                                      radius: 26,
-                                      backgroundColor: scheme.primaryContainer,
-                                      child: Icon(
-                                        Icons.public_rounded,
-                                        color: scheme.onPrimaryContainer,
+                                  child: Builder(builder: (context) {
+                                    const radius = 26.0;
+                                    final size = radius * 2;
+                                    final corners =
+                                        context.avatarBorderRadius(size);
+                                    return HaloRing(
+                                      borderRadius: corners,
+                                      child: AvatarFace(
+                                        size: size,
+                                        borderRadius: corners,
+                                        backgroundColor:
+                                            ThemeRoles.wellFill(context),
+                                        child: Icon(
+                                          Icons.public_rounded,
+                                          color: ThemeRoles.wellInk(context),
+                                        ),
                                       ),
-                                    ),
-                                  ),
+                                    );
+                                  }),
                                 ),
                               for (final s in spaces)
                                 _FeedTarget(
@@ -338,30 +350,38 @@ class _SharePostSheetState extends State<SharePostSheet> {
                                   selected: _feeds.contains(s.id),
                                   onTap: () =>
                                       setState(() => _toggle(_feeds, s.id)),
-                                  child: HaloRing(
-                                    accent: scheme.secondary,
-                                    child: AvatarPicture(
-                                      avatar: s.avatar,
-                                      size: 52,
-                                      fallback: CircleAvatar(
-                                        radius: 26,
-                                        backgroundColor:
-                                            scheme.secondaryContainer,
-                                        foregroundColor:
-                                            scheme.onSecondaryContainer,
-                                        child: Text(
-                                          s.name.isEmpty
-                                              ? '#'
-                                              : s.name.characters.first
+                                  child: Builder(builder: (context) {
+                                    const size = 52.0;
+                                    final corners =
+                                        context.avatarBorderRadius(size);
+                                    return HaloRing(
+                                      accent: scheme.secondary,
+                                      borderRadius: corners,
+                                      child: AvatarPicture(
+                                        avatar: s.avatar,
+                                        size: size,
+                                        borderRadius: corners,
+                                        fallback: AvatarFace(
+                                          size: size,
+                                          borderRadius: corners,
+                                          backgroundColor:
+                                              ThemeRoles.wellFill(context),
+                                          child: Text(
+                                            s.name.isEmpty
+                                                ? '#'
+                                                : s.name.characters.first
                                                     .toUpperCase(),
-                                          style: const TextStyle(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.w800,
+                                            style: TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w800,
+                                              color:
+                                                  ThemeRoles.wellInk(context),
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ),
+                                    );
+                                  }),
                                 ),
                             ],
                           ),
@@ -555,9 +575,9 @@ class _QuickAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: AppSurfaces.card(scheme),
+      color: AppSurfaces.card(scheme, tokens: AsemanTokens.maybeOf(context)),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppShape.control),
+        borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
         side: BorderSide(color: AppSurfaces.cardBorder(scheme)),
       ),
       clipBehavior: Clip.antiAlias,
@@ -626,7 +646,7 @@ class _FeedTarget extends StatelessWidget {
       label: label,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppShape.borderRadius(context, 16),
         child: SizedBox(
           width: 76,
           child: Column(
@@ -709,7 +729,7 @@ class _ChatTarget extends StatelessWidget {
         : 'Room · ${chat.spaceName}';
     return Material(
       color: selected
-          ? scheme.primaryContainer.withValues(alpha: .35)
+          ? ThemeRoles.selectedFill(context)
           : Colors.transparent,
       borderRadius: BorderRadius.circular(14),
       clipBehavior: Clip.antiAlias,

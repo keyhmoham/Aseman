@@ -3,6 +3,7 @@
 library;
 
 import 'dart:math' as math;
+import '../../../core/theme/app_shape.dart';
 
 import 'package:aseman/src/elpian/core/lenient.dart';
 import 'package:flutter/material.dart';
@@ -988,7 +989,7 @@ class Callout extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
       decoration: BoxDecoration(
         color: p.tonal(color),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppShape.borderRadius(context, 20),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

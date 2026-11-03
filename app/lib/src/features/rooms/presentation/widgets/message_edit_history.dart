@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_shape.dart';
+import '../../../../core/theme/theme_roles.dart';
 import '../../../../data/models/space.dart';
 import '../../../../data/services/aseman_service.dart';
 import '../../../../shared/widgets/overlay_panels.dart';
@@ -179,9 +180,9 @@ class _MessageEditHistorySheetState extends State<_MessageEditHistorySheet> {
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
         color: current
-            ? scheme.primaryContainer.withValues(alpha: 0.55)
+            ? ThemeRoles.selectedFill(context)
             : scheme.surfaceContainerHighest.withValues(alpha: 0.65),
-        borderRadius: BorderRadius.circular(AppShape.inner),
+        borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
         border: Border.all(
           color: current
               ? scheme.primary.withValues(alpha: 0.28)

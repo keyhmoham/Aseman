@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import '../../../../core/theme/app_shape.dart';
 
 import 'package:flutter/material.dart';
 
@@ -213,7 +214,7 @@ class SharedFileViewer extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: AppShape.borderRadius(context, 24),
           ),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Icon(file.isVoice ? Icons.mic_rounded : Icons.music_note_rounded,

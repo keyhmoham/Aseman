@@ -18,9 +18,12 @@ import '../models/llm_provider.dart';
 import '../models/post.dart';
 import '../models/profile.dart';
 import '../models/space.dart';
+import '../models/theme_pack_remote.dart';
 import '../models/uploaded_file.dart';
 import 'backend_capabilities.dart';
 import 'backend_service.dart';
+
+export '../models/theme_pack_remote.dart';
 
 /// Contract keys for the per-bot entity store. These are set at runtime and
 /// mirror the backend bot contract, so new entity types can be added without
@@ -1800,6 +1803,57 @@ class AsemanService implements BackendService {
       if (spaceId != null && spaceId.isNotEmpty) 'space': spaceId,
     });
     return ((resp.body as Map?)?['bot_id'] as String?) ?? '';
+  }
+
+  /// Install a theme listing (applies the pack to the signed-in account).
+  Future<void> installThemeListing(String listingId) async {
+    await client.call('market', 'install', body: {'listing': listingId});
+  }
+
+  // ── themes ────────────────────────────────────────────────────────────────
+
+  Future<CreatedTheme> createTheme({
+    required String name,
+    String description = '',
+    required String packJson,
+    bool publish = false,
+  }) async {
+    final resp = await client.call('themes', 'create', body: {
+      'name': name,
+      'description': description,
+      'pack': packJson,
+      'publish': publish,
+    });
+    final body = resp.body as Map? ?? {};
+    return CreatedTheme(
+      themeId: '${body['theme_id'] ?? ''}',
+      listingId: '${body['listing_id'] ?? ''}',
+      status: '${body['status'] ?? ''}',
+    );
+  }
+
+  Future<ActiveThemePack?> fetchActiveTheme() async {
+    final resp = await client.call('themes', 'active');
+    final body = resp.body as Map? ?? {};
+    if (body['active'] != true) return null;
+    final raw = '${body['pack_json'] ?? ''}';
+    if (raw.isEmpty) return null;
+    return ActiveThemePack(
+      themeId: '${body['theme_id'] ?? ''}',
+      listingId: '${body['listing_id'] ?? ''}',
+      packJson: raw,
+    );
+  }
+
+  Future<void> applyTheme({String? themeId, String? listingId}) async {
+    await client.call('themes', 'apply', body: {
+      if (themeId != null && themeId.isNotEmpty) 'theme': themeId,
+      if (listingId != null && listingId.isNotEmpty) 'listing': listingId,
+    });
+  }
+
+  Future<void> uninstallActiveTheme() async {
+    await client.call('themes', 'uninstall');
   }
 
   // ── wallet ────────────────────────────────────────────────────────────────

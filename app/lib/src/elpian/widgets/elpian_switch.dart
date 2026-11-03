@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/theme_chrome.dart';
 import '../core/elpian_services.dart';
 import '../core/lenient.dart';
 import '../models/elpian_node.dart';
 import 'elpian_expressive.dart';
 
-/// A Material 3 switch: its thumb grows and shows a check when on.
+/// Pack-styled switch (Material or sharp neo-brutal from the active theme).
 ///
 /// Props: `value` (bool), `label` (text beside it; tapping it toggles
 /// too), `icons` (default true: check / close on the thumb), `disabled`.
@@ -21,16 +22,9 @@ class ElpianSwitch {
     final icons = boolProp(node, 'icons') ?? true;
     void change(bool v) => dispatcher.dispatchChange(elementId, v);
 
-    final control = Switch(
+    final control = PackSwitch(
       value: value,
-      thumbIcon: icons
-          ? WidgetStateProperty.resolveWith(
-              (s) => Icon(
-                s.contains(WidgetState.selected) ? Icons.check : Icons.close,
-                size: 16,
-              ),
-            )
-          : null,
+      showIcons: icons,
       onChanged: disabled ? null : change,
     );
     return labelled(node, control, disabled ? null : () => change(!value));

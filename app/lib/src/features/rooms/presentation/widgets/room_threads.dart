@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_shape.dart';
+import '../../../../core/theme/theme_roles.dart';
 import '../../../../data/models/space.dart';
 import '../../../../data/services/aseman_service.dart';
 import '../../../../shared/widgets/overlay_panels.dart';
@@ -231,9 +232,9 @@ class _RoomThreadsPanelState extends State<RoomThreadsPanel> {
     final preview = t.lastBody.replaceAll(RegExp(r'\s+'), ' ').trim();
     return ListTile(
       selected: selected,
-      selectedTileColor: scheme.secondaryContainer,
+      selectedTileColor: ThemeRoles.selectedFill(context),
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.inner)),
+          borderRadius: BorderRadius.circular(AppShape.innerOf(context))),
       leading: Icon(icon),
       title: Text(t.title,
           maxLines: 1,

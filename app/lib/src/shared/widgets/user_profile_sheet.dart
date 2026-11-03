@@ -5,14 +5,15 @@ import 'package:flutter/services.dart';
 
 import '../../app_dependencies.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/theme_chrome.dart';
 import '../../data/models/bot.dart';
 import '../../data/models/post.dart';
 import '../../features/search_feed/presentation/feed_post_card.dart';
 import '../../features/search_feed/presentation/search_feed_view_model.dart'
     show feedPostFromServer;
 import 'avatar.dart';
+import 'avatar_face.dart';
 import 'avatar_editor.dart';
 import 'mini_tag.dart';
 import 'overlay_panels.dart';
@@ -181,7 +182,7 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
             child: Column(children: [
               Row(children: [
                 AppAvatar(initials,
-                    color: AppColors.primary,
+                    color: AppColors.primaryOf(context),
                     radius: 17,
                     image: widget.dependencies.service.avatarImage(
                         widget.dependencies.sessionController.avatar)),
@@ -309,7 +310,6 @@ class _ProfileHeader extends StatelessWidget {
     return LayoutBuilder(builder: (context, box) {
       final compact = box.maxWidth < 500;
       return SoftCard(
-          radius: AppShape.card - 2,
           padding: EdgeInsets.zero,
           child: Column(children: [
             Container(
@@ -322,7 +322,7 @@ class _ProfileHeader extends StatelessWidget {
                         colors: [
                       scheme.primary,
                       scheme.tertiary,
-                      AppColors.cyan,
+                      AppColors.cyanOf(context),
                     ])),
                 child: Stack(children: [
                   Positioned(
@@ -346,15 +346,27 @@ class _ProfileHeader extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             avatar ??
-                                HaloRing(
-                                  pad: 3,
-                                  child: CircleAvatar(
-                                      radius: 34,
+                                Builder(builder: (context) {
+                                  const radius = 34.0;
+                                  final size = radius * 2;
+                                  final corners =
+                                      context.avatarBorderRadius(size);
+                                  final scheme = Theme.of(context).colorScheme;
+                                  return HaloRing(
+                                    pad: 3,
+                                    borderRadius: corners,
+                                    child: AvatarFace(
+                                      size: size,
+                                      borderRadius: corners,
+                                      backgroundColor:
+                                          scheme.surfaceContainerHighest,
                                       child: Text(initials,
                                           style: const TextStyle(
                                               fontSize: 20,
-                                              fontWeight: FontWeight.w900))),
-                                ),
+                                              fontWeight: FontWeight.w900)),
+                                    ),
+                                  );
+                                }),
                             const Spacer(),
                             IconButton.filledTonal(
                                 tooltip: 'Share profile',

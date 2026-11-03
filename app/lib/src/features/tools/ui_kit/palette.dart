@@ -7,17 +7,24 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/aseman_tokens.dart';
+
 class VizPalette {
-  const VizPalette._(this.dark, this.scheme, this.baseText);
+  const VizPalette._(this.dark, this.scheme, this.baseText, this.tokens);
 
   factory VizPalette.of(BuildContext context) {
     final theme = Theme.of(context);
-    return VizPalette._(theme.brightness == Brightness.dark, theme.colorScheme,
-        DefaultTextStyle.of(context).style);
+    return VizPalette._(
+      theme.brightness == Brightness.dark,
+      theme.colorScheme,
+      DefaultTextStyle.of(context).style,
+      theme.extension<AsemanTokens>(),
+    );
   }
 
   final bool dark;
   final ColorScheme scheme;
+  final AsemanTokens? tokens;
 
   /// The ambient text style: canvas text (axes, labels painted by charts)
   /// does not inherit it the way Text widgets do, so it is merged in.
@@ -54,6 +61,10 @@ class VizPalette {
   static const Color warning = Color(0xFFFAB219);
   static const Color serious = Color(0xFFEC835A);
   static const Color critical = Color(0xFFD03B3B);
+
+  Color get goodTone => tokens?.success ?? good;
+  Color get warningTone => tokens?.warning ?? warning;
+  Color get criticalTone => tokens?.danger ?? critical;
 
   /// The maximum number of categorical series before folding to "Other".
   static const int maxSeries = 8;
@@ -114,10 +125,11 @@ class VizPalette {
   }
 
   Color status(String? name) => switch (name) {
-        'good' || 'success' || 'positive' || 'up' => good,
-        'warning' || 'warn' => warning,
+        'good' || 'success' || 'positive' || 'up' => goodTone,
+        'warning' || 'warn' => warningTone,
         'serious' => serious,
-        'critical' || 'error' || 'danger' || 'negative' || 'down' => critical,
+        'critical' || 'error' || 'danger' || 'negative' || 'down' =>
+          criticalTone,
         _ => scheme.primary,
       };
 

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/theme/app_shape.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../data/models/uploaded_file.dart';
@@ -66,7 +67,7 @@ class AttachmentBubble extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
             color: scheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12)),
+            borderRadius: AppShape.borderRadius(context, 12)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.folder_shared_rounded, color: scheme.primary),
           const SizedBox(width: 10),
@@ -327,9 +328,9 @@ class AttachmentBubble extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Material(
       color: scheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: AppShape.borderRadius(context, 12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppShape.borderRadius(context, 12),
         onTap: () => _openExternal(),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -346,13 +347,13 @@ class AttachmentBubble extends StatelessWidget {
   }
 
   Widget _document(BuildContext context, ColorScheme scheme) {
-    final color = _docColor(file);
+    final color = _docColor(context, file);
     final ext = file.extension.isEmpty ? 'FILE' : file.extension.toUpperCase();
     return Material(
       color: scheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: AppShape.borderRadius(context, 12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppShape.borderRadius(context, 12),
         onTap: () => _open(context),
         child: Padding(
           padding: const EdgeInsets.all(10),
@@ -419,24 +420,24 @@ class AttachmentBubble extends StatelessWidget {
         file: file, url: _url, headers: headers, download: fetchBytes);
   }
 
-  Color _docColor(UploadedFile file) {
-    if (file.mime.contains('pdf')) return AppColors.danger;
+  Color _docColor(BuildContext context, UploadedFile file) {
+    if (file.mime.contains('pdf')) return AppColors.dangerOf(context);
     if (file.mime.contains('sheet') ||
         file.mime.contains('excel') ||
         ['xls', 'xlsx', 'csv', 'tsv'].contains(file.extension)) {
-      return AppColors.success;
+      return AppColors.successOf(context);
     }
     if (file.mime.contains('presentation') ||
         file.mime.contains('powerpoint') ||
         ['ppt', 'pptx', 'key'].contains(file.extension)) {
-      return AppColors.warning;
+      return AppColors.warningOf(context);
     }
     if (file.mime.contains('zip') ||
         file.mime.contains('compressed') ||
         ['zip', 'rar', '7z', 'tar', 'gz'].contains(file.extension)) {
-      return AppColors.primary;
+      return AppColors.primaryOf(context);
     }
-    return AppColors.primary;
+    return AppColors.primaryOf(context);
   }
 
   Future<void> _openExternal() async {

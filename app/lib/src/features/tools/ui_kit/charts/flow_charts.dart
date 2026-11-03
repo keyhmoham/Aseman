@@ -2,6 +2,7 @@
 library;
 
 import 'dart:math' as math;
+import '../../../../core/theme/app_shape.dart';
 
 import 'package:flutter/material.dart';
 
@@ -56,7 +57,7 @@ class FunnelChart extends StatelessWidget {
                 ),
               ),
             InkWell(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppShape.borderRadius(context, 16),
               onTap: onSelect == null ? null : () => onSelect!({'index': i, 'row': rows[i], 'label': label, 'value': v}),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),

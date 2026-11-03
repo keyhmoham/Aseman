@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_surfaces.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/aseman_tokens.dart';
+import '../../core/theme/design_language.dart';
+import '../../core/theme/theme_chrome.dart';
 
 /// The app's signature segmented pill tab control (the same component used by
 /// the search feed's Global / Following / People tabs). A rounded container
@@ -85,6 +88,7 @@ class _SegmentedTabBarState extends State<SegmentedTabBar>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final tokens = AsemanTokens.maybeOf(context);
     final tabs = _controller(context);
     final labels = widget.labels;
     final icons = widget.icons;
@@ -119,21 +123,32 @@ class _SegmentedTabBarState extends State<SegmentedTabBar>
             constraints.hasBoundedWidth ? math.min(w, constraints.maxWidth) : w;
         // Shrink to the tabs when they fit; otherwise fill the room and
         // let the tabs scroll.
+        final navH =
+            tokens?.language.denseControlHeight ?? 40;
+        final barH = navH + 12;
+        final iconSz = (tokens?.language.iconSize ?? 22) - 5;
         return Container(
           width: math.min(natural, room),
-          height: 52,
+          height: barH,
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: AppSurfaces.card(scheme),
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(color: AppSurfaces.cardBorder(scheme)),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: .05),
-                  blurRadius: 12,
-                  offset: const Offset(0, 3)),
-            ],
+            color: tokens?.control('nav_pill').fill == FillKind.glass
+                ? AppSurfaces.overlay(scheme, tokens: tokens)
+                : AppSurfaces.card(scheme, tokens: tokens),
+            borderRadius: context.navPillBorderRadius,
+            border: Border.all(
+              color: AppSurfaces.cardBorder(scheme).withValues(
+                    alpha: tokens?.control('nav_pill').borderAlpha ?? 1,
+                  ),
+              width: (tokens?.control('nav_pill').borderWidth ?? 0) > 0
+                  ? tokens!.control('nav_pill').borderWidth
+                  : 1,
+            ),
+            boxShadow: (tokens?.control('nav_pill').elevation ?? 0) > 0 ||
+                    tokens?.language.shadow.alpha != 0
+                ? context.themeShadow(accent: scheme.primary)
+                : null,
           ),
           child: TabBar(
             controller: tabs,
@@ -142,7 +157,7 @@ class _SegmentedTabBarState extends State<SegmentedTabBar>
             tabAlignment: TabAlignment.start,
             dividerColor: Colors.transparent,
             indicatorSize: TabBarIndicatorSize.tab,
-            indicator: AppFab.tabIndicatorOf(scheme),
+            indicator: AppFab.tabIndicatorOf(scheme, tokens: tokens),
             labelColor: scheme.primary,
             unselectedLabelColor: scheme.onSurfaceVariant,
             labelStyle: selectedStyle,
@@ -150,10 +165,10 @@ class _SegmentedTabBarState extends State<SegmentedTabBar>
             tabs: [
               for (var i = 0; i < labels.length; i++)
                 Tab(
-                  height: 40,
+                  height: navH,
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     if (showIcons && icons.length > i) ...[
-                      Icon(icons[i], size: 17),
+                      Icon(icons[i], size: iconSz),
                       const SizedBox(width: 7),
                     ],
                     Text(labels[i]),

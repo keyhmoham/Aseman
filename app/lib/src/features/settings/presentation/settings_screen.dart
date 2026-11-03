@@ -5,15 +5,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../core/settings/app_settings.dart';
+import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/default_theme_packs.dart';
+import '../../../core/theme/shell_layout.dart';
+import '../../../core/theme/theme_chrome.dart';
+import '../../../core/theme/theme_pack_controller.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/avatar_editor.dart';
+import '../../../shared/widgets/avatar_face.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/sky_ui.dart';
+import '../../../shared/widgets/theme_slot_host.dart';
 import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../account/presentation/account_panel.dart';
 import '../../assistant/assistant.dart';
+import '../../market/presentation/bots_store_screen.dart';
 import '../../marketing/marketing_links.dart';
 import 'widgets/notify_prefs_panel.dart';
 import 'widgets/privacy_settings_panel.dart';
@@ -267,11 +275,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onManage: () => _openAccount(AccountArea.account),
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  _Section(
+                  ThemeSlotHost(
+                    slot: FeatureSlots.settingsAppearance,
+                    child: _Section(
                     title: 'Appearance',
                     icon: Icons.palette_outlined,
                     children: [
-                      const _Label('Theme'),
+                      const _Label('Theme pack'),
+                      Builder(builder: (context) {
+                        final packs = ThemePackScope.maybeOf(context);
+                        final active = packs?.pack.id ?? DefaultThemePacks.skyId;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Wrap(
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.sm,
+                              children: [
+                                for (final pack in DefaultThemePacks.all)
+                                  ChoiceChip(
+                                    label: Text(pack.meta.name),
+                                    selected: active == pack.id,
+                                    onSelected: packs == null
+                                        ? null
+                                        : (_) {
+                                            packs.applyBuiltin(pack.id);
+                                            settings.syncPaletteToPack(pack);
+                                          },
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            if (widget.dependencies != null)
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  onPressed: () => showBotsStore(
+                                    context,
+                                    widget.dependencies!,
+                                  ),
+                                  icon: const Icon(Icons.storefront_outlined),
+                                  label: const Text('Browse themes in Store'),
+                                ),
+                              ),
+                          ],
+                        );
+                      }),
+                      const SizedBox(height: AppSpacing.lg),
+                      const _Label('Light / dark'),
                       SizedBox(
                         width: double.infinity,
                         child: SegmentedButton<ThemeMode>(
@@ -298,20 +349,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
-                      const _Label('Accent color'),
-                      Wrap(
-                        spacing: AppSpacing.sm,
-                        runSpacing: AppSpacing.sm,
-                        children: _accents
-                            .map(
-                              (color) => _AccentChoice(
-                                color: color,
-                                selected: settings.accent == color,
-                                onTap: () => settings.setAccent(color),
-                              ),
-                            )
-                            .toList(),
-                      ),
+                      Builder(builder: (context) {
+                        final packs = ThemePackScope.maybeOf(context);
+                        final pack =
+                            packs?.pack ?? DefaultThemePacks.sky;
+                        final options = pack.selectablePalettes;
+                        final selected = pack.resolvePalette(
+                          paletteId: settings.paletteId,
+                          accent: settings.accent,
+                        );
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _Label('${pack.meta.name} palette'),
+                            const SizedBox(height: AppSpacing.sm),
+                            Wrap(
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.sm,
+                              children: [
+                                for (final option in options)
+                                  _AccentChoice(
+                                    color: option.accent,
+                                    label: option.label,
+                                    selected: selected.id == option.id,
+                                    onTap: () => settings.setPalette(option),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        );
+                      }),
                       const SizedBox(height: AppSpacing.lg),
                       Row(
                         children: [
@@ -363,7 +430,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
-                _Section(
+                  ),
+                ThemeSlotHost(
+                  slot: FeatureSlots.settingsAccount,
+                  child: _Section(
                   title: 'Account & identity',
                   icon: Icons.manage_accounts_outlined,
                   children: [
@@ -385,6 +455,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       subtitle: 'Services, apps and wallets',
                     ),
                   ],
+                ),
                 ),
                 if (widget.dependencies != null)
                   _Section(
@@ -479,7 +550,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
-                _Section(
+                ThemeSlotHost(
+                  slot: FeatureSlots.settingsNotifications,
+                  child: _Section(
                   title: 'Notifications',
                   icon: Icons.notifications_none_rounded,
                   children: [
@@ -535,6 +608,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
+                ),
+                ThemeSlotHost(
+                  slot: FeatureSlots.settingsAdvanced,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                 _Section(
                   title: 'Privacy & security',
                   icon: Icons.lock_outline_rounded,
@@ -631,6 +710,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
+                    ],
+                  ),
+                ),
                 ],
               ),
             ),
@@ -639,26 +721,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  static const _accents = [
-    Color(0xFF8B7BFF),
-    Colors.red,
-    Colors.pink,
-    Colors.purple,
-    Colors.deepPurple,
-    Colors.indigo,
-    Colors.blue,
-    Colors.lightBlue,
-    Colors.cyan,
-    Colors.teal,
-    Colors.green,
-    Colors.lightGreen,
-    Colors.lime,
-    Colors.amber,
-    Colors.orange,
-    Colors.deepOrange,
-    Colors.brown,
-    Colors.blueGrey,
-  ];
 }
 
 class _AccountCard extends StatelessWidget {
@@ -681,21 +743,27 @@ class _AccountCard extends StatelessWidget {
         ? 'ME'
         : handle.substring(0, 1).toUpperCase();
     final Widget avatar = dependencies == null
-        ? HaloRing(
-            accent: scheme.primary,
-            child: CircleAvatar(
-              radius: 30,
-              backgroundColor: scheme.primary,
-              foregroundColor: scheme.onPrimary,
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
+        ? Builder(builder: (context) {
+            const size = 60.0;
+            final corners = context.avatarBorderRadius(size);
+            return HaloRing(
+              accent: scheme.primary,
+              borderRadius: corners,
+              child: AvatarFace(
+                size: size,
+                borderRadius: corners,
+                backgroundColor: scheme.primary,
+                child: Text(
+                  initials,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onPrimary,
+                  ),
                 ),
               ),
-            ),
-          )
+            );
+          })
         : AvatarEditor(
             service: dependencies!.service,
             avatar: dependencies!.sessionController.avatar,
@@ -707,7 +775,6 @@ class _AccountCard extends StatelessWidget {
             onChanged: dependencies!.sessionController.setAvatar,
           );
     return SoftCard(
-      radius: AppShape.card,
       padding: const EdgeInsets.all(20),
       child: Row(
         children: [
@@ -885,33 +952,38 @@ class _AccentChoice extends StatelessWidget {
     required this.color,
     required this.selected,
     required this.onTap,
+    this.label,
   });
   final Color color;
   final bool selected;
   final VoidCallback onTap;
+  final String? label;
   @override
   Widget build(BuildContext context) {
     final onAccent = color.computeLuminance() > 0.45
         ? Colors.black87
         : Colors.white;
-    return InkWell(
-      onTap: onTap,
-      customBorder: const CircleBorder(),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: selected
-                ? Theme.of(context).colorScheme.onSurface
-                : Colors.transparent,
-            width: 3,
+    return Tooltip(
+      message: label ?? '',
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected
+                  ? Theme.of(context).colorScheme.onSurface
+                  : Colors.transparent,
+              width: 3,
+            ),
           ),
+          child: selected ? Icon(Icons.check_rounded, color: onAccent) : null,
         ),
-        child: selected ? Icon(Icons.check_rounded, color: onAccent) : null,
       ),
     );
   }

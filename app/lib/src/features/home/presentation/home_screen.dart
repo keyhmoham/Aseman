@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/post.dart';
 import '../../../data/repositories/market_repository.dart';
@@ -135,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     title: 'Wallet balance',
                                     value: formatLedgerCredits(_balance),
                                     change: 'from finance.wallet',
-                                    color: AppColors.success),
+                                    color: AppColors.successOf(context)),
                                 const SizedBox(height: 12),
                                 AppPanel(
                                     title: 'Active agents',
@@ -154,7 +155,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 .map((b) => _AgentRow(
                                                     b,
                                                     b.status == 'running'
-                                                        ? AppColors.success
+                                                        ? AppColors.successOf(context)
                                                         : Theme.of(context)
                                                             .colorScheme
                                                             .onSurfaceVariant,
@@ -207,7 +208,7 @@ class _MarketTile extends StatelessWidget {
                         )),
                 Text('${up ? '+' : ''}${quote.change}%',
                     style: TextStyle(
-                        color: up ? AppColors.success : AppColors.danger,
+                        color: up ? AppColors.successOf(context) : AppColors.dangerOf(context),
                         fontSize: 11,
                         fontWeight: FontWeight.w700))
               ]))
@@ -252,6 +253,9 @@ class _FeedCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final tone = authorId.isNotEmpty
+        ? ThemeRoles.identity(context, authorId)
+        : AppColors.primaryOf(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Container(
@@ -260,7 +264,7 @@ class _FeedCard extends StatelessWidget {
             AppSurfaces.cardDecoration(context, radius: AppShape.inner),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           AppAvatar(initials,
-              color: color, avatar: avatar, identity: authorId),
+              color: tone, avatar: avatar, identity: authorId),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
               child: Column(
@@ -273,7 +277,7 @@ class _FeedCard extends StatelessWidget {
                               .textTheme
                               .titleSmall
                               ?.copyWith(fontWeight: FontWeight.w800))),
-                  StatusTag(tag, color)
+                  StatusTag(tag, tone)
                 ]),
                 const SizedBox(height: AppSpacing.xs),
                 Text(body,

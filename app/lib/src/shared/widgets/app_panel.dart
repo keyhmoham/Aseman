@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/theme_chrome.dart';
 import 'sky_ui.dart';
 
 /// Titled content block used in sidebars and feature pages.
 ///
-/// Soft gradient surface (no nested backdrop blur) so stacks of panels stay
-/// cheap to paint while matching the switcher / You-tab language.
+/// Quiet pack surface — accent only on the optional leading glyph.
 class AppPanel extends StatelessWidget {
   const AppPanel(
       {super.key,
@@ -27,7 +27,7 @@ class AppPanel extends StatelessWidget {
   /// Optional leading glyph for section identity.
   final IconData? icon;
 
-  /// Accent wash for the soft surface.
+  /// Accent for the leading glyph well only (not the card fill).
   final Color? accent;
 
   @override
@@ -35,8 +35,6 @@ class AppPanel extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final accentColor = accent ?? scheme.primary;
     return SoftCard(
-      accent: accentColor,
-      secondary: scheme.tertiary,
       radius: AppShape.inner,
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.md - 1, AppSpacing.sm + 2, AppSpacing.md - 1, AppSpacing.md - 1),
@@ -46,9 +44,8 @@ class AppPanel extends StatelessWidget {
             Container(
               width: 28,
               height: 28,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(9),
-                color: accentColor.withValues(alpha: .14),
+              decoration: context.iconWellDecoration(
+                size: 28,
               ),
               child: Icon(icon, size: 15, color: accentColor),
             ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../app_dependencies.dart';
 import '../../../../core/theme/app_shape.dart';
+import '../../../../core/theme/theme_roles.dart';
 import '../../../../data/models/space.dart';
 import '../../../../shared/widgets/overlay_panels.dart';
 import '../../../../shared/widgets/skeleton.dart';
@@ -231,7 +232,7 @@ class _ForwardMessageSheetState extends State<ForwardMessageSheet> {
                 filled: true,
                 fillColor: scheme.surfaceContainerHighest.withValues(alpha: .55),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppShape.control),
+                  borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
                   borderSide: BorderSide.none,
                 ),
               ),
@@ -393,7 +394,7 @@ class _Preview extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: .55),
-        borderRadius: BorderRadius.circular(AppShape.inner),
+        borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
         border: Border.all(
             color: scheme.outlineVariant.withValues(alpha: .4)),
       ),
@@ -471,7 +472,7 @@ class _ChatRow extends StatelessWidget {
             : 'Room · ${chat.spaceName}';
     return Material(
       color: selected
-          ? scheme.primaryContainer.withValues(alpha: .35)
+          ? ThemeRoles.selectedFill(context)
           : Colors.transparent,
       borderRadius: BorderRadius.circular(14),
       clipBehavior: Clip.antiAlias,

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/theme_roles.dart';
+import '../../../core/theme/app_shape.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import 'markup_document.dart';
 import 'rich_post_content.dart';
@@ -415,7 +418,7 @@ class _MarkupDesignerState extends State<MarkupDesigner> {
     proxyDecorator: (child, _, animation) => Material(
       color: Colors.transparent,
       elevation: 6,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: AppShape.borderRadius(context, 16),
       child: child,
     ),
     itemBuilder: (context, i) {
@@ -478,7 +481,7 @@ class _MarkupDesignerState extends State<MarkupDesigner> {
               color: _tooLong
                   ? scheme.error
                   : length > max * .9
-                  ? Colors.orange
+                  ? AppColors.warningOf(context)
                   : scheme.primary,
             ),
           ),
@@ -601,7 +604,7 @@ class _FormatBar extends StatelessWidget {
     return TextFieldTapRegion(
       child: Container(
         decoration: BoxDecoration(
-          color: scheme.primaryContainer.withValues(alpha: .35),
+          color: ThemeRoles.wellFill(context),
           borderRadius: BorderRadius.circular(14),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -697,7 +700,7 @@ class _BlockCard extends StatelessWidget {
             color: active
                 ? scheme.surfaceContainerLow
                 : scheme.surfaceContainerLow.withValues(alpha: .6),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: AppShape.borderRadius(context, 16),
             border: Border.all(
               color: active
                   ? scheme.primary.withValues(alpha: .7)
@@ -818,7 +821,7 @@ class _BlockCard extends StatelessWidget {
                 : '',
             isDense: true,
             underline: const SizedBox.shrink(),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppShape.borderRadius(context, 12),
             style: TextStyle(fontSize: 12, color: scheme.onSurface),
             items: [
               for (final l in designCodeLanguages)
@@ -1277,7 +1280,7 @@ class _TableEditor extends StatelessWidget {
           child: Container(
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppShape.borderRadius(context, 12),
               border: Border.all(
                 color: scheme.outlineVariant.withValues(alpha: .7),
               ),
@@ -1596,7 +1599,7 @@ class _Preview extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: .35),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppShape.borderRadius(context, 16),
         border: Border.all(color: scheme.outlineVariant.withValues(alpha: .5)),
       ),
       child: markup.isEmpty

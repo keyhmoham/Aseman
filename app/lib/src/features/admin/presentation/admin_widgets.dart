@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/theme_chrome.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/glass_surface.dart';
@@ -67,9 +69,9 @@ AdminTone adminTone(String status) {
 }
 
 Color adminToneColor(BuildContext context, AdminTone tone) => switch (tone) {
-      AdminTone.ok => AppColors.success,
-      AdminTone.warn => AppColors.warning,
-      AdminTone.bad => AppColors.danger,
+      AdminTone.ok => AppColors.successOf(context),
+      AdminTone.warn => AppColors.warningOf(context),
+      AdminTone.bad => AppColors.dangerOf(context),
       AdminTone.neutral => Theme.of(context).colorScheme.onSurfaceVariant,
     };
 
@@ -82,19 +84,8 @@ IconData adminToneIcon(AdminTone tone) => switch (tone) {
 
 /// Categorical colours for chart series, in a fixed order so the same slot
 /// always means the same colour on a page.
-List<Color> adminPalette(BuildContext context) {
-  final scheme = Theme.of(context).colorScheme;
-  return [
-    scheme.primary,
-    AppColors.cyan,
-    AppColors.success,
-    AppColors.warning,
-    scheme.tertiary,
-    AppColors.danger,
-    const Color(0xFFFF8AD8),
-    const Color(0xFFA5E36B),
-  ];
-}
+List<Color> adminPalette(BuildContext context) =>
+    ThemeRoles.identityPool(context);
 
 /// A key figure. [progress] adds a thin meter under the value, [footer] any
 /// small visual (a sparkline, a stacked bar).
@@ -135,7 +126,7 @@ class AdminStatCard extends StatelessWidget {
               decoration: ShapeDecoration(
                 color: accent.withValues(alpha: .16),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                    borderRadius: AppShape.borderRadius(context, 12)),
               ),
               child: Icon(icon, size: 19, color: accent),
             ),
@@ -196,7 +187,7 @@ class AdminStatCard extends StatelessWidget {
       ]),
     );
     return GlassSurface(
-      borderRadius: BorderRadius.circular(AppShape.inner + 4),
+      borderRadius: BorderRadius.circular(AppShape.innerOf(context)+ 4),
       onTap: onTap,
       child: body,
     );
@@ -227,7 +218,7 @@ class AdminSectionCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     // Glass Material so list tiles inside the card paint ink on the frost.
     return GlassSurface(
-      borderRadius: BorderRadius.circular(AppShape.card),
+      borderRadius: BorderRadius.circular(AppShape.cardOf(context)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 14, 0),
@@ -291,10 +282,10 @@ class AdminHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final background = tone == null
-        ? scheme.primaryContainer
-        : Color.alphaBlend(tone!.withValues(alpha: .22), scheme.surface);
+        ? ThemeRoles.selectedFill(context)
+        : Color.alphaBlend(tone!.withValues(alpha: .16), scheme.surface);
     final foreground =
-        tone == null ? scheme.onPrimaryContainer : scheme.onSurface;
+        tone == null ? ThemeRoles.selectedInk(context) : scheme.onSurface;
     final text = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -325,7 +316,7 @@ class AdminHeroCard extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(AppShape.card + 4),
+        borderRadius: BorderRadius.circular(AppShape.cardOf(context)+ 4),
       ),
       child: LayoutBuilder(builder: (context, constraints) {
         if (visual == null) return text;
@@ -397,8 +388,10 @@ class AdminAvatar extends StatelessWidget {
         ? '?'
         : words.take(2).map((w) => w[0].toUpperCase()).join();
     final color = palette[name.hashCode.abs() % palette.length];
-    final fallback = CircleAvatar(
-      radius: size / 2,
+    final corners = context.avatarBorderRadius(size);
+    final fallback = AvatarFace(
+      size: size,
+      borderRadius: corners,
       backgroundColor: color.withValues(alpha: .2),
       child: icon != null
           ? Icon(icon, size: size * .5, color: color)
@@ -410,7 +403,13 @@ class AdminAvatar extends StatelessWidget {
     );
     return HaloRing(
       accent: color,
-      child: AvatarPicture(avatar: avatar, size: size, fallback: fallback),
+      borderRadius: corners,
+      child: AvatarPicture(
+        avatar: avatar,
+        size: size,
+        borderRadius: corners,
+        fallback: fallback,
+      ),
     );
   }
 }
@@ -612,7 +611,7 @@ class AdminDataTable extends StatelessWidget {
       color: scheme.surfaceContainerLow,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.card - 4)),
+          borderRadius: BorderRadius.circular(AppShape.cardOf(context)- 4)),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: SizedBox(
@@ -642,7 +641,7 @@ class AdminDataTable extends StatelessWidget {
             for (var rowIndex = 0; rowIndex < rows.length; rowIndex++)
               Material(
                 color: selected?.call(rowIndex) == true
-                    ? scheme.secondaryContainer.withValues(alpha: .6)
+                    ? ThemeRoles.selectedFill(context)
                     : Colors.transparent,
                 child: InkWell(
                   onTap: onRowTap == null ? null : () => onRowTap!(rowIndex),
@@ -685,23 +684,24 @@ class AdminLiveChart extends StatelessWidget {
     required this.samples,
     this.subtitle,
     this.max = 100,
-    this.color = AppColors.cyan,
+    this.color,
   });
   final String label;
   final String value;
   final String? subtitle;
   final List<double> samples;
   final double max;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final tone = color ?? AppColors.cyanOf(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(AppShape.card),
+        borderRadius: BorderRadius.circular(AppShape.cardOf(context)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -714,7 +714,7 @@ class AdminLiveChart extends StatelessWidget {
           ),
           Text(value,
               style: TextStyle(
-                  color: color,
+                  color: tone,
                   fontSize: 26,
                   letterSpacing: -.5,
                   fontWeight: FontWeight.w800)),
@@ -737,7 +737,7 @@ class AdminLiveChart extends StatelessWidget {
                   painter: _LineChartPainter(
                       samples: samples,
                       max: max,
-                      color: color,
+                      color: tone,
                       grid: scheme.outlineVariant),
                 ),
         ),
@@ -1175,9 +1175,9 @@ class AdminGauge extends StatelessWidget {
     final v = value.isFinite ? value.clamp(0.0, 1.0) : 0.0;
     final tint = color ??
         (v >= .9
-            ? AppColors.danger
+            ? AppColors.dangerOf(context)
             : v >= .75
-                ? AppColors.warning
+                ? AppColors.warningOf(context)
                 : scheme.primary);
     return SizedBox(
       width: size,
@@ -1349,11 +1349,11 @@ class AdminEmptyState extends StatelessWidget {
             width: 64,
             height: 64,
             decoration: ShapeDecoration(
-                color: scheme.secondaryContainer,
+                color: ThemeRoles.wellFill(context),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(22))),
             child: Icon(icon ?? Icons.inbox_outlined,
-                size: 30, color: scheme.onSecondaryContainer),
+                size: 30, color: ThemeRoles.wellInk(context)),
           ),
           const SizedBox(height: 14),
           Text(title,

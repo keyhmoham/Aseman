@@ -97,8 +97,8 @@ class _AppFrontendScreenState extends State<AppFrontendScreen> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.error_outline_rounded,
-                size: 44, color: AppColors.danger),
+            Icon(Icons.error_outline_rounded,
+                size: 44, color: AppColors.dangerOf(context)),
             const SizedBox(height: 12),
             const Text('Could not load the app',
                 style: TextStyle(fontWeight: FontWeight.w800)),

@@ -5,6 +5,8 @@ library;
 
 import 'dart:async';
 import 'dart:math' as math;
+import '../../../core/theme/app_shape.dart';
+import '../../../core/theme/theme_roles.dart';
 
 import 'package:aseman/src/elpian/core/lenient.dart';
 import 'package:flutter/material.dart';
@@ -274,7 +276,7 @@ class _KitCalendarState extends State<KitCalendar> {
           Container(
             margin: const EdgeInsets.only(bottom: 6),
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            decoration: BoxDecoration(color: s.surfaceContainerHigh, borderRadius: BorderRadius.circular(16)),
+            decoration: BoxDecoration(color: s.surfaceContainerHigh, borderRadius: AppShape.borderRadius(context, 16)),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Container(width: 4, height: 32, decoration: BoxDecoration(color: colorOf(e), borderRadius: BorderRadius.circular(2))),
               const SizedBox(width: 12),
@@ -332,7 +334,7 @@ class _KitKanbanState extends State<KitKanban> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: s.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppShape.borderRadius(context, 16),
           border: color == null ? null : Border(left: BorderSide(color: color, width: 4)),
           boxShadow: feedback ? const [BoxShadow(color: Color(0x33000000), blurRadius: 16, offset: Offset(0, 6))] : null,
         ),
@@ -366,9 +368,9 @@ class _KitKanbanState extends State<KitKanban> {
       if (feedback) return Material(type: MaterialType.transparency, child: body);
       final tappable = Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppShape.borderRadius(context, 16),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppShape.borderRadius(context, 16),
           onTap: () => _fire(widget.on, 'select', {'column': c, 'index': i, 'card': m, 'columnId': columns[c]['id'] ?? columns[c]['title']}),
           child: body,
         ),
@@ -391,8 +393,8 @@ class _KitKanbanState extends State<KitKanban> {
         width: colW,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: _over == c ? s.secondaryContainer : s.surfaceContainer,
-          borderRadius: BorderRadius.circular(24),
+          color: _over == c ? ThemeRoles.selectedFill(context) : s.surfaceContainer,
+          borderRadius: AppShape.borderRadius(context, 24),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
           Row(children: [
@@ -492,7 +494,7 @@ class _KitCarouselState extends State<KitCarousel> {
       if (img.isNotEmpty)
         Image.network(img, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: s.surfaceContainerHighest))
       else
-        Container(color: s.primaryContainer),
+        Container(color: ThemeRoles.wellFill(context)),
       if (m['title'] != null || m['subtitle'] != null)
         Align(
           alignment: Alignment.bottomLeft,
@@ -536,7 +538,7 @@ class _KitCarouselState extends State<KitCarousel> {
                 curve: Curves.easeOutCubic,
                 padding: EdgeInsets.symmetric(horizontal: 6, vertical: i == _page ? 0 : 10),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: AppShape.borderRadius(context, 28),
                   child: widget.children.isNotEmpty ? widget.children[i] : _item(context, items[i]),
                 ),
               ),
@@ -700,7 +702,7 @@ class KitChat extends StatelessWidget {
                 constraints: BoxConstraints(maxWidth: maxBubble),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: mine ? s.primaryContainer : s.surfaceContainerHigh,
+                  color: mine ? ThemeRoles.bubbleFill(context) : s.surfaceContainerHigh,
                   borderRadius: BorderRadius.only(
                     topLeft: !mine && prevSame ? small : big,
                     bottomLeft: !mine && nextSame ? small : (mine ? big : small),
@@ -709,7 +711,7 @@ class KitChat extends StatelessWidget {
                   ),
                 ),
                 child: Text.rich(
-                  TextSpan(children: inlineSpans(asText(m['text']), theme.textTheme.bodyMedium!.copyWith(color: mine ? s.onPrimaryContainer : s.onSurface, height: 1.4), p)),
+                  TextSpan(children: inlineSpans(asText(m['text']), theme.textTheme.bodyMedium!.copyWith(color: s.onSurface, height: 1.4), p)),
                 ),
               );
               final meta = (!nextSame && (m['time'] != null || (!mine && m['name'] != null)))
@@ -771,7 +773,7 @@ class _TypingState extends State<_Typing> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(color: widget.bg, borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(color: widget.bg, borderRadius: AppShape.borderRadius(context, 20)),
         child: AnimatedBuilder(
           animation: _a,
           builder: (context, _) => Row(mainAxisSize: MainAxisSize.min, children: [
@@ -857,7 +859,7 @@ class _KitCountdownState extends State<KitCountdown> {
       if (widget.props['showSeconds'] != false) (left.inSeconds % 60, 'sec'),
     ];
     final numStyle = (hero ? theme.textTheme.displayMedium : (compact ? theme.textTheme.titleLarge : theme.textTheme.headlineMedium))!
-        .copyWith(fontWeight: FontWeight.w700, fontFeatures: const [FontFeature.tabularFigures()], color: s.onPrimaryContainer);
+        .copyWith(fontWeight: FontWeight.w700, fontFeatures: const [FontFeature.tabularFigures()], color: ThemeRoles.wellInk(context));
     return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
       if (widget.props['label'] != null) ...[
         Text(asText(widget.props['label']), style: theme.textTheme.labelLarge?.copyWith(color: s.onSurfaceVariant)),
@@ -869,10 +871,10 @@ class _KitCountdownState extends State<KitCountdown> {
           Container(
             constraints: BoxConstraints(minWidth: hero ? 96 : (compact ? 48 : 68)),
             padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12, vertical: compact ? 6 : 10),
-            decoration: BoxDecoration(color: s.primaryContainer, borderRadius: BorderRadius.circular(compact ? 12 : 20)),
+            decoration: BoxDecoration(color: ThemeRoles.wellFill(context), borderRadius: BorderRadius.circular(compact ? 12 : 20)),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Text(part.$1.toString().padLeft(2, '0'), style: numStyle),
-              Text(part.$2, style: theme.textTheme.labelSmall?.copyWith(color: s.onPrimaryContainer.withValues(alpha: .8))),
+              Text(part.$2, style: theme.textTheme.labelSmall?.copyWith(color: ThemeRoles.wellInk(context).withValues(alpha: .8))),
             ]),
           ),
         ],
@@ -995,8 +997,8 @@ class KitEmptyState extends StatelessWidget {
         Container(
           width: compact ? 56 : 80,
           height: compact ? 56 : 80,
-          decoration: BoxDecoration(color: s.secondaryContainer, borderRadius: BorderRadius.circular(compact ? 20 : 28)),
-          child: Icon(iconFor(props['icon']) ?? Icons.inbox_rounded, size: compact ? 28 : 38, color: s.onSecondaryContainer),
+          decoration: BoxDecoration(color: ThemeRoles.wellFill(context), borderRadius: BorderRadius.circular(compact ? 20 : 28)),
+          child: Icon(iconFor(props['icon']) ?? Icons.inbox_rounded, size: compact ? 28 : 38, color: ThemeRoles.wellInk(context)),
         ),
         SizedBox(height: compact ? 10 : 16),
         Text(asText(props['title'] ?? 'Nothing here yet'), textAlign: TextAlign.center, style: (compact ? theme.textTheme.titleMedium : theme.textTheme.titleLarge)?.copyWith(fontWeight: FontWeight.w700)),

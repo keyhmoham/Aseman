@@ -12,7 +12,7 @@ import '../domain/feed_post.dart';
 import 'post_actions.dart';
 import 'rich_post_content.dart';
 import 'rich_post_parser.dart';
-import 'search_feed_view_model.dart' show feedColorFor;
+import '../../../core/theme/theme_roles.dart';
 import 'share_post_sheet.dart' show SharePostPreview;
 
 /// Opens the comments of [post]: a centered modal on wide screens and a
@@ -370,7 +370,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: scheme.primaryContainer,
+                    color: ThemeRoles.selectedFill(context),
                     borderRadius: BorderRadius.circular(99),
                   ),
                   child: Text(
@@ -378,7 +378,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
-                      color: scheme.onPrimaryContainer,
+                      color: scheme.primary,
                     ),
                   ),
                 )
@@ -490,7 +490,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
               padding: const EdgeInsets.only(bottom: 4),
               child: AppAvatar(
                 initialsOf(_myProfile?.name ?? _myHandle),
-                color: feedColorFor(_me),
+                color: ThemeRoles.identity(context, _me),
                 radius: 18,
                 avatar: _myProfile?.avatar,
                 identity: _me,
@@ -636,7 +636,7 @@ class _CommentTile extends StatelessWidget {
               customBorder: const CircleBorder(),
               child: AppAvatar(
                 initialsOf(name),
-                color: feedColorFor(comment.authorId),
+                color: ThemeRoles.identity(context, comment.authorId),
                 radius: 17,
                 avatar: comment.authorAvatar,
                 identity: comment.authorId,
@@ -718,7 +718,7 @@ class _CommentTile extends StatelessWidget {
                             : Icons.favorite_border_rounded,
                         label: comment.likes > 0 ? '${comment.likes}' : 'Like',
                         tooltip: comment.likedByMe ? 'Unlike' : 'Like',
-                        color: comment.likedByMe ? Colors.pinkAccent : null,
+                        color: comment.likedByMe ? scheme.primary : null,
                         onTap: onLike,
                       ),
                       _TextAction(
@@ -920,10 +920,10 @@ class _EmptyState extends StatelessWidget {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: scheme.primaryContainer.withValues(alpha: .6),
+              color: scheme.surfaceContainerHighest,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 30, color: scheme.onPrimaryContainer),
+            child: Icon(icon, size: 30, color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 14),
           Text(

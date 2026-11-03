@@ -3,10 +3,12 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
-import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_surfaces.dart';
+import '../../core/theme/shell_layout.dart';
+import '../../core/theme/shell_layout_builder.dart';
+import '../../core/theme/theme_ui_spec.dart';
 import '../../features/account/presentation/account_panel.dart';
 import '../../features/admin/presentation/admin_screen.dart';
 import '../../features/developer/presentation/developer_console.dart';
@@ -16,6 +18,7 @@ import '../../features/settings/presentation/settings_screen.dart';
 import 'avatar_editor.dart';
 import 'overlay_panels.dart';
 import 'sky_ui.dart';
+import 'theme_slot_host.dart';
 
 enum ProfileAction {
   store,
@@ -65,7 +68,7 @@ Future<void> showProfileMenu(
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Close profile menu',
-      barrierColor: AppSurfaces.barrier,
+      barrierColor: AppSurfaces.barrierOf(context),
       transitionDuration: const Duration(milliseconds: 420),
       pageBuilder: (dialogContext, _, __) => SafeArea(
         child: Align(
@@ -146,6 +149,13 @@ class ProfileMenuBody extends StatelessWidget {
     final session = dependencies.sessionController.session;
     final handle = session?.handle ?? 'guest';
     final initials = handle.isEmpty ? '?' : handle[0].toUpperCase();
+    final entries = profileEntriesOf(context).toSet();
+    final showStore = entries.contains(FeatureSlots.profileStore);
+    final showWallet = entries.contains(FeatureSlots.profileWallet);
+    final showSettings = entries.contains(FeatureSlots.profileSettings);
+    final showAdminEntry =
+        showAdmin && entries.contains(FeatureSlots.profileAdmin);
+    final islands = themeUiOf(context).islandsFor(ThemeIslandPlacement.profile);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -164,37 +174,50 @@ class ProfileMenuBody extends StatelessWidget {
             initials: initials,
             accountId: session?.accountId ?? '',
             loggedIn: session?.isLoggedIn ?? false,
-            onOpenSettings: () => onSelect(ProfileAction.settings),
+            onOpenSettings: showSettings
+                ? () => onSelect(ProfileAction.settings)
+                : null,
           ),
-          const SizedBox(height: AppSpacing.md),
-          FeatureStageCard(
-            title: 'Store',
-            eyebrow: 'Library · Market',
-            subtitle:
-                'Your bots and the marketplace, melted into one storefront',
-            icon: Icons.storefront_rounded,
-            accent: scheme.primary,
-            secondary: scheme.tertiary,
-            badges: const [
-              FeatureStageBadge(Icons.smart_toy_outlined, 'My bots'),
-              FeatureStageBadge(Icons.travel_explore_rounded, 'Market'),
-            ],
-            onTap: () => onSelect(ProfileAction.store),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          FeatureStageCard(
-            title: 'Wallet',
-            eyebrow: 'Balance · Usage',
-            subtitle: 'Credits, purchases and what each project spent',
-            icon: Icons.account_balance_wallet_rounded,
-            accent: AppColors.success,
-            secondary: scheme.primary,
-            badges: const [
-              FeatureStageBadge(Icons.payments_outlined, 'Credits'),
-              FeatureStageBadge(Icons.query_stats_rounded, 'Usage'),
-            ],
-            onTap: () => onSelect(ProfileAction.wallet),
-          ),
+          if (showStore) ...[
+            const SizedBox(height: AppSpacing.md),
+            ThemeSlotHost(
+              slot: FeatureSlots.profileStore,
+              child: FeatureStageCard(
+                title: 'Store',
+                eyebrow: 'Library · Market · Themes',
+                subtitle:
+                    'Agents, apps and theme packs in one storefront',
+                icon: Icons.storefront_rounded,
+                accent: scheme.primary,
+                secondary: scheme.tertiary,
+                badges: const [
+                  FeatureStageBadge(Icons.smart_toy_outlined, 'My bots'),
+                  FeatureStageBadge(Icons.travel_explore_rounded, 'Market'),
+                  FeatureStageBadge(Icons.palette_outlined, 'Themes'),
+                ],
+                onTap: () => onSelect(ProfileAction.store),
+              ),
+            ),
+          ],
+          if (showWallet) ...[
+            const SizedBox(height: AppSpacing.sm),
+            ThemeSlotHost(
+              slot: FeatureSlots.profileWallet,
+              child: FeatureStageCard(
+                title: 'Wallet',
+                eyebrow: 'Balance · Usage',
+                subtitle: 'Credits, purchases and what each project spent',
+                icon: Icons.account_balance_wallet_rounded,
+                accent: scheme.primary,
+                secondary: scheme.tertiary,
+                badges: const [
+                  FeatureStageBadge(Icons.payments_outlined, 'Credits'),
+                  FeatureStageBadge(Icons.query_stats_rounded, 'Usage'),
+                ],
+                onTap: () => onSelect(ProfileAction.wallet),
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
           QuietList(
             children: [
@@ -209,11 +232,23 @@ class ProfileMenuBody extends StatelessWidget {
                 label: 'Developer API',
                 onTap: () => onSelect(ProfileAction.developer),
               ),
-              if (showAdmin)
-                QuietTile(
-                  icon: Icons.admin_panel_settings_outlined,
-                  label: 'Admin console',
-                  onTap: () => onSelect(ProfileAction.admin),
+              if (showAdminEntry)
+                ThemeSlotHost(
+                  slot: FeatureSlots.profileAdmin,
+                  child: QuietTile(
+                    icon: Icons.admin_panel_settings_outlined,
+                    label: 'Admin console',
+                    onTap: () => onSelect(ProfileAction.admin),
+                  ),
+                ),
+              for (final island in islands)
+                ThemeSlotHost(
+                  slot: island.id,
+                  child: QuietTile(
+                    icon: island.iconData,
+                    label: island.title,
+                    onTap: () => openThemeIslandPage(context, island),
+                  ),
                 ),
             ],
           ),
@@ -247,7 +282,7 @@ class _IdentityMasthead extends StatelessWidget {
   final String initials;
   final String accountId;
   final bool loggedIn;
-  final VoidCallback onOpenSettings;
+  final VoidCallback? onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -303,11 +338,12 @@ class _IdentityMasthead extends StatelessWidget {
               ],
             ),
           ),
-          IconButton.filledTonal(
-            tooltip: 'Settings',
-            onPressed: onOpenSettings,
-            icon: const Icon(Icons.settings_outlined, size: 20),
-          ),
+          if (onOpenSettings != null)
+            IconButton.filledTonal(
+              tooltip: 'Settings',
+              onPressed: onOpenSettings,
+              icon: const Icon(Icons.settings_outlined, size: 20),
+            ),
         ],
       ),
     );

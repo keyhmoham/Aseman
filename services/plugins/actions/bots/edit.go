@@ -31,8 +31,8 @@ func editActions(s *Service) []api.Action {
 	return []api.Action{
 		helper.Action{Namespace: "bots", Name: "bot_edit", Summary: "Edit and activate an agent definition", Handler: s.editAction},
 		helper.Action{Namespace: "bots", Name: "bot_detail", Summary: "Read bot descriptor and authorized configuration", Handler: s.detailAction},
-		helper.Action{Namespace: "bots", Name: "agent_samples", Summary: "Admin: the sample agents and which are already on this node", Handler: s.agentSamples},
-		helper.Action{Namespace: "bots", Name: "agent_import_samples", Summary: "Admin: add the sample agents to the catalog", Handler: s.agentImportSamples},
+		helper.Action{Namespace: "bots", Name: "agent_samples", Summary: "Admin: the Agency Agents catalogue and which are already on this node", Handler: s.agentSamples},
+		helper.Action{Namespace: "bots", Name: "agent_import_samples", Summary: "Admin: add the Agency Agents catalogue to the catalog", Handler: s.agentImportSamples},
 		bridge.ActionAlias(s.K, "bots", "llm_catalog", "llm", "llm_models", "List enabled LLM models"),
 	}
 }

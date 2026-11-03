@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/theme_chrome.dart';
 import '../../../shared/widgets/glass_surface.dart';
 import '../domain/desk_models.dart';
 import 'tool_avatar.dart';
@@ -98,30 +99,19 @@ class _CardWindowState extends State<CardWindow>
           !RegExp(r'^[0-9a-f]{20,}$').hasMatch(w.openedBy))
         'by ${w.openedBy}',
     ].join('  ·  ');
-    final radius = BorderRadius.circular(widget.maximized ? 20 : 28);
+    final shell = ThemeChrome.floatingShell(
+      context,
+      lift: _dragging ? 8 : (widget.front ? 4 : 0),
+      radius: widget.maximized ? context.radiusInner : null,
+      front: widget.front || _dragging,
+    );
+    final radius = shell.borderRadius is BorderRadius
+        ? shell.borderRadius as BorderRadius
+        : context.cardBorderRadius;
     final card = DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black
-                  .withValues(alpha: widget.front || _dragging ? .22 : .10),
-              blurRadius: _dragging
-                  ? 40
-                  : widget.front
-                      ? 28
-                      : 14,
-              offset: Offset(
-                  0,
-                  _dragging
-                      ? 18
-                      : widget.front
-                          ? 10
-                          : 4)),
-        ],
-      ),
+      decoration: shell,
       child: GlassSurface(
-      alpha: widget.front ? AppSurfaces.overlayAlpha : AppSurfaces.cardAlpha,
+      alpha: widget.front ? AppSurfaces.overlayAlphaOf(context) : AppSurfaces.cardAlphaOf(context),
       borderRadius: radius,
       border: true,
       color: widget.front ? scheme.surfaceContainer : null,

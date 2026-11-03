@@ -28,3 +28,7 @@ func (p spaceInstallerBridge) AddBot(ctx context.Context, actor identity.ID, spa
 	err := bridge.Invoke(ctx, p.K, "spaces", "AddBot", []any{ctx, actor, spaceID, roomID, botID})
 	return err
 }
+
+func applyThemeListing(ctx context.Context, k api.Kernel, user, listingID identity.ID) error {
+	return bridge.Invoke(ctx, k, "themes", "ApplyFromListing", []any{ctx, user, listingID})
+}

@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import '../../../core/theme/app_shape.dart';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../data/models/space.dart';
 import '../../../elpian/core/media.dart';
 import '../../../shared/widgets/glass_surface.dart';
@@ -599,7 +601,7 @@ class FeedCanvas extends StatefulWidget {
 class _FeedCanvasState extends State<FeedCanvas> {
   static const _barSlot = 76.0;
 
-  /// Dim behind the toolbox. Lighter than [AppSurfaces.barrier] so the desk
+  /// Dim behind the toolbox. Lighter than [AppSurfaces.barrierOf(context)] so the desk
   /// still reads through the glass panel.
   static const _toolboxScrim = Color(0x47000000);
 
@@ -1083,8 +1085,8 @@ class _Taskbar extends StatelessWidget {
     final item = compact ? 42.0 : 48.0;
     final placed = controller.placements;
     return GlassSurface(
-      alpha: AppSurfaces.overlayAlpha,
-      blur: AppSurfaces.blurSigma,
+      alpha: AppSurfaces.overlayAlphaOf(context),
+      blur: AppSurfaces.blurSigmaOf(context),
       borderRadius: BorderRadius.circular(40),
       child: Padding(
         padding: EdgeInsets.symmetric(
@@ -1193,7 +1195,7 @@ class _BarButtonState extends State<_BarButton> {
                 decoration: BoxDecoration(
                   color: widget.selected
                       ? scheme.primary
-                      : scheme.secondaryContainer,
+                      : ThemeRoles.wellFill(context),
                   borderRadius: BorderRadius.circular(
                     widget.selected ? s * .3 : s / 2,
                   ),
@@ -1203,7 +1205,7 @@ class _BarButtonState extends State<_BarButton> {
                   size: s * .5,
                   color: widget.selected
                       ? scheme.onPrimary
-                      : scheme.onSecondaryContainer,
+                      : ThemeRoles.wellInk(context),
                 ),
               ),
             ),
@@ -1344,7 +1346,7 @@ class _Toolbox extends StatelessWidget {
               height: height,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: AppShape.borderRadius(context, 28),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: .22),
@@ -1354,9 +1356,9 @@ class _Toolbox extends StatelessWidget {
                   ],
                 ),
                 child: GlassSurface(
-                  alpha: AppSurfaces.overlayAlpha,
-                  blur: AppSurfaces.blurSigma,
-                  borderRadius: BorderRadius.circular(28),
+                  alpha: AppSurfaces.overlayAlphaOf(context),
+                  blur: AppSurfaces.blurSigmaOf(context),
+                  borderRadius: AppShape.borderRadius(context, 28),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -1636,7 +1638,7 @@ class _PinRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Material(
         color: scheme.surfaceContainerLow.withValues(alpha: .65),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppShape.borderRadius(context, 16),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
           child: Row(

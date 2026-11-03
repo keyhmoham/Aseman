@@ -4,6 +4,8 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 
+import '../../../core/theme/app_shape.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../core/utils/context_extensions.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/skeleton.dart';
@@ -540,10 +542,10 @@ class _HoverRowState extends State<_HoverRow> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: Material(
-        color: widget.selected ? scheme.primaryContainer : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
+        color: widget.selected ? ThemeRoles.selectedFill(context) : Colors.transparent,
+        borderRadius: AppShape.borderRadius(context, AppShape.control),
         child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: AppShape.borderRadius(context, AppShape.control),
           onTap: widget.onTap,
           onLongPress: () {
             final box = context.findRenderObject()! as RenderBox;

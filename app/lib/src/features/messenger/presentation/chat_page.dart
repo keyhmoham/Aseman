@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../../core/theme/app_shape.dart';
 
 import 'package:flutter/material.dart';
 
@@ -6,6 +7,8 @@ import '../../../app_dependencies.dart';
 import '../../../core/settings/app_settings.dart';
 import '../../../core/theme/app_surfaces.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_chrome.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../core/theme/halo_ring_cache.dart';
 import '../../../data/models/agent_humanoid.dart';
 import '../../../data/models/bot.dart';
@@ -831,9 +834,9 @@ class _CollapsingAgentHeader extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.fromLTRB(8, 4 + 2 * (1 - collapse), 8, 4),
         child: GlassSurface(
-          alpha: AppSurfaces.cardAlpha * (0.5 + 0.45 * collapse),
-          blur: AppSurfaces.blurSigma,
-          borderRadius: BorderRadius.circular(20),
+          alpha: AppSurfaces.cardAlphaOf(context) * (0.5 + 0.45 * collapse),
+          blur: AppSurfaces.blurSigmaOf(context),
+          borderRadius: AppShape.borderRadius(context, 20),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Row(
@@ -1088,15 +1091,19 @@ class ChatAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final peer = chat.peer;
+    final size = radius * 2;
+    final corners = context.avatarBorderRadius(size);
     if (chat.isAseman) {
       return HaloRing(
         identity: HaloRingCache.agent('aseman'),
         accent: scheme.primary,
-        child: CircleAvatar(
-          radius: radius,
+        borderRadius: corners,
+        child: AvatarFace(
+          size: size,
+          borderRadius: corners,
           backgroundColor: scheme.primary,
-          foregroundColor: scheme.onPrimary,
-          child: Icon(Icons.auto_awesome_rounded, size: radius),
+          child: Icon(Icons.auto_awesome_rounded,
+              size: radius, color: scheme.onPrimary),
         ),
       );
     }
@@ -1126,35 +1133,44 @@ class ChatAvatar extends StatelessWidget {
       return HaloRing(
         identity: HaloRingCache.person(peer?.id ?? ''),
         accent: scheme.secondary,
-        child: CircleAvatar(
-          radius: radius,
+        borderRadius: corners,
+        child: AvatarFace(
+          size: size,
+          borderRadius: corners,
           foregroundImage: picture,
-          onForegroundImageError: picture == null ? null : (_, __) {},
-          backgroundColor: scheme.secondaryContainer,
-          foregroundColor: scheme.onSecondaryContainer,
+          onImageError: picture == null ? null : (_, __) {},
+          backgroundColor: ThemeRoles.wellFill(context),
           child: Text(
-              name.isEmpty ? '?' : name.characters.first.toUpperCase(),
-              style: TextStyle(
-                  fontSize: radius * .8, fontWeight: FontWeight.w800)),
+            name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+            style: TextStyle(
+              fontSize: radius * .8,
+              fontWeight: FontWeight.w800,
+              color: ThemeRoles.wellInk(context),
+            ),
+          ),
         ),
       );
     }
     final label = chat.roomName.isEmpty ? '#' : chat.roomName;
-    // Circle fits the sweep ring — rounded squares clash with it.
-    final room = CircleAvatar(
-      radius: radius,
-      backgroundColor: scheme.primaryContainer,
-      foregroundColor: scheme.onPrimaryContainer,
+    final room = AvatarFace(
+      size: size,
+      borderRadius: corners,
+      backgroundColor: ThemeRoles.wellFill(context),
       child: Text(label.characters.first.toUpperCase(),
           style: TextStyle(
-              fontSize: radius * .8, fontWeight: FontWeight.w800)),
+              fontSize: radius * .8,
+              fontWeight: FontWeight.w800,
+              color: ThemeRoles.wellInk(context))),
     );
     return HaloRing(
       accent: scheme.primary,
+      borderRadius: corners,
       child: AvatarPicture(
-          avatar: chat.spaceAvatar,
-          size: radius * 2,
-          fallback: room),
+        avatar: chat.spaceAvatar,
+        size: size,
+        borderRadius: corners,
+        fallback: room,
+      ),
     );
   }
 }

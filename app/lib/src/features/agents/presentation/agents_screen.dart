@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_shape.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/services/aseman_service.dart';
@@ -461,11 +463,11 @@ class _AgentsTab extends StatelessWidget {
           FleetMetric(
               label: 'Total',
               value: '${agents.length}',
-              color: AppColors.primary),
+              color: AppColors.primaryOf(context)),
           FleetMetric(
               label: 'Running',
               value: '$running',
-              color: AppColors.success,
+              color: AppColors.successOf(context),
               live: running > 0),
         ]),
         const SizedBox(height: 14),
@@ -527,17 +529,17 @@ class _ToolsTab extends StatelessWidget {
             FleetMetric(
                 label: 'Total',
                 value: '${tools.length}',
-                color: AppColors.cyan),
+                color: AppColors.cyanOf(context)),
             FleetMetric(
                 label: 'Managed',
                 value:
                     '${tools.where((b) => b.toolModeLabel.startsWith('Managed')).length}',
-                color: AppColors.primary),
+                color: AppColors.primaryOf(context)),
             FleetMetric(
                 label: 'Installed',
                 value:
                     '${tools.where((b) => b.vmType == 'installed').length}',
-                color: AppColors.warning),
+                color: AppColors.warningOf(context)),
           ]),
           const SizedBox(height: 14),
           Wrap(spacing: gap, runSpacing: gap, children: [
@@ -563,9 +565,9 @@ class _ToolsTab extends StatelessWidget {
 }
 
 Color _statusColor(BuildContext context, String status) => switch (status) {
-      'running' => AppColors.success,
-      'paused' => AppColors.warning,
-      'failed' => AppColors.danger,
+      'running' => AppColors.successOf(context),
+      'paused' => AppColors.warningOf(context),
+      'failed' => AppColors.dangerOf(context),
       _ => Theme.of(context).colorScheme.onSurfaceVariant,
     };
 
@@ -605,7 +607,6 @@ class _AgentCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.sm - 2),
       child: SoftCard(
         showOrb: false,
-        accent: color,
         padding: const EdgeInsets.fromLTRB(
             AppSpacing.sm, AppSpacing.sm, AppSpacing.sm - 2, AppSpacing.sm),
         child: Row(children: [
@@ -651,14 +652,13 @@ class _AgentCard extends StatelessWidget {
                               )),
                     ),
                     const SizedBox(width: AppSpacing.xs),
-                    SoftMetaChip(label: 'AGENT', accent: color),
+                    SoftMetaChip(label: 'AGENT'),
                   ]),
                   const SizedBox(height: AppSpacing.xs - 1),
                   Wrap(spacing: 6, runSpacing: 6, children: [
                     SoftMetaChip(label: bot.vmType),
                     SoftMetaChip(
                       label: _statusLabel(bot.status),
-                      accent: color,
                       icon: running ? Icons.circle : null,
                     ),
                   ]),
@@ -682,7 +682,6 @@ class _AgentCard extends StatelessWidget {
                   ? Icons.stop_rounded
                   : Icons.play_arrow_rounded,
               onPressed: onToggle,
-              accent: running ? AppColors.danger : AppColors.success,
             ),
           ]),
         ]),
@@ -713,7 +712,6 @@ class _ToolCard extends StatelessWidget {
     return SoftCard(
       onTap: onOpen,
       showOrb: false,
-      accent: AppColors.cyan,
       padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -726,8 +724,8 @@ class _ToolCard extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  AppColors.cyan.withValues(alpha: .16),
-                  AppColors.cyan.withValues(alpha: .04),
+                  AppColors.cyanOf(context).withValues(alpha: .16),
+                  AppColors.cyanOf(context).withValues(alpha: .04),
                 ],
               ),
             ),
@@ -738,14 +736,14 @@ class _ToolCard extends StatelessWidget {
                 service: service,
                 avatar: bot.avatar,
                 initials: _initials(bot.name, 'T'),
-                color: AppColors.cyan,
+                color: AppColors.cyanOf(context),
                 radius: 12,
                 subject: 'app picture',
                 onChanged: onAvatar,
               ),
               const Spacer(),
               if (bot.hasFrontend)
-                const SoftMetaChip(label: 'ELPIAN', accent: AppColors.cyan),
+                const SoftMetaChip(label: 'ELPIAN'),
               IconButton(
                 tooltip: 'Edit',
                 visualDensity: VisualDensity.compact,
@@ -818,13 +816,11 @@ class _CapsuleButton extends StatelessWidget {
     required this.tooltip,
     required this.icon,
     required this.onPressed,
-    this.accent,
   });
 
   final String tooltip;
   final IconData icon;
   final VoidCallback onPressed;
-  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
@@ -834,7 +830,7 @@ class _CapsuleButton extends StatelessWidget {
       onPressed: onPressed,
       visualDensity: VisualDensity.compact,
       style: IconButton.styleFrom(
-        foregroundColor: accent ?? scheme.onSurfaceVariant,
+        foregroundColor: scheme.onSurfaceVariant,
         minimumSize: const Size(36, 36),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
@@ -1060,7 +1056,7 @@ class _AgentChatSheetState extends State<_AgentChatSheet> {
                   height: 40,
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: .14),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppShape.borderRadius(context, 12),
                     border: Border.all(
                         color: statusColor.withValues(alpha: .28)),
                   ),
@@ -1082,7 +1078,7 @@ class _AgentChatSheetState extends State<_AgentChatSheet> {
                         const SizedBox(height: 2),
                         Row(children: [
                           if (bot.status == 'running') ...[
-                            const _LiveDot(color: AppColors.success, size: 5),
+                            _LiveDot(color: AppColors.successOf(context), size: 5),
                             const SizedBox(width: 5),
                           ],
                           Text(_statusLabel(bot.status),
@@ -1138,7 +1134,7 @@ class _AgentChatSheetState extends State<_AgentChatSheet> {
                             constraints: const BoxConstraints(maxWidth: 320),
                             decoration: BoxDecoration(
                               color: isUser
-                                  ? scheme.primaryContainer
+                                  ? ThemeRoles.bubbleFill(context)
                                   : scheme.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(14),
                             ),

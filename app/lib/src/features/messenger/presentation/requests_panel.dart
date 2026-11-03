@@ -4,6 +4,8 @@ import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/aseman_tokens.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../data/models/space.dart';
 import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/avatar.dart';
@@ -144,11 +146,11 @@ class _PacketCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final peer = incoming ? packet.fromId : packet.toId;
     final (label, color, icon) = packet.isAsk
-        ? ('Question', AppColors.primary, Icons.help_outline_rounded)
+        ? ('Question', AppColors.primaryOf(context), Icons.help_outline_rounded)
         : packet.isAnswered
-            ? ('Answered', AppColors.success, Icons.check_circle_outline)
+            ? ('Answered', AppColors.successOf(context), Icons.check_circle_outline)
             : packet.isRequested
-                ? ('Requested', AppColors.warning, Icons.hourglass_top_rounded)
+                ? ('Requested', AppColors.warningOf(context), Icons.hourglass_top_rounded)
                 : (
                     'Message',
                     scheme.onSurfaceVariant,
@@ -162,10 +164,10 @@ class _PacketCard extends StatelessWidget {
             : peer;
     return Material(
       color: needsAnswer
-          ? scheme.primaryContainer.withValues(alpha: .4)
-          : AppSurfaces.card(scheme),
+          ? ThemeRoles.selectedFill(context)
+          : AppSurfaces.card(scheme, tokens: AsemanTokens.maybeOf(context)),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppShape.inner),
+        borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
         side: BorderSide(
           color: needsAnswer
               ? scheme.primary.withValues(alpha: .22)
@@ -193,7 +195,7 @@ class _PacketCard extends StatelessWidget {
                           ? Icons.call_received_rounded
                           : Icons.call_made_rounded,
                       size: 12,
-                      color: incoming ? AppColors.cyan : scheme.primary),
+                      color: incoming ? AppColors.cyanOf(context) : scheme.primary),
                 ),
               ),
             ]),

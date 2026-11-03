@@ -305,8 +305,8 @@ class _DmFacilitySheetState extends State<DmFacilitySheet> {
               const SizedBox(height: 12),
               Expanded(
                 child: GlassSurface(
-                  alpha: AppSurfaces.cardAlpha,
-                  blur: AppSurfaces.blurSigma,
+                  alpha: AppSurfaces.cardAlphaOf(context),
+                  blur: AppSurfaces.blurSigmaOf(context),
                   borderRadius: BorderRadius.circular(22),
                   child: Padding(
                     padding: const EdgeInsets.all(12),

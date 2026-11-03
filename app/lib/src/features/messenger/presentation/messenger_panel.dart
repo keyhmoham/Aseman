@@ -7,6 +7,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_chrome.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/space.dart';
 import '../../../data/services/aseman_service.dart';
@@ -323,7 +325,12 @@ class _ChatListState extends State<_ChatList> {
   Future<void> _newChat() async {
     final peer = await Navigator.of(context).push<String>(
       MaterialPageRoute<String>(
-        builder: (_) => _NewChatPage(dependencies: widget.dependencies),
+        builder: (_) => _NewChatPage(
+          dependencies: widget.dependencies,
+          // Same floating-app-bar clearance as the chats list — without it
+          // the back control sits under the home glass pill.
+          topContentInset: widget.topContentInset,
+        ),
       ),
     );
     if (peer == null || !mounted) return;
@@ -621,7 +628,7 @@ class _ChatListState extends State<_ChatList> {
           color: open
               ? scheme.primary.withValues(alpha: .07)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppShape.inner),
+          borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
         ),
         child: Column(
           children: [
@@ -998,10 +1005,10 @@ class _ChatTile extends StatelessWidget {
     // Flat rows (not SoftCards): a light unread wash only.
     return Material(
       color: unread
-          ? scheme.primaryContainer.withValues(alpha: .35)
+          ? ThemeRoles.selectedFill(context)
           : Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppShape.inner),
+        borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -1332,7 +1339,7 @@ class _MessengerChrome extends StatelessWidget {
                   gradient: LinearGradient(
                     colors: [
                       scheme.primary,
-                      AppColors.cyan.withValues(alpha: .85),
+                      AppColors.cyanOf(context).withValues(alpha: .85),
                       scheme.primary.withValues(alpha: .15),
                     ],
                   ),
@@ -1411,7 +1418,7 @@ class _RequestsBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return DockedBanner(
       eyebrow: 'REQUESTS',
-      accent: AppColors.warning,
+      accent: AppColors.warningOf(context),
       title: count == 1
           ? '1 question is waiting'
           : '$count questions are waiting',
@@ -1421,11 +1428,11 @@ class _RequestsBanner extends StatelessWidget {
         width: 34,
         height: 34,
         decoration: BoxDecoration(
-          color: AppColors.warning.withValues(alpha: .16),
+          color: AppColors.warningOf(context).withValues(alpha: .16),
           borderRadius: BorderRadius.circular(11),
         ),
-        child: const Icon(Icons.help_outline_rounded,
-            size: 18, color: AppColors.warning),
+        child: Icon(Icons.help_outline_rounded,
+            size: 18, color: AppColors.warningOf(context)),
       ),
     );
   }
@@ -1456,8 +1463,15 @@ class _Empty extends StatelessWidget {
 /// Picks who to start a direct chat with: a person or agent found by @handle,
 /// or one of the account's own agents. Pops with the chosen account id.
 class _NewChatPage extends StatefulWidget {
-  const _NewChatPage({required this.dependencies});
+  const _NewChatPage({
+    required this.dependencies,
+    this.topContentInset = 0,
+  });
   final AppDependencies dependencies;
+
+  /// Clears the home floating app bar when this page is pushed from the
+  /// embedded chats tab (see [MessengerPanel.topContentInset]).
+  final double topContentInset;
 
   @override
   State<_NewChatPage> createState() => _NewChatPageState();
@@ -1557,99 +1571,79 @@ class _NewChatPageState extends State<_NewChatPage> {
       AppSurfaces.tint(scheme).withValues(alpha: AppSurfaces.tintAlpha(scheme)),
       theme.scaffoldBackgroundColor,
     );
+    final topPad = (compact ? 12.0 : 18.0) + widget.topContentInset;
     return Scaffold(
       backgroundColor: background,
-      body: Padding(
-        padding: EdgeInsets.fromLTRB(gutter, compact ? 12 : 18, gutter, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                IconButton(
-                  tooltip: 'Back to chats',
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                ),
-                const SizedBox(width: 6),
-                const Expanded(
-                  child: Text(
-                    'New chat',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _query,
-              autofocus: true,
-              onChanged: (v) {
-                setState(() {});
-                _search(v);
-              },
-              decoration: InputDecoration(
-                hintText: 'Search people and agents by @handle',
-                prefixIcon: const Icon(Icons.person_search_rounded),
-                suffixIcon: _searching
-                    ? const Padding(
-                        padding: EdgeInsets.all(14),
-                        child: SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : null,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 24),
+      body: SafeArea(
+        // Host SafeArea already cleared the status bar when embedded; keep
+        // bottom safe for home-indicator clearance on the sheet form.
+        top: widget.topContentInset <= 0,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(gutter, topPad, gutter, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
                 children: [
-                  if (pastedId)
-                    _PickTile(
-                      icon: Icons.tag_rounded,
-                      title: 'Account $raw',
-                      subtitle: 'Start a chat with this account id',
-                      onTap: () => Navigator.of(context).pop(raw),
+                  IconButton(
+                    tooltip: 'Back to chats',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  ),
+                  const SizedBox(width: 6),
+                  const Expanded(
+                    child: Text(
+                      'New chat',
+                      style:
+                          TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
                     ),
-                  for (final r in _results)
-                    _PickTile(
-                      icon: Icons.person_outline_rounded,
-                      title: '@${r.handle}',
-                      avatar: r.avatar,
-                      subtitle: 'Person',
-                      onTap: () => Navigator.of(context).pop(r.id),
-                    ),
-                  for (final b in _foundAgents)
-                    _PickTile(
-                      icon: Icons.smart_toy_outlined,
-                      title: b.name,
-                      bot: b,
-                      userId: widget.dependencies.sessionController
-                              .session?.accountId ??
-                          '',
-                      subtitle: 'Agent',
-                      onTap: () => Navigator.of(
-                        context,
-                      ).pop(b.accountId.isNotEmpty ? b.accountId : b.id),
-                    ),
-                  if (agents.isNotEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(6, 14, 6, 6),
-                      child: Text(
-                        'YOUR AGENTS',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: .8,
-                          color: scheme.onSurfaceVariant,
-                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _query,
+                autofocus: true,
+                onChanged: (v) {
+                  setState(() {});
+                  _search(v);
+                },
+                decoration: InputDecoration(
+                  hintText: 'Search people and agents by @handle',
+                  prefixIcon: const Icon(Icons.person_search_rounded),
+                  suffixIcon: _searching
+                      ? const Padding(
+                          padding: EdgeInsets.all(14),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  children: [
+                    if (pastedId)
+                      _PickTile(
+                        icon: Icons.tag_rounded,
+                        title: 'Account $raw',
+                        subtitle: 'Start a chat with this account id',
+                        onTap: () => Navigator.of(context).pop(raw),
                       ),
-                    ),
-                    for (final b in agents)
+                    for (final r in _results)
+                      _PickTile(
+                        icon: Icons.person_outline_rounded,
+                        title: '@${r.handle}',
+                        avatar: r.avatar,
+                        subtitle: 'Person',
+                        onTap: () => Navigator.of(context).pop(r.id),
+                      ),
+                    for (final b in _foundAgents)
                       _PickTile(
                         icon: Icons.smart_toy_outlined,
                         title: b.name,
@@ -1662,24 +1656,51 @@ class _NewChatPageState extends State<_NewChatPage> {
                           context,
                         ).pop(b.accountId.isNotEmpty ? b.accountId : b.id),
                       ),
-                  ],
-                  if (raw.isNotEmpty &&
-                      !_searching &&
-                      _results.isEmpty &&
-                      _foundAgents.isEmpty &&
-                      !pastedId)
-                    Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        'Nobody found for "$raw".',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: scheme.onSurfaceVariant),
+                    if (agents.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(6, 14, 6, 6),
+                        child: Text(
+                          'YOUR AGENTS',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: .8,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
                       ),
-                    ),
-                ],
+                      for (final b in agents)
+                        _PickTile(
+                          icon: Icons.smart_toy_outlined,
+                          title: b.name,
+                          bot: b,
+                          userId: widget.dependencies.sessionController
+                                  .session?.accountId ??
+                              '',
+                          subtitle: 'Agent',
+                          onTap: () => Navigator.of(
+                            context,
+                          ).pop(b.accountId.isNotEmpty ? b.accountId : b.id),
+                        ),
+                    ],
+                    if (raw.isNotEmpty &&
+                        !_searching &&
+                        _results.isEmpty &&
+                        _foundAgents.isEmpty &&
+                        !pastedId)
+                      Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'Nobody found for "$raw".',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1711,17 +1732,27 @@ class _PickTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListTile(
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(AppShape.control),
+      borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
     ),
     leading: bot != null
         ? BotAvatar(bot: bot!, radius: 20, userId: userId)
-        : HaloRing(
-            child: CircleAvatar(
-              foregroundImage: Avatars.of(avatar),
-              onForegroundImageError: avatar.isEmpty ? null : (_, __) {},
-              child: Icon(icon),
-            ),
-          ),
+        : Builder(builder: (context) {
+            const radius = 20.0;
+            final size = radius * 2;
+            final corners = context.avatarBorderRadius(size);
+            final picture = Avatars.of(avatar);
+            return HaloRing(
+              borderRadius: corners,
+              child: AvatarFace(
+                size: size,
+                borderRadius: corners,
+                backgroundColor: ThemeRoles.wellFill(context),
+                foregroundImage: picture,
+                onImageError: picture == null ? null : (_, __) {},
+                child: Icon(icon, color: ThemeRoles.wellInk(context)),
+              ),
+            );
+          }),
     title: Text(
       title,
       maxLines: 1,

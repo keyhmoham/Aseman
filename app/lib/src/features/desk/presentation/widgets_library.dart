@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
-import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/theme_chrome.dart';
 import '../../../data/models/space.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_empty.dart';
@@ -338,14 +338,13 @@ class _PinCard extends StatelessWidget {
       if (item.roomName.isNotEmpty) item.roomName,
       if (item.pin.argsSummary.isNotEmpty) item.pin.argsSummary,
     ].join(' · ');
+    final shape = ThemeChrome.cardShape(context);
     return Material(
-      color: AppSurfaces.card(scheme),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: AppSurfaces.cardBorder(scheme)),
-      ),
+      color: ThemeChrome.cardFillColor(context),
+      shape: shape,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
+        customBorder: shape,
         onTap: onOpen,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/theme/app_shape.dart';
 
 /// Shared human-in-the-loop controls for AG-UI chat (and RoomWorkNeeds).
 /// One implementation — no duplicate chips elsewhere.
@@ -82,7 +83,7 @@ class _AgUiQuestionState extends State<AgUiQuestion> {
                       ? 'Your answer…'
                       : 'Or type another answer…',
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                      borderRadius: AppShape.borderRadius(context, 12)),
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 ),
@@ -259,7 +260,7 @@ class _AgUiFormState extends State<AgUiForm> {
               isDense: true,
               hintText: '${f['hint'] ?? ''}',
               border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  OutlineInputBorder(borderRadius: AppShape.borderRadius(context, 12)),
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),

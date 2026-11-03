@@ -4,7 +4,7 @@ import '../../core/theme/app_shape.dart';
 import 'sky_ui.dart';
 
 /// Slim metric cell used across account, settings, and panel strips:
-/// quiet label, large value, optional live accent. Soft surface, no blur.
+/// quiet label, large value, optional live accent. Quiet pack surface.
 class FleetMetric extends StatelessWidget {
   const FleetMetric({
     super.key,
@@ -26,11 +26,14 @@ class FleetMetric extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final accent = color ?? scheme.primary;
     return SoftCard(
-      accent: accent,
       radius: AppShape.control,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        EyebrowLabel(label, color: accent.withValues(alpha: .9), size: 9.5),
+        EyebrowLabel(
+          label,
+          color: scheme.onSurfaceVariant,
+          size: 9.5,
+        ),
         const SizedBox(height: 3),
         Row(children: [
           Flexible(
@@ -42,7 +45,7 @@ class FleetMetric extends StatelessWidget {
                     height: 1.1,
                     letterSpacing: -.4,
                     fontWeight: FontWeight.w900,
-                    color: live ? accent : null)),
+                    color: live ? accent : scheme.onSurface)),
           ),
           if (live) ...[
             const SizedBox(width: 8),
@@ -52,12 +55,6 @@ class FleetMetric extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: accent,
-                boxShadow: [
-                  BoxShadow(
-                      color: accent.withValues(alpha: .45),
-                      blurRadius: 6,
-                      spreadRadius: .5),
-                ],
               ),
             ),
           ],
@@ -70,7 +67,7 @@ class FleetMetric extends StatelessWidget {
               style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
-                  color: color ?? scheme.onSurfaceVariant)),
+                  color: scheme.onSurfaceVariant)),
         ],
       ]),
     );

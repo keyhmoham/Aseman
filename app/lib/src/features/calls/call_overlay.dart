@@ -1,9 +1,16 @@
 import 'dart:async';
+import '../../core/theme/app_shape.dart';
 
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/theme_chrome.dart';
+import '../../core/theme/theme_roles.dart';
+import '../../core/theme/theme_ui_spec.dart';
+import '../../shared/widgets/avatar_face.dart';
 import '../../shared/widgets/sky_ui.dart';
+import '../../shared/widgets/theme_slot_host.dart';
 import 'call_page.dart';
 import 'call_service.dart';
 
@@ -138,69 +145,80 @@ class _CallOverlayState extends State<CallOverlay> {
             left: 12,
             right: 12,
             top: MediaQuery.paddingOf(context).top + 8,
-            child: Material(
-              elevation: 6,
-              borderRadius: BorderRadius.circular(16),
-              color: scheme.surfaceContainerHighest,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-                child: Row(
-                  children: [
-                    HaloRing(
-                      child: CircleAvatar(
-                        backgroundColor: scheme.primaryContainer,
-                        child: Icon(
-                          video
-                              ? Icons.videocam_rounded
-                              : Icons.call_rounded,
-                          color: scheme.onPrimaryContainer,
+            child: ThemeSlotHost(
+              slot: ThemeChromeSlots.callOverlay,
+              child: Material(
+                elevation: 6,
+                borderRadius: AppShape.borderRadius(context, 16),
+                color: scheme.surfaceContainerHighest,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+                  child: Row(
+                    children: [
+                      Builder(builder: (context) {
+                        const radius = 20.0;
+                        final size = radius * 2;
+                        final corners = context.avatarBorderRadius(size);
+                        return HaloRing(
+                          borderRadius: corners,
+                          child: AvatarFace(
+                            size: size,
+                            borderRadius: corners,
+                            backgroundColor: ThemeRoles.wellFill(context),
+                            child: Icon(
+                              video
+                                  ? Icons.videocam_rounded
+                                  : Icons.call_rounded,
+                              color: ThemeRoles.wellInk(context),
+                            ),
+                          ),
+                        );
+                      }),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_peerLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w800, fontSize: 15)),
+                            Text(
+                              video
+                                  ? 'Incoming video call'
+                                  : 'Incoming voice call',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: scheme.onSurfaceVariant),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(_peerLabel,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w800, fontSize: 15)),
-                          Text(
-                            video
-                                ? 'Incoming video call'
-                                : 'Incoming voice call',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: scheme.onSurfaceVariant),
-                          ),
-                        ],
+                      IconButton(
+                        tooltip: 'Decline',
+                        onPressed: _opening ? null : _decline,
+                        style: IconButton.styleFrom(
+                          backgroundColor: scheme.errorContainer,
+                          foregroundColor: scheme.onErrorContainer,
+                        ),
+                        icon: const Icon(Icons.call_end_rounded),
                       ),
-                    ),
-                    IconButton(
-                      tooltip: 'Decline',
-                      onPressed: _opening ? null : _decline,
-                      style: IconButton.styleFrom(
-                        backgroundColor: scheme.errorContainer,
-                        foregroundColor: scheme.onErrorContainer,
+                      const SizedBox(width: 6),
+                      IconButton(
+                        tooltip: 'Accept',
+                        onPressed: _opening ? null : _accept,
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppColors.successOf(context),
+                          foregroundColor: scheme.onPrimary,
+                        ),
+                        icon: Icon(video
+                            ? Icons.videocam_rounded
+                            : Icons.call_rounded),
                       ),
-                      icon: const Icon(Icons.call_end_rounded),
-                    ),
-                    const SizedBox(width: 6),
-                    IconButton(
-                      tooltip: 'Accept',
-                      onPressed: _opening ? null : _accept,
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                      ),
-                      icon: Icon(video
-                          ? Icons.videocam_rounded
-                          : Icons.call_rounded),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

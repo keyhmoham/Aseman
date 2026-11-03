@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_shape.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../data/models/llm_provider.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_inputs.dart';
+import '../../../shared/widgets/glass_surface.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/status_tag.dart';
 import 'admin_widgets.dart';
-import '../../../shared/widgets/overlay_panels.dart';
 
 /// Admin panel section managing the node's LLM providers: API keys (owned by
 /// the admin's account), the models agents can choose as their backbone and the
@@ -145,13 +148,13 @@ class _LlmProvidersTabState extends State<LlmProvidersTab> {
               label: 'Models',
               value: '$models',
               icon: Icons.memory_rounded,
-              tone: AppColors.cyan,
+              tone: AppColors.cyanOf(context),
               hint: 'Prices are set under Models'),
           AdminStatCard(
               label: 'Missing keys',
               value: '$missing',
               icon: Icons.key_off_rounded,
-              tone: missing > 0 ? AppColors.danger : AppColors.success,
+              tone: missing > 0 ? AppColors.dangerOf(context) : AppColors.successOf(context),
               hint:
                   missing > 0 ? 'Agents cannot use these' : 'Every key is set'),
         ]),
@@ -193,11 +196,8 @@ class _LlmProvidersTabState extends State<LlmProvidersTab> {
 
   Widget _card(LlmProvider p) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.card)),
-      clipBehavior: Clip.antiAlias,
+    return GlassSurface(
+      borderRadius: BorderRadius.circular(AppShape.cardOf(context)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 18, 12, 14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -218,7 +218,7 @@ class _LlmProvidersTabState extends State<LlmProvidersTab> {
                             fontSize: 12, color: scheme.onSurfaceVariant)),
                   ]),
             ),
-            if (p.isDefault) const StatusTag('DEFAULT', AppColors.primary),
+            if (p.isDefault) StatusTag('DEFAULT', AppColors.primaryOf(context)),
             Switch(
               value: p.enabled,
               thumbIcon: WidgetStateProperty.resolveWith((states) => Icon(
@@ -245,7 +245,7 @@ class _LlmProvidersTabState extends State<LlmProvidersTab> {
                 style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: p.hasKey ? scheme.onSurface : AppColors.danger)),
+                    color: p.hasKey ? scheme.onSurface : AppColors.dangerOf(context))),
           ]),
           const SizedBox(height: 4),
           AdminKeyValue('Models', '${p.models.length}'),
@@ -452,11 +452,11 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                 width: 48,
                 height: 48,
                 decoration: ShapeDecoration(
-                    color: scheme.primaryContainer,
+                    color: ThemeRoles.wellFill(context),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16))),
+                        borderRadius: AppShape.borderRadius(context, 16))),
                 child:
-                    Icon(Icons.hub_rounded, color: scheme.onPrimaryContainer),
+                    Icon(Icons.hub_rounded, color: ThemeRoles.selectedInk(context)),
               ),
               const SizedBox(width: 14),
               Expanded(

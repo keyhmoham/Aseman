@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/theme_chrome.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../domain/desk_models.dart';
 import 'card_window.dart';
 import 'desk_controller.dart';
@@ -504,29 +506,35 @@ class _FocusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final pill = context.navPillRecipe;
+    final shape = ThemeChrome.outlinedBorder(pill);
+    final shadows = ThemeChrome.cardDecoration(
+      context,
+      elevated: true,
+    ).boxShadow;
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: .12),
-              blurRadius: 16,
-              offset: const Offset(0, 4)),
-        ],
+      decoration: ShapeDecoration(
+        color: ThemeRoles.wellFill(context),
+        shape: shape,
+        shadows: shadows,
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          ToolAvatar(tool: tool, name: name, size: 26, selected: true),
-          const SizedBox(width: 8),
-          Text('Only $name',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: scheme.onSecondaryContainer,
-                  fontWeight: FontWeight.w700)),
-          const SizedBox(width: 6),
-          TextButton(onPressed: onShowAll, child: const Text('Show all')),
-        ]),
+      child: Material(
+        color: Colors.transparent,
+        shape: shape,
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            ToolAvatar(tool: tool, name: name, size: 26, selected: true),
+            const SizedBox(width: 8),
+            Text('Only $name',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: scheme.onSecondaryContainer,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(width: 6),
+            TextButton(onPressed: onShowAll, child: const Text('Show all')),
+          ]),
+        ),
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
+import '../../core/theme/app_colors.dart';
 import 'assistant_common.dart';
 
 /// The setup checklist: what the person's assistant depends on, each Ready,
@@ -66,7 +67,7 @@ class _SetupTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final (icon, color) = switch ('${item['status']}') {
-      'ready' => (Icons.check_circle_rounded, Colors.green),
+      'ready' => (Icons.check_circle_rounded, AppColors.successOf(context)),
       'needs_setup' => (Icons.error_outline_rounded, scheme.error),
       _ => (Icons.radio_button_unchecked_rounded, scheme.onSurfaceVariant),
     };

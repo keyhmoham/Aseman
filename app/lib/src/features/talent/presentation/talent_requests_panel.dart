@@ -210,7 +210,6 @@ class _RequestCard extends StatelessWidget {
     };
     final skills = [for (final s in request['skills'] as List? ?? const []) '$s'];
     return SoftCard(
-      accent: color,
       showOrb: false,
       padding: EdgeInsets.zero,
       child: ExpansionTile(
@@ -221,7 +220,7 @@ class _RequestCard extends StatelessWidget {
         subtitle: Text(
             '${request['category']} · ${talentBudget(request)}${'${request['company'] ?? ''}'.isEmpty ? '' : ' · ${request['company']}'}'),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          SoftMetaChip(label: label, accent: color),
+          SoftMetaChip(label: label),
           AppPopupMenuButton<String>(
             tooltip: 'Request options',
             onSelected: (v) => v == 'delete' ? onDelete() : onStatus(v),
@@ -433,7 +432,6 @@ class _TalentRequestFormState extends State<TalentRequestForm> {
                       helper: 'Separated by commas, up to 10.')),
               const SizedBox(height: 18),
               SoftCard(
-                accent: scheme.secondary,
                 showOrb: false,
                 padding: const EdgeInsets.all(AppSpacing.sm + 2),
                 child: Row(children: [

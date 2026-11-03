@@ -2,6 +2,7 @@
 library;
 
 import 'dart:math' as math;
+import '../../../core/theme/app_shape.dart';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -158,7 +159,7 @@ class _KitMarkdownState extends State<KitMarkdown> {
       if (img != null) {
         flush();
         blocks.add(ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppShape.borderRadius(context, 16),
           child: Image.network(img.group(2)!, fit: BoxFit.cover, semanticLabel: img.group(1), errorBuilder: (_, __, ___) => Text(img.group(1)!, style: body.copyWith(color: s.onSurfaceVariant))),
         ));
         continue;
@@ -172,7 +173,7 @@ class _KitMarkdownState extends State<KitMarkdown> {
         i--;
         blocks.add(Container(
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-          decoration: BoxDecoration(color: s.surfaceContainerHigh, borderRadius: BorderRadius.circular(16), border: Border(left: BorderSide(color: s.primary, width: 3))),
+          decoration: BoxDecoration(color: s.surfaceContainerHigh, borderRadius: AppShape.borderRadius(context, 16), border: Border(left: BorderSide(color: s.primary, width: 3))),
           child: rich(quote.join(' '), body.copyWith(color: s.onSurfaceVariant, fontStyle: FontStyle.italic)),
         ));
         continue;
@@ -186,9 +187,9 @@ class _KitMarkdownState extends State<KitMarkdown> {
         }
         i--;
         blocks.add(ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppShape.borderRadius(context, 16),
           child: Container(
-            decoration: BoxDecoration(border: Border.all(color: s.outlineVariant), borderRadius: BorderRadius.circular(16)),
+            decoration: BoxDecoration(border: Border.all(color: s.outlineVariant), borderRadius: AppShape.borderRadius(context, 16)),
             child: Table(
               defaultColumnWidth: const FlexColumnWidth(),
               border: TableBorder(horizontalInside: BorderSide(color: s.outlineVariant.withValues(alpha: .6))),
@@ -337,7 +338,7 @@ class _KitLogViewState extends State<KitLogView> {
     ]);
     final maxH = asSize(widget.props['maxHeight'], 320);
     return Container(
-      decoration: BoxDecoration(color: s.surfaceContainerHighest.withValues(alpha: .6), borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: s.surfaceContainerHighest.withValues(alpha: .6), borderRadius: AppShape.borderRadius(context, 16)),
       clipBehavior: Clip.antiAlias,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
         if (widget.props['title'] != null)
@@ -516,7 +517,7 @@ class _KitDiffViewState extends State<KitDiffView> {
           ),
     ]);
     return Container(
-      decoration: BoxDecoration(border: Border.all(color: s.outlineVariant), borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(border: Border.all(color: s.outlineVariant), borderRadius: AppShape.borderRadius(context, 16)),
       clipBehavior: Clip.antiAlias,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
         Container(

@@ -21,6 +21,9 @@ type Kind string
 const (
 	KindAgent Kind = "agent"
 	KindTool  Kind = "tool"
+	// KindTheme is an installable UI theme pack (no VM). Pack JSON lives under
+	// the bot entity key static/theme.json.
+	KindTheme Kind = "theme"
 )
 
 // VMType supported by the VMM layer.

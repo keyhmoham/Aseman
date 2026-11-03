@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/theme_chrome.dart';
 import '../../../shared/widgets/panel_empty.dart';
 import '../../../shared/widgets/sky_ui.dart';
 import '../domain/desk_models.dart';
@@ -31,72 +30,68 @@ class PinnedDesk extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final pins = controller.state.pins;
     return Align(
       alignment: Alignment.center,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: maxWidth),
-        child: Container(
-          margin: EdgeInsets.fromLTRB(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
               AppSpacing.sm, AppSpacing.sm, AppSpacing.sm, bottomInset),
-          decoration: softSurfaceDecoration(
-            scheme,
-            accent: scheme.primary,
-            secondary: scheme.tertiary,
-            radius: AppShape.card + 4,
+          child: SoftCard(
             elevated: true,
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg, AppSpacing.md + 2, AppSpacing.sm, AppSpacing.xs),
-                child: SkySectionHeader(
-                  icon: Icons.space_dashboard_rounded,
-                  title: 'Pinned desk',
-                  subtitle: 'Windows you pinned, ready to open again',
-                  dense: true,
-                  onClose: () => controller.setPinnedOpen(false),
+            wash: true,
+            padding: EdgeInsets.zero,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.lg,
+                      AppSpacing.md + 2, AppSpacing.sm, AppSpacing.xs),
+                  child: SkySectionHeader(
+                    icon: Icons.space_dashboard_rounded,
+                    title: 'Pinned desk',
+                    subtitle: 'Windows you pinned, ready to open again',
+                    dense: true,
+                    onClose: () => controller.setPinnedOpen(false),
+                  ),
                 ),
-              ),
-              Expanded(
-                child: pins.isEmpty
-                    ? const PanelEmpty(
-                        icon: Icons.push_pin_outlined,
-                        title: 'Nothing pinned yet',
-                        message:
-                            'Pin a window from its title bar to keep it here.',
-                      )
-                    : GridView.builder(
-                        padding: const EdgeInsets.fromLTRB(
-                            AppSpacing.md + 4,
-                            AppSpacing.xs,
-                            AppSpacing.md + 4,
-                            AppSpacing.md + 4),
-                        gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 240,
-                          mainAxisSpacing: 14,
-                          crossAxisSpacing: 14,
-                          childAspectRatio: .78,
+                Expanded(
+                  child: pins.isEmpty
+                      ? const PanelEmpty(
+                          icon: Icons.push_pin_outlined,
+                          title: 'Nothing pinned yet',
+                          message:
+                              'Pin a window from its title bar to keep it here.',
+                        )
+                      : GridView.builder(
+                          padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.md + 4,
+                              AppSpacing.xs,
+                              AppSpacing.md + 4,
+                              AppSpacing.md + 4),
+                          gridDelegate:
+                              const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 240,
+                            mainAxisSpacing: 14,
+                            crossAxisSpacing: 14,
+                            childAspectRatio: .78,
+                          ),
+                          itemCount: pins.length,
+                          itemBuilder: (context, i) => _PinTile(
+                            key: ValueKey(pins[i].id),
+                            pin: pins[i],
+                            preview: preview(pins[i]),
+                            onOpen: () {
+                              controller.setPinnedOpen(false);
+                              controller.openPin(pins[i]);
+                            },
+                            onUnpin: () => controller.unpin(pins[i].id),
+                          ),
                         ),
-                        itemCount: pins.length,
-                        itemBuilder: (context, i) => _PinTile(
-                          key: ValueKey(pins[i].id),
-                          pin: pins[i],
-                          preview: preview(pins[i]),
-                          onOpen: () {
-                            controller.setPinnedOpen(false);
-                            controller.openPin(pins[i]);
-                          },
-                          onUnpin: () => controller.unpin(pins[i].id),
-                        ),
-                      ),
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -129,7 +124,7 @@ class _PinTileState extends State<_PinTile> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final pin = widget.pin;
-    final accent = portalAccentFor(pin.tool, scheme);
+    final accent = portalAccentFor(pin.tool, scheme, context);
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
@@ -139,8 +134,6 @@ class _PinTileState extends State<_PinTile> {
         curve: Curves.easeOutBack,
         child: SoftCard(
           onTap: widget.onOpen,
-          accent: accent,
-          radius: 24,
           padding: EdgeInsets.zero,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -184,22 +177,21 @@ class _PinTileState extends State<_PinTile> {
               ),
               // A live preview of the window, scaled to the tile.
               Expanded(
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Material(
                     color: scheme.surface.withValues(alpha: .72),
-                    borderRadius: BorderRadius.circular(AppShape.control),
-                    border: Border.all(color: AppSurfaces.cardBorder(scheme)),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: IgnorePointer(
-                    child: FittedBox(
-                      fit: BoxFit.cover,
-                      alignment: Alignment.topCenter,
-                      child: SizedBox(
-                        width: pin.size.width,
-                        height: pin.size.height,
-                        child: widget.preview,
+                    shape: ThemeChrome.cardShape(context),
+                    clipBehavior: Clip.antiAlias,
+                    child: IgnorePointer(
+                      child: FittedBox(
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                        child: SizedBox(
+                          width: pin.size.width,
+                          height: pin.size.height,
+                          child: widget.preview,
+                        ),
                       ),
                     ),
                   ),

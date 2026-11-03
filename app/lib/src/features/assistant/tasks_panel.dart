@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
 import '../../core/theme/app_shape.dart';
+import '../../core/theme/theme_roles.dart';
 import '../../shared/widgets/glass_surface.dart';
 import '../../shared/widgets/overlay_panels.dart';
 import '../../shared/widgets/panel_header.dart';
@@ -231,7 +232,7 @@ class _PulseStrip extends StatelessWidget {
     final total = needsYou + working + suggested + done;
     return GlassSurface(
       alpha: .7,
-      borderRadius: BorderRadius.circular(AppShape.inner),
+      borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         child: Column(
@@ -357,10 +358,10 @@ class _MiniStat extends StatelessWidget {
       color: selected
           ? color.withValues(alpha: .18)
           : scheme.surface.withValues(alpha: .4),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: AppShape.borderRadius(context, 12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppShape.borderRadius(context, 12),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           child: Row(
@@ -444,7 +445,7 @@ class _EmptyTasks extends StatelessWidget {
             height: 72,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: scheme.primaryContainer.withValues(alpha: .55),
+              color: ThemeRoles.wellFill(context),
             ),
             child: Icon(Icons.auto_awesome_rounded,
                 size: 34, color: scheme.primary),
@@ -488,8 +489,7 @@ class BriefCard extends StatelessWidget {
     final needs = jsonList(content['needs_you']);
     final calendar = jsonList(content['calendar']);
     final tasks = jsonList(content['tasks']);
-    final fg =
-        embedded ? scheme.onSurface : scheme.onSecondaryContainer;
+    final fg = scheme.onSurface;
     String time(dynamic iso) {
       final t = DateTime.tryParse('$iso')?.toLocal();
       return t == null
@@ -502,8 +502,8 @@ class BriefCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: embedded
             ? Colors.transparent
-            : scheme.secondaryContainer.withValues(alpha: .45),
-        borderRadius: BorderRadius.circular(AppShape.inner),
+            : ThemeRoles.wellFill(context),
+        borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -659,7 +659,7 @@ class TaskTile extends StatelessWidget {
 
     return GlassSurface(
       alpha: .7,
-      borderRadius: BorderRadius.circular(AppShape.inner),
+      borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 12, 10),
         child: Column(
@@ -822,7 +822,7 @@ class _SuggestionBannerState extends State<SuggestionBanner> {
     if (task.isEmpty) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: scheme.secondaryContainer,
+      color: ThemeRoles.selectedFill(context),
       borderRadius: BorderRadius.circular(14),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
@@ -831,7 +831,7 @@ class _SuggestionBannerState extends State<SuggestionBanner> {
             Icon(
               Icons.lightbulb_outline_rounded,
               size: 18,
-              color: scheme.onSecondaryContainer,
+              color: ThemeRoles.selectedInk(context),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -842,7 +842,7 @@ class _SuggestionBannerState extends State<SuggestionBanner> {
                   '${task['title']}',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: scheme.onSecondaryContainer),
+                  style: TextStyle(color: ThemeRoles.selectedInk(context)),
                 ),
               ),
             ),

@@ -366,7 +366,7 @@ class _Card extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
           color: scheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(AppShape.card)),
+          borderRadius: BorderRadius.circular(AppShape.cardOf(context))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(

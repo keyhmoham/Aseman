@@ -10,6 +10,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
 import '../../../core/theme/halo_ring_cache.dart';
+import '../../../core/theme/shell_layout.dart';
+import '../../../core/theme/theme_chrome.dart';
+import '../../../core/theme/theme_roles.dart';
+import '../../../core/theme/theme_ui_spec.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/post.dart';
 import '../../../data/models/profile.dart';
@@ -28,6 +32,7 @@ import '../../../shared/widgets/profile_menu.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/sky_ui.dart';
+import '../../../shared/widgets/theme_slot_host.dart';
 import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../../shared/widgets/workspace_panel_motion.dart';
@@ -733,40 +738,47 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                   width: math.min(340, MediaQuery.sizeOf(context).width * .88),
                   child: GlassDrawerSurface(
                     child: SafeArea(
-                      child: _LibraryPanel(
-                        room: room,
-                        workspace: workspace,
-                        rooms: rooms,
-                        bots: bots,
-                        spaceBots: spaceBots,
-                        allBots: bots,
-                        tab: libraryTab,
-                        flat: true,
-                        onOpenSettings: _spaceFor(workspace) == null
-                            ? null
-                            : () {
-                                Navigator.pop(context);
-                                _openSpaceSettings();
-                              },
-                        dependencies: widget.dependencies,
-                        spaceId: _spaceFor(workspace)?.id ?? '',
-                        roomId: _currentRoomId,
-                        fileRevision: _fileRevision,
-                        onTab: (v) => setState(() => libraryTab = v),
-                        onOpenApp: openApp,
-                        onOpenFile: _openFile,
-                        openFilePath: _openFilePath,
-                        onCreateRoom: _createRoom,
-                        onSearch: () => _search(context),
-                        onAddBot: _addBotToWorkspace,
-                        onRemoveBot: _removeBotFromWorkspace,
-                        onAddApp: _addAppToWorkspace,
-                        appConnections: _appConnections[workspace] ?? const {},
-                        onConnectApp: _connectApp,
-                        openRoom: (value) {
-                          Navigator.pop(context);
-                          openRoom(value);
-                        },
+                      child: ThemeSlotHost(
+                        slot: FeatureSlots.workspaceRail,
+                        child: ThemeSlotHost(
+                          slot: ThemeChromeSlots.workspaceRail,
+                          child: _LibraryPanel(
+                            room: room,
+                            workspace: workspace,
+                            rooms: rooms,
+                            bots: bots,
+                            spaceBots: spaceBots,
+                            allBots: bots,
+                            tab: libraryTab,
+                            flat: true,
+                            onOpenSettings: _spaceFor(workspace) == null
+                                ? null
+                                : () {
+                                    Navigator.pop(context);
+                                    _openSpaceSettings();
+                                  },
+                            dependencies: widget.dependencies,
+                            spaceId: _spaceFor(workspace)?.id ?? '',
+                            roomId: _currentRoomId,
+                            fileRevision: _fileRevision,
+                            onTab: (v) => setState(() => libraryTab = v),
+                            onOpenApp: openApp,
+                            onOpenFile: _openFile,
+                            openFilePath: _openFilePath,
+                            onCreateRoom: _createRoom,
+                            onSearch: () => _search(context),
+                            onAddBot: _addBotToWorkspace,
+                            onRemoveBot: _removeBotFromWorkspace,
+                            onAddApp: _addAppToWorkspace,
+                            appConnections:
+                                _appConnections[workspace] ?? const {},
+                            onConnectApp: _connectApp,
+                            openRoom: (value) {
+                              Navigator.pop(context);
+                              openRoom(value);
+                            },
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -784,7 +796,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               SafeArea(
                 child: LayoutBuilder(
                   builder: (context, box) {
-                    final appBarInset = FloatingAppBarLayout.contentInset(
+                    final appBarInset = FloatingAppBarLayout.contentInsetOf(
+                      context,
                       compact,
                     );
                     if (box.maxWidth < 820) {
@@ -822,35 +835,44 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                     0,
                                     box.maxHeight * .82 - appBarInset,
                                   ),
-                                  child: _LibraryPanel(
-                                    room: room,
-                                    workspace: workspace,
-                                    rooms: rooms,
-                                    bots: bots,
-                                    spaceBots: spaceBots,
-                                    allBots: bots,
-                                    tab: libraryTab,
-                                    dependencies: widget.dependencies,
-                                    spaceId: _spaceFor(workspace)?.id ?? '',
-                                    roomId: _currentRoomId,
-                                    fileRevision: _fileRevision,
-                                    onTab: (v) =>
-                                        setState(() => libraryTab = v),
-                                    onOpenSettings: _spaceFor(workspace) == null
-                                        ? null
-                                        : _openSpaceSettings,
-                                    onOpenApp: openApp,
-                                    onOpenFile: _openFile,
-                                    openFilePath: _openFilePath,
-                                    onCreateRoom: _createRoom,
-                                    onSearch: () => _search(context),
-                                    onAddBot: _addBotToWorkspace,
-                                    onRemoveBot: _removeBotFromWorkspace,
-                                    onAddApp: _addAppToWorkspace,
-                                    appConnections:
-                                        _appConnections[workspace] ?? const {},
-                                    onConnectApp: _connectApp,
-                                    openRoom: openRoom,
+                                  child: ThemeSlotHost(
+                                    slot: FeatureSlots.workspaceRail,
+                                    child: ThemeSlotHost(
+                                      slot: ThemeChromeSlots.workspaceRail,
+                                      child: _LibraryPanel(
+                                        room: room,
+                                        workspace: workspace,
+                                        rooms: rooms,
+                                        bots: bots,
+                                        spaceBots: spaceBots,
+                                        allBots: bots,
+                                        tab: libraryTab,
+                                        dependencies: widget.dependencies,
+                                        spaceId:
+                                            _spaceFor(workspace)?.id ?? '',
+                                        roomId: _currentRoomId,
+                                        fileRevision: _fileRevision,
+                                        onTab: (v) =>
+                                            setState(() => libraryTab = v),
+                                        onOpenSettings:
+                                            _spaceFor(workspace) == null
+                                                ? null
+                                                : _openSpaceSettings,
+                                        onOpenApp: openApp,
+                                        onOpenFile: _openFile,
+                                        openFilePath: _openFilePath,
+                                        onCreateRoom: _createRoom,
+                                        onSearch: () => _search(context),
+                                        onAddBot: _addBotToWorkspace,
+                                        onRemoveBot: _removeBotFromWorkspace,
+                                        onAddApp: _addAppToWorkspace,
+                                        appConnections:
+                                            _appConnections[workspace] ??
+                                                const {},
+                                        onConnectApp: _connectApp,
+                                        openRoom: openRoom,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -929,45 +951,53 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               // Floating glass app bar over desk / feed / chat.
               SafeArea(
                 bottom: false,
-                child: ListenableBuilder(
-                  listenable: widget.dependencies.sessionController,
-                  builder: (context, _) => WorkspaceHeader(
-                    room: room,
-                    compact: compact,
-                    handle:
-                        widget.dependencies.sessionController.session?.handle ??
-                        '',
-                    accountId: widget.dependencies.sessionController.session
-                            ?.accountId ??
-                        '',
-                    avatar: widget.dependencies.service.avatarImage(
-                      widget.dependencies.sessionController.avatar,
+                child: ThemeSlotHost(
+                  slot: ThemeChromeSlots.floatingAppBar,
+                  child: ThemeSlotHost(
+                    slot: FeatureSlots.workspaceHeader,
+                    child: ListenableBuilder(
+                      listenable: widget.dependencies.sessionController,
+                      builder: (context, _) => WorkspaceHeader(
+                        room: room,
+                        compact: compact,
+                        handle: widget.dependencies.sessionController.session
+                                ?.handle ??
+                            '',
+                        accountId: widget.dependencies.sessionController.session
+                                ?.accountId ??
+                            '',
+                        avatar: widget.dependencies.service.avatarImage(
+                          widget.dependencies.sessionController.avatar,
+                        ),
+                        onBackToFeed: widget.onBackToFeed == null
+                            ? null
+                            : _leaveToFeed,
+                        onGoHome: goHome,
+                        onOpenAdmin:
+                            !widget.dependencies.sessionController.isAdmin
+                                ? null
+                                : () => Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => AdminScreen(
+                                        dependencies: widget.dependencies,
+                                      ),
+                                    ),
+                                  ),
+                        onOpenWidgetsLibrary: () => showWidgetsLibrary(
+                          context,
+                          widget.dependencies,
+                          onOpenSpace: (name) =>
+                              unawaited(switchWorkspace(name)),
+                        ),
+                        onOpenProfile: compact
+                            ? null
+                            : () => showProfileMenu(
+                                  context,
+                                  widget.dependencies,
+                                  showMessages: true,
+                                ),
+                      ),
                     ),
-                    onBackToFeed: widget.onBackToFeed == null
-                        ? null
-                        : _leaveToFeed,
-                    onGoHome: goHome,
-                    onOpenAdmin: !widget.dependencies.sessionController.isAdmin
-                        ? null
-                        : () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => AdminScreen(
-                                dependencies: widget.dependencies,
-                              ),
-                            ),
-                          ),
-                    onOpenWidgetsLibrary: () => showWidgetsLibrary(
-                      context,
-                      widget.dependencies,
-                      onOpenSpace: (name) => unawaited(switchWorkspace(name)),
-                    ),
-                    onOpenProfile: compact
-                        ? null
-                        : () => showProfileMenu(
-                              context,
-                              widget.dependencies,
-                              showMessages: true,
-                            ),
                   ),
                 ),
               ),
@@ -1073,9 +1103,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
           top: appBarInset + 12,
           left: 12,
           child: GlassSurface(
-            alpha: AppSurfaces.overlayAlpha,
-            blur: AppSurfaces.blurSigma,
-            borderRadius: BorderRadius.circular(24),
+            alpha: AppSurfaces.overlayAlphaOf(context),
+            blur: AppSurfaces.blurSigmaOf(context),
+            borderRadius: AppShape.borderRadius(context, 24),
             child: IconButton(
               tooltip: 'Rooms and workspace',
               onPressed: () => scaffoldKey.currentState?.openDrawer(),
@@ -1311,7 +1341,7 @@ class _LibraryPanel extends StatelessWidget {
             color: Theme.of(
               context,
             ).colorScheme.surfaceContainerHighest.withValues(alpha: .58),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: ThemeChrome.softCardCorners(context, AppShape.inner),
           ),
           // The library tabs, then (past a divider) the space's
           // facilities; the rail scrolls when the panel is short. The
@@ -1343,7 +1373,7 @@ class _LibraryPanel extends StatelessWidget {
                                 color: Colors.transparent,
                                 child: InkWell(
                                   onTap: () => onTab(i),
-                                  borderRadius: BorderRadius.circular(16),
+                                  borderRadius: AppShape.borderRadius(context, 16),
                                   child: AnimatedContainer(
                                     duration: const Duration(milliseconds: 240),
                                     curve: Curves.easeOutCubic,
@@ -1351,19 +1381,15 @@ class _LibraryPanel extends StatelessWidget {
                                     height: 42,
                                     decoration: BoxDecoration(
                                       color: i == tab
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.primaryContainer
+                                          ? ThemeRoles.selectedFill(context)
                                           : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(16),
+                                      borderRadius: AppShape.borderRadius(context, 16),
                                     ),
                                     child: Icon(
                                       icons[i],
                                       size: 20,
                                       color: i == tab
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.onPrimaryContainer
+                                          ? ThemeRoles.selectedInk(context)
                                           : Theme.of(
                                               context,
                                             ).colorScheme.onSurfaceVariant,
@@ -1852,14 +1878,14 @@ class _LibraryRoomCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hall = name == _WorkspaceScreenState.hallRoom;
+    final corners = ThemeChrome.softCardCorners(context);
+    final well = AppShape.borderRadius(context, AppShape.control);
     return Material(
-      color: selected
-          ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: .7)
-          : Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(17),
+      color: ThemeChrome.cardFillColor(context, selected: selected),
+      borderRadius: corners,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: corners,
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Row(
@@ -1874,7 +1900,7 @@ class _LibraryRoomCard extends StatelessWidget {
                       Theme.of(context).colorScheme.tertiary,
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: well,
                 ),
                 child: Center(
                   child: hall
@@ -1912,8 +1938,8 @@ class _LibraryRoomCard extends StatelessWidget {
                         Container(
                           width: 6,
                           height: 6,
-                          decoration: const BoxDecoration(
-                            color: Colors.greenAccent,
+                          decoration: BoxDecoration(
+                            color: AppColors.successOf(context),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -1973,9 +1999,12 @@ class _LibraryListCard extends StatelessWidget {
   final String? subtitle;
   final AppDependencies? dependencies;
   @override
-  Widget build(BuildContext context) => Material(
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
-    borderRadius: BorderRadius.circular(15),
+  Widget build(BuildContext context) {
+    final corners = ThemeChrome.softCardCorners(context);
+    final well = AppShape.borderRadius(context, AppShape.control);
+    return Material(
+    color: ThemeChrome.cardFillColor(context),
+    borderRadius: corners,
     child: InkWell(
       onTap: kind == 1 || kind == 2
           ? () => _openEntityProfile(
@@ -1985,7 +2014,7 @@ class _LibraryListCard extends StatelessWidget {
               dependencies,
             )
           : null,
-      borderRadius: BorderRadius.circular(15),
+      borderRadius: corners,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         child: Row(
@@ -1994,8 +2023,8 @@ class _LibraryListCard extends StatelessWidget {
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(11),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: well,
               ),
               child: Icon(icon, size: 17),
             ),
@@ -2042,7 +2071,8 @@ class _LibraryListCard extends StatelessWidget {
         ),
       ),
     ),
-  );
+    );
+  }
 }
 
 class _LibraryBotCard extends StatelessWidget {
@@ -2058,9 +2088,10 @@ class _LibraryBotCard extends StatelessWidget {
   final VoidCallback? onRemove;
   @override
   Widget build(BuildContext context) {
+    final corners = ThemeChrome.softCardCorners(context);
     return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(17),
+      color: ThemeChrome.cardFillColor(context),
+      borderRadius: corners,
       child: InkWell(
         onTap: () => _openEntityProfile(
           context,
@@ -2069,7 +2100,7 @@ class _LibraryBotCard extends StatelessWidget {
           dependencies,
           spaceId,
         ),
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: corners,
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Row(
@@ -2132,12 +2163,14 @@ class _AddAppTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final corners = ThemeChrome.softCardCorners(context);
+    final well = AppShape.borderRadius(context, AppShape.control);
     return Material(
-      color: scheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(17),
+      color: ThemeChrome.cardFillColor(context),
+      borderRadius: corners,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: corners,
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Row(
@@ -2146,13 +2179,13 @@ class _AddAppTile extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: scheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
+                  color: scheme.surfaceContainerHighest,
+                  borderRadius: well,
                 ),
                 child: Icon(
                   Icons.add_link_rounded,
                   size: 19,
-                  color: scheme.onPrimaryContainer,
+                  color: scheme.primary,
                 ),
               ),
               const SizedBox(width: 10),
@@ -2268,43 +2301,48 @@ class _AddBotTile extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
-    borderRadius: BorderRadius.circular(17),
-    child: InkWell(
-      onTap: () => _pick(context),
-      borderRadius: BorderRadius.circular(17),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: .14),
-                borderRadius: BorderRadius.circular(12),
+  Widget build(BuildContext context) {
+    final corners = ThemeChrome.softCardCorners(context);
+    final well = AppShape.borderRadius(context, AppShape.control);
+    return Material(
+      color: ThemeChrome.cardFillColor(context),
+      borderRadius: corners,
+      child: InkWell(
+        onTap: () => _pick(context),
+        borderRadius: corners,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: .14),
+                  borderRadius: well,
+                ),
+                child:
+                    Icon(icon, size: 19, color: AppColors.primaryOf(context)),
               ),
-              child: Icon(icon, size: 19, color: AppColors.primary),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
-            ),
-            const Icon(Icons.add_rounded, size: 18),
-          ],
+              const Icon(Icons.add_rounded, size: 18),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _LibraryToolCard extends StatelessWidget {
@@ -2334,15 +2372,18 @@ class _LibraryToolCard extends StatelessWidget {
   final AppDependencies? dependencies;
   final String spaceId;
   @override
-  Widget build(BuildContext context) => Material(
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
-    borderRadius: BorderRadius.circular(17),
+  Widget build(BuildContext context) {
+    final corners = ThemeChrome.softCardCorners(context);
+    final well = AppShape.borderRadius(context, AppShape.control);
+    return Material(
+    color: ThemeChrome.cardFillColor(context),
+    borderRadius: corners,
     child: InkWell(
       onTap:
           onTap ??
           () =>
               _openEntityProfile(context, 'Apps', label, dependencies, spaceId),
-      borderRadius: BorderRadius.circular(17),
+      borderRadius: corners,
       child: Padding(
         padding: const EdgeInsets.all(10),
         child: Row(
@@ -2363,9 +2404,9 @@ class _LibraryToolCard extends StatelessWidget {
                   color: Theme.of(
                     context,
                   ).colorScheme.primary.withValues(alpha: .14),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: well,
                 ),
-                child: Icon(icon, size: 19, color: AppColors.primary),
+                child: Icon(icon, size: 19, color: AppColors.primaryOf(context)),
               ),
             const SizedBox(width: 9),
             Expanded(
@@ -2389,8 +2430,8 @@ class _LibraryToolCard extends StatelessWidget {
                         height: 6,
                         decoration: BoxDecoration(
                           color: connected
-                              ? Colors.greenAccent
-                              : AppColors.warning,
+                              ? AppColors.successOf(context)
+                              : AppColors.warningOf(context),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -2423,7 +2464,7 @@ class _LibraryToolCard extends StatelessWidget {
                 icon: Icon(
                   connected ? Icons.sync_rounded : Icons.login_rounded,
                   size: 17,
-                  color: connected ? null : AppColors.warning,
+                  color: connected ? null : AppColors.warningOf(context),
                 ),
               ),
             if (onRemove != null)
@@ -2437,7 +2478,8 @@ class _LibraryToolCard extends StatelessWidget {
         ),
       ),
     ),
-  );
+    );
+  }
 }
 
 /// The room's desk: tools' frontends as floating card windows (opened by
@@ -3174,12 +3216,17 @@ class _SocialFeedState extends State<_SocialFeed> {
     );
   }
 
-  Widget _composer(BuildContext context) => Container(
+  Widget _composer(BuildContext context) {
+    final shell = ThemeChrome.inputShell(context);
+    return Container(
     margin: const EdgeInsets.only(bottom: 10),
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+    padding: EdgeInsets.symmetric(
+      horizontal: shell.padding.horizontal / 2,
+      vertical: 4,
+    ),
     decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(16),
+      color: shell.color,
+      borderRadius: shell.radius,
       border: Border.all(
         color: Theme.of(
           context,
@@ -3188,7 +3235,7 @@ class _SocialFeedState extends State<_SocialFeed> {
     ),
     child: InkWell(
       onTap: _publishing ? null : _openComposer,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: shell.radius,
       child: Row(
         children: [
           const Icon(Icons.edit_note_rounded, size: 18),
@@ -3216,6 +3263,7 @@ class _SocialFeedState extends State<_SocialFeed> {
       ),
     ),
   );
+  }
 }
 
 /// Opens Explore from the feed: a search across Aseman with no space scope,
@@ -3936,7 +3984,7 @@ class _SearchResultsState extends State<_SearchResults> {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(13),
                 ),
                 child: Icon(_sectionIcon(section), size: 19),
@@ -4019,7 +4067,7 @@ class _SearchResultsState extends State<_SearchResults> {
                   // one card, a row each.
                   final first = identical(rows.first, hit);
                   final last = identical(rows.last, hit);
-                  const r = Radius.circular(AppShape.card - 2);
+                  final r = Radius.circular(AppShape.cardOf(context) - 2);
                   return Container(
                     margin: EdgeInsets.only(bottom: last ? 10 : 0),
                     padding: EdgeInsets.fromLTRB(
@@ -4136,7 +4184,7 @@ class _SearchMediaCard extends StatelessWidget {
     return Material(
       color: scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppShape.card - 2),
+        borderRadius: BorderRadius.circular(AppShape.cardOf(context)- 2),
       ),
       clipBehavior: Clip.antiAlias,
       child: Padding(
@@ -4238,12 +4286,7 @@ class _SearchResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final color = [
-      Colors.purpleAccent,
-      Colors.cyan,
-      Colors.green,
-      Colors.orangeAccent,
-    ][index % 4];
+    final color = ThemeRoles.identity(context, '$section::$title');
     final open = _open(context);
     return Material(
       color: Colors.transparent,
@@ -4266,21 +4309,29 @@ class _SearchResultCard extends StatelessWidget {
                               ?.sessionController.session?.accountId ??
                           '',
                     )
-                  : HaloRing(
-                      accent: color,
-                      child: CircleAvatar(
-                        radius: 18,
-                        backgroundColor: color.withValues(alpha: .18),
-                        foregroundImage: Avatars.of(avatar),
-                        onForegroundImageError:
-                            avatar.isEmpty ? null : (_, __) {},
-                        child: Icon(
-                          _sectionIcon(section),
-                          color: color,
-                          size: 18,
+                  : Builder(builder: (context) {
+                      const radius = 18.0;
+                      final size = radius * 2;
+                      final corners = context.avatarBorderRadius(size);
+                      final picture = Avatars.of(avatar);
+                      return HaloRing(
+                        accent: color,
+                        borderRadius: corners,
+                        child: AvatarFace(
+                          size: size,
+                          borderRadius: corners,
+                          backgroundColor: color.withValues(alpha: .18),
+                          foregroundImage: picture,
+                          onImageError:
+                              picture == null ? null : (_, __) {},
+                          child: Icon(
+                            _sectionIcon(section),
+                            color: color,
+                            size: 18,
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    }),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -4978,8 +5029,8 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
         Container(
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: scheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(26),
+            color: ThemeChrome.cardFillColor(context),
+            borderRadius: ThemeChrome.softCardCorners(context, AppShape.card),
           ),
           child: Column(
             children: [
@@ -5037,21 +5088,30 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
                                           ?.accountId ??
                                       '',
                                 )
-                              : HaloRing(
-                                  pad: 3,
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: scheme.primaryContainer,
-                                      shape: BoxShape.circle,
+                              : Builder(builder: (context) {
+                                  const size = 62.0;
+                                  final corners =
+                                      context.avatarBorderRadius(size);
+                                  return HaloRing(
+                                    pad: 3,
+                                    borderRadius: corners,
+                                    child: AvatarFace(
+                                      size: size,
+                                      borderRadius: corners,
+                                      backgroundColor:
+                                          scheme.surfaceContainerHighest,
+                                      child: AvatarPicture(
+                                        avatar: _avatar,
+                                        size: size,
+                                        borderRadius: corners,
+                                        fallback: Center(
+                                            child: Icon(icon,
+                                                size: 31,
+                                                color: scheme.primary)),
+                                      ),
                                     ),
-                                    child: AvatarPicture(
-                                      avatar: _avatar,
-                                      size: 62,
-                                      fallback: Center(
-                                          child: Icon(icon, size: 31)),
-                                    ),
-                                  ),
-                                ),
+                                  );
+                                }),
                           const Spacer(),
                           if (action != null)
                             FilledButton.icon(
@@ -5117,7 +5177,7 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
             padding: const EdgeInsets.all(12),
             child: Text(
               _error!,
-              style: const TextStyle(color: AppColors.danger, fontSize: 12),
+              style: TextStyle(color: AppColors.dangerOf(context), fontSize: 12),
             ),
           ),
         if (_loading)
@@ -5216,21 +5276,35 @@ class _EntityProfileScreenState extends State<_EntityProfileScreen> {
                                   handle: list[i].handle,
                                 );
                               },
-                              leading: HaloRing(
-                                identity: HaloRingCache.person(list[i].id),
-                                child: CircleAvatar(
-                                  radius: 16,
-                                  foregroundImage: Avatars.of(list[i].avatar),
-                                  onForegroundImageError: list[i].avatar.isEmpty
-                                      ? null
-                                      : (_, __) {},
-                                  child: Text(
-                                    list[i].handle.isEmpty
-                                        ? '?'
-                                        : list[i].handle[0].toUpperCase(),
+                              leading: Builder(builder: (context) {
+                                const radius = 16.0;
+                                final size = radius * 2;
+                                final corners =
+                                    context.avatarBorderRadius(size);
+                                final picture = Avatars.of(list[i].avatar);
+                                return HaloRing(
+                                  identity: HaloRingCache.person(list[i].id),
+                                  borderRadius: corners,
+                                  child: AvatarFace(
+                                    size: size,
+                                    borderRadius: corners,
+                                    foregroundImage: picture,
+                                    onImageError: picture == null
+                                        ? null
+                                        : (_, __) {},
+                                    backgroundColor:
+                                        ThemeRoles.wellFill(context),
+                                    child: Text(
+                                      list[i].handle.isEmpty
+                                          ? '?'
+                                          : list[i].handle[0].toUpperCase(),
+                                      style: TextStyle(
+                                        color: ThemeRoles.wellInk(context),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
+                                );
+                              }),
                               title: Text(
                                 '@${list[i].handle}',
                                 style: const TextStyle(fontSize: 13),
@@ -5261,7 +5335,7 @@ class _ProfileDetailCard extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 9),
     child: GlassSurface(
-      borderRadius: BorderRadius.circular(21),
+      borderRadius: ThemeChrome.softCardCorners(context, AppShape.inner),
       child: Padding(
         padding: const EdgeInsets.all(15),
         child: Column(
@@ -5523,11 +5597,14 @@ class _WorkspaceRoomPreview extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
   @override
-  Widget build(BuildContext context) => Material(
-    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-    borderRadius: BorderRadius.circular(13),
+  Widget build(BuildContext context) {
+    final corners = AppShape.borderRadius(context, AppShape.control);
+    return Material(
+    color: ThemeChrome.cardFillColor(context),
+    borderRadius: corners,
     clipBehavior: Clip.antiAlias,
     child: InkWell(
+      borderRadius: corners,
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.all(8),
@@ -5549,7 +5626,8 @@ class _WorkspaceRoomPreview extends StatelessWidget {
         ),
       ),
     ),
-  );
+    );
+  }
 }
 
 class _RoomProfileDetail extends StatelessWidget {
@@ -5696,7 +5774,7 @@ class _Panel extends StatelessWidget {
     if (flat) {
       return Material(type: MaterialType.transparency, child: child);
     }
-    final radius = BorderRadius.circular(30);
+    final radius = ThemeChrome.softCardCorners(context, AppShape.card);
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: radius,
@@ -5709,8 +5787,8 @@ class _Panel extends StatelessWidget {
         ],
       ),
       child: GlassSurface(
-        alpha: AppSurfaces.overlayAlpha,
-        blur: AppSurfaces.blurSigma,
+        alpha: AppSurfaces.overlayAlphaOf(context),
+        blur: AppSurfaces.blurSigmaOf(context),
         borderRadius: radius,
         child: child,
       ),

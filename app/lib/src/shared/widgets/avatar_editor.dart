@@ -2,7 +2,9 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/halo_ring_cache.dart';
+import '../../core/theme/theme_chrome.dart';
 import '../../data/services/aseman_service.dart';
+import 'avatar_face.dart';
 import 'overlay_panels.dart';
 import 'sky_ui.dart';
 
@@ -58,8 +60,10 @@ class AvatarEditor extends StatefulWidget {
   /// The avatar's hue; the theme's primary color when not given.
   final Color? color;
 
-  /// A solid circle in [color] rather than a tonal one.
+  /// A solid fill in [color] rather than a tonal one.
   final bool filled;
+
+  /// Face radius in logical pixels (diameter is `radius * 2`).
   final double radius;
 
   /// False shows the avatar without offering to change it.
@@ -184,17 +188,21 @@ class _AvatarEditorState extends State<AvatarEditor> {
     final color = widget.color ?? scheme.primary;
     final image = widget.service.avatarImage(_avatar);
     final radius = widget.radius;
+    final size = radius * 2;
+    final corners = context.avatarBorderRadius(size);
     final ringId = widget.agent
         ? HaloRingCache.agent(widget.identity)
         : HaloRingCache.person(widget.identity);
     final avatar = HaloRing(
       identity: ringId,
       accent: color,
-      child: CircleAvatar(
-        radius: radius,
+      borderRadius: corners,
+      child: AvatarFace(
+        size: size,
+        borderRadius: corners,
         backgroundColor: widget.filled ? color : color.withValues(alpha: .18),
         foregroundImage: image,
-        onForegroundImageError: image == null ? null : (_, __) {},
+        onImageError: image == null ? null : (_, __) {},
         child: Text(
           widget.initials,
           style: TextStyle(
@@ -207,13 +215,14 @@ class _AvatarEditorState extends State<AvatarEditor> {
     );
     if (!widget.enabled) return avatar;
     final badge = (radius * .62).clamp(16, 26).toDouble();
+    final badgeCorners = context.avatarBorderRadius(badge);
     return Tooltip(
       message: 'Change the ${widget.subject}',
       child: Semantics(
         button: true,
         label: 'Change the ${widget.subject}',
         child: InkWell(
-          customBorder: const CircleBorder(),
+          borderRadius: corners,
           onTap: _busy ? null : _change,
           child: Stack(
             clipBehavior: Clip.none,
@@ -221,18 +230,18 @@ class _AvatarEditorState extends State<AvatarEditor> {
               avatar,
               if (_busy)
                 Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
+                  child: ClipRRect(
+                    borderRadius: corners,
+                    child: ColoredBox(
                       color: Colors.black.withValues(alpha: .35),
-                    ),
-                    child: const Center(
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
+                      child: const Center(
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
@@ -246,7 +255,7 @@ class _AvatarEditorState extends State<AvatarEditor> {
                   height: badge,
                   decoration: BoxDecoration(
                     color: scheme.surface,
-                    shape: BoxShape.circle,
+                    borderRadius: badgeCorners,
                     border: Border.all(color: scheme.outlineVariant),
                   ),
                   child: Icon(

@@ -28,7 +28,7 @@ class RoomWorkNeeds extends StatelessWidget {
         : work.interrupted != null
             ? _notice(context,
                 icon: Icons.pause_circle_outline,
-                color: AppColors.warning,
+                color: AppColors.warningOf(context),
                 text: '${work.interrupted!.botName} was interrupted',
                 action: 'Retry',
                 onAction: () => work.resume(work.interrupted!),
@@ -209,7 +209,7 @@ class RoomWorkPanel extends StatelessWidget {
     };
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-      leading: Icon(icon, color: r.blocked ? AppColors.warning : null),
+      leading: Icon(icon, color: r.blocked ? AppColors.warningOf(context) : null),
       title:
           Text(r.botName, style: const TextStyle(fontWeight: FontWeight.w700)),
       subtitle: Text(
@@ -234,7 +234,7 @@ class RoomWorkPanel extends StatelessWidget {
   Widget _entry(BuildContext context, WorkEntry e) {
     final scheme = Theme.of(context).colorScheme;
     final (icon, color, label) = switch (e.kind) {
-      'done' => (Icons.check_circle_outline, AppColors.success, 'Done'),
+      'done' => (Icons.check_circle_outline, AppColors.successOf(context), 'Done'),
       'failed' => (Icons.error_outline, scheme.error, 'Failed'),
       'cancelled' => (
           Icons.stop_circle_outlined,

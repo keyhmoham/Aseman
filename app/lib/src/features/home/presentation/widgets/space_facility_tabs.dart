@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../app_dependencies.dart';
+import '../../../../core/theme/theme_chrome.dart';
 import '../../../../core/utils/context_extensions.dart';
 import '../../../../data/models/bot.dart';
 import '../../../../data/services/aseman_service.dart';
@@ -402,8 +403,8 @@ class _SpaceMemoryTabState extends State<SpaceMemoryTab> {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: scheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(18),
+                color: ThemeChrome.cardFillColor(context),
+                borderRadius: ThemeChrome.softCardCorners(context),
                 border: Border.all(
                   color: _dirty
                       ? scheme.primary.withValues(alpha: .55)
@@ -784,11 +785,13 @@ class _PreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final corners = ThemeChrome.softCardCorners(context);
     return Material(
-      color: scheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(18),
+      color: ThemeChrome.cardFillColor(context),
+      borderRadius: corners,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
+        borderRadius: corners,
         onTap: onOpen,
         child: Padding(
           padding: const EdgeInsets.all(8),

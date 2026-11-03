@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app_dependencies.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/aseman_tokens.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/mini_tag.dart';
 import '../../../shared/widgets/overlay_panels.dart';
@@ -154,7 +155,9 @@ class _FeedPostCardState extends State<FeedPostCard> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final server = post.serverId != null;
-    final accent = post.color;
+    final accentKey =
+        post.authorId.isNotEmpty ? post.authorId : (post.serverId ?? post.name);
+    final accent = ThemeRoles.identity(context, accentKey);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       // Soft portal surface — no BackdropFilter; Opacity is safe here.
@@ -162,8 +165,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
         duration: const Duration(milliseconds: 160),
         opacity: _busy ? .55 : 1,
         child: SoftCard(
-          accent: accent,
-          secondary: scheme.primary,
+          // Post accent is for avatars / chips only — keep the card surface quiet.
           radius: AppShape.card - 2,
           padding: const EdgeInsets.fromLTRB(
               AppSpacing.md, AppSpacing.md - 2, AppSpacing.sm, AppSpacing.sm),
@@ -224,7 +226,6 @@ class _FeedPostCardState extends State<FeedPostCard> {
                     SoftMetaChip(
                       label: 'Pinned',
                       icon: Icons.push_pin_rounded,
-                      accent: scheme.primary,
                     ),
                   _menu(scheme, server),
                 ]),
@@ -271,8 +272,6 @@ class _FeedPostCardState extends State<FeedPostCard> {
                       clipBehavior: Clip.antiAlias,
                       decoration: softSurfaceDecoration(
                         scheme,
-                        accent: accent,
-                        secondary: scheme.primary,
                         radius: AppShape.inner,
                       ),
                       child: Stack(fit: StackFit.expand, children: [
@@ -291,11 +290,10 @@ class _FeedPostCardState extends State<FeedPostCard> {
                   runSpacing: 6,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    SoftMetaChip(label: post.tag, accent: accent),
+                    SoftMetaChip(label: post.tag),
                     if (post.workspace != null)
                       SoftMetaChip(
                         label: post.workspace!.toUpperCase(),
-                        accent: AppColors.primary,
                       ),
                   ],
                 ),
@@ -312,7 +310,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
                         label: post.likes,
                         tooltip: post.liked ? 'Unlike' : 'Like',
                         active: post.liked,
-                        activeColor: Colors.pinkAccent,
+                        activeColor: scheme.primary,
                         onTap: widget.onToggleLike,
                       ),
                       _PostAction(
@@ -410,7 +408,7 @@ class _PostAction extends StatelessWidget {
       child: Material(
         color: active
             ? color.withValues(alpha: .14)
-            : AppSurfaces.card(scheme),
+            : AppSurfaces.card(scheme, tokens: AsemanTokens.maybeOf(context)),
         shape: StadiumBorder(
           side: BorderSide(
             color: active

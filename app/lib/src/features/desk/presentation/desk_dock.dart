@@ -1,10 +1,26 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/design_language.dart';
+import '../../../core/theme/theme_chrome.dart';
 import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import 'desk_controller.dart';
 import 'tool_avatar.dart';
+
+BorderRadius _dockWellRadius(BuildContext context, double size, bool selected) {
+  final recipe = context.buttonRecipe;
+  if (recipe.shape == ShapeKind.sharp) return BorderRadius.zero;
+  if (recipe.shape == ShapeKind.stadium) {
+    return BorderRadius.circular(size / 2);
+  }
+  // Follow the pack button / nav radius for both states (never force a circle).
+  final base = recipe.radius <= 0
+      ? (selected ? size * .3 : size * .28)
+      : recipe.radius;
+  final r = base.clamp(4.0, size / 2).toDouble();
+  return BorderRadius.circular(r);
+}
 
 /// The dock pinned to the bottom of the desk: the pinned desk, then the
 /// tools with windows open. A tool shows only its windows (again: all of
@@ -22,10 +38,11 @@ class DeskDock extends StatelessWidget {
     final tools = controller.state.openTools;
     final focus = controller.focusTool;
     final item = compact ? 42.0 : 48.0;
+    final capsule = context.navPillRecipe.borderRadius;
     return GlassSurface(
-      alpha: AppSurfaces.overlayAlpha,
-      blur: AppSurfaces.blurSigma,
-      borderRadius: BorderRadius.circular(40),
+      alpha: AppSurfaces.overlayAlphaOf(context),
+      blur: AppSurfaces.blurSigmaOf(context),
+      borderRadius: capsule,
       child: Padding(
           padding:
               EdgeInsets.symmetric(horizontal: compact ? 8 : 12, vertical: 8),
@@ -145,15 +162,14 @@ class _DockButtonState extends State<_DockButton> {
                 decoration: BoxDecoration(
                   color: widget.selected
                       ? scheme.primary
-                      : scheme.secondaryContainer,
-                  borderRadius:
-                      BorderRadius.circular(widget.selected ? s * .3 : s / 2),
+                      : scheme.surfaceContainerHighest,
+                  borderRadius: _dockWellRadius(context, s, widget.selected),
                 ),
                 child: Icon(widget.icon,
                     size: s * .5,
                     color: widget.selected
                         ? scheme.onPrimary
-                        : scheme.onSecondaryContainer),
+                        : scheme.onSurfaceVariant),
               ),
             ),
           ),
@@ -274,9 +290,19 @@ class _DockToolState extends State<_DockTool> {
                               curve: Curves.easeOutBack,
                               child: Material(
                                 color: scheme.inverseSurface,
-                                shape: const CircleBorder(),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: _dockWellRadius(
+                                    context,
+                                    18,
+                                    false,
+                                  ),
+                                ),
                                 child: InkWell(
-                                  customBorder: const CircleBorder(),
+                                  borderRadius: _dockWellRadius(
+                                    context,
+                                    18,
+                                    false,
+                                  ),
                                   onTap: widget.onClose,
                                   child: Padding(
                                     padding: const EdgeInsets.all(2),

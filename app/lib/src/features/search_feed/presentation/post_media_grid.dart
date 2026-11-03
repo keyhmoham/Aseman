@@ -39,7 +39,7 @@ class PostMediaGrid extends StatelessWidget {
     if (files.isEmpty) return const SizedBox.shrink();
     final shown = files.take(_shown).toList();
     final more = files.length - shown.length;
-    final radius = BorderRadius.circular(AppShape.inner);
+    final radius = BorderRadius.circular(AppShape.innerOf(context));
     if (shown.length == 1) {
       return ClipRRect(
         borderRadius: radius,

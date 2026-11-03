@@ -409,7 +409,7 @@ class _ToolFormState extends State<_ToolForm> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHighest.withValues(alpha: .45),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppShape.borderRadius(context, 12),
         ),
         child: Row(children: [
           Icon(Icons.dns_outlined, size: 18, color: scheme.onSurfaceVariant),

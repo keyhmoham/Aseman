@@ -84,8 +84,12 @@ func (s *Service) Publish(ctx context.Context, publisher identity.ID, botID iden
 		if rec.IsSandbox() {
 			return nil, errs.InvalidArgument("sandbox instances cannot be listed as apps")
 		}
+	case market.ItemTheme:
+		if rec.Kind != bot.KindTheme {
+			return nil, errs.InvalidArgument("theme listings require a theme pack")
+		}
 	default:
-		return nil, errs.InvalidArgument("type must be agent or tool")
+		return nil, errs.InvalidArgument("type must be agent, tool, or theme")
 	}
 	if name == "" {
 		name = rec.Name
@@ -211,7 +215,8 @@ func (s *Service) MyListings(ctx context.Context, publisher identity.ID) ([]mark
 }
 
 // Install records an install and, when a target space/room is given, adds the
-// bot to that workspace so its members can use it.
+// bot to that workspace so its members can use it. Theme listings apply the
+// pack to the installer's account instead of adding a space bot.
 func (s *Service) Install(ctx context.Context, installer identity.ID, listingID identity.ID, spaceID, roomID identity.ID) (*market.Listing, error) {
 	l, err := s.Get(ctx, listingID)
 	if err != nil {
@@ -220,7 +225,11 @@ func (s *Service) Install(ctx context.Context, installer identity.ID, listingID 
 	if l.Status != market.StatusActive {
 		return nil, errs.Conflict("listing is not active")
 	}
-	if !spaceID.IsZero() {
+	if l.Type == market.ItemTheme {
+		if err := applyThemeListing(ctx, s.K, installer, listingID); err != nil {
+			return nil, err
+		}
+	} else if !spaceID.IsZero() {
 		if err := s.S.AddBot(ctx, installer, spaceID, roomID, l.BotID); err != nil {
 			return nil, err
 		}

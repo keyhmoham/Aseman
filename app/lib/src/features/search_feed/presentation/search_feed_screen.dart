@@ -1,19 +1,27 @@
 import 'dart:async';
 import 'dart:math' as math;
+import '../../../core/theme/app_shape.dart';
 
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_surfaces.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/aseman_tokens.dart';
 import '../../../core/theme/halo_ring_cache.dart';
+import '../../../core/theme/shell_layout.dart';
+import '../../../core/theme/shell_layout_builder.dart';
+import '../../../core/theme/theme_chrome.dart';
+import '../../../core/theme/theme_ui_spec.dart';
 import '../../../data/models/space.dart';
+import '../../../shared/widgets/avatar_face.dart';
 import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/glow_painter.dart';
 import '../../../shared/widgets/notifications_menu.dart';
 import '../../../shared/widgets/profile_menu.dart';
 import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/sky_ui.dart';
+import '../../../shared/widgets/theme_slot_host.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../../shared/widgets/workspace_panel_motion.dart';
 import '../../admin/presentation/admin_screen.dart';
@@ -77,7 +85,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   /// How many notifications are unread, badging the app bar's bell.
   int _unreadNotifications = 0;
 
-  late HomeMobileTab _mobileTab;
+  late String _mobileSlot;
   ChatSummary? _asemanChat;
   Object? _asemanError;
   bool _asemanLoading = true;
@@ -85,7 +93,11 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   @override
   void initState() {
     super.initState();
-    _mobileTab = widget.initialMobileTab;
+    _mobileSlot = switch (widget.initialMobileTab) {
+      HomeMobileTab.chats => FeatureSlots.homeChats,
+      HomeMobileTab.explore => FeatureSlots.homeExplore,
+      HomeMobileTab.you => FeatureSlots.homeYou,
+    };
     model = SearchFeedViewModel(
       dependencies: widget.dependencies,
       workspace: widget.workspace,
@@ -186,9 +198,9 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
     super.dispose();
   }
 
-  void _setMobileTab(HomeMobileTab tab) {
-    if (_mobileTab == tab) return;
-    setState(() => _mobileTab = tab);
+  void _setMobileSlot(String slot) {
+    if (_mobileSlot == slot) return;
+    setState(() => _mobileSlot = slot);
   }
 
   /// The search bar opens the search panel: people, spaces, Following posts,
@@ -277,8 +289,13 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final compact = _compact;
-    final showComposer = !compact || _mobileTab == HomeMobileTab.explore;
-    final appBarInset = FloatingAppBarLayout.contentInset(compact);
+    final homeShell = shellOf(context).home;
+    final mobileSlot = _mobileSlot;
+    final showComposer = (!compact ||
+            homeShell.composerOn.contains(mobileSlot)) &&
+        !themeSlotDisabled(context, FeatureSlots.homeComposer) &&
+        !themeSlotDisabled(context, ThemeChromeSlots.feedComposer);
+    final appBarInset = FloatingAppBarLayout.contentInsetOf(context, compact);
     return Scaffold(
       extendBody: compact,
       body: Stack(
@@ -298,19 +315,21 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                 builder: (context, box) {
                   if (compact) {
                     Widget glassTab(Widget child) => GlassSurface(
-                      alpha: AppSurfaces.cardAlpha,
-                      blur: AppSurfaces.blurSigma,
+                      alpha: AppSurfaces.cardAlphaOf(context),
+                      blur: AppSurfaces.blurSigmaOf(context),
                       borderRadius: BorderRadius.zero,
                       border: false,
                       child: child,
                     );
-                    return IndexedStack(
-                      index: _mobileTab.index,
-                      sizing: StackFit.expand,
-                      children: [
-                        // App-bar inset lives inside each tab's scroll (like
-                        // Explore) so content can pass under the floating bar.
-                        glassTab(
+                    final phoneTabs = homePhoneTabsOf(context);
+                    final tabIndex = phoneTabs.isEmpty
+                        ? 0
+                        : phoneTabs
+                            .indexWhere((t) => t.slot == _mobileSlot)
+                            .clamp(0, phoneTabs.length - 1);
+                    Widget tabBody(String slot) {
+                      if (slot == FeatureSlots.homeChats) {
+                        return glassTab(
                           MessengerPanel(
                             dependencies: widget.dependencies,
                             embedded: true,
@@ -322,8 +341,10 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                                 ? null
                                 : _enterWorkspace,
                           ),
-                        ),
-                        WorkspacePanelMotion(
+                        );
+                      }
+                      if (slot == FeatureSlots.homeExplore) {
+                        return WorkspacePanelMotion(
                           animation: motion,
                           hiddenOffset: WorkspacePanelMotions.mobileOffset,
                           scaleFrom: WorkspacePanelMotions.mobileScale,
@@ -331,8 +352,27 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                             compact: true,
                             topInset: appBarInset,
                           ),
-                        ),
-                        glassTab(_youTab(topInset: appBarInset)),
+                        );
+                      }
+                      if (slot == FeatureSlots.homeYou) {
+                        return glassTab(_youTab(topInset: appBarInset));
+                      }
+                      final island = themeIslandOf(context, slot);
+                      if (island != null) {
+                        return glassTab(
+                          Padding(
+                            padding: EdgeInsets.only(top: appBarInset),
+                            child: ThemeIslandHost(island: island),
+                          ),
+                        );
+                      }
+                      return glassTab(const SizedBox.shrink());
+                    }
+                    return IndexedStack(
+                      index: tabIndex,
+                      sizing: StackFit.expand,
+                      children: [
+                        for (final tab in phoneTabs) tabBody(tab.slot),
                       ],
                     );
                   }
@@ -383,25 +423,25 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                             scaleFrom: WorkspacePanelMotions.centerScale,
                             child: SizedBox(
                               height: railHeight,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(30),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black
-                                          .withValues(alpha: .12),
-                                      blurRadius: 30,
-                                      offset: const Offset(0, 12),
-                                    ),
-                                  ],
-                                ),
-                                child: GlassSurface(
-                                  alpha: AppSurfaces.cardAlpha,
-                                  blur: AppSurfaces.blurSigma,
-                                  borderRadius: BorderRadius.circular(30),
-                                  child: _asemanPane(bottomInset: 0),
-                                ),
-                              ),
+                              child: Builder(builder: (context) {
+                                final shell = ThemeChrome.floatingShell(
+                                  context,
+                                  lift: 2,
+                                );
+                                final radius = shell.borderRadius
+                                        is BorderRadius
+                                    ? shell.borderRadius as BorderRadius
+                                    : context.cardBorderRadius;
+                                return DecoratedBox(
+                                  decoration: shell,
+                                  child: GlassSurface(
+                                    alpha: AppSurfaces.cardAlphaOf(context),
+                                    blur: AppSurfaces.blurSigmaOf(context),
+                                    borderRadius: radius,
+                                    child: _asemanPane(bottomInset: 0),
+                                  ),
+                                );
+                              }),
                             ),
                           ),
                         ),
@@ -426,25 +466,37 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
             ),
           ),
           // Floating glass app bar over every home tab / desktop rails.
-          SafeArea(bottom: false, child: _workspaceBar(context, compact)),
+          SafeArea(
+            bottom: false,
+            child: ThemeSlotHost(
+              slot: ThemeChromeSlots.floatingAppBar,
+              child: ThemeSlotHost(
+                slot: FeatureSlots.workspaceHeader,
+                child: _workspaceBar(context, compact),
+              ),
+            ),
+          ),
           if (compact)
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
-              child: ListenableBuilder(
-                listenable: widget.dependencies.sessionController,
-                builder: (context, _) => HomeTabBar(
-                  tab: _mobileTab,
-                  onSelect: _setMobileTab,
-                  handle: widget.dependencies.sessionController.session
-                          ?.handle ??
-                      '',
-                  accountId: widget.dependencies.sessionController.session
-                          ?.accountId ??
-                      '',
-                  avatar: widget.dependencies.service.avatarImage(
-                    widget.dependencies.sessionController.avatar,
+              child: ThemeSlotHost(
+                slot: ThemeChromeSlots.homeTabBar,
+                child: ListenableBuilder(
+                  listenable: widget.dependencies.sessionController,
+                  builder: (context, _) => HomeTabBar(
+                    selectedSlot: _mobileSlot,
+                    onSelect: _setMobileSlot,
+                    handle: widget.dependencies.sessionController.session
+                            ?.handle ??
+                        '',
+                    accountId: widget.dependencies.sessionController.session
+                            ?.accountId ??
+                        '',
+                    avatar: widget.dependencies.service.avatarImage(
+                      widget.dependencies.sessionController.avatar,
+                    ),
                   ),
                 ),
               ),
@@ -453,16 +505,22 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
       ),
       floatingActionButton: !showComposer
           ? null
-          : Padding(
-              padding: EdgeInsets.only(
-                bottom: compact ? _fabNavLift(context) : 0,
-              ),
-              child: SkyFab(
-                heroTag: 'feed-composer',
-                onPressed: _openComposer,
-                icon: Icons.edit_rounded,
-                label: 'Post',
-                tooltip: 'New post',
+          : ThemeSlotHost(
+              slot: FeatureSlots.homeComposer,
+              child: ThemeSlotHost(
+                slot: ThemeChromeSlots.feedComposer,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    bottom: compact ? _fabNavLift(context) : 0,
+                  ),
+                  child: SkyFab(
+                    heroTag: 'feed-composer',
+                    onPressed: _openComposer,
+                    icon: Icons.edit_rounded,
+                    label: 'Post',
+                    tooltip: 'New post',
+                  ),
+                ),
               ),
             ),
     );
@@ -542,14 +600,17 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
       builder: (context, _) => ListView(
         padding: EdgeInsets.only(top: topInset, bottom: bottom),
         children: [
-          ProfileMenuBody(
-            dependencies: widget.dependencies,
-            showAdmin: widget.dependencies.sessionController.isAdmin,
-            showMessages: false,
-            onSelect: (action) => dispatchProfileAction(
-              context,
-              widget.dependencies,
-              action,
+          ThemeSlotHost(
+            slot: FeatureSlots.homeYou,
+            child: ProfileMenuBody(
+              dependencies: widget.dependencies,
+              showAdmin: widget.dependencies.sessionController.isAdmin,
+              showMessages: false,
+              onSelect: (action) => dispatchProfileAction(
+                context,
+                widget.dependencies,
+                action,
+              ),
             ),
           ),
         ],
@@ -565,9 +626,12 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
       SliverPadding(
         padding: EdgeInsets.fromLTRB(horizontalPad, 4, horizontalPad, 0),
         sliver: SliverToBoxAdapter(
-          child: HomeAssistant(
-            key: const ValueKey('home-assistant'),
-            dependencies: widget.dependencies,
+          child: ThemeSlotHost(
+            slot: ThemeChromeSlots.feedAssistant,
+            child: HomeAssistant(
+              key: const ValueKey('home-assistant'),
+              dependencies: widget.dependencies,
+            ),
           ),
         ),
       ),
@@ -698,14 +762,14 @@ class _HeroContent extends StatelessWidget {
 class HomeTabBar extends StatelessWidget {
   const HomeTabBar({
     super.key,
-    required this.tab,
+    required this.selectedSlot,
     required this.onSelect,
     this.handle = '',
     this.accountId = '',
     this.avatar,
   });
 
-  /// Height of the capsule, before the float gap and the home indicator.
+  /// Fallback height when the pack does not set [AsemanTokens.navHeight].
   static const height = 64.0;
 
   /// Width of one tab. The capsule hugs these instead of spanning the screen.
@@ -714,40 +778,72 @@ class HomeTabBar extends StatelessWidget {
   /// Space between the capsule and the screen edge or home indicator.
   static const floatGap = 10.0;
 
-  /// How far the pill reaches up from the bottom of the screen.
-  static double occupied(BuildContext context) =>
-      height + floatGap + MediaQuery.viewPaddingOf(context).bottom;
+  static double _barHeight(BuildContext context) {
+    final h = AsemanTokens.maybeOf(context)?.navHeight;
+    return (h == null || h <= 0) ? height : h;
+  }
 
-  final HomeMobileTab tab;
-  final ValueChanged<HomeMobileTab> onSelect;
+  /// How far the pill reaches up from the bottom of the screen.
+  static double occupied(BuildContext context) {
+    if (themeSlotDisabled(context, ThemeChromeSlots.homeTabBar)) return 0;
+    return _barHeight(context) +
+        floatGap +
+        MediaQuery.viewPaddingOf(context).bottom;
+  }
+
+  final String selectedSlot;
+  final ValueChanged<String> onSelect;
   final String handle;
   final String accountId;
   final ImageProvider? avatar;
 
-  static const _tabs = <_HomeTabSpec>[
-    _HomeTabSpec(
-      HomeMobileTab.chats,
-      'Chats',
-      icon: Icons.forum_outlined,
-      selectedIcon: Icons.forum_rounded,
-    ),
-    _HomeTabSpec(
-      HomeMobileTab.explore,
-      'Explore',
-      icon: Icons.explore_outlined,
-      selectedIcon: Icons.explore_rounded,
-    ),
-    _HomeTabSpec(
-      HomeMobileTab.you,
-      'You',
-      avatar: true,
-    ),
-  ];
+  static _HomeTabSpec _specFor(ShellTabMeta meta) {
+    if (meta.slot == FeatureSlots.homeYou) {
+      return _HomeTabSpec(meta.slot, meta.label, avatar: true);
+    }
+    if (meta.slot == FeatureSlots.homeChats) {
+      return _HomeTabSpec(
+        meta.slot,
+        meta.label,
+        icon: Icons.forum_outlined,
+        selectedIcon: Icons.forum_rounded,
+      );
+    }
+    if (meta.slot == FeatureSlots.homeExplore) {
+      return _HomeTabSpec(
+        meta.slot,
+        meta.label,
+        icon: Icons.explore_outlined,
+        selectedIcon: Icons.explore_rounded,
+      );
+    }
+    return _HomeTabSpec(meta.slot, meta.label, icon: meta.icon);
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final dark = scheme.brightness == Brightness.dark;
+    final tokens = AsemanTokens.maybeOf(context);
+    final nav = tokens?.control('nav_pill');
+    final capsuleRadius = nav?.borderRadius ?? BorderRadius.circular(999);
+    final barH = _barHeight(context);
+    final iconSize = tokens?.language.iconSize ?? 22;
+    final metas = homePhoneTabsOf(context);
+    final tabs = [
+      for (final meta in metas) _specFor(meta),
+    ];
+    if (tabs.isEmpty) {
+      tabs.addAll([
+        const _HomeTabSpec(FeatureSlots.homeChats, 'Chats',
+            icon: Icons.forum_outlined, selectedIcon: Icons.forum_rounded),
+        const _HomeTabSpec(FeatureSlots.homeExplore, 'Explore',
+            icon: Icons.explore_outlined, selectedIcon: Icons.explore_rounded),
+        const _HomeTabSpec(FeatureSlots.homeYou, 'You', avatar: true),
+      ]);
+    }
+    final selectedIndex = tabs
+        .indexWhere((s) => s.slot == selectedSlot)
+        .clamp(0, tabs.length - 1);
     return Padding(
       padding: EdgeInsets.only(
         bottom: floatGap + MediaQuery.viewPaddingOf(context).bottom,
@@ -755,50 +851,50 @@ class HomeTabBar extends StatelessWidget {
       child: Center(
         child: DecoratedBox(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: dark ? .30 : .12),
-                blurRadius: 28,
-                offset: const Offset(0, 10),
-              ),
-            ],
+            borderRadius: capsuleRadius,
+            boxShadow: tokens?.language.shadow
+                    .resolve(scheme, accent: scheme.primary) ??
+                AppFab.glowOf(scheme),
           ),
           child: GlassSurface(
-            alpha: AppSurfaces.overlayAlpha,
-            blur: AppSurfaces.blurSigma,
-            borderRadius: BorderRadius.circular(999),
+            alpha: AppSurfaces.overlayAlphaResolved(tokens),
+            blur: AppSurfaces.blurSigmaResolved(tokens),
+            borderRadius: capsuleRadius,
             child: SizedBox(
-              height: height,
+              height: barH,
               child: Padding(
-                padding: const EdgeInsets.all(5),
+                padding: EdgeInsets.all(nav?.paddingV.clamp(3, 10) ?? 5),
                 child: Stack(
                   children: [
                     AnimatedPositioned(
                       duration: const Duration(milliseconds: 260),
                       curve: Curves.easeOutCubic,
-                      left: tabWidth * tab.index + 2,
+                      left: tabWidth * selectedIndex + 2,
                       width: tabWidth - 4,
                       top: 0,
                       bottom: 0,
                       child: DecoratedBox(
-                        decoration: AppFab.tabIndicatorOf(scheme, radius: 999),
+                        decoration: AppFab.tabIndicatorOf(
+                          scheme,
+                          tokens: tokens,
+                        ),
                       ),
                     ),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        for (final spec in _tabs)
+                        for (final spec in tabs)
                           SizedBox(
                             width: tabWidth,
                             child: _HomeTabButton(
                               spec: spec,
-                              selected: spec.tab == tab,
+                              selected: spec.slot == selectedSlot,
                               handle: handle,
                               accountId: accountId,
                               avatar: avatar,
-                              onTap: () => onSelect(spec.tab),
+                              iconSize: iconSize,
+                              onTap: () => onSelect(spec.slot),
                             ),
                           ),
                       ],
@@ -816,14 +912,14 @@ class HomeTabBar extends StatelessWidget {
 
 class _HomeTabSpec {
   const _HomeTabSpec(
-    this.tab,
+    this.slot,
     this.label, {
     this.icon,
     this.selectedIcon,
     this.avatar = false,
   });
 
-  final HomeMobileTab tab;
+  final String slot;
   final String label;
   final IconData? icon;
   final IconData? selectedIcon;
@@ -838,6 +934,7 @@ class _HomeTabButton extends StatelessWidget {
     this.handle = '',
     this.accountId = '',
     this.avatar,
+    this.iconSize = 22,
   });
 
   final _HomeTabSpec spec;
@@ -846,12 +943,14 @@ class _HomeTabButton extends StatelessWidget {
   final String handle;
   final String accountId;
   final ImageProvider? avatar;
+  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final color = selected ? scheme.primary : scheme.onSurfaceVariant;
     final initials = handle.isEmpty ? '?' : handle[0].toUpperCase();
+    final avatarR = (iconSize * .5).clamp(9.0, 14.0);
     return Semantics(
       button: true,
       selected: selected,
@@ -863,30 +962,37 @@ class _HomeTabButton extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (spec.avatar)
-              HaloRing(
-                pad: 1.6,
-                identity: HaloRingCache.person(accountId),
-                accent: color,
-                child: CircleAvatar(
-                  radius: 11,
+              Builder(builder: (context) {
+                final size = avatarR * 2;
+                final corners = context.avatarBorderRadius(size);
+                final face = AvatarFace(
+                  size: size,
+                  borderRadius: corners,
                   backgroundColor: color.withValues(alpha: .18),
                   foregroundImage: avatar,
-                  onForegroundImageError: avatar == null ? null : (_, __) {},
+                  onImageError: avatar == null ? null : (_, __) {},
                   child: Text(
                     initials,
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: avatarR * .9,
                       fontWeight: FontWeight.w800,
                       height: 1,
                       color: color,
                     ),
                   ),
-                ),
-              )
+                );
+                return HaloRing(
+                  pad: 1.6,
+                  identity: HaloRingCache.person(accountId),
+                  accent: color,
+                  borderRadius: corners,
+                  child: face,
+                );
+              })
             else
               Icon(
                 selected ? spec.selectedIcon! : spec.icon!,
-                size: 22,
+                size: iconSize,
                 color: color,
               ),
             const SizedBox(height: 2),
@@ -924,9 +1030,9 @@ class _SearchBar extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
           child: GlassSurface(
-            alpha: AppSurfaces.cardAlpha,
-            blur: AppSurfaces.blurSigma,
-            borderRadius: BorderRadius.circular(22),
+            alpha: AppSurfaces.cardAlphaOf(context),
+            blur: AppSurfaces.blurSigmaOf(context),
+            borderRadius: ThemeChrome.inputShell(context).radius,
             onTap: onTap,
             child: SizedBox(
               height: _HeroContent._barHeight,
@@ -999,7 +1105,7 @@ class _FeedHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: scheme.secondaryContainer,
+            color: scheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(999),
           ),
           child: Text(
@@ -1007,7 +1113,7 @@ class _FeedHeader extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: scheme.onSecondaryContainer,
+              color: scheme.onSurfaceVariant,
             ),
           ),
         ),
@@ -1030,15 +1136,15 @@ class _EmptyFeed extends StatelessWidget {
             width: 72,
             height: 72,
             decoration: ShapeDecoration(
-              color: scheme.secondaryContainer,
+              color: scheme.surfaceContainerHighest,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: AppShape.borderRadius(context, 24),
               ),
             ),
             child: Icon(
               Icons.search_off_rounded,
               size: 34,
-              color: scheme.onSecondaryContainer,
+              color: scheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 14),
@@ -1075,24 +1181,21 @@ class _DesktopRail extends StatelessWidget {
     return SizedBox(
       width: width,
       height: height,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: .12),
-              blurRadius: 30,
-              offset: const Offset(0, 12),
-            ),
-          ],
-        ),
-        child: GlassSurface(
-          alpha: AppSurfaces.cardAlpha,
-          blur: AppSurfaces.blurSigma,
-          borderRadius: BorderRadius.circular(30),
-          child: SizedBox.expand(child: child),
-        ),
-      ),
+      child: Builder(builder: (context) {
+        final shell = ThemeChrome.floatingShell(context, lift: 2);
+        final radius = shell.borderRadius is BorderRadius
+            ? shell.borderRadius as BorderRadius
+            : context.cardBorderRadius;
+        return DecoratedBox(
+          decoration: shell,
+          child: GlassSurface(
+            alpha: AppSurfaces.cardAlphaOf(context),
+            blur: AppSurfaces.blurSigmaOf(context),
+            borderRadius: radius,
+            child: SizedBox.expand(child: child),
+          ),
+        );
+      }),
     );
   }
 }

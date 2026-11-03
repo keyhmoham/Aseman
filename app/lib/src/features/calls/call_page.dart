@@ -1,8 +1,13 @@
 import 'dart:async';
+import '../../core/theme/app_shape.dart';
 
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/theme_chrome.dart';
+import '../../core/theme/theme_roles.dart';
+import '../../shared/widgets/avatar_face.dart';
 import '../../shared/widgets/sky_ui.dart';
 import 'call_service.dart';
 import 'rtc_session.dart';
@@ -317,7 +322,7 @@ class _CallPageState extends State<CallPage> {
                             width: 112,
                             height: 160,
                             child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: AppShape.borderRadius(context, 12),
                               child: ColoredBox(
                                 color: Colors.black87,
                                 child: local,
@@ -329,20 +334,27 @@ class _CallPageState extends State<CallPage> {
                   : Column(
                       children: [
                         const Spacer(),
-                        HaloRing(
-                          pad: 3,
-                          child: CircleAvatar(
-                            radius: 48,
-                            backgroundColor: scheme.primaryContainer,
-                            child: Icon(
-                              widget.video
-                                  ? Icons.videocam_rounded
-                                  : Icons.call_rounded,
-                              size: 40,
-                              color: scheme.onPrimaryContainer,
+                        Builder(builder: (context) {
+                          const radius = 48.0;
+                          final size = radius * 2;
+                          final corners = context.avatarBorderRadius(size);
+                          return HaloRing(
+                            pad: 3,
+                            borderRadius: corners,
+                            child: AvatarFace(
+                              size: size,
+                              borderRadius: corners,
+                              backgroundColor: ThemeRoles.wellFill(context),
+                              child: Icon(
+                                widget.video
+                                    ? Icons.videocam_rounded
+                                    : Icons.call_rounded,
+                                size: 40,
+                                color: ThemeRoles.wellInk(context),
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        }),
                         const SizedBox(height: 20),
                         Text(widget.peerLabel,
                             style: const TextStyle(
@@ -424,7 +436,7 @@ class _CallPageState extends State<CallPage> {
                           ),
                           const SizedBox(width: 36),
                           _RoundAction(
-                            color: Colors.green,
+                            color: AppColors.successOf(context),
                             icon: Icons.call_rounded,
                             label: 'Accept',
                             onPressed: _busy

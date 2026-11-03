@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
 import '../../../core/utils/context_extensions.dart';
@@ -548,16 +549,16 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
           MiniTag(
               _public ? 'PUBLIC' : 'PRIVATE',
               _public
-                  ? AppColors.success
+                  ? AppColors.successOf(context)
                   : Theme.of(context).colorScheme.onSurfaceVariant),
-          if (_space.home) const MiniTag('HOME', AppColors.primary),
+          if (_space.home) MiniTag('HOME', AppColors.primaryOf(context)),
           MiniTag(
               'OWNER · ${_profile?.ownerHandle ?? ''}',
               _isOwner
-                  ? AppColors.cyan
+                  ? AppColors.cyanOf(context)
                   : Theme.of(context).colorScheme.onSurfaceVariant),
           if (_myRole.isNotEmpty)
-            MiniTag('YOUR ROLE · ${_myRole.toUpperCase()}', AppColors.warning),
+            MiniTag('YOUR ROLE · ${_myRole.toUpperCase()}', AppColors.warningOf(context)),
         ]),
       ]),
     );
@@ -640,7 +641,7 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
                           onPressed: _busy ? null : () => _deleteRoom(room),
                           icon: const Icon(Icons.delete_outline_rounded,
                               size: 18),
-                          color: AppColors.danger)
+                          color: AppColors.dangerOf(context))
                       : null,
                 ),
             ]),
@@ -766,15 +767,16 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
       decoration: BoxDecoration(
-        color: AppColors.danger.withValues(alpha: .06),
+        color: AppColors.dangerOf(context).withValues(alpha: .06),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.danger.withValues(alpha: .35)),
+        border: Border.all(color: AppColors.dangerOf(context).withValues(alpha: .35)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Row(children: [
-          Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 20),
-          SizedBox(width: 10),
-          Text('Danger zone',
+        Row(children: [
+          Icon(Icons.warning_amber_rounded,
+              color: AppColors.dangerOf(context), size: 20),
+          const SizedBox(width: 10),
+          const Text('Danger zone',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
         ]),
         const SizedBox(height: 12),
@@ -789,7 +791,7 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
               width: double.infinity,
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.danger,
+                    backgroundColor: AppColors.dangerOf(context),
                     foregroundColor: Colors.white),
                 onPressed: _busy ? null : _delete,
                 icon: const Icon(Icons.delete_forever_rounded, size: 18),
@@ -806,7 +808,7 @@ class _SpaceSettingsPanelState extends State<SpaceSettingsPanel> {
               width: double.infinity,
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.danger,
+                    backgroundColor: AppColors.dangerOf(context),
                     foregroundColor: Colors.white),
                 onPressed: _busy ? null : _leave,
                 icon: const Icon(Icons.logout_rounded, size: 18),
@@ -837,7 +839,7 @@ class _Section extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return GlassSurface(
-      borderRadius: BorderRadius.circular(AppShape.card),
+      borderRadius: BorderRadius.circular(AppShape.cardOf(context)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -846,10 +848,10 @@ class _Section extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: ShapeDecoration(
-                  color: colors.secondaryContainer,
+                  color: ThemeRoles.wellFill(context),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14))),
-              child: Icon(icon, size: 21, color: colors.onSecondaryContainer),
+              child: Icon(icon, size: 21, color: ThemeRoles.wellInk(context)),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -925,8 +927,8 @@ class _MemberTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final roleColor = switch (_role) {
-      'owner' => AppColors.cyan,
-      'admin' => AppColors.warning,
+      'owner' => AppColors.cyanOf(context),
+      'admin' => AppColors.warningOf(context),
       _ => Theme.of(context).colorScheme.onSurfaceVariant,
     };
     return ListTile(
@@ -943,7 +945,7 @@ class _MemberTile extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w700))),
         if (isMe) ...[
           const SizedBox(width: 6),
-          const MiniTag('YOU', AppColors.primary),
+          MiniTag('YOU', AppColors.primaryOf(context)),
         ],
       ]),
       subtitle: Padding(
@@ -968,10 +970,10 @@ class _MemberTile extends StatelessWidget {
                 const PopupMenuItem(
                     value: 'guest', child: Text('Set as guest')),
                 const PopupMenuDivider(),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'remove',
                   child: Text('Remove from workspace',
-                      style: TextStyle(color: AppColors.danger)),
+                      style: TextStyle(color: AppColors.dangerOf(context))),
                 ),
               ],
             )

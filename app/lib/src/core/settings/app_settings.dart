@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Device theme: light, dark, or system, plus the accent colour.
+import '../theme/theme_pack.dart';
+
+/// Device theme: light, dark, or system, plus the active pack's palette.
 ///
 /// Stored in [SharedPreferences], the app's local cache. That plugin writes
 /// to the platform store on Android, iOS, macOS, Windows, and Linux, and to
@@ -15,6 +17,8 @@ class AppSettingsController extends ChangeNotifier {
 
   ThemeMode themeMode = ThemeMode.system;
   Color accent = defaultAccent;
+  /// Empty until the user picks a pack palette (or restore finds one).
+  String paletteId = '';
 
   bool _dirty = false;
   Future<void>? _save;
@@ -32,6 +36,7 @@ class AppSettingsController extends ChangeNotifier {
       if (decoded is! Map) return;
       final mode = _mode(decoded['mode']);
       final color = _color(decoded['accent']);
+      final palette = decoded['palette'];
       var changed = false;
       if (mode != null && mode != themeMode) {
         themeMode = mode;
@@ -39,6 +44,10 @@ class AppSettingsController extends ChangeNotifier {
       }
       if (color != null && color != accent) {
         accent = color;
+        changed = true;
+      }
+      if (palette is String && palette.isNotEmpty && palette != paletteId) {
+        paletteId = palette;
         changed = true;
       }
       if (changed && epoch == _epoch) notifyListeners();
@@ -55,9 +64,36 @@ class AppSettingsController extends ChangeNotifier {
     _scheduleSave();
   }
 
+  /// Selects a palette option proposed by the active theme pack.
+  void setPalette(ThemePaletteOption option) {
+    if (paletteId == option.id && accent.toARGB32() == option.accent.toARGB32()) {
+      return;
+    }
+    paletteId = option.id;
+    accent = option.accent;
+    _epoch++;
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// Legacy accent-only setter — prefer [setPalette] so the id stays in sync.
   void setAccent(Color value) {
     if (accent == value) return;
     accent = value;
+    _epoch++;
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// When the theme pack changes, snap to a palette that pack actually offers.
+  void syncPaletteToPack(ThemePack pack) {
+    final resolved = pack.resolvePalette(paletteId: paletteId, accent: accent);
+    if (paletteId == resolved.id &&
+        accent.toARGB32() == resolved.accent.toARGB32()) {
+      return;
+    }
+    paletteId = resolved.id;
+    accent = resolved.accent;
     _epoch++;
     notifyListeners();
     _scheduleSave();
@@ -77,6 +113,7 @@ class AppSettingsController extends ChangeNotifier {
         _dirty = false;
         final mode = themeMode;
         final color = accent;
+        final palette = paletteId;
         try {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString(
@@ -84,6 +121,7 @@ class AppSettingsController extends ChangeNotifier {
             jsonEncode({
               'mode': mode.name,
               'accent': color.toARGB32().toRadixString(16).padLeft(8, '0'),
+              'palette': palette,
             }),
           );
         } catch (_) {

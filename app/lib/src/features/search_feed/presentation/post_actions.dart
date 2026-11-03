@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_surfaces.dart';
+import '../../../core/theme/aseman_tokens.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../domain/feed_post.dart';
 import 'rich_post_parser.dart';
@@ -127,7 +128,7 @@ class _ReportPostDialogState extends State<_ReportPostDialog> {
                   child: Material(
                     color: _reason == key
                         ? scheme.errorContainer.withValues(alpha: .55)
-                        : AppSurfaces.card(scheme),
+                        : AppSurfaces.card(scheme, tokens: AsemanTokens.maybeOf(context)),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                       side: BorderSide(

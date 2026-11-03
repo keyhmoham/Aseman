@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import '../../../../core/theme/app_shape.dart';
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
@@ -171,11 +172,11 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppShape.borderRadius(context, 16),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(file.isVoice ? Icons.mic_rounded : Icons.music_note_rounded,
-              color: AppColors.primary, size: 40),
+              color: AppColors.primaryOf(context), size: 40),
           const SizedBox(height: 8),
           Text(file.name, style: const TextStyle(fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
@@ -194,11 +195,11 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppShape.borderRadius(context, 16),
       ),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.insert_drive_file_outlined,
-            color: AppColors.primary, size: 40),
+        Icon(Icons.insert_drive_file_outlined,
+            color: AppColors.primaryOf(context), size: 40),
         const SizedBox(height: 8),
         Text(file.name,
             textAlign: TextAlign.center,

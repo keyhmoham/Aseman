@@ -33,6 +33,8 @@ const (
 	EntityStatic = "static/"
 	// EntityAssets is a prefix; other assets live under "assets/<name>".
 	EntityAssets = "assets/"
+	// EntityThemePack is the installable aseman.theme/v1 JSON for KindTheme.
+	EntityThemePack = "static/theme.json"
 )
 
 // Entity is a single runtime artifact of a bot, keyed by a runtime contract

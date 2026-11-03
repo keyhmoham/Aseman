@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../core/theme/app_shape.dart';
 
 import '../core/elpian_services.dart';
 import '../core/event_dispatcher.dart';
@@ -183,7 +184,7 @@ class _ElpianTextFieldViewState extends State<_ElpianTextFieldView> {
         : iconWidget(_props['trailingIcon'] ?? _props['suffixIcon']);
     OutlineInputBorder border(Color color, [double width = 1]) =>
         OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppShape.borderRadius(context, 16),
           borderSide: BorderSide(color: color, width: width),
         );
     return TextField(

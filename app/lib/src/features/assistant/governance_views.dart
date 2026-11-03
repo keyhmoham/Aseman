@@ -4,12 +4,154 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app_dependencies.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/theme_chrome.dart';
+import '../../core/theme/theme_roles.dart';
+import '../../shared/widgets/avatar_face.dart';
+import '../../shared/widgets/app_inputs.dart';
+import '../../shared/widgets/glass_surface.dart';
+import '../../shared/widgets/skeleton.dart';
 import '../rooms/presentation/widgets/download_helper.dart';
 import 'assistant_common.dart';
 
 /// The governance views shared by the admin console (the node's scope, no
 /// [space]) and a project's settings (its own scope): the action policy, the
 /// audit trail, the computer's network policy and saved credentials.
+
+class _Section extends StatelessWidget {
+  const _Section({
+    required this.title,
+    required this.child,
+    this.subtitle,
+    this.icon,
+    this.trailing,
+  });
+  final String title;
+  final String? subtitle;
+  final IconData? icon;
+  final Widget? trailing;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AppCard(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 20, color: scheme.primary),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -.1,
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          subtitle!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.3,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (trailing != null) trailing!,
+              ],
+            ),
+            const SizedBox(height: 14),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Empty extends StatelessWidget {
+  const _Empty(this.title, this.body, {this.icon});
+  final String title;
+  final String body;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: ShapeDecoration(
+              color: ThemeRoles.wellFill(context),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+            child: Icon(
+              icon ?? Icons.inbox_outlined,
+              color: ThemeRoles.wellInk(context),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(
+            body,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  const _Pill(this.label, {this.color});
+  final String label;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = color ?? Theme.of(context).colorScheme.onSurfaceVariant;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 4, 10, 4),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: .15),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: tone,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
 
 /// The CEL policy: deny rules first, then ask, then allow; anything no rule
 /// allows is refused. A dry run shows how a sample action is decided.
@@ -47,8 +189,8 @@ class _PolicyEditorState extends State<PolicyEditor> {
   String verdict = '';
 
   Map<String, dynamic> get _scope => {
-    if (widget.space.isNotEmpty) 'space': widget.space,
-  };
+        if (widget.space.isNotEmpty) 'space': widget.space,
+      };
 
   @override
   void initState() {
@@ -85,9 +227,11 @@ class _PolicyEditorState extends State<PolicyEditor> {
         defaults = jsonMap(out['defaults']);
         isDefault = out['default'] == true;
         variables = jsonStrings(out['variables']);
-        if (jsonStrings(out['effects']).isNotEmpty)
+        if (jsonStrings(out['effects']).isNotEmpty) {
           effects = jsonStrings(out['effects']);
+        }
         loading = false;
+        error = '';
       });
     } catch (e) {
       if (mounted) {
@@ -162,7 +306,6 @@ class _PolicyEditorState extends State<PolicyEditor> {
           decoration: InputDecoration(
             labelText: label,
             helperText: help,
-            border: const OutlineInputBorder(),
             alignLabelWithHint: true,
           ),
         ),
@@ -170,119 +313,163 @@ class _PolicyEditorState extends State<PolicyEditor> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator());
-    if (error.isNotEmpty)
-      return Text(
-        error,
-        style: TextStyle(color: Theme.of(context).colorScheme.error),
-      );
+    final scheme = Theme.of(context).colorScheme;
+    if (loading) return const SkeletonList(itemCount: 3);
+    if (error.isNotEmpty) {
+      return _Empty('Could not load policy', error, icon: Icons.cloud_off_rounded);
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          isDefault
+        _Section(
+          title: 'Action policy',
+          icon: Icons.policy_rounded,
+          subtitle: isDefault
               ? 'The default policy is in effect: it asks before sending, paying, signing or deleting, and lets work started on its own only read.'
               : 'This scope has its own policy.',
-        ),
-        const SizedBox(height: 12),
-        _rulesField(
-          'Deny',
-          'One CEL rule per line. A match refuses the action.',
-          deny,
-        ),
-        _rulesField(
-          'Ask',
-          'A match asks the person (Allow once, Always allow, Refuse).',
-          ask,
-        ),
-        _rulesField(
-          'Allow',
-          'A match allows the action. Nothing matching: refused.',
-          allow,
-        ),
-        if (variables.isNotEmpty)
-          Text(
-            'Variables: ${variables.join(', ')}',
-            style: const TextStyle(fontSize: 12),
+          trailing: _Pill(
+            isDefault ? 'Default' : 'Custom',
+            color: isDefault ? AppColors.successOf(context) : scheme.primary,
           ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: [
-            FilledButton(onPressed: _save, child: const Text('Save policy')),
-            TextButton(
-              onPressed: defaults.isEmpty
-                  ? null
-                  : () => setState(() => _fill(defaults)),
-              child: const Text('Start from the default'),
-            ),
-          ],
-        ),
-        const Divider(height: 32),
-        const Text(
-          'Try an action',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            SizedBox(
-              width: 200,
-              child: TextField(
-                controller: sampleTool,
-                decoration: const InputDecoration(labelText: 'Tool'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _rulesField(
+                'Deny',
+                'One CEL rule per line. A match refuses the action.',
+                deny,
               ),
-            ),
-            DropdownButton<String>(
-              value: effects.contains(sampleEffect)
-                  ? sampleEffect
-                  : effects.first,
-              items: [
-                for (final e in effects)
-                  DropdownMenuItem(value: e, child: Text(e)),
-              ],
-              onChanged: (v) =>
-                  setState(() => sampleEffect = v ?? sampleEffect),
-            ),
-            DropdownButton<String>(
-              value: sampleInitiator,
-              items: [
-                for (final k in const [
-                  'person',
-                  'routine',
-                  'responsibility',
-                  'proactive',
-                  'handoff',
-                  'channel',
-                ])
-                  DropdownMenuItem(value: k, child: Text('started by $k')),
-              ],
-              onChanged: (v) =>
-                  setState(() => sampleInitiator = v ?? sampleInitiator),
-            ),
-            SizedBox(
-              width: 240,
-              child: TextField(
-                controller: sampleCommand,
-                decoration: const InputDecoration(
-                  labelText: 'Command (optional)',
+              _rulesField(
+                'Ask',
+                'A match asks the person (Allow once, Always allow, Refuse).',
+                ask,
+              ),
+              _rulesField(
+                'Allow',
+                'A match allows the action. Nothing matching: refused.',
+                allow,
+              ),
+              if (variables.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(
+                    'Variables: ${variables.join(', ')}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
                 ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _save,
+                    icon: const Icon(Icons.save_rounded, size: 18),
+                    label: const Text('Save policy'),
+                  ),
+                  TextButton(
+                    onPressed: defaults.isEmpty
+                        ? null
+                        : () => setState(() => _fill(defaults)),
+                    child: const Text('Start from the default'),
+                  ),
+                ],
               ),
-            ),
-            OutlinedButton(onPressed: _test, child: const Text('Decide')),
-          ],
-        ),
-        if (verdict.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              verdict,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
+            ],
           ),
+        ),
+        const SizedBox(height: 16),
+        _Section(
+          title: 'Try an action',
+          icon: Icons.science_outlined,
+          subtitle: 'Dry-run a sample request against the rules above.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Wrap(
+                spacing: 12,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 200,
+                    child: TextField(
+                      controller: sampleTool,
+                      decoration: const InputDecoration(labelText: 'Tool'),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 160,
+                    child: DropdownButtonFormField<String>(
+                      value: effects.contains(sampleEffect)
+                          ? sampleEffect
+                          : effects.first,
+                      decoration: const InputDecoration(labelText: 'Effect'),
+                      items: [
+                        for (final e in effects)
+                          DropdownMenuItem(value: e, child: Text(e)),
+                      ],
+                      onChanged: (v) =>
+                          setState(() => sampleEffect = v ?? sampleEffect),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 200,
+                    child: DropdownButtonFormField<String>(
+                      value: sampleInitiator,
+                      decoration:
+                          const InputDecoration(labelText: 'Started by'),
+                      items: [
+                        for (final k in const [
+                          'person',
+                          'routine',
+                          'responsibility',
+                          'proactive',
+                          'handoff',
+                          'channel',
+                        ])
+                          DropdownMenuItem(value: k, child: Text(k)),
+                      ],
+                      onChanged: (v) => setState(
+                        () => sampleInitiator = v ?? sampleInitiator,
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 240,
+                    child: TextField(
+                      controller: sampleCommand,
+                      decoration: const InputDecoration(
+                        labelText: 'Command (optional)',
+                      ),
+                    ),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: _test,
+                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                    label: const Text('Decide'),
+                  ),
+                ],
+              ),
+              if (verdict.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                GlassSurface(
+                  borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
+                  color: ThemeRoles.wellFill(context),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Text(
+                      verdict,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -311,11 +498,11 @@ class _AuditViewState extends State<AuditView> {
   String error = '';
 
   Map<String, dynamic> get _query => {
-    if (widget.space.isNotEmpty) 'space': widget.space,
-    if (decision.isNotEmpty) 'decision': decision,
-    if (initiator.isNotEmpty) 'initiator': initiator,
-    if (unattended) 'unattended': true,
-  };
+        if (widget.space.isNotEmpty) 'space': widget.space,
+        if (decision.isNotEmpty) 'decision': decision,
+        if (initiator.isNotEmpty) 'initiator': initiator,
+        if (unattended) 'unattended': true,
+      };
 
   @override
   void initState() {
@@ -383,23 +570,20 @@ class _AuditViewState extends State<AuditView> {
     );
   }
 
-  Widget _filter(
-    String label,
-    String value,
-    List<String> options,
-    ValueChanged<String> set,
-  ) => DropdownButton<String>(
-    value: value,
-    items: [
-      DropdownMenuItem(value: '', child: Text('Any $label')),
-      for (final o in options) DropdownMenuItem(value: o, child: Text(o)),
-    ],
-    onChanged: (v) {
-      set(v ?? '');
-      offset = 0;
-      _load();
-    },
-  );
+  Color _decisionColor(String d) => switch (d) {
+        'deny' || 'refused' => AppColors.dangerOf(context),
+        'ask' => AppColors.warningOf(context),
+        'error' => AppColors.dangerOf(context),
+        'allow' || 'approved' => AppColors.successOf(context),
+        _ => Theme.of(context).colorScheme.onSurfaceVariant,
+      };
+
+  IconData _decisionIcon(String d) => switch (d) {
+        'deny' || 'refused' => Icons.block_rounded,
+        'ask' => Icons.help_outline_rounded,
+        'error' => Icons.error_outline_rounded,
+        _ => Icons.check_circle_rounded,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -407,103 +591,190 @@ class _AuditViewState extends State<AuditView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 4,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            _filter('decision', decision, const [
-              'allow',
-              'ask',
-              'deny',
-              'approved',
-              'refused',
-              'error',
-            ], (v) => decision = v),
-            _filter('initiator', initiator, const [
-              'person',
-              'routine',
-              'responsibility',
-              'proactive',
-              'handoff',
-              'channel',
-              'deployment',
-            ], (v) => initiator = v),
-            FilterChip(
-              label: const Text('Unattended only'),
-              selected: unattended,
-              onSelected: (v) {
-                unattended = v;
-                offset = 0;
-                _load();
-              },
-            ),
-            OutlinedButton.icon(
-              onPressed: _export,
-              icon: const Icon(Icons.download_rounded),
-              label: const Text('Export CSV'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (error.isNotEmpty)
-          Text(error, style: TextStyle(color: scheme.error)),
-        if (loading) const LinearProgressIndicator(),
-        if (!loading && events.isEmpty && error.isEmpty)
-          const Text('Nothing recorded under this filter.'),
-        for (final e in events)
-          ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(switch ('${e['decision']}') {
-              'deny' || 'refused' => Icons.block_rounded,
-              'ask' => Icons.help_outline_rounded,
-              'error' => Icons.error_outline_rounded,
-              _ => Icons.check_rounded,
-            }),
-            title: Text(
-              [
-                e['tool'] ?? e['event'],
-                e['target'],
-              ].where((x) => '${x ?? ''}'.isNotEmpty).join(' · '),
-            ),
-            subtitle: Text(
-              [
-                '${e['decision']}${'${e['rule'] ?? ''}'.isEmpty ? '' : ' by ${e['rule']}'}',
-                if ('${e['agent_name'] ?? ''}'.isNotEmpty) '${e['agent_name']}',
-                'started by ${e['initiator_kind'] ?? 'person'}',
-                '${e['created_at'] ?? ''}'
-                    .replaceFirst('T', ' ')
-                    .split('.')
-                    .first,
-              ].join(' · '),
-            ),
+        _Section(
+          title: 'Audit trail',
+          icon: Icons.fact_check_rounded,
+          subtitle: 'Every agent action, who started it and what was decided.',
+          trailing: OutlinedButton.icon(
+            onPressed: _export,
+            icon: const Icon(Icons.download_rounded, size: 18),
+            label: const Text('Export CSV'),
           ),
-        if (total > _page)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('${offset + 1}–${offset + events.length} of $total'),
-              IconButton(
-                onPressed: offset == 0
-                    ? null
-                    : () {
-                        offset = (offset - _page).clamp(0, total);
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 180,
+                    child: DropdownButtonFormField<String>(
+                      value: decision,
+                      isExpanded: true,
+                      decoration:
+                          const InputDecoration(labelText: 'Decision'),
+                      items: [
+                        const DropdownMenuItem(
+                          value: '',
+                          child: Text('Any decision'),
+                        ),
+                        for (final o in const [
+                          'allow',
+                          'ask',
+                          'deny',
+                          'approved',
+                          'refused',
+                          'error',
+                        ])
+                          DropdownMenuItem(value: o, child: Text(o)),
+                      ],
+                      onChanged: (v) {
+                        decision = v ?? '';
+                        offset = 0;
                         _load();
                       },
-                icon: const Icon(Icons.chevron_left_rounded),
-              ),
-              IconButton(
-                onPressed: offset + _page >= total
-                    ? null
-                    : () {
-                        offset += _page;
+                    ),
+                  ),
+                  SizedBox(
+                    width: 200,
+                    child: DropdownButtonFormField<String>(
+                      value: initiator,
+                      isExpanded: true,
+                      decoration:
+                          const InputDecoration(labelText: 'Initiator'),
+                      items: [
+                        const DropdownMenuItem(
+                          value: '',
+                          child: Text('Any initiator'),
+                        ),
+                        for (final o in const [
+                          'person',
+                          'routine',
+                          'responsibility',
+                          'proactive',
+                          'handoff',
+                          'channel',
+                          'deployment',
+                        ])
+                          DropdownMenuItem(value: o, child: Text(o)),
+                      ],
+                      onChanged: (v) {
+                        initiator = v ?? '';
+                        offset = 0;
                         _load();
                       },
-                icon: const Icon(Icons.chevron_right_rounded),
+                    ),
+                  ),
+                  FilterChip(
+                    label: const Text('Unattended only'),
+                    selected: unattended,
+                    onSelected: (v) {
+                      unattended = v;
+                      offset = 0;
+                      _load();
+                    },
+                  ),
+                ],
               ),
+              const SizedBox(height: 12),
+              if (error.isNotEmpty)
+                Text(error, style: TextStyle(color: scheme.error)),
+              if (loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: SkeletonList(itemCount: 4),
+                )
+              else if (events.isEmpty && error.isEmpty)
+                const _Empty(
+                  'Nothing recorded',
+                  'Nothing matches this filter yet.',
+                  icon: Icons.fact_check_outlined,
+                )
+              else
+                for (final e in events)
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                    leading: Builder(builder: (context) {
+                      const size = 40.0;
+                      final corners = context.avatarBorderRadius(size);
+                      final color = _decisionColor('${e['decision']}');
+                      return AvatarFace(
+                        size: size,
+                        borderRadius: corners,
+                        backgroundColor: color.withValues(alpha: .16),
+                        child: Icon(
+                          _decisionIcon('${e['decision']}'),
+                          color: color,
+                          size: 20,
+                        ),
+                      );
+                    }),
+                    title: Text(
+                      [
+                        e['tool'] ?? e['event'],
+                        e['target'],
+                      ].where((x) => '${x ?? ''}'.isNotEmpty).join(' · '),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Text(
+                      [
+                        if ('${e['agent_name'] ?? ''}'.isNotEmpty)
+                          '${e['agent_name']}',
+                        'started by ${e['initiator_kind'] ?? 'person'}',
+                        '${e['created_at'] ?? ''}'
+                            .replaceFirst('T', ' ')
+                            .split('.')
+                            .first,
+                      ].join(' · '),
+                    ),
+                    trailing: _Pill(
+                      () {
+                        final rule = '${e['rule'] ?? ''}';
+                        final decision = '${e['decision']}';
+                        return rule.isEmpty ? decision : '$decision · $rule';
+                      }(),
+                      color: _decisionColor('${e['decision']}'),
+                    ),
+                  ),
+              if (total > _page)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${offset + 1}–${offset + events.length} of $total',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: offset == 0
+                            ? null
+                            : () {
+                                offset = (offset - _page).clamp(0, total);
+                                _load();
+                              },
+                        icon: const Icon(Icons.chevron_left_rounded),
+                      ),
+                      IconButton(
+                        onPressed: offset + _page >= total
+                            ? null
+                            : () {
+                                offset += _page;
+                                _load();
+                              },
+                        icon: const Icon(Icons.chevron_right_rounded),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
+        ),
       ],
     );
   }
@@ -528,13 +799,23 @@ class _EgressEditorState extends State<EgressEditor> {
     'defaults_plus_allowlist': (
       'Common developer services plus my list',
       'Package registries, Git hosts and model providers, and the hosts below.',
+      Icons.public_rounded,
     ),
-    'allowlist_only': ('Only my list', 'Nothing but the hosts below.'),
+    'allowlist_only': (
+      'Only my list',
+      'Nothing but the hosts below.',
+      Icons.list_alt_rounded,
+    ),
     'allow_all': (
       'Anywhere',
       'The computer connects anywhere except private networks and cloud metadata.',
+      Icons.travel_explore_rounded,
     ),
-    'deny_all': ('Nowhere', 'No connections except to this node.'),
+    'deny_all': (
+      'Nowhere',
+      'No connections except to this node.',
+      Icons.block_rounded,
+    ),
   };
 
   final allow = TextEditingController();
@@ -587,57 +868,71 @@ class _EgressEditorState extends State<EgressEditor> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const LinearProgressIndicator();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        RadioGroup<String>(
-          groupValue: mode,
-          onChanged: (v) {
-            if (canEdit) setState(() => mode = v ?? mode);
-          },
-          child: Column(
-            children: [
-              for (final m in _modes.entries)
-                RadioListTile<String>(
-                  contentPadding: EdgeInsets.zero,
-                  value: m.key,
-                  enabled: canEdit,
-                  title: Text(m.value.$1),
-                  subtitle: Text(m.value.$2),
-                ),
-            ],
-          ),
-        ),
-        TextField(
-          controller: allow,
-          enabled: canEdit,
-          minLines: 2,
-          maxLines: 8,
-          decoration: const InputDecoration(
-            labelText: 'Hosts',
-            helperText:
-                'One per line: api.example.com, or *.example.com for its subdomains',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        if (always.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              'Always reachable: ${always.join(', ')}',
-              style: const TextStyle(fontSize: 12),
+    if (loading) return const SkeletonList(itemCount: 3);
+    return _Section(
+      title: 'Network access',
+      icon: Icons.lan_rounded,
+      subtitle: 'Where this project’s computer may connect.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final m in _modes.entries) ...[
+            AppSwitchCard(
+              icon: m.value.$3,
+              title: m.value.$1,
+              subtitle: m.value.$2,
+              value: mode == m.key,
+              onChanged: !canEdit
+                  ? null
+                  : (v) {
+                      if (v) setState(() => mode = m.key);
+                    },
+            ),
+            const SizedBox(height: 8),
+          ],
+          const SizedBox(height: 6),
+          TextField(
+            controller: allow,
+            enabled: canEdit,
+            minLines: 2,
+            maxLines: 8,
+            decoration: const InputDecoration(
+              labelText: 'Hosts',
+              helperText:
+                  'One per line: api.example.com, or *.example.com for its subdomains',
+              alignLabelWithHint: true,
             ),
           ),
-        const SizedBox(height: 8),
-        if (canEdit)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilledButton(onPressed: _save, child: const Text('Save')),
-          )
-        else
-          const Text('Only the project\'s owner changes this.'),
-      ],
+          if (always.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Always reachable: ${always.join(', ')}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+          if (canEdit)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                onPressed: _save,
+                icon: const Icon(Icons.save_rounded, size: 18),
+                label: const Text('Save'),
+              ),
+            )
+          else
+            Text(
+              'Only the project’s owner changes this.',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -659,6 +954,7 @@ class SecretsView extends StatefulWidget {
 
 class _SecretsViewState extends State<SecretsView> {
   List<Map<String, dynamic>> secrets = const [];
+  bool loading = true;
 
   @override
   void initState() {
@@ -674,8 +970,11 @@ class _SecretsViewState extends State<SecretsView> {
       'secret_list',
       {'space': widget.space},
     );
-    if (mounted && out != null)
-      setState(() => secrets = jsonList(out['secrets']));
+    if (!mounted) return;
+    setState(() {
+      if (out != null) secrets = jsonList(out['secrets']);
+      loading = false;
+    });
   }
 
   Future<void> _add() async {
@@ -695,49 +994,72 @@ class _SecretsViewState extends State<SecretsView> {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      if (secrets.isEmpty)
-        const Text(
-          'No saved credentials. Agents ask for one with a masked box when they need it.',
-        ),
-      for (final s in secrets)
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.key_rounded),
-          title: Text('${s['name']}'),
-          subtitle: Text(
-            [
-              '•' * ((s['length'] as num?)?.toInt().clamp(4, 12) ?? 8),
-              if ('${s['site'] ?? ''}'.isNotEmpty) '${s['site']}',
-              'use as {{secret:${s['name']}}}',
-            ].join(' · '),
-          ),
-          trailing: IconButton(
-            tooltip: 'Delete',
-            icon: const Icon(Icons.delete_outline_rounded),
-            onPressed: () async {
-              final out = await runAction(
-                context,
-                widget.dependencies,
-                'governance',
-                'secret_delete',
-                {'id': s['id']},
-                'Deleted',
-              );
-              if (out != null) await _load();
-            },
-          ),
-        ),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: TextButton.icon(
-          onPressed: _add,
-          icon: const Icon(Icons.add_rounded),
-          label: const Text('Add a credential'),
-        ),
+  Widget build(BuildContext context) {
+    if (loading) return const SkeletonList(itemCount: 3);
+    return _Section(
+      title: 'Saved credentials',
+      icon: Icons.key_rounded,
+      subtitle:
+          'Names and lengths only — never values. Agents use them as {{secret:name}}.',
+      trailing: TextButton.icon(
+        onPressed: _add,
+        icon: const Icon(Icons.add_rounded, size: 18),
+        label: const Text('Add'),
       ),
-    ],
-  );
+      child: secrets.isEmpty
+          ? const _Empty(
+              'No saved credentials',
+              'Agents ask for one with a masked box when they need it.',
+              icon: Icons.key_off_outlined,
+            )
+          : Column(
+              children: [
+                for (final s in secrets)
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(vertical: 2),
+                    leading: Builder(builder: (context) {
+                      const size = 40.0;
+                      final corners = context.avatarBorderRadius(size);
+                      return AvatarFace(
+                        size: size,
+                        borderRadius: corners,
+                        backgroundColor: ThemeRoles.wellFill(context),
+                        child: Icon(
+                          Icons.key_rounded,
+                          color: ThemeRoles.wellInk(context),
+                        ),
+                      );
+                    }),
+                    title: Text(
+                      '${s['name']}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Text(
+                      [
+                        '•' *
+                            ((s['length'] as num?)?.toInt().clamp(4, 12) ?? 8),
+                        if ('${s['site'] ?? ''}'.isNotEmpty) '${s['site']}',
+                        'use as {{secret:${s['name']}}}',
+                      ].join(' · '),
+                    ),
+                    trailing: IconButton(
+                      tooltip: 'Delete',
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      onPressed: () async {
+                        final out = await runAction(
+                          context,
+                          widget.dependencies,
+                          'governance',
+                          'secret_delete',
+                          {'id': s['id']},
+                          'Deleted',
+                        );
+                        if (out != null) await _load();
+                      },
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
 }

@@ -3,6 +3,8 @@
 library;
 
 import 'dart:math' as math;
+import '../../../core/theme/app_shape.dart';
+import '../../../core/theme/theme_roles.dart';
 
 import 'package:flutter/material.dart';
 
@@ -85,11 +87,11 @@ class KitSection extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: p.scheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(12),
+                  color: ThemeRoles.wellFill(context),
+                  borderRadius: AppShape.borderRadius(context, 12),
                 ),
                 child: Icon(icon,
-                    size: 20, color: p.scheme.onSecondaryContainer),
+                    size: 20, color: ThemeRoles.wellInk(context)),
               ),
               const SizedBox(width: 12),
             ],
@@ -193,7 +195,7 @@ class _ExpandableState extends State<Expandable> {
                     height: 32,
                     decoration: BoxDecoration(
                       color: _open
-                          ? p.scheme.secondaryContainer
+                          ? ThemeRoles.selectedFill(context)
                           : Colors.transparent,
                       shape: BoxShape.circle,
                     ),

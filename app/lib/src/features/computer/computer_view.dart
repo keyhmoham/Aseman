@@ -66,13 +66,18 @@ abstract final class _Screen {
   static const text = Color(0x99E8ECEF);
 }
 
-Color computerStateColor(ComputerState s) => switch (s) {
-  ComputerState.awake => AppColors.success,
-  ComputerState.failed => AppColors.danger,
-  ComputerState.asleep => AppColors.warning,
-  ComputerState.none => AppColors.muted,
-  _ => AppColors.cyan,
-};
+Color computerStateColor(ComputerState s, [BuildContext? context]) =>
+    switch (s) {
+      ComputerState.awake => context != null
+          ? AppColors.successOf(context)
+          : AppColors.success,
+      ComputerState.failed =>
+        context != null ? AppColors.dangerOf(context) : AppColors.danger,
+      ComputerState.asleep =>
+        context != null ? AppColors.warningOf(context) : AppColors.warning,
+      ComputerState.none => AppColors.muted,
+      _ => context != null ? AppColors.cyanOf(context) : AppColors.cyan,
+    };
 
 /// A small light saying what the computer is doing; it breathes while the
 /// computer is on its way somewhere.
@@ -284,7 +289,7 @@ class _OffScreen extends StatelessWidget {
                           : Icons.power_settings_new_rounded,
                       size: big ? 40 : 22,
                       color: state == ComputerState.failed
-                          ? AppColors.danger.withValues(alpha: .7)
+                          ? AppColors.dangerOf(context).withValues(alpha: .7)
                           : const Color(0x40FFFFFF),
                     ),
                     SizedBox(height: big ? 10 : 5),
@@ -344,7 +349,7 @@ class _BusyScreen extends StatelessWidget {
                 height: big ? 28 : 18,
                 child: CircularProgressIndicator(
                   strokeWidth: big ? 2.6 : 2,
-                  color: AppColors.cyan,
+                  color: AppColors.cyanOf(context),
                   backgroundColor: const Color(0x1AFFFFFF),
                 ),
               ),

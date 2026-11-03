@@ -225,6 +225,15 @@ abstract final class BackendCapabilities {
       'stats',
       'unpublish',
     ],
+    'themes': [
+      'active',
+      'apply',
+      'create',
+      'edit',
+      'get',
+      'import_samples',
+      'uninstall',
+    ],
     'message': ['ask', 'get', 'list', 'requests', 'respond', 'send'],
     'posts': [
       'admin_post_report_resolve',

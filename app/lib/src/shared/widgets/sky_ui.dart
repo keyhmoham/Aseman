@@ -6,7 +6,14 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_surfaces.dart';
+import '../../core/theme/aseman_tokens.dart';
+import '../../core/theme/control_look.dart';
+import '../../core/theme/design_language.dart';
 import '../../core/theme/halo_ring_cache.dart';
+import '../../core/theme/theme_chrome.dart';
+import '../../core/theme/theme_pack.dart';
+import '../../core/theme/theme_roles.dart';
+import 'avatar_face.dart';
 
 /// Aseman UI primitives — quiet structure first.
 ///
@@ -25,11 +32,12 @@ class SkyAtmospherePainter extends CustomPainter {
     this.dark = true,
   });
 
-  /// Convenience from a [ColorScheme].
-  factory SkyAtmospherePainter.of(ColorScheme scheme) => SkyAtmospherePainter(
+  /// Convenience from a [ColorScheme] (+ optional pack cyan).
+  factory SkyAtmospherePainter.of(ColorScheme scheme, {Color? cyan}) =>
+      SkyAtmospherePainter(
         primary: scheme.primary,
         tertiary: scheme.tertiary,
-        cyan: AppColors.cyan,
+        cyan: cyan ?? scheme.secondary,
         dark: scheme.brightness == Brightness.dark,
       );
 
@@ -157,18 +165,14 @@ class SkyIconBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final a = accent ?? scheme.primary;
-    final r = size * .34;
+    final packIcon = AsemanTokens.maybeOf(context)?.language.iconSize;
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(r.clamp(10, 16)),
-        color: a.withValues(alpha: .12),
-        border: Border.all(color: a.withValues(alpha: .16)),
-      ),
+      decoration: context.iconWellDecoration(accent: a, size: size),
       child: Icon(
         icon,
-        size: iconSize ?? (size * .48),
+        size: iconSize ?? packIcon ?? (size * .48),
         color: a,
       ),
     );
@@ -276,6 +280,7 @@ class HaloRing extends StatelessWidget {
     this.identity = '',
     this.accent,
     this.pad = 2.2,
+    this.borderRadius,
   });
 
   final Widget child;
@@ -288,13 +293,31 @@ class HaloRing extends StatelessWidget {
   /// Ring stroke width (and inset around [child]).
   final double pad;
 
+  /// When set (or derived from the pack), the halo follows avatar corners
+  /// instead of always painting a circle.
+  final BorderRadius? borderRadius;
+
   @override
   Widget build(BuildContext context) {
-    final colors = identity.trim().isNotEmpty
+    // Unified packs: one halo accent (alpha variants only). Legacy multi-hue
+    // identity rings stay only when the pack opts out of unified colouring.
+    final tokens = AsemanTokens.maybeOf(context);
+    final haloAccent = accent ??
+        ThemeRoles.partAccent(context, ThemePartId.halo);
+    final haloSecondary =
+        ThemeRoles.partSecondary(context, ThemePartId.halo);
+    final colors = (tokens != null &&
+            !tokens.unifiedAccent &&
+            identity.trim().isNotEmpty)
         ? HaloRingCache.colorsFor(identity)
-        : _accentSweep(accent ?? Theme.of(context).colorScheme.primary);
+        : _accentSweep(haloAccent, haloSecondary);
+    final corners = borderRadius ?? context.avatarBorderRadius(48);
     return CustomPaint(
-      painter: _HaloRingPainter(colors: colors, stroke: pad),
+      painter: _HaloRingPainter(
+        colors: colors,
+        stroke: pad,
+        borderRadius: corners,
+      ),
       child: Padding(
         padding: EdgeInsets.all(pad),
         child: child,
@@ -302,36 +325,54 @@ class HaloRing extends StatelessWidget {
     );
   }
 
-  static List<Color> _accentSweep(Color accent) => [
+  static List<Color> _accentSweep(Color accent, Color cyan) => [
         accent,
         accent.withValues(alpha: .22),
-        AppColors.cyan.withValues(alpha: .75),
+        cyan.withValues(alpha: .75),
         accent,
       ];
 }
 
 class _HaloRingPainter extends CustomPainter {
-  const _HaloRingPainter({required this.colors, required this.stroke});
+  const _HaloRingPainter({
+    required this.colors,
+    required this.stroke,
+    required this.borderRadius,
+  });
   final List<Color> colors;
   final double stroke;
+  final BorderRadius borderRadius;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.shortestSide / 2 - stroke / 2;
-    if (radius <= 0 || colors.isEmpty) return;
-    final rect = Rect.fromCircle(center: center, radius: radius);
+    if (colors.isEmpty || size.shortestSide <= stroke) return;
+    final inset = stroke / 2;
+    final rect = Rect.fromLTWH(
+      inset,
+      inset,
+      size.width - stroke,
+      size.height - stroke,
+    );
+    if (rect.width <= 0 || rect.height <= 0) return;
+    final circular = borderRadius.topLeft.x >= rect.shortestSide / 2 - 0.5;
     final paint = Paint()
       ..shader = SweepGradient(colors: colors).createShader(rect)
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke
       ..isAntiAlias = true;
-    canvas.drawCircle(center, radius, paint);
+    if (circular) {
+      canvas.drawCircle(rect.center, rect.shortestSide / 2, paint);
+    } else {
+      final rrect = borderRadius.toRRect(rect);
+      canvas.drawRRect(rrect, paint);
+    }
   }
 
   @override
   bool shouldRepaint(covariant _HaloRingPainter old) =>
-      old.stroke != stroke || !_sameColors(old.colors, colors);
+      old.stroke != stroke ||
+      old.borderRadius != borderRadius ||
+      !_sameColors(old.colors, colors);
 
   static bool _sameColors(List<Color> a, List<Color> b) {
     if (identical(a, b)) return true;
@@ -371,18 +412,21 @@ class HaloAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final accentColor = accent ?? scheme.primary;
+    final size = radius * 2;
+    final corners = context.avatarBorderRadius(size);
     return HaloRing(
       identity: identity,
       accent: accentColor,
-      child: CircleAvatar(
-        radius: radius,
+      borderRadius: corners,
+      child: AvatarFace(
+        size: size,
+        borderRadius: corners,
         backgroundColor: scheme.surface,
         foregroundImage: foregroundImage,
-        onForegroundImageError:
-            foregroundImage == null ? null : (_, __) {},
-        child: icon != null
-            ? Icon(icon, color: accentColor, size: radius)
-            : child,
+        child: child ??
+            (icon == null
+                ? null
+                : Icon(icon, color: accentColor, size: radius)),
       ),
     );
   }
@@ -418,7 +462,9 @@ class SoftSearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final field = TextField(
+    final iconSz =
+        (AsemanTokens.maybeOf(context)?.language.iconSize ?? 22) - (dense ? 2 : 0);
+    return TextField(
       controller: controller,
       autofocus: autofocus,
       enabled: enabled,
@@ -427,39 +473,18 @@ class SoftSearchField extends StatelessWidget {
       onChanged: onChanged,
       onSubmitted: onSubmitted,
       style: TextStyle(fontSize: dense ? 13 : 14.5),
-      decoration: InputDecoration(
+      decoration: ThemeChrome.searchDecoration(
+        context,
+        hintText: hintText,
+        dense: dense,
         prefixIcon: Icon(
           Icons.search_rounded,
-          size: dense ? 20 : 22,
+          size: iconSz,
           color: scheme.onSurfaceVariant,
         ),
         suffixIcon: trailing,
-        hintText: hintText,
-        filled: true,
-        fillColor: scheme.surfaceContainerHighest.withValues(alpha: .42),
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: 8,
-          vertical: dense ? 10 : 14,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(999),
-          borderSide: BorderSide(color: AppSurfaces.cardBorder(scheme)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(999),
-          borderSide: BorderSide(color: AppSurfaces.cardBorder(scheme)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(999),
-          borderSide: BorderSide(color: scheme.primary, width: 1.4),
-        ),
-        disabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(999),
-          borderSide: BorderSide(color: AppSurfaces.cardBorder(scheme)),
-        ),
       ),
     );
-    return field;
   }
 }
 
@@ -470,43 +495,81 @@ class SoftSearchField extends StatelessWidget {
 /// cinematic gradient.
 BoxDecoration softSurfaceDecoration(
   ColorScheme scheme, {
-  required Color accent,
+  Color? accent,
   Color? secondary,
   double radius = AppShape.inner,
   bool selected = false,
   bool elevated = false,
   bool shadow = true,
   bool wash = false,
+  AsemanTokens? tokens,
+  BorderRadius? borderRadius,
+  BuildContext? context,
 }) {
+  final ink = accent ?? scheme.primary;
+  if (context != null) {
+    final deco = ThemeChrome.cardDecoration(
+      context,
+      accent: ink,
+      selected: selected,
+      elevated: elevated,
+      wash: wash,
+      radiusOverride: radius,
+      borderRadius: borderRadius,
+    );
+    if (!shadow) {
+      return BoxDecoration(
+        color: deco.color,
+        borderRadius: deco.borderRadius,
+        border: deco.border,
+      );
+    }
+    return deco;
+  }
+  final cardFill = AppSurfaces.card(scheme, tokens: tokens);
   final Color fill;
   if (selected) {
-    fill = accent.withValues(alpha: .14);
+    fill = ink.withValues(alpha: .14);
   } else if (wash) {
     fill = Color.alphaBlend(
-      accent.withValues(alpha: .08),
-      AppSurfaces.card(scheme),
+      ink.withValues(alpha: .08),
+      cardFill,
     );
   } else {
-    fill = AppSurfaces.card(scheme);
+    fill = cardFill;
   }
+  final card = tokens?.control('card');
+  final shadows = tokens?.language.shadow.resolve(scheme, accent: ink);
+  final borderW = selected
+      ? math.max(card?.borderWidth ?? 1, 1.4)
+      : (card?.borderWidth ?? 1);
   return BoxDecoration(
     color: fill,
-    borderRadius: BorderRadius.circular(radius),
-    border: Border.all(
-      color: selected
-          ? accent.withValues(alpha: .55)
-          : AppSurfaces.cardBorder(scheme),
-      width: selected ? 1.4 : 1,
-    ),
-    boxShadow: !shadow || (!elevated && !selected)
+    borderRadius: borderRadius ??
+        card?.borderRadius ??
+        BorderRadius.circular(radius),
+    border: borderW > 0
+        ? Border.all(
+            color: selected
+                ? ink.withValues(alpha: .55)
+                : AppSurfaces.cardBorder(scheme).withValues(
+                    alpha: card != null && card.borderWidth > 0
+                        ? card.borderAlpha
+                        : 1),
+            width: borderW,
+          )
+        : null,
+    boxShadow: !shadow ||
+            (!elevated && !selected && (card == null || card.elevation <= 0))
         ? null
-        : [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: elevated ? .08 : .05),
-              blurRadius: elevated ? 16 : 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+        : (shadows ??
+            [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: elevated ? .08 : .05),
+                blurRadius: elevated ? 16 : 10,
+                offset: const Offset(0, 4),
+              ),
+            ]),
   );
 }
 
@@ -545,28 +608,41 @@ class SoftCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final accentColor = accent ?? scheme.primary;
-    final corners = BorderRadius.circular(radius);
-
-    final fill = softSurfaceDecoration(
-      scheme,
-      accent: accentColor,
-      secondary: secondary,
-      radius: radius,
+    final tokens = AsemanTokens.maybeOf(context);
+    final accentColor = _resolveAccent(context, accent) ?? scheme.primary;
+    final look = context.controlLook(
+      'card',
       selected: selected,
-      elevated: elevated,
-      wash: wash,
-      shadow: false,
     );
-    final shadows = softSurfaceDecoration(
-      scheme,
+    final card = look.recipe;
+    final shape = ThemeChrome.cardShape(
+      context,
       accent: accentColor,
-      secondary: secondary,
-      radius: radius,
       selected: selected,
-      elevated: elevated,
+    );
+    // Quiet by default: accent only tints when [wash] / [selected] / orb.
+    final fill = ThemeChrome.cardFillColor(
+      context,
+      accent: accentColor,
+      selected: selected,
       wash: wash,
-    ).boxShadow;
+    );
+    final wantShadow =
+        elevated || selected || card.elevation > 0;
+    final shadows = !wantShadow
+        ? null
+        : (tokens?.language.shadow.resolve(scheme, accent: accentColor) ??
+            [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: elevated ? .08 : .05),
+                blurRadius: elevated ? 16 : 10,
+                offset: const Offset(0, 4),
+              ),
+            ]);
+
+    final pad = identical(padding, const EdgeInsets.all(AppSpacing.md))
+        ? look.padding
+        : padding;
 
     final content = Stack(
       fit: StackFit.passthrough,
@@ -591,35 +667,66 @@ class SoftCard extends StatelessWidget {
               ),
             ),
           ),
-        Padding(padding: padding, child: child),
+        Padding(padding: pad, child: child),
       ],
     );
 
-    final painted = onTap == null
-        ? ClipRRect(
-            borderRadius: corners,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              decoration: fill,
+    final ink = look.ink;
+    Widget painted = Material(
+      color: fill,
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      clipBehavior: card.clip ? Clip.antiAlias : Clip.none,
+      shape: shape,
+      child: onTap == null
+          ? content
+          : InkWell(
+              onTap: onTap,
+              customBorder: shape,
+              splashFactory: ThemeChrome.splashFactory(context, ink: ink),
+              highlightColor: ThemeChrome.pressHighlight(
+                context,
+                accent: accentColor,
+                ink: ink,
+              ),
+              splashColor: ThemeChrome.pressSplash(
+                context,
+                accent: accentColor,
+                ink: ink,
+              ),
               child: content,
             ),
-          )
-        : Material(
-            color: Colors.transparent,
-            clipBehavior: Clip.antiAlias,
-            shape: RoundedRectangleBorder(borderRadius: corners),
-            child: InkWell(
-              onTap: onTap,
-              child: Ink(decoration: fill, child: content),
-            ),
-          );
-
-    if (shadows == null || shadows.isEmpty) return painted;
-    return DecoratedBox(
-      decoration: BoxDecoration(borderRadius: corners, boxShadow: shadows),
-      child: painted,
     );
+
+    if (shadows != null && shadows.isNotEmpty) {
+      painted = DecoratedBox(
+        decoration: ShapeDecoration(shape: shape, shadows: shadows),
+        child: painted,
+      );
+    }
+    return look.decorate(painted);
+  }
+
+  /// Remaps legacy [AppColors] status tones onto the active pack.
+  static Color? _resolveAccent(BuildContext context, Color? color) {
+    if (color == null) return null;
+    if (color == AppColors.cyan || color == AppColors.cyanOf(context)) {
+      return AppColors.cyanOf(context);
+    }
+    if (color == AppColors.success || color == AppColors.successOf(context)) {
+      return AppColors.successOf(context);
+    }
+    if (color == AppColors.warning || color == AppColors.warningOf(context)) {
+      return AppColors.warningOf(context);
+    }
+    if (color == AppColors.danger || color == AppColors.dangerOf(context)) {
+      return AppColors.dangerOf(context);
+    }
+    if (color == AppColors.primary || color == AppColors.primaryOf(context)) {
+      return AppColors.primaryOf(context);
+    }
+    return color;
   }
 }
 
@@ -668,7 +775,7 @@ class FeatureStageCard extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: AppShape.borderRadius(context, 12),
                   color: accentColor.withValues(alpha: .12),
                 ),
                 child: Icon(icon, color: accentColor, size: 22),
@@ -762,11 +869,9 @@ class DockedBanner extends StatelessWidget {
     final accentColor = accent ?? scheme.primary;
     return SoftCard(
       onTap: onTap,
-      accent: accentColor,
       elevated: false,
       showOrb: false,
       padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
-      radius: 22,
       child: Row(
         children: [
           if (leading != null) ...[
@@ -819,12 +924,14 @@ class QuietList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: AppSurfaces.card(scheme),
-        borderRadius: BorderRadius.circular(AppShape.inner),
-        border: Border.all(color: AppSurfaces.cardBorder(scheme)),
-      ),
+    final shape = ThemeChrome.cardShape(context);
+    final fill = ThemeChrome.cardFillColor(context);
+    return Material(
+      color: fill,
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shape: shape,
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
@@ -868,13 +975,28 @@ class QuietTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final ink = danger ? AppColors.danger : scheme.onSurface;
+    final ink = danger ? AppColors.dangerOf(context) : scheme.onSurface;
     final accentColor =
-        danger ? AppColors.danger : (accent ?? scheme.primary);
+        danger ? AppColors.dangerOf(context) : (accent ?? scheme.primary);
+    final tokens = AsemanTokens.maybeOf(context);
+    final inkKind = tokens?.control('button').ink ??
+        tokens?.language.interaction.ink ??
+        InkKind.ripple;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        splashFactory: ThemeChrome.splashFactory(context, ink: inkKind),
+        highlightColor: ThemeChrome.pressHighlight(
+          context,
+          accent: accentColor,
+          ink: inkKind,
+        ),
+        splashColor: ThemeChrome.pressSplash(
+          context,
+          accent: accentColor,
+          ink: inkKind,
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.sm + 2,
@@ -885,9 +1007,9 @@ class QuietTile extends StatelessWidget {
               Container(
                 width: 34,
                 height: 34,
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: .12),
-                  borderRadius: BorderRadius.circular(11),
+                decoration: context.iconWellDecoration(
+                  accent: accentColor,
+                  size: 34,
                 ),
                 child: Icon(icon, size: 18, color: accentColor),
               ),
@@ -922,7 +1044,7 @@ class QuietTile extends StatelessWidget {
                     Icons.chevron_right_rounded,
                     size: 20,
                     color: danger
-                        ? AppColors.danger.withValues(alpha: .7)
+                        ? AppColors.dangerOf(context).withValues(alpha: .7)
                         : scheme.onSurfaceVariant,
                   ),
             ],
@@ -957,7 +1079,7 @@ class QuietSwitchTile extends StatelessWidget {
       label: label,
       subtitle: subtitle,
       onTap: onChanged == null ? null : () => onChanged!(!value),
-      trailing: Switch.adaptive(value: value, onChanged: onChanged),
+      trailing: PackSwitch(value: value, onChanged: onChanged),
     );
   }
 }
@@ -997,15 +1119,15 @@ class StaggerIn extends StatelessWidget {
 }
 
 /// Name-hashed accent from the portal palette (primary / tertiary / cyan / …).
-Color portalAccentFor(String name, ColorScheme scheme) {
-  const extras = [AppColors.cyan, AppColors.success, Color(0xFFFF8F6B)];
-  final palette = <Color>[
-    scheme.primary,
-    scheme.tertiary,
-    scheme.secondary,
-    ...extras,
-  ];
-  return palette[name.hashCode.abs() % palette.length];
+Color portalAccentFor(
+  String name,
+  ColorScheme scheme, [
+  BuildContext? context,
+]) {
+  if (context != null) {
+    return ThemeRoles.identity(context, name);
+  }
+  return scheme.primary;
 }
 
 /// Compact meta chip — tonal fill, no border glow.
@@ -1025,12 +1147,13 @@ class SoftMetaChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final color = accent ?? scheme.onSurfaceVariant;
+    final chip = context.chipRecipe;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: .1),
-        borderRadius: BorderRadius.circular(8),
+      padding: EdgeInsets.symmetric(
+        horizontal: chip.paddingH.clamp(6, 12),
+        vertical: chip.paddingV.clamp(2, 8),
       ),
+      decoration: context.metaChipDecoration(accent: color),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

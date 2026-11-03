@@ -7,6 +7,8 @@ import 'package:flutter/rendering.dart';
 
 import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_surfaces.dart';
+import '../../core/theme/aseman_tokens.dart';
+import '../../core/theme/theme_chrome.dart';
 import 'glass_surface.dart';
 
 /// Slide/scale transition used for every desktop modal: rises from below
@@ -58,7 +60,7 @@ Future<T?> showAppDialog<T>({
   barrierLabel: barrierLabel,
   // Scrim is painted with the frost when [frosted]; otherwise the shared
   // barrier colour sits behind panels that already bring their own glass.
-  barrierColor: frosted ? Colors.transparent : AppSurfaces.barrier,
+  barrierColor: frosted ? Colors.transparent : AppSurfaces.barrierOf(context),
   transitionDuration: const Duration(milliseconds: 420),
   pageBuilder: (routeContext, animation, __) {
     final built = builder(routeContext);
@@ -75,7 +77,7 @@ Future<T?> showAppDialog<T>({
           onTap: barrierDismissible
               ? () => Navigator.of(routeContext).maybePop()
               : null,
-          child: const ColoredBox(color: AppSurfaces.barrier),
+          child: ColoredBox(color: AppSurfaces.barrierOf(routeContext)),
         ),
         desktopFloatingPanelTransition(
           routeContext,
@@ -91,14 +93,14 @@ Future<T?> showAppDialog<T>({
 
 /// Puts [child] on the shared frosted dialog chrome.
 Widget _frostDialog(BuildContext context, Widget child) {
-  final radius = BorderRadius.circular(AppShape.card);
+  final radius = BorderRadius.circular(AppShape.cardOf(context));
   if (child is AlertDialog) {
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
       child: GlassSurface(
-        alpha: AppSurfaces.overlayAlpha,
-        blur: AppSurfaces.blurSigma,
+        alpha: AppSurfaces.overlayAlphaOf(context),
+        blur: AppSurfaces.blurSigmaOf(context),
         borderRadius: radius,
         child: _AlertDialogPane(dialog: child),
       ),
@@ -116,8 +118,8 @@ Widget _frostDialog(BuildContext context, Widget child) {
       insetPadding: child.insetPadding,
       alignment: child.alignment,
       child: GlassSurface(
-        alpha: AppSurfaces.overlayAlpha,
-        blur: AppSurfaces.blurSigma,
+        alpha: AppSurfaces.overlayAlphaOf(context),
+        blur: AppSurfaces.blurSigmaOf(context),
         borderRadius: radius,
         child: body,
       ),
@@ -127,13 +129,16 @@ Widget _frostDialog(BuildContext context, Widget child) {
   // backdrop behind a translucent themed dialog so blur still reads.
   return BackdropFilter(
     filter: ImageFilter.blur(
-      sigmaX: AppSurfaces.blurSigma,
-      sigmaY: AppSurfaces.blurSigma,
+      sigmaX: AppSurfaces.blurSigmaOf(context),
+      sigmaY: AppSurfaces.blurSigmaOf(context),
     ),
     child: Theme(
       data: Theme.of(context).copyWith(
         dialogTheme: Theme.of(context).dialogTheme.copyWith(
-          backgroundColor: AppSurfaces.overlay(Theme.of(context).colorScheme),
+          backgroundColor: AppSurfaces.overlay(
+            Theme.of(context).colorScheme,
+            tokens: AsemanTokens.maybeOf(context),
+          ),
         ),
       ),
       child: child,
@@ -288,7 +293,6 @@ Widget _appSheetChrome({
   bool showDragHandle = true,
   bool expandBody = false,
 }) {
-  const radius = BorderRadius.vertical(top: Radius.circular(AppShape.card));
   final body = _SheetScroll(child: AppSheetScope(child: child));
   final column = Column(
     mainAxisSize: expandBody ? MainAxisSize.max : MainAxisSize.min,
@@ -300,13 +304,17 @@ Widget _appSheetChrome({
       if (expandBody) Expanded(child: body) else Flexible(child: body),
     ],
   );
-  return GlassSurface(
-    alpha: AppSurfaces.overlayAlpha,
-    blur: AppSurfaces.blurSigma,
-    borderRadius: radius,
-    border: false,
-    child: column,
-  );
+  return Builder(builder: (context) {
+    final radius = BorderRadius.vertical(
+        top: Radius.circular(AppShape.cardOf(context)));
+    return GlassSurface(
+      alpha: AppSurfaces.overlayAlphaOf(context),
+      blur: AppSurfaces.blurSigmaOf(context),
+      borderRadius: radius,
+      border: false,
+      child: column,
+    );
+  });
 }
 
 /// Hugs [child] when it fits. When [child] is taller than the height the sheet
@@ -601,8 +609,8 @@ Future<T?> showAdaptivePanel<T>(
       backgroundColor: Colors.transparent,
       elevation: 0,
       child: GlassSurface(
-        alpha: AppSurfaces.overlayAlpha,
-        borderRadius: BorderRadius.circular(AppShape.card),
+        alpha: AppSurfaces.overlayAlphaOf(context),
+        borderRadius: BorderRadius.circular(AppShape.cardOf(context)),
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight),
           child: child,
@@ -652,8 +660,8 @@ Future<T?> showAppPicker<T>({
         backgroundColor: Colors.transparent,
         elevation: 0,
         child: GlassSurface(
-          alpha: AppSurfaces.overlayAlpha,
-          borderRadius: BorderRadius.circular(AppShape.card),
+          alpha: AppSurfaces.overlayAlphaOf(context),
+          borderRadius: BorderRadius.circular(AppShape.cardOf(context)),
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: maxWidth,
@@ -677,7 +685,7 @@ Future<T?> showAppPicker<T>({
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Dismiss',
-    barrierColor: AppSurfaces.barrier,
+    barrierColor: AppSurfaces.barrierOf(context),
     transitionDuration: const Duration(milliseconds: 280),
     pageBuilder: (routeContext, __, ___) => CustomSingleChildLayout(
       delegate: _AnchoredPickerLayout(
@@ -825,7 +833,7 @@ class AppPopupMenuButton<T> extends StatelessWidget {
     if (child != null) {
       return InkWell(
         onTap: enabled ? () => _open(context) : null,
-        borderRadius: BorderRadius.circular(AppShape.control),
+        borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
         child: child,
       );
     }
@@ -926,34 +934,23 @@ class FloatingPanelSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final radius = BorderRadius.circular(AppShape.card);
     final lift = elevation ?? 0;
+    final shell = ThemeChrome.floatingShell(context, lift: lift);
+    final radius = shell.borderRadius ??
+        BorderRadius.circular(AppShape.cardOf(context));
     return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        boxShadow: [
-          // Soft ambient lift — two layers read cleaner than one heavy blob.
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .10 + lift * .01),
-            blurRadius: 12 + lift * 2,
-            offset: const Offset(0, 4),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .18 + lift * .015),
-            blurRadius: 36 + lift * 3,
-            offset: const Offset(0, 16),
-          ),
-        ],
-      ),
+      decoration: shell,
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: radius,
           border: Border.all(color: AppSurfaces.cardBorder(scheme)),
         ),
         child: GlassSurface(
-          alpha: AppSurfaces.overlayAlpha,
-          blur: AppSurfaces.blurSigma,
-          borderRadius: radius,
+          alpha: AppSurfaces.overlayAlphaOf(context),
+          blur: AppSurfaces.blurSigmaOf(context),
+          borderRadius: radius is BorderRadius
+              ? radius
+              : BorderRadius.circular(AppShape.cardOf(context)),
           border: false,
           child: child,
         ),

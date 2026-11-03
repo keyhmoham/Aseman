@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/theme_chrome.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/fleet_metric.dart';
 import '../../../shared/widgets/sky_ui.dart';
@@ -62,15 +64,24 @@ class _AccountHubContentState extends State<AccountHubContent> {
             padding: const EdgeInsets.all(AppSpacing.sm + 2),
             child: Row(
               children: [
-                HaloRing(
-                  child: CircleAvatar(
-                      foregroundImage: Avatars.of(invite['space_avatar']),
-                      onForegroundImageError:
-                          Avatars.of(invite['space_avatar']) == null
-                              ? null
-                              : (_, __) {},
-                      child: const Icon(Icons.folder_shared_outlined)),
-                ),
+                Builder(builder: (context) {
+                  const radius = 20.0;
+                  final size = radius * 2;
+                  final corners = context.avatarBorderRadius(size);
+                  final picture = Avatars.of(invite['space_avatar']);
+                  return HaloRing(
+                    borderRadius: corners,
+                    child: AvatarFace(
+                      size: size,
+                      borderRadius: corners,
+                      backgroundColor: ThemeRoles.wellFill(context),
+                      foregroundImage: picture,
+                      onImageError: picture == null ? null : (_, __) {},
+                      child: Icon(Icons.folder_shared_outlined,
+                          color: ThemeRoles.wellInk(context)),
+                    ),
+                  );
+                }),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Column(
@@ -130,7 +141,7 @@ class _AccountHubContentState extends State<AccountHubContent> {
             label: 'Available balance',
             value: _credits(balance),
             hint: _usd(balance),
-            color: AppColors.success,
+            color: AppColors.primaryOf(context),
             live: true,
           ),
         ),
@@ -264,7 +275,7 @@ class _AccountHubContentState extends State<AccountHubContent> {
             label: 'Total spend',
             value: _credits(total),
             hint: _usd(total),
-            color: AppColors.primary,
+            color: AppColors.primaryOf(context),
           ),
         ),
         SizedBox(
@@ -415,7 +426,7 @@ class _AccountHubContentState extends State<AccountHubContent> {
               alignment: Alignment.centerLeft,
               child: FilledButton.icon(
                   style:
-                      FilledButton.styleFrom(backgroundColor: AppColors.danger),
+                      FilledButton.styleFrom(backgroundColor: AppColors.dangerOf(context)),
                   onPressed: () => widget.onAction(
                       'auth', 'account_delete', {'confirmation': 'DELETE'}),
                   icon: const Icon(Icons.delete_forever_outlined),

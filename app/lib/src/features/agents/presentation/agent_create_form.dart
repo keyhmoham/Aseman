@@ -351,7 +351,7 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: scheme.errorContainer.withValues(alpha: .5),
-            borderRadius: BorderRadius.circular(AppShape.control),
+            borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
           ),
           child: Text(
             catalogError != null

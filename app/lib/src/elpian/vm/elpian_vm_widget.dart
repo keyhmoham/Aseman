@@ -204,9 +204,23 @@ class _ElpianVmWidgetState extends State<ElpianVmWidget>
   }
 
   @override
+  void didUpdateWidget(covariant ElpianVmWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(widget.stylesheet, oldWidget.stylesheet) &&
+        widget.stylesheet != null) {
+      _engine.loadStylesheet(widget.stylesheet!);
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _dependenciesReady = true;
+    // Keep guest CSS in sync when the host ThemeData / pack changes.
+    if (widget.stylesheet != null) {
+      _engine.loadStylesheet(widget.stylesheet!);
+    }
     _scheduleHostEnvironmentSync();
   }
 

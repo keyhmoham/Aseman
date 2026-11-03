@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/theme/app_shape.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/halo_ring_cache.dart';
+import '../../../core/theme/theme_chrome.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/code_highlight.dart';
 import '../../../shared/widgets/network_content_image.dart';
@@ -198,7 +200,7 @@ class _BlockView extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
               color: scheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppShape.borderRadius(context, 12),
               border: Border.all(
                   color: scheme.outlineVariant.withValues(alpha: .5))),
           child: Table(
@@ -244,7 +246,7 @@ class _BlockView extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppShape.borderRadius(context, 12),
             child: NetworkContentImage(
                 url: url,
                 headers: headers,
@@ -281,7 +283,7 @@ class _BlockView extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
               color: scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12)),
+              borderRadius: AppShape.borderRadius(context, 12)),
           child: LayoutBuilder(
               builder: (context, box) => AudioBubble(
                   url: url,
@@ -570,10 +572,10 @@ class _InfoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final (icon, color, title) = switch (card.kind) {
-      CardKind.user => (Icons.person_rounded, AppColors.cyan, 'Person'),
-      CardKind.agent => (Icons.smart_toy_rounded, AppColors.primary, 'Agent'),
-      CardKind.tool => (Icons.apps_rounded, AppColors.warning, 'App'),
-      CardKind.space => (Icons.hub_rounded, AppColors.success, 'Workspace'),
+      CardKind.user => (Icons.person_rounded, AppColors.cyanOf(context), 'Person'),
+      CardKind.agent => (Icons.smart_toy_rounded, AppColors.primaryOf(context), 'Agent'),
+      CardKind.tool => (Icons.apps_rounded, AppColors.warningOf(context), 'App'),
+      CardKind.space => (Icons.hub_rounded, AppColors.successOf(context), 'Workspace'),
     };
     return Container(
       width: double.infinity,
@@ -588,7 +590,7 @@ class _InfoCard extends StatelessWidget {
           height: 38,
           decoration: BoxDecoration(
               color: color.withValues(alpha: .16),
-              borderRadius: BorderRadius.circular(12)),
+              borderRadius: AppShape.borderRadius(context, 12)),
           child: Icon(icon, size: 20, color: color),
         ),
         const SizedBox(width: 10),
@@ -699,22 +701,29 @@ class ForwardedTag extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(4, 3, 10, 3),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              HaloRing(
-                pad: 1.5,
-                identity: HaloRingCache.person(authorId),
-                child: CircleAvatar(
-                  radius: 10,
-                  backgroundColor: scheme.primary.withValues(alpha: .2),
-                  foregroundImage: Avatars.of(avatar),
-                  onForegroundImageError:
-                      avatar.isEmpty ? null : (_, __) {},
-                  child: Text(initial,
-                      style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          color: scheme.primary)),
-                ),
-              ),
+              Builder(builder: (context) {
+                const radius = 10.0;
+                final size = radius * 2;
+                final corners = context.avatarBorderRadius(size);
+                final picture = Avatars.of(avatar);
+                return HaloRing(
+                  pad: 1.5,
+                  identity: HaloRingCache.person(authorId),
+                  borderRadius: corners,
+                  child: AvatarFace(
+                    size: size,
+                    borderRadius: corners,
+                    backgroundColor: scheme.primary.withValues(alpha: .2),
+                    foregroundImage: picture,
+                    onImageError: picture == null ? null : (_, __) {},
+                    child: Text(initial,
+                        style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: scheme.primary)),
+                  ),
+                );
+              }),
               const SizedBox(width: 6),
               Icon(Icons.shortcut_rounded, size: 14, color: scheme.primary),
               const SizedBox(width: 4),

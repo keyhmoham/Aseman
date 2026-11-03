@@ -65,9 +65,9 @@ Future<Map<String, dynamic>?> showAdminActionForm(
     'bots.agent_import_samples' => _ConfirmForm(
         initial: body,
         icon: Icons.download_rounded,
-        title: 'Import sample agents?',
+        title: 'Import agency agents?',
         message:
-            'Adds the ready-made sample agents to this node. Existing agents are left as they are.',
+            'Adds the Agency Agents catalogue (hundreds of specialists with their skills) to this node. Existing agents are left as they are.',
         submit: 'Import'),
     'tools.mcp_import_samples' => _ConfirmForm(
         initial: body,
@@ -123,7 +123,7 @@ String adminActionDone(String namespace, String action) =>
       'bots.bot_create': 'Agent created',
       'bots.bot_edit': 'Agent saved',
       'bots.bot_delete': 'Agent deleted',
-      'bots.agent_import_samples': 'Sample agents imported',
+      'bots.agent_import_samples': 'Agency agents imported',
       'tools.mcp_import_samples': 'App catalog imported',
       'tools.mcp_register': 'Server added',
       'tools.mcp_update': 'Server saved',

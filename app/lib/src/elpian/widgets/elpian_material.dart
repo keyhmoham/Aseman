@@ -5,6 +5,7 @@
 library;
 
 import 'dart:math' as math;
+import '../../core/theme/app_shape.dart';
 
 import 'package:flutter/material.dart';
 
@@ -243,7 +244,7 @@ class ElpianListTile {
                 height: 40,
                 decoration: BoxDecoration(
                   color: scheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: AppShape.borderRadius(context, 12),
                 ),
                 child: Icon(icon, size: 22, color: scheme.onSecondaryContainer),
               );
@@ -321,7 +322,7 @@ class ElpianListTile {
             selectedTileColor: scheme.secondaryContainer,
             selectedColor: scheme.onSecondaryContainer,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppShape.borderRadius(context, 16),
             ),
             titleTextStyle: theme.textTheme.bodyLarge?.copyWith(
               fontWeight: FontWeight.w500,

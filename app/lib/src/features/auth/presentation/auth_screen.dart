@@ -6,6 +6,7 @@ import '../../../app_dependencies.dart';
 import '../../../core/auth/federated_sign_in.dart';
 import '../../../core/network/session_controller.dart';
 import '../../../core/theme/app_shape.dart';
+import '../../../core/theme/theme_pack_controller.dart';
 import '../../../shared/widgets/app_brand.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
@@ -29,6 +30,8 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
+  String? _themeSyncedFor;
+
   @override
   void initState() {
     super.initState();
@@ -59,12 +62,31 @@ class _AuthGateState extends State<AuthGate> {
     if (!session.isLoggedIn) {
       BrainAvatarPrefs.viewerId = '';
       BrainAvatarPrefs.clearLive();
+      _themeSyncedFor = null;
       return;
     }
     final accountId = session.session?.accountId ?? '';
     if (BrainAvatarPrefs.viewerId != accountId) {
       BrainAvatarPrefs.viewerId = accountId;
     }
+    if (_themeSyncedFor != accountId) {
+      _themeSyncedFor = accountId;
+      unawaited(_pullActiveTheme());
+    }
+  }
+
+  Future<void> _pullActiveTheme() async {
+    try {
+      final active = await widget.dependencies.service.fetchActiveTheme();
+      if (!mounted || active == null) return;
+      final packs = ThemePackScope.maybeOf(context);
+      if (packs == null) return;
+      await packs.syncFromServer(
+        next: active.pack,
+        listing: active.listingId.isEmpty ? null : active.listingId,
+        botId: active.themeId,
+      );
+    } catch (_) {}
   }
 
   @override

@@ -5,6 +5,7 @@ import '../models/elpian_node.dart';
 import '../css/css_parser.dart';
 import '../css/css_properties.dart';
 import 'html_details.dart';
+import '../../core/theme/app_shape.dart';
 
 /// `<dialog>`.
 ///
@@ -92,7 +93,7 @@ class _HtmlDialogState extends State<_HtmlDialog> {
 
   Widget _card(BuildContext context) {
     final style = widget.node.style;
-    final radius = style?.borderRadius ?? BorderRadius.circular(28);
+    final radius = style?.borderRadius ?? AppShape.borderRadius(context, 28);
     Widget content = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,

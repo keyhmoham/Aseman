@@ -9,6 +9,8 @@ import '../../../../app_dependencies.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_shape.dart';
 import '../../../../core/theme/halo_ring_cache.dart';
+import '../../../../core/theme/theme_chrome.dart';
+import '../../../../core/theme/theme_roles.dart';
 import '../../../../data/models/agent_humanoid.dart';
 import '../../../../data/models/bot.dart';
 import '../../../../data/models/space.dart';
@@ -825,7 +827,7 @@ class _RoomChatState extends State<RoomChat> {
             children: [
               for (final e in _reactEmojis)
                 InkWell(
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: AppShape.borderRadius(context, 24),
                   onTap: () => Navigator.pop(context, e),
                   child: Padding(
                     padding: const EdgeInsets.all(10),
@@ -919,7 +921,7 @@ class _RoomChatState extends State<RoomChat> {
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
               decoration: BoxDecoration(
                 color: fg.withValues(alpha: .08),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppShape.borderRadius(context, 12),
               ),
               child: Text(
                 e.value > 1 ? '${e.key} ${e.value}' : e.key,
@@ -943,7 +945,7 @@ class _RoomChatState extends State<RoomChat> {
       padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
       decoration: BoxDecoration(
           color: scheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(AppShape.inner),
+          borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
           border: Border(left: BorderSide(color: scheme.primary, width: 3))),
       child: Row(children: [
         Icon(editing != null ? Icons.edit_outlined : Icons.reply_rounded,
@@ -1122,15 +1124,15 @@ class _RoomChatState extends State<RoomChat> {
     final scheme = Theme.of(context).colorScheme;
     return InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppShape.borderRadius(context, 16),
         child: Container(
             width: 96,
             padding: const EdgeInsets.symmetric(vertical: 14),
             decoration: BoxDecoration(
                 color: scheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(16)),
+                borderRadius: AppShape.borderRadius(context, 16)),
             child: Column(children: [
-              Icon(icon, color: AppColors.primary, size: 26),
+              Icon(icon, color: AppColors.primaryOf(context), size: 26),
               const SizedBox(height: 6),
               Text(label,
                   textAlign: TextAlign.center,
@@ -1312,7 +1314,7 @@ class _RoomChatState extends State<RoomChat> {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
             color: scheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12)),
+            borderRadius: AppShape.borderRadius(context, 12)),
         child: Row(children: [
           if (d.bytes.isNotEmpty && d.mime.startsWith('image/'))
             ClipRRect(
@@ -1329,7 +1331,7 @@ class _RoomChatState extends State<RoomChat> {
                         ? Icons.videocam_rounded
                         : Icons.insert_drive_file_rounded,
                 size: 22,
-                color: AppColors.primary),
+                color: AppColors.primaryOf(context)),
           const SizedBox(width: 7),
           Expanded(
               child: d.uploading
@@ -1338,8 +1340,8 @@ class _RoomChatState extends State<RoomChat> {
                       height: 12,
                       child: CircularProgressIndicator(strokeWidth: 2))
                   : d.error != null
-                      ? const Icon(Icons.error_outline_rounded,
-                          color: AppColors.danger, size: 16)
+                      ? Icon(Icons.error_outline_rounded,
+                          color: AppColors.dangerOf(context), size: 16)
                       : Column(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1350,9 +1352,10 @@ class _RoomChatState extends State<RoomChat> {
                                   style: const TextStyle(
                                       fontSize: 9,
                                       fontWeight: FontWeight.w700)),
-                              const Text('ready to send',
+                              Text('ready to send',
                                   style: TextStyle(
-                                      fontSize: 8, color: AppColors.success)),
+                                      fontSize: 8,
+                                      color: AppColors.successOf(context))),
                             ])),
           const SizedBox(width: 3),
           IconButton(
@@ -1545,14 +1548,14 @@ class _RoomChatState extends State<RoomChat> {
                   height: 42,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                      color: scheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(AppShape.control)),
+                      color: ThemeRoles.wellFill(context),
+                      borderRadius: BorderRadius.circular(AppShape.controlOf(context))),
                   child: Text(
                       widget.room.isEmpty ? 'R' : widget.room[0].toUpperCase(),
                       style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w800,
-                          color: scheme.onPrimaryContainer))),
+                          color: ThemeRoles.selectedInk(context)))),
           const SizedBox(width: 12),
           Expanded(
               child: Column(
@@ -1625,13 +1628,14 @@ class _RoomChatState extends State<RoomChat> {
 
   Widget _composer() {
     final scheme = Theme.of(context).colorScheme;
+    final shell = ThemeChrome.inputShell(context, elevated: widget.flat);
     final notice = widget.composerNotice;
     if (notice != null) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-            color: scheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(AppShape.card)),
+            color: shell.color,
+            borderRadius: shell.radius),
         child: Row(children: [
           Icon(Icons.block_rounded, size: 18, color: scheme.onSurfaceVariant),
           const SizedBox(width: 10),
@@ -1644,13 +1648,13 @@ class _RoomChatState extends State<RoomChat> {
     }
     final work = _work;
     final box = Material(
-        color: scheme.surfaceContainerHigh,
-        elevation: widget.flat ? 3 : 0,
+        color: shell.color,
+        elevation: shell.elevation,
         shadowColor: Colors.black.withValues(alpha: .25),
-        borderRadius: BorderRadius.circular(AppShape.card),
+        borderRadius: shell.radius,
         clipBehavior: Clip.antiAlias,
         child: Padding(
-            padding: const EdgeInsets.all(6),
+            padding: shell.padding,
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               if (_drafts.isNotEmpty)
                 Padding(
@@ -1861,17 +1865,13 @@ class _RoomChatState extends State<RoomChat> {
         widget.peerSeenAt != null &&
         !m.createdAt.isAfter(widget.peerSeenAt!);
     final fg = mine ? scheme.onPrimaryContainer : scheme.onSurface;
-    const r = Radius.circular(20);
-    const tail = Radius.circular(6);
     final bubble = Container(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
-        decoration: BoxDecoration(
-            color: mine ? scheme.primaryContainer : scheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.only(
-                topLeft: !mine && !continued ? tail : r,
-                topRight: mine && !continued ? tail : r,
-                bottomLeft: r,
-                bottomRight: r)),
+        padding: ThemeChrome.chatBubblePadding(context),
+        decoration: ThemeChrome.chatBubble(
+          context,
+          mine: mine,
+          continued: continued,
+        ),
         child: DefaultTextStyle.merge(
             style: TextStyle(color: fg, fontSize: 14, height: 1.4),
             child:
@@ -1950,18 +1950,27 @@ class _RoomChatState extends State<RoomChat> {
                     radius: 15,
                     userId: widget.me,
                   )
-                : HaloRing(
-                    identity: HaloRingCache.person(m.senderId),
-                    accent: scheme.secondary,
-                    child: CircleAvatar(
-                        radius: 15,
-                        foregroundImage: Avatars.of(_avatarOf(m)),
-                        onForegroundImageError: Avatars.of(_avatarOf(m)) == null
-                            ? null
-                            : (_, __) {},
-                        backgroundColor: scheme.secondaryContainer,
+                : Builder(builder: (context) {
+                    const radius = 15.0;
+                    final faceSize = radius * 2;
+                    final corners = context.avatarBorderRadius(faceSize);
+                    final picture = Avatars.of(_avatarOf(m));
+                    return HaloRing(
+                      identity: HaloRingCache.person(m.senderId),
+                      accent: scheme.secondary,
+                      borderRadius: corners,
+                      child: AvatarFace(
+                        size: faceSize,
+                        borderRadius: corners,
+                        foregroundImage: picture,
+                        onImageError:
+                            picture == null ? null : (_, __) {},
+                        backgroundColor: ThemeRoles.wellFill(context),
                         child: Icon(Icons.person_rounded,
-                            size: 17, color: scheme.onSecondaryContainer))));
+                            size: 17, color: ThemeRoles.wellInk(context)),
+                      ),
+                    );
+                  }));
     return Padding(
         padding: EdgeInsets.only(top: continued ? 2 : 10),
         child: Row(
@@ -2208,9 +2217,9 @@ class _ProxyOpenButton extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: Material(
         color: scheme.primary,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppShape.borderRadius(context, 12),
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppShape.borderRadius(context, 12),
           onTap: () => _open(context),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -2260,10 +2269,10 @@ class _NoMessages extends StatelessWidget {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-                color: scheme.primaryContainer,
-                borderRadius: BorderRadius.circular(AppShape.inner)),
+                color: ThemeRoles.wellFill(context),
+                borderRadius: BorderRadius.circular(AppShape.innerOf(context))),
             child: Icon(Icons.forum_rounded,
-                size: 30, color: scheme.onPrimaryContainer),
+                size: 30, color: ThemeRoles.wellInk(context)),
           ),
           const SizedBox(height: 14),
           const Text('No messages yet',
@@ -2370,10 +2379,11 @@ class _WorkingIndicatorState extends State<_WorkingIndicator>
       child: Container(
         constraints: const BoxConstraints(maxWidth: 560),
         margin: const EdgeInsets.only(top: 10, left: 38),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(draft.isEmpty ? 20 : 18),
+        padding: ThemeChrome.chatBubblePadding(context),
+        decoration: ThemeChrome.chatBubble(
+          context,
+          mine: false,
+          agent: true,
         ),
         child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2484,13 +2494,13 @@ class _LogSection extends StatelessWidget {
       margin: const EdgeInsets.only(top: 10),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(AppShape.control),
+        borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
         border: Border.all(color: scheme.outlineVariant.withValues(alpha: .4)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         InkWell(
           onTap: onToggle,
-          borderRadius: BorderRadius.circular(AppShape.control),
+          borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(8, 8, 10, 8),
             child: Row(children: [
@@ -2498,10 +2508,10 @@ class _LogSection extends StatelessWidget {
                 width: 26,
                 height: 26,
                 decoration: BoxDecoration(
-                    color: scheme.secondaryContainer,
+                    color: ThemeRoles.wellFill(context),
                     borderRadius: BorderRadius.circular(9)),
                 child: Icon(Icons.terminal_rounded,
-                    size: 15, color: scheme.onSecondaryContainer),
+                    size: 15, color: ThemeRoles.wellInk(context)),
               ),
               const SizedBox(width: 10),
               Expanded(

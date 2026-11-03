@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_surfaces.dart';
+import '../../core/theme/theme_roles.dart';
 import 'app_inputs.dart';
 import 'glass_surface.dart';
 import 'overlay_panels.dart';
@@ -27,8 +27,8 @@ Future<T?> showAppForm<T>(BuildContext context, Widget form) {
       backgroundColor: Colors.transparent,
       elevation: 0,
       child: GlassSurface(
-        alpha: AppSurfaces.overlayAlpha,
-        borderRadius: BorderRadius.circular(AppShape.card),
+        alpha: AppSurfaces.overlayAlphaOf(context),
+        borderRadius: BorderRadius.circular(AppShape.cardOf(context)),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 580, maxHeight: 780),
           child: form,
@@ -63,9 +63,11 @@ class AppFormFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final badge = destructive ? scheme.errorContainer : scheme.primaryContainer;
-    final onBadge =
-        destructive ? scheme.onErrorContainer : scheme.onPrimaryContainer;
+    final badge =
+        destructive ? scheme.errorContainer : ThemeRoles.wellFill(context);
+    final onBadge = destructive
+        ? scheme.onErrorContainer
+        : ThemeRoles.wellInk(context);
     final compact = MediaQuery.sizeOf(context).width < 600;
     return Form(
       key: formKey,

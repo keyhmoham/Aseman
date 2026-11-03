@@ -4,6 +4,7 @@ import '../models/css_style.dart';
 import '../core/node_events.dart';
 import '../css/css_properties.dart';
 import 'elpian_expressive.dart';
+import '../../core/theme/app_shape.dart';
 
 /// A Material 3 card around its children (a column).
 ///
@@ -67,7 +68,7 @@ class ElpianCard {
         if (corners == null && themeShape is RoundedRectangleBorder) {
           corners = themeShape.borderRadius;
         }
-        corners ??= BorderRadius.circular(24);
+        corners ??= AppShape.borderRadius(context, 24);
         final side = style?.borderColor != null
             ? BorderSide(
                 color: style!.borderColor!,

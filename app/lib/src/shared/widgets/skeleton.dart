@@ -130,7 +130,7 @@ class SkeletonBox extends StatelessWidget {
           height: height,
           decoration: BoxDecoration(
             color: _blockColor(context),
-            borderRadius: BorderRadius.circular(radius),
+            borderRadius: AppShape.borderRadius(context, radius),
           ),
         ),
       );
@@ -271,7 +271,7 @@ class SkeletonCard extends StatelessWidget {
         height: height,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppShape.inner),
+          borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
           border: Border.all(color: scheme.outlineVariant.withValues(alpha: .4)),
         ),
         child: Column(

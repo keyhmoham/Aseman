@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/skeleton.dart';
@@ -185,7 +186,7 @@ class _AppPageContentState extends State<AdminPageContent> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(AppShape.inner),
+                borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,7 +293,7 @@ class _AppPageContentState extends State<AdminPageContent> {
           text:
               '$fail deploy ${fail == 1 ? 'check needs' : 'checks need'} fixing',
           target: 'Health',
-          tone: AppColors.danger,
+          tone: AppColors.dangerOf(context),
           icon: Icons.gpp_maybe_rounded,
         ),
       if (pendingPayouts.isNotEmpty)
@@ -300,7 +301,7 @@ class _AppPageContentState extends State<AdminPageContent> {
           text:
               '${pendingPayouts.length} payout ${pendingPayouts.length == 1 ? 'request' : 'requests'} · ${_money(_sum(pendingPayouts, 'amount'))}',
           target: 'Finance · Payouts',
-          tone: AppColors.warning,
+          tone: AppColors.warningOf(context),
           icon: Icons.payments_rounded,
         ),
       if (pendingListings > 0)
@@ -308,7 +309,7 @@ class _AppPageContentState extends State<AdminPageContent> {
           text:
               '$pendingListings marketplace ${pendingListings == 1 ? 'listing waits' : 'listings wait'} for review',
           target: 'Agents',
-          tone: AppColors.warning,
+          tone: AppColors.warningOf(context),
           icon: Icons.rate_review_rounded,
         ),
       if (failedRuns > 0)
@@ -316,7 +317,7 @@ class _AppPageContentState extends State<AdminPageContent> {
           text:
               '$failedRuns agent ${failedRuns == 1 ? 'run' : 'runs'} failed recently',
           target: 'Projects',
-          tone: AppColors.danger,
+          tone: AppColors.dangerOf(context),
           icon: Icons.running_with_errors_rounded,
         ),
       if (warn > 0)
@@ -324,7 +325,7 @@ class _AppPageContentState extends State<AdminPageContent> {
           text:
               '$warn deployment ${warn == 1 ? 'check is' : 'checks are'} worth a look',
           target: 'Health',
-          tone: AppColors.warning,
+          tone: AppColors.warningOf(context),
           icon: Icons.tips_and_updates_rounded,
         ),
     ];
@@ -350,10 +351,10 @@ class _AppPageContentState extends State<AdminPageContent> {
             label: 'health',
             size: 128,
             color: fail > 0
-                ? AppColors.danger
+                ? AppColors.dangerOf(context)
                 : warn > 0
-                ? AppColors.warning
-                : AppColors.success,
+                ? AppColors.warningOf(context)
+                : AppColors.successOf(context),
             display: checks == 0 ? '—' : '$ok/$checks',
           ),
         ),
@@ -368,7 +369,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                 for (final item in needs)
                   ListTile(
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppShape.control),
+                      borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
                     ),
                     leading: Container(
                       width: 40,
@@ -409,7 +410,7 @@ class _AppPageContentState extends State<AdminPageContent> {
               value: _compact(counters['projects'] ?? counters['spaces']),
               hint: 'Workspaces and machines',
               icon: Icons.folder_rounded,
-              tone: AppColors.cyan,
+              tone: AppColors.cyanOf(context),
               onTap: () => widget.onNavigate('Projects'),
             ),
             AdminStatCard(
@@ -417,7 +418,7 @@ class _AppPageContentState extends State<AdminPageContent> {
               value: _compact(counters['bots']),
               hint: 'Agents and apps',
               icon: Icons.smart_toy_rounded,
-              tone: AppColors.success,
+              tone: AppColors.successOf(context),
               onTap: () => widget.onNavigate('Agents'),
             ),
             AdminStatCard(
@@ -425,7 +426,7 @@ class _AppPageContentState extends State<AdminPageContent> {
               value: _compact(counters['room_turns']),
               hint: 'Turns across all projects',
               icon: Icons.play_circle_rounded,
-              tone: AppColors.warning,
+              tone: AppColors.warningOf(context),
               onTap: () => widget.onNavigate('Projects'),
             ),
           ],
@@ -447,16 +448,16 @@ class _AppPageContentState extends State<AdminPageContent> {
                 center: '$checks',
                 caption: 'checks',
                 slices: [
-                  AdminChartSlice('Healthy', ok.toDouble(), AppColors.success),
+                  AdminChartSlice('Healthy', ok.toDouble(), AppColors.successOf(context)),
                   AdminChartSlice(
                     'Worth a look',
                     warn.toDouble(),
-                    AppColors.warning,
+                    AppColors.warningOf(context),
                   ),
                   AdminChartSlice(
                     'Need fixing',
                     fail.toDouble(),
-                    AppColors.danger,
+                    AppColors.dangerOf(context),
                   ),
                 ],
               ),
@@ -473,17 +474,17 @@ class _AppPageContentState extends State<AdminPageContent> {
                   AdminChartSlice(
                     'Finished',
                     (runTones[AdminTone.ok] ?? 0).toDouble(),
-                    AppColors.success,
+                    AppColors.successOf(context),
                   ),
                   AdminChartSlice(
                     'In progress',
                     (runTones[AdminTone.warn] ?? 0).toDouble(),
-                    AppColors.cyan,
+                    AppColors.cyanOf(context),
                   ),
                   AdminChartSlice(
                     'Failed',
                     failedRuns.toDouble(),
-                    AppColors.danger,
+                    AppColors.dangerOf(context),
                   ),
                   AdminChartSlice(
                     'Other',
@@ -584,17 +585,17 @@ class _AppPageContentState extends State<AdminPageContent> {
                   AdminChartSlice(
                     'Active',
                     active.toDouble(),
-                    AppColors.success,
+                    AppColors.successOf(context),
                   ),
                   AdminChartSlice(
                     'Pending',
                     pending.toDouble(),
-                    AppColors.warning,
+                    AppColors.warningOf(context),
                   ),
                   AdminChartSlice(
                     'Disabled',
                     disabled.toDouble(),
-                    AppColors.danger,
+                    AppColors.dangerOf(context),
                   ),
                 ],
               ),
@@ -826,7 +827,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                 center: '${spaces.length}',
                 caption: 'projects',
                 slices: [
-                  AdminChartSlice('Awake', awake.toDouble(), AppColors.success),
+                  AdminChartSlice('Awake', awake.toDouble(), AppColors.successOf(context)),
                   AdminChartSlice(
                     'Asleep or none',
                     (spaces.length - awake).toDouble(),
@@ -1121,7 +1122,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                 const <String, dynamic>{},
               ),
               icon: const Icon(Icons.download_rounded, size: 18),
-              label: const Text('Import samples'),
+              label: const Text('Import catalogue'),
             ),
             FilledButton.icon(
               onPressed: () =>
@@ -1147,17 +1148,17 @@ class _AppPageContentState extends State<AdminPageContent> {
                   AdminChartSlice(
                     'Listed',
                     count('approved').toDouble(),
-                    AppColors.success,
+                    AppColors.successOf(context),
                   ),
                   AdminChartSlice(
                     'In review',
                     count('pending').toDouble(),
-                    AppColors.warning,
+                    AppColors.warningOf(context),
                   ),
                   AdminChartSlice(
                     'Denied',
                     count('denied').toDouble(),
-                    AppColors.danger,
+                    AppColors.dangerOf(context),
                   ),
                   AdminChartSlice(
                     'Unlisted',
@@ -1293,10 +1294,10 @@ class _AppPageContentState extends State<AdminPageContent> {
                 'listing': listing?['id'],
                 'bot': b['id'],
               }),
-              icon: const Icon(
+              icon: Icon(
                 Icons.check_rounded,
                 size: 18,
-                color: AppColors.success,
+                color: AppColors.successOf(context),
               ),
             ),
             IconButton(
@@ -1306,10 +1307,10 @@ class _AppPageContentState extends State<AdminPageContent> {
                 'bot': b['id'],
                 '_name': name,
               }),
-              icon: const Icon(
+              icon: Icon(
                 Icons.block_rounded,
                 size: 18,
-                color: AppColors.danger,
+                color: AppColors.dangerOf(context),
               ),
             ),
           ] else
@@ -1396,14 +1397,14 @@ class _AppPageContentState extends State<AdminPageContent> {
               label: 'From MCP servers',
               value: '${bots.where(isServer).length}',
               icon: Icons.hub_rounded,
-              tone: AppColors.cyan,
+              tone: AppColors.cyanOf(context),
             ),
             AdminStatCard(
               label: 'In the catalog',
               value:
                   '${bots.where((b) => listedIds.contains('${b['id']}')).length}',
               icon: Icons.storefront_rounded,
-              tone: AppColors.success,
+              tone: AppColors.successOf(context),
               progress: bots.isEmpty
                   ? 0
                   : bots.where((b) => listedIds.contains('${b['id']}')).length /
@@ -1743,17 +1744,17 @@ class _AppPageContentState extends State<AdminPageContent> {
                   AdminChartSlice(
                     'Pending',
                     count('pending').toDouble(),
-                    AppColors.warning,
+                    AppColors.warningOf(context),
                   ),
                   AdminChartSlice(
                     'Approved',
                     count('approved').toDouble(),
-                    AppColors.success,
+                    AppColors.successOf(context),
                   ),
                   AdminChartSlice(
                     'Denied',
                     count('rejected').toDouble(),
-                    AppColors.danger,
+                    AppColors.dangerOf(context),
                   ),
                 ],
               ),
@@ -1866,10 +1867,10 @@ class _AppPageContentState extends State<AdminPageContent> {
                               'account': t['id'],
                               'profile': {'marketStatus': 'rejected'},
                             }),
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.block_rounded,
                           size: 18,
-                          color: AppColors.danger,
+                          color: AppColors.dangerOf(context),
                         ),
                       ),
                   ],
@@ -1953,14 +1954,14 @@ class _AppPageContentState extends State<AdminPageContent> {
               value: '${count('open')}',
               hint: 'What partners read now',
               icon: Icons.work_rounded,
-              tone: AppColors.success,
+              tone: AppColors.successOf(context),
             ),
             AdminStatCard(
               label: 'Taken down',
               value: '${count('hidden')}',
               hint: 'Removed by an admin',
               icon: Icons.visibility_off_rounded,
-              tone: count('hidden') == 0 ? null : AppColors.warning,
+              tone: count('hidden') == 0 ? null : AppColors.warningOf(context),
             ),
             AdminStatCard(
               label: 'Partner keys',
@@ -2011,10 +2012,10 @@ class _AppPageContentState extends State<AdminPageContent> {
                     for (final r in rows)
                       ExpansionTile(
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppShape.control),
+                          borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
                         ),
                         collapsedShape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppShape.control),
+                          borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
                         ),
                         leading: AdminAvatar(
                           '${r['title']}',
@@ -2292,14 +2293,14 @@ class _AppPageContentState extends State<AdminPageContent> {
               value: _money(totals['spend']),
               hint: '${_compact(totals['requests'])} requests',
               icon: Icons.payments_rounded,
-              tone: AppColors.success,
+              tone: AppColors.successOf(context),
             ),
             AdminStatCard(
               label: 'Errors',
               value: _compact(totals['errors']),
               hint: 'Failed requests',
               icon: Icons.error_outline_rounded,
-              tone: _integer(totals['errors']) == 0 ? null : AppColors.warning,
+              tone: _integer(totals['errors']) == 0 ? null : AppColors.warningOf(context),
             ),
             AdminStatCard(
               label: 'Held in balances',
@@ -2625,7 +2626,7 @@ class _AppPageContentState extends State<AdminPageContent> {
       AdminChartSlice(
         'Platform',
         _number(o['kept']),
-        AppColors.success,
+        AppColors.successOf(context),
         display: _money(o['kept']),
       ),
     ];
@@ -2668,7 +2669,7 @@ class _AppPageContentState extends State<AdminPageContent> {
               hint:
                   'Credit packs sold · ${_integer(income['purchases'])} purchases',
               icon: Icons.south_west_rounded,
-              tone: AppColors.success,
+              tone: AppColors.successOf(context),
             ),
             AdminStatCard(
               label: 'Customer spend',
@@ -2692,8 +2693,8 @@ class _AppPageContentState extends State<AdminPageContent> {
                   ? null
                   : _number(o['kept']) / _number(charged['total']),
               tone: _number(o['kept']) < 0
-                  ? AppColors.danger
-                  : AppColors.success,
+                  ? AppColors.dangerOf(context)
+                  : AppColors.successOf(context),
             ),
           ],
         ),
@@ -2748,13 +2749,13 @@ class _AppPageContentState extends State<AdminPageContent> {
                       AdminChartSlice(
                         'Customers charged',
                         billed,
-                        AppColors.success,
+                        AppColors.successOf(context),
                         display: _money(billed),
                       ),
                       AdminChartSlice(
                         'Provider billed',
                         bill,
-                        AppColors.warning,
+                        AppColors.warningOf(context),
                         display: _money(bill),
                       ),
                     ],
@@ -2770,7 +2771,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                 value: margin.clamp(0, 1).toDouble(),
                 label: 'margin',
                 display: billed <= 0 ? '—' : '${(margin * 100).round()}%',
-                color: margin < 0 ? AppColors.danger : AppColors.success,
+                color: margin < 0 ? AppColors.dangerOf(context) : AppColors.successOf(context),
                 size: 124,
               );
               if (constraints.maxWidth < 520) {
@@ -2818,14 +2819,14 @@ class _AppPageContentState extends State<AdminPageContent> {
                   margin: const EdgeInsets.only(top: 10),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.danger.withValues(alpha: .1),
-                    borderRadius: BorderRadius.circular(AppShape.control),
+                    color: AppColors.dangerOf(context).withValues(alpha: .1),
+                    borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.warning_amber_rounded,
-                        color: AppColors.danger,
+                        color: AppColors.dangerOf(context),
                         size: 20,
                       ),
                       const SizedBox(width: 10),
@@ -2898,28 +2899,28 @@ class _AppPageContentState extends State<AdminPageContent> {
               value: _money(_sum(charged, 'amount')),
               hint: '${charged.length} live purchases',
               icon: Icons.paid_rounded,
-              tone: AppColors.success,
+              tone: AppColors.successOf(context),
             ),
             AdminStatCard(
               label: 'Sandbox',
               value: _money(_sum(sandbox, 'amount')),
               hint: '${sandbox.length} test transactions',
               icon: Icons.science_rounded,
-              tone: AppColors.cyan,
+              tone: AppColors.cyanOf(context),
             ),
             AdminStatCard(
               label: 'Pending',
               value: _money(_sum(pending, 'amount')),
               hint: '${pending.length} waiting',
               icon: Icons.hourglass_top_rounded,
-              tone: pending.isEmpty ? null : AppColors.warning,
+              tone: pending.isEmpty ? null : AppColors.warningOf(context),
             ),
             AdminStatCard(
               label: 'Reversed',
               value: _money(_sum(reversed, 'amount')),
               hint: '${reversed.length} refunds',
               icon: Icons.undo_rounded,
-              tone: reversed.isEmpty ? null : AppColors.danger,
+              tone: reversed.isEmpty ? null : AppColors.dangerOf(context),
             ),
           ],
         ),
@@ -2933,22 +2934,22 @@ class _AppPageContentState extends State<AdminPageContent> {
               AdminChartSlice(
                 'Live',
                 charged.length.toDouble(),
-                AppColors.success,
+                AppColors.successOf(context),
               ),
               AdminChartSlice(
                 'Sandbox',
                 sandbox.length.toDouble(),
-                AppColors.cyan,
+                AppColors.cyanOf(context),
               ),
               AdminChartSlice(
                 'Pending',
                 pending.length.toDouble(),
-                AppColors.warning,
+                AppColors.warningOf(context),
               ),
               AdminChartSlice(
                 'Reversed',
                 reversed.length.toDouble(),
-                AppColors.danger,
+                AppColors.dangerOf(context),
               ),
             ],
           ),
@@ -2980,14 +2981,14 @@ class _AppPageContentState extends State<AdminPageContent> {
                   margin: const EdgeInsets.only(top: 12),
                   padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
                   decoration: BoxDecoration(
-                    color: scheme.secondaryContainer,
+                    color: ThemeRoles.selectedFill(context),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Row(
                     children: [
                       Icon(
                         Icons.checklist_rounded,
-                        color: scheme.onSecondaryContainer,
+                        color: ThemeRoles.selectedInk(context),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -2995,7 +2996,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                           '${selected.length} selected',
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: scheme.onSecondaryContainer,
+                            color: ThemeRoles.selectedInk(context),
                           ),
                         ),
                       ),
@@ -3117,21 +3118,21 @@ class _AppPageContentState extends State<AdminPageContent> {
               hint:
                   '${pending.length} ${pending.length == 1 ? 'request' : 'requests'}',
               icon: Icons.hourglass_top_rounded,
-              tone: pending.isEmpty ? null : AppColors.warning,
+              tone: pending.isEmpty ? null : AppColors.warningOf(context),
             ),
             AdminStatCard(
               label: 'Marked paid',
               value: _money(_sum(paid, 'amount')),
               hint: 'This queue only — already resolved',
               icon: Icons.price_check_rounded,
-              tone: AppColors.success,
+              tone: AppColors.successOf(context),
             ),
             AdminStatCard(
               label: 'Returned',
               value: _money(_sum(rejected, 'amount')),
               hint: '${rejected.length} rejected',
               icon: Icons.undo_rounded,
-              tone: rejected.isEmpty ? null : AppColors.danger,
+              tone: rejected.isEmpty ? null : AppColors.dangerOf(context),
             ),
           ],
         ),
@@ -3153,10 +3154,10 @@ class _AppPageContentState extends State<AdminPageContent> {
                     for (final p in ordered)
                       ExpansionTile(
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppShape.control),
+                          borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
                         ),
                         collapsedShape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppShape.control),
+                          borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
                         ),
                         initiallyExpanded:
                             '${p['status']}' == 'pending' &&
@@ -3398,7 +3399,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                       size: 18,
                       color: _map(m['_provider'])['enabled'] == false
                           ? Theme.of(context).colorScheme.onSurfaceVariant
-                          : AppColors.success,
+                          : AppColors.successOf(context),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -3429,8 +3430,8 @@ class _AppPageContentState extends State<AdminPageContent> {
                   _modelPriceText(m),
                   textAlign: TextAlign.right,
                   style: m['unpriced'] == true
-                      ? const TextStyle(
-                          color: AppColors.warning,
+                      ? TextStyle(
+                          color: AppColors.warningOf(context),
                           fontWeight: FontWeight.w700,
                         )
                       : null,
@@ -3546,7 +3547,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                 const SizedBox(height: 8),
                 Text(
                   '${needPrice.length} need a price before they are served: ${needPrice.take(8).join(', ')}${needPrice.length > 8 ? '…' : ''}',
-                  style: const TextStyle(color: AppColors.warning),
+                  style: TextStyle(color: AppColors.warningOf(context)),
                 ),
               ],
               if (gone.isNotEmpty) ...[
@@ -4336,10 +4337,10 @@ class _AppPageContentState extends State<AdminPageContent> {
       children: [
         AdminHeroCard(
           tone: fail > 0
-              ? AppColors.danger
+              ? AppColors.dangerOf(context)
               : warn > 0
-              ? AppColors.warning
-              : AppColors.success,
+              ? AppColors.warningOf(context)
+              : AppColors.successOf(context),
           icon: fail > 0
               ? Icons.gpp_maybe_rounded
               : warn > 0
@@ -4365,13 +4366,13 @@ class _AppPageContentState extends State<AdminPageContent> {
             center: total == 0 ? '—' : '${(ok / total * 100).round()}%',
             caption: 'healthy',
             slices: [
-              AdminChartSlice('Healthy', ok.toDouble(), AppColors.success),
+              AdminChartSlice('Healthy', ok.toDouble(), AppColors.successOf(context)),
               AdminChartSlice(
                 'Worth a look',
                 warn.toDouble(),
-                AppColors.warning,
+                AppColors.warningOf(context),
               ),
-              AdminChartSlice('Need fixing', fail.toDouble(), AppColors.danger),
+              AdminChartSlice('Need fixing', fail.toDouble(), AppColors.dangerOf(context)),
             ],
           ),
         ),
@@ -4385,20 +4386,20 @@ class _AppPageContentState extends State<AdminPageContent> {
               value: '$fail',
               hint: fail > 0 ? 'Broken or unsafe' : 'Nothing broken',
               icon: Icons.cancel_rounded,
-              tone: fail > 0 ? AppColors.danger : AppColors.success,
+              tone: fail > 0 ? AppColors.dangerOf(context) : AppColors.successOf(context),
             ),
             AdminStatCard(
               label: 'Worth a look',
               value: '$warn',
               hint: 'Works, but something is unset',
               icon: Icons.error_rounded,
-              tone: warn > 0 ? AppColors.warning : null,
+              tone: warn > 0 ? AppColors.warningOf(context) : null,
             ),
             AdminStatCard(
               label: 'Healthy',
               value: '$ok',
               icon: Icons.check_circle_rounded,
-              tone: AppColors.success,
+              tone: AppColors.successOf(context),
             ),
           ],
         ),
@@ -4427,7 +4428,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                           color: tone == AdminTone.ok
                               ? Colors.transparent
                               : color.withValues(alpha: .08),
-                          borderRadius: BorderRadius.circular(AppShape.control),
+                          borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -4457,7 +4458,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                                         vertical: 6,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: scheme.primaryContainer,
+                                        color: ThemeRoles.selectedFill(context),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Row(
@@ -4466,7 +4467,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                                           Icon(
                                             Icons.build_circle_outlined,
                                             size: 16,
-                                            color: scheme.onPrimaryContainer,
+                                            color: ThemeRoles.selectedInk(context),
                                           ),
                                           const SizedBox(width: 6),
                                           Flexible(
@@ -4475,7 +4476,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                                               style: TextStyle(
                                                 fontSize: 12,
                                                 color:
-                                                    scheme.onPrimaryContainer,
+                                                    ThemeRoles.selectedInk(context),
                                                 fontWeight: FontWeight.w600,
                                               ),
                                             ),
@@ -4582,7 +4583,7 @@ class _AppPageContentState extends State<AdminPageContent> {
               value: _uptime(r['host_uptime_sec']),
               hint: '${r['cpu_cores'] ?? '—'} cores',
               icon: Icons.timer_rounded,
-              tone: AppColors.cyan,
+              tone: AppColors.cyanOf(context),
             ),
             AdminStatCard(
               label: 'Disk',
@@ -4591,14 +4592,14 @@ class _AppPageContentState extends State<AdminPageContent> {
                   '${_bytes(r['disk_used_bytes'])} of ${_bytes(r['disk_total_bytes'])}',
               icon: Icons.storage_rounded,
               progress: _number(r['disk_used_percent']) / 100,
-              tone: AppColors.warning,
+              tone: AppColors.warningOf(context),
             ),
             AdminStatCard(
               label: 'Runtime',
               value: '${node['go_version'] ?? '—'}',
               hint: 'Process ${_bytes(r['process_rss_bytes'])}',
               icon: Icons.code_rounded,
-              tone: AppColors.success,
+              tone: AppColors.successOf(context),
             ),
           ],
         ),
@@ -4613,7 +4614,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                 value: '${(cpu.isEmpty ? 0 : cpu.last).round()}%',
                 subtitle:
                     'load ${load.map((v) => v.toStringAsFixed(2)).join(' / ')}',
-                color: AppColors.cyan,
+                color: AppColors.cyanOf(context),
               ),
               AdminLiveChart(
                 label: 'Memory',
@@ -4658,8 +4659,8 @@ class _AppPageContentState extends State<AdminPageContent> {
                             p['ok'] == true ? AdminTone.ok : AdminTone.bad,
                           ),
                           color: p['ok'] == true
-                              ? AppColors.success
-                              : AppColors.danger,
+                              ? AppColors.successOf(context)
+                              : AppColors.dangerOf(context),
                         ),
                         title: Text(
                           '${p['name']}',
@@ -4761,13 +4762,13 @@ class _AppPageContentState extends State<AdminPageContent> {
                   .map((e) => '${e.key}: ${e.value}')
                   .join(' · '),
               icon: Icons.cable_rounded,
-              tone: AppColors.cyan,
+              tone: AppColors.cyanOf(context),
             ),
             AdminStatCard(
               label: 'Errors',
               value: '$errors',
               icon: Icons.error_rounded,
-              tone: errors > 0 ? AppColors.danger : AppColors.success,
+              tone: errors > 0 ? AppColors.dangerOf(context) : AppColors.successOf(context),
             ),
           ],
         ),
@@ -4995,12 +4996,12 @@ class _AppPageContentState extends State<AdminPageContent> {
                     AdminChartSlice(
                       'warn',
                       (buckets[m]!['warn'] ?? 0).toDouble(),
-                      AppColors.warning,
+                      AppColors.warningOf(context),
                     ),
                     AdminChartSlice(
                       'error',
                       (buckets[m]!['error'] ?? 0).toDouble(),
-                      AppColors.danger,
+                      AppColors.dangerOf(context),
                     ),
                   ]),
               ],
@@ -5015,7 +5016,7 @@ class _AppPageContentState extends State<AdminPageContent> {
         ),
         const SizedBox(height: 14),
         ClipRRect(
-          borderRadius: BorderRadius.circular(AppShape.card - 4),
+          borderRadius: BorderRadius.circular(AppShape.cardOf(context)- 4),
           child: Container(
             height: 520,
             color: const Color(0xFF07101C),
@@ -5026,10 +5027,10 @@ class _AppPageContentState extends State<AdminPageContent> {
                   color: const Color(0xFF0D1A2B),
                   child: Row(
                     children: [
-                      for (final c in const [
-                        Color(0xFFFF6B79),
-                        Color(0xFFFFB648),
-                        Color(0xFF43D39E),
+                      for (final c in [
+                        AppColors.dangerOf(context),
+                        AppColors.warningOf(context),
+                        AppColors.successOf(context),
                       ]) ...[
                         Container(
                           width: 10,
@@ -5078,12 +5079,12 @@ class _AppPageContentState extends State<AdminPageContent> {
                               '${line['level'] ?? 'log'}',
                             );
                             final color = level == 'error'
-                                ? AppColors.danger
+                                ? AppColors.dangerOf(context)
                                 : level == 'warn'
-                                ? AppColors.warning
+                                ? AppColors.warningOf(context)
                                 : level == 'debug'
                                 ? Theme.of(context).colorScheme.onSurfaceVariant
-                                : const Color(0xFFD3DEEA);
+                                : Theme.of(context).colorScheme.onSurface;
                             return SelectableText(
                               '${_time(line['time'])} ${level.toUpperCase().padRight(5)} ${line['logger'] == null ? '' : '[${line['logger']}] '}${line['message'] ?? ''}',
                               style: TextStyle(
@@ -5178,12 +5179,12 @@ class _AppPageContentState extends State<AdminPageContent> {
                   AdminChartSlice(
                     "Projects' computers",
                     mine.length.toDouble(),
-                    AppColors.success,
+                    AppColors.successOf(context),
                   ),
                   AdminChartSlice(
                     'Not used by a project',
                     stray.length.toDouble(),
-                    AppColors.warning,
+                    AppColors.warningOf(context),
                   ),
                 ],
               ),
@@ -5195,7 +5196,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                   ? 'Every running machine belongs to a project.'
                   : 'Running without a project: check these',
               icon: Icons.report_problem_rounded,
-              tone: stray.isEmpty ? AppColors.success : AppColors.warning,
+              tone: stray.isEmpty ? AppColors.successOf(context) : AppColors.warningOf(context),
             ),
           ],
         ),
@@ -5297,7 +5298,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                   ? 'Nothing waits for a decision.'
                   : 'Read the copied messages, then resolve or dismiss.',
               icon: Icons.flag_rounded,
-              tone: open == 0 ? AppColors.success : AppColors.warning,
+              tone: open == 0 ? AppColors.successOf(context) : AppColors.warningOf(context),
             ),
             AdminStatCard(
               label: 'Shown',
@@ -5343,10 +5344,10 @@ class _AppPageContentState extends State<AdminPageContent> {
                     for (final r in reports)
                       ExpansionTile(
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppShape.control),
+                          borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
                         ),
                         collapsedShape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppShape.control),
+                          borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
                         ),
                         leading: AdminAvatar(
                           person(r['accused']),
@@ -5405,8 +5406,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                                 color: '${m['id']}' == '${r['message_id']}'
                                     ? scheme.errorContainer
                                     : scheme.surfaceContainerHigh,
-                                borderRadius: BorderRadius.circular(
-                                  AppShape.inner,
+                                borderRadius: BorderRadius.circular(AppShape.innerOf(context),
                                 ),
                               ),
                               child: Column(
@@ -5528,7 +5528,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                   ? 'Nothing waits for a decision.'
                   : 'Read the reported post, then remove it, resolve or dismiss.',
               icon: Icons.report_rounded,
-              tone: open == 0 ? AppColors.success : AppColors.warning,
+              tone: open == 0 ? AppColors.successOf(context) : AppColors.warningOf(context),
             ),
             AdminStatCard(
               label: 'Shown',
@@ -5574,10 +5574,10 @@ class _AppPageContentState extends State<AdminPageContent> {
                     for (final r in reports)
                       ExpansionTile(
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppShape.control),
+                          borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
                         ),
                         collapsedShape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppShape.control),
+                          borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
                         ),
                         leading: AdminAvatar(
                           person(r['accused']),
@@ -5626,8 +5626,7 @@ class _AppPageContentState extends State<AdminPageContent> {
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
                               color: scheme.errorContainer,
-                              borderRadius: BorderRadius.circular(
-                                AppShape.inner,
+                              borderRadius: BorderRadius.circular(AppShape.innerOf(context),
                               ),
                             ),
                             child: KeyedSubtree(
@@ -5771,12 +5770,12 @@ class _AppPageContentState extends State<AdminPageContent> {
                   AdminChartSlice(
                     "Holding a project's files",
                     usedAll.toDouble(),
-                    AppColors.success,
+                    AppColors.successOf(context),
                   ),
                   AdminChartSlice(
                     'With no project',
                     (all.length - usedAll).toDouble(),
-                    AppColors.warning,
+                    AppColors.warningOf(context),
                   ),
                 ],
               ),
@@ -5787,8 +5786,8 @@ class _AppPageContentState extends State<AdminPageContent> {
               hint: "Left from deleted projects, or not this node's",
               icon: Icons.cleaning_services_rounded,
               tone: all.length == usedAll
-                  ? AppColors.success
-                  : AppColors.warning,
+                  ? AppColors.successOf(context)
+                  : AppColors.warningOf(context),
             ),
           ],
         ),
@@ -5898,7 +5897,7 @@ class _AppPageContentState extends State<AdminPageContent> {
               value: '${custom.length}',
               hint: 'Added for this node',
               icon: Icons.new_label_rounded,
-              tone: AppColors.cyan,
+              tone: AppColors.cyanOf(context),
             ),
           ],
         ),
@@ -6142,7 +6141,7 @@ class _AppPageContentState extends State<AdminPageContent> {
       return ListTile(
         contentPadding: contentPadding,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.control),
+          borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
         ),
         leading: leading,
         title: title,
@@ -6168,16 +6167,16 @@ class _AppPageContentState extends State<AdminPageContent> {
         !active &&
         (setting['chat_active'] == true || setting['embedding_active'] == true);
     final color = active
-        ? AppColors.success
+        ? AppColors.successOf(context)
         : partly
-        ? AppColors.warning
+        ? AppColors.warningOf(context)
         : scheme.onSurfaceVariant;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: color.withValues(alpha: .12),
-        borderRadius: BorderRadius.circular(AppShape.inner),
+        borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
       ),
       child: Row(
         children: [
@@ -7183,7 +7182,7 @@ class _MachineEditorState extends State<_MachineEditor> {
               AdminChartSlice(
                 'Reserve',
                 reserve ?? billed * .25,
-                AppColors.success,
+                AppColors.successOf(context),
               ),
               AdminChartSlice(
                 'Billed',
@@ -7193,7 +7192,7 @@ class _MachineEditorState extends State<_MachineEditor> {
               AdminChartSlice(
                 'Burst',
                 (max ?? billed * 2) - billed,
-                AppColors.cyan,
+                AppColors.cyanOf(context),
               ),
               AdminChartSlice(
                 '',
@@ -7245,9 +7244,9 @@ class _MachineEditorState extends State<_MachineEditor> {
                   runSpacing: 6,
                   children: [
                     for (final (label, color) in [
-                      ('Idle reserve', AppColors.success),
+                      ('Idle reserve', AppColors.successOf(context)),
                       ('Billed size', scheme.primary),
-                      ('Burst', AppColors.cyan),
+                      ('Burst', AppColors.cyanOf(context)),
                     ])
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -7515,14 +7514,14 @@ class _PromptEditorState extends State<_PromptEditor> {
                 hint: 'of $limit characters',
                 icon: Icons.short_text_rounded,
                 progress: length / limit,
-                tone: over ? AppColors.danger : null,
+                tone: over ? AppColors.dangerOf(context) : null,
               ),
               AdminStatCard(
                 label: 'Tokens per turn',
                 value: '≈$tokens',
                 hint: 'Paid on every agent turn',
                 icon: Icons.token_outlined,
-                tone: tokens > 1500 ? AppColors.warning : AppColors.success,
+                tone: tokens > 1500 ? AppColors.warningOf(context) : AppColors.successOf(context),
               ),
               AdminStatCard(
                 label: 'Rules',
@@ -7530,7 +7529,7 @@ class _PromptEditorState extends State<_PromptEditor> {
                     '${controller.text.split('\n').where((l) => l.trim().isNotEmpty).length}',
                 hint: 'Non-empty lines',
                 icon: Icons.rule_rounded,
-                tone: AppColors.cyan,
+                tone: AppColors.cyanOf(context),
               ),
             ],
           ),
@@ -7828,7 +7827,7 @@ class _UserDialogState extends State<_UserDialog> {
               label: 'Bought',
               value: _money(m['bought']),
               icon: Icons.shopping_bag_rounded,
-              tone: AppColors.success,
+              tone: AppColors.successOf(context),
               hint:
                   '${m['bought_count'] ?? 0} packs · ${_credits(m['bought'])}',
             ),
@@ -7836,14 +7835,14 @@ class _UserDialogState extends State<_UserDialog> {
               label: 'Added by admin',
               value: _money(m['granted']),
               icon: Icons.card_giftcard_rounded,
-              tone: AppColors.cyan,
+              tone: AppColors.cyanOf(context),
               hint: _credits(m['granted']),
             ),
             AdminStatCard(
               label: 'Spent',
               value: _money(m['spent']),
               icon: Icons.trending_down_rounded,
-              tone: AppColors.warning,
+              tone: AppColors.warningOf(context),
               hint: _credits(m['spent']),
             ),
           ],
@@ -7945,8 +7944,8 @@ class _UserDialogState extends State<_UserDialog> {
               style: TextStyle(
                 fontWeight: FontWeight.w700,
                 color: _number(e['amount']) < 0
-                    ? AppColors.danger
-                    : AppColors.success,
+                    ? AppColors.dangerOf(context)
+                    : AppColors.successOf(context),
               ),
             ),
             Text(_credits(e['balance']), textAlign: TextAlign.right),
@@ -7997,7 +7996,7 @@ class _UserDialogState extends State<_UserDialog> {
               subtitle: disabled
                   ? 'Currently blocked'
                   : 'Data and wallet are kept',
-              tone: disabled ? AppColors.success : AppColors.danger,
+              tone: disabled ? AppColors.successOf(context) : AppColors.dangerOf(context),
               onTap: widget.onEdit,
             ),
             _ActionTile(
@@ -8013,7 +8012,7 @@ class _UserDialogState extends State<_UserDialog> {
               icon: Icons.add_card_rounded,
               title: 'Grant credits',
               subtitle: 'Add credits to their wallet',
-              tone: AppColors.success,
+              tone: AppColors.successOf(context),
               onTap: () => widget.onAction('finance', 'wallet_mint', {
                 'target': a['id'],
                 '_name': name,
@@ -8048,7 +8047,7 @@ class _ActionTile extends StatelessWidget {
     return Material(
       color: scheme.surfaceContainer,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppShape.inner + 4),
+        borderRadius: BorderRadius.circular(AppShape.innerOf(context)+ 4),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -8258,13 +8257,13 @@ class _ProjectDialogState extends State<_ProjectDialog> {
               label: 'Agents',
               value: '${detail['agents'] ?? _list(detail['workers']).length}',
               icon: Icons.smart_toy_rounded,
-              tone: AppColors.cyan,
+              tone: AppColors.cyanOf(context),
             ),
             AdminStatCard(
               label: 'Rooms',
               value: '${_list(detail['rooms']).length}',
               icon: Icons.forum_rounded,
-              tone: AppColors.success,
+              tone: AppColors.successOf(context),
             ),
             AdminStatCard(
               label: 'Budget',
@@ -8274,7 +8273,7 @@ class _ProjectDialogState extends State<_ProjectDialog> {
                   ? null
                   : _number(spent) / _number(cap),
               icon: Icons.savings_rounded,
-              tone: AppColors.warning,
+              tone: AppColors.warningOf(context),
             ),
           ],
         ),
@@ -8344,7 +8343,7 @@ class _ProjectDialogState extends State<_ProjectDialog> {
                 title: label,
                 subtitle: hint,
                 tone: op == 'replace' || op == 'sleep'
-                    ? AppColors.warning
+                    ? AppColors.warningOf(context)
                     : null,
                 onTap: () => widget.onAction('spaces', 'computer', {
                   'space': id,
@@ -8493,10 +8492,10 @@ class _ProjectDialogState extends State<_ProjectDialog> {
           for (final run in runs)
             ExpansionTile(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppShape.control),
+                borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
               ),
               collapsedShape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppShape.control),
+                borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
               ),
               title: Text(
                 [

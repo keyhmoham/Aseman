@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../core/theme/aseman_tokens.dart';
+import '../../../core/theme/theme_pack.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../elpian/elpian.dart';
 import '../../../shared/widgets/skeleton.dart';
@@ -159,11 +161,18 @@ class _ElpianAppViewState extends State<ElpianAppView> {
   Map<String, dynamic> _environment(BuildContext context) {
     final theme = Theme.of(context);
     final s = theme.colorScheme;
+    final tokens = AsemanTokens.maybeOf(context);
     String hex(Color c) =>
         '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
     final session = widget.service.session;
     final presentation = FrontendPresentation.maybeOf(context);
     final display = FrontendPresentation.displayOf(context);
+    final partColors = <String, String>{};
+    if (tokens != null) {
+      for (final part in ThemePartId.values) {
+        partColors[part.jsonKey] = hex(tokens.partAccent(part));
+      }
+    }
     return {
       'display': display.name,
       if (display == FrontendDisplay.compact)
@@ -174,6 +183,10 @@ class _ElpianAppViewState extends State<ElpianAppView> {
       'theme': {
         'mode': theme.brightness == Brightness.dark ? 'dark' : 'light',
         'accent': hex(s.primary),
+        'unified': tokens?.unifiedAccent ?? true,
+        'packId': tokens?.packId ?? '',
+        'parts': partColors,
+        'disabled': tokens?.ui.disabled.toList() ?? const <String>[],
         'colors': {
           'primary': hex(s.primary),
           'onPrimary': hex(s.onPrimary),
@@ -203,6 +216,11 @@ class _ElpianAppViewState extends State<ElpianAppView> {
           'onError': hex(s.onError),
           'errorContainer': hex(s.errorContainer),
           'onErrorContainer': hex(s.onErrorContainer),
+          if (tokens != null) ...{
+            'success': hex(tokens.success),
+            'warning': hex(tokens.warning),
+            'danger': hex(tokens.danger),
+          },
         },
       },
       'user': {

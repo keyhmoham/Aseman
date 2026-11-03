@@ -42,7 +42,7 @@ class TopBar extends StatelessWidget {
             ]),
         const SizedBox(width: 18),
         AppAvatar(handle.isEmpty ? 'ME' : handle[0].toUpperCase(),
-            color: AppColors.primary),
+            color: AppColors.primaryOf(context)),
         const SizedBox(width: 10),
         Text('@$handle', style: const TextStyle(fontWeight: FontWeight.w700)),
       ]));

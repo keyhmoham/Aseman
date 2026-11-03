@@ -4,9 +4,15 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_surfaces.dart';
+import '../../core/theme/aseman_tokens.dart';
+import '../../core/theme/design_language.dart';
+import '../../core/theme/theme_chrome.dart';
 
 /// Frosted glass fill used across the app: a light blur of whatever sits
 /// behind plus a translucent surface tint from [AppSurfaces].
+///
+/// Packs that use solid / flat / neo-brutal languages skip frost and clip to
+/// the card recipe's true shape (sharp / cut / stadium), not a Material RRect.
 ///
 /// When this surface is the body of content shown inside [showAppSheet],
 /// pass [embedded] so the sheet owns the frost and this widget stays
@@ -44,53 +50,139 @@ class GlassSurface extends StatelessWidget {
   /// already paints glass. Use for content-container bodies shown in a sheet.
   final bool embedded;
 
-  @override
-  Widget build(BuildContext context) {
-    if (embedded) {
-      if (onTap == null) return child;
-      final radius = borderRadius ?? BorderRadius.circular(AppShape.card - 4);
-      return Material(
-        type: MaterialType.transparency,
-        child: InkWell(onTap: onTap, borderRadius: radius, child: child),
+  OutlinedBorder _shape(BuildContext context, BorderRadius? radius) {
+    final scheme = Theme.of(context).colorScheme;
+    final tokens = AsemanTokens.maybeOf(context);
+    final card = tokens?.control('card');
+    if (radius != null) {
+      final tl = radius.topLeft.x;
+      final uniform = tl == radius.topRight.x &&
+          tl == radius.bottomLeft.x &&
+          tl == radius.bottomRight.x;
+      // Asymmetric radii (sheets / drawers) stay as rounded rects.
+      if (!uniform) {
+        return RoundedRectangleBorder(
+          borderRadius: radius,
+          side: border
+              ? BorderSide(color: AppSurfaces.cardBorder(scheme))
+              : BorderSide.none,
+        );
+      }
+    }
+    if (card != null) {
+      return ThemeChrome.outlinedBorder(
+        card,
+        sideColor: border ? AppSurfaces.cardBorder(scheme) : null,
+        borderWidth: border ? (card.borderWidth > 0 ? card.borderWidth : 1) : 0,
       );
     }
+    final corners = radius ??
+        ThemeChrome.softCardCorners(context, AppShape.card - 4);
+    return RoundedRectangleBorder(
+      borderRadius: corners,
+      side: border
+          ? BorderSide(color: AppSurfaces.cardBorder(scheme))
+          : BorderSide.none,
+    );
+  }
+
+  BorderRadius _resolveRadius(BuildContext context, BorderRadius? input) {
+    if (input == null) {
+      return ThemeChrome.softCardCorners(context, AppShape.card - 4);
+    }
+    final tl = input.topLeft.x;
+    final uniform = tl == input.topRight.x &&
+        tl == input.bottomLeft.x &&
+        tl == input.bottomRight.x;
+    if (uniform &&
+        (AppShape.isSentinel(tl) ||
+            (tl - AppShape.card).abs() <= 8 ||
+            (tl - AppShape.inner).abs() <= 8)) {
+      return ThemeChrome.softCardCorners(context, tl);
+    }
+    return AppShape.resolveBorderRadius(context, input);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AsemanTokens.maybeOf(context);
+    final card = tokens?.control('card');
+    final ink = card?.ink ??
+        tokens?.language.interaction.ink ??
+        InkKind.ripple;
+
+    if (embedded) {
+      if (onTap == null) return child;
+      final shape = _shape(context, borderRadius);
+      return PackInkWell(
+        onTap: onTap,
+        shape: shape,
+        slot: 'card',
+        child: child,
+      );
+    }
+
     final scheme = Theme.of(context).colorScheme;
-    final radius = borderRadius ?? BorderRadius.circular(AppShape.card - 4);
-    final sigma = blur ?? AppSurfaces.blurSigma;
-    // Light pages use a white veil at the same opacity as dark glass.
-    // The dark container role sits on the light page and the frost vanishes;
-    // raising that opacity toward 1 paints a solid panel instead.
-    final standard = color == null && AppSurfaces.standardAlpha(alpha);
+    final radius = _resolveRadius(context, borderRadius);
+    final shape = _shape(context, borderRadius ?? radius);
+    final sigma = blur ?? AppSurfaces.blurSigmaResolved(tokens);
+    final useBlur = (blur != null && blur! > 0) ||
+        (blur == null && ThemeChrome.wantsGlassBlur(context));
+    final overlayA = AppSurfaces.overlayAlphaResolved(tokens);
+    final cardA = AppSurfaces.cardAlphaResolved(tokens);
+    final standard = color == null && AppSurfaces.standardAlpha(alpha, tokens);
     final light = scheme.brightness == Brightness.light && standard;
-    final fill =
-        (light
+    final solidFill = card?.fill == FillKind.solid ||
+        card?.fill == FillKind.outline ||
+        !useBlur;
+    final fill = solidFill
+        ? (color ??
+            (card?.fill == FillKind.solid
+                ? scheme.surface
+                : AppSurfaces.card(scheme, tokens: tokens)))
+        : (light
                 ? AppSurfaces.tint(scheme)
                 : (color ?? scheme.surfaceContainerHigh))
             .withValues(
               alpha: light
                   ? AppSurfaces.tintAlpha(
                       scheme,
-                      overlay: alpha == AppSurfaces.overlayAlpha,
+                      overlay: alpha == overlayA ||
+                          alpha == AppSurfaces.overlayAlpha,
+                      tokens: tokens,
                     )
-                  : (alpha ?? AppSurfaces.cardAlpha),
+                  : (alpha ?? cardA),
             );
-    return ClipRRect(
-      borderRadius: radius,
+
+    Widget body = Material(
+      color: fill,
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
+      child: onTap == null
+          ? child
+          : InkWell(
+              onTap: onTap,
+              customBorder: shape,
+              splashFactory: ThemeChrome.splashFactory(context, ink: ink),
+              highlightColor: ThemeChrome.pressHighlight(
+                context,
+                ink: ink,
+              ),
+              splashColor: ThemeChrome.pressSplash(context, ink: ink),
+              child: child,
+            ),
+    );
+
+    if (!useBlur || solidFill) return body;
+
+    return ClipPath(
+      clipper: ShapeBorderClipper(shape: shape),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-        child: Material(
-          color: fill,
-          shape: RoundedRectangleBorder(
-            borderRadius: radius,
-            side: border
-                ? BorderSide(color: AppSurfaces.cardBorder(scheme))
-                : BorderSide.none,
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: onTap == null
-              ? child
-              : InkWell(onTap: onTap, borderRadius: radius, child: child),
-        ),
+        child: body,
       ),
     );
   }
@@ -119,11 +211,14 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = shape is RoundedRectangleBorder
-        ? (shape as RoundedRectangleBorder).borderRadius.resolve(
+    BorderRadius? radius;
+    if (shape is RoundedRectangleBorder) {
+      radius = (shape as RoundedRectangleBorder).borderRadius.resolve(
             Directionality.maybeOf(context) ?? TextDirection.ltr,
-          )
-        : AppSurfaces.cardRadius(AppShape.card);
+          );
+    } else if (shape == null) {
+      radius = ThemeChrome.softCardCorners(context, AppShape.card);
+    }
     return Padding(
       padding: margin,
       child: GlassSurface(
@@ -147,18 +242,15 @@ class GlassDrawerSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = AsemanTokens.maybeOf(context);
+    final corners = ThemeChrome.softCardCorners(context, AppShape.card);
+    final r = corners.topLeft;
     final side = Directionality.of(context) == TextDirection.rtl
-        ? const BorderRadius.only(
-            topLeft: Radius.circular(AppShape.card),
-            bottomLeft: Radius.circular(AppShape.card),
-          )
-        : const BorderRadius.only(
-            topRight: Radius.circular(AppShape.card),
-            bottomRight: Radius.circular(AppShape.card),
-          );
+        ? BorderRadius.only(topLeft: r, bottomLeft: r)
+        : BorderRadius.only(topRight: r, bottomRight: r);
     return GlassSurface(
-      alpha: AppSurfaces.overlayAlpha,
-      blur: AppSurfaces.blurSigma,
+      alpha: AppSurfaces.overlayAlphaResolved(tokens),
+      blur: AppSurfaces.blurSigmaResolved(tokens),
       borderRadius: side,
       border: false,
       child: child,

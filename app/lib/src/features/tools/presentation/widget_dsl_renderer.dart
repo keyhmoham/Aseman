@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../domain/widget_dsl.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import '../domain/widget_dsl.dart';
 
 /// Renders an app [DeskWidgetDsl] inside a room-desk tile. Rows are laid
 /// out vertically and are kept compact to fit small mosaic tiles. Actions are
@@ -12,14 +13,14 @@ class WidgetDslRenderer extends StatefulWidget {
     super.key,
     required this.dsl,
     required this.onAction,
-    this.accent = Colors.cyanAccent,
+    this.accent,
     this.dense = false,
   });
 
   final DeskWidgetDsl dsl;
   final Future<String> Function(DslAction action, Map<String, dynamic> inline)
       onAction;
-  final Color accent;
+  final Color? accent;
   final bool dense;
 
   @override
@@ -50,8 +51,12 @@ class _WidgetDslRendererState extends State<WidgetDslRenderer> {
     ]);
   }
 
+  Color get _accent =>
+      widget.accent ?? AppColors.cyanOf(context);
+
   Widget _buildRow(DslRow row) {
     final color = _colorFor(row.color);
+    final accent = _accent;
     switch (row.type) {
       case 'divider':
         return const Divider(height: 10);
@@ -61,7 +66,7 @@ class _WidgetDslRendererState extends State<WidgetDslRenderer> {
             value: row.value?.toString() ?? '',
             delta: row.delta,
             color: color,
-            accent: widget.accent);
+            accent: accent);
       case 'sparkline':
         return _Sparkline(data: row.data, delta: row.delta, color: color);
       case 'gauge':
@@ -78,13 +83,13 @@ class _WidgetDslRendererState extends State<WidgetDslRenderer> {
             label: row.label, value: row.value?.toString() ?? '', color: color);
       case 'list':
         return _ListBlock(
-            items: row.items, color: color, accent: widget.accent);
+            items: row.items, color: color, accent: accent);
       case 'button':
         final action = row.action;
         if (action == null) return const SizedBox.shrink();
         return _ActionButton(
             label: row.text.isEmpty ? row.label : row.text,
-            accent: widget.accent,
+            accent: accent,
             onTap: () => _run(action, const {}));
       case 'toggle':
         final action = row.action;
@@ -92,7 +97,7 @@ class _WidgetDslRendererState extends State<WidgetDslRenderer> {
         return _ToggleRow(
             label: row.label,
             value: _toggles[row.label] ?? row.toggle,
-            accent: widget.accent,
+            accent: accent,
             onChanged: (value) {
               setState(() => _toggles[row.label] = value);
               _run(action, {'value': value, 'enabled': value});
@@ -105,7 +110,7 @@ class _WidgetDslRendererState extends State<WidgetDslRenderer> {
             label: row.label,
             controller: controller,
             submit: submit,
-            accent: widget.accent,
+            accent: accent,
             onSubmit: (value) {
               if (submit == null) return;
               _run(submit, {'value': value});
@@ -168,13 +173,13 @@ class _WidgetDslRendererState extends State<WidgetDslRenderer> {
           : 0;
 
   Color _colorFor(String token) => switch (token) {
-        'success' => Colors.greenAccent,
-        'danger' => Colors.redAccent,
-        'warning' => Colors.orangeAccent,
-        'info' => Colors.cyanAccent,
+        'success' => AppColors.successOf(context),
+        'danger' => AppColors.dangerOf(context),
+        'warning' => AppColors.warningOf(context),
+        'info' => AppColors.cyanOf(context),
         'muted' => Theme.of(context).colorScheme.onSurfaceVariant,
-        'accent' => widget.accent,
-        _ => widget.accent,
+        'accent' => _accent,
+        _ => _accent,
       };
 }
 
@@ -407,14 +412,14 @@ class _ListBlock extends StatelessWidget {
                     style: TextStyle(
                         fontSize: 9,
                         fontWeight: FontWeight.w800,
-                        color: _itemColor(items[i]))),
+                        color: _itemColor(context, items[i]))),
               ])),
       ]);
 
-  Color _itemColor(DslRow item) {
-    if (item.color == 'success') return Colors.greenAccent;
-    if (item.color == 'danger') return Colors.redAccent;
-    if (item.color == 'warning') return Colors.orangeAccent;
+  Color _itemColor(BuildContext context, DslRow item) {
+    if (item.color == 'success') return AppColors.successOf(context);
+    if (item.color == 'danger') return AppColors.dangerOf(context);
+    if (item.color == 'warning') return AppColors.warningOf(context);
     return item.color == 'accent' ? accent : color;
   }
 }

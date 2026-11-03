@@ -9,12 +9,13 @@ import (
 	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
-// ItemType distinguishes the published artifacts: agents, and tools (apps).
+// ItemType distinguishes the published artifacts: agents, tools (apps), themes.
 type ItemType string
 
 const (
 	ItemAgent ItemType = "agent"
 	ItemTool  ItemType = "tool"
+	ItemTheme ItemType = "theme"
 )
 
 // Status of a listing.

@@ -35,6 +35,7 @@ class Bot {
 
   bool get isAgent => kind == 'agent';
   bool get isTool => kind == 'tool';
+  bool get isTheme => kind == 'theme';
 
   /// Built-in Aseman assistant or lead — personal Aseman chat, not a New-chat peer.
   bool get isBuiltin =>
@@ -83,8 +84,9 @@ class Bot {
         humanoid: humanoid,
       );
 
-  /// What it is, for display: an agent or an app.
-  String get kindLabel => isAgent ? 'Agent' : 'App';
+  /// What it is, for display: an agent, an app, or a theme.
+  String get kindLabel =>
+      isTheme ? 'Theme' : (isAgent ? 'Agent' : 'App');
 
   factory Bot.fromJson(Map<String, dynamic> json) => Bot(
         id: json['id'] as String? ?? '',
@@ -121,7 +123,7 @@ class MarketListing {
   final String id;
   final String publisherId;
   final String botId;
-  final String type; // agent | tool (an app)
+  final String type; // agent | tool (an app) | theme
   final String name;
   final String description;
   final int price;
@@ -134,9 +136,11 @@ class MarketListing {
   final String avatar;
 
   bool get isApp => type == 'tool';
+  bool get isTheme => type == 'theme';
 
-  /// What it lists, for display: an agent or an app.
-  String get kindLabel => isAgent ? 'Agent' : 'App';
+  /// What it lists, for display: an agent, an app, or a theme.
+  String get kindLabel =>
+      isTheme ? 'Theme' : (isAgent ? 'Agent' : 'App');
   bool get isAgent => type == 'agent';
 
   factory MarketListing.fromJson(Map<String, dynamic> json) {

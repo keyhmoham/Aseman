@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/theme_roles.dart';
+
 /// A room to create: its name and, optionally, what it is for with an icon
 /// and a colour. A room made for something is greeted by the lead, who
 /// offers three things to start on; its agents are told what it is for.
@@ -91,7 +93,7 @@ class _NewRoomDialogState extends State<NewRoomDialog> {
                   tooltip: e.key,
                   isSelected: icon == e.key,
                   style: IconButton.styleFrom(
-                      backgroundColor: icon == e.key ? scheme.secondaryContainer : null),
+                      backgroundColor: icon == e.key ? ThemeRoles.selectedFill(context) : null),
                   onPressed: () => setState(() => icon = icon == e.key ? '' : e.key),
                   icon: Icon(e.value, size: 20),
                 ),

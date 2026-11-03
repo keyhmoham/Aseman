@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/theme_roles.dart';
 import '../../../data/models/post.dart';
 import '../../../data/models/space.dart';
 import '../domain/feed_post.dart';
@@ -229,20 +230,13 @@ String _initialsOf(String id) {
 String _upper(String s) => s.toUpperCase();
 
 /// The accent colour the feed gives [id] (a post or an account).
-Color feedColorFor(String id) {
-  const palette = [
-    AppColors.primary,
-    AppColors.cyan,
-    AppColors.success,
-    AppColors.warning,
-    Color(0xFF14B8A6),
-    Color(0xFFF97316),
-    Color(0xFFEC4899),
-    Color(0xFF3B82F6),
-    Color(0xFF6366F1),
-  ];
-  return palette[id.hashCode.abs() % palette.length];
-}
+///
+/// Prefer [feedColorForContext] so colours follow the active pack palette.
+Color feedColorFor(String id) => AppColors.primary;
+
+/// Pack-aware feed accent (use from widgets) — unified identity accent.
+Color feedColorForContext(BuildContext context, String id) =>
+    ThemeRoles.identity(context, id);
 
 /// [n] as a short count: 1.2K for 1200.
 String compactCount(int n) {

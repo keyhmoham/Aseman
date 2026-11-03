@@ -178,6 +178,17 @@ test('personal chat runs as the person on its own session', async () => {
   assert.match(systemText(gw.llmCalls[0].body), /the person's own assistant/)
 })
 
+test('in personal chat a question is the reply and the next message answers it', async () => {
+  script = (body) => (allText(body).includes('Answer to your question') ? { text: 'booked the window seat' } : { tools: [{ name: 'ask_user', args: { question: 'Window or aisle?', options: ['window', 'aisle'] } }] })
+  const chat = (content) => api('POST', '/v1/chat', { token: 'tok-p2', account_id: 'person-2', thread_id: 't', with_tools: true, messages: [{ role: 'user', content }] })
+  const asked = await chat('book my flight')
+  assert.equal(asked.status, 'awaiting', JSON.stringify(asked))
+  assert.match(asked.reply, /Window or aisle\?\n<replies>window \| aisle<\/replies>/)
+  const answered = await chat('window')
+  assert.equal(answered.status, 'done', JSON.stringify(answered))
+  assert.equal(answered.reply, 'booked the window seat')
+})
+
 test('forgetting a room thread drops its conversations', async () => {
   const out = await api('POST', '/v1/rooms/forget', { space: SPACE, room: ROOM })
   assert.ok(out.forgotten >= 1)

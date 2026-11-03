@@ -138,8 +138,17 @@ export class Runner {
         const agent = await this.agentFor(binding, scopeDir(this.config, { kind: 'personal', accountId }), abort)
         this.applyTools(binding, agent, null)
         const resumed = agent.session.seq > 0
-        const text = personalMessage(req.messages, { resumed, memories: binding.recalled })
+        // In a personal chat the person's next message is the answer to a
+        // question their Aseman asked.
+        const pending = this.store.question(sessionId)
+        if (pending) this.store.drop(pending.id)
+        binding.asked = undefined
+        let text = personalMessage(req.messages, { resumed, memories: binding.recalled })
+        if (pending) text = `Answer to your question "${pending.question}": ${lastUserText(req.messages)}`
         const result = await this.drive(binding, agent, text, abort)
+        if (binding.asked) {
+          return { reply: personalQuestion(result.text, binding.asked), status: 'awaiting', question_id: binding.asked.id, transcript: result.transcript }
+        }
         return { reply: result.text, status: result.status, error: result.error ?? '', transcript: result.transcript }
       } catch (error) {
         return { reply: '', status: abort.aborted ? 'cancelled' : 'failed', error: messageOf(error) }
@@ -431,6 +440,13 @@ export function personalMessage(messages, { resumed, memories }) {
   if (resumed || list.length <= 1) return `${mem}${String(last.content)}`
   const earlier = list.slice(0, -1).slice(-20).map((m) => `${m.role === 'assistant' ? 'Aseman' : 'Person'}: ${String(m.content).slice(0, 4000)}`)
   return `${mem}<earlier_conversation>\n${earlier.join('\n')}\n</earlier_conversation>\n\n${String(last.content)}`
+}
+
+/** A personal question as the reply: the question, its options as reply chips. */
+export function personalQuestion(before, question) {
+  const head = before && before !== question.question ? `${before}\n\n` : ''
+  const opts = (question.options ?? []).map((o) => String(o).replace(/[|<>]/g, ' ').trim().slice(0, 40)).filter(Boolean).slice(0, 3)
+  return `${head}${question.question}${opts.length ? `\n<replies>${opts.join(' | ')}</replies>` : ''}`.trim()
 }
 
 /** Cancelled by the node (the request), the turn's own end, or the turn timeout. */

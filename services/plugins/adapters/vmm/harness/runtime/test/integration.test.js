@@ -77,6 +77,7 @@ before(async () => {
       },
       'spaces.agent_log': () => ({ ok: true }),
       'spaces.message_send': () => ({ id: 'm1' }),
+      'tools.plugin_create': (body) => ({ plugin: { id: 'p1', name: body.name, scope: 'account', placement: body.placement ?? 'panel' } }),
     },
   })
   await gw.start()
@@ -187,6 +188,29 @@ test('in personal chat a question is the reply and the next message answers it',
   const answered = await chat('window')
   assert.equal(answered.status, 'done', JSON.stringify(answered))
   assert.equal(answered.reply, 'booked the window seat')
+})
+
+test('creator mode: a plugin is created through the node, a broken program is sent back', async () => {
+  const screen = "function view(){return {type:'Text',props:{text:'hi'}}}\naskHost('render', JSON.stringify(view()))"
+  let results = []
+  script = (body, n) => {
+    const r = lastToolResult(body)
+    if (r !== undefined) results.push(r)
+    if (n === 1) return { tools: [{ name: 'create_plugin', args: { name: 'Bad', description: 'x', frontend: 'function (' } }] }
+    if (results.length === 1) return { tools: [{ name: 'create_plugin', args: { name: 'Habits', description: 'Track habits', placement: 'page', permissions: ['spaces.message_list'], frontend: screen } }] }
+    return { text: 'made it' }
+  }
+  gw.llmCalls.length = 0
+  const before = gw.calls.length
+  const out = await api('POST', '/v1/chat', { token: 'tok-c', account_id: 'person-3', thread_id: 't', with_tools: true, messages: [{ role: 'user', content: 'make me a habits tracker' }] })
+  assert.equal(out.reply, 'made it', JSON.stringify(out))
+  assert.match(results[0], /fix the program/)
+  const created = gw.calls.slice(before).filter((c) => c.action === 'plugin_create')
+  assert.equal(created.length, 1, 'the broken program never reached the node')
+  assert.equal(created[0].token, 'tok-c')
+  assert.deepEqual(created[0].body.permissions, ['spaces.message_list'])
+  assert.equal(created[0].body.frontend.runtime, 'quickjs')
+  assert.match(results[1], /Created plugin Habits \(p1\), page, everywhere/)
 })
 
 test('forgetting a room thread drops its conversations', async () => {

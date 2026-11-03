@@ -24,6 +24,7 @@ import { spaceTools } from './tools/space.js'
 import { apiTools } from './tools/api.js'
 import { teamTools } from './tools/team.js'
 import { memoryTools, timelineTools, formatMemories } from './tools/memory.js'
+import { creatorTools } from './tools/creator.js'
 
 export { ROUTE, WINDOWS, modelFor } from './models.js'
 import { ROUTE, modelFor } from './models.js'
@@ -306,7 +307,7 @@ export class Runner {
   applyTools(binding, agent, listed) {
     binding.disposeTools?.()
     const deps = { gateway: this.gateway, binding: () => binding, store: this.store, attachments: () => this.ctx.get('attachments') }
-    const defs = [...apiTools(deps)]
+    const defs = [...apiTools(deps), ...creatorTools(deps)]
     if (binding.kind === 'personal') {
       defs.push(askUserTool(deps))
       if (!binding.flags.no_memory) defs.push(...memoryTools(deps))

@@ -8,6 +8,7 @@
 
 import { PROMPT as OUTSIDE } from './untrusted.js'
 import { WORKSPACE } from './tools/sandbox.js'
+import { CREATOR_GUIDE } from './tools/creator.js'
 
 const HARNESS = `You work on Aseman, in a space shared by people and AI agents. Everyone in
 the space works together in its rooms, through messages.
@@ -126,7 +127,7 @@ with \`remember\`.`
 
 /** The agent's own persona section. */
 export function personaFor(agent) {
-  const parts = [`You are ${agent.name}.${agent.description ? ` ${agent.description}` : ''}`, HARNESS, OUTSIDE, agent.lead ? LEAD : SPECIALIST]
+  const parts = [`You are ${agent.name}.${agent.description ? ` ${agent.description}` : ''}`, HARNESS, CREATOR_GUIDE, OUTSIDE, agent.lead ? LEAD : SPECIALIST]
   if (String(agent.instructions ?? '').trim()) parts.push(`## Your instructions\n${String(agent.instructions).trim()}`)
   const skills = Array.isArray(agent.skills) ? agent.skills.filter((s) => s && s.name) : []
   if (skills.length) {
@@ -140,7 +141,7 @@ export function personaFor(agent) {
 
 /** Aseman, the person's assistant (personal chat). */
 export function personalPersona(system) {
-  return [PERSONAL, OUTSIDE, String(system ?? '').trim() && `## From the app\n${String(system).trim()}`].filter(Boolean).join('\n\n')
+  return [PERSONAL, CREATOR_GUIDE, OUTSIDE, String(system ?? '').trim() && `## From the app\n${String(system).trim()}`].filter(Boolean).join('\n\n')
 }
 
 /** Notes, as a dynamic context the agent always has (empty contributes nothing). */

@@ -9,6 +9,7 @@ import { authorized } from '../lib/plugins/host.js'
 import { wrap, wrapped } from '../lib/untrusted.js'
 import { personaFor, notesText } from '../lib/persona.js'
 import { formatMemories } from '../lib/tools/memory.js'
+import { syntaxError, CREATOR_GUIDE } from '../lib/tools/creator.js'
 import { Gateway, GatewayError } from '../lib/gateway.js'
 import { Store } from '../lib/store.js'
 import { mkdtempSync } from 'node:fs'
@@ -200,4 +201,11 @@ test('the store keeps one open question per session and survives a reload', () =
   assert.deepEqual(again.sessionsInRoom('sp', 'r'), ['a'])
   again.dropSession('a')
   assert.equal(again.questions({}).length, 0)
+})
+
+test('creator checks programs before they reach the node', () => {
+  assert.equal(syntaxError("askHost('render', '{}')", 'frontend'), '')
+  assert.match(syntaxError('function (', 'backend'), /^backend: /)
+  assert.match(personaFor({ name: 'Ava' }), /Plugins \(Creator mode\)/)
+  assert.match(CREATOR_GUIDE, /aseman\.call/)
 })

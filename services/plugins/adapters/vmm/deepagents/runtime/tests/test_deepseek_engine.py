@@ -134,7 +134,7 @@ def test_overlay_routes_the_model_through_the_turn_gateway(monkeypatch) -> None:
     monkeypatch.delenv("ASEMAN_DSH_ENGINE_LLM", raising=False)
     rows = profilelib.build(profilelib.Overlay(
         persona="You are aseman.", mcp_env={"ASEMAN_ENGINE_DIR": "/tmp/x"}, gateway="http://node/deepagents/v1",
-        model="deepseek-chat", context_window=64000, lead=True, team=True,
+        model="deepseek-chat", context_window=64000, lead=True, team=True, teams=profilelib.TEAMS_BUILTIN,
     ))
     route = row(rows, "llm-pi-ai")["config"]["providers"]["aseman"]
     assert route["baseURL"] == "http://node/deepagents/v1/llm"
@@ -152,6 +152,31 @@ def test_overlay_routes_the_model_through_the_turn_gateway(monkeypatch) -> None:
     assert mcp["config"]["transport"] == "stdio"
     assert mcp["config"]["serverName"] == "aseman"
     assert mcp["config"]["args"] == ["-m", "aseman_agents.deepseek_engine.mcp_server"]
+
+
+def test_overlay_mounts_dsh_022_experimental_agent_teams_for_a_lead(tmp_path: Path) -> None:
+    overlay = profilelib.Overlay(persona="p", mcp_env={}, gateway="http://node/deepagents/v1", lead=True, team=True,
+                                 teams=profilelib.TEAMS_EXPERIMENTAL)
+    rows = profilelib.build(overlay, available={"tool-subagent", "tool-subagent-fork", "tool-subagent-control",
+                                                "llm-pi-ai", "system-prompt"})
+    for rid in profilelib.TEAM_REPLACES:
+        assert row(rows, rid)["disabled"] is True
+    assert inserted(rows, "agent-team")["name"] == "@deepseek-ai/dsh-experimental-agent-team"
+    assert inserted(rows, "tool-agent-team")["config"] == {"freshProvider": "spawn", "forkProvider": "fork"}
+    # A specialist (no team) keeps plain subagents.
+    overlay.team = False
+    rows = profilelib.build(overlay)
+    assert not any(r.get("id") == "tool-subagent" for r in rows)
+    assert not any(i.get("id") == "agent-team" for r in rows for i in r.get("insert") or [])
+    # The packages are found beside the installed dsh (hoisted or nested).
+    pkg = tmp_path / "node_modules" / "@deepseek-ai"
+    (pkg / "dsh" / "lib").mkdir(parents=True)
+    (pkg / "dsh" / "lib" / "bin.js").write_text("")
+    assert profilelib.teams_kind(str(pkg / "dsh" / "lib" / "bin.js"), {"tool-subagent"}) == ""
+    (pkg / profilelib.TEAM_PACKAGE).mkdir()
+    (pkg / profilelib.TEAM_PACKAGE / "package.json").write_text("{}")
+    assert profilelib.teams_kind(str(pkg / "dsh" / "lib" / "bin.js"), {"tool-subagent"}) == profilelib.TEAMS_EXPERIMENTAL
+    assert profilelib.teams_kind("dsh", {"agent-team", "tool-agent-team"}) == profilelib.TEAMS_BUILTIN
 
 
 def test_overlay_can_use_the_engines_own_deepseek_key(monkeypatch) -> None:

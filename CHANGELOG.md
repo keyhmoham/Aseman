@@ -10,12 +10,13 @@
   per-agent notes and a journal of every turn; dsh's own instruction loader
   puts the notes in context. The project's Memory screen reads and corrects
   it (`vmm.EngineMemory`, runtime `/v1/engines/deepseek/memory`).
-- **Its own swarm**: parallel subagents, Agent Teams (dsh 0.2.2+), plan mode,
+- **Its own swarm**: parallel subagents, Agent Teams for leads, plan mode,
   goals and workflows; swarms and todos show in the work log.
 - **Wired to Aseman**: models through the turn's metered LLM gateway (or the
   engine's own DeepSeek key), and the `aseman` MCP bridge for space tools,
   questions, hand-offs to other agents, timeline, Code Mode and creator mode
   (`create_app` / `create_plugin` → on-demand app generation).
+- The runtime image ships dsh `0.2.2-alpha.3` by default (`DSH_VERSION`).
 
 ## Unreleased: deep theme system
 

@@ -23,7 +23,7 @@ MECHANISMS: tuple[tuple[str, str], ...] = (
     ("Models", "llm-pi-ai route 'aseman' → the platform LLM gateway (agent's provider/model, metered on the turn); or llm-deepseek with the engine's own DeepSeek key"),
     ("Subagents", "dsh's own subagent / subagent_fork tools (in-process children), steered with send_message / wait_agent / list_agents"),
     ("Swarm", "dsh's own: several subagents started at once (each returns its id at once), collected with wait_agent; shown in the agent's work log"),
-    ("Agent team", "dsh's own Agent Teams task board (team_task_*) for leads (dsh 0.2.2+), plus the space's Aseman agents as teammates"),
+    ("Agent team", "dsh's own Agent Teams for leads (spawn_teammate, the team_task_* board), plus the space's Aseman agents as teammates"),
     ("Task handoff / dispatch", "delegate_task on the Aseman MCP bridge: a room task to another Aseman agent, its own turn answers back"),
     ("Planning & workflow", "dsh's own todo_write, plan mode (exit_plan_mode), goals (create_goal) and the workflow tool; todos go to the work log"),
     ("Questions to people", "ask_user on the Aseman MCP bridge; the run ends, the question waits in Aseman, the dsh Session resumes with the answer"),

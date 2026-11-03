@@ -18,7 +18,8 @@ What the overlay mounts into the harness:
   ``agent-instructions`` loader puts in context every turn;
 * the persona (``system-prompt``): the agent, its team and the mechanism map;
 * the harness's own swarm: subagents (in-process children), Agent Teams for
-  leads (``agent-team``, dsh 0.2.2+) and the workflow tool;
+  leads with teammates (the profile's ``agent-team`` row, or dsh 0.2.2's
+  experimental Agent Teams packages, mounted here) and the workflow tool;
 * the runtime's own shell, files, web and plugin manager off: the space's
   computer and apps are reached through the bridge, and plugins are Aseman
   apps (create_plugin), not packages installed into the shared runtime.
@@ -90,6 +91,9 @@ class Overlay:
     reasoning_effort: str = ""
     lead: bool = False
     team: bool = False
+    # How this dsh ships Agent Teams: "builtin" (a profile row), "experimental"
+    # (packages the overlay mounts, dsh 0.2.2-alpha) or "" (none).
+    teams: str = ""
     mode: str = LLM_GATEWAY
     with_mcp: bool = True
     extra_disabled: list[str] = field(default_factory=list)
@@ -178,7 +182,14 @@ def _build(overlay: Overlay) -> list[dict]:
         # The node's DeepSeek account route would look for a key it does not have.
         rows.append({"id": "llm-deepseek", "disabled": True})
     rows.append({"id": "system-prompt", "config": {"personaPrefix": overlay.persona}})
-    rows.append({"id": "agent-team", "config": {"maxTasks": 256, "defaultEnabled": bool(overlay.team)}})
+    if overlay.teams == TEAMS_BUILTIN:
+        rows.append({"id": "agent-team", "config": {"maxTasks": 256, "defaultEnabled": bool(overlay.team)}})
+    elif overlay.teams == TEAMS_EXPERIMENTAL and overlay.team:
+        # dsh's experimental Agent Teams layer: spawn_teammate and team-scoped
+        # list_agents / send_message / interrupt_agent / wait_agent replace the
+        # plain subagent tools; workflow keeps fresh children.
+        rows += [{"id": row, "disabled": True} for row in TEAM_REPLACES]
+        rows.append({"insert": team_rows()})
     if overlay.memory_root:
         # dsh's own instruction loader reads the memory's notes: the space's
         # AGENTS.md (root, marked .aseman-space) and the agent's, in the run's
@@ -206,6 +217,48 @@ def _build(overlay: Overlay) -> list[dict]:
     if inserts:
         rows.append({"insert": inserts})
     return rows
+
+
+TEAMS_BUILTIN = "builtin"
+TEAMS_EXPERIMENTAL = "experimental"
+TEAM_PACKAGE = "dsh-experimental-agent-team"
+TEAM_REPLACES = ("tool-subagent-control", "tool-subagent", "tool-subagent-fork")
+
+
+def team_rows() -> list[dict]:
+    """dsh 0.2.2's experimental Agent Teams (its profile layer, minus the Web UI)."""
+    return [
+        {"id": "agent-team", "name": "@deepseek-ai/dsh-experimental-agent-team",
+         "config": {"maxMembers": 8, "maxTasks": 256, "maxMessageBytes": 65536, "disposalTimeoutMs": 5000}},
+        {"id": "tool-agent-team", "name": "@deepseek-ai/dsh-experimental-tool-agent-team",
+         "config": {"freshProvider": "spawn", "forkProvider": "fork"}},
+    ]
+
+
+def teams_kind(binary: str, rows: set[str] | None) -> str:
+    """How the installed dsh ships Agent Teams (TEAMS_BUILTIN / TEAMS_EXPERIMENTAL / "")."""
+    if rows is None:
+        return TEAMS_BUILTIN
+    if "agent-team" in rows and "tool-agent-team" in rows:
+        return TEAMS_BUILTIN
+    return TEAMS_EXPERIMENTAL if experimental_teams(binary) else ""
+
+
+def experimental_teams(binary: str) -> bool:
+    """Whether dsh's experimental Agent Teams packages are installed beside it."""
+    import shutil
+    found = shutil.which(binary) or binary
+    try:
+        path = Path(found).resolve()
+    except OSError:
+        return False
+    # .../@deepseek-ai/dsh/lib/bin.js: the packages are its dependencies,
+    # nested (npm --global) or hoisted beside it (a project install).
+    for parent in path.parents:
+        if parent.name == "dsh" and parent.parent.name == "@deepseek-ai":
+            return any((base / "@deepseek-ai" / TEAM_PACKAGE / "package.json").is_file()
+                       for base in (parent / "node_modules", parent.parent.parent))
+    return False
 
 
 MEMORY_MARKER = ".aseman-space"

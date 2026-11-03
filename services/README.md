@@ -764,8 +764,9 @@ change the programmer switch:
     `.aseman/agents/<agent>/JOURNAL.md`) reads and corrects it through
     `vmm.EngineMemory` (runtime `GET/POST /v1/engines/deepseek/memory`).
   - **swarm and team** — dsh's own: parallel subagents (`subagent` returns
-    at once; `wait_agent`, `send_message`, `list_agents`) and, for leads on
-    dsh 0.2.2+, the Agent Teams task board (`team_task_*`). Other Aseman
+    at once; `wait_agent`, `send_message`, `list_agents`) and, for leads with
+    teammates, dsh's Agent Teams (`spawn_teammate`, the `team_task_*` board;
+    on 0.2.2-alpha the overlay mounts its experimental packages). Other Aseman
     agents are teammates through `delegate_task` (a room task their own turn
     answers), `recruit_agent` and `hire_agent`.
   - **models** — the agent's own provider and model through the turn
@@ -785,9 +786,9 @@ change the programmer switch:
     person), with a memory per person.
   Rows the installed dsh lacks (they differ between releases) are left out
   of the overlay: the engine reads the profile's rows and headless flags once
-  per dsh version. The image pins `DSH_VERSION` (`0.2.1-rc.5`); a
-  `0.2.2-alpha.*` build adds Agent Teams and `--approval-policy never`, which
-  the engine then uses.
+  per dsh version. The image pins `DSH_VERSION` to `0.2.2-alpha.3` (Agent
+  Teams, `--approval-policy never`); an older build such as `0.2.1-rc.5`
+  still runs, without Agent Teams.
 
 When an agent takes a turn in a space, the runtime reads the space's tools
 (`spaces.tools_list`) — every app installed in the space **plus the

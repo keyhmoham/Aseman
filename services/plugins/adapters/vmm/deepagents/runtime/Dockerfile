@@ -2,9 +2,10 @@
 # Aseman's deep agents runtime. The node runs it as a Nomad service VM
 # (see ../runtime.go); agents reach the platform only through the node.
 # DeepSeek Harness (dsh) for the agentic engine (Admin → Agentic engine →
-# DeepSeek Harness). Pinned; 0.2.2-alpha.* adds Agent Teams and
-# --approval-policy, which the engine detects and uses when present.
-ARG DSH_VERSION=0.2.1-rc.5
+# DeepSeek Harness). Pinned to the 0.2.2 alpha line: its headless runs take
+# --approval-policy and it ships Agent Teams (mounted for leads). Older
+# builds (e.g. 0.2.1-rc.5) also work: the engine detects what they lack.
+ARG DSH_VERSION=0.2.2-alpha.3
 FROM node:22-bookworm-slim AS dsh
 ARG DSH_VERSION
 RUN --mount=type=secret,id=extra_ca,required=false \

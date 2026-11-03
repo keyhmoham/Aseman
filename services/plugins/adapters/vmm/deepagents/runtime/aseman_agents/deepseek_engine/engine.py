@@ -85,6 +85,8 @@ class DeepSeekEngine:
         self._rows_read = rows is not None
         # Whether headless takes --approval-policy (dsh 0.2.2+).
         self.never_ask: bool | None = True if rows is not None else None
+        # How this dsh ships Agent Teams (profile.teams_kind).
+        self.teams = profilelib.TEAMS_BUILTIN if rows is not None and "agent-team" in rows else ""
 
     async def rows(self) -> set[str] | None:
         if not self._rows_read:
@@ -92,12 +94,13 @@ class DeepSeekEngine:
             self._rows = await asyncio.to_thread(profilelib.available_rows, self.runner.binary, probe)
             flags = await asyncio.to_thread(profilelib.headless_flags, self.runner.binary, probe)
             self.never_ask = "--approval-policy" in flags if flags else True
+            self.teams = profilelib.teams_kind(self.runner.binary, self._rows)
             self._rows_read = True
         return self._rows
 
     def _teams(self, rows: set[str] | None) -> bool:
         """Whether this dsh ships Agent Teams (the 0.2.2 line does)."""
-        return rows is None or ("agent-team" in rows and "tool-agent-team" in rows)
+        return rows is None or bool(self.teams)
 
     # --- entry points -------------------------------------------------------
 
@@ -164,6 +167,8 @@ class DeepSeekEngine:
         members = await self._members(ctx)
         rows = await self.rows()
         teams = self._teams(rows)
+        # Agent Teams for a lead with teammates.
+        team_on = teams and ctx.agent.lead and any(m.kind == "agent" for m in members)
         mode = profilelib.llm_mode()
         # The run works in the agent's memory directory, so dsh's own
         # instruction loader reads its notes (none for a "no memory" request).
@@ -173,12 +178,13 @@ class DeepSeekEngine:
         mcp_env = self._base_env(dirs, thread=ctx.thread_id, gateway=ctx.gateway.base_url, token=ctx.gateway.token)
         mcp_env.update(self._room_env(ctx))
         overlay = profilelib.Overlay(
-            persona=_persona(ctx, members, teams=teams, memory=place is not None),
+            persona=_persona(ctx, members, teams=teams, memory=place is not None,
+                             spawn=team_on and self.teams == profilelib.TEAMS_EXPERIMENTAL),
             mcp_env=mcp_env, gateway=ctx.gateway.base_url,
             model="" if mode == profilelib.LLM_DEEPSEEK else _gateway_model(ctx),
             context_window=ctx.agent.context_window, max_tokens=ctx.agent.max_tokens,
             reasoning_effort=ctx.agent.reasoning_effort if mode == profilelib.LLM_DEEPSEEK else "",
-            lead=ctx.agent.lead, team=teams and ctx.agent.lead and any(m.kind == "agent" for m in members),
+            lead=ctx.agent.lead, team=team_on, teams=self.teams if rows is not None else profilelib.TEAMS_BUILTIN,
             mode=mode,
             memory_root=str(place.root) if place else "", memory_agent=place.agent if place else "",
             agent_name=ctx.agent.name,
@@ -378,7 +384,8 @@ class DeepSeekEngine:
 # --- prompts ------------------------------------------------------------------
 
 
-def _persona(ctx: TurnContext, members: list, *, teams: bool = True, memory: bool = True) -> str:
+def _persona(ctx: TurnContext, members: list, *, teams: bool = True, memory: bool = True,
+             spawn: bool = False) -> str:
     agent = ctx.agent
     parts = [f"You are {agent.name}, an agent of an Aseman space." + (" You lead the space." if agent.lead else "")]
     if agent.description:
@@ -394,11 +401,17 @@ def _persona(ctx: TurnContext, members: list, *, teams: bool = True, memory: boo
     agents = [m for m in members if getattr(m, "kind", "") == "agent"]
     if members:
         parts.append("The space:\n" + teamlib.describe(members))
+    if spawn:
+        swarm = ("Your swarm is your own Agent Team: run independent pieces of work in parallel as "
+                 "teammates (spawn_teammate returns at once; start several, then wait_agent for their "
+                 "results, steer them with send_message, see them with list_agents).")
+    else:
+        swarm = ("Your swarm is your own: run independent pieces of work in parallel as subagents (the "
+                 "subagent tool returns at once; start several, then wait_agent for their results, steer "
+                 "them with send_message, see them with list_agents).")
     parts.append(
-        "Your swarm is your own: run independent pieces of work in parallel as subagents (the subagent "
-        "tool returns at once; start several, then wait_agent for their results, steer them with "
-        "send_message, see them with list_agents). Brief each completely: a subagent does not see this "
-        "conversation. Multi-stage work with fixed steps goes to the workflow tool."
+        swarm + " Brief each completely: it does not see this conversation. Multi-stage work with fixed "
+        "steps goes to the workflow tool."
         + (" As the lead, plan the team's work on the Team task board (team_task_create / team_task_list / "
            "team_task_update) and keep it current." if agent.lead and teams else "")
     )
@@ -484,7 +497,7 @@ def _chat_message(messages: list[dict], *, resumed: bool) -> str:
 
 def _swarm_note(steps: list[ToolStep]) -> str:
     """The harness's swarm in this run, for the agent's work log."""
-    spawned = [s for s in steps if s.tool in ("subagent", "subagent_fork")]
+    spawned = [s for s in steps if s.tool in ("subagent", "subagent_fork", "spawn_teammate")]
     tasks = [s for s in steps if s.tool == "team_task_create"]
     flows = [s for s in steps if s.tool in ("workflow", "ralph")]
     if not (spawned or tasks or flows):

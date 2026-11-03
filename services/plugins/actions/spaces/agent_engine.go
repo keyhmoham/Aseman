@@ -137,7 +137,7 @@ func deepSeekMapping() []map[string]string {
 		{"platform": "Personal Aseman (notes / Talk)", "deepseek": "The assistant's platform model + person-scoped Aseman MCP tools; its own memory per person"},
 		{"platform": "Memory", "deepseek": "DeepSeek Harness's own: the aseman-memory dsh plugin (notes, search, a journal of every turn) per space and agent, loaded by dsh's instruction loader"},
 		{"platform": "Swarm", "deepseek": "DeepSeek Harness's own: parallel subagents (subagent, wait_agent, send_message, list_agents), shown in the agent's work log"},
-		{"platform": "Agent team", "deepseek": "dsh Agent Teams task board for leads (dsh 0.2.2+), with the space's Aseman agents as teammates"},
+		{"platform": "Agent team", "deepseek": "dsh Agent Teams for leads (spawn_teammate and the team task board), with the space's Aseman agents as teammates"},
 		{"platform": "Subagents", "deepseek": "dsh subagent / subagent_fork (in-process children)"},
 		{"platform": "Task handoff / dispatch", "deepseek": "delegate_task: a room task to another Aseman agent, whose own turn answers"},
 		{"platform": "Planning & workflow", "deepseek": "dsh todo_write, plan mode, goals and the workflow tool; todos go to the work log"},

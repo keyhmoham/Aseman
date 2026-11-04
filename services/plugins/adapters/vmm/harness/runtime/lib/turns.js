@@ -24,6 +24,7 @@ import { spaceTools } from './tools/space.js'
 import { apiTools } from './tools/api.js'
 import { teamTools } from './tools/team.js'
 import { memoryTools, timelineTools, formatMemories } from './tools/memory.js'
+import { decideTools } from './tools/decide.js'
 import { creatorTools } from './tools/creator.js'
 import { workspaceTool } from './tools/workspace.js'
 
@@ -139,7 +140,16 @@ export class Runner {
       try {
         await this.loadMemory(binding, lastUserText(req.messages), abort)
         const agent = await this.agentFor(binding, scopeDir(this.config, { kind: 'personal', accountId }), abort)
-        this.applyTools(binding, agent, null)
+        // Home computer: same App UI / plugin builtins as a space turn (appui_*).
+        let listed = []
+        if (binding.computerSpace) {
+          try {
+            listed = (await this.gateway.call(binding.token, 'spaces', 'tools_list', { space: binding.computerSpace }, { signal: abort })).tools ?? []
+          } catch (error) {
+            this.log.warn?.(`tools_list for personal computer ${binding.computerSpace}: ${messageOf(error)}`)
+          }
+        }
+        this.applyTools(binding, agent, listed)
         const resumed = agent.session.seq > 0
         // In a personal chat the person's next message is the answer to a
         // question their Aseman asked.
@@ -309,11 +319,15 @@ export class Runner {
   applyTools(binding, agent, listed) {
     binding.disposeTools?.()
     const deps = { gateway: this.gateway, binding: () => binding, store: this.store, attachments: () => this.ctx.get('attachments') }
-    const defs = [...apiTools(deps), ...creatorTools(deps)]
+    const defs = [...apiTools(deps), ...creatorTools(deps), ...decideTools(deps)]
     if (binding.kind === 'personal') {
       defs.push(askUserTool(deps))
-      // The person's own computer (their home workspace's), as the person.
-      if (binding.computerSpace) defs.push(...sandboxTools(deps), workspaceTool(deps))
+      // The person's own computer (their home workspace's), as the person —
+      // sandbox + App UI / plugin builtins from that space's tools_list.
+      if (binding.computerSpace) {
+        defs.push(...sandboxTools(deps), workspaceTool(deps))
+        if (listed?.length) defs.push(...spaceTools({ ...deps, listed }))
+      }
       if (!binding.flags.no_memory) defs.push(...memoryTools(deps))
     } else {
       defs.push(...messagingTools(deps), ...teamTools(deps), ...sandboxTools(deps))

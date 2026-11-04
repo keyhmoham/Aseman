@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased: plugins are frameless App UIs
+
+- **Same creation as apps.** Plugins are built with the Elpian / web App UI
+  pipeline (`appui_create` / `appui_publish`). Pass `kind: "plugin"` and
+  `placement` (`chat` / `rail` / `desk` / `page`); omit kind (or
+  `kind: "app"`) for a framed desk card. Built in the person's Aseman
+  (home) they are account-wide / platform gadgets; built in a space they
+  stay on that space's surfaces. Agents start one with `create_plugin`
+  (shorthand for `appui_create` kind=plugin) or `appui_create` directly;
+  `list_plugins` / `remove_plugin` / `restore_plugin` manage what is
+  already registered.
+- **Two host differences only.** No window frame, background pad or title
+  bar (custom shapes); right-click or long-press opens minimise / close /
+  open as page / move. Free positioning over desk, chat, left rail, or
+  universal over home and workspaces.
+- **Removed:** DSH Creator `create_plugin`, `tools.plugin_create` /
+  `plugin_call` / `plugin_invoke`, static QuickJS / HTML plugin programs,
+  `aseman-plugin*` / `plugin-check` / `plugin-inline`, and the Flutter
+  PluginHost / PluginRuntime / PluginWebFrame path.
+
 ## Unreleased: Aseman chat is home
 
 - **One personal space.** The Aseman self-chat (former Saved Messages) is also
@@ -34,38 +54,14 @@
   meaning, learned from finished turns, billed to the project.
 - **Timeline:** kept in the node's own database; agents search their own
   project's (`ASEMAN_TIMELINE=off` turns it off).
-- **Plugins (Creator mode):** agents make plugins — an Elpian screen drawn
-  natively in the app with a QuickJS backend (`create_plugin`). Made in the
-  personal Aseman chat, a plugin is the person's own **universal floating
-  gadget** (across home tabs and while viewing workspaces); made in a space
-  or direct chat, it lives in that space's sandbox as a floating gadget on
-  chat, the left rail (nav drawer), or the desk (placements `chat` / `rail` /
-  `desk`), or as a `page`, shared by members and confined to that space. A
-  plugin's screen calls its backend (`tools.plugin_invoke`) and the platform
-  actions it declared (`tools.plugin_call`), as the person using it. Gadgets
-  mount on those surfaces. One **plugins handle** — a curved bump on the
-  right screen edge, under the workspace switcher's rocket, on every shell
-  page — opens the plugin manager (a bottom sheet on phones, a floating panel
-  on desktop): the account's universal plugins and the current workspace's,
-  filtered by on screen / minimised, to show, minimise, open as a page, remove
-  and restore. A minimised plugin leaves no dock chip behind; it waits in the
-  manager. It replaces the per-surface gadgets buttons (left panel, chat
-  header) and My bots → Your gadgets.
-- **Plugins are built to the platform's standard.** An Elpian plugin now runs
-  on the Aseman Elpian SDK (`App.create`, the UI kit, Material 3 Expressive)
-  plus a plugin shim (`Aseman.plugin.get / set / call / api / context`).
-  **Web is the fallback** (`ui: "web"`, with a reason) for 3D, rich
-  visualization Elpian draws poorly, or when the person asked for web: one
-  self-contained HTML document (libraries inlined, 6 MB) shown in the app's
-  sandboxed web frame under a no-network policy, with a bridge that gives it
-  the same API and the person's theme as `--aseman-*` CSS variables (Windows
-  and Linux desktops open it in the browser). `create_plugin` builds from
-  files on the computer and runs `aseman-plugin-check` first: Elpian on
-  QuickJS with every reached screen validated at phone and desk size, web in
-  headless Chromium at 360×640 and 1280×800; a plugin that would break is
-  refused with the findings. Agents follow `PLUGINS.md` (in the computer's
-  Elpian kit) and ELPIAN.md's Design section; the plugins panel marks web
-  plugins.
+- **Plugins (frameless App UIs):** agents make plugins with the same
+  `appui_create` / `appui_publish` pipeline as desk apps (`kind: "plugin"`,
+  `placement` chat / rail / desk / page). Made in the personal Aseman chat,
+  a plugin is the person's own **universal floating gadget** (across home
+  tabs and while viewing workspaces); made in a space or DM it stays on that
+  space's surfaces. Hosted **without** a window frame / pad (custom shapes;
+  right-click or long-press for minimise / close / …). One **plugins handle**
+  on the right screen edge opens the plugin manager.
 - **Typed API catalog:** `aseman_api_search` shows each action's body fields,
   read from the source by `cmd/gen-action-schemas` (kept current by a test).
 - **Confinement:** a room agent, and a space's plugin, may name only its own

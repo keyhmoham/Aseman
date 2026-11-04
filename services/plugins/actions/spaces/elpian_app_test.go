@@ -6,6 +6,31 @@ import (
 	"time"
 )
 
+func TestAppUIKindAndPluginPlacement(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"", "app"}, {"app", "app"}, {"plugin", "plugin"}, {"PLUGIN", "plugin"},
+	} {
+		got, err := appuiKind(c.in)
+		if err != nil || got != c.want {
+			t.Fatalf("appuiKind(%q) = %q, %v; want %q", c.in, got, err, c.want)
+		}
+	}
+	if _, err := appuiKind("gadget"); err == nil {
+		t.Fatal("unknown kind accepted")
+	}
+	for _, c := range []struct{ in, want string }{
+		{"", "chat"}, {"panel", "chat"}, {"chat", "chat"}, {"rail", "rail"}, {"desk", "desk"}, {"page", "page"},
+	} {
+		got, err := appuiPluginPlacement(c.in)
+		if err != nil || got != c.want {
+			t.Fatalf("appuiPluginPlacement(%q) = %q, %v; want %q", c.in, got, err, c.want)
+		}
+	}
+	if _, err := appuiPluginPlacement("dock"); err == nil {
+		t.Fatal("unknown placement accepted")
+	}
+}
+
 // App UIs are Elpian unless the person asked for web; an existing app keeps
 // what it was built with.
 func TestAppUIsDefaultToAnElpianFrontend(t *testing.T) {

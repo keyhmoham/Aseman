@@ -1,15 +1,12 @@
-// Package agentpolicy is what model-written code may call of the platform:
-// agents (through the harness gateway) and plugins (through
-// tools.plugin_call). Each call is dispatched as an account — the agent's, or
-// the person's — so every action's own authorization still decides; this
-// policy is the outer bound on top of it.
+// Package agentpolicy is what model-written code may call of the platform
+// (agents through the harness gateway). Each call is dispatched as an account —
+// the agent's, or the person's — so every action's own authorization still
+// decides; this policy is the outer bound on top of it.
 //
 // Two scopes:
-//   - Account: the person's own Aseman and the person's app-wide plugins act
-//     across the person's account.
-//   - Space: a room agent and a space's plugins act inside one space: the
-//     space-bound namespaces (never to create or list other spaces) and a few
-//     account-wide lookups.
+//   - Account: the person's own Aseman acts across the person's account.
+//   - Space: a room agent acts inside one space: the space-bound namespaces
+//     (never to create or list other spaces) and a few account-wide lookups.
 //
 // Never: node administration, authentication and identity, the plugin host,
 // federation, the developer surface, model providers and their keys, usage
@@ -42,9 +39,6 @@ var deniedActions = map[string]bool{
 	"users.account_create": true,
 	"bots.entity_put":      true, "bots.entity_delete": true,
 	"market.approve": true, "market.deny": true, "market.stats": true,
-	// A plugin's own calls are gated by plugin_call; model code never calls it
-	// for another plugin.
-	"tools.plugin_call": true, "tools.plugin_invoke": true,
 }
 
 // spaceNamespaces are the space-bound namespaces.
@@ -80,17 +74,4 @@ func Allows(scope Scope, name string) bool {
 		return false
 	}
 	return spaceNamespaces[ns] || spaceGlobal[name]
-}
-
-// Granted reports whether name is one of a plugin's declared permissions:
-// exact "namespace.action" entries, or "namespace.*".
-func Granted(permissions []string, name string) bool {
-	ns, _, _ := strings.Cut(name, ".")
-	for _, p := range permissions {
-		p = strings.TrimSpace(p)
-		if p == name || p == ns+".*" {
-			return true
-		}
-	}
-	return false
 }

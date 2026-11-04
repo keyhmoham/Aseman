@@ -1,6 +1,5 @@
 import '../../../data/services/aseman_service.dart';
 import '../../tools/data/tools_api.dart';
-import '../../tools/domain/tool_models.dart';
 
 /// Where a space plugin mounts as a floating gadget (account plugins are
 /// always universal floaters across home and workspaces).
@@ -14,24 +13,23 @@ enum PluginPlacement {
   /// A page of its own.
   page,
 
-  /// A floating gadget / window on the room's desk.
+  /// A floating gadget on the room's desk.
   desk;
 
-  /// Older plugins stored `panel`; treat it as [chat].
   static PluginPlacement parse(Object? v) => switch ('$v') {
         'page' => PluginPlacement.page,
         'desk' => PluginPlacement.desk,
         'rail' => PluginPlacement.rail,
-        'panel' || 'chat' => PluginPlacement.chat,
+        'chat' => PluginPlacement.chat,
         _ => PluginPlacement.chat,
       };
 
   String get wire => name;
 }
 
-/// A plugin agents made for people (Creator mode): an Elpian screen (or, as
-/// the fallback, a web document) with its backend. App-wide plugins are the person's own universal gadgets;
-/// a space's plugins belong to that space and its members.
+/// A plugin: an App UI (Elpian or web) hosted as a frameless free-position
+/// gadget. App-wide plugins are the person's own universal gadgets; a space's
+/// plugins belong to that space and its members.
 class PluginInfo {
   const PluginInfo({
     required this.id,
@@ -41,9 +39,11 @@ class PluginInfo {
     this.spaceId = '',
     this.ownerId = '',
     this.placement = PluginPlacement.chat,
-    this.permissions = const [],
     this.removed = false,
     this.web = false,
+    this.preview = '',
+    this.entry = '',
+    this.appId = '',
   });
 
   factory PluginInfo.fromJson(Map<String, dynamic> j) => PluginInfo(
@@ -54,11 +54,11 @@ class PluginInfo {
         spaceId: '${j['space_id'] ?? ''}',
         ownerId: '${j['owner'] ?? ''}',
         placement: PluginPlacement.parse(j['placement']),
-        permissions: [
-          for (final p in (j['permissions'] as List?) ?? const []) '$p'
-        ],
         removed: j['status'] == 'removed',
         web: j['ui'] == 'web',
+        preview: '${j['preview'] ?? ''}',
+        entry: '${j['entry'] ?? ''}',
+        appId: '${j['app_id'] ?? ''}',
       );
 
   final String id;
@@ -68,12 +68,22 @@ class PluginInfo {
   final String spaceId;
   final String ownerId;
   final PluginPlacement placement;
-  final List<String> permissions;
   final bool removed;
 
-  /// Its screen is a web document (3D, rich visualization, or web asked
-  /// for) rather than native Elpian.
+  /// Its screen is a web App UI rather than native Elpian.
   final bool web;
+
+  /// Preview gateway path of the App UI (`/v1/proxy/<id>/`).
+  final String preview;
+
+  /// Elpian program path the preview serves (e.g. `elpian/app.js`). Empty for
+  /// a web App UI (the preview page itself is shown).
+  final String entry;
+
+  /// App UI project id (from `appui_create`).
+  final String appId;
+
+  bool get isApp => preview.isNotEmpty;
 }
 
 /// The plugins of the tools namespace, as the signed-in person.
@@ -108,31 +118,4 @@ class PluginsApi {
 
   Future<void> restore(String plugin) =>
       _call('tools', 'plugin_restore', {'plugin': plugin});
-
-  /// The plugin's own backend (`tool.call` of its screen).
-  Future<dynamic> invoke(String plugin, String function,
-      {String roomId = '', Map<String, dynamic> args = const {}}) async {
-    final body = _map(await _call(
-        'tools',
-        'plugin_invoke',
-        {
-          'plugin': plugin,
-          'function': function,
-          'payload': args,
-          if (roomId.isNotEmpty) 'room': roomId,
-        },
-        timeout: ToolsApi.backendTimeout));
-    return microtoolValue(body['result']);
-  }
-
-  /// A platform action the plugin declared (`aseman.call` of its screen);
-  /// the node allows only those, as the person using it.
-  Future<dynamic> call(String plugin, String namespace, String action,
-          Map<String, dynamic> body) =>
-      _call('tools', 'plugin_call', {
-        'plugin': plugin,
-        'namespace': namespace,
-        'action': action,
-        'body': body,
-      });
 }

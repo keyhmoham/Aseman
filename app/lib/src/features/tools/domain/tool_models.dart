@@ -334,7 +334,6 @@ class ToolFrontendPayload {
     this.bytecode,
     this.title = '',
     this.version = '',
-    this.plugin,
   });
 
   final FrontendMode mode;
@@ -348,11 +347,6 @@ class ToolFrontendPayload {
   final String title;
   final String version;
 
-  /// The plugin this frontend belongs to (`tools.plugin_list` shape), when the
-  /// tool is a plugin the person may use: its screen talks to the app through
-  /// the plugin gate.
-  final Map<String, dynamic>? plugin;
-
   factory ToolFrontendPayload.fromJson(Map<String, dynamic> j) {
     final bytecode = j['bytecode'] as String?;
     return ToolFrontendPayload(
@@ -363,9 +357,6 @@ class ToolFrontendPayload {
           bytecode == null || bytecode.isEmpty ? null : base64Decode(bytecode),
       title: j['title'] as String? ?? '',
       version: j['version'] as String? ?? '',
-      plugin: j['plugin'] is Map
-          ? (j['plugin'] as Map).cast<String, dynamic>()
-          : null,
     );
   }
 }

@@ -13,6 +13,7 @@ node (Go, vmm/harness)                          runtime (this package, Node)
   GET  /v1/questions, POST /v1/rooms/forget                    │
                                                                ▼
   /harness/v1/llm  ◀── every model call (X-Aseman-Turn) ── dsh pi-ai route "aseman" (aseman-llm)
+  /harness/v1/llm/evaluate  ◀── jev_decide (node's decision model)
   /harness/v1/call, /catalog, /memory/*, /timeline/*  ◀── Aseman tools (turn token)
 ```
 
@@ -65,6 +66,7 @@ A cancelled room turn (the node drops the request) cancels the agent.
 | Team (lead) | `list_team`, `delegate_task`, `recruit_agent`, `hire_agent` | room hand-offs, `agent_recruit`, `agent_hire`, `market.catalog` |
 | Memory | `remember`, `recall`, `rewrite_notes` | `/memory/*` |
 | Timeline | `timeline_search`, `timeline_entry` | `/timeline/*` |
+| Decisions | `jev_decide` | `/llm/evaluate` (Admin → Decision) |
 | Skills | `load_skill` | the agent's own definition |
 
 Plus dsh's own: `todo_write`, goals, `workflow`, Agent Teams

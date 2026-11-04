@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -48,6 +49,8 @@ func baseRoutes(a *Adapter) []route {
 		// The turn's model, metered (OpenAI-compatible).
 		{network.MethodPost, gatewayPrefix + "/llm/chat/completions", a.serveChat},
 		{network.MethodGet, gatewayPrefix + "/llm/models", a.serveModels},
+		// The node's decision model (Jev / evaluate), metered onto the turn.
+		{network.MethodPost, gatewayPrefix + "/llm/evaluate", a.serveEvaluate},
 		// The agents' memory (memory.go).
 		{network.MethodGet, gatewayPrefix + "/memory/notes", a.serveNotesGet},
 		{network.MethodPost, gatewayPrefix + "/memory/notes", a.serveNotesSet},
@@ -63,6 +66,10 @@ func baseRoutes(a *Adapter) []route {
 // namespace bridge so it never depends on another module's service.
 type platform interface {
 	ResolveChat(ctx context.Context, provider, model string) (vmm.ProviderConfig, error)
+	// ResolveDecision is the node's decision model (Admin → Decision). An
+	// error means it is off or its provider is unusable: agents then decide
+	// with their own model.
+	ResolveDecision(ctx context.Context) (vmm.ProviderConfig, error)
 	// ResolveMemoryChat / ResolveMemoryEmbedding are the models of the agents'
 	// memory; an error means the admin has not picked (a usable) one.
 	ResolveMemoryChat(ctx context.Context) (vmm.ProviderConfig, error)
@@ -85,6 +92,12 @@ type kernelPlatform struct{ K api.Kernel }
 func (p kernelPlatform) ResolveChat(ctx context.Context, provider, model string) (vmm.ProviderConfig, error) {
 	var out vmm.ProviderConfig
 	err := bridge.Invoke(ctx, p.K, "llm", "ResolveChat", []any{ctx, provider, model}, &out)
+	return out, err
+}
+
+func (p kernelPlatform) ResolveDecision(ctx context.Context) (vmm.ProviderConfig, error) {
+	var out vmm.ProviderConfig
+	err := bridge.Invoke(ctx, p.K, "llm", "ResolveDecision", []any{ctx}, &out)
 	return out, err
 }
 
@@ -382,6 +395,109 @@ func (s *session) checkRequestMode(name string, body json.RawMessage) error {
 		return nil
 	}
 	return errs.Permission("space and room memory is disabled for this request")
+}
+
+// serveEvaluate is the decision API of a turn: {"state","questions"} →
+// {"answers","usage","model"}. It calls the node's decision model (Admin →
+// Decision; typically Jev) with the provider key that never leaves the node,
+// and meters the decision's own price onto the turn.
+func (a *Adapter) serveEvaluate(ctx context.Context, req *network.Request) (*network.Response, error) {
+	s := a.byToken(bearer(req.Header))
+	if s == nil {
+		return openAIError(401, "invalid or expired agent turn token"), nil
+	}
+	defer s.begin()()
+	if a.platform == nil {
+		return openAIError(503, "the decision model is unavailable"), nil
+	}
+	if gateErr := a.gate(s); gateErr != nil {
+		return openAIError(http.StatusPaymentRequired, gateErr.Error()), nil
+	}
+	provider, err := a.platform.ResolveDecision(s.base)
+	if err != nil {
+		return openAIError(503, "the decision model is off: "+err.Error()), nil
+	}
+	var body struct {
+		State     any            `json:"state"`
+		Questions map[string]any `json:"questions"`
+	}
+	if err := json.Unmarshal(req.Body, &body); err != nil {
+		return openAIError(400, "invalid request body"), nil
+	}
+	if body.State == nil || len(body.Questions) == 0 {
+		return openAIError(400, "a decision needs a state and at least one question"), nil
+	}
+	callTimeout := a.llmCallTimeout
+	if callTimeout <= 0 {
+		callTimeout = defaultLLMCallTimeout
+	}
+	if callTimeout > 30*time.Second {
+		callTimeout = 30 * time.Second
+	}
+	callCtx, cancel := context.WithTimeout(ctx, callTimeout)
+	defer cancel()
+	payload, err := json.Marshal(map[string]any{"model": provider.Model, "state": body.State, "questions": body.Questions})
+	if err != nil {
+		return openAIError(500, err.Error()), nil
+	}
+	up, err := http.NewRequestWithContext(callCtx, http.MethodPost, vmm.DecisionURL(provider.BaseURL), bytes.NewReader(payload))
+	if err != nil {
+		return openAIError(500, err.Error()), nil
+	}
+	up.Header.Set("Content-Type", "application/json")
+	if provider.APIKey != "" {
+		up.Header.Set("Authorization", "Bearer "+provider.APIKey)
+	}
+	start := time.Now()
+	traceDetail := provider.Model + " · interrupted"
+	defer func() { vmm.TraceFrom(s.base, "llm.decision", traceDetail, start) }()
+	resp, err := a.client.Do(up)
+	if err != nil {
+		status := http.StatusBadGateway
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(callCtx.Err(), context.DeadlineExceeded) {
+			status = http.StatusGatewayTimeout
+		}
+		traceDetail = provider.Model + " · unreachable: " + clip(err.Error(), 160)
+		return openAIError(status, "the decision model could not be reached: "+err.Error()), nil
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		traceDetail = provider.Model + " · response failed: " + clip(err.Error(), 160)
+		return openAIError(http.StatusBadGateway, "the decision model response failed: "+err.Error()), nil
+	}
+	if resp.StatusCode >= 300 {
+		traceDetail = fmt.Sprintf("%s · HTTP %d", provider.Model, resp.StatusCode)
+		return openAIError(resp.StatusCode, fmt.Sprintf("the decision model did not answer (%d)", resp.StatusCode)), nil
+	}
+	var out struct {
+		Answers map[string]any `json:"answers"`
+		Usage   struct {
+			InputTokens  int64 `json:"inputTokens"`
+			OutputTokens int64 `json:"outputTokens"`
+			// Some gateways report snake_case.
+			PromptTokens     int64 `json:"prompt_tokens"`
+			CompletionTokens int64 `json:"completion_tokens"`
+		} `json:"usage"`
+		Model string `json:"model"`
+	}
+	if json.Unmarshal(data, &out) != nil || len(out.Answers) == 0 {
+		traceDetail = provider.Model + " · answered without answers"
+		return openAIError(502, "the decision model answered without answers"), nil
+	}
+	in, outTok := out.Usage.InputTokens, out.Usage.OutputTokens
+	if in == 0 && outTok == 0 {
+		in, outTok = out.Usage.PromptTokens, out.Usage.CompletionTokens
+	}
+	a.meterDecision(s, provider, in, outTok)
+	if out.Model == "" {
+		out.Model = provider.Model
+	}
+	traceDetail = fmt.Sprintf("%s · %d in / %d out · %d answers", out.Model, in, outTok, len(out.Answers))
+	return jsonResponse(200, map[string]any{
+		"model": out.Model, "answers": out.Answers,
+		"usage": map[string]any{"inputTokens": in, "outputTokens": outTok},
+	}), nil
 }
 
 // serveChat is the OpenAI-compatible model endpoint of a turn. It forwards to
@@ -833,6 +949,25 @@ func (a *Adapter) meter(s *session, in, out int64) {
 	s.mu.Unlock()
 	vmm.AddInvocationUsage(s.base, usage.Delta{TokensIn: in, TokensOut: out})
 	vmm.BudgetFrom(s.base).RecordTokens(in, out)
+}
+
+// meterDecision records one decision-model call: priced at the decision
+// model's own rates (not the agent's chat rates) and charged as Decision
+// ledger units on the turn (ceil'd, like ChatDecide).
+func (a *Adapter) meterDecision(s *session, provider vmm.ProviderConfig, in, out int64) {
+	price := (float64(in)*provider.InputPrice + float64(out)*provider.OutputPrice) / 1e6
+	units := int64(math.Ceil(price - 1e-9))
+	if units < 0 {
+		units = 0
+	}
+	s.mu.Lock()
+	s.decisionCost += price
+	s.decisionCharged += units
+	s.mu.Unlock()
+	if units == 0 && in == 0 && out == 0 {
+		return
+	}
+	vmm.AddInvocationUsage(s.base, usage.Delta{Decision: units, DecisionIn: in, DecisionOut: out})
 }
 
 // gate stops a turn that can no longer pay: before each model call the node

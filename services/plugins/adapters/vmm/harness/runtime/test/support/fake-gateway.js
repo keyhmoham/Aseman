@@ -9,6 +9,7 @@ import http from 'node:http'
 export function fakeGateway({ llm, actions = {}, notes = { space: '', own: '' }, memories = [] } = {}) {
   const calls = []
   const llmCalls = []
+  const evaluateCalls = []
   const memoryCalls = []
   const server = http.createServer(async (req, res) => {
     let raw = ''
@@ -27,6 +28,17 @@ export function fakeGateway({ llm, actions = {}, notes = { space: '', own: '' },
         return stream(res, body.model, out)
       }
       if (url.pathname.endsWith('/llm/models')) return json(200, { data: [] })
+      if (url.pathname.endsWith('/llm/evaluate')) {
+        evaluateCalls.push({ token, body })
+        if (!body.state || !body.questions || !Object.keys(body.questions).length) {
+          return json(400, { error: { message: 'a decision needs a state and at least one question' } })
+        }
+        const answers = {}
+        for (const name of Object.keys(body.questions)) {
+          answers[name] = { type: 'boolean', probability: 0.91 }
+        }
+        return json(200, { model: 'typesafe-ai/jev', answers, usage: { inputTokens: 120, outputTokens: 0 } })
+      }
       if (url.pathname === '/call') {
         calls.push({ token, namespace: body.namespace, action: body.action, body: body.body })
         const handler = actions[`${body.namespace}.${body.action}`]
@@ -48,6 +60,7 @@ export function fakeGateway({ llm, actions = {}, notes = { space: '', own: '' },
   return {
     calls,
     llmCalls,
+    evaluateCalls,
     memoryCalls,
     async start() {
       await new Promise((r) => server.listen(0, '127.0.0.1', r))

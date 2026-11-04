@@ -92,8 +92,10 @@ function textOutput() {
 function scope(binding, name) {
   const b = binding()
   if (!b?.active) throw new Error(`${name}: this conversation has no running turn`)
-  if (!b.spaceId) throw new Error(`${name}: this conversation is not in a space`)
-  return b
+  // Personal Aseman uses the home computer space for App UI / plugin builtins.
+  const space = b.spaceId || b.computerSpace
+  if (!space) throw new Error(`${name}: this conversation is not in a space`)
+  return { ...b, spaceId: space }
 }
 
 function appFunction({ gateway, binding, name, app, command }) {

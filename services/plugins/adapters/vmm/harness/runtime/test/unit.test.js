@@ -9,11 +9,12 @@ import { authorized } from '../lib/plugins/host.js'
 import { wrap, wrapped } from '../lib/untrusted.js'
 import { personaFor, personalPersona, notesText } from '../lib/persona.js'
 import { formatMemories } from '../lib/tools/memory.js'
-import { syntaxError, CREATOR_GUIDE, pluginUI, quickProblems, parseCheck, looksLikeHTML, creatorTools } from '../lib/tools/creator.js'
+import { CREATOR_GUIDE, creatorTools } from '../lib/tools/creator.js'
 import { bodyLine } from '../lib/tools/api.js'
 import { workspaceTool } from '../lib/tools/workspace.js'
 import { Gateway, GatewayError } from '../lib/gateway.js'
 import { Store } from '../lib/store.js'
+import { decideTools } from '../lib/tools/decide.js'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -177,6 +178,16 @@ test('persona: lead or specialist, instructions and skills catalog', () => {
   assert.match(formatMemories([{ text: 'x', shared: true, kind: 'fact' }]), /- \[space\] \(fact\) x/)
 })
 
+test('persona routes lasting screens to appui_create (plugin or desk app)', () => {
+  const p = personaFor({ name: 'Ava' })
+  assert.match(p, /kind: "plugin"/)
+  assert.match(p, /appui_create` with\s+`kind: "plugin"`/)
+  assert.match(p, /kind: "app"/)
+  assert.match(CREATOR_GUIDE, /exactly the same as an App UI/)
+  assert.match(CREATOR_GUIDE, /kind: "plugin"/)
+  assert.ok(!/Prefer create_plugin over appui_create/.test(p))
+})
+
 test('gateway calls carry the token and surface the node\'s error', async () => {
   const seen = []
   const fake = async (url, init) => {
@@ -189,6 +200,42 @@ test('gateway calls carry the token and surface the node\'s error', async () => 
   assert.equal(seen[0].init.headers.authorization, 'Bearer tok')
   assert.deepEqual(JSON.parse(seen[0].init.body), { namespace: 'spaces', action: 'ask', body: { a: 1 } })
   await assert.rejects(gw.call('', 'x', 'y'), /no gateway session/)
+})
+
+test('jev_decide posts state and questions to the turn\'s /llm/evaluate', async () => {
+  const seen = []
+  const fake = async (url, init) => {
+    seen.push({ url, body: JSON.parse(init.body) })
+    return new Response(JSON.stringify({
+      model: 'typesafe-ai/jev',
+      answers: { pick: { type: 'choice', choice: 'a', probabilities: { a: 0.7, b: 0.3 } } },
+      usage: { inputTokens: 40, outputTokens: 0 },
+    }), { status: 200, headers: { 'content-type': 'application/json' } })
+  }
+  const gw = new Gateway({ base: 'http://n/harness/v1', fetch: fake })
+  const binding = { active: true, token: 'tok', signal: undefined }
+  const [tool] = decideTools({ gateway: gw, binding: () => binding })
+  assert.equal(tool.name, 'jev_decide')
+  const out = await tool.execute(
+    { state: 'two options', questions: { pick: { type: 'choice', criteria: { a: 'first', b: 'second' } } } },
+    { signal: AbortSignal.timeout(5000) },
+  )
+  assert.equal(seen[0].url, 'http://n/harness/v1/llm/evaluate')
+  assert.equal(seen[0].body.state, 'two options')
+  assert.match(out, /"choice": "a"/)
+  assert.match(personaFor({ name: 'Ava' }), /jev_decide/)
+})
+
+test('jev_decide tells the agent to decide when the model is off', async () => {
+  const fake = async () => new Response(JSON.stringify({ error: { message: 'the decision model is off' } }), { status: 503 })
+  const gw = new Gateway({ base: 'http://n/harness/v1', fetch: fake })
+  const binding = { active: true, token: 'tok' }
+  const [tool] = decideTools({ gateway: gw, binding: () => binding })
+  const out = await tool.execute(
+    { state: 'x', questions: { y: { type: 'boolean' } } },
+    { signal: AbortSignal.timeout(5000) },
+  )
+  assert.match(out, /decision model is off/i)
 })
 
 test('the store keeps one open question per session and survives a reload', () => {
@@ -205,86 +252,34 @@ test('the store keeps one open question per session and survives a reload', () =
   assert.equal(again.questions({}).length, 0)
 })
 
-test('creator checks programs before they reach the node', () => {
-  assert.equal(syntaxError("askHost('render', '{}')", 'frontend'), '')
-  assert.match(syntaxError('function (', 'backend'), /^backend: /)
-  assert.match(personaFor({ name: 'Ava' }), /Plugins \(Creator mode\)/)
-  assert.match(CREATOR_GUIDE, /PLUGINS\.md/)
-  assert.match(CREATOR_GUIDE, /aseman-plugin-check/)
-  assert.match(CREATOR_GUIDE, /"web" \(say why in ui_reason\): the design needs 3D/)
-  assert.match(CREATOR_GUIDE, /mode: "analog", seconds: true/)
-  assert.match(CREATOR_GUIDE, /never a\npicture made of Text/)
-  // An SDK program renders through App.create; a bare one through askHost.
-  assert.deepEqual(quickProblems({ ui: 'elpian', frontend: 'var app = App.create({ state: {}, view: function () { return {type: "Text"} } })' }), [])
-  assert.deepEqual(quickProblems({ ui: 'elpian', frontend: "askHost('render', '{}')" }), [])
-  assert.match(quickProblems({ ui: 'elpian', frontend: 'var x = 1' })[0], /never renders/)
-  assert.match(quickProblems({ ui: 'elpian', frontend: '<!doctype html><html></html>' })[0], /make it ui "web"/)
-  assert.match(quickProblems({ ui: 'web', frontend: 'var x' }).join('\n'), /one HTML document/)
-  assert.match(quickProblems({ ui: 'web', frontend: '<!doctype html><html></html>' })[0], /ui_reason/)
-  assert.deepEqual(quickProblems({ ui: 'web', frontend: '<!doctype html><html></html>', uiReason: '3D globe' }), [])
-})
-
-test('a plugin is Elpian unless web is asked for or its screen is a web document', () => {
-  assert.equal(pluginUI('', 'App.create({})'), 'elpian')
-  assert.equal(pluginUI('', '', '/workspace/.plugins/globe/dist/plugin.html'), 'web')
-  assert.equal(pluginUI('', '<!DOCTYPE html><html>'), 'web')
-  assert.equal(pluginUI('web', 'x'), 'web')
-  assert.throws(() => pluginUI('flash', 'x'), /elpian.*web/)
-  assert.ok(looksLikeHTML('  <html><body></body></html>'))
-  assert.ok(!looksLikeHTML('var html = "<html>"'))
-})
-
-test("the plugin checker's verdict is read from its JSON line, and its absence is not a failure", () => {
-  assert.deepEqual(parseCheck(0, 'noise\n{"ok":true,"errors":[],"warnings":[]}\n'), { ok: true, errors: [], warnings: [] })
-  assert.equal(parseCheck(1, '{"ok":false,"errors":["x"],"warnings":[]}').errors[0], 'x')
-  assert.equal(parseCheck(127, 'bash: aseman-plugin-check: command not found'), null)
-  assert.equal(parseCheck(2, 'TypeError: boom'), null)
-})
-
-test('create_plugin checks the plugin on the computer and refuses one that fails', async () => {
-  const calls = []
-  let verdict = { ok: true, ui: 'web', errors: [], warnings: ['phone: console.error: x'], notes: [] }
-  const files = { '/workspace/.plugins/globe/plugin.html': '<!doctype html><html><body><canvas></canvas></body></html>' }
+test('creator tools include create_plugin which starts appui_create kind=plugin', async () => {
+  assert.match(personaFor({ name: 'Ava' }), /Plugins \(frameless App UIs\)/)
+  assert.match(CREATOR_GUIDE, /create_plugin/)
+  assert.match(CREATOR_GUIDE, /kind: "plugin"/)
+  assert.match(CREATOR_GUIDE, /exactly the same as an App UI/)
+  assert.match(CREATOR_GUIDE, /No frame/)
+  const seen = []
   const gateway = {
-    call: async (token, ns, action, body) => {
-      calls.push({ ns, action, body })
-      if (action === 'sandbox_files' && body.operation === 'read') {
-        const data = files['/workspace/' + body.path]
-        return data === undefined ? { missing: true } : { data_base64: Buffer.from(data).toString('base64') }
-      }
-      if (action === 'sandbox_files') return { ok: true }
-      if (action === 'ask') return body.body.startsWith('aseman-plugin-check') ? { exit_code: verdict.ok ? 0 : 1, output: JSON.stringify(verdict) } : { exit_code: 0, output: '' }
-      if (action === 'plugin_create') return { plugin: { id: 'p9', name: body.name, placement: 'page', scope: 'space' } }
-      return {}
+    call: async (_tok, ns, action, body) => {
+      seen.push({ ns, action, body })
+      return { result: 'prepared /workspace/appui/x' }
     },
   }
-  const b = { kind: 'room', active: true, token: 't', spaceId: 'sp', roomId: 'r', flags: {} }
-  const create = creatorTools({ gateway, binding: () => b }).find((t) => t.name === 'create_plugin')
-  const signal = new AbortController().signal
-  const args = { name: 'Globe', description: 'Our offices on a globe', ui: 'web', ui_reason: '3D globe', placement: 'page', frontend_file: '.plugins/globe/plugin.html', permissions: ['spaces.message_list'] }
-  const out = await create.execute(args, { signal })
-  assert.match(out, /Created web plugin Globe \(p9\).*Checked as the app runs it.*console\.error/s)
-  const check = calls.find((c) => c.action === 'ask')
-  assert.match(check.body.body, /^aseman-plugin-check '\/workspace\/\.plugins\/globe\/plugin\.html' --ui web --json .*--permissions 'spaces\.message_list'/)
-  assert.match(check.body.body, /--description 'Our offices on a globe'/, 'the check knows what was asked for')
-  const created = calls.find((c) => c.action === 'plugin_create').body
-  assert.equal(created.ui, 'web')
-  assert.deepEqual(created.frontend, { source: files['/workspace/.plugins/globe/plugin.html'], runtime: 'web', language: 'html' })
-
-  verdict = { ok: false, ui: 'web', errors: ['phone 360×640: the page draws nothing'], warnings: [] }
-  calls.length = 0
-  await assert.rejects(create.execute(args, { signal }), /plugin check failed[\s\S]*draws nothing/)
-  assert.ok(!calls.some((c) => c.action === 'plugin_create'), 'a failing plugin never reaches the node')
-
-  // Without a computer: Elpian inline only.
-  const personal = { kind: 'personal', active: true, token: 't', flags: {} }
-  const noPc = creatorTools({ gateway, binding: () => personal }).find((t) => t.name === 'create_plugin')
-  await assert.rejects(noPc.execute(args, { signal }), /no computer/)
-  await assert.rejects(noPc.execute({ ...args, frontend_file: undefined, frontend: files['/workspace/.plugins/globe/plugin.html'] }, { signal }), /built and checked on a computer/)
-  calls.length = 0
-  const inline = await noPc.execute({ name: 'Tasks', description: 'x', frontend: 'App.create({ state: {}, view: function () { return {type: "Text"} } })' }, { signal })
-  assert.match(inline, /Created elpian plugin Tasks/)
-  assert.equal(calls.find((c) => c.action === 'plugin_create').body.frontend.runtime, 'quickjs')
+  const tools = creatorTools({ gateway, binding: () => ({ active: true, token: 't', spaceId: 's1', roomId: 'r1' }) })
+  assert.deepEqual(tools.map((t) => t.name), ['create_plugin', 'list_plugins', 'remove_plugin', 'restore_plugin'])
+  const create = tools.find((t) => t.name === 'create_plugin')
+  const out = await create.execute(
+    { name: 'Habits', description: 'Track habits', placement: 'chat', ui: 'elpian' },
+    { signal: new AbortController().signal },
+  )
+  assert.match(String(out), /prepared/)
+  assert.equal(seen[0].ns, 'spaces')
+  assert.equal(seen[0].action, 'ask')
+  assert.equal(seen[0].body.tool, 'appui_create')
+  assert.equal(seen[0].body.args.kind, 'plugin')
+  assert.equal(seen[0].body.args.placement, 'chat')
+  assert.equal(seen[0].body.args.ui, 'elpian')
+  assert.match(seen[0].body.args.brief, /Habits/)
 })
 
 test('catalog bodies read in one line', () => {

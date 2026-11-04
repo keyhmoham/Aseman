@@ -75,10 +75,5 @@ func (s *Service) frontendGet(ctx context.Context, req *api.ActionRequest) (*api
 			out["source"] = source
 		}
 	}
-	// A plugin's screen talks to the app through the plugin gate: say so to
-	// those who may use it (wherever its window is opened).
-	if p, err := s.plugin(ctx, tool.BotID); err == nil && req.Caller.Kind == "user" && s.usable(ctx, req.Caller.ID, p) == nil {
-		out["plugin"] = p
-	}
 	return helper.JSON(out)
 }

@@ -54,8 +54,7 @@ jobs:
       # QuickJS for the checker (the same engine the client runs programs on).
       - run: npm ci --ignore-scripts --no-audit --no-fund
         working-directory: deploy/tool-runtime
-      # The validator, driver and checks, and plugin-check (web plugins load
-      # in the runner's Chrome).
+      # The Elpian validator, driver and checks.
       - run: node --test deploy/sandbox-computer/appui/elpian/test/*.test.mjs
 
   app:

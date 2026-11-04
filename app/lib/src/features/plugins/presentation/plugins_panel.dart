@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../computer/preview_view.dart';
 import '../../desk/presentation/desk_controller.dart';
-import '../../tools/data/tools_api.dart';
-import '../../tools/presentation/tool_frontend_view.dart';
+import '../../tools/elpian_app/elpian_app_view.dart';
 import '../data/plugins_api.dart';
 import 'plugin_gadgets_controller.dart';
 
-/// A plugin's screen: its Elpian program drawn natively in the person's theme
-/// (or its web document in the sandboxed frame), reaching its backend and the
-/// platform only through the plugin gate.
+/// A plugin's screen: the same App UI host as a desk app (Elpian natively, or
+/// web in the sandboxed frame), without window chrome.
 class PluginView extends StatelessWidget {
   const PluginView({
     super.key,
@@ -21,32 +20,51 @@ class PluginView extends StatelessWidget {
 
   final AppDependencies dependencies;
   final PluginInfo plugin;
-
-  /// Where it is opened (an app-wide plugin may be opened anywhere).
   final String spaceId;
   final String roomId;
 
   @override
   Widget build(BuildContext context) {
     final service = dependencies.service;
-    final userId = dependencies.sessionController.session?.accountId ?? '';
     final space = plugin.appWide ? spaceId : plugin.spaceId;
-    // The frontend view gives the screen its plugin gate (and, for Elpian,
-    // the SDK and the plugin shim; for web, the sandboxed frame).
-    return ToolFrontendView(
-      key: ValueKey('plugin-${plugin.id}-$space-$roomId'),
-      api: ToolsApi.of(service),
-      botId: plugin.id,
+    if (!plugin.isApp) {
+      return Center(
+        child: Text('This plugin has no App UI preview.',
+            style: Theme.of(context).textTheme.bodyMedium),
+      );
+    }
+    final page = plugin.preview;
+    final title = plugin.name;
+    if (plugin.web || plugin.entry.isEmpty) {
+      return LivePreview(
+        key: ValueKey('plugin-web-${plugin.id}-$page'),
+        service: service,
+        spaceId: space,
+        title: title,
+        page: page,
+      );
+    }
+    return LivePreview(
+      key: ValueKey('plugin-elpian-${plugin.id}-$page-${plugin.entry}'),
+      service: service,
       spaceId: space,
-      roomId: roomId,
-      userId: userId,
+      title: title,
+      page: page,
+      content: (_) => ElpianAppView(
+        key: ValueKey('plugin-elpian-view-${plugin.id}'),
+        service: service,
+        page: page,
+        entry: plugin.entry,
+        spaceId: space,
+        roomId: roomId,
+        title: title,
+      ),
     );
   }
 }
 
 /// Opens a plugin as a floating gadget on its surface, or as a page when
-/// placement is [PluginPlacement.page]. Desk plugins in a room still open on
-/// the desk when a [DeskController] is in scope.
+/// placement is [PluginPlacement.page].
 Future<void> openPlugin(BuildContext context, AppDependencies dependencies,
     PluginInfo plugin,
     {String spaceId = '', String roomId = '', DeskController? desk}) async {
@@ -55,15 +73,6 @@ Future<void> openPlugin(BuildContext context, AppDependencies dependencies,
   if (plugin.appWide && gadgets != null) {
     gadgets.open(plugin.id);
     return;
-  }
-
-  if (plugin.placement == PluginPlacement.desk) {
-    desk ??= DeskScope.maybeOf(context);
-    if (desk != null) {
-      Navigator.of(context).maybePop();
-      await desk.open(plugin.id, title: plugin.name);
-      return;
-    }
   }
 
   if (plugin.placement != PluginPlacement.page && gadgets != null) {
@@ -91,4 +100,3 @@ Future<void> openPluginPage(BuildContext context, AppDependencies dependencies,
     ),
   ));
 }
-

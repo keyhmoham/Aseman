@@ -1,10 +1,12 @@
 package spaces
 
 // App UI generation: on-demand fullstack apps built in the space sandbox,
-// calling space apps and agents via the preview `_aseman/api/*` API, opened
-// as desk card windows. The space's agents build them.
-// Both share the project layout, guides and toolchain (aseman-appui), and
-// the platform verifies every app the same way before it opens.
+// calling space apps and agents via the preview `_aseman/api/*` API.
+// kind=app (default) opens as a desk card window; kind=plugin registers the
+// same verified app as a frameless free-position plugin (chat / rail / desk /
+// page, or account-wide when built in the person's home Aseman).
+// The space's agents build them. Both share the project layout, guides and
+// toolchain (aseman-appui), and the platform verifies every app the same way.
 
 import (
 	"context"
@@ -19,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aseman/aseman/internal/plugins/bridge"
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
@@ -60,7 +63,35 @@ type appuiReady struct {
 const (
 	appuiElpian = "elpian"
 	appuiWeb    = "web"
+
+	// Hosting: a desk window, or a frameless free-position plugin.
+	appuiKindApp    = "app"
+	appuiKindPlugin = "plugin"
 )
+
+// appuiKind picks how a verified App UI is hosted.
+func appuiKind(asked string) (string, error) {
+	switch k := strings.ToLower(strings.TrimSpace(asked)); k {
+	case "", appuiKindApp:
+		return appuiKindApp, nil
+	case appuiKindPlugin:
+		return appuiKindPlugin, nil
+	default:
+		return "", errs.InvalidArgument(`kind is "app" (desk window, the default) or "plugin" (frameless free-position gadget)`)
+	}
+}
+
+// appuiPluginPlacement normalises a plugin's surface.
+func appuiPluginPlacement(asked string) (string, error) {
+	switch p := strings.ToLower(strings.TrimSpace(asked)); p {
+	case "", "chat", "panel":
+		return "chat", nil
+	case "rail", "page", "desk":
+		return p, nil
+	default:
+		return "", errs.InvalidArgument(`placement for a plugin is "chat", "rail", "desk" or "page"`)
+	}
+}
 
 // appuiFrontend picks an App UI's frontend: the one asked for, else what an
 // existing app was built with, else Elpian.
@@ -253,8 +284,11 @@ type appuiJob struct {
 	Port   int        `json:"port"`
 	Mode   string     `json:"mode"`
 	UI     string     `json:"ui"`
-	HasKey bool       `json:"has_key"`
-	Place  appuiPlace `json:"place"`
+	Kind   string     `json:"kind,omitempty"` // app (default) | plugin
+	// Placement is only for kind=plugin: chat | rail | desk | page.
+	Placement string     `json:"placement,omitempty"`
+	HasKey    bool       `json:"has_key"`
+	Place     appuiPlace `json:"place"`
 }
 
 func appuiPublishFile(dir string) string { return dir + "/.aseman/publish.json" }
@@ -281,22 +315,24 @@ func appuiDeskPlace(roomID, target identity.ID, room string) (desk string, arran
 // finishes with appui_publish, which verifies and opens the app.
 func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.ID, agentName, argsJSON string) (string, error) {
 	var in struct {
-		Brief   string       `json:"brief"`
-		Title   string       `json:"title"`
-		Apps    []string     `json:"apps"`
-		Agents  []string     `json:"agents"`
-		UI      string       `json:"ui"`
-		Tool    string       `json:"tool"`
-		Dir     string       `json:"dir"`
-		Port    int          `json:"port"`
-		ID      string       `json:"id"`
-		X       *float64     `json:"x"`
-		Y       *float64     `json:"y"`
-		W       *float64     `json:"w"`
-		H       *float64     `json:"h"`
-		Compact *DeskCompact `json:"compact"`
-		Room    string       `json:"room"`
-		Show    *bool        `json:"show"`
+		Brief     string       `json:"brief"`
+		Title     string       `json:"title"`
+		Apps      []string     `json:"apps"`
+		Agents    []string     `json:"agents"`
+		UI        string       `json:"ui"`
+		Kind      string       `json:"kind"`
+		Placement string       `json:"placement"`
+		Tool      string       `json:"tool"`
+		Dir       string       `json:"dir"`
+		Port      int          `json:"port"`
+		ID        string       `json:"id"`
+		X         *float64     `json:"x"`
+		Y         *float64     `json:"y"`
+		W         *float64     `json:"w"`
+		H         *float64     `json:"h"`
+		Compact   *DeskCompact `json:"compact"`
+		Room      string       `json:"room"`
+		Show      *bool        `json:"show"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
 		return "", errs.InvalidArgument("appui_create arguments must be a JSON object")
@@ -305,11 +341,21 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	if brief == "" {
 		return "", errs.InvalidArgument("appui_create needs brief (what to build)")
 	}
+	kind, err := appuiKind(in.Kind)
+	if err != nil {
+		return "", err
+	}
+	placement := ""
+	if kind == appuiKindPlugin {
+		if placement, err = appuiPluginPlacement(in.Placement); err != nil {
+			return "", err
+		}
+	}
 	target, err := deskRoom(roomID, in.Room)
 	if err != nil {
 		return "", err
 	}
-	job := appuiJob{ID: strings.TrimSpace(in.ID), Dir: strings.TrimSpace(in.Dir), Port: in.Port, Title: strings.TrimSpace(in.Title)}
+	job := appuiJob{ID: strings.TrimSpace(in.ID), Dir: strings.TrimSpace(in.Dir), Port: in.Port, Title: strings.TrimSpace(in.Title), Kind: kind, Placement: placement}
 	if job.ID == "" {
 		job.ID = newAppUIID()
 	}
@@ -426,18 +472,24 @@ func (s *Service) appuiAgentsBuild(ctx context.Context, spaceID identity.ID, job
 	if terr != nil || strings.TrimSpace(task) == "" {
 		task = strings.TrimPrefix(out, "exit=0\n")
 	}
-	next := "Build the app now, exactly as the task says (or hand the whole task to a developer agent of the space with this dir and TASK.md): plan, build, test, drive it end to end with aseman-elpian, write READY.json. Then call appui_publish {\"dir\": \"" + job.Dir + "\"}: the platform verifies it and opens it on the desk, or answers with what to fix."
+	hostHint := "opens it on the desk"
+	if job.Kind == appuiKindPlugin {
+		hostHint = "registers it as a frameless free-position plugin (" + job.Placement + ")"
+	}
+	next := "Build the app now, exactly as the task says (or hand the whole task to a developer agent of the space with this dir and TASK.md): plan, build, test, drive it end to end with aseman-elpian, write READY.json. Then call appui_publish {\"dir\": \"" + job.Dir + "\"}: the platform verifies it and " + hostHint + ", or answers with what to fix."
 	b, _ := json.Marshal(map[string]any{
-		"state":   "building",
-		"builder": "agents",
-		"id":      job.ID,
-		"dir":     job.Dir,
-		"title":   job.Title,
-		"port":    job.Port,
-		"mode":    job.Mode,
-		"ui":      job.UI,
-		"task":    clipTrace(task, 12000),
-		"next":    next,
+		"state":     "building",
+		"builder":   "agents",
+		"id":        job.ID,
+		"dir":       job.Dir,
+		"title":     job.Title,
+		"port":      job.Port,
+		"mode":      job.Mode,
+		"ui":        job.UI,
+		"kind":      job.Kind,
+		"placement": job.Placement,
+		"task":      clipTrace(task, 12000),
+		"next":      next,
 		"server_api": map[string]any{
 			"url":        sandboxAppAPIURL(),
 			"background": job.HasKey,
@@ -482,15 +534,17 @@ func (s *Service) appuiExec(ctx context.Context, spaceID identity.ID, cmd string
 // It also re-verifies and reopens any app.
 func (s *Service) appuiPublishTool(ctx context.Context, spaceID, roomID identity.ID, agentName, argsJSON string) (string, error) {
 	var in struct {
-		Dir   string   `json:"dir"`
-		Title string   `json:"title"`
-		Tool  string   `json:"tool"`
-		Room  string   `json:"room"`
-		Show  *bool    `json:"show"`
-		X     *float64 `json:"x"`
-		Y     *float64 `json:"y"`
-		W     *float64 `json:"w"`
-		H     *float64 `json:"h"`
+		Dir       string   `json:"dir"`
+		Title     string   `json:"title"`
+		Kind      string   `json:"kind"`
+		Placement string   `json:"placement"`
+		Tool      string   `json:"tool"`
+		Room      string   `json:"room"`
+		Show      *bool    `json:"show"`
+		X         *float64 `json:"x"`
+		Y         *float64 `json:"y"`
+		W         *float64 `json:"w"`
+		H         *float64 `json:"h"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
 		return "", errs.InvalidArgument("appui_publish arguments must be a JSON object: {\"dir\": \"/workspace/appui/<id>\"}")
@@ -536,6 +590,27 @@ func (s *Service) appuiPublishTool(ctx context.Context, spaceID, roomID identity
 	job.Dir = dir
 	if t := strings.TrimSpace(in.Title); t != "" {
 		job.Title = t
+	}
+	if k := strings.TrimSpace(in.Kind); k != "" {
+		kind, kerr := appuiKind(k)
+		if kerr != nil {
+			return "", kerr
+		}
+		job.Kind = kind
+	}
+	if job.Kind == "" {
+		job.Kind = appuiKindApp
+	}
+	if job.Kind == appuiKindPlugin {
+		place := in.Placement
+		if place == "" {
+			place = job.Placement
+		}
+		p, perr := appuiPluginPlacement(place)
+		if perr != nil {
+			return "", perr
+		}
+		job.Placement = p
 	}
 	if t := strings.TrimSpace(in.Tool); t != "" {
 		job.Place.Tool = t
@@ -584,8 +659,9 @@ func (s *Service) appuiPublishTool(ctx context.Context, spaceID, roomID identity
 	return s.appuiOpen(opCtx, ctx, spaceID, agentName, job, ready, "agents")
 }
 
-// appuiOpen serves a verified app on the room's desk (the preview gateway
-// runs its start command) and binds the app's key to that preview.
+// appuiOpen serves a verified app: as a desk card (kind=app) or as a
+// frameless free-position plugin (kind=plugin). The preview gateway runs its
+// start command either way; plugins keep the desk window off (show=false).
 func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, agentName string, job appuiJob, ready appuiReady, builder string) (string, error) {
 	dir, port, title := job.Dir, job.Port, job.Title
 	if ready.Port > 0 {
@@ -595,9 +671,14 @@ func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, age
 		title = ready.Title
 	}
 	start := appuiStartCommand(dir, port, ready.Start)
+	if job.Kind == "" {
+		job.Kind = appuiKindApp
+	}
 
 	show := true
-	if job.Place.Show != nil {
+	if job.Kind == appuiKindPlugin {
+		show = false
+	} else if job.Place.Show != nil {
 		show = *job.Place.Show
 	}
 	proxyArgs := map[string]any{
@@ -608,9 +689,10 @@ func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, age
 		"tool":  job.Place.Tool,
 		"room":  job.Place.Room,
 	}
+	elpianEntry := ""
 	// An Elpian app opens as itself: the client runs its program natively.
 	if job.UI == appuiElpian {
-		elpianEntry := strings.TrimPrefix(strings.TrimSpace(ready.Elpian), "./")
+		elpianEntry = strings.TrimPrefix(strings.TrimSpace(ready.Elpian), "./")
 		if elpianEntry == "" {
 			elpianEntry = "elpian/app.js"
 		}
@@ -634,11 +716,12 @@ func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, age
 		if builder == "agents" {
 			next = "Fix it and call appui_publish again."
 		}
-		return "", errs.Conflict("the app passed its checks but did not start on the desk (its start command, run as the preview runs it, did not answer on port " +
+		return "", errs.Conflict("the app passed its checks but did not start (its start command, run as the preview runs it, did not answer on port " +
 			strconv.Itoa(port) + "). " + next + "\n" + clipTrace(proxyOut, 3000))
 	}
+	m := proxyPathID.FindStringSubmatch(proxyOut)
 	// The key works while the app's preview exists.
-	if m := proxyPathID.FindStringSubmatch(proxyOut); job.HasKey && m != nil {
+	if job.HasKey && m != nil {
 		if pid, perr := identity.Parse(m[1]); perr == nil {
 			if err := s.BindAppKey(opCtx, spaceID, dir, pid); err != nil {
 				return "", err
@@ -646,12 +729,23 @@ func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, age
 		}
 	}
 
-	// Optional desk placement after open.
-	p := job.Place
-	if p.X != nil || p.Y != nil || p.W != nil || p.H != nil || p.Compact {
-		arrangeRoom, _ := identity.Parse(p.ArrangeRoom)
-		// Best-effort: arrange the most recently opened matching title window.
-		_ = s.appuiArrangeHint(ctx, spaceID, arrangeRoom, agentName, p.X, p.Y, p.W, p.H)
+	var pluginOut any
+	if job.Kind == appuiKindPlugin {
+		if m == nil {
+			return "", errs.Conflict("the app started but its preview path was not returned; call appui_publish again")
+		}
+		preview := "/v1/proxy/" + m[1] + "/"
+		pluginOut, err = s.appuiRegisterPlugin(opCtx, spaceID, agentName, job, title, preview, elpianEntry)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		// Optional desk placement after open.
+		p := job.Place
+		if p.X != nil || p.Y != nil || p.W != nil || p.H != nil || p.Compact {
+			arrangeRoom, _ := identity.Parse(p.ArrangeRoom)
+			_ = s.appuiArrangeHint(ctx, spaceID, arrangeRoom, agentName, p.X, p.Y, p.W, p.H)
+		}
 	}
 
 	next := "To change this app later, call appui_create again with the same dir and a brief of the change."
@@ -659,26 +753,53 @@ func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, age
 		next += " Build the change as its task says, then call appui_publish with the dir again."
 	}
 	result := map[string]any{
-		"id":      job.ID,
-		"dir":     dir,
-		"title":   title,
-		"port":    port,
-		"start":   start,
-		"summary": ready.Summary,
-		"tested":  true,
-		"mode":    job.Mode,
-		"ui":      job.UI,
-		"builder": builder,
-		"next":    next,
-		"proxy":   proxyOut,
+		"id":        job.ID,
+		"dir":       dir,
+		"title":     title,
+		"port":      port,
+		"start":     start,
+		"summary":   ready.Summary,
+		"tested":    true,
+		"mode":      job.Mode,
+		"ui":        job.UI,
+		"kind":      job.Kind,
+		"placement": job.Placement,
+		"builder":   builder,
+		"next":      next,
+		"proxy":     proxyOut,
 		"server_api": map[string]any{
 			"url":        sandboxAppAPIURL(),
 			"background": job.HasKey,
 			"billing":    "Calls with a request's X-Aseman-User-Token are billed to the person using the app; background calls with ASEMAN_APP_KEY to the person who asked for it.",
 		},
 	}
+	if pluginOut != nil {
+		result["plugin"] = pluginOut
+	}
 	b, _ := json.Marshal(result)
 	return string(b), nil
+}
+
+// appuiRegisterPlugin registers a verified App UI as a frameless plugin.
+// Built in the person's home Aseman → account-wide (universal) plugin;
+// otherwise a space plugin on the given placement.
+func (s *Service) appuiRegisterPlugin(ctx context.Context, spaceID identity.ID, agentName string, job appuiJob, title, preview, entry string) (any, error) {
+	owner := appOwner(ctx)
+	if owner.IsZero() {
+		return nil, errs.Permission("no person to create the plugin for")
+	}
+	pluginSpace := spaceID.String()
+	if sp, err := s.GetSpace(ctx, spaceID); err == nil && sp != nil && sp.Home {
+		pluginSpace = "" // account-wide / platform plugin
+	}
+	var out any
+	err := bridge.Invoke(ctx, s.K, "tools", "RegisterAppPlugin", []any{
+		ctx, owner.String(), pluginSpace, title, "", job.Placement, job.UI, preview, entry, job.ID, agentName,
+	}, &out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (s *Service) appuiArrangeHint(ctx context.Context, spaceID, roomID identity.ID, agentName string, x, y, w, h *float64) error {

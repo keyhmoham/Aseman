@@ -1,16 +1,17 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
-import '../../../core/theme/app_shape.dart';
-import '../../../core/theme/app_surfaces.dart';
-import '../../../shared/widgets/glass_surface.dart';
+import '../../../shared/widgets/overlay_panels.dart';
 import '../data/plugins_api.dart';
 import 'plugin_gadgets_controller.dart';
 import 'plugins_panel.dart';
 
-/// A floating Creator-plugin gadget: glass chrome, drag by the title bar,
-/// minimise (back to the plugins manager), optional resize grip. A minimised
-/// gadget draws nothing.
+/// A floating plugin gadget: the same content stack as an App UI, but
+/// **frameless** (no window chrome, glass pad or title bar) so the screen can
+/// take any custom shape. Right-click or long-press opens the window menu
+/// (minimise, close, open as page, …). Free-positioned over desk / chat /
+/// left rail, or as a universal overlay for account plugins.
 class PluginGadget extends StatelessWidget {
   const PluginGadget({
     super.key,
@@ -32,14 +33,14 @@ class PluginGadget extends StatelessWidget {
   /// Keep the window inside its Stack parent (surface hosts).
   final bool constrainToParent;
 
-  /// Smaller chrome for rail / narrow panels.
+  /// Smaller default size for rail / narrow panels (layout only; no chrome).
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final layout = controller.layoutOf(plugin.id);
     if (layout.mode != PluginGadgetMode.open) return const SizedBox.shrink();
-    return _FloatingWindow(
+    return _FloatingPlugin(
       dependencies: dependencies,
       plugin: plugin,
       controller: controller,
@@ -52,8 +53,8 @@ class PluginGadget extends StatelessWidget {
   }
 }
 
-class _FloatingWindow extends StatefulWidget {
-  const _FloatingWindow({
+class _FloatingPlugin extends StatefulWidget {
+  const _FloatingPlugin({
     required this.dependencies,
     required this.plugin,
     required this.controller,
@@ -74,15 +75,16 @@ class _FloatingWindow extends StatefulWidget {
   final bool compact;
 
   @override
-  State<_FloatingWindow> createState() => _FloatingWindowState();
+  State<_FloatingPlugin> createState() => _FloatingPluginState();
 }
 
-class _FloatingWindowState extends State<_FloatingWindow> {
+class _FloatingPluginState extends State<_FloatingPlugin> {
   late Offset _offset = widget.layout.offset;
   late Size _size = widget.layout.size;
+  bool _moving = false;
 
   @override
-  void didUpdateWidget(covariant _FloatingWindow old) {
+  void didUpdateWidget(covariant _FloatingPlugin old) {
     super.didUpdateWidget(old);
     if (old.layout.offset != widget.layout.offset) {
       _offset = widget.layout.offset;
@@ -102,12 +104,74 @@ class _FloatingWindowState extends State<_FloatingWindow> {
     );
   }
 
+  Future<void> _menu(Offset global) async {
+    final box = Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final size = box?.size ?? MediaQuery.sizeOf(context);
+    final local = box?.globalToLocal(global) ?? global;
+    final choice = await showAppMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        local.dx,
+        local.dy,
+        size.width - local.dx,
+        size.height - local.dy,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'minimise',
+          child: ListTile(
+            dense: true,
+            leading: const Icon(Icons.minimize_rounded),
+            title: const Text('Minimise'),
+            subtitle: Text('Reopen from Plugins',
+                style: Theme.of(context).textTheme.labelSmall),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'page',
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.open_in_full_rounded),
+            title: Text('Open as page'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'move',
+          child: ListTile(
+            dense: true,
+            leading: Icon(_moving ? Icons.done_rounded : Icons.open_with_rounded),
+            title: Text(_moving ? 'Done moving' : 'Move'),
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'close',
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.close_rounded),
+            title: Text('Close'),
+          ),
+        ),
+      ],
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'minimise' || choice == 'close') {
+      widget.controller.dock(widget.plugin.id);
+    } else if (choice == 'page') {
+      await openPluginPage(
+        context,
+        widget.dependencies,
+        widget.plugin,
+        spaceId: widget.spaceId,
+        roomId: widget.roomId,
+      );
+    } else if (choice == 'move') {
+      setState(() => _moving = !_moving);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final radius = BorderRadius.circular(AppShape.cardOf(context));
-    final barH = widget.compact ? 36.0 : 42.0;
-
     return LayoutBuilder(builder: (context, box) {
       final bounds = Size(
         box.maxWidth.isFinite ? box.maxWidth : MediaQuery.sizeOf(context).width,
@@ -124,96 +188,51 @@ class _FloatingWindowState extends State<_FloatingWindow> {
             top: _offset.dy,
             width: _size.width,
             height: _size.height,
+            // Frameless: no glass pad / window frame — the app draws its own
+            // shape. Hit-testing stays on the content bounds.
             child: Material(
-              color: Colors.transparent,
-              child: GlassSurface(
-                alpha: AppSurfaces.overlayAlphaOf(context),
-                blur: AppSurfaces.blurSigmaOf(context),
-                borderRadius: radius,
-                child: Column(
-                  children: [
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onPanUpdate: (d) {
-                        setState(() {
-                          _offset += d.delta;
-                          _clamp(bounds);
-                        });
-                      },
-                      onPanEnd: (_) =>
-                          widget.controller.move(widget.plugin.id, _offset),
-                      child: SizedBox(
-                        height: barH,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Row(
-                            children: [
-                              Icon(Icons.extension_rounded,
-                                  size: 16, color: scheme.primary),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  widget.plugin.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: widget.compact ? 12.5 : 13.5,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: 'Minimise (reopen from Plugins)',
-                                visualDensity: VisualDensity.compact,
-                                iconSize: 18,
-                                onPressed: () =>
-                                    widget.controller.dock(widget.plugin.id),
-                                icon: const Icon(Icons.minimize_rounded),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+              type: MaterialType.transparency,
+              child: Listener(
+                onPointerDown: (e) {
+                  if (e.buttons == kSecondaryMouseButton) {
+                    _menu(e.position);
+                  }
+                },
+                child: GestureDetector(
+                  behavior: HitTestBehavior.deferToChild,
+                  onLongPressStart: (d) => _menu(d.globalPosition),
+                  onPanUpdate: _moving
+                      ? (d) {
+                          setState(() {
+                            _offset += d.delta;
+                            _clamp(bounds);
+                          });
+                        }
+                      : null,
+                  onPanEnd: _moving
+                      ? (_) =>
+                          widget.controller.move(widget.plugin.id, _offset)
+                      : null,
+                  child: DecoratedBox(
+                    decoration: _moving
+                        ? BoxDecoration(
+                            border: Border.all(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: .45),
+                              width: 1.5,
+                            ),
+                          )
+                        : const BoxDecoration(),
+                    child: PluginView(
+                      dependencies: widget.dependencies,
+                      plugin: widget.plugin,
+                      spaceId: widget.spaceId,
+                      roomId: widget.roomId,
                     ),
-                    Divider(height: 1, color: scheme.outlineVariant),
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.vertical(
-                          bottom: Radius.circular(AppShape.cardOf(context)),
-                        ),
-                        child: PluginView(
-                          dependencies: widget.dependencies,
-                          plugin: widget.plugin,
-                          spaceId: widget.spaceId,
-                          roomId: widget.roomId,
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: _offset.dx + _size.width - 18,
-            top: _offset.dy + _size.height - 18,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onPanUpdate: (d) {
-                setState(() {
-                  _size = Size(
-                    (_size.width + d.delta.dx).clamp(200, 720),
-                    (_size.height + d.delta.dy).clamp(160, 900),
-                  );
-                  _clamp(bounds);
-                });
-              },
-              onPanEnd: (_) =>
-                  widget.controller.resize(widget.plugin.id, _size),
-              child: const SizedBox(
-                width: 18,
-                height: 18,
-                child: Icon(Icons.drag_handle_rounded, size: 14),
               ),
             ),
           ),

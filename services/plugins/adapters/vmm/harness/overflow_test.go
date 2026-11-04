@@ -16,6 +16,8 @@ import (
 // fakePlatform resolves every agent's model to one provider endpoint.
 type fakePlatform struct {
 	provider vmm.ProviderConfig
+	// decision is the node's decision model; nil means it is off.
+	decision *vmm.ProviderConfig
 	// memoryChat / memoryEmbedding are the memory's models; nil means unset.
 	memoryChat, memoryEmbedding *vmm.ProviderConfig
 	// timeline answers the spaces' timeline searches; nil means it is off.
@@ -70,6 +72,13 @@ func (p fakePlatform) RoomSpace(_ context.Context, roomID string) (string, error
 
 func (p fakePlatform) ResolveChat(context.Context, string, string) (vmm.ProviderConfig, error) {
 	return p.provider, nil
+}
+
+func (p fakePlatform) ResolveDecision(context.Context) (vmm.ProviderConfig, error) {
+	if p.decision == nil {
+		return vmm.ProviderConfig{}, errs.New(errs.CodeUnavailable, "the decision model is off")
+	}
+	return *p.decision, nil
 }
 
 func TestContextOverflowRecognizesProviderWordings(t *testing.T) {

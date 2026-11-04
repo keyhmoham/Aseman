@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../../../elpian/elpian.dart';
@@ -9,10 +7,6 @@ import '../../desk/presentation/frontend_presentation.dart';
 import '../connect/mcp_connect_dialog.dart';
 import '../data/tools_api.dart';
 import '../domain/tool_models.dart';
-import '../../plugins/data/plugins_api.dart';
-import '../../plugins/presentation/web/plugin_web_frame.dart';
-import '../../plugins/runtime/plugin_host.dart';
-import '../../plugins/runtime/plugin_runtime.dart';
 import '../runtime/tool_frontend_host.dart';
 import '../runtime/tool_media.dart';
 import '../ui_kit/kit.dart' show kitEngine;
@@ -48,8 +42,7 @@ class ToolFrontendView extends StatefulWidget {
   /// Called once the person connected their own account to the tool here.
   final VoidCallback? onConnected;
 
-  /// Host calls added to (or replacing) the tool host's. A plugin's screen
-  /// needs none: it is given its plugin gate here (see [PluginHost]).
+  /// Host calls added to (or replacing) the tool host's.
   final Map<String, HostCallHandler> extraHandlers;
 
   @override
@@ -63,14 +56,6 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
   ToolFrontendPayload? _payload;
   Object? _error;
   bool _loading = true;
-
-  /// A plugin's screen: its gate, and (Elpian) its program after the SDK and
-  /// the plugin shim, with the controller its answers are delivered through.
-  final ElpianVmController _vm = ElpianVmController();
-  PluginHost? _pluginHost;
-  String? _pluginProgram;
-  Map<String, dynamic> _pluginEnv = const {};
-  String _pluginEnvSent = '';
 
   /// The name of a tool each person connects with their own account, while
   /// this person has not connected theirs in the space (null otherwise).
@@ -92,17 +77,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
     }
   }
 
-  @override
-  void dispose() {
-    _pluginHost?.dispose();
-    super.dispose();
-  }
-
   Future<void> _load() async {
-    _pluginHost?.dispose();
-    _pluginHost = null;
-    _pluginProgram = null;
-    _pluginEnvSent = '';
     setState(() {
       _loading = true;
       _error = null;
@@ -132,19 +107,9 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
           spaceId: widget.spaceId,
           roomId: widget.roomId,
           shown: widget.shown);
-      // An Elpian plugin runs on the Aseman Elpian SDK and the plugin shim,
-      // exactly as the plugin checker ran it before it was created.
-      String? program;
-      if (payload.plugin != null &&
-          payload.mode == FrontendMode.static &&
-          payload.runtime != ToolRuntime.web &&
-          !(payload.runtime == ToolRuntime.elpian && payload.bytecode != null)) {
-        program = await PluginRuntime.elpianProgram(payload.source);
-      }
       if (!mounted) return;
       setState(() {
         _payload = payload;
-        _pluginProgram = program;
         _loading = false;
       });
       widget.onLoaded?.call(payload);
@@ -190,32 +155,6 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
     final hint = CompactHint.fromJson(summary);
     if (!hint.isEmpty) {
       FrontendPresentation.maybeOf(context)?.onHint?.call(hint);
-    }
-  }
-
-  /// The plugin's `Aseman.env()`: the theme, the display and the space it
-  /// is drawn in; sent to the running program when it changes.
-  void _pluginEnvFor(BuildContext context, BoxConstraints box, String display) {
-    final size = Size(
-        box.maxWidth.isFinite ? box.maxWidth : MediaQuery.sizeOf(context).width,
-        box.maxHeight.isFinite
-            ? box.maxHeight
-            : MediaQuery.sizeOf(context).height);
-    _pluginEnv = {
-      ...PluginRuntime.env(context, viewport: size, display: display),
-      'user': {'id': widget.userId},
-      'space': widget.spaceId,
-      'room': widget.roomId,
-      'title': _payload?.title ?? '',
-    };
-    final encoded = jsonEncode(_pluginEnv);
-    if (encoded == _pluginEnvSent) return;
-    final first = _pluginEnvSent.isEmpty;
-    _pluginEnvSent = encoded;
-    // The program read the first env itself; later ones are news to it.
-    if (!first) {
-      WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _vm.callFunction('__asemanEnv', input: encoded));
     }
   }
 
@@ -282,53 +221,6 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
             onExpand: FrontendPresentation.maybeOf(context)?.onExpand);
         final machineId = 'tool-${widget.botId}-${identityHashCode(this)}';
         final stylesheet = AppFrontendTheme.stylesheet(Theme.of(context));
-        // A plugin's screen reaches its backend and the platform through the
-        // plugin gate, wherever it is opened (a gadget, a page, a desk window).
-        final pluginJson = payload.plugin;
-        if (pluginJson != null) {
-          final gate = _pluginHost ??= PluginHost(PluginsApi(widget.api.call),
-              plugin: PluginInfo.fromJson(pluginJson),
-              spaceId: widget.spaceId,
-              roomId: widget.roomId,
-              userId: widget.userId,
-              display: display.name,
-              settle: (result) =>
-                  _vm.callFunction('__asemanSettle', input: jsonEncode(result)),
-              env: () => _pluginEnv);
-          if (payload.runtime == ToolRuntime.web) {
-            return PluginWebFrame(
-                key: ValueKey('plugin-web-${widget.botId}'),
-                html: payload.source,
-                host: gate,
-                display: display.name);
-          }
-          final program = _pluginProgram;
-          if (program != null) {
-            final Widget screen = LayoutBuilder(builder: (context, box) {
-              _pluginEnvFor(context, box, display.name);
-              return ElpianVmScope(
-                controller: _vm,
-                machineId: machineId,
-                code: program,
-                runtime: ElpianRuntime.quickJs,
-                engine: _engine,
-                stylesheet: stylesheet,
-                hostHandlers: {
-                  ...host.handlers(),
-                  ...gate.handlers(),
-                  ...widget.extraHandlers,
-                },
-              );
-            });
-            if (!compact) return screen;
-            return _StaticCompact(summary: _summary, program: screen);
-          }
-        }
-        // A plugin compiled to Elpian bytecode keeps its gate too.
-        final bytecodeGate = _pluginHost;
-        final extra = bytecodeGate != null
-            ? {...bytecodeGate.handlers(), ...widget.extraHandlers}
-            : widget.extraHandlers;
         final Widget program =
             payload.runtime == ToolRuntime.elpian && payload.bytecode != null
                 ? ElpianVmWidget.fromBytecode(
@@ -336,7 +228,10 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
                     bytecode: payload.bytecode!,
                     engine: _engine,
                     stylesheet: stylesheet,
-                    hostHandlers: {...host.handlers(), ...extra},
+                    hostHandlers: {
+                      ...host.handlers(),
+                      ...widget.extraHandlers,
+                    },
                   )
                 : ElpianVmWidget.fromCode(
                     machineId: machineId,
@@ -344,7 +239,10 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
                     runtime: ElpianRuntime.quickJs,
                     engine: _engine,
                     stylesheet: stylesheet,
-                    hostHandlers: {...host.handlers(), ...extra},
+                    hostHandlers: {
+                      ...host.handlers(),
+                      ...widget.extraHandlers,
+                    },
                   );
         if (!compact) return program;
         return _StaticCompact(summary: _summary, program: program);

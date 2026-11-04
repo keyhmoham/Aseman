@@ -22,7 +22,7 @@ The system is built with **hexagonal architecture** and is fully **plugin-driven
 ├──────────────────────────────────────────────────────────────────┤
 │ ADAPTERS     postgres/mysql/mongo/memory · local/redis ·         │
 │              local/s3 · http/tcp/ws · nomad/docker/wasm/modal/   │
-│              deepagents                                           │
+│              harness                                              │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -182,17 +182,18 @@ through `internal/plugins/host`; see [runtime plugin architecture](plugins/READM
 | cache | local-cache, redis | local-cache |
 | filesystem | local, s3 | local (s3 when `ASEMAN_S3_BUCKET` is set: Cloudflare R2, AWS S3, MinIO) |
 | network | http, tcp (JSON frames), websocket | http |
-| vmm | nomad (docker, plus elpian/quickjs tool backends), docker, wasm (wazero), modal, deepagents, mcp (external and installed tools) | nomad |
+| vmm | nomad (docker, plus elpian/quickjs tool backends), docker, wasm (wazero), modal, harness, mcp (external and installed tools) | nomad |
 
 VMM providers implement a common interface (images, create/start/stop/pause/
 resume/resize/delete, live `Usage` metering). `ResizeVM` applies new resource
 limits to a running VM (bots.bot_resize). Nomad is the default and is used to
 run docker/wasm drivers; the wasm provider runs modules in-process via
 **wazero**; docker talks directly to the engine API; modal wraps remote
-sandboxes; and the **deepagents** provider treats each agent as a VM — an
+sandboxes; and the **harness** provider treats each agent as a VM — an
 agent's definition (instructions, skills, model) is its image, its turns run on
-the deep agents runtime, and token consumption is metered as execution cost
-(see [Agents](#agents-the-deep-agents-runtime) and `configs/vmm/vm.example.yml`).
+the DeepSeek Harness runtime, and token consumption is metered as execution
+cost (see [Agents](#agents-the-deepseek-harness-runtime) and
+`configs/vmm/vm.example.yml`).
 
 ## Pricing
 
@@ -265,77 +266,25 @@ done is never refused, so a run can finish at most one step past the cap.
   `post_user_posts`, `post_like`, `post_unlike`, `post_comment`,
   `post_comments`; admins review reports with `admin_post_reports` and
   `admin_post_report_resolve`.
-- **timeline** — each space's dated timeline, kept in the node's Utopia
-  server (a bitemporal knowledge graph on the node's Postgres). Its worker
-  reads the other namespaces' records in time order (requests, tool runs,
-  messages and work logs, usage, files, members, rooms, routines and their
-  runs), turns each into dated statements and pushes them to the space's
-  knowledge base, one per space, created on first use. Its service serves the
-  agents' reads (`MCP`, through the deepagents gateway's `/timeline/mcp`) and
-  `timeline.status` shows the admin each feed's cursor. Configured by
-  `ASEMAN_TIMELINE_URL` / `_EMAIL` / `_PASSWORD`; off without the URL.
-- **Code Mode** — Cloudflare's search-and-execute pattern as the agent's
-  capability-calling system. The tools namespace builds one OpenAPI document of
+- **timeline** — each space's dated timeline, kept in the node's own
+  database (`timeline_entries`). Its worker reads the other namespaces'
+  records in time order (requests, tool runs, messages and work logs, usage,
+  files, members, rooms, routines and their runs) and writes each as a dated
+  entry. Its service serves the agents' searches (through the harness
+  gateway's `/timeline/search` and `/timeline/entry`, for the turn's own space)
+  and `timeline.status` shows the admin each feed's cursor.
+  `ASEMAN_TIMELINE=off` turns it off.
+- **Code Mode** — Cloudflare's search-and-execute pattern for external MCP
+  clients: the tools namespace builds one OpenAPI document of
   `POST /apps/{slug}/{function}` (and `/ask`), `POST /platform/{tool}` (files,
-  proxies, routines, desk, UI, database, …) and `POST /timeline/{tool}`, serves
-  `search` + `execute` as a built-in MCP at `/deepagents/v1/codemode/mcp`, and
-  runs model-written JavaScript in an isolated sandbox (`codemode.spec` /
-  `codemode.request`). Agents get `codemode_search` / `codemode_execute` instead
-  of one tool per capability, so composition stays out of the model context.
-  The surface also carries the shared computer (`POST /sandbox/{exec,
-  write_files, read_files, edit_file, list, delete}` over `spaces.ask` and
-  `spaces.sandbox_files`) and the space's agents as subagents (`POST
-  /agents/{name}` {task} → {agent, answer}, a `spaces.message_send` hand-off
-  with `wait`, visible in the room); `codemode.batch` runs independent calls
-  concurrently. Agents are told to prefer one shot: a straightforward job —
-  with OpenCode off, a whole app build (every file, tests, `aseman-elpian`
-  checks, READY.json, `appui_publish`) — is one `codemode_execute` that
-  returns a short report, not a step per file or command. Messaging, HITL,
-  the native sandbox FS/shell, planning and swarm stay native harness tools. HTTP for external hosts (including `deploy/codemode` Cloudflare
-  Workers): `/tools/v1/codemode/{openapi,request,mcp}`. The catalog sample
-  "Cloudflare API (Code Mode)" points at `https://mcp.cloudflare.com/mcp`.
-- **developer** — the developer API: organizations (a person's own, or teams with
-  their own wallet, members and roles), API keys (`dk_live_…`, hashed; permissions,
-  per-key spend cap, rate limit, model and provider allow-lists, expiry), a unified
-  model catalog built from the LLM providers (one entry per model, priced), and
-  the HTTP door on the developer host (`ASEMAN_DEVELOPER_HOST`): `GET /v1/models`,
-  `POST /v1/chat/completions` (streaming), `/v1/embeddings`, `/v1/decisions`,
-  `/v1/images/generations`, `/v1/audio/speech` (answers with the audio),
-  `/v1/audio/transcriptions` (multipart or base64 JSON), `/v1/rerank`, video as a
-  job (`POST /v1/videos/generations`, `GET /v1/videos/{id}`; charged at the start,
-  refunded if the provider fails it), `/v1/balance`, `/v1/usage`, plus computers
-  and storage. Image, speech, transcription and video models are reached through
-  Vercel AI Gateway's own protocol (`/v4/ai/{kind}-model`), reranking through its
-  Cohere-compatible `/v2/rerank`. Fallback `models` are tried in order (a
-  `provider` object still routes between the node's providers, undocumented while
-  there is one). The model that answers is billed to the organization's wallet,
-  paid to the provider key's owner, and logged. Replies, headers and the
-  console never name the provider; the node admin sees it (with every
-  organization's usage, keys and requests) through `developer.admin_orgs`,
-  `admin_org` and `admin_logs`. Admin → Models → Import → Vercel
-  (`llm.llm_import_vercel`) brings Vercel's catalog in at its price plus a markup,
-  updating models in place; a model with no price the node can meter is imported
-  as unpriced and not served until the admin prices it.
-- **talent** — funded offers to hire people into a project (`create`, `respond`,
-  `list_mine`, `list_project`), and **requests for talent**: a person posts a job
-  (title, category, description of 50–5,000 characters, budget as fixed / hourly /
-  monthly in US dollars, company or project, optional timeline and skills) with
-  `request_create` (ten open at a time; a `request_id` makes a retry post once),
-  and lists, closes, reopens and deletes their own (`request_list`,
-  `request_status`, `request_delete`). The node's admin sees all of them and can take
-  one down (`admin_requests`, `admin_request_status`) and manages **partner keys**
-  (`partner_keys`, `partner_key_create` shows the secret once, `partner_key_revoke`).
-  A partner reads the open requests with a key (`Authorization: Bearer pk_live_…`)
-  on the developer host: `GET /v1/partner/talent-requests` (newest first;
-  `limit`, `category`, `cursor` → `next_cursor`), or `?updated_since=<RFC 3339>` for
-  what changed (new and edited requests in full; closed, deleted or taken-down ones
-  as `{id, status: "closed"}`; `next_updated_since` to continue), and
-  `GET /v1/partner/talent-requests/{id}`. Each request carries `poster: {name, email}` so
-  the partner can get in touch (the post form tells the poster so); which project it
-  came from is never in the partner API. 120 calls a minute per key.
+  proxies, routines, desk, UI, database, …), the shared computer and the
+  space's agents, and runs model-written JavaScript in an isolated sandbox.
+  HTTP for external hosts (including `deploy/codemode` Cloudflare Workers):
+  `/tools/v1/codemode/{openapi,request,mcp}`. (Agents on the runtime call the
+  same capabilities as native tools.)
 - **market** — publish, discover and install agents and apps:
   `publish`, `unpublish`, `list`, `get`, `install`, `my_listings`.
-- **governance** — every agent action passes one gate: the deep agents
+- **governance** — every agent action passes one gate: the harness
   gateway, Code Mode, platform tools, app calls and sandbox commands are
   normalized to a request (tool, kind, effect, target, initiator) and decided
   by CEL rules, deny then ask then allow, failing closed (`policy_get`,
@@ -408,7 +357,7 @@ done is never refused, so a run can finish at most one step past the cap.
 ### Agents & apps
 
 Every agent is a **bot** managed through the VMM layer; agents run on the
-deepagents VM (skills/instructions YAML as the image, token usage metered as
+harness VM (skills/instructions YAML as the image, token usage metered as
 cost). Every app is a bot too, of kind `tool` (see below). There is one kind
 of app: the retired `miniapp` kind (a wasm backend with an elpian frontend)
 is migrated to `tool` when the node starts, bots and market listings alike.
@@ -477,8 +426,8 @@ the same UI in chat and on the desk.
   large or multi-panel **non-interactive** visualizations using the same AG-UI
   components on the room desk.
 - **DeskWeb App UI** (`appui_create`, then `appui_publish` when the agents
-  build): interactive + complex + live APIs / lasting apps. The node's builder
-  (the agents, or OpenCode when the admin turned it on) builds fullstack
+  build): interactive + complex + live APIs / lasting apps. The space's agents
+  build fullstack
   software (an Elpian frontend by default; optional OpenUI agent islands via
   `_aseman/kit/openui`).
 - **`proxy_create`**: only to expose an already-running sandbox HTTP service.
@@ -519,105 +468,31 @@ Configuration: `ASEMAN_TOOL_RUNTIME_IMAGE`, `ASEMAN_TOOL_RUNTIME_NETWORK`,
 `ASEMAN_TOOL_NODE_URL` (the node as backends reach it) and
 `ASEMAN_TOOL_COMPILER_URL` (compose sets them all).
 
-## Agents: the deep agents runtime
+## Agents: the DeepSeek Harness runtime
 
 Every agent — the built-in **aseman** lead of each space and every
-specialist — runs on [LangChain Deep Agents](https://github.com/langchain-ai/deepagents)
-(on LangGraph), unless an admin sets the agentic engine to OpenCode or
-DeepSeek Harness (below). The engine is a modular VMM adapter,
-`plugins/adapters/vmm/deepagents`:
+specialist — and every person's own Aseman runs on
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`).
+The engine is a modular VMM adapter, `plugins/adapters/vmm/harness`:
 
-- the **Go adapter** registers agents as VMs (`vm_type: deepagents`), runs the
-  **Python runtime** (`deepagents/runtime`, image `aseman/deepagents:v2`) as
-  a Nomad service on the stack's network, and hands it one turn at a time;
-- each turn carries a **turn token**. The runtime reaches the platform only
-  through the adapter's gateway (`/deepagents/v1/call`), which dispatches real
-  actions *as the agent's account* inside the turn's execution scope (who
-  started it and pays, the space, room and run), and through the metered
-  OpenAI-compatible LLM proxy (`/deepagents/v1/llm`), so provider keys never
-  leave the node and every token is billed to the turn.
+- the **Go adapter** registers agents as VMs (`vm_type: harness`; records of
+  older engines are read as it), runs the runtime as a Nomad service, mints a
+  token for every turn and serves the turn's **gateway** (`/harness/v1`):
+  platform actions under one policy (`/call`, `/catalog`, `policy.go`), the
+  metered model (`/llm`), the agents' memory (`/memory/*`, `memory.go`) and
+  the project timeline (`/timeline/*`);
+- the **runtime** (`plugins/adapters/vmm/harness/runtime`, Node) is one
+  long-lived dsh host running the `aseman` profile with Aseman's own Cordis
+  plugins: the node-facing API and turn driver, the LLM route's per-turn
+  token, and agent-scoped tools (the space's computer, messaging and
+  `ask_user`, the space's apps and platform builtins, the whole Aseman API,
+  team hand-offs, memory, timeline). See its
+  [README](plugins/adapters/vmm/harness/runtime/README.md).
 
-The platform's own APIs are the agents' transport:
-
-| what | transport |
-|---|---|
-| people ↔ agents | room messages (`spaces.message_send` / `message_list`) and direct chats: a one-room space per pair (`spaces.direct_open`, listed with project rooms by `spaces.chat_list`, pinned chats first); `users.dm_send` / `dm_list` still work and mirror into that room. A direct chat with oneself is the personal Aseman chat (formerly Saved Messages); opening a Direct with the built-in assistant or lead redirects there. Any room: `message_edit` and `message_delete` by the sender (in a project a manager can delete any message), `typing_set`, `chat_pin`, `message_report` (a copy of the last messages goes to the admins: `admin_chat_reports`, `admin_chat_report_resolve`); a direct chat only: `chat_clear` (deleted for the caller until a newer message) and `direct_block` (neither side can write). `message_list` carries `typing` and, for a direct chat, `peer_seen_at`, `blocked` and `can_send` |
-| lead ↔ subagents (and any agent ↔ agent) | room messages: the delegating agent mentions the agent it hands work to; the agent's answer is a message whose `reply_to` is the hand-off |
-| agents → tools | `spaces.ask`: the shared sandbox (`raw` shell commands), apps, and platform tools (`tool` + `args`: files, images, previews, routines) |
-| work logs and live status | `spaces.agent_log` (log messages in the room + the room's live activity) |
-| questions to people | `spaces.agent_questions` / `spaces.agent_answer`, or a plain reply in the room |
-| the team | `market.catalog` (published agents), `spaces.agent_hire` (a marketplace agent joins the space, installed by whoever runs the work), `spaces.agent_recruit` (a new specialist) |
-| learning | `/deepagents/v1/learn/chat/completions` and `/deepagents/v1/learn/decision/evaluate` (the runtime's secret; the agent's own model and the decision model, billed to its project) |
-
-Every deep agents feature is on, mapped onto the platform:
-
-- **planning** — `write_todos`; the plan is written to the work log;
-- **filesystem and shell** — `ls`, `read_file`, `write_file`, `edit_file`,
-  `glob`, `grep` and `execute` run on the space's shared sandbox, so the lead
-  and every specialist work on the same machine and files (`/workspace`);
-- **subagents** — the `task` tool hands a task to an agent of the space and
-  returns its answer: the task is a room message mentioning the agent
-  (`spaces.message_send` with `wait`), and the node runs the agent's turn on
-  it before the call returns, so the answer is in the room as the reply and
-  comes back with no polling. Several `task` calls in one step run at the same
-  time; `general-purpose` is the space's generalist, recruited on first use;
-- **the swarm** — the lead's `assemble_team` staffs every role a goal needs
-  with the best fit: an agent already in the space, else one **published in the
-  marketplace** (hired into the space), else a **new specialist written for the
-  role** — reuse first, generation only for what is missing. The language
-  model breaks the goal into roles and writes missing specialists; the
-  decision model scores every (role, candidate) pair in one fast request and
-  checks each written specialist fits its role; the language model settles
-  only the close calls (one request for all of them). `run_swarm` runs a plan
-  as a LangGraph flow (plan → prune → run → report): the language model writes
-  the plan when the lead gives none, the decision model drops dependencies a
-  task does not really need, and every task starts the moment what it waits
-  for is done, many at once (`ASEMAN_SWARM_PARALLEL`, default 8), each with
-  the results it builds on. Several tasks for the same agent run as **parallel
-  instances** of it: a tagged task (`[task …]`) that reaches an agent already
-  working in the room runs on a thread of its own instead of waiting;
-- **skills** — each agent's skills (and the space's shared ones) are `SKILL.md`
-  files in the sandbox (`/workspace/.aseman/...`), loaded progressively;
-- **memory** — OpenViking (see the root README): notes in the system prompt,
-  recall with every message, memory tools, every turn learned from;
-- **human in the loop** — `ask_user`, and any tool listed in an agent's
-  `interrupt_on`, pause the agent's thread on a question people answer;
-- **summarization, prompt caching and tool-call repair** — the harness defaults;
-- **durable threads** — one LangGraph thread per agent per room, checkpointed
-  on the runtime's volume, so conversations and pending questions survive
-  restarts;
-- **self-improvement** (**[GEPA](https://github.com/gepa-ai/gepa)**) — each
-  agent has a playbook per space, lessons from its own work there at the end of
-  its system prompt. After every turn the runtime keeps the turn's decision
-  points: calls that failed or were repeated unchanged, an answer the decision
-  model found short of the request, steps that worked. After a turn that went
-  poorly, or every few turns, a background cycle runs GEPA over them: each
-  moment is **replayed** — the agent's own model, with a candidate playbook, is
-  shown the conversation up to that moment with the same tools and takes its
-  next step, which is only judged, never run (a request's effects are never
-  repeated) — the step is scored against what is known of that moment (the
-  decision model judges, else the agent's model), and GEPA's reflection reads
-  the feedback and writes a better playbook. A playbook is adopted only when it
-  scores better than the current one on the same moments; every version stays
-  in its history. It runs through the learn endpoints, billed to the project
-  like its memory. Requests made without memory never use or feed it.
-
-Configuration of the runtime (all optional, passed on by the node):
-`ASEMAN_SWARM_PARALLEL`; `ASEMAN_IMPROVE=0` turns self-improvement off,
-`ASEMAN_IMPROVE_EVERY` (turns between cycles, 10), `ASEMAN_IMPROVE_COOLDOWN`
-(seconds between cycles of one agent in one space, 3 h),
-`ASEMAN_IMPROVE_LOOP_COOLDOWN` (the same after a turn where the agent looped:
-repeated calls or read instructions it already had, 15 min),
-`ASEMAN_IMPROVE_BUDGET` (steps a cycle replays, 60) and
-`ASEMAN_IMPROVE_MAX_AGE_DAYS` (how long an adopted playbook is used, 30; 0
-for always). Playbooks and turns learned before 2026-10-21, while the runtime
-refused calls and hid tools, are not used, and `POST /v1/playbooks/reset`
-(`{"space", "agent"}`, either empty for all; the runtime secret) forgets what
-agents learned. A turn's history is
-summarized at 60% of the model's window and old tool output trimmed at half
-that; `ASEMAN_SUMMARIZE_MAX_TOKENS` caps the summarization size to bound what
-a call costs. Instructions an agent read (an app's instructions or help, a
-skill) are never trimmed.
+Each agent keeps one dsh Session per room thread (the person's Aseman one per
+personal chat), resumed from disk after a restart; a deleted thread's
+Sessions are deleted. A question (`ask_user`) ends the turn and waits in the
+runtime's store; the person's answer resumes the same Session.
 
 ### Image model
 
@@ -637,31 +512,10 @@ for an image (the request's intent, set when a turn starts).
 ### Decision model
 
 The node admin can turn on a **decision model** (Admin → AI → Decision model):
-one model of an enabled provider marked as a decision model — e.g. TypeSafe
-AI's **Jev** (`typesafe-ai/jev`) on Vercel AI Gateway, which answers typed
-questions (yes/no, choice, score) with probabilities instead of text. On, the
-runtime's `decision` module (`deepagents/runtime/aseman_agents/decision`)
-uses it together with each agent's own model:
-
-- **routing** — the agent that fits a task best (a lead's hint; a swarm
-  task addressed by role);
-- **completion** — after a turn, how well its answer delivered the request,
-  for the agent's learning (never during the turn);
-- **approvals** (opt-in: *auto-approve*) — low-risk calls of `interrupt_on`
-  tools run without waiting on a person; each is written to the work log.
-
-It never changes which tools an agent sees and never sends an agent back to
-work: the agent's own model chooses its tools and decides when it is done.
-Off — or whenever the decision model is unusable or a decision fails — the
-agent's own model decides everything, as before.
-
-An agent with more than 24 connected-app functions gets them on demand, as
-Claude Code defers MCP tools: `load_app_tools` lists every app with its
-functions, and an app the agent loads (or any function it calls) is offered
-whole from its next step (`deepagents/runtime/aseman_agents/apps.py`). Decisions go through the
-gateway (`/deepagents/v1/decision/evaluate`, the provider's `/evaluate`
-endpoint, key kept on the node) and are billed to the turn at the decision
-model's own token prices. Models carry `capabilities` (`chat`, `decision`):
+one model of an enabled provider marked as a decision model, answering typed
+questions (yes/no, choice, score) with probabilities instead of text. A
+person's own Aseman uses it to decide, before anything else, whether a note
+is kept or answered. Models carry `capabilities` (`chat`, `decision`):
 decision models are never offered as an agent's backbone (`llm.llm_models`).
 Admin actions: `llm.llm_decision_get` / `llm.llm_decision_set`.
 
@@ -685,10 +539,10 @@ runtime yourself. Provider calls default to a five-minute total limit, two
 minutes to the first streamed event and 45 seconds between events; tune them
 with `ASEMAN_LLM_CALL_TIMEOUT`, `ASEMAN_LLM_FIRST_EVENT_TIMEOUT` and
 `ASEMAN_LLM_STREAM_IDLE_TIMEOUT` (Go duration strings). The runtime's own
-tests:
+tests (unit, and the real launcher and dsh against a fake node gateway):
 
 ```bash
-cd plugins/adapters/vmm/deepagents/runtime && pip install -r requirements-dev.txt && pytest
+cd plugins/adapters/vmm/harness/runtime && npm ci && npm test
 ```
 
 ### Shared space sandbox
@@ -707,99 +561,24 @@ upgrades reach existing projects; `ASEMAN_DOCKER_REFRESH_IMAGES=0` turns this
 off. An app tool that finds an awake sandbox still on an older image restarts
 it once.
 
-The default image (`deploy/sandbox-computer`) includes `aseman-appui`, the
-Elpian toolchain (`aseman-elpian`) and **OpenCode**, so every new space can
-generate on-demand fullstack App UIs. Who builds them is the node's **OpenCode
-switch** (`spaces.opencode_get` / `spaces.opencode_set`, Admin → AI →
-OpenCode, stored in `spaces_opencode`, **off by default**; each turn reads it,
-and the runtime gets it as `opencode` in the turn request):
-
-- **Off:** the agents build. `appui_create` runs `aseman-appui prepare` and
-  answers with the build task; the agent builds, tests and drives the app
-  (`aseman-elpian`), then `appui_publish` runs `aseman-appui verify` (READY.json,
-  start, Elpian bundle, QuickJS check, end-to-end scenarios) and opens it, or
-  answers with the problem (`REPAIR.md`). The `opencode_*` tools and the
-  OpenCode builtin app are not listed, calling them fails, OpenCode is never
-  configured, and the prompts and team staffing let agents write code.
-- **On:** agents brief OpenCode with `appui_create` / `opencode_run` on the
-  metered Aseman LLM gateway; `aseman-appui build` runs it with repair rounds
-  and the same checks. OpenCode is also listed in `spaces.tools_list` as a
-  builtin app with microtools `run`, `status`, `models`, `build`.
-
-`appui_status` (and `appui_publish`, to re-verify and reopen) work in both.
-
-That switch is the programmer only. **Who runs agent turns** is
-`spaces.agent_engine_get` / `spaces.agent_engine_set` (Admin → AI → Agentic
-engine, table `spaces_agent_engine`, default `deepagents`). Each turn reads
-it, so a change applies to the next step without a restart, and it does not
-change the programmer switch:
-
-- **deepagents** — the LangGraph runtime above. Models come from the
-  platform LLM gateway.
-- **opencode** — the runtime drives the OpenCode CLI (`opencode run --format
-  json --auto`), one session per agent per room, on a free `opencode/…`
-  model from OpenCode's own gateway (`opencode models`). The platform LLM
-  proxy is not used. A swarm is parallel `opencode run` processes, the team
-  is OpenCode agents (primary plus subagents), a handoff is the task tool,
-  and app generation is the `aseman-app-builder` subagent (sandbox files,
-  then `appui_publish`). It does not call `opencode_run`, `appui_create`, or
-  `aseman-appui`, and it does not load `/etc/opencode`.
-- **deepseek** — the runtime drives [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
-  (`dsh`, an all-plugin Cordis harness), headless: `dsh --profile headless
-  --patch <overlay> --json`, one dsh Session per agent per thread
-  (`--session-id`). The package is `runtime/aseman_agents/deepseek_engine`.
-  The harness brings **its own agentic modules** and the overlay wires them
-  to the platform:
-  - **loop, planning, goals, workflows** — dsh's own (`todo_write`, plan
-    mode, `create_goal`, `workflow`); todos and swarms show in the agent's
-    work log.
-  - **memory** — dsh's own, not OpenViking: the `aseman-memory` dsh plugin
-    (`deepseek_engine/plugins/aseman-memory.mjs`) keeps a store per space
-    (shared `AGENTS.md`) and per agent (its `AGENTS.md` and a journal of every
-    turn, written from the Session's own events), with `memory_remember` /
-    `memory_rewrite` / `memory_search` / `memory_read`; each run works in the
-    agent's directory, so dsh's own `agent-instructions` loader puts both
-    notes in every turn. The project's Memory screen (`sandbox_files` on
-    `AGENTS.md`, `.aseman/agents/<agent>/AGENTS.md`, read-only
-    `.aseman/agents/<agent>/JOURNAL.md`) reads and corrects it through
-    `vmm.EngineMemory` (runtime `GET/POST /v1/engines/deepseek/memory`).
-  - **swarm and team** — dsh's own: parallel subagents (`subagent` returns
-    at once; `wait_agent`, `send_message`, `list_agents`) and, for leads with
-    teammates, dsh's Agent Teams (`spawn_teammate`, the `team_task_*` board;
-    on 0.2.2-alpha the overlay mounts its experimental packages). Other Aseman
-    agents are teammates through `delegate_task` (a room task their own turn
-    answers), `recruit_agent` and `hire_agent`.
-  - **models** — the agent's own provider and model through the turn
-    gateway's metered `/llm` (a `llm-pi-ai` route with the turn token), so
-    every token is billed to the turn; or the engine's own DeepSeek key
-    (`ASEMAN_DSH_ENGINE_LLM=deepseek`, `ASEMAN_DSH_ENGINE_API_KEY`).
-  - **the space** — the `aseman` MCP server (`deepseek_engine/mcp_server.py`)
-    mounted into dsh: the same space, messaging, recruit/hire and personal
-    tools as the OpenCode bridge, `ask_user` (the run ends, the question waits
-    in Aseman, the Session resumes with the answer), the timeline and Code
-    Mode forwarded from the gateway, and **creator mode**: `create_app` /
-    `create_plugin` / `app_status` / `publish_app` are Aseman's on-demand app
-    generation (`appui_*`). dsh's `plugin_manager`, shell, files and web tools
-    are off: the runtime container is shared, plugins are Aseman apps.
-  - **personal Aseman** (notes / Talk) runs on dsh too, on the assistant's
-    model through a person-scoped gateway session (its tokens billed to the
-    person), with a memory per person.
-  Rows the installed dsh lacks (they differ between releases) are left out
-  of the overlay: the engine reads the profile's rows and headless flags once
-  per dsh version. The image pins `DSH_VERSION` to `0.2.2-alpha.3` (Agent
-  Teams, `--approval-policy never`); an older build such as `0.2.1-rc.5`
-  still runs, without Agent Teams.
+The default image (`deploy/sandbox-computer`) includes `aseman-appui` and the
+Elpian toolchain (`aseman-elpian`), so every new space can generate on-demand
+fullstack App UIs, built by the space's agents: `appui_create` runs
+`aseman-appui prepare` and answers with the build task (`TASK.md`); the agent
+builds, tests and drives the app end to end, then `appui_publish` runs
+`aseman-appui verify` and opens it, or answers with the problem
+(`REPAIR.md`). `appui_status` reads a project's state.
 
 When an agent takes a turn in a space, the runtime reads the space's tools
 (`spaces.tools_list`) — every app installed in the space **plus the
-sandbox (and OpenCode while it is on)** — and exposes them to the model. Calling any of them
+sandbox** — and exposes them to the model. Calling any of them
 routes back through `spaces.ask`:
 
 | tool | backend | routing |
 |---|---|---|
 | `execute` and the file tools | shared docker/container or modal sandbox VM | `spaces.ask` (`raw`) → docker/modal exec (`Send`) |
 | `ask_<app>` | wasm app VM | `spaces.ask` → wasm `ask` host fn |
-| platform tools (`file_send`, `image_generate`, `proxy_*`, `appui_*`, `opencode_*` while OpenCode is on, `routine_*`) | the spaces namespace | `spaces.ask` (`tool` + `args`) |
+| platform tools (`file_send`, `image_generate`, `proxy_*`, `appui_*`, `routine_*`) | the spaces namespace | `spaces.ask` (`tool` + `args`) |
 
 ```bash
 # list the tools an agent sees in a space

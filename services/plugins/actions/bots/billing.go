@@ -233,10 +233,10 @@ func (s *Service) BillUsage(ctx context.Context, customer, botID identity.ID, se
 	if rec.VMType == bot.VMTypeInstalled {
 		seconds = 0
 	}
-	// An agent on the deep agents runtime bills each of its turns where the
+	// An agent on the agent runtime bills each of its turns where the
 	// turn runs (with its own duration and tokens); billing it again here
 	// would charge the same work twice.
-	if rec.Kind == bot.KindAgent && bot.AgentVMType(rec.VMType) == bot.VMTypeDeepAgents {
+	if rec.Kind == bot.KindAgent && bot.AgentVMType(rec.VMType) == bot.VMTypeHarness {
 		return nil
 	}
 	cost := s.costFor(ctx, rec)

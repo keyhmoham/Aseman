@@ -32,15 +32,16 @@ jobs:
         run: go run ./cmd/evals triage -rules-only -set ../evals/triage/emails.jsonl -out /tmp/triage.md
 
   runtime:
-    name: Agent runtime (Python)
+    name: Agent runtime (DeepSeek Harness)
     runs-on: ubuntu-latest
-    defaults: { run: { working-directory: services/plugins/adapters/vmm/deepagents/runtime } }
+    defaults: { run: { working-directory: services/plugins/adapters/vmm/harness/runtime } }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12", cache: pip }
-      - run: pip install -r requirements.txt -r requirements-dev.txt -e .
-      - run: python -m pytest -q tests
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: services/plugins/adapters/vmm/harness/runtime/package-lock.json }
+      - run: npm ci --no-audit --no-fund
+      # Unit tests, and the real launcher and dsh against a fake node gateway.
+      - run: npm test
 
   app:
     name: App (Flutter)
@@ -61,7 +62,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: docker compose config
-        env: { ASEMAN_TIMELINE_PASSWORD: x, ASEMAN_OPENVIKING_ROOT_KEY: x }
         run: docker compose config -q && docker compose --profile spire config -q
       - uses: azure/setup-helm@v4
         with: { version: v3.16.4 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The Elpian UI DSL validator as an MCP server (stdio, newline-delimited
-// JSON-RPC 2.0; no dependencies), so coding agents (OpenCode) can call it as
+// JSON-RPC 2.0; no dependencies), so coding agents can call it as
 // tools:
 //
 //   elpian_validate          validate a view tree (JSON, a file, or an OpenUI tree)
@@ -8,7 +8,7 @@
 //   elpian_describe          the schema of node types (props, events, children, parents, layout)
 //   elpian_icons             search the Material icon names the client draws
 //
-// Register it in opencode.json: "mcp": {"elpian": {"type": "local",
+// Register it with an MCP client, e.g. "mcp": {"elpian": {"type": "local",
 // "command": ["node", "/opt/aseman-appui/elpian/validate-mcp.mjs"]}}.
 
 import fs from "node:fs";

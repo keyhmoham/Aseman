@@ -40,7 +40,7 @@ function cli(dir, ...args) {
   });
 }
 
-test("aseman-elpian lists the same tools OpenCode gets over MCP", async () => {
+test("aseman-elpian lists the same tools its MCP servers serve", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "elpian-cli-"));
   try {
     const r = await cli(dir, "tools");

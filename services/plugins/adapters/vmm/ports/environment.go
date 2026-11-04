@@ -17,7 +17,7 @@ type Tool struct {
 	Commands []ToolCommand `json:"commands,omitempty"`
 	// Frontend is the mode of a tool's frontend (static or empty).
 	// Non-static interactive UIs are not 1:1 with tools: agents build them
-	// with appui_create (themselves, or by briefing OpenCode when it is on) so
+	// with appui_create (themselves, or a developer agent of the space) so
 	// generated fullstack software can call any space apps.
 	Frontend string `json:"frontend,omitempty"`
 }
@@ -68,7 +68,7 @@ func Builtins() []Tool {
 		tool("proxy_list", "List gateway proxies in this workspace.", "Inspect existing previews before creating duplicates or deleting a proxy.", `{}`, map[string]any{}),
 		tool("proxy_get", "Inspect or HTTP-probe one workspace gateway proxy.", "Use a proxy ID returned by proxy_list or creation. With probe:true, the host checks its persisted upstream tunnel and returns actual HTTP status, byte count and complete-body SHA256. Compare that hash to the served source. Credentials stay private. This does not test node gateway authentication or browser behavior; do not search sandbox environment variables for gateway credentials.", `{"id":"<proxy-id>","probe":true}`, map[string]any{"id": str("Proxy ID."), "probe": map[string]any{"type": "boolean", "description": "Perform a bounded HTTP GET of the persisted upstream tunnel without returning credentials or body."}}, "id"),
 		tool("proxy_delete", "Remove a workspace gateway proxy.", "Delete only a proxy belonging to this workspace when the assigned task requires removal; this does not stop the underlying service.", `{"id":"<proxy-id>"}`, map[string]any{"id": str("Proxy ID.")}, "id"),
-		tool("appui_create", "Build an on-demand fullstack app with OpenCode in the sandbox and open it on the desk.", "Use when the person wants a lasting app/dashboard/tool/multi-step workspace — not for a quick chart, table, or question (those are ui_present / ask_user in chat). Write a complete brief and call this tool. The frontend is an Elpian app by default (ui=elpian): a native app the Aseman client runs on its Elpian/QuickJS runtime, drawn with Aseman's own widgets, UI kit (charts, tables, stats…) and theme, on desktop and phones alike, with OpenUI agent-backed islands where judgment helps. Set ui=web only when the person explicitly asked for web technology (a website, HTML/CSS, React, a browser page); then OpenCode builds a web frontend (Material 3 Expressive by default). Every app also gets a native Elpian phone widget showing the live facts that matter for its use case (people's phone boards show it; a tap opens the app) — say in the brief what someone would want to see at a glance. Either way OpenCode (the same metered Aseman LLM gateway as agents, billed on the turn) builds the backend too, plans, writes and runs tests; the platform then starts the app, checks it (an Elpian frontend is run on QuickJS against the live server) and sends failures back to OpenCode to fix before it opens. The software calls space apps and agents from its frontend and its server (as the person using the app, or with the app's key for background work, billed to the person who asked for it). Pass `apps` / `agents` it should wire to, and `tool` for dock association. Pass an existing app's `dir` to change it. Use opencode_run for coding tasks that are not an app people use. Use proxy_create only when a sandbox HTTP service already exists.", `{"brief":"Weather dashboard for the weather app: city search, current conditions, 5-day forecast.","title":"Weather","tool":"<tool-bot-id>","apps":["weather"]}`, map[string]any{
+		tool("appui_create", appuiAgentsDescription, appuiAgentsUsage, `{"brief":"Weather dashboard for the weather app: city search, current conditions, 5-day forecast.","title":"Weather","tool":"<tool-bot-id>","apps":["weather"]}`, map[string]any{
 			"brief":   str("Complete request: what to build, for whom, its features and data, which space apps/agents it uses and for what, and what done means. Name a UI technology or dedicated brand colors only when the person asked."),
 			"ui":      str("Frontend: elpian (default — a native Elpian app on the Aseman client) or web (only when the person explicitly asked for web technology). Omit to keep an existing app's."),
 			"title":   str("Window / app title."),
@@ -98,9 +98,6 @@ func Builtins() []Tool {
 			"h":     integer("Optional height."),
 		}, "dir"),
 		tool("appui_status", "Read an app project's build status in the sandbox.", "Pass the dir from appui_create. Reports STATUS.json (building, completed, needs_repair with the problem) or READY.json.", `{"dir":"/workspace/appui/abc"}`, map[string]any{"dir": str("Project directory under /workspace.")}),
-		tool("opencode_run", "Hand a coding or programming task to OpenCode in the space sandbox.", "Every software development task goes here (writing, fixing, refactoring, testing or reviewing code, scripts, APIs, bots, pipelines, builds): agents never write code themselves or give coding to other agents. Brief it completely in one message: goal, features and data, the space apps/agents involved, constraints, and what done means (tests). OpenCode is built into the default computer sandbox and uses the same metered Aseman LLM gateway as agents (usage billed on the turn). Pass the same dir again for follow-ups on the same project. For interactive App UIs that people use on the desk, prefer appui_create instead (build + test + proxy card). Returns the working directory and status.", `{"message":"Add input validation and unit tests to /workspace/appui/abc/server.js","dir":"/workspace/appui/abc"}`, map[string]any{"message": str("What OpenCode should do."), "dir": str("Optional working directory under /workspace."), "model": str("Optional model id; default aseman/default.")}, "message"),
-		tool("opencode_status", "Read OpenCode / App UI job status in the sandbox.", "Pass the project dir from opencode_run or appui_create. Reports STATUS.json / READY.json.", `{"dir":"/workspace/appui/abc"}`, map[string]any{"dir": str("Project directory under /workspace.")}),
-		tool("opencode_models", "Show the Aseman LLM backbone OpenCode uses in this sandbox.", "OpenCode shares the agent's metered gateway; there is no separate free-model path.", `{}`, map[string]any{}),
 		tool("desk_state", "Read the room's desk: its size, the usable area above the dock, and every open card window with its id, title, result and rectangle.", "Your turn's note already describes the desk as the turn began; read it again after changing it, or before arranging many windows.", `{}`, map[string]any{"room": str("Optional room ID; defaults to the current room.")}),
 		tool("desk_arrange", "Move and resize card windows on the room's desk.", "Give each window's id and its new x, y (top-left) and/or w, h in desk pixels. Arrange related windows side by side inside the usable area, avoid overlaps, keep the most relevant window top-left; the desk scrolls, so windows may also go beyond the visible area.", `{"windows":[{"id":"a1b2c3","x":16,"y":16,"w":460,"h":560},{"id":"d4e5f6","x":492,"y":16}]}`, map[string]any{"windows": map[string]any{"type": "array", "description": "[{id, x?, y?, w?, h?}]", "items": map[string]any{"type": "object"}}, "room": str("Optional room ID; defaults to the current room.")}, "windows"),
 		tool("desk_close", "Close card windows on the room's desk: by id, or every window of a tool at once.", "Close what is no longer useful (stale results, replaced views) so the desk stays clear; people can also close windows themselves.", `{"ids":["a1b2c3"]}`, map[string]any{"ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Window ids."}, "tool": str("Close all windows of this tool (bot ID or name)."), "room": str("Optional room ID; defaults to the current room.")}),
@@ -170,38 +167,11 @@ func governedBuiltins() []Tool {
 	}
 }
 
-// openCodeOnly are the builtins offered only while the node's OpenCode is on.
-var openCodeOnly = map[string]bool{"opencode_run": true, "opencode_status": true, "opencode_models": true}
-
-// OpenCodeOnly reports whether a builtin exists only while OpenCode is on.
-func OpenCodeOnly(name string) bool { return openCodeOnly[name] }
-
-// appui_create while OpenCode is off: the agents build the app themselves.
+// appui_create: the agents build the app themselves (or a developer agent of the space).
 const (
 	appuiAgentsDescription = "Start an on-demand fullstack app in the sandbox for you (or a developer agent of the space) to build, then open it on the desk with appui_publish."
 	appuiAgentsUsage       = "Use when the person wants a lasting app/dashboard/tool/multi-step workspace — not for a quick chart, table, or question (those are ui_present / ask_user in chat). Write a complete brief and call this tool: it lays out the project in the sandbox (dir) — the guides (AGENTS.md, ELPIAN.md), the Aseman SDKs, the Elpian toolchain, APPS.json with the space's apps (microtools and argument schemas) and agents, the app's server API settings and key — and answers with your build task (also in TASK.md). The frontend is an Elpian app by default (ui=elpian): a native app the Aseman client runs on its Elpian/QuickJS runtime, drawn with Aseman's own widgets, UI kit and theme, on desktop and phones alike, with OpenUI agent-backed islands where judgment helps; set ui=web only when the person explicitly asked for web technology. Every app also gets a native Elpian phone widget — say in the brief what someone would want to see at a glance. Then build it yourself with the sandbox shell and files, exactly as the task says: plan (PLAN.md), the frontend and the backend, tests, the Elpian validator and the headless driver (the aseman-elpian command: every screen and control used, each journey saved to elpian/e2e), READY.json. A lead may hand the whole task to a developer specialist instead (the dir and TASK.md are all it needs). Finish with appui_publish {dir}: the platform verifies the app (starts it, runs an Elpian frontend on QuickJS against the live server, replays the end-to-end scenarios) and opens it on the desk, or answers with what to fix. The software calls space apps and agents from its frontend and its server (as the person using the app, or with the app's key for background work, billed to the person who asked for it). Pass `apps` / `agents` it should wire to, and `tool` for dock association. Pass an existing app's `dir` to change it (the brief then describes the change; CHANGES.md keeps the history). Use proxy_create only when a sandbox HTTP service already exists."
 )
-
-// BuiltinsFor returns the platform tools as offered on a node whose OpenCode
-// is on or off: off, the OpenCode tools are gone and appui_create prepares an
-// app for the agents to build (finished with appui_publish).
-func BuiltinsFor(openCode bool) []Tool {
-	all := Builtins()
-	if openCode {
-		return all
-	}
-	out := make([]Tool, 0, len(all))
-	for _, t := range all {
-		if openCodeOnly[t.Name] {
-			continue
-		}
-		if t.Name == "appui_create" {
-			t.Description, t.Usage = appuiAgentsDescription, appuiAgentsUsage
-		}
-		out = append(out, t)
-	}
-	return out
-}
 
 func Names() []string {
 	var names []string

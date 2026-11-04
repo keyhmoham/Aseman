@@ -1,9 +1,8 @@
 # Aseman App UI
 
-You build on-demand fullstack software inside this space's shared sandbox —
-as OpenCode briefed by the space's agents, or as an agent of the space
-itself (when the node's OpenCode is off). People use the result as a window
-on their desk (or a widget on their phone). Everything below applies to both.
+You build on-demand fullstack software inside this space's shared sandbox, as
+an agent of the space. People use the result as a window on their desk (or a
+widget on their phone).
 
 ## Mission
 
@@ -30,8 +29,8 @@ Before writing an Elpian frontend, read `ELPIAN.md` in full and look at
 use only the node types, props and host APIs they define. Validate the view
 trees you write with the **UI DSL validator**: your `elpian_*` tools
 (`elpian_describe`, `elpian_icons`, `elpian_validate`,
-`elpian_validate_program`; MCP tools for OpenCode, the `aseman-elpian`
-command for an agent: ELPIAN.md, Your `elpian_*` tools) or `vendor/aseman-elpian/validate.mjs` (ELPIAN.md,
+`elpian_validate_program`; the `aseman-elpian` command: ELPIAN.md, Your
+`elpian_*` tools) or `vendor/aseman-elpian/validate.mjs` (ELPIAN.md,
 Validating view trees). The backend is the same in both cases.
 
 ## Wiring to the space (read first)
@@ -293,7 +292,7 @@ Validating view trees). The backend is the same in both cases.
 
 ## Model
 
-OpenCode uses the Aseman metered LLM backbone (`aseman/default`) already
-configured for this sandbox; an agent builds with its own model. Do not switch
-to OpenCode Zen free models or invent API keys — completions are billed with
-the agent turn through the node gateway.
+You build with your own model. Software that needs a model calls the Aseman
+metered LLM gateway already configured for this sandbox (ASEMAN_LLM_BASE_URL);
+do not invent API keys — completions are billed with the agent turn through
+the node gateway.

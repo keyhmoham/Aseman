@@ -7,6 +7,8 @@ import '../../desk/presentation/frontend_presentation.dart';
 import '../connect/mcp_connect_dialog.dart';
 import '../data/tools_api.dart';
 import '../domain/tool_models.dart';
+import '../../plugins/data/plugins_api.dart';
+import '../../plugins/runtime/plugin_host.dart';
 import '../runtime/tool_frontend_host.dart';
 import '../runtime/tool_media.dart';
 import '../ui_kit/kit.dart' show kitEngine;
@@ -26,6 +28,7 @@ class ToolFrontendView extends StatefulWidget {
     this.shown,
     this.onLoaded,
     this.onConnected,
+    this.extraHandlers = const {},
   });
 
   final ToolsApi api;
@@ -40,6 +43,10 @@ class ToolFrontendView extends StatefulWidget {
 
   /// Called once the person connected their own account to the tool here.
   final VoidCallback? onConnected;
+
+  /// Host calls added to (or replacing) the tool host's: a plugin's screen
+  /// reaches its backend and the platform through its own gate.
+  final Map<String, HostCallHandler> extraHandlers;
 
   @override
   State<ToolFrontendView> createState() => _ToolFrontendViewState();
@@ -215,6 +222,18 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
             display: display.name,
             onCompact: _onCompact,
             onExpand: FrontendPresentation.maybeOf(context)?.onExpand);
+        // A plugin opened where nobody gave it its host (a desk window): its
+        // screen reaches its backend and the platform through the plugin gate.
+        var extra = widget.extraHandlers;
+        if (extra.isEmpty && payload.plugin != null) {
+          extra = PluginHost(PluginsApi(widget.api.call),
+                  plugin: PluginInfo.fromJson(payload.plugin!),
+                  spaceId: widget.spaceId,
+                  roomId: widget.roomId,
+                  userId: widget.userId,
+                  display: display.name)
+              .handlers();
+        }
         final machineId = 'tool-${widget.botId}-${identityHashCode(this)}';
         final stylesheet = AppFrontendTheme.stylesheet(Theme.of(context));
         final Widget program =
@@ -224,7 +243,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
                     bytecode: payload.bytecode!,
                     engine: _engine,
                     stylesheet: stylesheet,
-                    hostHandlers: host.handlers(),
+                    hostHandlers: {...host.handlers(), ...extra},
                   )
                 : ElpianVmWidget.fromCode(
                     machineId: machineId,
@@ -232,7 +251,7 @@ class _ToolFrontendViewState extends State<ToolFrontendView> {
                     runtime: ElpianRuntime.quickJs,
                     engine: _engine,
                     stylesheet: stylesheet,
-                    hostHandlers: host.handlers(),
+                    hostHandlers: {...host.handlers(), ...extra},
                   );
         if (!compact) return program;
         return _StaticCompact(summary: _summary, program: program);

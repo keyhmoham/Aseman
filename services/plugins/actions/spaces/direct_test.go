@@ -10,6 +10,8 @@ import (
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 	"github.com/aseman/aseman/plugins/actions/message/models/message"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/permission"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 func directPerson(t *testing.T, s *Service, ctx context.Context, hex, handle string) identity.ID {
@@ -171,5 +173,49 @@ func TestDirectChatCannotRemoveFoundingAgentPeer(t *testing.T) {
 	}
 	if _, err := s.SpaceMembership(ctx, sp.ID, sub.AccountID); err == nil {
 		t.Fatal("subagent is still a member")
+	}
+}
+
+// Direct chats work on the person's own computer: whoever's work it is (the
+// person, or the agent working for them in their run) uses that person's home
+// workspace computer, made the first time it is needed; projects keep theirs.
+func TestDirectChatsWorkOnThePersonsOwnComputer(t *testing.T) {
+	s, ctx := fileToolHarness(t)
+	alice := directPerson(t, s, ctx, "00000000000000010000000000000001", "alice")
+	bob := directPerson(t, s, ctx, "00000000000000010000000000000002", "bob")
+	project, err := s.CreateSpace(ctx, alice, "project", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := addDevBotMember(t, s, ctx, project.ID)
+	dm, _, err := s.OpenDirect(ctx, alice, bob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliceBox := s.computerOf(ctx, dm.ID, alice)
+	home, err := s.HomeSpace(ctx, alice)
+	if err != nil || aliceBox != home.ID {
+		t.Fatalf("alice works on %v, her home is %v (%v)", aliceBox, home, err)
+	}
+	if again := s.computerOf(ctx, dm.ID, alice); again != aliceBox {
+		t.Fatal("a second home workspace was made")
+	}
+	bobBox := s.computerOf(ctx, dm.ID, bob)
+	if bobBox == aliceBox || bobBox == dm.ID {
+		t.Fatalf("bob's work in the same chat is on %v", bobBox)
+	}
+	// An agent works on the computer of the person whose run it is in.
+	inBobsRun := vmm.WithExecution(ctx, vmm.Execution{ActorID: bob.String()})
+	if got := s.computerOf(inBobsRun, dm.ID, agent); got != bobBox {
+		t.Fatalf("an agent in bob's run works on %v", got)
+	}
+	if got := s.personalSandboxSpace(helper.WithActor(ctx, agent), dm.ID); got != dm.ID {
+		t.Fatalf("an agent working for nobody got a personal computer: %v", got)
+	}
+	if got := s.computerOf(ctx, project.ID, alice); got != project.ID {
+		t.Fatalf("a project's work moved to %v", got)
+	}
+	if _, err := s.HomeSpace(ctx, agent); err == nil {
+		t.Fatal("an agent was given a home workspace")
 	}
 }

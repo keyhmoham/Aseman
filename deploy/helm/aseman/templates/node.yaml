@@ -62,10 +62,7 @@ spec:
             - { name: ASEMAN_SANDBOX_RUNTIME, value: {{ .Values.sandbox.docker.runtime | quote }} }
             - { name: ASEMAN_EGRESS_IMAGE, value: {{ .Values.sandbox.egressImage | quote }} }
             {{- end }}
-            {{- if .Values.openviking.enabled }}
-            - { name: ASEMAN_OPENVIKING_URL, value: "http://{{ $fn }}-openviking:1933" }
-            {{- end }}
-            - { name: ASEMAN_TIMELINE_URL, value: {{ if .Values.timeline.enabled }}"http://{{ $fn }}-timeline:1516"{{ else }}""{{ end }} }
+            - { name: ASEMAN_TIMELINE, value: {{ ternary "on" "off" .Values.timeline.enabled | quote }} }
             - { name: ASEMAN_GOVERNANCE_REQUIRED, value: {{ ternary "1" "0" .Values.governance.required | quote }} }
             - { name: ASEMAN_APPROVAL_TIMEOUT, value: {{ .Values.governance.approvalTimeout | quote }} }
             {{- range $k, $v := .Values.node.env }}

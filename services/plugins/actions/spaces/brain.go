@@ -6,7 +6,6 @@ import (
 
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
-	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 	"github.com/aseman/aseman/plugins/actions/message/models/message"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/space"
@@ -59,18 +58,8 @@ func (s *Service) BrainRooms(ctx context.Context, member identity.ID) ([]BrainRo
 	return out, nil
 }
 
-// BrainAsk hands a request to a room's agents for a person, as if they had
-// written it in the room: a turn in its main thread for its lead, who brings
-// in whoever it needs. It returns the thread the work happens in.
-func (s *Service) BrainAsk(ctx context.Context, actor, spaceID identity.ID, body string) (string, error) {
-	t, err := s.brainSubmit(ctx, actor, spaceID, body)
-	if err != nil {
-		return "", err
-	}
-	return t.RoomID.String(), nil
-}
-
-// brainSubmit is the turn BrainAsk starts.
+// brainSubmit starts a turn for actor in a space's main thread for its lead,
+// who brings in whoever it needs, as if the person had written it there.
 func (s *Service) brainSubmit(ctx context.Context, actor, spaceID identity.ID, body string) (*turn.Turn, error) {
 	if ok, _ := s.MemberOf(ctx, spaceID, actor); !ok {
 		return nil, errs.NotFound("room")
@@ -81,7 +70,7 @@ func (s *Service) brainSubmit(ctx context.Context, actor, spaceID identity.ID, b
 		return nil, err
 	}
 	if len(rooms) == 0 {
-		return nil, errs.NotFound("this room has no conversation yet")
+		return nil, errs.NotFound("this workspace has no conversation yet")
 	}
 	var mems []membership.Membership
 	if err := s.R.List(ctx, "memberships", database.Filter{
@@ -96,32 +85,27 @@ func (s *Service) brainSubmit(ctx context.Context, actor, spaceID identity.ID, b
 		}
 	}
 	if lead == "" {
-		return nil, errs.NotFound("this room has no lead to give the work to")
+		return nil, errs.NotFound("this workspace has no lead to give the work to")
 	}
 	return s.SubmitRoomTurn(ctx, actor, spaceID, rooms[0].ID, "", body, "", []string{lead}, nil, false)
 }
 
-// BrainWorkStart is where a person's Aseman put work that needs a computer.
+// BrainWorkStart is where a person's Aseman put work: their home workspace
+// and the turn its team works on it in.
 type BrainWorkStart struct {
 	SpaceID string `json:"space_id"`
 	Name    string `json:"name"`
 	TurnID  string `json:"turn_id"`
 }
 
-// BrainWork hands work that needs a computer (research across many sites, running code, building something) to
-// the person's own workspace (their Home, made now if they have none yet), where the lead and its team have a
-// computer: no room has to be set up first. The turn is the person's own, so their budget and permissions apply.
+// BrainWork hands work to the person's own workspace (their home, made now if
+// they have none): its lead and team take it up on the person's computer, the
+// same one their personal Aseman and direct chats use. The turn is the
+// person's own, so their budget and permissions apply.
 func (s *Service) BrainWork(ctx context.Context, actor identity.ID, request string) (BrainWorkStart, error) {
-	home, err := s.HomeSpace(ctx, actor)
+	home, err := s.PersonalComputer(ctx, actor)
 	if err != nil {
-		handle := ""
-		var acc account.Account
-		if s.R.Get(ctx, "accounts", actor, &acc) == nil {
-			handle = acc.Handle
-		}
-		if home, err = s.CreateHomeSpace(ctx, actor, handle); err != nil {
-			return BrainWorkStart{}, errs.Wrap(errs.CodeUnavailable, err, "could not open your workspace")
-		}
+		return BrainWorkStart{}, err
 	}
 	t, err := s.brainSubmit(ctx, actor, home.ID, request)
 	if err != nil {

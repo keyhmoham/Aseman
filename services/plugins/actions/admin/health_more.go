@@ -62,26 +62,6 @@ func (s *Service) moreHealth(ctx context.Context, r *repo.Repo, add func(healthC
 			break
 		}
 	}
-	for _, svc := range []struct{ id, label, env, path, fix string }{
-		{"openviking", "Agent memory (OpenViking)", "ASEMAN_OPENVIKING_URL", "/health", "docker compose ps openviking"},
-		{"timeline", "Project timelines (Utopia)", "ASEMAN_TIMELINE_URL", "/", "docker compose ps timeline"},
-	} {
-		base := strings.TrimRight(strings.TrimSpace(os.Getenv(svc.env)), "/")
-		if base == "" {
-			add(healthCheck{ID: svc.id, Group: "AI", Label: svc.label, Status: "warn", Detail: "Not configured: turned off.", Fix: svc.env})
-			continue
-		}
-		if code, err := probe(ctx, base+svc.path, nil); err != nil || code >= 500 {
-			detail := "Not answering at " + base
-			if err == nil {
-				detail += " (" + itoa(int64(code)) + ")"
-			}
-			add(healthCheck{ID: svc.id, Group: "AI", Label: svc.label, Status: "fail", Detail: detail, Fix: svc.fix})
-		} else {
-			add(healthCheck{ID: svc.id, Group: "AI", Label: svc.label, Status: "ok", Detail: "Answering at " + base})
-		}
-	}
-
 	// Governance
 	loaded := func(ns string) bool { _, err := s.K.Resolve("service/" + ns); return err == nil }
 	if !loaded("governance") {

@@ -17,7 +17,7 @@ func TestSearchBotsPlatformWide(t *testing.T) {
 	agent := &bot.Bot{
 		Entity:  entity.Entity{ID: agentID, CreatedAt: now, UpdatedAt: now},
 		OwnerID: owner, Name: "AlphaAgent", Kind: bot.KindAgent,
-		VMType: bot.VMTypeDeepAgents, Status: bot.StatusRunning,
+		VMType: bot.VMTypeHarness, Status: bot.StatusRunning,
 	}
 	if err := s.R.CreateID(ctx, "bots", agentID, agent); err != nil {
 		t.Fatal(err)
@@ -75,7 +75,7 @@ func TestSearchBotsPlatformWide(t *testing.T) {
 	assist := &bot.Bot{
 		Entity:  entity.Entity{ID: assistID, CreatedAt: now, UpdatedAt: now},
 		OwnerID: owner, Name: "Aseman", Kind: bot.KindAgent,
-		VMType: bot.VMTypeDeepAgents, Status: bot.StatusRunning, ImageRef: bot.BuiltinChatImage,
+		VMType: bot.VMTypeHarness, Status: bot.StatusRunning, ImageRef: bot.BuiltinChatImage,
 	}
 	if err := s.R.CreateID(ctx, "bots", assistID, assist); err != nil {
 		t.Fatal(err)

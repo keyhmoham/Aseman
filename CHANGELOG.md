@@ -1,22 +1,63 @@
 # Changelog
 
-## Unreleased: DeepSeek Harness agentic engine
+## Unreleased: every agent on DeepSeek Harness
 
-- **Third agentic engine** (`spaces.agent_engine_set` `engine: "deepseek"`,
-  Admin → AI → Agentic engine): agent turns and personal Aseman run on
-  headless [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
-  (`dsh --profile headless --json`), one dsh Session per agent per thread.
-- **Its own memory**: the `aseman-memory` dsh plugin keeps per-space and
-  per-agent notes and a journal of every turn; dsh's own instruction loader
-  puts the notes in context. The project's Memory screen reads and corrects
-  it (`vmm.EngineMemory`, runtime `/v1/engines/deepseek/memory`).
-- **Its own swarm**: parallel subagents, Agent Teams for leads, plan mode,
-  goals and workflows; swarms and todos show in the work log.
-- **Wired to Aseman**: models through the turn's metered LLM gateway (or the
-  engine's own DeepSeek key), and the `aseman` MCP bridge for space tools,
-  questions, hand-offs to other agents, timeline, Code Mode and creator mode
-  (`create_app` / `create_plugin` → on-demand app generation).
-- The runtime image ships dsh `0.2.2-alpha.3` by default (`DSH_VERSION`).
+- **One agentic engine.** Every agent turn and every personal Aseman answer
+  runs on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+  `0.2.2-alpha.3`: one long-lived dsh host (the `aseman` profile, dsh's `sdk`
+  template plus Aseman's patch layer) with Aseman's own Cordis plugins,
+  replacing the LangChain Deep Agents runtime and the OpenCode and headless
+  dsh engines. The node's VMM plugin is `harness` (gateway `/harness/v1`);
+  agents recorded on older engines are served by it unchanged.
+- **Removed:** the Python runtime (LangGraph, GEPA self-improvement, the
+  swarm planner), the Admin → Agentic engine and Admin → OpenCode switches,
+  the OpenCode builtins and sandbox install, the self-hosted OpenViking
+  memory server and the Utopia timeline server (and their keys in `.env`).
+- **Tools on dsh:** the space's computer as shell and files, the space's
+  apps and platform builtins generated per turn, the whole Aseman API through
+  one permission-checked catalog (`aseman_api_search` / `aseman_api_call`),
+  `ask_user` (the turn pauses; the answer resumes the same Session), hand-offs,
+  hiring and recruiting; dsh's own Agent Teams, todos, goals, workflows,
+  compaction and session search.
+- **Scoping:** a room agent stays in its space; the person's own Aseman acts
+  across their account. Administration, credentials and money movement are
+  never served to agents.
+- **Memory:** notes and long-term memories kept by the node in Postgres with
+  pgvector (a new optional `VectorIndex` database capability), recalled by
+  meaning, learned from finished turns, billed to the project.
+- **Timeline:** kept in the node's own database; agents search their own
+  project's (`ASEMAN_TIMELINE=off` turns it off).
+- **Plugins (Creator mode):** agents make plugins — an Elpian screen drawn
+  natively in the app with a QuickJS backend (`create_plugin`). Made in the
+  personal Aseman chat, a plugin is the person's own and app-wide; made in a
+  space or direct chat, it lives in that space's sandbox, shared by its
+  members, and reaches only that space. A plugin's screen calls its backend
+  (`tools.plugin_invoke`) and the platform actions it declared
+  (`tools.plugin_call`), as the person using it. Plugins open from a Plugins
+  button in chats and the workspace panel, as a side panel, a page or a desk
+  window, and from My bots → Your plugins (remove, restore).
+- **Typed API catalog:** `aseman_api_search` shows each action's body fields,
+  read from the source by `cmd/gen-action-schemas` (kept current by a test).
+- **Confinement:** a room agent, and a space's plugin, may name only its own
+  space and the rooms and threads in it, whatever the field is called.
+- **Personal Aseman:** acts only on DeepSeek Harness; its older in-node tools
+  (proposals, reminders) are gone; proposals already stored are still
+  answered. Long or team work goes to the person's workspace with
+  `hand_to_workspace` (`users.brain_work`): its lead and team do it on the
+  person's computer, and the result is written back into the Aseman chat as
+  an answer to the note, with a card that opens the workspace.
+- **Approvals on the personal computer:** what the personal Aseman does on the
+  person's computer is decided by their workspace's rules, network policy and
+  computer handover, and an approval is asked in that workspace (and on their
+  phone).
+- **Personal computer:** the agents of a person's direct chats work on that
+  person's own computer (their home workspace's sandbox, made when they have
+  none) for everything, not only shell commands: workspace files, file tools,
+  the desk's computer and desktop, and the turn's computer. Each person in a
+  shared direct chat works on their own. The personal Aseman has the same
+  computer with its tools (shell, files, images, desktop), as the person.
+- **Fix:** reports of direct messages have their own `direct_reports` table;
+  they shared `chat_reports` with room reports, which lost who was reported.
 
 ## Unreleased: deep theme system
 

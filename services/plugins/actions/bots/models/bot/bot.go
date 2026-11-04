@@ -14,7 +14,7 @@ import (
 )
 
 // Kind classifies what a bot is used for. Agents are LLM-driven assistants
-// (served by the deep agents runtime); a tool is an app: a backend (MCP,
+// (served by the agent runtime); a tool is an app: a backend (MCP,
 // wasm, a program) and the frontend it is used through.
 type Kind string
 
@@ -37,9 +37,10 @@ const (
 	VMTypeDocker    VMType = "docker"
 	VMTypeWASM      VMType = "wasm"
 	VMTypeModal     VMType = "modal"
-	// VMTypeDeepAgents is an agent served by the deep agents runtime. Every
-	// agent (the built-in aseman lead and every market agent) runs on it.
-	VMTypeDeepAgents VMType = "deepagents"
+	// VMTypeHarness is an agent served by the agent runtime (DeepSeek
+	// Harness). Every agent (the built-in aseman lead and every market agent)
+	// runs on it.
+	VMTypeHarness VMType = "harness"
 	// VMTypeElpian / VMTypeQuickJS are managed tool backends: Elpian VM or
 	// QuickJS programs run by the tool runtime image as Nomad services.
 	VMTypeElpian  VMType = "elpian"
@@ -67,14 +68,24 @@ func (b *Bot) IsToolBackend() bool {
 }
 
 // AgentVMType maps the agent engine a record or request names onto the one
-// agent runtime. Engines this node no longer runs ("langchain", "grok") are
-// served by deep agents, so older records and older clients keep working.
+// agent runtime. Engines this node no longer runs ("deepagents", "opencode",
+// "langchain", "grok") are served by the harness, so older records and older
+// clients keep working.
 func AgentVMType(t VMType) VMType {
 	switch t {
-	case "langchain", "grok", "":
-		return VMTypeDeepAgents
+	case "deepagents", "opencode", "deepseek", "langchain", "grok", "":
+		return VMTypeHarness
 	}
 	return t
+}
+
+// VMMType is the VMM that serves the bot: an agent recorded on an earlier
+// engine is served by the agent runtime.
+func (b *Bot) VMMType() VMType {
+	if b.Kind == KindAgent {
+		return AgentVMType(b.VMType)
+	}
+	return b.VMType
 }
 
 // Status lifecycle states of a bot VM.

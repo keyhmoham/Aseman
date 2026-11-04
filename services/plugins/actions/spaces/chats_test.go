@@ -285,7 +285,7 @@ func TestOpenDirectWithBuiltinAssistantUsesAsemanChat(t *testing.T) {
 	if err := s.R.CreateID(ctx, "bots", botID, &bot.Bot{
 		Entity:  entity.Entity{ID: botID, CreatedAt: now, UpdatedAt: now},
 		OwnerID: assistantAcc, AccountID: assistantAcc, Name: "Aseman", Kind: bot.KindAgent,
-		VMType: bot.VMTypeDeepAgents, Status: bot.StatusRunning, ImageRef: bot.BuiltinChatImage,
+		VMType: bot.VMTypeHarness, Status: bot.StatusRunning, ImageRef: bot.BuiltinChatImage,
 	}); err != nil {
 		t.Fatal(err)
 	}

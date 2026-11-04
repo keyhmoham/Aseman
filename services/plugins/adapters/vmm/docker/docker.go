@@ -707,7 +707,7 @@ func (a *Adapter) Send(ctx context.Context, vmID, command string) (string, error
 	//
 	// Default 5 minutes when the caller set no deadline. When a deadline is
 	// present (e.g. appui_create's 12m build budget), honor the remaining time
-	// instead of capping below it — min(300s, 12m) used to kill OpenCode builds.
+	// instead of capping below it — min(300s, 12m) used to kill long app builds.
 	duration := 5 * time.Minute
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline) - 3*time.Second

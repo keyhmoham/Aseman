@@ -144,7 +144,7 @@ func (s *Service) importSample(ctx context.Context, req *api.ActionRequest, samp
 		username = sample.Username + strconv.Itoa(n)
 	}
 	rec, e := s.CreateBot(helper.WithActor(ctx, owner), owner, CreateBotRequest{
-		Name: sample.Name, Kind: bot.KindAgent, VMType: bot.VMTypeDeepAgents,
+		Name: sample.Name, Kind: bot.KindAgent, VMType: bot.VMTypeHarness,
 		Description: sample.Description, Instructions: sample.Instructions,
 		Skills: sample.Skills,
 	})

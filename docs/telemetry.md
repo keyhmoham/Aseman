@@ -11,7 +11,7 @@ or a person used one. Here is every destination:
 |---|---|---|
 | Model providers (Admin → Providers) | An agent runs, a brief or triage is written, dictation is transcribed, Health probes the default provider | Prompts, tool results, audio for dictation; the provider key |
 | Project computers (Modal or your Docker host) | A project computer starts or runs a command | The sandbox image, commands, files |
-| OpenViking and timelines (your own containers) | Agents remember; projects record history | Memory and timeline entries |
+| Agent memory and timelines (your own Postgres) | Agents remember; projects record history | Memory and timeline entries |
 | Google (Gmail, Calendar, OAuth) | A person connects Google and their agents read mail or calendar | That person's OAuth token; mail and calendar requests |
 | Slack, Microsoft Teams, Twilio | An administrator connects them and people link their accounts | Replies, approval prompts, notifications |
 | Feeds and APIs a responsibility watches | A person sets up a feed or API responsibility | GET requests to that public address, with the bearer token they gave |

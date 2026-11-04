@@ -217,11 +217,12 @@ func callSignals() database.Model {
 	}
 }
 
-// chatReports are what people reported in their direct messages, for the admin.
+// chatReports are what people reported in their direct messages, for the
+// admin. (Reports from rooms are the spaces plugin's chat_reports.)
 func chatReports() database.Model {
 	return database.Model{
-		Name:  "chat_reports",
-		Table: "chat_reports",
+		Name:  "direct_reports",
+		Table: "direct_reports",
 		Fields: []database.Field{
 			f("id", database.KindString), f("reporter_id", database.KindString),
 			f("peer_id", database.KindString), f("message_id", database.KindString),

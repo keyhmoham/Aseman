@@ -59,17 +59,6 @@ case "$cmd" in
       export ASEMAN_CONFIG_FILE
     fi
     mkdir -p "${NOMAD_DATA_DIR:-/tmp/aseman-nomad}"
-    # The agents' memory server (OpenViking) needs a root key: made once, kept in .env.
-    if [ -z "${ASEMAN_OPENVIKING_ROOT_KEY:-}" ] && ! grep -qs '^ASEMAN_OPENVIKING_ROOT_KEY=.' .env; then
-      printf '\nASEMAN_OPENVIKING_ROOT_KEY=%s\n' "$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" >> .env
-      echo "generated ASEMAN_OPENVIKING_ROOT_KEY in .env"
-    fi
-    # The node's account in the timelines' server (Utopia): made once, kept in .env.
-    if [ -z "${ASEMAN_TIMELINE_PASSWORD:-}" ] && ! grep -qs '^ASEMAN_TIMELINE_PASSWORD=.' .env; then
-      printf '\nASEMAN_TIMELINE_PASSWORD=%s\n' "$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" >> .env
-      echo "generated ASEMAN_TIMELINE_PASSWORD in .env"
-    fi
-
     # So the debug container can hand generated plugin files back to this user.
     ASEMAN_UID=$(id -u)
     ASEMAN_GID=$(id -g)
@@ -77,7 +66,7 @@ case "$cmd" in
 
     if [ "$no_web" = true ]; then
       docker compose stop web >/dev/null 2>&1 || true
-      docker compose up -d --build postgres nomad sandbox-computer deepagents openviking timeline-db timeline aseman
+      docker compose up -d --build postgres nomad sandbox-computer harness aseman
       echo
       echo "Aseman stack started without the web container."
     elif [ "$hot_reload" = true ]; then

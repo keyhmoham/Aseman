@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // The Elpian validator and headless driver on the command line, for Aseman's
-// own agents (installed as `aseman-elpian`). They are the very tools OpenCode
+// own agents (installed as `aseman-elpian`). They are the very tools MCP clients
 // gets as MCP servers (validate-mcp.mjs, drive-mcp.mjs), so an app built by
 // the space's agents is designed, validated and tested end to end exactly
-// like one OpenCode builds.
+// like one an agent builds.
 //
 //   aseman-elpian tools [name]                 list the tools (or one, with its arguments)
 //   aseman-elpian <tool> ['{json args}' | @args.json | -] [--dir DIR]
@@ -136,7 +136,7 @@ function usage(tools) {
     "Usage: aseman-elpian <tool> ['{json args}' | @args.json | -] [--dir DIR]",
     "       aseman-elpian tools [name]   |   aseman-elpian stop [--dir DIR]",
     "",
-    "Tools (the same ones OpenCode has; driver sessions persist between commands):",
+    "Tools (the same ones the MCP servers serve; driver sessions persist between commands):",
     ...tools.map((t) => `  ${t.name.padEnd(24)} ${t.description.split(". ")[0]}.`),
   ].join("\n");
 }

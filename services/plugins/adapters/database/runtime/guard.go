@@ -204,6 +204,61 @@ func (p *guardedDatabase) SupportsAtomicUpdates() bool {
 	return ok
 }
 
+func (p *guardedDatabase) vectorPort() (database.VectorIndex, error) {
+	port, ok := p.port.(database.VectorIndex)
+	if !ok {
+		return nil, errs.New(errs.CodeUnavailable, "database provider has no vector index")
+	}
+	return port, nil
+}
+
+func (p *guardedDatabase) VectorUpsert(ctx context.Context, collection, id, scope string, vector []float32) error {
+	ctx, release, err := p.gate.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	port, err := p.vectorPort()
+	if err != nil {
+		return err
+	}
+	return port.VectorUpsert(ctx, collection, id, scope, vector)
+}
+
+func (p *guardedDatabase) VectorDelete(ctx context.Context, collection, id string) error {
+	ctx, release, err := p.gate.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	port, err := p.vectorPort()
+	if err != nil {
+		return err
+	}
+	return port.VectorDelete(ctx, collection, id)
+}
+
+func (p *guardedDatabase) VectorSearch(ctx context.Context, collection string, scopes []string, vector []float32, limit int) ([]database.VectorHit, error) {
+	ctx, release, err := p.gate.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	port, err := p.vectorPort()
+	if err != nil {
+		return nil, err
+	}
+	return port.VectorSearch(ctx, collection, scopes, vector, limit)
+}
+
+func (p *guardedDatabase) SupportsVectorIndex() bool {
+	if support, ok := p.port.(database.VectorIndexSupport); ok && !support.SupportsVectorIndex() {
+		return false
+	}
+	_, ok := p.port.(database.VectorIndex)
+	return ok
+}
+
 func Guard(port database.Database, gate *lifetime.Gate, remember func(database.Model), forget func(string)) database.Database {
 	return &guardedDatabase{port: port, gate: gate, remember: remember, forget: forget}
 }

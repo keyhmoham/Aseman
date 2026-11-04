@@ -185,7 +185,7 @@ const _templates = <String, List<_FieldTemplate>>{
   'bots.bot_create': [
     _FieldTemplate('name', required: true),
     _FieldTemplate('kind', hint: 'agent or tool (an app)'),
-    _FieldTemplate('vm_type', hint: 'Defaults to deepagents for agents'),
+    _FieldTemplate('vm_type', hint: 'Agents run on the agent runtime (harness)'),
     _FieldTemplate('image_ref'),
     _FieldTemplate('spec_yml', type: BackendFieldType.multiline),
     _FieldTemplate('resources', type: BackendFieldType.object),
@@ -443,16 +443,6 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('provider_id'),
     _FieldTemplate('model_id'),
     _FieldTemplate('auto_approve', type: BackendFieldType.boolean),
-  ],
-  'spaces.opencode_set': [
-    _FieldTemplate('enabled', type: BackendFieldType.boolean, required: true),
-  ],
-  'spaces.agent_engine_set': [
-    _FieldTemplate(
-      'engine',
-      required: true,
-      hint: 'deepagents, opencode or deepseek',
-    ),
   ],
   'llm.llm_memory_set': [
     _FieldTemplate('chat_provider_id'),

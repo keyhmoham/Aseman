@@ -74,7 +74,7 @@ func addDevBotMember(t *testing.T, s *Service, ctx context.Context, spaceID iden
 	if err := s.R.CreateID(ctx, "bots", botID, &bot.Bot{
 		Entity:  entity.Entity{ID: botID, CreatedAt: now, UpdatedAt: now},
 		OwnerID: accID, AccountID: accID, Name: "dev", Kind: bot.KindAgent,
-		VMType: bot.VMTypeDeepAgents, Status: bot.StatusRunning, VMID: "dev",
+		VMType: bot.VMTypeHarness, Status: bot.StatusRunning, VMID: "dev",
 	}); err != nil {
 		t.Fatal(err)
 	}

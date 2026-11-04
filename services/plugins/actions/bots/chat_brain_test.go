@@ -76,29 +76,6 @@ func TestAskDecisionGivesUpAtItsDeadline(t *testing.T) {
 	}
 }
 
-func TestAToolCallIsReadFromTheModelsAnswer(t *testing.T) {
-	var got map[string]any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewDecoder(r.Body).Decode(&got)
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"create_room","arguments":"{\"name\":\"Launch\"}"}}]}}],"usage":{"prompt_tokens":50,"completion_tokens":9}}`))
-	}))
-	defer srv.Close()
-	tools := []map[string]any{{"type": "function", "function": BrainTool{Name: "create_room", Parameters: map[string]any{"type": "object"}}}}
-	text, calls, in, out, err := callWithTools(context.Background(), []vmm.ProviderConfig{{BaseURL: srv.URL, Model: "m"}},
-		map[string]any{"messages": []map[string]any{{"role": "user", "content": "make a room"}}, "tools": tools})
-	if err != nil || text != "" || in != 50 || out != 9 {
-		t.Fatalf("%q %d/%d %v", text, in, out, err)
-	}
-	if len(calls) != 1 || calls[0].ID != "c1" || calls[0].Function.Name != "create_room" || calls[0].Function.Arguments != `{"name":"Launch"}` {
-		t.Fatalf("calls %+v", calls)
-	}
-	if sent, _ := got["tools"].([]any); len(sent) != 1 {
-		t.Fatalf("tools sent %v", got["tools"])
-	}
-	if !strings.Contains(brainActSystem("", agentChatSpec{}, "Aseman", ""), "only proposed") {
-		t.Fatal("the model must be told that changes wait for the person")
-	}
-}
 
 func TestANewcomerIsWelcomedNotFunnelled(t *testing.T) {
 	fresh := brainSystem("", agentChatSpec{}, "Aseman", "")
@@ -109,7 +86,7 @@ func TestANewcomerIsWelcomedNotFunnelled(t *testing.T) {
 	if strings.Contains(known, "You know nothing of this person") {
 		t.Fatal("someone it knows is not a newcomer")
 	}
-	if !strings.Contains(brainActSystem("", agentChatSpec{}, "Aseman", "- likes tea"), "- likes tea") {
+	if !strings.Contains(brainActHarnessSystem("", agentChatSpec{}, "Aseman", "- likes tea"), "- likes tea") {
 		t.Fatal("acting, it still knows the person")
 	}
 }

@@ -73,7 +73,7 @@ func codeModeTestService(t *testing.T) (*Service, *fakeSpace, context.Context) {
 	})
 	register("bots_list", func(map[string]any) (any, error) {
 		return map[string]any{"bots": []map[string]any{
-			{"id": "b-lead", "account_id": "a-lead", "name": "aseman", "kind": "agent", "vm_type": "deepagents", "vm_id": codeModeLeadVM},
+			{"id": "b-lead", "account_id": "a-lead", "name": "aseman", "kind": "agent", "vm_type": "harness", "vm_id": codeModeLeadVM},
 			{"id": "b-res", "account_id": "a-res", "name": "Researcher", "kind": "agent", "vm_type": "deepagents"},
 			{"id": "b-wx", "account_id": "a-wx", "name": "Weather", "kind": "tool", "vm_type": "mcp"},
 		}}, nil

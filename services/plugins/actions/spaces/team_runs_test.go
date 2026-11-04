@@ -70,7 +70,7 @@ func TestStopEndsTheWholeTeam(t *testing.T) {
 	if err := s.K.(*kernel.Kernel).Register(rt); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.K.(*kernel.Kernel).Boot(ctx, []string{"deepagents"}); err != nil {
+	if err := s.K.(*kernel.Kernel).Boot(ctx, []string{"harness"}); err != nil {
 		t.Fatal(err)
 	}
 	lead := addAgent(t, s, ctx, sp.ID, "lead", "lead-vm")

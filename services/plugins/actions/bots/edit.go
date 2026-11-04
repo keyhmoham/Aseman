@@ -220,18 +220,18 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 		rec.SpecYML = string(b)
 	}
 	if (changedSpec || in.Resources != nil) && rec.Kind == bot.KindAgent && !sharedRuntime {
-		// The built-in lead runs on the shared deep agents runtime: its spec is
+		// The built-in lead runs on the shared agent runtime: its spec is
 		// read per turn, so it keeps its VM and image.
-		vm := s.K.VMMFor(vmm.Type(rec.VMType))
+		vm := s.K.VMMFor(vmm.Type(rec.VMMType()))
 		if vm == nil {
 			return nil, errs.New(errs.CodeUnavailable, "agent runtime unavailable")
 		}
-		img, e := vm.BuildImage(ctx, vmm.ImageSpec{Type: vmm.Type(rec.VMType), Name: rec.Name, YML: rec.SpecYML})
+		img, e := vm.BuildImage(ctx, vmm.ImageSpec{Type: vmm.Type(rec.VMMType()), Name: rec.Name, YML: rec.SpecYML})
 		if e != nil {
 			return nil, e
 		}
 		res, _ := rec.ParseResources()
-		created, e = vm.CreateVM(ctx, vmm.VMSpec{Type: vmm.Type(rec.VMType), Name: rec.Name, ImageRef: img.Ref, YML: rec.SpecYML, Resources: vmm.ResourceSpec{CPU: res.CPU, MemoryMB: res.Memory, DiskMB: res.Disk}})
+		created, e = vm.CreateVM(ctx, vmm.VMSpec{Type: vmm.Type(rec.VMMType()), Name: rec.Name, ImageRef: img.Ref, YML: rec.SpecYML, Resources: vmm.ResourceSpec{CPU: res.CPU, MemoryMB: res.Memory, DiskMB: res.Disk}})
 		if e != nil {
 			return nil, e
 		}
@@ -243,7 +243,7 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 	changed, e := s.R.CompareAndSwap(ctx, "bots", id.String(), map[string]any{"updated_at": oldUpdated}, rec)
 	if e != nil || !changed {
 		if created.ID != "" {
-			_ = s.K.VMMFor(vmm.Type(rec.VMType)).DeleteVM(ctx, created.ID)
+			_ = s.K.VMMFor(vmm.Type(rec.VMMType())).DeleteVM(ctx, created.ID)
 		}
 		if e != nil {
 			return nil, e
@@ -292,7 +292,7 @@ func (s *Service) editAction(ctx context.Context, req *api.ActionRequest) (*api.
 		}
 	}
 	if created.ID != "" && oldVM != "" {
-		if e = s.K.VMMFor(vmm.Type(rec.VMType)).DeleteVM(ctx, oldVM); e != nil {
+		if e = s.K.VMMFor(vmm.Type(rec.VMMType())).DeleteVM(ctx, oldVM); e != nil {
 			s.L.Warn("retired agent runtime could not be removed", "vm", oldVM, "error", e)
 		}
 	}
@@ -378,7 +378,7 @@ func (s *Service) Rebuild(ctx context.Context, id identity.ID, image string) (*b
 	if rec.Status == bot.StatusRunning {
 		return nil, errs.Conflict("stop the VM before replacing it")
 	}
-	vm := s.K.VMMFor(vmm.Type(rec.VMType))
+	vm := s.K.VMMFor(vmm.Type(rec.VMMType()))
 	if vm == nil {
 		return nil, errs.New(errs.CodeUnavailable, "runtime unavailable")
 	}
@@ -389,7 +389,7 @@ func (s *Service) Rebuild(ctx context.Context, id identity.ID, image string) (*b
 	if image == "" {
 		image = rec.ImageRef
 	}
-	created, e := vm.CreateVM(ctx, vmm.VMSpec{Name: rec.Name, Type: vmm.Type(rec.VMType), ImageRef: image, YML: rec.SpecYML, Args: []string{"sleep", "infinity"}, Resources: vmm.ResourceSpec{CPU: res.CPU, MemoryMB: res.Memory, DiskMB: res.Disk}, Labels: map[string]string{"aseman.bot_id": rec.ID.String()}})
+	created, e := vm.CreateVM(ctx, vmm.VMSpec{Name: rec.Name, Type: vmm.Type(rec.VMMType()), ImageRef: image, YML: rec.SpecYML, Args: []string{"sleep", "infinity"}, Resources: vmm.ResourceSpec{CPU: res.CPU, MemoryMB: res.Memory, DiskMB: res.Disk}, Labels: map[string]string{"aseman.bot_id": rec.ID.String()}})
 	if e != nil {
 		return nil, e
 	}

@@ -38,10 +38,9 @@ echo "==> platform $PLATFORM, tag $TAG"
 IMAGES=(
   "node|./services|aseman/asemand:latest"
   "web|./app|aseman/flutter-web:latest"
-  "agents|./services/plugins/adapters/vmm/deepagents/runtime|aseman/deepagents:v2"
+  "agents|./services/plugins/adapters/vmm/harness/runtime|aseman/harness:v1"
   "sandbox|./deploy/sandbox-computer|aseman/sandbox-computer:latest"
   "tools|./deploy/tool-runtime|aseman/tool-runtime:v1"
-  "memory|./deploy/openviking|aseman/openviking:v1"
   "db|./deploy/postgres|aseman/postgres:16-pgvector"
 )
 
@@ -89,10 +88,6 @@ set -euo pipefail
 trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
 cd '$DEPLOY_PATH'
 [ -f .env ] || { echo "Missing $DEPLOY_PATH/.env on the server. See deploy/README.md." >&2; exit 1; }
-# The agents' memory server (OpenViking) needs a root key: made once, kept in .env.
-grep -qs '^ASEMAN_OPENVIKING_ROOT_KEY=.' .env || printf '\\nASEMAN_OPENVIKING_ROOT_KEY=%s\\n' "\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')" >> .env
-# The node's account in the timelines' server (Utopia): made once, kept in .env.
-grep -qs '^ASEMAN_TIMELINE_PASSWORD=.' .env || printf '\\nASEMAN_TIMELINE_PASSWORD=%s\\n' "\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')" >> .env
 mkdir -p /tmp/aseman-nomad
 $pull_cmds
 # The images are already here under the names the compose file uses: nothing to build.

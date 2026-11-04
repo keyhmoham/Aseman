@@ -21,7 +21,7 @@ import (
 
 const (
 	aiKindAseman = "aseman" // a note to yourself, read by your Aseman (brain.go)
-	aiKindChat      = "chat"      // @aseman in a personal chat (saved_agents.go)
+	aiKindChat   = "chat"   // @aseman in a personal chat (saved_agents.go)
 
 	aiOK      = "ok"      // answered
 	aiSaved   = "saved"   // kept as a note, no answer
@@ -91,27 +91,6 @@ func (s *Service) logAI(ctx context.Context, e aiEntry) {
 	if err := s.R.DB.Create(ctx, "ai_logs", row.ID, row); err != nil {
 		s.warn("ai log", e.person, err)
 	}
-}
-
-// toolTally collects the names of the tools a run called, for the log.
-type toolTally struct {
-	mu    sync.Mutex
-	names []string
-}
-
-func (t *toolTally) wrap(run func(name, args string) string) func(name, args string) string {
-	return func(name, args string) string {
-		t.mu.Lock()
-		t.names = append(t.names, name)
-		t.mu.Unlock()
-		return run(name, args)
-	}
-}
-
-func (t *toolTally) list() []string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return append([]string(nil), t.names...)
 }
 
 var aiLogPurged sync.Mutex

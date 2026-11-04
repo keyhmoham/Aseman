@@ -1,12 +1,12 @@
 # Sandbox computer: the default per-space sandbox image of aseman.
 #
 # Every space runs one. It is the shared computer of the space's agents: the
-# deep agents runtime runs their shell commands and file tools here (through
-# spaces.ask), so the lead and every specialist work on the same files under
-# /workspace. The deep agents file tools run python3 in the sandbox.
+# agent runtime (DeepSeek Harness) runs their shell commands and file tools
+# here (through spaces.ask and the project's stored files), so the lead and
+# every specialist work on the same files under /workspace.
 # aseman-appui and the Elpian toolchain are baked in so every new space can
 # generate on-demand fullstack App UIs (appui_create): built by the space's
-# agents, or by OpenCode (also baked in) when the admin turns it on.
+# agents.
 # Default UI for those apps is Material 3 Expressive (@material/web).
 #
 #   docker build -t aseman/tool-runtime:v1 deploy/tool-runtime
@@ -41,27 +41,16 @@ RUN chmod +x /usr/local/bin/aseman-desktop
 # The tool runtime: tools installed into a space run here, one process per
 # tool, started by the node.
 COPY --from=tool-runtime /opt/aseman-tool-runtime /opt/aseman-tool-runtime
-# OpenCode: baked into every space sandbox, used only while the admin has it
-# on (Admin → OpenCode): agents then hand coding tasks and App UI builds
-# (appui_create) to it, on the Aseman metered LLM gateway. Off (the default),
-# the agents build apps themselves with the same toolchain below.
-RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path \
- && install -d /usr/local/bin \
- && if [ -x "$HOME/.opencode/bin/opencode" ]; then ln -sf "$HOME/.opencode/bin/opencode" /usr/local/bin/opencode; fi \
- && if [ -x /root/.opencode/bin/opencode ]; then ln -sf /root/.opencode/bin/opencode /usr/local/bin/opencode; fi \
- && command -v opencode >/dev/null
-COPY opencode/opencode.json /etc/opencode/opencode.json
-ENV OPENCODE_CONFIG=/etc/opencode/opencode.json
 # App UI helper + agent instructions + OpenUI kit used by platform builtins.
 COPY appui/AGENTS.md /opt/aseman-appui/AGENTS.md
 COPY appui/openui /opt/aseman-appui/openui
 COPY appui/ASEMAN_API.md /opt/aseman-appui/ASEMAN_API.md
 # Elpian App UI kit: App UIs default to an Elpian frontend (ELPIAN.md).
 COPY appui/elpian/aseman-elpian.js appui/elpian/openui-elpian.js appui/elpian/bundle.mjs appui/elpian/check.mjs appui/elpian/nodes.json appui/elpian/ELPIAN.md /opt/aseman-appui/elpian/
-# The UI DSL validator: a CLI, and an MCP server OpenCode loads (opencode.json "mcp").
+# The UI DSL validator: a CLI, and an MCP server.
 COPY appui/elpian/validate.mjs appui/elpian/validate-mcp.mjs appui/elpian/schema.mjs appui/elpian/icons.json /opt/aseman-appui/elpian/
 # The headless driver: uses an Elpian app like a person, for end-to-end tests;
-# a CLI (drive.mjs run elpian/e2e) and an MCP server OpenCode loads.
+# a CLI (drive.mjs run elpian/e2e) and an MCP server.
 # aseman-elpian serves both (validator and driver) to the space's agents on
 # the shell, with driver sessions that persist between commands.
 COPY appui/elpian/drive.mjs appui/elpian/drive-mcp.mjs appui/elpian/mcp-stdio.mjs appui/elpian/elpian-cli.mjs /opt/aseman-appui/elpian/

@@ -23,7 +23,7 @@ import (
 	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
-// fakeAgentRuntime stands in for the deep agents runtime and records the turns
+// fakeAgentRuntime stands in for the agent runtime and records the turns
 // the space routes to it.
 type fakeAgentRuntime struct {
 	vmm.VMM
@@ -42,14 +42,14 @@ type fakeAgentRuntime struct {
 }
 
 func newFakeAgentRuntime() *fakeAgentRuntime {
-	return &fakeAgentRuntime{Base: base.Base{Name: "deepagents", Category: api.CategoryVMM}, waiting: map[string]bool{}}
+	return &fakeAgentRuntime{Base: base.Base{Name: "harness", Category: api.CategoryVMM}, waiting: map[string]bool{}}
 }
 
-func (f *fakeAgentRuntime) Name() string                                  { return "deepagents" }
+func (f *fakeAgentRuntime) Name() string                                  { return "harness" }
 func (f *fakeAgentRuntime) Init(context.Context, *api.Dependencies) error { return nil }
 func (f *fakeAgentRuntime) Start(context.Context) error                   { return nil }
 func (f *fakeAgentRuntime) Stop(context.Context) error                    { return nil }
-func (f *fakeAgentRuntime) SupportedTypes() []vmm.Type                    { return []vmm.Type{vmm.TypeDeepAgents} }
+func (f *fakeAgentRuntime) SupportedTypes() []vmm.Type                    { return []vmm.Type{vmm.TypeHarness} }
 
 func (f *fakeAgentRuntime) Prompt(ctx context.Context, vmID string, turn vmm.AgentTurn) (string, error) {
 	f.mu.Lock()
@@ -117,7 +117,7 @@ func bootRuntime(t *testing.T, s *Service, ctx context.Context) *fakeAgentRuntim
 	if err := s.K.(*kernel.Kernel).Register(rt); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.K.(*kernel.Kernel).Boot(ctx, []string{"deepagents"}); err != nil {
+	if err := s.K.(*kernel.Kernel).Boot(ctx, []string{"harness"}); err != nil {
 		t.Fatal(err)
 	}
 	return rt
@@ -145,7 +145,7 @@ func addAgent(t *testing.T, s *Service, ctx context.Context, spaceID identity.ID
 	}
 	botID, _ := identity.New(s.K.NodeID())
 	rec := &bot.Bot{Entity: entity.Entity{ID: botID, CreatedAt: now}, OwnerID: accID, AccountID: accID, Name: name,
-		Kind: bot.KindAgent, VMType: bot.VMTypeDeepAgents, Status: bot.StatusRunning, VMID: vmID}
+		Kind: bot.KindAgent, VMType: bot.VMTypeHarness, Status: bot.StatusRunning, VMID: vmID}
 	if err := s.R.CreateID(ctx, "bots", botID, rec); err != nil {
 		t.Fatal(err)
 	}
@@ -497,7 +497,7 @@ func TestAFailedTurnTellsPeopleOneSentenceAndKeepsTheDetailForAdmins(t *testing.
 		contains string
 		hides    string
 	}{
-		{errs.New(errs.CodeUnavailable, "the agent runtime did not become healthy at http://aseman-deepagents:8000"), "temporarily unavailable", "aseman-deepagents"},
+		{errs.New(errs.CodeUnavailable, "the agent runtime did not become healthy at http://aseman-harness:8000"), "temporarily unavailable", "aseman-deepagents"},
 		{errs.New(errs.CodeVMM, "OpenAIInvalidRequestError: Error code: 400 - thought_signature"), "ran into a problem", "thought_signature"},
 		{context.Canceled, "was stopped", "canceled"},
 		{&refusedError{errs.New(errs.CodeFinance, "insufficient balance to run metered execution")}, "insufficient balance", ""},

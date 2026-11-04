@@ -1,43 +1,39 @@
 // Package timeline gives every space a timeline its agents can read: a dated,
-// queryable record of the space's work and events, kept in the node's Utopia
-// server (https://github.com/deeplethe/utopia), a bitemporal knowledge graph
-// that runs on the node's own Postgres.
+// queryable record of the space's work and events, kept in the node's own
+// database (timeline_entries).
 //
-// The node pushes what happens in each space (people's requests and how they
+// The node reads what happens in each space (people's requests and how they
 // ended, the tools agents ran, messages and work logs, model usage, files,
-// members, rooms, routines and their runs) into the space's knowledge base as
-// dated statements, read from the records the other namespaces keep. Agents
-// read the timeline through the agent gateway (/deepagents/v1/timeline/mcp),
-// which forwards to the space's base over MCP: what happened when, what an
-// agent or person did over a period, what changed in a window.
+// members, rooms, routines and their runs) from the records the other
+// namespaces keep, and writes each as a dated entry: what happened, to whom,
+// when. Agents read the timeline through the agent gateway
+// (/harness/v1/timeline/search and /entry), which answers for the turn's own
+// space only: what happened when, what an agent or person did over a period,
+// what changed in a window. No model is involved, in writing or reading.
 //
 // A timeline is the space's: every role in a space (bots included) reads every
 // room of it, so the timeline shows an agent nothing its room reads would not.
 //
-// Utopia's address and the node's account come from ASEMAN_TIMELINE_*;
-// without ASEMAN_TIMELINE_URL the timeline is off.
+// ASEMAN_TIMELINE=off turns timelines off.
 package timeline
 
 import (
 	"context"
 	"encoding/json"
 	"os"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/aseman/aseman/pkg/crypto"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/pkg/logger"
 	"github.com/aseman/aseman/plugins/actions/support/repo"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
-// Environment the node reads Utopia's address and its account from.
-const (
-	EnvURL      = "ASEMAN_TIMELINE_URL"
-	EnvEmail    = "ASEMAN_TIMELINE_EMAIL"
-	EnvPassword = "ASEMAN_TIMELINE_PASSWORD"
-)
+// EnvSwitch turns the timelines off ("off", "0", "false").
+const EnvSwitch = "ASEMAN_TIMELINE"
 
 const (
 	// syncEvery is how often the feeds are read.
@@ -47,15 +43,11 @@ const (
 	// holdBack is how long a feed's cursor waits for a record that is not
 	// final yet (a tool still running), so its outcome is not missed.
 	holdBack = 30 * time.Minute
+	// scanLimit bounds the entries one text search reads.
+	scanLimit = 2000
+	// maxResults bounds what one search returns.
+	maxResults = 100
 )
-
-// readTools are the MCP tools agents may use: reads of the space's timeline.
-// Utopia's `remember` (a write) and `search_docs` (its own manual) are not
-// served.
-var readTools = map[string]bool{
-	"find_entities": true, "entity_facts": true, "neighbors": true, "timeline": true,
-	"paths_between": true, "changes": true, "search_chunks": true, "get_document": true,
-}
 
 type apiKernel interface {
 	Env() map[string]string
@@ -70,256 +62,139 @@ type Service struct {
 	feeds []feed
 	now   func() time.Time
 
-	utopia *utopia
+	enabled bool
 
-	mu     sync.Mutex
-	spaces map[string]*spaceKeys
-	reader string
-	// pushed remembers recent observations, so a record the cursor holds
-	// back is not sent again on every pass.
-	pushed map[string]bool
-	// resets counts the times a base was found missing and the feeds were
-	// rewound: a pass that saw one does not move its cursor.
-	resets int
-}
-
-// spaceKeys is a space's base with its push key unsealed.
-type spaceKeys struct {
-	kbID, sourceID, pushKey string
+	mu sync.Mutex
+	// written remembers recent entries, so a record the cursor holds back is
+	// not written again on every pass.
+	written map[string]bool
 }
 
 // NewService builds the service; config comes from the environment.
 func NewService(k apiKernel, r *repo.Repo, log *logger.Logger) *Service {
-	s := &Service{K: k, R: r, L: log.Named("timeline"), names: newNames(r), feeds: feeds(), now: time.Now,
-		spaces: map[string]*spaceKeys{}, pushed: map[string]bool{}}
-	if url := os.Getenv(EnvURL); url != "" {
-		email := os.Getenv(EnvEmail)
-		if email == "" {
-			email = "timeline@aseman.local"
-		}
-		s.utopia = newUtopia(url, email, os.Getenv(EnvPassword))
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(EnvSwitch))) {
+	case "off", "0", "false", "no":
+		return &Service{K: k, R: r, L: log.Named("timeline"), names: newNames(r), feeds: feeds(), now: time.Now, written: map[string]bool{}}
 	}
-	return s
+	return &Service{K: k, R: r, L: log.Named("timeline"), names: newNames(r), feeds: feeds(), now: time.Now,
+		enabled: true, written: map[string]bool{}}
 }
 
-// Enabled reports whether the node keeps timelines (Utopia is configured).
+// Enabled reports whether the node keeps timelines.
 func (s *Service) Enabled(ctx context.Context) (bool, error) {
-	return s.utopia != nil, nil
+	return s.enabled, nil
 }
 
-// --- reading: the agents' MCP -------------------------------------------------
+// --- reading -------------------------------------------------------------------
 
-// MCP forwards one MCP JSON-RPC message from an agent of the space to the
-// space's knowledge base, serving only the read tools.
-func (s *Service) MCP(ctx context.Context, spaceID string, body []byte) ([]byte, error) {
-	if s.utopia == nil {
-		return nil, errs.New(errs.CodeUnavailable, "the timeline is not configured on this node")
+// SearchQuery narrows a space's timeline.
+type SearchQuery struct {
+	// Query: every word must appear in the entry (case-insensitive).
+	Query string `json:"query,omitempty"`
+	// Kinds: only these feeds (requests, tools, messages, usage, files, …).
+	Kinds []string  `json:"kinds,omitempty"`
+	Since time.Time `json:"since,omitempty"`
+	Until time.Time `json:"until,omitempty"`
+	Limit int       `json:"limit,omitempty"`
+}
+
+// Search returns a space's entries, newest first.
+func (s *Service) Search(ctx context.Context, spaceID string, q SearchQuery) ([]Entry, error) {
+	if !s.enabled {
+		return nil, errs.New(errs.CodeUnavailable, "timelines are off on this node")
 	}
-	if spaceID == "" {
+	if strings.TrimSpace(spaceID) == "" {
 		return nil, errs.InvalidArgument("space required")
 	}
-	var msg struct {
-		Method string `json:"method"`
-		Params struct {
-			Name string `json:"name"`
-		} `json:"params"`
+	limit := q.Limit
+	if limit <= 0 || limit > maxResults {
+		limit = 30
 	}
-	if err := json.Unmarshal(body, &msg); err != nil {
-		return nil, errs.InvalidArgument("invalid MCP message")
+	words := strings.Fields(strings.ToLower(q.Query))
+	f := database.Filter{Equal: map[string]any{"space_id": spaceID}, OrderBy: "at", Asc: false, Limit: limit}
+	if len(words) > 0 {
+		f.Limit = scanLimit
 	}
-	switch msg.Method {
-	case "initialize", "tools/list", "ping", "notifications/initialized":
-	case "tools/call":
-		if !readTools[msg.Params.Name] {
-			return nil, errs.Permission("timeline tool " + msg.Params.Name + " is not available to agents")
+	if len(q.Kinds) > 0 {
+		kinds := make([]any, 0, len(q.Kinds))
+		for _, k := range q.Kinds {
+			kinds = append(kinds, k)
 		}
-	default:
-		return nil, errs.InvalidArgument("unsupported MCP method " + msg.Method)
+		f.In = map[string][]any{"kind": kinds}
 	}
-	out, err := s.forward(ctx, spaceID, body)
-	if err != nil {
+	if !q.Since.IsZero() {
+		f.GreaterThan = map[string]any{"at": q.Since.UTC()}
+	}
+	if !q.Until.IsZero() {
+		f.LessThan = map[string]any{"at": q.Until.UTC()}
+	}
+	var rows []Entry
+	if err := s.R.DB.List(ctx, entriesTable, f, &rows); err != nil {
 		return nil, err
 	}
-	if msg.Method == "tools/list" {
-		return filterTools(out), nil
+	out := rows[:0]
+	for _, e := range rows {
+		if matches(e, words) {
+			out = append(out, e)
+			if len(out) == limit {
+				break
+			}
+		}
 	}
 	return out, nil
 }
 
-func (s *Service) forward(ctx context.Context, spaceID string, body []byte) ([]byte, error) {
-	for attempt := 0; ; attempt++ {
-		keys, err := s.space(ctx, spaceID)
-		if err != nil {
-			return nil, err
-		}
-		token, err := s.readToken(ctx)
-		if err != nil {
-			return nil, err
-		}
-		out, err := s.utopia.mcp(ctx, keys.kbID, token, body)
-		if err == nil || attempt > 0 {
-			return out, err
-		}
-		switch {
-		case err == errNotFound:
-			s.forgetSpace(ctx, spaceID)
-		case errs.CodeOf(err) == errs.CodeUnauthenticated:
-			s.forgetReader(ctx)
-		default:
-			return nil, err
+func matches(e Entry, words []string) bool {
+	if len(words) == 0 {
+		return true
+	}
+	hay := strings.ToLower(e.Summary + "\n" + e.Subjects + "\n" + e.Kind)
+	for _, w := range words {
+		if !strings.Contains(hay, w) {
+			return false
 		}
 	}
+	return true
 }
 
-// filterTools keeps the read tools in a tools/list reply.
-func filterTools(raw []byte) []byte {
-	var msg map[string]any
-	if json.Unmarshal(raw, &msg) != nil {
-		return raw
-	}
-	result, _ := msg["result"].(map[string]any)
-	tools, _ := result["tools"].([]any)
-	if result == nil || tools == nil {
-		return raw
-	}
-	kept := make([]any, 0, len(tools))
-	for _, t := range tools {
-		if m, ok := t.(map[string]any); ok && readTools[str(m["name"])] {
-			kept = append(kept, t)
-		}
-	}
-	result["tools"] = kept
-	out, err := json.Marshal(msg)
-	if err != nil {
-		return raw
-	}
-	return out
+// EntryView is one entry with the entries recorded around it.
+type EntryView struct {
+	Entry  Entry   `json:"entry"`
+	Before []Entry `json:"before"`
+	After  []Entry `json:"after"`
 }
 
-func str(v any) string {
-	s, _ := v.(string)
-	return s
-}
-
-// readToken is the node's read token, issued once and kept sealed.
-func (s *Service) readToken(ctx context.Context) (string, error) {
-	s.mu.Lock()
-	reader := s.reader
-	s.mu.Unlock()
-	if reader != "" {
-		return reader, nil
+// Entry returns one entry of the space and its neighbours in time.
+func (s *Service) Entry(ctx context.Context, spaceID, id string) (*EntryView, error) {
+	if !s.enabled {
+		return nil, errs.New(errs.CodeUnavailable, "timelines are off on this node")
 	}
-	id := s.stateID()
-	var st State
-	if err := s.R.GetString(ctx, stateTable, id, &st); err == nil && st.Secret != "" {
-		if token, err := s.open(st.Secret); err == nil && token != "" {
-			s.mu.Lock()
-			s.reader = token
-			s.mu.Unlock()
-			return token, nil
-		}
+	var e Entry
+	if err := s.R.GetString(ctx, entriesTable, id, &e); err != nil {
+		return nil, err
 	}
-	token, err := s.utopia.issueReadToken(ctx)
-	if err != nil {
-		return "", err
+	if e.SpaceID != spaceID {
+		// Another space's entry is not this space's to see.
+		return nil, errs.NotFound("timeline entry")
 	}
-	sealed, err := s.seal(token)
-	if err != nil {
-		return "", err
+	view := &EntryView{Entry: e, Before: []Entry{}, After: []Entry{}}
+	if err := s.R.DB.List(ctx, entriesTable, database.Filter{Equal: map[string]any{"space_id": spaceID},
+		LessThan: map[string]any{"at": e.At}, OrderBy: "at", Asc: false, Limit: 5}, &view.Before); err != nil {
+		return nil, err
 	}
-	st = State{ID: id, Secret: sealed, UpdatedAt: s.now().UTC()}
-	if err := s.upsert(ctx, stateTable, id, &st); err != nil {
-		return "", err
+	if err := s.R.DB.List(ctx, entriesTable, database.Filter{Equal: map[string]any{"space_id": spaceID},
+		GreaterThan: map[string]any{"at": e.At}, OrderBy: "at", Asc: true, Limit: 5}, &view.After); err != nil {
+		return nil, err
 	}
-	s.mu.Lock()
-	s.reader = token
-	s.mu.Unlock()
-	return token, nil
-}
-
-func (s *Service) forgetReader(ctx context.Context) {
-	s.mu.Lock()
-	s.reader = ""
-	s.mu.Unlock()
-	_ = s.R.DB.Delete(ctx, stateTable, s.stateID())
-}
-
-func (s *Service) stateID() string { return "timeline" }
-
-// --- the spaces' bases --------------------------------------------------------
-
-// space returns a space's base, creating it in Utopia the first time.
-func (s *Service) space(ctx context.Context, spaceID string) (*spaceKeys, error) {
-	s.mu.Lock()
-	keys := s.spaces[spaceID]
-	s.mu.Unlock()
-	if keys != nil {
-		return keys, nil
-	}
-	var sp Space
-	if err := s.R.GetString(ctx, spacesTable, spaceID, &sp); err == nil && sp.KBID != "" {
-		if push, err := s.open(sp.Secret); err == nil {
-			keys = &spaceKeys{kbID: sp.KBID, sourceID: sp.SourceID, pushKey: push}
-		}
-	}
-	if keys == nil {
-		project := s.names.space(ctx, spaceID)
-		kb, source, push, err := s.utopia.createBase(ctx, "Timeline · "+project.name,
-			"The dated timeline of Aseman project "+spaceID+": requests, agents' work, messages, files, members and routines.")
-		if err != nil {
-			return nil, err
-		}
-		sealed, err := s.seal(push)
-		if err != nil {
-			return nil, err
-		}
-		now := s.now().UTC()
-		sp = Space{ID: spaceID, KBID: kb, SourceID: source, Secret: sealed, CreatedAt: now, UpdatedAt: now}
-		if err := s.upsert(ctx, spacesTable, spaceID, &sp); err != nil {
-			return nil, err
-		}
-		keys = &spaceKeys{kbID: kb, sourceID: source, pushKey: push}
-		s.L.Info("timeline created for project", "space", spaceID, "kb", kb)
-	}
-	s.mu.Lock()
-	s.spaces[spaceID] = keys
-	s.mu.Unlock()
-	return keys, nil
-}
-
-// forgetSpace drops a space's base Utopia no longer knows; the next use
-// creates it again, and the feeds are read from the start to refill it.
-func (s *Service) forgetSpace(ctx context.Context, spaceID string) {
-	s.mu.Lock()
-	delete(s.spaces, spaceID)
-	s.pushed = map[string]bool{}
-	s.resets++
-	s.mu.Unlock()
-	_ = s.R.DB.Delete(ctx, spacesTable, spaceID)
-	for _, f := range s.feeds {
-		_ = s.R.DB.Delete(ctx, cursorsTable, f.name)
-	}
-	s.L.Warn("timeline base missing in utopia; recreating and refilling", "space", spaceID)
-}
-
-func (s *Service) seal(value string) (string, error) {
-	master := s.K.Env()["node_private_key"]
-	if master == "" {
-		return "", errs.New(errs.CodeUnavailable, "node credential encryption is not available")
-	}
-	return crypto.EncryptPrivateKey(value, master)
-}
-
-func (s *Service) open(sealed string) (string, error) {
-	return crypto.DecryptPrivateKey(sealed, s.K.Env()["node_private_key"])
+	return view, nil
 }
 
 // --- writing: the feeds -------------------------------------------------------
 
-// Start pushes the feeds until the plugin stops.
+// Start reads the feeds until the plugin stops.
 func (s *Service) Start(ctx context.Context) {
-	if s.utopia == nil {
-		s.L.Info("timeline off: " + EnvURL + " is not set")
+	if !s.enabled {
+		s.L.Info("timeline off: " + EnvSwitch + " turns it off")
 		return
 	}
 	ticker := time.NewTicker(syncEvery)
@@ -336,7 +211,7 @@ func (s *Service) Start(ctx context.Context) {
 	}
 }
 
-// Sync reads every feed from its cursor and pushes what it finds.
+// Sync reads every feed from its cursor and writes what it finds.
 func (s *Service) Sync(ctx context.Context) error {
 	var first error
 	for _, f := range s.feeds {
@@ -350,7 +225,7 @@ func (s *Service) Sync(ctx context.Context) error {
 	return first
 }
 
-// syncFeed reads a feed to its end in batches and pushes each record. The
+// syncFeed reads a feed to its end in batches and writes each record. The
 // saved cursor stops at the first record that is not final yet (while it is
 // young), so its outcome is read again; reading goes on past it.
 func (s *Service) syncFeed(ctx context.Context, f feed) error {
@@ -358,18 +233,8 @@ func (s *Service) syncFeed(ctx context.Context, f feed) error {
 	if err := s.R.GetString(ctx, cursorsTable, f.name, &cur); err != nil && errs.CodeOf(err) != errs.CodeNotFound {
 		return err
 	}
-	s.mu.Lock()
-	resets := s.resets
-	s.mu.Unlock()
 	scan, saved, held := cur.At, cur.At, false
-	defer func() {
-		s.mu.Lock()
-		rewound := s.resets != resets
-		s.mu.Unlock()
-		if !rewound {
-			_ = s.saveCursor(ctx, f.name, saved, cur.At)
-		}
-	}()
+	defer func() { _ = s.saveCursor(ctx, f.name, saved, cur.At) }()
 	for ctx.Err() == nil {
 		records, err := f.read(ctx, s, scan, batch)
 		if err != nil {
@@ -378,8 +243,8 @@ func (s *Service) syncFeed(ctx context.Context, f feed) error {
 		from := scan
 		for _, rec := range records {
 			for _, obs := range rec.obs {
-				if err := s.pushObservation(ctx, obs); err != nil {
-					return err // the next pass sends this record again
+				if err := s.write(ctx, f.name, obs); err != nil {
+					return err // the next pass writes this record again
 				}
 			}
 			if rec.pending && s.now().Sub(rec.at) < holdBack {
@@ -422,38 +287,81 @@ func (s *Service) upsert(ctx context.Context, model, id string, v any) error {
 	return err
 }
 
-func (s *Service) pushObservation(ctx context.Context, obs observation) error {
-	if len(obs.S) == 0 {
+// write stores one observation as a timeline entry. An observation's id says
+// what it states, so writing the same one again changes nothing.
+func (s *Service) write(ctx context.Context, kind string, obs observation) error {
+	if len(obs.S) == 0 || obs.space == "" {
 		return nil
 	}
 	s.mu.Lock()
-	done := s.pushed[obs.ExternalID]
+	done := s.written[obs.ExternalID]
 	s.mu.Unlock()
 	if done {
 		return nil
 	}
-	for attempt := 0; ; attempt++ {
-		keys, err := s.space(ctx, obs.space)
-		if err != nil {
-			return err
-		}
-		_, err = s.utopia.push(ctx, keys.sourceID, keys.pushKey, obs)
-		if err == errNotFound && attempt == 0 {
-			s.forgetSpace(ctx, obs.space)
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		break
+	e := entryOf(kind, obs, s.now().UTC())
+	if err := s.upsert(ctx, entriesTable, e.ID, &e); err != nil {
+		return err
 	}
 	s.mu.Lock()
-	if len(s.pushed) > 50_000 {
-		s.pushed = map[string]bool{}
+	if len(s.written) > 50_000 {
+		s.written = map[string]bool{}
 	}
-	s.pushed[obs.ExternalID] = true
+	s.written[obs.ExternalID] = true
 	s.mu.Unlock()
 	return nil
+}
+
+// entryOf renders an observation's statements as one readable entry.
+func entryOf(kind string, obs observation, now time.Time) Entry {
+	at, _ := time.Parse(time.RFC3339, obs.DocTime)
+	subjects := map[string]bool{}
+	var lines []string
+	for _, st := range obs.S {
+		subject, _ := st[1].(string)
+		phrase, _ := st[2].(string)
+		line := subject + " " + phrase
+		if obj, ok := st[3].(string); ok && obj != "" {
+			line += " " + obj
+			subjects[obj] = true
+		} else if v, ok := st[4].(string); ok && v != "" {
+			line += ": " + v
+		}
+		if q, ok := st[5].(map[string]string); ok && len(q) > 0 {
+			keys := make([]string, 0, len(q))
+			for k := range q {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			parts := make([]string, 0, len(keys))
+			for _, k := range keys {
+				parts = append(parts, k+": "+q[k])
+			}
+			line += " (" + strings.Join(parts, ", ") + ")"
+		}
+		subjects[subject] = true
+		lines = append(lines, line)
+	}
+	names := make([]string, 0, len(subjects))
+	for n := range subjects {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	if at.IsZero() {
+		at = now
+	}
+	return Entry{ID: obs.ExternalID, SpaceID: obs.space, Kind: kind, At: at.UTC(), Summary: strings.Join(lines, "; "),
+		Subjects: strings.Join(names, "\n"), RecordedAt: now}
+}
+
+// clip shortens text to n runes for an entry.
+func clip(s string, n int) string {
+	s = strings.TrimSpace(s)
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
 }
 
 // --- status -------------------------------------------------------------------
@@ -461,19 +369,14 @@ func (s *Service) pushObservation(ctx context.Context, obs observation) error {
 // Status is what the admin sees of the timelines.
 type Status struct {
 	Enabled bool                 `json:"enabled"`
-	URL     string               `json:"url,omitempty"`
-	Spaces  int64                `json:"spaces"`
+	Entries int64                `json:"entries"`
 	Feeds   map[string]time.Time `json:"feeds"`
 }
 
 func (s *Service) Status(ctx context.Context) (Status, error) {
-	out := Status{Enabled: s.utopia != nil, Feeds: map[string]time.Time{}}
-	if s.utopia != nil {
-		out.URL = os.Getenv(EnvURL)
-	}
-	n, err := s.R.Count(ctx, spacesTable, database.Filter{})
-	if err == nil {
-		out.Spaces = n
+	out := Status{Enabled: s.enabled, Feeds: map[string]time.Time{}}
+	if n, err := s.R.Count(ctx, entriesTable, database.Filter{}); err == nil {
+		out.Entries = n
 	}
 	for _, f := range s.feeds {
 		var c Cursor
@@ -482,4 +385,33 @@ func (s *Service) Status(ctx context.Context) (Status, error) {
 		}
 	}
 	return out, nil
+}
+
+// --- the agent gateway's bridge ---------------------------------------------------
+
+// SearchJSON is Search for the agent gateway: query and result as JSON.
+func (s *Service) SearchJSON(ctx context.Context, spaceID string, query []byte) ([]byte, error) {
+	var q SearchQuery
+	if len(query) > 0 {
+		if err := json.Unmarshal(query, &q); err != nil {
+			return nil, errs.InvalidArgument("invalid timeline query: " + err.Error())
+		}
+	}
+	items, err := s.Search(ctx, spaceID, q)
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []Entry{}
+	}
+	return json.Marshal(map[string]any{"items": items})
+}
+
+// EntryJSON is Entry for the agent gateway.
+func (s *Service) EntryJSON(ctx context.Context, spaceID, id string) ([]byte, error) {
+	view, err := s.Entry(ctx, spaceID, id)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(view)
 }

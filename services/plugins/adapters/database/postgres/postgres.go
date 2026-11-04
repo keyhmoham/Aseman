@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"sync"
 
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/pkg/errs"
@@ -23,6 +24,9 @@ type Adapter struct {
 	db     *sql.DB
 	engine *sqlcommon.Engine
 	cfg    database.Config
+
+	vecOnce sync.Once
+	vec     *vectorState
 }
 
 // New creates the adapter plugin.

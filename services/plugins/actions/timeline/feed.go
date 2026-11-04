@@ -9,7 +9,7 @@ import (
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
-// observation is one item in Utopia's statements contract (decision 0054):
+// observation is one dated item of a space's timeline:
 // things (e), statements (s) and other names (n), dated by doc_time. Pushing
 // the same external_id again with the same content changes nothing, so every
 // item is keyed by what it says: a changed record is a new observation, never

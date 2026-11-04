@@ -62,7 +62,7 @@ func (s *Service) BotProfile(ctx context.Context, botID identity.ID) (map[string
 	}
 	// The agent's LLM backbone and the token prices users pay for it.
 	llmInfo := map[string]any{}
-	if rec.Kind == bot.KindAgent && rec.VMType == bot.VMTypeDeepAgents && s.LLM != nil {
+	if rec.Kind == bot.KindAgent && bot.AgentVMType(rec.VMType) == bot.VMTypeHarness && s.LLM != nil {
 		provider, model := AgentBackbone(rec.SpecYML)
 		if p, m, lerr := s.LLM.Resolve(ctx, provider, model); lerr == nil {
 			llmInfo = map[string]any{

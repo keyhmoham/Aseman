@@ -87,10 +87,6 @@ jobs:
           cd '$DEPLOY_PATH'
           # Settings live on the server (never in GitHub): create .env there once.
           [ -f .env ] || { echo "Missing $DEPLOY_PATH/.env on the server. See deploy/README.md." >&2; exit 1; }
-          # The agents' memory server (OpenViking) needs a root key: made once, kept in .env.
-          grep -qs '^ASEMAN_OPENVIKING_ROOT_KEY=.' .env || printf '\\nASEMAN_OPENVIKING_ROOT_KEY=%s\\n' "\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')" >> .env
-          # The node's account in the timelines' server (Utopia): made once, kept in .env.
-          grep -qs '^ASEMAN_TIMELINE_PASSWORD=.' .env || printf '\\nASEMAN_TIMELINE_PASSWORD=%s\\n' "\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')" >> .env
           mkdir -p /tmp/aseman-nomad
           # Free disk before building: the parallel image builds need several GB of scratch space.
           docker image prune -af --filter "until=72h"

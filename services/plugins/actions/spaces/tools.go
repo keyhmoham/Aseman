@@ -57,10 +57,6 @@ func toolDetail(toolName string) string {
 		return "verifying and opening an app…"
 	case "appui_status":
 		return "checking an app…"
-	case "opencode_run":
-		return "running OpenCode…"
-	case "opencode_status", "opencode_models":
-		return "checking OpenCode…"
 	case "desk_state", "desk_arrange", "desk_close":
 		return "arranging the desk…"
 	default:
@@ -97,12 +93,8 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 	for _, t := range dbTools() {
 		used[t.Name] = true
 	}
-	sandboxID, hasSandbox := s.sandboxBotID(ctx, spaceID)
-	openCode := s.openCodeOn(ctx)
-	builder := "OpenCode builds"
-	if !openCode {
-		builder = "you build"
-	}
+	sandboxID, hasSandbox := s.sandboxBotID(ctx, s.personalSandboxSpace(ctx, spaceID))
+	builder := "you build"
 	caller := helper.Actor(ctx)
 	sp, _ := s.GetSpace(ctx, spaceID)
 	direct := sp != nil && sp.Direct
@@ -159,15 +151,8 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 		}
 		tools = append(tools, tool)
 	}
-	// While it is on, OpenCode is listed like the sandbox: a builtin app with
-	// microtool-style commands; agents call the platform builtins
-	// (appui_create / opencode_*). Off, it is not offered at all.
-	if openCode && !used["opencode"] {
-		used["opencode"] = true
-		tools = append(tools, openCodeBuiltinApp())
-	}
 	available := map[string]map[string]bool{}
-	for _, t := range vmm.BuiltinsFor(openCode) {
+	for _, t := range vmm.Builtins() {
 		if strings.HasPrefix(t.Name, "routine_") && s.Routines == nil {
 			continue
 		}
@@ -262,7 +247,7 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 	if vmm.ExecutionFrom(ctx).NoSandbox {
 		switch toolName {
 		case "sandbox_exec", "file_send", "file_upload", "file_edit", "proxy_create", "proxy_list", "proxy_get", "proxy_delete",
-			"appui_create", "appui_publish", "appui_status", "opencode_run", "opencode_status", "opencode_models":
+			"appui_create", "appui_publish", "appui_status":
 			return "", errs.Permission("sandbox access is disabled for this request")
 		}
 	}
@@ -411,14 +396,6 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 		result, terr = s.appuiPublishTool(ctx, id, roomID, agentName, argsJSON)
 	case toolName == "appui_status":
 		result, terr = s.appuiStatusTool(ctx, id, argsJSON)
-	case vmm.OpenCodeOnly(toolName) && !s.openCodeOn(ctx):
-		terr = errOpenCodeOff(toolName)
-	case toolName == "opencode_run":
-		result, terr = s.opencodeRunTool(ctx, id, argsJSON)
-	case toolName == "opencode_status":
-		result, terr = s.appuiStatusTool(ctx, id, argsJSON)
-	case toolName == "opencode_models":
-		result, terr = s.opencodeModelsTool(ctx, id)
 	case toolName == "desk_state":
 		result, terr = s.deskStateTool(ctx, id, roomID, argsJSON)
 	case toolName == "desk_arrange":

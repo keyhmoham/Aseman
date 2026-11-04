@@ -13,9 +13,9 @@
 name: aseman
 
 services:
-  # The stack's one Postgres: the node's records, and the spaces' timelines
-  # (Utopia) in a database of their own. postgres:16-alpine with pgvector
-  # added (deploy/postgres), so existing data volumes keep working.
+  # The stack's one Postgres: the node's records, the spaces' timelines and
+  # the agents' memory (pgvector). postgres:16-alpine with pgvector added
+  # (deploy/postgres), so existing data volumes keep working.
   postgres:
     build: ./deploy/postgres
     image: aseman/postgres:16-pgvector
@@ -98,77 +98,15 @@ services:
     command: ["version"]
     restart: "no"
 
-  # The agent runtime. By default it is LangChain Deep Agents on LangGraph.
-  # Admin → Agentic engine can run the same turns through the OpenCode CLI
-  # in this image (its own free models). Built here; the node runs it as a
-  # Nomad service on the stack's network (alias aseman-deepagents) the first
-  # time an agent works. The tag is pinned because Nomad always pulls ":latest".
-  deepagents:
-    build: ./services/plugins/adapters/vmm/deepagents/runtime
-    image: aseman/deepagents:v2
+  # The agent runtime: DeepSeek Harness (dsh) as one long-lived host with
+  # Aseman's plugins. Built here; the node runs it as a Nomad service on the
+  # stack's network (alias aseman-harness) the first time an agent works. The
+  # tag is pinned because Nomad always pulls ":latest".
+  harness:
+    build: ./services/plugins/adapters/vmm/harness/runtime
+    image: aseman/harness:v1
     command: ["true"]
     restart: "no"
-
-  # Self-hosted OpenViking (https://openviking.ai): the context database that
-  # keeps the agents' memory (each space is an account, each agent a user).
-  # Reached only on the stack's network, by the deep agents runtime and the
-  # node, with the root key (./aseman.sh up generates one into .env). It
-  # has no model settings: it calls its models through the node, which uses
-  # the ones picked under Admin → Memory models.
-  openviking:
-    build: ./deploy/openviking
-    image: aseman/openviking:v1
-    restart: unless-stopped
-    environment:
-      OPENVIKING_ROOT_API_KEY: ${ASEMAN_OPENVIKING_ROOT_KEY:?set ASEMAN_OPENVIKING_ROOT_KEY in .env (./aseman.sh up generates one)}
-      OPENVIKING_NODE_URL: http://aseman:8080
-    volumes:
-      - openviking-data:/data
-
-  # Creates the timelines' database on the node's Postgres (with pgvector)
-  # if it is missing, then exits. Runs on every start; changes nothing when
-  # the database is there.
-  timeline-db:
-    build: ./deploy/postgres
-    image: aseman/postgres:16-pgvector
-    command: ["timeline-db"]
-    restart: "no"
-    networks: [data]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      PGHOST: postgres
-      POSTGRES_USER: ${POSTGRES_USER:-aseman}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aseman}
-      POSTGRES_DB: ${POSTGRES_DB:-aseman}
-      TIMELINE_DB: ${ASEMAN_TIMELINE_DB:-aseman_timeline}
-
-  # The spaces' timelines: Utopia (https://github.com/deeplethe/utopia), a
-  # bitemporal knowledge graph, on the node's own Postgres (no database of its
-  # own). The node pushes each space's events into it and serves it to every
-  # agent as a built-in MCP server. Reached only on the stack's network; the
-  # node signs in with ASEMAN_TIMELINE_PASSWORD (./aseman.sh up
-  # generates one). Its own web console is not published.
-  timeline:
-    image: ${ASEMAN_TIMELINE_IMAGE:-ghcr.io/deeplethe/utopia:0.1.0-rc9}
-    restart: unless-stopped
-    depends_on:
-      timeline-db:
-        condition: service_completed_successfully
-    networks: [data]
-    environment:
-      UTOPIA_DATABASE_URL: postgres://${POSTGRES_USER:-aseman}:${POSTGRES_PASSWORD:-aseman}@postgres:5432/${ASEMAN_TIMELINE_DB:-aseman_timeline}
-      UTOPIA_BIND_ADDR: 0.0.0.0:1516
-      UTOPIA_DATA_DIR: /app/data
-      UTOPIA_WEB_DIST: /app/web-dist
-      # Only the first account (the node's) may register.
-      UTOPIA_OPEN_REGISTRATION: "false"
-      # Its share of the node's Postgres connections (max_connections 100).
-      UTOPIA_DB_MAX_CONNECTIONS: ${ASEMAN_TIMELINE_DB_CONNECTIONS:-16}
-    volumes:
-      # Full-text index, the signing and sealing keys Utopia generates.
-      - timeline-data:/app/data
 
   # Local STT/TTS for Talk (Admin → AI → Voice): OpenAI-compatible
   # /v1/audio/transcriptions + /v1/audio/speech. The node reaches it as
@@ -221,13 +159,9 @@ services:
         condition: service_healthy
       sandbox-computer:
         condition: service_completed_successfully
-      deepagents:
+      harness:
         condition: service_completed_successfully
       tool-runtime:
-        condition: service_started
-      openviking:
-        condition: service_healthy
-      timeline:
         condition: service_started
       voice:
         condition: service_started
@@ -251,9 +185,10 @@ services:
       ASEMAN_SANDBOX_DOCKER_NETWORK: ${ASEMAN_SANDBOX_DOCKER_NETWORK:-aseman_default}
       # Sandbox computer image (default: the sandbox computer built above).
       ASEMAN_SANDBOX_IMAGE: ${ASEMAN_SANDBOX_IMAGE:-aseman/sandbox-computer:latest}
-      # The deep agents runtime: its image, the node as the runtime reaches it
-      # (agent gateway + metered LLM proxy) and the network it joins.
-      ASEMAN_AGENT_RUNTIME_IMAGE: ${ASEMAN_AGENT_RUNTIME_IMAGE:-aseman/deepagents:v2}
+      # The agent runtime (DeepSeek Harness): its image, the node as the
+      # runtime reaches it (agent gateway + metered LLM proxy) and the network
+      # it joins.
+      ASEMAN_AGENT_RUNTIME_IMAGE: ${ASEMAN_AGENT_RUNTIME_IMAGE:-aseman/harness:v1}
       # The filtering proxy run beside each project computer (empty: none, and
       # computers connect directly). Network policies are set per project.
       ASEMAN_EGRESS_IMAGE: ${ASEMAN_EGRESS_IMAGE:-aseman/egress-proxy:v1}
@@ -271,45 +206,16 @@ services:
       # Long App UI / sandbox tool rounds can leave the model quiet between
       # tool results; 45s was killing turns mid-appui_create.
       ASEMAN_LLM_STREAM_IDLE_TIMEOUT: ${ASEMAN_LLM_STREAM_IDLE_TIMEOUT:-180s}
-      # Programmer OpenCode only (Admin → OpenCode, appui_create / opencode_run):
-      # the sandbox coding agent uses the turn's metered LLM gateway
-      # (/deepagents/v1/llm). The agentic engine does not read OPENCODE_MODEL;
-      # when it is OpenCode, the runtime CLI uses OpenCode's free models and
-      # seeds OpenCode Go auth from ASEMAN_OPENCODE_ENGINE_API_KEY (defaults to
-      # OPENCODE_API_KEY) so free-tier daily limits do not stop the agent.
-      # Optional overrides when sandboxes cannot resolve ASEMAN_AGENT_NODE_URL:
+      # Sandboxes reach the turn's metered LLM gateway (/harness/v1/llm) at
+      # ASEMAN_AGENT_NODE_URL; override when they cannot resolve it.
       ASEMAN_SANDBOX_LLM_URL: ${ASEMAN_SANDBOX_LLM_URL:-}
-      OPENCODE_MODEL: ${OPENCODE_MODEL:-aseman/default}
-      # Also used as the agentic engine's OpenCode Go credential when
-      # ASEMAN_OPENCODE_ENGINE_API_KEY is unset (see deepagents/runtime.go).
-      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
-      ASEMAN_OPENCODE_ENGINE_API_KEY: ${ASEMAN_OPENCODE_ENGINE_API_KEY:-}
-      ASEMAN_OPENCODE_ENGINE_AUTH: ${ASEMAN_OPENCODE_ENGINE_AUTH:-}
-      # DeepSeek Harness agentic engine (Admin → Agentic engine = DeepSeek
-      # Harness). By default it runs on the agents' platform models through
-      # the metered gateway; set ASEMAN_DSH_ENGINE_LLM=deepseek with a key to
-      # use the engine's own DeepSeek account instead.
-      ASEMAN_DSH_ENGINE_LLM: ${ASEMAN_DSH_ENGINE_LLM:-}
-      ASEMAN_DSH_ENGINE_API_KEY: ${ASEMAN_DSH_ENGINE_API_KEY:-}
-      ASEMAN_DSH_ENGINE_MODEL: ${ASEMAN_DSH_ENGINE_MODEL:-}
-      ASEMAN_DSH_ENGINE_WEB: ${ASEMAN_DSH_ENGINE_WEB:-}
-      ASEMAN_DSH_ENGINE_TIMEOUT: ${ASEMAN_DSH_ENGINE_TIMEOUT:-}
-      # The agents' memory: the self-hosted OpenViking above, as the runtime
-      # reaches it, and how much it recalls with each message (tokens).
-      ASEMAN_OPENVIKING_URL: ${ASEMAN_OPENVIKING_URL:-http://openviking:1933}
-      ASEMAN_OPENVIKING_API_KEY: ${ASEMAN_OPENVIKING_ROOT_KEY:-}
-      ASEMAN_OPENVIKING_RECALL_TOKENS: ${ASEMAN_OPENVIKING_RECALL_TOKENS:-1500}
-      # The agent runtime's swarm and self-improvement (passed on to it).
-      ASEMAN_SWARM_PARALLEL: ${ASEMAN_SWARM_PARALLEL:-}
-      ASEMAN_IMPROVE: ${ASEMAN_IMPROVE:-}
-      ASEMAN_IMPROVE_EVERY: ${ASEMAN_IMPROVE_EVERY:-}
-      ASEMAN_IMPROVE_COOLDOWN: ${ASEMAN_IMPROVE_COOLDOWN:-}
-      ASEMAN_IMPROVE_BUDGET: ${ASEMAN_IMPROVE_BUDGET:-}
-      # The spaces' timelines: the Utopia server above and the node's account
-      # in it. Set ASEMAN_TIMELINE_URL to an empty value to turn them off.
-      ASEMAN_TIMELINE_URL: ${ASEMAN_TIMELINE_URL-http://timeline:1516}
-      ASEMAN_TIMELINE_EMAIL: ${ASEMAN_TIMELINE_EMAIL:-timeline@aseman.local}
-      ASEMAN_TIMELINE_PASSWORD: ${ASEMAN_TIMELINE_PASSWORD:?set ASEMAN_TIMELINE_PASSWORD in .env (./aseman.sh up generates one)}
+      # The agent runtime's limits (passed on to it): the window assumed for a
+      # model whose window is unknown, and how long a turn may run (seconds).
+      ASEMAN_DEFAULT_CONTEXT_WINDOW: ${ASEMAN_DEFAULT_CONTEXT_WINDOW:-}
+      ASEMAN_TURN_TIMEOUT: ${ASEMAN_TURN_TIMEOUT:-}
+      # The spaces' timelines are kept in the node's database; "off" turns
+      # them off.
+      ASEMAN_TIMELINE: ${ASEMAN_TIMELINE:-}
       # Tools: the image managed Elpian VM / QuickJS backends run in, the
       # network they join (where the node reaches them by name), the node as
       # they reach it, and the compiler above.
@@ -436,8 +342,6 @@ volumes:
   spire-svid:
   postgres-data:
   aseman-data:
-  openviking-data:
-  timeline-data:
   voice-models:
   voice-kokoro:
   # Debug Flutter client (docker-compose.hotreload.yml): pub cache and the

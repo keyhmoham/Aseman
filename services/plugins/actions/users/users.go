@@ -19,7 +19,6 @@ import (
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/pkg/jsonpatch"
 	"github.com/aseman/aseman/pkg/logger"
-	"github.com/aseman/aseman/pkg/openviking"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 	"github.com/aseman/aseman/plugins/actions/message/models/message"
@@ -62,15 +61,14 @@ type Service struct {
 	answerFn    func(ctx context.Context, person identity.ID, rec *bot.Bot, turns []map[string]string, onText func(string)) (string, error)
 
 	// The person's Aseman (brain.go) in tests: its memory, the decision model, its answers and the rooms it reads.
-	memoryFn      func() *openviking.Client
+	memoryFn      func() vmm.PersonMemory
 	decideFn      func(ctx context.Context, body string) brainPlan
 	brainAnswerFn func(ctx context.Context, person identity.ID, rec *bot.Bot, brief string, turns []map[string]string, onText func(string)) (string, error)
 	roomsFn       func(ctx context.Context, person identity.ID) ([]brainRoom, error)
 	linesFn       func(ctx context.Context, person identity.ID, space string) []brainLine
 	// What it does for the person (brain_tools.go) in tests: its answers with tools, and the actions it runs as them.
-	actFn      func(ctx context.Context, person identity.ID, brief string, turns []map[string]string, run func(name, args string) string) (string, error)
-	dispatchFn func(ctx context.Context, person identity.ID, namespace, action string, body any) (json.RawMessage, error)
-	fundsFn    func(ctx context.Context, person identity.ID) error
+	actFn   func(ctx context.Context, person identity.ID, brief string, turns []map[string]string) (string, error)
+	fundsFn func(ctx context.Context, person identity.ID) error
 }
 
 // Actions returns the users namespace actions.
@@ -94,6 +92,7 @@ func BuildActions(s *Service) []api.Action {
 		&dmAgentAskAction{s: s},
 		&dmAssistantAction{s: s},
 		brainConfirmAction(s),
+		brainWorkAction(s),
 		adminAILogAction(s),
 		voiceConfigAction(s),
 		voiceSpeakAction(s),

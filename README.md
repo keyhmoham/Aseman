@@ -10,7 +10,7 @@
 AsemanAIOS/
 ├── app/         # Aseman Flutter client (web, iOS, Android, desktop)
 ├── services/    # Aseman core node (Go): API gateway, agent runtime, finance, federation
-└── deploy/      # Deployment configurations (Nomad agent, sandbox computer, OpenViking)
+└── deploy/      # Deployment configurations (Nomad agent, sandbox computer, Helm, …)
 ```
 
 | Component | Tech Stack | Role |
@@ -45,14 +45,11 @@ Run the entire platform with a single command. Docker with the Compose plugin is
 | :--- | :--- | :--- |
 | **`web`** | Flutter web client. Debug mode with hot reload by default; `--no-hot-reload` serves the release build | [http://localhost:3000](http://localhost:3000) |
 | **`aseman`** | Core Go node (REST/WebSocket API, agent gateway, finance) | [http://localhost:8080](http://localhost:8080) |
-| **`postgres`** | The stack's one database server (Postgres 16 with pgvector): the node's records and the timelines' database | Internal |
+| **`postgres`** | The stack's one database server (Postgres 16 with pgvector): the node's records, the agents' memory and the project timelines | Internal |
 | **`nomad`** | Nomad agent executing bot and agent workloads | Internal |
 | **`sandbox-computer`** | Builds the base sandbox image for spaces, then exits | — |
-| **`deepagents`** | Builds the LangChain/LangGraph agent runtime image, then exits | — |
+| **`harness`** | Builds the agent runtime image (DeepSeek Harness with Aseman's plugins), then exits | — |
 | **`tool-runtime`** | Runs tool backends written for the Elpian VM or QuickJS (Nomad runs its image for managed tools, sandboxes carry it for installed ones); this service is the node's tool compiler | Internal |
-| **`openviking`** | Self-hosted [OpenViking](https://openviking.ai): the agents' long-term memory | Internal |
-| **`timeline-db`** | Creates the timelines' database on `postgres` if it is missing, then exits | — |
-| **`timeline`** | Self-hosted [Utopia](https://github.com/deeplethe/utopia): each project's dated timeline, on `postgres` | Internal |
 
 ### Accessing the System
 
@@ -97,12 +94,16 @@ The Flutter client reads the Google web/server client ID from the node at runtim
 
 ## Agents
 
-Every agent runs on [LangChain Deep Agents](https://github.com/langchain-ai/deepagents) in the agent runtime (see [`services/README.md`](services/README.md#agents-the-deep-agents-runtime)), unless an admin picks another **agentic engine** (Admin → AI → Agentic engine): the headless **OpenCode** CLI on its own free models, or **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)** (`dsh`), which brings its own memory, swarm of subagents, Agent Teams, planning and workflows, runs on the agents' platform models, and reaches the space, questions, hand-offs and on-demand app/plugin creation through Aseman's MCP bridge:
+Every agent runs on **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)** (`dsh`): one long-lived harness host with Aseman's own plugins, which the node runs as its agent runtime (see [`services/plugins/adapters/vmm/harness/runtime`](services/plugins/adapters/vmm/harness/runtime/README.md)). Each agent keeps one dsh Session per room thread (and the person's Aseman one per personal chat), resumed across turns and restarts. The harness brings the agent loop, compaction, todos, goals, workflows, subagents and Agent Teams; Aseman's plugins bring the platform:
 
-- **Hybrid teams:** the lead (aseman) staffs a goal with agents already in the space, agents **published in the marketplace** (hired into the space) and, only for roles nothing fits, **new specialists it writes**. The language model and the decision model share the work: the decision model scores every candidate for every role in one fast request, and the language model breaks the goal into roles, settles close calls and writes missing specialists.
+- **The metered model:** every model call goes to the node's LLM gateway as the turn it belongs to (the agent's own provider and model, billed to the turn); provider keys never leave the node.
+- **The space's computer** is each agent's shell and files (`bash`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `read_image`); the harness's local shell and files are off.
+- **The platform:** the space's apps and the platform's tools (files, desk, AG-UI, app building, routines, images, proxies, …) are generated per turn; the whole Aseman API (spaces, rooms and threads, people, agents, files and media, routines, market, themes, posts, …) is reachable with `aseman_api_search` / `aseman_api_call`, under one policy: a room agent stays in its space; the person's own Aseman acts across their account. Administration, credentials and money movement are never served.
+- **People:** `post_message`, direct messages, and `ask_user`, which pauses the conversation until a person answers.
+
+- **Hybrid teams:** the lead (aseman) hands work to the space's agents (`delegate_task`), hires agents **published in the marketplace** (`hire_agent`) and, only for roles nothing fits, writes **new specialists** (`recruit_agent`). For parallel work of its own it spawns teammates (dsh Agent Teams: a shared task board and mailbox).
 - **Theme packs:** people publish and install **UI themes** from the Store (Themes tab). A pack is versioned JSON (`aseman.theme/v1`) that restyles Material tokens, glass/surfaces, shapes, typography, motion, graphics, and shell layout (which features appear as tabs/sections and in what order) through a trusted Flutter runtime — no arbitrary Dart from the Store. Theme Studio and Aseman (`create_theme` / `install_theme`) generate packs from a design brief; Settings → Appearance switches builtins (Sky, High contrast, Compact) or opens the Store.
-- **Parallel work:** the lead runs plans across the team in parallel; independent tasks start at once (the decision model drops dependencies that are not needed), and several tasks for the same agent run as parallel instances of it.
-- **Self-improvement:** agents improve their own playbook as they work with [GEPA](https://github.com/gepa-ai/gepa): the moments of their turns that went wrong (or right) are replayed with candidate playbooks, without running anything again, and a playbook is adopted only when it does better on them. It is billed to the project like memory; `ASEMAN_IMPROVE=0` turns it off.
+- **Parallel work:** several delegations run at once, teammates and subagents work in parallel, and `workflow` scripts orchestrate fixed fan-outs.
 
 ## Room Threads
 
@@ -126,25 +127,17 @@ switches the chat to that thread's own history.
 
 ## Agent Memory
 
-Agents remember through a self-hosted [OpenViking](https://openviking.ai) server (`deploy/openviking`), not files in the sandbox:
+Agents remember in three layers, all kept by the node and scoped by the turn:
 
-- **Isolation:** each space is an OpenViking account and each agent a user in it; one space never sees another's memory.
-- **Notes:** the space's shared notes (`viking://resources/space/notes.md`) and each agent's own (`viking://user/<agent>/memories/notes.md`) are in every agent's prompt; agents keep them with `remember` / `rewrite_notes`.
-- **Recall:** what memory holds about a message is recalled with it, and agents search and read more with `recall` / `read_memory`. It is recalled as the person who asked (what OpenViking knows of them comes first) and within the room's session, so a short follow-up is expanded with the conversation into what it is about (`ASEMAN_OPENVIKING_QUERY_EXPANSION=off` saves that memory-model call) and memories served in the last turns are not repeated. A specialist working on the space's computer recalls for its work (resources and skills first), a lead for the people in the conversation.
-- **Learning:** every finished turn, with the tools the agent ran, is added to the agent's OpenViking session of the room. OpenViking commits the session once about ten turns gathered or the room has been quiet for 30 minutes, and extracts long-term memories from it (preferences, entities, events, cases, patterns, how tasks were done, and what it learned about each person). Text files people attach are kept as the space's resources, so any room can find them again. A conversation that starts fresh (a new room thread, or a new one after the last no longer fit the model) begins from the session's summary of the earlier ones.
-- **Models:** OpenViking has no model settings of its own. It calls its models through the node, which uses the ones picked in **Admin → Memory models**: a chat model that learns from conversations and an embedding model that finds memories by meaning, chosen from the providers and models under **Admin → Providers / Models** (mark embedding models as such on Models). Without them agents still keep and read their notes. Changing the embedding model re-indexes every project's memory.
-- **Billing:** a project pays for what its memory uses, like the rest of its agents' work: the memory models' tokens at their own prices (Admin → Models), paid to the owner of the provider's key, counted in the project's spend and against its budget. The payer is whoever ran the project's latest agent turn, else its owner. OpenViking names the project of every model call (`deploy/openviking/sitecustomize.py`), and the node charges each project every 30 seconds. A project that cannot pay gets no memory model calls until it can.
-- **Setup:** nothing to configure: the root key is generated into `.env` on first start. Requests marked "no memory" never reach OpenViking. Notes kept in a space's sandbox `AGENTS.md` files before are imported once, and the project's Memory screen reads and edits the notes in OpenViking.
+- **Notes:** the space's shared notes and each agent's own (in personal chat, the person's notes with their Aseman) are always in the agent's context; agents keep them with `rewrite_notes`. The project's Memory screen reads and corrects the same notes.
+- **Long-term memories:** facts, preferences, decisions, procedures and what is known about people, stored in Postgres with **pgvector** and recalled by meaning. Agents keep them (`remember`, `shared=true` for the whole team) and look them up (`recall`); what memory holds about each message comes with it. After every turn the node learns new memories from it with the memory chat model, skipping what it already knows. A room agent recalls its own and its space's memories, never another space's; a person's memory is theirs alone.
+- **Earlier conversations:** dsh's full-text session search (`session_*` tools) over the space's earlier sessions.
+- **Models:** pick a chat and an embedding model under **Admin → Memory models**. Without an embedding model, memories are recalled by words; without a chat model, nothing is learned from turns. Notes always work. Changing the embedding model needs no reindex: memories of another dimension are never compared.
+- **Billing:** a project pays for what its memory uses of the memory models (its owner's provider prices), counted in its spend and budget; a person's own memory is billed to the person. A project that cannot pay gets no memory model calls until it can. Requests marked "no memory" read and learn nothing.
 
 ## Project Timeline
 
-Every project keeps a dated timeline of its work and events, and every agent can read it. It lives in a self-hosted [Utopia](https://github.com/deeplethe/utopia) server (service `timeline`), a bitemporal knowledge graph, which runs on the stack's own Postgres in a database of its own (`aseman_timeline`); there is no second database server.
-
-- **What is on it:** people's requests and how they ended, the tools each agent ran, room messages and agents' work logs, model usage and cost, files shared, members joining, rooms opened, routines and their runs. The node reads these from its own records (the `timeline` namespace) and pushes them about every 10 seconds, history included on first start. Each entry carries when it happened and when it was recorded.
-- **Agents:** the timeline is a built-in MCP server of every agent, on by default. The runtime reaches it only through the node's agent gateway (`/deepagents/v1/timeline/mcp`), which forwards to the turn's own project; agents see it as `timeline_*` tools (find, history, changes, facts, related, paths, search, entry), whatever tools they are otherwise allowed, and are told in their prompt when to use them. Reads only: Utopia's write tool is not served. Requests marked "no memory" get no timeline.
-- **Isolation:** each project is a knowledge base of its own in Utopia; an agent never names the project or holds a Utopia key.
-- **No models needed:** events go in as structured statements, so building and reading the timeline uses no LLM.
-- **Setup:** nothing to configure: the node's Utopia password (`ASEMAN_TIMELINE_PASSWORD`) is generated into `.env` on first start, and the node creates its account, each project's knowledge base and its read token itself. Set `ASEMAN_TIMELINE_URL=` (empty) in `.env` to turn timelines off. Admins see each feed's progress with `timeline.status`.
+Every project keeps a dated timeline of its work and events in the node's own database (`timeline_entries`): people's requests and how they ended, the tools each agent ran, room messages and work logs, model usage, files shared, members joining, rooms opened, routines and their runs. The node reads these from its own records about every 10 seconds, history included on first start. Agents search it with `timeline_search` and `timeline_entry`, for their own project only. No model is involved. `ASEMAN_TIMELINE=off` turns it off; admins see each feed's progress with `timeline.status`.
 
 ## Tools
 
@@ -162,7 +155,7 @@ Users create tools in the Tools panel from one form with a **backend** and a
   windows on the room's desk, placed and arranged by agents and people.
 - **On-demand apps:** when people want an app, dashboard or custom tool UI,
   agents start it with `appui_create` (fullstack in the sandbox), and the
-  node's builder builds it (see *Who builds: the OpenCode switch* below). The
+  space's agents build it (see *Who builds* below). The
   frontend is an **Elpian app** by default: JavaScript the client runs on
   its Elpian QuickJS runtime and draws natively with the UI kit and the
   person's theme, with the OpenUI collection and agent islands ported to
@@ -181,33 +174,14 @@ Users create tools in the Tools panel from one form with a **backend** and a
   the live server, its end-to-end scenarios replayed) before it opens.
   Passing an existing app's `dir` changes it in place.
   See [`deploy/sandbox-computer/appui`](deploy/sandbox-computer/appui).
-- **Who builds: the OpenCode switch** (Admin → AI → OpenCode,
-  `spaces.opencode_get` / `opencode_set`; **off by default**):
-  - *Off:* OpenCode is out of the loop — not offered, not configured, not
-    run. The space's own agents build apps and write code themselves:
-    `appui_create` lays the project out and answers with the build task
-    (`TASK.md`); the agent (or a developer specialist the lead staffs)
-    plans, builds, tests, validates the Elpian views and drives the app end
-    to end with `aseman-elpian` (the same Elpian validator and headless
-    driver OpenCode gets as MCP tools, sessions kept between commands), then
-    calls `appui_publish`: the platform verifies it and opens it, or answers
-    with what to repair. Other coding happens directly in the sandbox, and
-    teams may staff developer roles.
-  - *On:* every coding task (apps, scripts, APIs, fixes, tests) goes to
-    OpenCode (`appui_create` / `opencode_run`) in one complete brief, on the
-    turn's metered gateway; the platform verifies its apps and sends failures
-    back to it to repair. Agents never write code themselves and the lead
-    never staffs a programming specialist; agents supply what the brief needs
-    and check the result.
-  Both modes share the project layout, guides, toolchain, checks, update
-  flow and app features. `appui_status` reads a project's state in either.
-  This switch is only the programmer. Who runs agent turns is separate
-  (Admin → AI → Agentic engine, `spaces.agent_engine_get` / `agent_engine_set`,
-  default `deepagents`). `opencode` runs every turn through the OpenCode CLI
-  (`opencode run --format json`) on OpenCode's own free models — swarm as
-  parallel runs, the team as OpenCode agents, handoff as the task tool, app
-  generation as the `aseman-app-builder` agent — and does not use the platform
-  LLM gateway or this programmer switch.
+- **Who builds:** the space's own agents. `appui_create` lays the project
+  out and answers with the build task (`TASK.md`); the agent (or a developer
+  specialist the lead staffs) plans, builds, tests, validates the Elpian views
+  and drives the app end to end with `aseman-elpian` (the Elpian validator and
+  headless driver, sessions kept between commands), then calls
+  `appui_publish`: the platform verifies it and opens it, or answers with what
+  to repair. Other coding happens directly in the sandbox. `appui_status`
+  reads a project's state.
   Use `proxy_create` to expose an already-running sandbox HTTP service as a
   DeskWeb card. Previews serve the page API at `/_aseman/api/` (context,
   tools, microtool calls).
@@ -223,15 +197,18 @@ dependency. See [`services/README.md`](services/README.md#tools-one-form-three-b
 - **Provider Management:** Admin users can register API keys and set per-model input/output token pricing directly from the web UI (**Admin → LLM**).
 - **Execution & Metering:** All model calls route through the node's metered LLM proxy, ensuring exact usage tracking based on provider responses.
 - **Billing Mechanics:** Agent work is billed to the account that initiated the task (`pay_llm` for model tokens, `pay_bot` / `pay_node` for execution runtime).
-- **Decision Model:** Optionally pick a decision model such as TypeSafe AI's Jev on Vercel AI Gateway (**Admin → Decision model**). Agents then use it for tool selection, routing and work checks together with their own model; turned off, every agent decides with its own model.
+- **Decision Model:** Optionally pick a fast decision model (**Admin → Decision model**). Your personal Aseman uses it to decide, before anything else, whether a note is kept or answered.
 - **First Boot Bootstrap:** To automatically seed an initial LLM provider on startup, set `ASEMAN_LLM_API_KEY` (and optionally `ASEMAN_LLM_MODEL`) in your `.env`.
 
 ## Personal Aseman, calls and social
 
 - **Aseman chat is your personal Aseman:** the former Saved Messages self-chat
-  is where notes are kept or answered by your personal brain (OpenViking memory,
-  room access, proposals with Confirm, reminders, `work_on_it` jobs, live voice
-  under Admin → Agents). There is no separate Aseman assistant Direct — opening
+  is where notes are kept or answered by your personal Aseman, which acts for
+  you on DeepSeek Harness with your access across the app (your own memory,
+  room access, `ask_user` before anything that cannot be undone, app-wide
+  plugins, your own computer (your home workspace's, shared with your direct
+  chats' agents), work handed to your workspace's team and written back here
+  when done, live voice under Admin → Agents). There is no separate Aseman assistant Direct — opening
   the built-in assistant or lead out of space lands here. Mentions of `@aseman`
   in other personal chats still use the chat assistant; room agents stay
   mentionable in projects, scoped to whoever prompts them.

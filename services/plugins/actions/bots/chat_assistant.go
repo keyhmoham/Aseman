@@ -23,7 +23,7 @@ import (
 // or fallbacks. An administrator manages it like any agent (model, fallbacks, thinking
 // effort, name, avatar) and, unlike the lead, can edit its instructions.
 
-// chatAssistantVMID is the deep agents runtime id the assistant's record carries (it
+// chatAssistantVMID is the agent runtime id the assistant's record carries (it
 // never runs a turn: a chat answer is one model call).
 const chatAssistantVMID = "deepagents-aseman-chat"
 
@@ -143,7 +143,7 @@ func (s *Service) InstallChatAssistant(ctx context.Context) (*bot.Bot, error) {
 	rec := &bot.Bot{
 		Entity:  entity.Entity{ID: botID, CreatedAt: now, UpdatedAt: now},
 		OwnerID: identity.ID{}, AccountID: accID, Name: "Aseman",
-		Kind: bot.KindAgent, VMType: bot.VMTypeDeepAgents, VMID: chatAssistantVMID,
+		Kind: bot.KindAgent, VMType: bot.VMTypeHarness, VMID: chatAssistantVMID,
 		Status: bot.StatusRunning, ImageRef: bot.BuiltinChatImage, SpecYML: chatAssistantSpec(""),
 	}
 	if err := s.R.CreateID(ctx, "bots", botID, rec); err != nil {

@@ -14,6 +14,7 @@ import (
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/invitation"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
@@ -32,8 +33,12 @@ const zeroRoom = "00000000000000000000000000000000"
 
 // Service implements space operations and permission resolution.
 type Service struct {
-	teams teamRuns
-	desks deskStore
+	// agentMemoryFn replaces the agent runtime's memory (tests).
+	agentMemoryFn func() vmm.EngineMemory
+	// homeMu keeps two first uses from making two home workspaces.
+	homeMu sync.Mutex
+	teams  teamRuns
+	desks  deskStore
 	// threadRooms caches which room each room id is a thread of (see threads.go).
 	threadRooms     sync.Map
 	botMembershipMu sync.Mutex
@@ -440,6 +445,35 @@ func (s *Service) HomeSpace(ctx context.Context, owner identity.ID) (*space.Spac
 		return nil, errs.NotFound("no home space")
 	}
 	return &list[0], nil
+}
+
+// PersonalComputer is the space whose computer is a person's own: their home
+// workspace, made now if they have none yet. Their direct chats' agents and
+// their personal Aseman work on it. Agents have no personal computer.
+func (s *Service) PersonalComputer(ctx context.Context, person identity.ID) (*space.Space, error) {
+	if person.IsZero() {
+		return nil, errs.InvalidArgument("a personal computer needs a person")
+	}
+	if home, err := s.HomeSpace(ctx, person); err == nil && home != nil {
+		return home, nil
+	}
+	var acc account.Account
+	if err := s.R.Get(ctx, "accounts", person, &acc); err != nil {
+		return nil, err
+	}
+	if acc.Kind != account.KindUser || s.isBotAccount(ctx, person) {
+		return nil, errs.NotFound("no personal computer")
+	}
+	s.homeMu.Lock()
+	defer s.homeMu.Unlock()
+	if home, err := s.HomeSpace(ctx, person); err == nil && home != nil {
+		return home, nil // made while this waited
+	}
+	home, err := s.CreateHomeSpace(ctx, person, acc.Handle)
+	if err != nil {
+		return nil, errs.Wrap(errs.CodeUnavailable, err, "could not open the personal workspace")
+	}
+	return home, nil
 }
 
 // Invite creates a pending invitation.

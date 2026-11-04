@@ -151,7 +151,7 @@ func TestQuestionReplyRestoresPromptModeBeforePreparingSandbox(t *testing.T) {
 	if err := s.K.(*kernel.Kernel).Register(rt); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.K.(*kernel.Kernel).Boot(ctx, []string{"deepagents"}); err != nil {
+	if err := s.K.(*kernel.Kernel).Boot(ctx, []string{"harness"}); err != nil {
 		t.Fatal(err)
 	}
 	agent := addAgent(t, s, ctx, sp.ID, "helper", "helper-vm")

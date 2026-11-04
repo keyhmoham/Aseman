@@ -2,13 +2,7 @@ package timeline
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -17,6 +11,7 @@ import (
 	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/actions/support/repo"
 	"github.com/aseman/aseman/plugins/adapters/database/memory"
+	"github.com/aseman/aseman/plugins/adapters/database/ports"
 	dbmodel "github.com/aseman/aseman/plugins/testutil"
 )
 
@@ -31,139 +26,9 @@ const (
 
 type fakeKernel struct{}
 
-func (fakeKernel) Env() map[string]string {
-	return map[string]string{"node_private_key": "test-node-key"}
-}
+func (fakeKernel) Env() map[string]string { return map[string]string{} }
 
-// fakeUtopia answers the parts of Utopia's API the node uses.
-type fakeUtopia struct {
-	mu         sync.Mutex
-	registered bool
-	kbs        map[string]string // kb → source
-	sources    map[string]string // source → push key
-	items      map[string][]observation
-	mcp        []map[string]any
-	token      string
-	srv        *httptest.Server
-	// wipeAt: when this many items have been pushed, the next push finds
-	// Utopia's data gone (0: never).
-	wipeAt int
-}
-
-func newFakeUtopia(t *testing.T) *fakeUtopia {
-	u := &fakeUtopia{kbs: map[string]string{}, sources: map[string]string{}, items: map[string][]observation{}}
-	u.srv = httptest.NewServer(http.HandlerFunc(u.serve))
-	t.Cleanup(u.srv.Close)
-	return u
-}
-
-func (u *fakeUtopia) serve(w http.ResponseWriter, r *http.Request) {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	body, _ := io.ReadAll(r.Body)
-	auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	reply := func(status int, v any) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(v)
-	}
-	path := strings.TrimPrefix(r.URL.Path, "/api/v1")
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	switch {
-	case path == "/auth/login":
-		if !u.registered {
-			reply(401, map[string]any{"error": "invalid credentials"})
-			return
-		}
-		reply(200, map[string]any{"token": "jwt"})
-	case path == "/auth/register":
-		u.registered = true
-		reply(200, map[string]any{"token": "jwt"})
-	case path == "/workspaces":
-		reply(200, []map[string]any{{"id": "ws1"}})
-	case len(parts) == 3 && parts[0] == "workspaces" && parts[2] == "kbs":
-		id := fmt.Sprintf("kb%d", len(u.kbs)+1)
-		u.kbs[id] = ""
-		reply(200, map[string]any{"id": id})
-	case len(parts) == 3 && parts[0] == "kbs" && parts[2] == "sources":
-		id := "src-" + parts[1]
-		u.kbs[parts[1]] = id
-		u.sources[id] = "push-" + parts[1]
-		reply(200, map[string]any{"source": map[string]any{"id": id}, "ingest_token": "push-" + parts[1]})
-	case path == "/me/tokens":
-		u.token = "utp_pat_read"
-		reply(200, map[string]any{"token": u.token})
-	case len(parts) == 3 && parts[0] == "sources" && parts[2] == "statements":
-		key, ok := u.sources[parts[1]]
-		if !ok {
-			reply(404, map[string]any{"error": "Not found"})
-			return
-		}
-		if auth != key {
-			reply(401, map[string]any{"error": "bad key"})
-			return
-		}
-		if u.wipeAt > 0 && u.countLocked() >= u.wipeAt {
-			u.wipeAt = 0
-			u.kbs, u.sources, u.items, u.token = map[string]string{}, map[string]string{}, map[string][]observation{}, ""
-			reply(404, map[string]any{"error": "Not found"})
-			return
-		}
-		var o observation
-		_ = json.Unmarshal(body, &o)
-		u.items[parts[1]] = append(u.items[parts[1]], o)
-		reply(200, map[string]any{"action": "created"})
-	case len(parts) == 3 && parts[0] == "kbs" && parts[2] == "mcp":
-		if auth != u.token || u.token == "" {
-			reply(401, map[string]any{"error": "bad token"})
-			return
-		}
-		var msg map[string]any
-		_ = json.Unmarshal(body, &msg)
-		msg["kb"] = parts[1]
-		u.mcp = append(u.mcp, msg)
-		if msg["method"] == "tools/list" {
-			reply(200, map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": map[string]any{"tools": []any{
-				map[string]any{"name": "timeline"}, map[string]any{"name": "changes"}, map[string]any{"name": "remember"}}}})
-			return
-		}
-		reply(200, map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": map[string]any{
-			"content": []any{map[string]any{"type": "text", "text": "from " + parts[1]}}}})
-	default:
-		reply(404, map[string]any{"error": "Not found"})
-	}
-}
-
-// pushed is every statement the fake received, as "subject|phrase|object|value".
-func (u *fakeUtopia) pushed() map[string]bool {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	out := map[string]bool{}
-	for _, items := range u.items {
-		for _, o := range items {
-			for _, s := range o.S {
-				out[fmt.Sprintf("%v|%v|%v|%v", s[1], s[2], s[3], s[4])] = true
-			}
-		}
-	}
-	return out
-}
-
-func (u *fakeUtopia) count() int {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	return u.countLocked()
-}
-
-func (u *fakeUtopia) countLocked() int {
-	n := 0
-	for _, items := range u.items {
-		n += len(items)
-	}
-	return n
-}
-
-func harness(t *testing.T) (*Service, *fakeUtopia, context.Context) {
+func harness(t *testing.T) (*Service, context.Context) {
 	t.Helper()
 	db := memory.New(logger.Global())
 	ctx := helper.WithInternalAccess(context.Background())
@@ -172,11 +37,7 @@ func harness(t *testing.T) (*Service, *fakeUtopia, context.Context) {
 			t.Fatal(err)
 		}
 	}
-	u := newFakeUtopia(t)
-	t.Setenv(EnvURL, u.srv.URL)
-	t.Setenv(EnvPassword, "secret-password")
-	s := NewService(fakeKernel{}, &repo.Repo{DB: db}, logger.Global())
-	return s, u, ctx
+	return NewService(fakeKernel{}, &repo.Repo{DB: db}, logger.Global()), ctx
 }
 
 func create(t *testing.T, s *Service, ctx context.Context, model, id string, v map[string]any) {
@@ -210,44 +71,66 @@ func seed(t *testing.T, s *Service, ctx context.Context, now time.Time) {
 		"name": "landing.html", "mime": "text/html", "size": int64(1200), "created_at": at(-4)})
 }
 
-func TestFeedsPushEachSpaceEventOnce(t *testing.T) {
-	s, u, ctx := harness(t)
+
+func summaries(t *testing.T, s *Service, ctx context.Context, space string) map[string]bool {
+	t.Helper()
+	got, err := s.Search(ctx, space, SearchQuery{Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]bool{}
+	for _, e := range got {
+		for _, line := range strings.Split(e.Summary, "; ") {
+			out[line] = true
+		}
+	}
+	return out
+}
+
+// has reports whether a line starts with want (qualifiers follow in parentheses).
+func has(lines map[string]bool, want string) bool {
+	for l := range lines {
+		if l == want || strings.HasPrefix(l, want+" (") {
+			return true
+		}
+	}
+	return false
+}
+
+func TestFeedsWriteEachSpaceEventOnce(t *testing.T) {
+	s, ctx := harness(t)
 	now := time.Now().UTC().Truncate(time.Second)
 	seed(t, s, ctx, now)
 	if err := s.Sync(ctx); err != nil {
 		t.Fatal(err)
 	}
-	got := u.pushed()
+	got := summaries(t, s, ctx, spaceA)
 	for _, want := range []string{
-		"@ann|asked for|request (#turn1)|<nil>",
-		"request (#turn1)|was asked in|general (#00a002)|<nil>",
-		"request (#turn1)|has status|<nil>|done",
-		"Coder (#000c0d)|ran tool|<nil>|sandbox_exec",
-		"Coder (#000c0d)|ran tool|<nil>|message_send",
-		"@ann|posted in|general (#00a002)|<nil>",
-		"Coder (#000c0d)|logged work in|general (#00a002)|<nil>",
-		"Coder (#000c0d)|shared file|landing.html (#file1)|<nil>",
-		"general (#00a002)|was opened in|Launch (#00a001)|<nil>",
+		"@ann asked for request (#turn1)",
+		"request (#turn1) was asked in general (#00a002)",
+		"request (#turn1) has status: done",
+		"Coder (#000c0d) ran tool: sandbox_exec",
+		"Coder (#000c0d) ran tool: message_send",
+		"@ann posted in general (#00a002)",
+		"Coder (#000c0d) logged work in general (#00a002)",
+		"Coder (#000c0d) shared file landing.html (#file1)",
+		"general (#00a002) was opened in Launch (#00a001)",
 	} {
-		if !got[want] {
+		if !has(got, want) {
 			t.Errorf("missing %q in %v", want, got)
 		}
 	}
-	if got["Coder (#000c0d)|ran tool|<nil>|file_send"] {
-		t.Error("a running tool was pushed before it finished")
-	}
-	// One base per space, items only in the space's own base.
-	if len(u.kbs) != 1 {
-		t.Fatalf("bases = %v", u.kbs)
+	if has(got, "Coder (#000c0d) ran tool: file_send") {
+		t.Error("a running tool was written before it finished")
 	}
 
-	// Nothing new: nothing is sent again.
-	n := u.count()
+	// Nothing new: nothing is written again.
+	n, _ := s.R.Count(ctx, entriesTable, dbFilter())
 	if err := s.Sync(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if u.count() != n {
-		t.Fatalf("a second pass re-sent %d items", u.count()-n)
+	if m, _ := s.R.Count(ctx, entriesTable, dbFilter()); m != n {
+		t.Fatalf("a second pass wrote %d more entries", m-n)
 	}
 
 	// The running tool finishes: the cursor waited for it.
@@ -259,141 +142,88 @@ func TestFeedsPushEachSpaceEventOnce(t *testing.T) {
 		"run_id": "run1", "agent_id": coder, "agent_name": "Coder", "tool": "file_send", "status": "done", "at": ev.At}); err != nil {
 		t.Fatal(err)
 	}
-	s.pushed = map[string]bool{} // as after a restart
+	s.written = map[string]bool{} // as after a restart
 	if err := s.Sync(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if !u.pushed()["Coder (#000c0d)|ran tool|<nil>|file_send"] {
+	if !has(summaries(t, s, ctx, spaceA), "Coder (#000c0d) ran tool: file_send") {
 		t.Fatal("the finished tool run never reached the timeline")
 	}
 }
 
-func TestEveryStatementNamesItsThingsAndTime(t *testing.T) {
-	s, u, ctx := harness(t)
-	seed(t, s, ctx, time.Now().UTC())
+func TestSearchFiltersByWordsKindsAndTime(t *testing.T) {
+	s, ctx := harness(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	seed(t, s, ctx, now)
 	if err := s.Sync(ctx); err != nil {
 		t.Fatal(err)
 	}
-	for _, items := range u.items {
-		for _, o := range items {
-			if o.ExternalID == "" || o.DocTime == "" {
-				t.Errorf("item without identity or time: %+v", o)
-			}
-			named := map[any]bool{}
-			for _, e := range o.E {
-				named[e[0]] = true
-			}
-			for _, st := range o.S {
-				if st[0] != nil || !named[st[1]] || (st[3] != nil && !named[st[3]]) || (st[3] == nil) == (st[4] == nil) {
-					t.Errorf("statement breaks the contract: %v (things %v)", st, o.E)
-				}
-				if _, err := time.Parse(time.RFC3339, fmt.Sprint(st[6])); err != nil {
-					t.Errorf("statement without a time: %v", st)
-				}
-			}
+	hits, err := s.Search(ctx, spaceA, SearchQuery{Query: "landing.html shared"})
+	if err != nil || len(hits) != 1 || !strings.Contains(hits[0].Summary, "shared file landing.html") {
+		t.Fatalf("word search = %+v, %v", hits, err)
+	}
+	all, _ := s.Search(ctx, spaceA, SearchQuery{Limit: 100})
+	kind := hits[0].Kind
+	byKind, _ := s.Search(ctx, spaceA, SearchQuery{Kinds: []string{kind}, Limit: 100})
+	if len(byKind) == 0 || len(byKind) >= len(all) {
+		t.Fatalf("kind %q filter: %d of %d", kind, len(byKind), len(all))
+	}
+	for _, e := range byKind {
+		if e.Kind != kind {
+			t.Fatalf("kind filter let %q through", e.Kind)
+		}
+	}
+	recent, _ := s.Search(ctx, spaceA, SearchQuery{Since: now.Add(-5*time.Minute - time.Second), Limit: 100})
+	for _, e := range recent {
+		if e.At.Before(now.Add(-5*time.Minute - time.Second)) {
+			t.Fatalf("since filter let %v through", e.At)
+		}
+	}
+	if len(recent) == 0 || len(recent) >= len(all) {
+		t.Fatalf("since filter: %d of %d", len(recent), len(all))
+	}
+	// Newest first.
+	for i := 1; i < len(all); i++ {
+		if all[i].At.After(all[i-1].At) {
+			t.Fatal("search is not newest first")
 		}
 	}
 }
 
 func TestAgentsReadOnlyTheirSpaceTimeline(t *testing.T) {
-	s, u, ctx := harness(t)
-	list, err := s.MCP(ctx, spaceA, []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(list), "remember") || !strings.Contains(string(list), `"timeline"`) {
-		t.Fatalf("tools/list = %s", list)
-	}
-	if _, err := s.MCP(ctx, spaceA, []byte(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"remember","arguments":{}}}`)); errs.CodeOf(err) != errs.CodePermission {
-		t.Fatalf("remember = %v", err)
-	}
-	a, err := s.MCP(ctx, spaceA, []byte(`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"changes","arguments":{}}}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := s.MCP(ctx, spaceB, []byte(`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"changes","arguments":{}}}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(a), "from kb1") || !strings.Contains(string(b), "from kb2") {
-		t.Fatalf("space A read %s, space B read %s", a, b)
-	}
-	if _, err := s.MCP(ctx, spaceA, []byte(`{"jsonrpc":"2.0","id":5,"method":"resources/list"}`)); errs.CodeOf(err) != errs.CodeInvalidArgument {
-		t.Fatalf("resources/list = %v", err)
-	}
-	_ = u
-}
-
-func TestAResetUtopiaIsRefilled(t *testing.T) {
-	s, u, ctx := harness(t)
+	s, ctx := harness(t)
 	seed(t, s, ctx, time.Now().UTC())
 	if err := s.Sync(ctx); err != nil {
 		t.Fatal(err)
 	}
-	// Utopia loses its data: bases, sources and the read token.
-	u.mu.Lock()
-	u.kbs, u.sources, u.items, u.token = map[string]string{}, map[string]string{}, map[string][]observation{}, ""
-	u.mu.Unlock()
-	s.pushed = map[string]bool{}
-	create(t, s, ctx, "messages", "msg3", map[string]any{"space_id": spaceA, "room_id": roomA, "sender_id": ann,
-		"body": "and the docs", "created_at": time.Now().UTC()})
-	if err := s.Sync(ctx); err != nil {
-		t.Fatal(err)
+	if got, _ := s.Search(ctx, spaceB, SearchQuery{}); len(got) != 0 {
+		t.Fatalf("space B reads space A's entries: %+v", got)
 	}
-	if err := s.Sync(ctx); err != nil {
-		t.Fatal(err)
+	a, _ := s.Search(ctx, spaceA, SearchQuery{Limit: 1})
+	if len(a) != 1 {
+		t.Fatal("space A has no entries")
 	}
-	if !u.pushed()["@ann|asked for|request (#turn1)|<nil>"] {
-		t.Fatal("the space's history was not refilled")
+	view, err := s.Entry(ctx, spaceA, a[0].ID)
+	if err != nil || view.Entry.ID != a[0].ID || len(view.Before) == 0 {
+		t.Fatalf("entry = %+v, %v", view, err)
 	}
-	if _, err := s.MCP(ctx, spaceA, []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"changes","arguments":{}}}`)); err != nil {
-		t.Fatalf("read after reset: %v", err)
+	if _, err := s.Entry(ctx, spaceB, a[0].ID); errs.CodeOf(err) != errs.CodeNotFound {
+		t.Fatalf("another space's entry = %v", err)
+	}
+	if _, err := s.Search(ctx, "", SearchQuery{}); errs.CodeOf(err) != errs.CodeInvalidArgument {
+		t.Fatalf("no space = %v", err)
 	}
 }
 
-func TestOffWithoutUtopia(t *testing.T) {
-	t.Setenv(EnvURL, "")
-	s := NewService(fakeKernel{}, &repo.Repo{DB: memory.New(logger.Global())}, logger.Global())
-	if on, _ := s.Enabled(context.Background()); on {
-		t.Fatal("enabled without a Utopia URL")
+func TestOffSwitch(t *testing.T) {
+	t.Setenv(EnvSwitch, "off")
+	s, ctx := harness(t)
+	if on, _ := s.Enabled(ctx); on {
+		t.Fatal("timelines are on")
 	}
-	if _, err := s.MCP(context.Background(), spaceA, []byte(`{"method":"tools/list"}`)); errs.CodeOf(err) != errs.CodeUnavailable {
-		t.Fatalf("MCP = %v", err)
+	if _, err := s.Search(ctx, spaceA, SearchQuery{}); errs.CodeOf(err) != errs.CodeUnavailable {
+		t.Fatalf("search while off = %v", err)
 	}
 }
 
-func TestAResetInTheMiddleOfAPassLosesNothing(t *testing.T) {
-	s, u, ctx := harness(t)
-	now := time.Now().UTC()
-	seed(t, s, ctx, now)
-	if err := s.Sync(ctx); err != nil {
-		t.Fatal(err)
-	}
-	create(t, s, ctx, "messages", "msg3", map[string]any{"space_id": spaceA, "room_id": roomA, "sender_id": ann,
-		"body": "first new", "created_at": now.Add(time.Minute)})
-	create(t, s, ctx, "messages", "msg4", map[string]any{"space_id": spaceA, "room_id": roomA, "sender_id": ann,
-		"body": "second new", "created_at": now.Add(2 * time.Minute)})
-	// msg3 reaches the old base, then Utopia's data is gone.
-	u.mu.Lock()
-	u.wipeAt = u.countLocked() + 1
-	u.mu.Unlock()
-	for i := 0; i < 3; i++ {
-		if err := s.Sync(ctx); err != nil {
-			t.Fatal(err)
-		}
-	}
-	var bodies []string
-	u.mu.Lock()
-	for _, items := range u.items {
-		for _, o := range items {
-			bodies = append(bodies, o.ExternalID)
-		}
-	}
-	u.mu.Unlock()
-	joined := strings.Join(bodies, ",")
-	for _, want := range []string{"message:msg1", "message:msg3", "message:msg4", "request:turn1"} {
-		if !strings.Contains(joined, want) {
-			t.Errorf("%s missing after the reset: %s", want, joined)
-		}
-	}
-}
+func dbFilter() database.Filter { return database.Filter{} }

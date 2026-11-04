@@ -101,20 +101,13 @@ func (s *Service) chatModels(ctx context.Context, spec agentChatSpec) ([]vmm.Pro
 // the error). Billed to customer for the tokens used (and, for an agent other than the chat
 // assistant, its time), including an answer that did not arrive whole.
 func (s *Service) ChatAnswerStream(ctx context.Context, customer, botID identity.ID, turns []ChatTurn, onText func(string)) (string, error) {
-	return s.answerStream(ctx, customer, botID, turns, chatAnswerSystem, onText)
+	return s.answerStream(ctx, customer, botID, turns, chatAnswerSystem, false, onText)
 }
 
-// agentEngine is the node's agentic engine (deepagents, opencode or deepseek).
-func (s *Service) agentEngine(ctx context.Context) string {
-	var engine string
-	if err := bridge.Invoke(ctx, s.K, "spaces", "AgentEngine", []any{ctx}, &engine); err != nil || engine == "" {
-		return "deepagents"
-	}
-	return engine
-}
-
-// answerStream is ChatAnswerStream with the system prompt system makes.
-func (s *Service) answerStream(ctx context.Context, customer, botID identity.ID, turns []ChatTurn, system func(platform string, spec agentChatSpec, name string) string, onText func(string)) (string, error) {
+// answerStream is ChatAnswerStream with the system prompt system makes. A
+// personal answer (the person's own Aseman) runs on the agent runtime as the
+// person; any other agent's chat answer is one streamed model call.
+func (s *Service) answerStream(ctx context.Context, customer, botID identity.ID, turns []ChatTurn, system func(platform string, spec agentChatSpec, name string) string, personal bool, onText func(string)) (string, error) {
 	rec, err := s.GetBot(ctx, botID)
 	if err != nil {
 		return "", err
@@ -132,10 +125,9 @@ func (s *Service) answerStream(ctx context.Context, customer, botID identity.ID,
 	var platform string
 	_ = bridge.Invoke(ctx, s.K, "settings", "Instructions", []any{ctx}, &platform)
 	prompt := system(platform, spec, rec.Name)
-	// When Admin → Agentic engine is a CLI engine, personal Aseman (notes /
-	// Talk) runs on it: OpenCode on its free models, DeepSeek Harness on the
-	// assistant's platform model with its own memory.
-	if runtimeEngine(s.agentEngine(ctx)) {
+	// Personal Aseman (notes / Talk) runs on the agent runtime, on the
+	// assistant's platform model, with the person's own memory and tools.
+	if personal {
 		return s.answerViaEngine(ctx, customer, rec, used, prompt, turns, onText)
 	}
 	models, err := s.chatModels(ctx, used)
@@ -179,26 +171,18 @@ func (s *Service) answerStream(ctx context.Context, customer, botID identity.ID,
 	return strings.TrimSpace(res.Text), callErr
 }
 
-// openCodeChatTimeout bounds one personal OpenCode reply. Cold starts (runtime
-// schedule + first free-model call) need longer than a normal chat answer.
-const openCodeChatTimeout = 8 * time.Minute
+// harnessChatTimeout bounds one personal answer on the agent runtime. Cold
+// starts (runtime schedule + first model call) need longer than a chat answer.
+const harnessChatTimeout = 8 * time.Minute
 
-// runtimeEngine reports whether personal Aseman runs in the agent runtime under
-// this engine rather than on the platform LLM loop here.
-func runtimeEngine(engine string) bool { return engine == "opencode" || engine == "deepseek" }
-
-// answerViaEngine answers a personal chat through the agent runtime's
-// agentic engine (OpenCode or DeepSeek Harness), as the person, with their
-// space tools. DeepSeek Harness runs on the assistant's model (spec): its
-// tokens are billed like any chat answer.
+// answerViaEngine answers a personal chat on the agent runtime (DeepSeek
+// Harness), as the person, with their access across the app. It runs on the
+// assistant's model (spec): its tokens are billed like any chat answer.
 func (s *Service) answerViaEngine(ctx context.Context, customer identity.ID, rec *bot.Bot, spec agentChatSpec, system string, turns []ChatTurn, onText func(string)) (string, error) {
-	if s.agentEngine(ctx) != "deepseek" {
-		return s.answerViaOpenCode(ctx, customer, rec, system, turns, onText)
-	}
-	vm := s.K.VMMFor(vmm.TypeDeepAgents)
+	vm := s.K.VMMFor(vmm.TypeHarness)
 	chatter, ok := vm.(vmm.PersonalChatter)
 	if !ok || vm == nil {
-		return "", errs.New(errs.CodeUnavailable, "DeepSeek Harness is the agentic engine, but the agent runtime cannot answer personal chats")
+		return "", errs.New(errs.CodeUnavailable, "the agent runtime cannot answer personal chats on this node")
 	}
 	msgs := make([]vmm.ChatMessage, 0, len(turns))
 	for _, t := range turns {
@@ -209,7 +193,7 @@ func (s *Service) answerViaEngine(ctx context.Context, customer identity.ID, rec
 		msgs = append(msgs, vmm.ChatMessage{Role: role, Content: t.Content})
 	}
 	started := time.Now()
-	callCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), openCodeChatTimeout)
+	callCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), harnessChatTimeout)
 	defer cancel()
 	var used vmm.ChatUsage
 	reply, err := chatter.PersonalChat(callCtx, vmm.PersonalChat{
@@ -226,44 +210,6 @@ func (s *Service) answerViaEngine(ctx context.Context, customer identity.ID, rec
 	}
 	// The harness's model calls were metered on the person's session.
 	if billErr := s.billChatAnswer(ctx, customer, rec, elapsedSeconds(started), used.TokensIn, used.TokensOut); billErr != nil && err == nil {
-		err = billErr
-	}
-	return reply, err
-}
-
-// answerViaOpenCode answers a personal chat through the agent runtime's
-// OpenCode engine (free models). Tokens are not billed to platform providers.
-func (s *Service) answerViaOpenCode(ctx context.Context, customer identity.ID, rec *bot.Bot, system string, turns []ChatTurn, onText func(string)) (string, error) {
-	vm := s.K.VMMFor(vmm.TypeDeepAgents)
-	chatter, ok := vm.(vmm.PersonalChatter)
-	if !ok || vm == nil {
-		return "", errs.New(errs.CodeUnavailable, "OpenCode agentic engine is on, but the agent runtime cannot answer personal chats")
-	}
-	msgs := make([]vmm.ChatMessage, 0, len(turns))
-	for _, t := range turns {
-		role := "user"
-		if t.Role == "assistant" {
-			role = "assistant"
-		}
-		msgs = append(msgs, vmm.ChatMessage{Role: role, Content: t.Content})
-	}
-	started := time.Now()
-	// Detach from the brain's shorter answer deadline: OpenCode cold path is slower.
-	callCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), openCodeChatTimeout)
-	defer cancel()
-	reply, err := chatter.PersonalChat(callCtx, vmm.PersonalChat{
-		System: system, Messages: msgs, ThreadID: "chat:" + customer.String(),
-		PersonID: customer.String(), WithTools: true,
-	})
-	reply = strings.TrimSpace(reply)
-	if reply != "" && onText != nil {
-		onText(reply)
-	}
-	if reply == "" && err != nil {
-		return "", err
-	}
-	// OpenCode free tier: no platform token charge; still record the turn time.
-	if billErr := s.billChatAnswer(ctx, customer, rec, elapsedSeconds(started), 0, 0); billErr != nil && err == nil {
 		err = billErr
 	}
 	return reply, err
@@ -287,9 +233,6 @@ func (s *Service) ChatAnswer(ctx context.Context, customer, botID identity.ID, p
 	var platform string
 	_ = bridge.Invoke(ctx, s.K, "settings", "Instructions", []any{ctx}, &platform)
 	sys := chatAnswerSystem(platform, spec, rec.Name)
-	if runtimeEngine(s.agentEngine(ctx)) {
-		return s.answerViaEngine(ctx, customer, rec, spec, sys, []ChatTurn{{Role: "user", Content: prompt}}, nil)
-	}
 	var provider vmm.ProviderConfig
 	if err := bridge.Invoke(ctx, s.K, "llm", "ResolveChat", []any{ctx, spec.Provider, spec.Model}, &provider); err != nil {
 		return "", errs.Wrap(errs.CodeUnavailable, err, rec.Name+"'s model is not available")

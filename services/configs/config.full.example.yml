@@ -61,12 +61,12 @@ plugins:
       config:
         options:
           host: "unix:///var/run/docker.sock"
-    - name: deepagents        # every agent: LangChain Deep Agents runtime
+    - name: harness           # every agent: DeepSeek Harness runtime
       enabled: true
       config:
         options:
           node_url: "http://aseman:8080"        # the node as the runtime reaches it
-          image: "aseman/deepagents:v2"         # runtime image, run on Nomad
+          image: "aseman/harness:v1"            # runtime image, run on Nomad
           network: "aseman_default"             # docker network the runtime joins
           # runtime_url: "http://localhost:8000"   # or run the runtime yourself
           image_model: "gpt-image-1"   # model behind the agents' image_generate tool

@@ -27,6 +27,7 @@ import '../../desk/data/desk_api.dart';
 import '../../desk/presentation/desk_controller.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import 'dm_desk_panel.dart';
+import '../../plugins/presentation/plugins_panel.dart';
 import 'dm_facility_sheet.dart';
 import 'report_dialog.dart';
 import 'widgets/brain_proposals.dart';
@@ -631,6 +632,13 @@ class _ChatPageState extends State<ChatPage> {
                     onPressed: _openFacility,
                   ),
                 ..._callActions(),
+                PluginsButton(
+                  dependencies: widget.dependencies,
+                  spaceId: chat.isAseman ? '' : chat.spaceId,
+                  roomId: chat.isAseman ? '' : chat.roomId,
+                  appWideOnly: chat.isAseman,
+                  desk: _showDualTabs ? _desk : null,
+                ),
                 const SizedBox(width: 2),
                 _menu(),
               ],

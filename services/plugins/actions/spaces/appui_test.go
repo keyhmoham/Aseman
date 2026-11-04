@@ -4,38 +4,14 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
-	"strings"
 	"testing"
 
 	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
-func TestOpenCodeBuiltinApp(t *testing.T) {
-	app := openCodeBuiltinApp()
-	if app.Name != "opencode" {
-		t.Fatalf("name=%q", app.Name)
-	}
-	if len(app.Commands) < 4 {
-		t.Fatalf("expected microtools run/status/models/build, got %d", len(app.Commands))
-	}
-	names := map[string]bool{}
-	for _, c := range app.Commands {
-		names[c.Name] = true
-	}
-	for _, want := range []string{"run", "status", "models", "build"} {
-		if !names[want] {
-			t.Fatalf("missing command %s", want)
-		}
-	}
-	if !strings.Contains(app.Description, "appui_create") {
-		t.Fatal("description should point agents at appui_create")
-	}
-}
-
 func TestAppUIBuiltinsPresent(t *testing.T) {
 	want := map[string]bool{
 		"ui_present": false, "appui_create": false, "appui_publish": false, "appui_status": false,
-		"opencode_run": false, "opencode_status": false, "opencode_models": false,
 	}
 	for _, tool := range vmm.Builtins() {
 		if _, ok := want[tool.Name]; ok {
@@ -92,28 +68,6 @@ func TestAppuiPortFor(t *testing.T) {
 	}
 }
 
-func TestOpenCodeAsemanConfig(t *testing.T) {
-	raw, err := openCodeAsemanConfig("http://aseman:8080/deepagents/v1/llm", "aseman/default")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(raw, &doc); err != nil {
-		t.Fatal(err)
-	}
-	if doc["model"] != "aseman/default" {
-		t.Fatalf("model=%v", doc["model"])
-	}
-	provider, _ := doc["provider"].(map[string]any)
-	aseman, _ := provider["aseman"].(map[string]any)
-	opts, _ := aseman["options"].(map[string]any)
-	if opts["baseURL"] != "http://aseman:8080/deepagents/v1/llm" {
-		t.Fatalf("baseURL=%v", opts["baseURL"])
-	}
-	if opts["apiKey"] != "{env:ASEMAN_LLM_API_KEY}" {
-		t.Fatalf("apiKey=%v", opts["apiKey"])
-	}
-}
 
 // The preview runs an app's start command with sh from /workspace; it must
 // start the app as aseman-appui verify did: from its directory, under bash,

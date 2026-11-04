@@ -1,8 +1,8 @@
 # Aseman on Kubernetes.
 #
 # The node, the web client, the agent runtime (as a Deployment the node calls
-# at ASEMAN_AGENT_RUNTIME_URL), the agents' memory (OpenViking), project
-# timelines (Utopia) and Postgres (or your own). Project computers need a
+# at ASEMAN_AGENT_RUNTIME_URL; DeepSeek Harness), and Postgres (or your own),
+# which keeps the agents' memory (pgvector) and the project timelines. Project computers need a
 # container runtime the node can drive: Modal (sandbox.backend: modal, the
 # default here) or a Docker host (sandbox.backend: docker, see sandbox.docker).
 
@@ -12,9 +12,7 @@ fullnameOverride: ""
 images:
   node: { repository: aseman/asemand, tag: latest, pullPolicy: IfNotPresent }
   web: { repository: aseman/flutter-web, tag: latest, pullPolicy: IfNotPresent }
-  runtime: { repository: aseman/deepagents, tag: v2, pullPolicy: IfNotPresent }
-  openviking: { repository: aseman/openviking, tag: v1, pullPolicy: IfNotPresent }
-  timeline: { repository: ghcr.io/deeplethe/utopia, tag: 0.1.0-rc9, pullPolicy: IfNotPresent }
+  runtime: { repository: aseman/harness, tag: v1, pullPolicy: IfNotPresent }
   postgres: { repository: aseman/postgres, tag: 16-pgvector, pullPolicy: IfNotPresent }
 imagePullSecrets: []
 
@@ -28,8 +26,6 @@ appURL: https://app.aseman.example.com
 secrets:
   existingSecret: ""
   adminPassword: ""
-  timelinePassword: ""
-  openvikingKey: ""
   runtimeSecret: ""
 
 # The node's configuration file (services/configs/config.example.yml).
@@ -74,25 +70,17 @@ sandbox:
   # The filtering proxy beside each project computer (docker backend only).
   egressImage: aseman/egress-proxy:v1
 
-openviking:
-  enabled: true
-  resources: { requests: { cpu: 250m, memory: 512Mi } }
-  persistence: { size: 10Gi, storageClass: "" }
-
+# Project timelines, kept in the node's database.
 timeline:
   enabled: true
-  resources: { requests: { cpu: 100m, memory: 256Mi } }
-  persistence: { size: 5Gi, storageClass: "" }
 
 postgres:
-  # Off: set externalDSN (and timelineDSN when timelines are on).
+  # Off: set externalDSN (PostgreSQL with pgvector).
   enabled: true
   user: aseman
   password: ""
   database: aseman
-  timelineDatabase: aseman_timeline
   externalDSN: ""
-  timelineDSN: ""
   resources: { requests: { cpu: 250m, memory: 512Mi } }
   persistence: { size: 20Gi, storageClass: "" }
 
@@ -109,7 +97,6 @@ ingress:
   webHost: app.aseman.example.com
   tls: []
 
-# Only the node (and the timeline) reach Postgres; only the node and the
-# runtime reach memory and timelines.
+# Only the node reaches Postgres; only the node reaches the agent runtime.
 networkPolicy:
   enabled: true

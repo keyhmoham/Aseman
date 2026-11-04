@@ -24,7 +24,7 @@ import (
 	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
-// Every agent runs on the deep agents runtime and is reached only through
+// Every agent runs on the agent runtime and is reached only through
 // space messaging: a room message (or ask) becomes a turn, the reply goes back
 // into the room as an answer to that message, and everything else the agent
 // does on the platform goes through the space's action API (spaces.ask for
@@ -33,11 +33,11 @@ import (
 
 // isAgentRuntime reports whether a bot is an agent served by the runtime.
 func isAgentRuntime(rec *bot.Bot) bool {
-	return rec != nil && rec.Kind == bot.KindAgent && bot.AgentVMType(rec.VMType) == bot.VMTypeDeepAgents
+	return rec != nil && rec.Kind == bot.KindAgent && bot.AgentVMType(rec.VMType) == bot.VMTypeHarness
 }
 
 func (s *Service) agentRuntime(rec *bot.Bot) (vmm.AgentRuntime, error) {
-	rt, ok := s.K.VMMFor(vmm.TypeDeepAgents).(vmm.AgentRuntime)
+	rt, ok := s.K.VMMFor(vmm.TypeHarness).(vmm.AgentRuntime)
 	if !ok || rt == nil {
 		return nil, errs.New(errs.CodeUnavailable, "the agent runtime is not active on this node")
 	}
@@ -50,6 +50,11 @@ func (s *Service) agentRuntime(rec *bot.Bot) (vmm.AgentRuntime, error) {
 // runs the computer is kept from idling out. A space that has no computer yet
 // is not given one here either: creating it is starting it, so that too waits
 // for the agent's first command (spaces.ask with bot "sandbox").
+func (s *Service) hasSandbox(ctx context.Context, spaceID identity.ID) bool {
+	_, ok := s.sandboxBotID(ctx, spaceID)
+	return ok
+}
+
 func (s *Service) reserveSandbox(ctx context.Context, spaceID identity.ID) (vmm.SandboxRef, func(), error) {
 	if err := s.retireLegacySandbox(ctx, spaceID); err != nil {
 		return vmm.SandboxRef{}, nil, err
@@ -174,9 +179,10 @@ func (s *Service) prepareTurn(ctx context.Context, spaceID, roomID identity.ID, 
 	ref, release := vmm.SandboxRef{}, func() {}
 	if turn.NoSandbox {
 		// The agent engine runs on the node; the space machine stays untouched.
-	} else if _, recorded := s.sandboxBotID(ctx, spaceID); recorded || s.K.VMMFor(vmm.Type(s.sandboxVMType())) != nil {
+	} else if box := s.personalSandboxSpace(ctx, spaceID); s.hasSandbox(ctx, box) || s.K.VMMFor(vmm.Type(s.sandboxVMType())) != nil {
+		// In a direct chat the turn works on the person's own computer.
 		endSandbox := vmm.Trace(ctx, "sandbox.reserve", "start or wake the project computer")
-		ref, release, err = s.reserveSandbox(ctx, spaceID)
+		ref, release, err = s.reserveSandbox(ctx, box)
 		endSandbox()
 		if err != nil {
 			return nil, nil, err
@@ -531,7 +537,7 @@ func (s *Service) runAgentTurn(ctx context.Context, spaceID, roomID identity.ID,
 
 // AgentQuestions lists the questions the space's agents are waiting on.
 func (s *Service) AgentQuestions(ctx context.Context, spaceID identity.ID) ([]vmm.AgentQuestion, error) {
-	lister, ok := s.K.VMMFor(vmm.TypeDeepAgents).(vmm.QuestionLister)
+	lister, ok := s.K.VMMFor(vmm.TypeHarness).(vmm.QuestionLister)
 	if !ok || lister == nil {
 		return []vmm.AgentQuestion{}, nil
 	}

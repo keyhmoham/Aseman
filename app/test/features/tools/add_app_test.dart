@@ -44,7 +44,7 @@ class _Service extends FakeAsemanService {
             accountId: 'acct-a',
             name: 'Helper',
             kind: 'agent',
-            vmType: 'deepagents',
+            vmType: 'harness',
             status: 'running'),
       ];
 

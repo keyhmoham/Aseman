@@ -1,6 +1,6 @@
 # Aseman OpenUI
 
-Agent-backed UI islands for OpenCode App UIs. Mix freely with programmed
+Agent-backed UI islands for App UIs. Mix freely with programmed
 frontend + backend — not biased to always-agent or always-code.
 
 OpenUI components use the **same** Aseman adaptive theme tokens and the same

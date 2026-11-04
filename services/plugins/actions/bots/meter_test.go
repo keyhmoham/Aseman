@@ -29,7 +29,7 @@ type fakeVMM struct {
 }
 
 func (f *fakeVMM) Name() string                                   { return "fakevmm" }
-func (f *fakeVMM) SupportedTypes() []vmm.Type                     { return []vmm.Type{vmm.TypeDeepAgents} }
+func (f *fakeVMM) SupportedTypes() []vmm.Type                     { return []vmm.Type{vmm.TypeHarness} }
 func (f *fakeVMM) Open(ctx context.Context, cfg vmm.Config) error { return nil }
 func (f *fakeVMM) Close(ctx context.Context) error                { return nil }
 func (f *fakeVMM) Health(ctx context.Context) vmm.Health          { return vmm.Health{OK: true} }
@@ -38,7 +38,7 @@ func (f *fakeVMM) BuildImage(ctx context.Context, spec vmm.ImageSpec) (vmm.Image
 }
 func (f *fakeVMM) DeleteImage(ctx context.Context, ref string) error { return nil }
 func (f *fakeVMM) CreateVM(ctx context.Context, spec vmm.VMSpec) (vmm.VM, error) {
-	return vmm.VM{ID: "vm-1", Name: spec.Name, Type: vmm.TypeDeepAgents, Status: vmm.StatusRunning}, nil
+	return vmm.VM{ID: "vm-1", Name: spec.Name, Type: vmm.TypeHarness, Status: vmm.StatusRunning}, nil
 }
 func (f *fakeVMM) DeleteVM(ctx context.Context, id string) error { return nil }
 func (f *fakeVMM) StartVM(ctx context.Context, id string) error  { return nil }
@@ -142,7 +142,7 @@ func entityHarnessIDs(t *testing.T, s *Service, ctx context.Context) (identity.I
 	rec := &bot.Bot{
 		Entity:  entity.Entity{ID: botID, CreatedAt: now, UpdatedAt: now},
 		OwnerID: owner, Name: "AlphaBot", Kind: bot.KindAgent,
-		VMType: bot.VMTypeDeepAgents, Status: bot.StatusRunning, VMID: "vm-1",
+		VMType: bot.VMTypeHarness, Status: bot.StatusRunning, VMID: "vm-1",
 	}
 	if err := s.R.CreateID(ctx, "bots", botID, rec); err != nil {
 		t.Fatal(err)

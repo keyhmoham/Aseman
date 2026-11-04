@@ -22,10 +22,10 @@ const (
 	TypeWASM      Type = "wasm"
 	TypeMCP       Type = "mcp"
 	TypeModal     Type = "modal"
-	// TypeDeepAgents is an agent served by the deep agents runtime (LangChain
-	// deepagents on LangGraph). Agents reach people and each other through
-	// space messaging, tools through spaces.ask, and share the space sandbox.
-	TypeDeepAgents Type = "deepagents"
+	// TypeHarness is an agent served by the agent runtime (DeepSeek Harness
+	// with Aseman's plugins). Agent records of earlier engines ("deepagents")
+	// are read as this type.
+	TypeHarness Type = "harness"
 	// TypeElpian is a tool backend written for the Elpian VM (Dart or the
 	// JavaScript subset, compiled to Elpian bytecode) and TypeQuickJS one
 	// written in plain JavaScript run by QuickJS. Both run in the tool runtime

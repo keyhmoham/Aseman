@@ -138,8 +138,6 @@ String adminActionDone(String namespace, String action) =>
       'llm.llm_memory_set': 'Memory models saved',
       'llm.llm_image_set': 'Image model saved',
       'llm.llm_voice_set': 'Voice model saved',
-      'spaces.opencode_set': 'OpenCode setting saved',
-      'spaces.agent_engine_set': 'Agentic engine saved',
       'admin.plugins_load': 'Module loaded',
       'admin.plugins_unload': 'Module unloaded',
       'admin.plugins_stop': 'Module stopped',

@@ -19,7 +19,7 @@ func (p *agentProvider) Name() string                                      { ret
 func (p *agentProvider) Init(context.Context, *api.Dependencies) error     { return nil }
 func (p *agentProvider) Start(context.Context) error                       { return nil }
 func (p *agentProvider) Stop(context.Context) error                        { return nil }
-func (p *agentProvider) SupportedTypes() []vmm.Type                        { return []vmm.Type{vmm.TypeDeepAgents} }
+func (p *agentProvider) SupportedTypes() []vmm.Type                        { return []vmm.Type{vmm.TypeHarness} }
 func (p *agentProvider) EnsureAgent(context.Context, string, string) error { return nil }
 func (p *agentProvider) Prompt(ctx context.Context, id string, turn vmm.AgentTurn) (string, error) {
 	return "prompt:" + turn.Message, nil
@@ -45,7 +45,7 @@ func TestGuardPreservesAgentCapabilities(t *testing.T) {
 	if err := k.Start(provider.Info().Name); err != nil {
 		t.Fatal(err)
 	}
-	vm := k.VMMFor(vmm.TypeDeepAgents)
+	vm := k.VMMFor(vmm.TypeHarness)
 	rt, ok := vm.(vmm.AgentRuntime)
 	if !ok {
 		t.Fatal("agent runtime contract lost")

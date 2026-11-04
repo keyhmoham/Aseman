@@ -270,7 +270,7 @@ func (s *Service) sandboxReadFile(ctx context.Context, spaceID identity.ID, path
 
 // computerAwake reports whether the project's computer is running now.
 func (s *Service) computerAwake(ctx context.Context, spaceID identity.ID) bool {
-	id, found := s.sandboxBotID(ctx, spaceID)
+	id, found := s.sandboxBotID(ctx, s.personalSandboxSpace(ctx, spaceID))
 	if !found || s.Bots == nil {
 		return false
 	}
@@ -364,7 +364,7 @@ func (s *Service) storedFile(ctx context.Context, spaceID identity.ID, p string)
 	if err != nil || target == "/workspace" || inBrowserProfile(target) {
 		return nil, nil, "", false
 	}
-	id, found := s.sandboxBotID(ctx, spaceID)
+	id, found := s.sandboxBotID(ctx, s.personalSandboxSpace(ctx, spaceID))
 	if !found {
 		return nil, nil, "", false
 	}

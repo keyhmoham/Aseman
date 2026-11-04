@@ -72,10 +72,8 @@ the app is shown; make it pass.
 ## Your `elpian_*` tools
 
 Every builder of an app has the same `elpian_*` tools (the validator and the
-headless driver below), reached one of two ways:
+headless driver below), also served as MCP servers (`elpian`, `elpian-driver`):
 
-* **OpenCode** has them as MCP servers (`elpian`, `elpian-driver`): call them
-  as tools.
 * **An Aseman agent** has them as the `aseman-elpian` command on the sandbox
   shell, with the same names and arguments (a JSON object), run from the
   project directory (or with `--dir`):
@@ -179,7 +177,7 @@ the filter filters, that the save button is enabled once the form is
 filled. Prove that by **using the app as a person does, headlessly**, with
 the Elpian driver — like a headless browser, but for Elpian: no
 screenshots, the screen is a text outline. Your `elpian_*` driver tools
-(an MCP server for OpenCode, `aseman-elpian` for an agent: Your `elpian_*`
+(`aseman-elpian` on the shell, or the MCP server: Your `elpian_*`
 tools, above) keep a session open across calls:
 
 | Tool | |

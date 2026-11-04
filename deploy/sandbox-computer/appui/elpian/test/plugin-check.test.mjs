@@ -6,7 +6,7 @@ import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { backendFunctions, checkPlugin, chromiumPath, webDocument, WEB_PLUGIN_CSP } from "../plugin-check.mjs";
+import { backendFunctions, checkPlugin, chromiumPath, craftFindings, webDocument, WEB_PLUGIN_CSP } from "../plugin-check.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, "../../../../..");
@@ -123,4 +123,42 @@ test("plugin-inline makes a multi-file web build one document", async () => {
   assert.match(out, /<img src="data:image\/png;base64,/);
   assert.match(out, /<script>window\.x = '<\\\/script>';<\/script>/);
   assert.match(out, /src="https:\/\/cdn\.example\.com\/x\.js"/, "remote URLs are left for the check to report");
+});
+
+// The analog clock an agent once drew out of dots and slashes in Text rows.
+const TEXT_ART_CLOCK = `
+var rows = ["...", ". .", ".   .", "● · ●", ".   .", "● ● ●", ". / \\\\ .", ". / . ●", "●./ / .. .", ". ..", "..."];
+App.create({ state: {}, view: function () {
+  return { type: "Column", children: rows.map(function (r, i) {
+    return { type: "Row", key: "r" + i, children: r.split(" ").map(function (c, j) { return { type: "Text", key: "r" + i + "c" + j, props: { text: c } }; }) };
+  }) };
+} });`;
+
+test("a picture drawn with text characters, and an analog clock without the Clock node, are refused", async () => {
+  const r = await checkPlugin({ frontend: TEXT_ART_CLOCK, name: "Precision Analog Clock", description: "An analog clock with three hands" });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => /craft-text-art/.test(e) && /Canvas/.test(e)), r.errors.join("\n"));
+  assert.ok(r.errors.some((e) => /craft-intent/.test(e) && /mode: "analog"/.test(e)), r.errors.join("\n"));
+});
+
+test("the Clock node, or a Canvas face, is what an analog clock is", async () => {
+  const clock = `App.create({ state: {}, view: function () { return { type: "Column", props: { style: { padding: "16", gap: "12" } }, children: [
+    { type: "Text", props: { text: "Clock", variant: "titleLarge" } }, { type: "Clock", props: { mode: "analog", seconds: true, size: 240 } } ] }; } });`;
+  const r = await checkPlugin({ frontend: clock, name: "Analog clock" });
+  assert.deepEqual(r.errors, []);
+  const guide = fs.readFileSync(path.join(here, "..", "PLUGINS.md"), "utf8");
+  const start = guide.indexOf("// A custom clock face");
+  const canvas = guide.slice(start, guide.indexOf("```", start));
+  const c = await checkPlugin({ frontend: canvas, name: "Studio clock", description: "a custom analog clock face" });
+  assert.deepEqual(c.errors, [], "the guide's Canvas example passes");
+  assert.deepEqual(c.warnings, []);
+});
+
+test("craft rules leave ordinary text alone and only nudge softer intents", () => {
+  const prose = { type: "Column", children: [{ type: "Text", props: { text: "Total: 42" } }, { type: "Text", props: { text: "-" } }] };
+  assert.deepEqual(craftFindings([prose], { name: "Budget" }), { errors: [], warnings: [] });
+  const chart = craftFindings([prose], { name: "Sales", description: "a chart of weekly sales" });
+  assert.deepEqual(chart.errors, []);
+  assert.match(chart.warnings[0], /craft-intent/);
+  assert.deepEqual(craftFindings([{ type: "Chart", props: { type: "line" } }], { description: "sales trend chart" }).warnings, []);
 });

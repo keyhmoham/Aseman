@@ -17,7 +17,7 @@
 //     it looks like (phone.png, desk.png) to look at with read_image.
 //
 //   node plugin-check.mjs <frontend.js | index.html> [--ui elpian|web]
-//        [--backend backend.js] [--permissions ns.action,ns.*] [--name N]
+//        [--backend backend.js] [--permissions ns.action,ns.*] [--name N] [--description D]
 //        [--screenshots DIR] [--json]
 //
 // Exit code 1 when the plugin would break for the person using it.
@@ -85,7 +85,88 @@ export function elpianBundle(program) {
   return `${sdk}\n${shim}\n${program}\n`;
 }
 
-export async function checkElpian(program, { permissions = [], functions = ["get", "set"], name = "Plugin", design = true } = {}) {
+// ── Craft: what a correct tree can still get wrong ─────────────────────────
+
+// Characters people draw pictures with when they do not know the drawing
+// nodes: dots, bullets, slashes, bars.
+const ART = /^[\s.·•●○◦∙⋅°*+\-_=|/\\…:oO◯⬤■□▪▫]+$/;
+
+// Asked for in the plugin's name or description → the nodes made for it.
+const CHARTS = ["Chart", "Sparkline", "Funnel", "Waterfall", "Sankey", "Gantt", "BoxPlot", "BulletChart", "SegmentedBar", "RadialBars",
+  "Sunburst", "CalendarHeatmap", "Gauge", "Heatmap", "PivotTable"];
+const DRAWN = ["Canvas", "CachedCanvas", "canvas"];
+export const INTENTS = [
+  { re: /\b(analog(ue)?\s+(clock|watch)|clock\s*face|wall\s*clock|watch\s*face)\b/i, nodes: ["Clock", ...DRAWN], severity: "error",
+    fix: '{type: "Clock", props: {mode: "analog", seconds: true, size: 240}} draws a live analog clock (it ticks by itself); a custom face is a Canvas (fillCircle, arc, lineTo)' },
+  { re: /\b(gauge|speedometer|dial)\b/i, nodes: ["Gauge", "RadialBars", ...DRAWN], severity: "error",
+    fix: '{type: "Gauge", props: {value, min, max, label, thresholds}}' },
+  { re: /\bkanban\b/i, nodes: ["Kanban"], severity: "warning", fix: '{type: "Kanban", props: {columns, cards}} (elpian_describe Kanban)' },
+  { re: /\bcountdown\b/i, nodes: ["Countdown", "Clock", ...DRAWN], severity: "warning", fix: '{type: "Countdown"} ticks by itself (app.every is 5 s at least)' },
+  { re: /\b(clock|time\s*zones?|world\s*time)\b/i, nodes: ["Clock", ...DRAWN], severity: "warning", fix: '{type: "Clock", props: {mode: "analog" | "digital", utcOffset, label}} — live, it ticks by itself' },
+  { re: /\bcalendar\b/i, nodes: ["Calendar", "CalendarHeatmap"], severity: "warning", fix: '{type: "Calendar"} (elpian_describe Calendar)' },
+  { re: /\b(chart|graph|plot|trend|histogram)s?\b/i, nodes: [...CHARTS, ...DRAWN], severity: "warning", fix: '{type: "Chart", props: {type: "line" | "bar" | "pie" | …, data, x, y}} inside a filled Card (elpian_describe Chart)' },
+];
+
+// Design notes that decide whether a plugin looks made or assembled: shown
+// to the agent as warnings, not buried in notes.
+const DESIGN_WARNINGS = new Set(["design-filled-buttons", "design-emoji-icon", "design-type-role", "design-hardcoded-color", "design-nested-card"]);
+
+function walkNodes(node, visit) {
+  if (node === null || node === undefined || node === false) return;
+  if (Array.isArray(node)) return node.forEach((n) => walkNodes(n, visit));
+  if (typeof node === "string") return visit({ type: "Text", props: { text: node } });
+  if (typeof node !== "object") return;
+  visit(node);
+  walkNodes(node.children, visit);
+  if (node.props) for (const v of Object.values(node.props)) if (v && typeof v === "object" && (v.type || Array.isArray(v))) walkNodes(v, visit);
+}
+
+/** Findings no schema can see: pictures drawn with characters, the node made for what was asked left unused. */
+export function craftFindings(trees, { name = "", description = "" } = {}) {
+  const errors = [];
+  const warnings = [];
+  const types = new Set();
+  let worstArt = 0;
+  let sample = [];
+  for (const tree of trees) {
+    let art = 0;
+    const seen = [];
+    walkNodes(tree, (n) => {
+      if (n.type) types.add(n.type);
+      if (n.type !== "Text") return;
+      const text = String((n.props && (n.props.text ?? n.props.data)) ?? "");
+      const lines = text.split("\n").filter((l) => l.trim());
+      if (!lines.length) return;
+      // A short mark, or a block of lines made only of marks.
+      if ((text.trim().length <= 4 && ART.test(text)) || (lines.length >= 3 && lines.filter((l) => ART.test(l)).length >= lines.length * 0.7)) {
+        art += lines.length >= 3 ? lines.length : 1;
+        if (seen.length < 4 && !seen.includes(text.trim())) seen.push(text.trim().slice(0, 12));
+      }
+    });
+    if (art > worstArt) {
+      worstArt = art;
+      sample = seen;
+    }
+  }
+  if (worstArt >= 10) {
+    errors.push(`the screen draws a picture out of text characters (${worstArt} marks such as ${sample.map((t) => JSON.stringify(t)).join(", ")}): ` +
+      "it looks broken on every screen and theme. Fix: use the node made for it (Clock, Gauge, Chart, Progress, RadialBars …) or draw it on a Canvas " +
+      "({type: \"Canvas\", props: {width, height, commands: [{type: \"setFillStyle\", params: {color}}, {type: \"fillCircle\", params: {x, y, radius}}, " +
+      "{type: \"beginPath\"}, {type: \"moveTo\", params: {x, y}}, {type: \"lineTo\", params: {x, y}}, {type: \"stroke\"}]}}) [craft-text-art]");
+  }
+  const asked = `${name}\n${description}`;
+  for (const intent of INTENTS) {
+    if (!intent.re.test(asked)) continue;
+    if (intent.nodes.some((t) => types.has(t))) continue;
+    const what = asked.match(intent.re)[0];
+    const line = `the plugin is "${what}", but the screen uses none of ${intent.nodes.filter((t) => t !== "canvas").join(", ")}. Fix: ${intent.fix} [craft-intent]`;
+    (intent.severity === "error" ? errors : warnings).push(line);
+    break; // the most specific intent only
+  }
+  return { errors, warnings };
+}
+
+export async function checkElpian(program, { permissions = [], functions = ["get", "set"], name = "Plugin", description = "", design = true } = {}) {
   const { check } = await import("./check.mjs");
   const { validateRenders } = await import("./validate.mjs");
   const errors = [];
@@ -103,9 +184,12 @@ export async function checkElpian(program, { permissions = [], functions = ["get
     for (const i of report.issues) {
       const line = `${i.at || i.path}: ${i.message}${i.fix ? ` Fix: ${i.fix}` : ""} [${i.code}]`;
       if (i.severity === "error") errors.push(line);
-      else if (i.severity === "info") notes.push(line);
+      else if (i.severity === "info" && !DESIGN_WARNINGS.has(i.code)) notes.push(line);
       else warnings.push(line);
     }
+    const craft = craftFindings(trees, { name, description });
+    errors.push(...craft.errors);
+    warnings.push(...craft.warnings);
   }
   if (!/\bApp\.create\s*\(/.test(program)) {
     warnings.push("the screen does not use App.create: build it with the SDK (state, view, app.handler) so it re-renders, keeps state and looks like the app");
@@ -298,12 +382,12 @@ export async function checkWeb(html, { permissions = [], functions = ["get", "se
 }
 
 /** Checks a plugin: {ok, errors, warnings, notes, …}. */
-export async function checkPlugin({ ui = "elpian", frontend, backend = "", permissions = [], name = "Plugin", screenshots = "" }) {
+export async function checkPlugin({ ui = "elpian", frontend, backend = "", permissions = [], name = "Plugin", description = "", screenshots = "" }) {
   const b = backendFunctions(backend);
   const functions = b.functions || [];
   const result = ui === "web"
     ? await checkWeb(frontend, { permissions, functions, screenshots })
-    : await checkElpian(frontend, { permissions, functions, name });
+    : await checkElpian(frontend, { permissions, functions, name, description });
   if (b.error) {
     result.errors.unshift(`backend: ${b.error}`);
     result.ok = false;
@@ -322,7 +406,7 @@ export function formatResult(r) {
 
 async function main(argv) {
   const val = (n) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : undefined);
-  const valued = new Set(["--ui", "--backend", "--permissions", "--name", "--screenshots"]);
+  const valued = new Set(["--ui", "--backend", "--permissions", "--name", "--description", "--screenshots"]);
   const file = argv.find((a, i) => !a.startsWith("--") && !(i > 0 && valued.has(argv[i - 1])));
   if (!file) {
     console.error("usage: plugin-check.mjs <frontend.js|index.html> [--ui elpian|web] [--backend backend.js] [--permissions a.b,c.*] [--name N] [--screenshots DIR] [--json]");
@@ -332,7 +416,7 @@ async function main(argv) {
   const ui = val("--ui") || (/\.html?$/i.test(file) ? "web" : "elpian");
   const backend = val("--backend") ? fs.readFileSync(val("--backend"), "utf8") : "";
   const permissions = (val("--permissions") || "").split(",").map((s) => s.trim()).filter(Boolean);
-  const r = await checkPlugin({ ui, frontend, backend, permissions, name: val("--name") || "Plugin", screenshots: val("--screenshots") || "" });
+  const r = await checkPlugin({ ui, frontend, backend, permissions, name: val("--name") || "Plugin", description: val("--description") || "", screenshots: val("--screenshots") || "" });
   console.log(argv.includes("--json") ? JSON.stringify(r) : formatResult(r));
   return r.ok ? 0 : 1;
 }

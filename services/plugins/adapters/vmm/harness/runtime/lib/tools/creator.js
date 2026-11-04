@@ -52,6 +52,17 @@ Choose the UI (ui):
   maps, dense or animated charts with ECharts / D3, node graphs, rich text or
   code editors, canvas animation). When in doubt, Elpian.
 
+Elpian draws most things with one node, live and themed — use it, never a
+picture made of Text: an analog or digital clock is {type: "Clock", props:
+{mode: "analog", seconds: true, size: 240}} (it ticks by itself); a countdown
+"Countdown"; a dial or level "Gauge" / "RadialBars" / "Progress"; trends and
+parts "Chart" (line, bar, area, pie, radar …), "Sparkline", "Funnel",
+"Sankey"; key numbers "Stat"; boards and dates "Kanban", "Gantt", "Calendar",
+"Timeline"; records "ListGroup" of "ListTile", "DataGrid". Any other picture
+is a "Canvas" of vector commands (fillCircle, arc, moveTo/lineTo, stroke,
+fillText) in the theme's colors — or a web plugin for 3D. Rows of Text holding
+dots, bullets, slashes or emoji are refused by the check.
+
 Build it like software, on the computer, to a professional standard:
 1. Read ${KIT}/PLUGINS.md (the plugin guide, with a complete example). For
    Elpian also read the Design section and the node tables of
@@ -143,7 +154,7 @@ function listed(title, items, max) {
 }
 
 /** Runs aseman-plugin-check on the computer: its verdict, or null when it cannot run there. */
-async function checkOnComputer(pc, { ui, frontend, backend, frontendFile, backendFile, permissions, name }, signal) {
+async function checkOnComputer(pc, { ui, frontend, backend, frontendFile, backendFile, permissions, name, description }, signal) {
   const dir = `/workspace/.plugins/.check-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
   const written = []
   try {
@@ -160,6 +171,7 @@ async function checkOnComputer(pc, { ui, frontend, backend, frontendFile, backen
       written.push(back)
     }
     const args = [shq(front), '--ui', ui, '--json', '--name', shq(name || 'Plugin')]
+    if (description) args.push('--description', shq(description))
     if (back) args.push('--backend', shq(back))
     if (permissions.length) args.push('--permissions', shq(permissions.join(',')))
     const { code, output } = await pc.exec(`aseman-plugin-check ${args.join(' ')} 2>&1`, signal)
@@ -222,7 +234,7 @@ export function creatorTools({ gateway, binding }) {
 
         let verdict = null
         if (computer) {
-          verdict = await checkOnComputer(pc, { ui, frontend, backend, frontendFile, backendFile, permissions, name: args.name }, signal)
+          verdict = await checkOnComputer(pc, { ui, frontend, backend, frontendFile, backendFile, permissions, name: args.name, description: args.description }, signal)
           if (verdict && !verdict.ok) {
             throw new Error(`the plugin check failed (aseman-plugin-check, as the app runs it); fix these and create it again:` +
               listed('errors', verdict.errors, 30) + listed('warnings', verdict.warnings, 10))

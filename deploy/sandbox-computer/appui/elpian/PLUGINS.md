@@ -111,6 +111,77 @@ function add(e, app) { if (app.state.draft) { save(app.state.items.concat([{ tit
 function done(i) { save(app.state.items.filter(function (_, j) { return j !== i; })); }
 ```
 
+### Use the node made for it
+
+Elpian has a node for most things people ask for, drawn and animated by the
+app in the person's theme. Use it before building anything yourself
+(`aseman-elpian elpian_describe '{"types":["Clock"]}'` gives its props):
+
+| Asked for | Node |
+|---|---|
+| a clock, world clocks, a watch face | `Clock` (`mode: "analog"` or `"digital"`, `seconds`, `hour24`, `utcOffset`, `label`, `size`): live, it ticks by itself |
+| a timer, a countdown | `Countdown` (ticks by itself) |
+| a value against a range, a speedometer, a dial | `Gauge`, `RadialBars`, `Progress`, `BulletChart` |
+| trends, comparisons, parts of a whole | `Chart` (`line` `bar` `area` `pie` …), `Sparkline`, `Funnel`, `Waterfall`, `Sankey`, `Sunburst`, `CalendarHeatmap` |
+| key numbers | `Stat` on filled `Card`s in a `ResponsiveGrid` |
+| a board, a schedule, dates | `Kanban`, `Gantt`, `Calendar`, `Timeline` |
+| records, tables | `ListGroup` of `ListTile`s, `DataGrid`, `KeyValue`, `Leaderboard` |
+| anything else that is a picture | a `Canvas` (below) — or a web plugin for 3D |
+
+**Never draw a picture with text**: rows of `Text` holding dots, bullets,
+slashes or emoji are not a clock, a chart or a shape; they break on every
+screen and theme. The checker refuses it (`craft-text-art`), and refuses a
+plugin named for something (an analog clock, a gauge) whose screen does not
+use the node made for it or a `Canvas` (`craft-intent`).
+
+### Drawing on a Canvas
+
+A `Canvas` draws vector commands (`{type, params}`): `beginPath`,
+`moveTo` / `lineTo` `{x, y}`, `arc` `{x, y, radius, startAngle, endAngle}`,
+`fillCircle` / `strokeCircle` `{x, y, radius}`, `fillRect` `{x, y, width,
+height}`, `fillText` `{text, x, y}`, `stroke`, `fill`, `setFillStyle` /
+`setStrokeStyle` `{color}`, `setLineWidth` `{width}`, `setLineCap` `{cap}`,
+`save` / `restore` / `translate` / `rotate`, gradients (ELPIAN.md, Elpian
+nodes). Colors come from `Aseman.env().theme.colors`; size it from
+`Aseman.viewport()` so it fits a phone. `app.every` runs every 5 s at
+least: things that tick every second are nodes (`Clock`, `Countdown`).
+
+```js
+// A custom clock face on a Canvas: the theme's colors, sized to the window,
+// redrawn every 30 s (app.every is 5 s at least; the Clock node ticks every
+// second by itself when you need seconds).
+var app = App.create({
+  state: { now: Date.now() },
+  view: function (s, app) {
+    var v = Aseman.viewport(), size = Math.max(160, Math.min(320, v.width - 32, v.height - 120));
+    return { type: "Column", props: { style: { padding: "16", gap: "12", alignItems: "center" } }, children: [
+      { type: "Text", props: { text: "Studio clock", variant: "titleLargeEmphasized" } },
+      { type: "Canvas", key: "face", props: { width: size, height: size, commands: face(size, new Date(s.now)) } },
+    ] };
+  },
+  init: function (app) { app.every("tick", 30000, function () { app.set({ now: Date.now() }); }); },
+});
+function face(size, t) {
+  var c = Aseman.env().theme.colors, r = size / 2, cmds = [];
+  function hand(turns, length, width, color) {
+    var a = turns * 2 * Math.PI - Math.PI / 2;
+    cmds.push({ type: "setStrokeStyle", params: { color: color } }, { type: "setLineWidth", params: { width: width } },
+      { type: "setLineCap", params: { cap: "round" } }, { type: "beginPath" }, { type: "moveTo", params: { x: r, y: r } },
+      { type: "lineTo", params: { x: r + Math.cos(a) * length, y: r + Math.sin(a) * length } }, { type: "stroke" });
+  }
+  cmds.push({ type: "setFillStyle", params: { color: c.surfaceContainerHigh } }, { type: "fillCircle", params: { x: r, y: r, radius: r - 2 } });
+  for (var i = 0; i < 12; i++) {
+    var a = i / 12 * 2 * Math.PI;
+    cmds.push({ type: "setFillStyle", params: { color: i % 3 ? c.outline : c.primary } },
+      { type: "fillCircle", params: { x: r + Math.cos(a) * (r - 16), y: r + Math.sin(a) * (r - 16), radius: i % 3 ? 3 : 5 } });
+  }
+  hand((t.getHours() % 12 + t.getMinutes() / 60) / 12, r * 0.5, 8, c.onSurface);
+  hand(t.getMinutes() / 60, r * 0.75, 5, c.primary);
+  cmds.push({ type: "setFillStyle", params: { color: c.primary } }, { type: "fillCircle", params: { x: r, y: r, radius: 7 } });
+  return cmds;
+}
+```
+
 Design it like an app someone would screenshot: follow **ELPIAN.md,
 Design** (Material 3 Expressive) to the letter: one clear hierarchy, `Text`
 `variant` type roles (never `fontSize`), tonal `Card`s and `ListGroup`s (no

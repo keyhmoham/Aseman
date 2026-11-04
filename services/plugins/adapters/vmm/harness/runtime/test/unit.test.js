@@ -212,6 +212,8 @@ test('creator checks programs before they reach the node', () => {
   assert.match(CREATOR_GUIDE, /PLUGINS\.md/)
   assert.match(CREATOR_GUIDE, /aseman-plugin-check/)
   assert.match(CREATOR_GUIDE, /"web" \(say why in ui_reason\): the design needs 3D/)
+  assert.match(CREATOR_GUIDE, /mode: "analog", seconds: true/)
+  assert.match(CREATOR_GUIDE, /never a\npicture made of Text/)
   // An SDK program renders through App.create; a bare one through askHost.
   assert.deepEqual(quickProblems({ ui: 'elpian', frontend: 'var app = App.create({ state: {}, view: function () { return {type: "Text"} } })' }), [])
   assert.deepEqual(quickProblems({ ui: 'elpian', frontend: "askHost('render', '{}')" }), [])
@@ -264,6 +266,7 @@ test('create_plugin checks the plugin on the computer and refuses one that fails
   assert.match(out, /Created web plugin Globe \(p9\).*Checked as the app runs it.*console\.error/s)
   const check = calls.find((c) => c.action === 'ask')
   assert.match(check.body.body, /^aseman-plugin-check '\/workspace\/\.plugins\/globe\/plugin\.html' --ui web --json .*--permissions 'spaces\.message_list'/)
+  assert.match(check.body.body, /--description 'Our offices on a globe'/, 'the check knows what was asked for')
   const created = calls.find((c) => c.action === 'plugin_create').body
   assert.equal(created.ui, 'web')
   assert.deepEqual(created.frontend, { source: files['/workspace/.plugins/globe/plugin.html'], runtime: 'web', language: 'html' })

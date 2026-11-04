@@ -34,6 +34,13 @@ const NODES = JSON.parse(fs.readFileSync(path.join(here, "nodes.json"), "utf8"))
 const KNOWN = new Set([...NODES.elpian, ...NODES.html, ...NODES.kit]);
 const HOST_APIS = new Set(["render", "aseman.env", "aseman.request", "aseman.compact", "aseman.expand", "println", "env.get",
   "setTimeout", "setInterval", "clearTimeout", "clearInterval"]);
+// A Creator plugin's screen also has its older direct host calls.
+const PLUGIN_APIS = new Set(["tool.call", "server.call", "host.request", "aseman.call", "aseman.context", "tool.compact", "tool.expand"]);
+
+// Whether a plugin declared namespace.action ("ns.action" or "ns.*").
+export function pluginAllows(permissions, namespace, action) {
+  return (permissions || []).some((p) => p === `${namespace}.${action}` || p === `${namespace}.*`);
+}
 
 export async function loadQuickJS() {
   const candidates = [
@@ -181,7 +188,30 @@ function addValidation(renders, paths, compact, errors, warnings, opts, viewport
 }
 
 async function run(source, { server = "", apps = null, maxHandlers = 60, millis = 10000, display = "full", validate: doValidate, collect = false,
-  explore = true, exploreMs = 8000, maxTransitions = 2500 } = {}) {
+  explore = true, exploreMs = 8000, maxTransitions = 2500, plugin = null } = {}) {
+  // A plugin's own store (its default backend's get/set), and its backend
+  // functions' sample answers.
+  const pluginStore = new Map();
+  const pluginCall = (namespace, action) => {
+    if (plugin && !pluginAllows(plugin.permissions, namespace, action)) {
+      errors.push(`the screen calls ${namespace}.${action}, which the plugin did not declare in permissions (it will be refused)${stepsText(currentPath)}`);
+      return { ok: false, status: 403, error: `${namespace}.${action} is not declared` };
+    }
+    return { ok: true, status: 200, data: {} };
+  };
+  const pluginInvoke = (fn, args) => {
+    if (fn === "get") return { ok: true, status: 200, data: { value: pluginStore.has(String(args && args.key)) ? pluginStore.get(String(args.key)) : null } };
+    if (fn === "set") {
+      pluginStore.set(String(args && args.key), args ? args.value : null);
+      return { ok: true, status: 200, data: { ok: true } };
+    }
+    if (plugin && Array.isArray(plugin.functions) && !plugin.functions.includes(fn)) {
+      errors.push(`the screen calls backend function "${fn}", which the plugin's backend does not declare in tools()${stepsText(currentPath)}`);
+      return { ok: false, status: 404, error: `no backend function ${fn}` };
+    }
+    return { ok: true, status: 200, data: {} };
+  };
+  const pluginContext = () => ({ plugin: "p-check", name: (plugin && plugin.name) || "Check", scope: "account", space: SAMPLE_ENV.space, room: SAMPLE_ENV.room, user: SAMPLE_ENV.user.id, display });
   const vopts = { validate: doValidate };
   const compact = display === "compact";
   const env = { ...SAMPLE_ENV, display, widget: compact ? { size: "medium", shape: "card" } : undefined };
@@ -251,6 +281,23 @@ async function run(source, { server = "", apps = null, maxHandlers = 60, millis 
           errors.push(`the view threw: ${first}${at ? ` (${at})` : ""}${stepsText(currentPath)}`);
         }
         break;
+      case "tool.call":
+      case "server.call":
+      case "host.request": {
+        const a = Array.isArray(parsed) ? parsed : [parsed && (parsed.microtool || parsed.name), parsed && parsed.args];
+        const out = pluginInvoke(String(a[0] || ""), a[1] || {});
+        reply = out.ok ? out.data : { error: { code: "tool_error", message: out.error } };
+        break;
+      }
+      case "aseman.call": {
+        const a = Array.isArray(parsed) ? parsed : [parsed && parsed.namespace, parsed && parsed.action, parsed && parsed.body];
+        const out = pluginCall(String(a[0] || ""), String(a[1] || ""));
+        reply = out.ok ? out.data : { error: { code: "platform_error", message: out.error } };
+        break;
+      }
+      case "aseman.context":
+        reply = pluginContext();
+        break;
       case "aseman.request":
         if (!parsed || !parsed.id || !(parsed.op || parsed.path !== undefined)) errors.push(`aseman.request without id and op/path: ${JSON.stringify(parsed)}`);
         else {
@@ -260,7 +307,7 @@ async function run(source, { server = "", apps = null, maxHandlers = 60, millis 
         reply = { accepted: true };
         break;
       default:
-        if (!HOST_APIS.has(api)) unknownApis.add(api);
+        if (!HOST_APIS.has(api) && !(plugin && PLUGIN_APIS.has(api))) unknownApis.add(api);
     }
     return vm.newString(JSON.stringify(typed(reply)));
   });
@@ -284,6 +331,20 @@ async function run(source, { server = "", apps = null, maxHandlers = 60, millis 
   };
 
   const answer = async (req) => {
+    if (req.target === "plugin") {
+      const body = req.body || {};
+      switch (req.op) {
+        case "invoke":
+          return pluginInvoke(String(body.function || ""), body.args || {});
+        case "call":
+          return pluginCall(String(body.namespace || ""), String(body.action || ""));
+        case "context":
+          return { ok: true, status: 200, data: pluginContext() };
+        default:
+          errors.push(`unknown plugin op "${req.op}" (use Aseman.plugin.call, api, get, set or context)`);
+          return { ok: false, status: 404, error: "no such op" };
+      }
+    }
     if (req.target === "app") {
       if (!server) return { ok: true, status: 200, data: { status: 200, ok: true, json: {}, text: "{}", contentType: "application/json" } };
       const cacheKey = `${req.method || "GET"} ${req.path}`;

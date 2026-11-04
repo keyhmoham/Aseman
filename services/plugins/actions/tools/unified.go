@@ -39,6 +39,10 @@ import (
 // maxProgram bounds an uploaded program or skill.
 const maxProgram = 1 << 20
 
+// maxWebDocument bounds a web frontend: one HTML document with its libraries
+// inlined (a 3D engine and its scene fit comfortably).
+const maxWebDocument = 6 << 20
+
 type backendInput struct {
 	Mode string `json:"mode"`
 	// external
@@ -145,8 +149,20 @@ func (f *frontendInput) validate() error {
 			}
 		case models.RuntimeQuickJS:
 			f.Language = "js"
+		case models.RuntimeWeb:
+			f.Language = "html"
+			if f.Bytecode != "" {
+				return errs.InvalidArgument("a web frontend is an HTML document, not bytecode")
+			}
+			if strings.TrimSpace(f.Source) == "" {
+				return errs.InvalidArgument("upload the frontend document")
+			}
+			if len(f.Source) > maxWebDocument {
+				return errs.InvalidArgument("the web frontend is too large (6 MB at most, libraries included)")
+			}
+			return nil
 		default:
-			return errs.InvalidArgument("a static frontend runs on elpian or quickjs")
+			return errs.InvalidArgument("a static frontend runs on elpian, quickjs or web")
 		}
 		if strings.TrimSpace(f.Source) == "" && f.Bytecode == "" {
 			return errs.InvalidArgument("upload the frontend program")

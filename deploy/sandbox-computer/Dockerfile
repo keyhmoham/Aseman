@@ -55,10 +55,16 @@ COPY appui/elpian/validate.mjs appui/elpian/validate-mcp.mjs appui/elpian/schema
 # the shell, with driver sessions that persist between commands.
 COPY appui/elpian/drive.mjs appui/elpian/drive-mcp.mjs appui/elpian/mcp-stdio.mjs appui/elpian/elpian-cli.mjs /opt/aseman-appui/elpian/
 COPY appui/elpian/examples /opt/aseman-appui/elpian/examples
+# Creator plugins (PLUGINS.md): the plugin shim and web bridge the app runs
+# them with, the checker create_plugin runs before saving one (Elpian on
+# QuickJS, web in Chromium), and the inliner that makes a web build one page.
+COPY appui/elpian/PLUGINS.md appui/elpian/aseman-plugin.js appui/elpian/aseman-web-plugin.js appui/elpian/plugin-check.mjs appui/elpian/plugin-inline.mjs /opt/aseman-appui/elpian/
 COPY appui/sdk/aseman.js appui/sdk/server.cjs appui/sdk/server.mjs appui/sdk/aseman_server.py /opt/aseman-appui/sdk/
 COPY appui/aseman-appui /usr/local/bin/aseman-appui
-RUN chmod +x /usr/local/bin/aseman-appui /opt/aseman-appui/elpian/elpian-cli.mjs \
+RUN chmod +x /usr/local/bin/aseman-appui /opt/aseman-appui/elpian/elpian-cli.mjs /opt/aseman-appui/elpian/plugin-check.mjs /opt/aseman-appui/elpian/plugin-inline.mjs \
  && ln -sf /opt/aseman-appui/elpian/elpian-cli.mjs /usr/local/bin/aseman-elpian \
+ && ln -sf /opt/aseman-appui/elpian/plugin-check.mjs /usr/local/bin/aseman-plugin-check \
+ && ln -sf /opt/aseman-appui/elpian/plugin-inline.mjs /usr/local/bin/aseman-plugin-inline \
  && mkdir -p /opt/aseman-appui \
  && ln -sf /usr/local/bin/aseman-appui /opt/aseman-appui/aseman-appui
 # /workspace is the space's shared working tree.

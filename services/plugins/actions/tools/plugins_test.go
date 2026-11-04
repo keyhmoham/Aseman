@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -289,5 +290,43 @@ func TestAPluginsFrontendSaysItIsAPlugin(t *testing.T) {
 	}
 	if get(pBob)["plugin"] != nil {
 		t.Fatal("someone else was told of an app-wide plugin")
+	}
+}
+
+// A plugin's screen is Elpian by default; ui "web" makes it one HTML
+// document on the web runtime, and a script is refused there.
+func TestAWebPluginIsOneHTMLDocument(t *testing.T) {
+	native := pluginInput{Name: "Tasks", Frontend: pluginProgram{Source: "askHost('render','{}')"}}
+	if err := native.normalize(); err != nil || native.UI != PluginUIElpian || native.Frontend.Runtime != models.RuntimeQuickJS {
+		t.Fatalf("default = %+v, %v", native, err)
+	}
+	web := pluginInput{Name: "Globe", UI: "web", Frontend: pluginProgram{Source: "<!doctype html><html><body><canvas></canvas></body></html>"}}
+	if err := web.normalize(); err != nil || web.UI != PluginUIWeb || web.Frontend.Runtime != models.RuntimeWeb || web.Frontend.Language != "html" {
+		t.Fatalf("web = %+v, %v", web, err)
+	}
+	byRuntime := pluginInput{Name: "Globe", Frontend: pluginProgram{Runtime: models.RuntimeWeb, Source: "<html><body></body></html>"}}
+	if err := byRuntime.normalize(); err != nil || byRuntime.UI != PluginUIWeb {
+		t.Fatalf("the web runtime implies ui web: %+v, %v", byRuntime, err)
+	}
+	for _, bad := range []pluginInput{
+		{Name: "x", UI: "web", Frontend: pluginProgram{Source: "askHost('render','{}')"}},
+		{Name: "x", UI: "flash", Frontend: pluginProgram{Source: "x"}},
+	} {
+		if err := bad.normalize(); errs.CodeOf(err) != errs.CodeInvalidArgument {
+			t.Fatalf("%+v = %v", bad, err)
+		}
+	}
+	doc := frontendInput{Mode: models.FrontendStatic, Runtime: models.RuntimeWeb, Source: "<!doctype html><html></html>"}
+	if err := doc.validate(); err != nil || doc.Language != "html" {
+		t.Fatalf("a web frontend = %+v, %v", doc, err)
+	}
+	huge := frontendInput{Mode: models.FrontendStatic, Runtime: models.RuntimeWeb, Source: "<html>" + strings.Repeat("x", maxWebDocument) + "</html>"}
+	if err := huge.validate(); errs.CodeOf(err) != errs.CodeInvalidArgument {
+		t.Fatalf("an oversized web frontend = %v", err)
+	}
+	// Larger than a program, within a web document's bound (a 3D engine inlined).
+	big := frontendInput{Mode: models.FrontendStatic, Runtime: models.RuntimeWeb, Source: "<html>" + strings.Repeat("x", 2*maxProgram) + "</html>"}
+	if err := big.validate(); err != nil {
+		t.Fatalf("a web document with its libraries = %v", err)
 	}
 }

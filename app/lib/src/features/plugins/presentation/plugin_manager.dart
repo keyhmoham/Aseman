@@ -132,11 +132,11 @@ Future<void> showPluginManager(
   );
 }
 
-enum _Filter { all, onScreen, minimised, hidden }
+enum _Filter { all, onScreen, minimised }
 
 /// Manages the person's Creator plugins in one place: the universal plugins
 /// of their account and the plugins of the workspace they are in. Each one
-/// can be put on screen, minimised to its dock chip, hidden, or (for its
+/// can be put on screen, minimised (off screen, kept here), or (for its
 /// owner) removed and later restored.
 class PluginManager extends StatefulWidget {
   const PluginManager({
@@ -186,7 +186,6 @@ class _PluginManagerState extends State<PluginManager> {
         _Filter.all => true,
         _Filter.onScreen => _mode(p) == PluginGadgetMode.open,
         _Filter.minimised => _mode(p) == PluginGadgetMode.docked,
-        _Filter.hidden => _mode(p) == PluginGadgetMode.hidden,
       };
 
   void _openPage(PluginInfo p) {
@@ -246,8 +245,6 @@ class _PluginManagerState extends State<PluginManager> {
         all.where((p) => _mode(p) == PluginGadgetMode.open).length;
     final docked =
         all.where((p) => _mode(p) == PluginGadgetMode.docked).length;
-    final hidden =
-        all.where((p) => _mode(p) == PluginGadgetMode.hidden).length;
 
     final children = <Widget>[
       if (_c.error != null && all.isEmpty)
@@ -322,8 +319,7 @@ class _PluginManagerState extends State<PluginManager> {
                     Text(
                       all.isEmpty
                           ? 'Made for you in Creator mode'
-                          : '$open on screen · $docked minimised'
-                              '${hidden > 0 ? ' · $hidden hidden' : ''}',
+                          : '$open on screen · $docked minimised',
                       style: TextStyle(
                           fontSize: 12, color: scheme.onSurfaceVariant),
                     ),
@@ -395,7 +391,6 @@ class _PluginManagerState extends State<PluginManager> {
         _Filter.all => 'All',
         _Filter.onScreen => 'On screen',
         _Filter.minimised => 'Minimised',
-        _Filter.hidden => 'Hidden',
       };
 
   Widget _tile(PluginInfo p) {
@@ -416,9 +411,6 @@ class _PluginManagerState extends State<PluginManager> {
       onMinimise: mode == null || mode == PluginGadgetMode.docked
           ? null
           : () => _c.dock(p.id),
-      onHide: mode == null || mode == PluginGadgetMode.hidden
-          ? null
-          : () => _c.hide(p.id),
       onOpenPage: () => _openPage(p),
       onRemove: () => _remove(p),
     );
@@ -532,7 +524,6 @@ class _PluginTile extends StatelessWidget {
     required this.onPrimary,
     this.removed = false,
     this.onMinimise,
-    this.onHide,
     this.onOpenPage,
     this.onRemove,
   });
@@ -545,7 +536,6 @@ class _PluginTile extends StatelessWidget {
   final bool removed;
   final VoidCallback onPrimary;
   final VoidCallback? onMinimise;
-  final VoidCallback? onHide;
   final VoidCallback? onOpenPage;
   final VoidCallback? onRemove;
 
@@ -568,7 +558,6 @@ class _PluginTile extends StatelessWidget {
         : switch (mode) {
             PluginGadgetMode.open => ('On screen', AppColors.successOf(context)),
             PluginGadgetMode.docked => ('Minimised', scheme.primary),
-            PluginGadgetMode.hidden => ('Hidden', scheme.onSurfaceVariant),
             null => ('Page', scheme.primary),
           };
     final (IconData primaryIcon, String primaryTip) = removed
@@ -576,7 +565,8 @@ class _PluginTile extends StatelessWidget {
         : switch (mode) {
             PluginGadgetMode.open => (Icons.minimize_rounded, 'Minimise'),
             null => (Icons.open_in_new_rounded, 'Open'),
-            _ => (Icons.open_in_full_rounded, 'Show on screen'),
+            PluginGadgetMode.docked =>
+              (Icons.open_in_full_rounded, 'Show on screen'),
           };
     final onScreen = mode == PluginGadgetMode.open;
 
@@ -585,10 +575,6 @@ class _PluginTile extends StatelessWidget {
         const PopupMenuItem(
             value: 'minimise',
             child: _MenuRow(Icons.minimize_rounded, 'Minimise')),
-      if (onHide != null)
-        const PopupMenuItem(
-            value: 'hide',
-            child: _MenuRow(Icons.visibility_off_outlined, 'Hide')),
       if (onOpenPage != null && mode != null)
         const PopupMenuItem(
             value: 'page',
@@ -675,8 +661,6 @@ class _PluginTile extends StatelessWidget {
                     switch (v) {
                       case 'minimise':
                         onMinimise?.call();
-                      case 'hide':
-                        onHide?.call();
                       case 'page':
                         onOpenPage?.call();
                       case 'remove':

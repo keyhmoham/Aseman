@@ -9,7 +9,8 @@ import 'plugin_gadgets_controller.dart';
 import 'plugins_panel.dart';
 
 /// A floating Creator-plugin gadget: glass chrome, drag by the title bar,
-/// collapse to a dock chip, optional resize grip.
+/// minimise (back to the plugins manager), optional resize grip. A minimised
+/// gadget draws nothing.
 class PluginGadget extends StatelessWidget {
   const PluginGadget({
     super.key,
@@ -37,16 +38,7 @@ class PluginGadget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final layout = controller.layoutOf(plugin.id);
-    if (layout.mode == PluginGadgetMode.hidden) {
-      return const SizedBox.shrink();
-    }
-    if (layout.mode == PluginGadgetMode.docked) {
-      return _DockChip(
-        plugin: plugin,
-        onOpen: () => controller.open(plugin.id),
-        onHide: () => controller.hide(plugin.id),
-      );
-    }
+    if (layout.mode != PluginGadgetMode.open) return const SizedBox.shrink();
     return _FloatingWindow(
       dependencies: dependencies,
       plugin: plugin,
@@ -56,65 +48,6 @@ class PluginGadget extends StatelessWidget {
       roomId: roomId,
       constrainToParent: constrainToParent,
       compact: compact,
-    );
-  }
-}
-
-class _DockChip extends StatelessWidget {
-  const _DockChip({
-    required this.plugin,
-    required this.onOpen,
-    required this.onHide,
-  });
-
-  final PluginInfo plugin;
-  final VoidCallback onOpen;
-  final VoidCallback onHide;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final radius = BorderRadius.circular(999);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onOpen,
-        onLongPress: onHide,
-        borderRadius: radius,
-        child: GlassSurface(
-          alpha: AppSurfaces.overlayAlphaOf(context),
-          blur: AppSurfaces.blurSigmaOf(context),
-          borderRadius: radius,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  plugin.appWide
-                      ? Icons.extension_rounded
-                      : Icons.widgets_outlined,
-                  size: 16,
-                  color: scheme.primary,
-                ),
-                const SizedBox(width: 6),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 120),
-                  child: Text(
-                    plugin.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -230,20 +163,12 @@ class _FloatingWindowState extends State<_FloatingWindow> {
                                 ),
                               ),
                               IconButton(
-                                tooltip: 'Dock',
+                                tooltip: 'Minimise (reopen from Plugins)',
                                 visualDensity: VisualDensity.compact,
                                 iconSize: 18,
                                 onPressed: () =>
                                     widget.controller.dock(widget.plugin.id),
                                 icon: const Icon(Icons.minimize_rounded),
-                              ),
-                              IconButton(
-                                tooltip: 'Hide',
-                                visualDensity: VisualDensity.compact,
-                                iconSize: 18,
-                                onPressed: () =>
-                                    widget.controller.hide(widget.plugin.id),
-                                icon: const Icon(Icons.close_rounded),
                               ),
                             ],
                           ),
@@ -298,8 +223,8 @@ class _FloatingWindowState extends State<_FloatingWindow> {
   }
 }
 
-/// Dock chips and open floaters for one surface. Empty areas do not absorb
-/// pointer events — only chips and open windows participate in hit testing.
+/// The open floaters of one surface. Minimised gadgets draw nothing (the
+/// plugins manager lists them), and empty areas do not absorb pointer events.
 class PluginGadgetLayer extends StatelessWidget {
   const PluginGadgetLayer({
     super.key,
@@ -308,9 +233,7 @@ class PluginGadgetLayer extends StatelessWidget {
     required this.plugins,
     this.spaceId = '',
     this.roomId = '',
-    this.dockAlignment = Alignment.bottomRight,
     this.compact = false,
-    this.pad = const EdgeInsets.all(10),
   });
 
   final AppDependencies dependencies;
@@ -318,25 +241,15 @@ class PluginGadgetLayer extends StatelessWidget {
   final List<PluginInfo> plugins;
   final String spaceId;
   final String roomId;
-  final Alignment dockAlignment;
   final bool compact;
-  final EdgeInsets pad;
 
   @override
   Widget build(BuildContext context) {
-    if (plugins.isEmpty) return const SizedBox.shrink();
-    final docked = [
-      for (final p in plugins)
-        if (controller.layoutOf(p.id).mode == PluginGadgetMode.docked) p
-    ];
     final open = [
       for (final p in plugins)
         if (controller.layoutOf(p.id).mode == PluginGadgetMode.open) p
     ];
-    final hiddenCount = plugins
-        .where((p) => controller.layoutOf(p.id).mode == PluginGadgetMode.hidden)
-        .length;
-
+    if (open.isEmpty) return const SizedBox.shrink();
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -349,43 +262,6 @@ class PluginGadgetLayer extends StatelessWidget {
               spaceId: spaceId,
               roomId: roomId,
               compact: compact,
-            ),
-          ),
-        if (docked.isNotEmpty || hiddenCount > 0)
-          Positioned(
-            left: dockAlignment.x <= 0 ? pad.left : null,
-            right: dockAlignment.x >= 0 ? pad.right : null,
-            top: dockAlignment.y <= 0 ? pad.top : null,
-            bottom: dockAlignment.y >= 0 ? pad.bottom : null,
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              alignment: WrapAlignment.end,
-              children: [
-                for (final p in docked)
-                  PluginGadget(
-                    dependencies: dependencies,
-                    plugin: p,
-                    controller: controller,
-                    spaceId: spaceId,
-                    roomId: roomId,
-                    compact: compact,
-                  ),
-                if (hiddenCount > 0)
-                  ActionChip(
-                    avatar: const Icon(Icons.visibility_outlined, size: 16),
-                    label: Text('+$hiddenCount'),
-                    onPressed: () {
-                      for (final p in plugins) {
-                        if (controller.layoutOf(p.id).mode ==
-                            PluginGadgetMode.hidden) {
-                          controller.dock(p.id);
-                        }
-                      }
-                    },
-                    visualDensity: VisualDensity.compact,
-                  ),
-              ],
             ),
           ),
       ],

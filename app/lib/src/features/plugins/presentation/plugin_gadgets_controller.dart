@@ -7,14 +7,11 @@ import '../data/plugins_api.dart';
 
 /// How a gadget is shown on its surface.
 enum PluginGadgetMode {
-  /// Chip in the surface dock; tap to expand.
+  /// Minimised: off screen, listed in the plugins manager to bring back.
   docked,
 
   /// Expanded floating window on the surface.
   open,
-
-  /// Hidden until the person opens it from the dock / launcher.
-  hidden,
 }
 
 /// In-memory layout of one floating gadget on the current screen.
@@ -158,8 +155,6 @@ class PluginGadgetsController extends ChangeNotifier {
   void open(String pluginId) => setMode(pluginId, PluginGadgetMode.open);
 
   void dock(String pluginId) => setMode(pluginId, PluginGadgetMode.docked);
-
-  void hide(String pluginId) => setMode(pluginId, PluginGadgetMode.hidden);
 
   void toggle(String pluginId) {
     final mode = layoutOf(pluginId).mode;

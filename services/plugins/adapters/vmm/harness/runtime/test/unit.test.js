@@ -9,7 +9,7 @@ import { authorized } from '../lib/plugins/host.js'
 import { wrap, wrapped } from '../lib/untrusted.js'
 import { personaFor, personalPersona, notesText } from '../lib/persona.js'
 import { formatMemories } from '../lib/tools/memory.js'
-import { syntaxError, CREATOR_GUIDE } from '../lib/tools/creator.js'
+import { syntaxError, CREATOR_GUIDE, pluginUI, quickProblems, parseCheck, looksLikeHTML, creatorTools } from '../lib/tools/creator.js'
 import { bodyLine } from '../lib/tools/api.js'
 import { workspaceTool } from '../lib/tools/workspace.js'
 import { Gateway, GatewayError } from '../lib/gateway.js'
@@ -209,7 +209,79 @@ test('creator checks programs before they reach the node', () => {
   assert.equal(syntaxError("askHost('render', '{}')", 'frontend'), '')
   assert.match(syntaxError('function (', 'backend'), /^backend: /)
   assert.match(personaFor({ name: 'Ava' }), /Plugins \(Creator mode\)/)
-  assert.match(CREATOR_GUIDE, /aseman\.call/)
+  assert.match(CREATOR_GUIDE, /PLUGINS\.md/)
+  assert.match(CREATOR_GUIDE, /aseman-plugin-check/)
+  assert.match(CREATOR_GUIDE, /"web" \(say why in ui_reason\): the design needs 3D/)
+  // An SDK program renders through App.create; a bare one through askHost.
+  assert.deepEqual(quickProblems({ ui: 'elpian', frontend: 'var app = App.create({ state: {}, view: function () { return {type: "Text"} } })' }), [])
+  assert.deepEqual(quickProblems({ ui: 'elpian', frontend: "askHost('render', '{}')" }), [])
+  assert.match(quickProblems({ ui: 'elpian', frontend: 'var x = 1' })[0], /never renders/)
+  assert.match(quickProblems({ ui: 'elpian', frontend: '<!doctype html><html></html>' })[0], /make it ui "web"/)
+  assert.match(quickProblems({ ui: 'web', frontend: 'var x' }).join('\n'), /one HTML document/)
+  assert.match(quickProblems({ ui: 'web', frontend: '<!doctype html><html></html>' })[0], /ui_reason/)
+  assert.deepEqual(quickProblems({ ui: 'web', frontend: '<!doctype html><html></html>', uiReason: '3D globe' }), [])
+})
+
+test('a plugin is Elpian unless web is asked for or its screen is a web document', () => {
+  assert.equal(pluginUI('', 'App.create({})'), 'elpian')
+  assert.equal(pluginUI('', '', '/workspace/.plugins/globe/dist/plugin.html'), 'web')
+  assert.equal(pluginUI('', '<!DOCTYPE html><html>'), 'web')
+  assert.equal(pluginUI('web', 'x'), 'web')
+  assert.throws(() => pluginUI('flash', 'x'), /elpian.*web/)
+  assert.ok(looksLikeHTML('  <html><body></body></html>'))
+  assert.ok(!looksLikeHTML('var html = "<html>"'))
+})
+
+test("the plugin checker's verdict is read from its JSON line, and its absence is not a failure", () => {
+  assert.deepEqual(parseCheck(0, 'noise\n{"ok":true,"errors":[],"warnings":[]}\n'), { ok: true, errors: [], warnings: [] })
+  assert.equal(parseCheck(1, '{"ok":false,"errors":["x"],"warnings":[]}').errors[0], 'x')
+  assert.equal(parseCheck(127, 'bash: aseman-plugin-check: command not found'), null)
+  assert.equal(parseCheck(2, 'TypeError: boom'), null)
+})
+
+test('create_plugin checks the plugin on the computer and refuses one that fails', async () => {
+  const calls = []
+  let verdict = { ok: true, ui: 'web', errors: [], warnings: ['phone: console.error: x'], notes: [] }
+  const files = { '/workspace/.plugins/globe/plugin.html': '<!doctype html><html><body><canvas></canvas></body></html>' }
+  const gateway = {
+    call: async (token, ns, action, body) => {
+      calls.push({ ns, action, body })
+      if (action === 'sandbox_files' && body.operation === 'read') {
+        const data = files['/workspace/' + body.path]
+        return data === undefined ? { missing: true } : { data_base64: Buffer.from(data).toString('base64') }
+      }
+      if (action === 'sandbox_files') return { ok: true }
+      if (action === 'ask') return body.body.startsWith('aseman-plugin-check') ? { exit_code: verdict.ok ? 0 : 1, output: JSON.stringify(verdict) } : { exit_code: 0, output: '' }
+      if (action === 'plugin_create') return { plugin: { id: 'p9', name: body.name, placement: 'page', scope: 'space' } }
+      return {}
+    },
+  }
+  const b = { kind: 'room', active: true, token: 't', spaceId: 'sp', roomId: 'r', flags: {} }
+  const create = creatorTools({ gateway, binding: () => b }).find((t) => t.name === 'create_plugin')
+  const signal = new AbortController().signal
+  const args = { name: 'Globe', description: 'Our offices on a globe', ui: 'web', ui_reason: '3D globe', placement: 'page', frontend_file: '.plugins/globe/plugin.html', permissions: ['spaces.message_list'] }
+  const out = await create.execute(args, { signal })
+  assert.match(out, /Created web plugin Globe \(p9\).*Checked as the app runs it.*console\.error/s)
+  const check = calls.find((c) => c.action === 'ask')
+  assert.match(check.body.body, /^aseman-plugin-check '\/workspace\/\.plugins\/globe\/plugin\.html' --ui web --json .*--permissions 'spaces\.message_list'/)
+  const created = calls.find((c) => c.action === 'plugin_create').body
+  assert.equal(created.ui, 'web')
+  assert.deepEqual(created.frontend, { source: files['/workspace/.plugins/globe/plugin.html'], runtime: 'web', language: 'html' })
+
+  verdict = { ok: false, ui: 'web', errors: ['phone 360×640: the page draws nothing'], warnings: [] }
+  calls.length = 0
+  await assert.rejects(create.execute(args, { signal }), /plugin check failed[\s\S]*draws nothing/)
+  assert.ok(!calls.some((c) => c.action === 'plugin_create'), 'a failing plugin never reaches the node')
+
+  // Without a computer: Elpian inline only.
+  const personal = { kind: 'personal', active: true, token: 't', flags: {} }
+  const noPc = creatorTools({ gateway, binding: () => personal }).find((t) => t.name === 'create_plugin')
+  await assert.rejects(noPc.execute(args, { signal }), /no computer/)
+  await assert.rejects(noPc.execute({ ...args, frontend_file: undefined, frontend: files['/workspace/.plugins/globe/plugin.html'] }, { signal }), /built and checked on a computer/)
+  calls.length = 0
+  const inline = await noPc.execute({ name: 'Tasks', description: 'x', frontend: 'App.create({ state: {}, view: function () { return {type: "Text"} } })' }, { signal })
+  assert.match(inline, /Created elpian plugin Tasks/)
+  assert.equal(calls.find((c) => c.action === 'plugin_create').body.frontend.runtime, 'quickjs')
 })
 
 test('catalog bodies read in one line', () => {

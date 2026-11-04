@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:aseman/src/features/plugins/data/plugins_api.dart';
 import 'package:aseman/src/features/plugins/runtime/plugin_host.dart';
+import 'package:aseman/src/features/plugins/runtime/plugin_runtime.dart';
 import 'package:aseman/src/features/tools/domain/tool_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -147,4 +148,118 @@ void main() {
     expect(PluginInfo.fromJson(payload.plugin!).placement, PluginPlacement.desk);
     expect(ToolFrontendPayload.fromJson({'mode': 'static'}).plugin, isNull);
   });
+
+  test('a web plugin says so, and its frontend runs on the web runtime', () {
+    expect(PluginInfo.fromJson({'id': 'p', 'ui': 'web'}).web, isTrue);
+    expect(PluginInfo.fromJson({'id': 'p', 'ui': 'elpian'}).web, isFalse);
+    expect(PluginInfo.fromJson({'id': 'p'}).web, isFalse);
+    expect(ToolRuntime.parse('web'), ToolRuntime.web);
+  });
+
+  test('Aseman.plugin requests are accepted now and answered through settle',
+      () async {
+    final node = _Node()
+      ..replies['tools.plugin_invoke'] = (body) => {
+            'result': {
+              'structuredContent': {'value': (body['payload'] as Map)['key']}
+            }
+          }
+      ..replies['tools.plugin_call'] = (_) => {'ok': true};
+    final settled = <Map<String, dynamic>>[];
+    final host = PluginHost(node.api,
+        plugin: _spaced,
+        spaceId: 's1',
+        roomId: 'r1',
+        userId: 'u1',
+        settle: (r) async => settled.add(r),
+        env: () => {'theme': {'mode': 'dark'}});
+    final handlers = host.handlers();
+    Future<void> request(Map<String, dynamic> req) async {
+      final raw = await handlers['aseman.request']!(
+          'aseman.request', jsonEncode(jsonEncode(req)));
+      expect(_value(raw), {'accepted': true});
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    await request({
+      'id': 'p1',
+      'target': 'plugin',
+      'op': 'invoke',
+      'body': {
+        'function': 'get',
+        'args': {'key': 'items'}
+      }
+    });
+    expect(settled.last['id'], 'p1');
+    expect(settled.last['ok'], isTrue);
+    expect(settled.last['data'], {'value': 'items'});
+    expect(node.calls.last.$2,
+        {'plugin': 'p2', 'function': 'get', 'payload': {'key': 'items'}, 'room': 'r1'});
+
+    await request({
+      'id': 'p2',
+      'target': 'plugin',
+      'op': 'call',
+      'body': {'namespace': 'spaces', 'action': 'message_list', 'body': {}}
+    });
+    expect(settled.last['ok'], isTrue);
+    expect(node.calls.last.$1, 'tools.plugin_call');
+
+    await request({'id': 'p3', 'target': 'plugin', 'op': 'context'});
+    expect((settled.last['data'] as Map)['space'], 's1');
+
+    // The SDK's page API is not a plugin's: refused with a hint.
+    await request({'id': 'p4', 'target': 'app', 'path': 'api/x'});
+    expect(settled.last['ok'], isFalse);
+    expect('${settled.last['error']}', contains('Aseman.plugin'));
+
+    final env = _value(await handlers['aseman.env']!('aseman.env', ''));
+    expect(env['theme'], {'mode': 'dark'});
+    expect(env['kind'], 'plugin');
+
+    // After the screen is gone nothing is delivered.
+    host.dispose();
+    final before = settled.length;
+    await request({'id': 'p5', 'target': 'plugin', 'op': 'context'});
+    expect(settled.length, before);
+  });
+
+  test('without settle a request is refused, not lost', () async {
+    final host = PluginHost(_Node().api, plugin: _appWide);
+    final raw = await host.handlers()['aseman.request']!(
+        'aseman.request', jsonEncode({'id': 'x', 'target': 'plugin', 'op': 'context'}));
+    expect(_value(raw)['error'], isNotNull);
+  });
+
+  test('a backend failure is an answer the screen can read', () async {
+    final node = _Node()
+      ..replies['tools.plugin_invoke'] = (_) => throw Exception('boom');
+    final host = PluginHost(node.api, plugin: _appWide);
+    final r = await host.perform('invoke', {'function': 'add'});
+    expect(r['ok'], isFalse);
+    expect('${r['error']}', contains('boom'));
+    expect((await host.perform('nope', {}))['ok'], isFalse);
+    expect((await host.perform('invoke', {}))['ok'], isFalse);
+  });
+
+  test('a web plugin gets the frame policy, its env and the bridge first', () {
+    final doc = PluginRuntime.webDocument(
+        '<!doctype html><html><head><title>t</title></head><body></body></html>',
+        {'theme': {'mode': 'dark', 'name': '</script>'}},
+        'window.Aseman = {};');
+    final head = doc.indexOf('<head>') + '<head>'.length;
+    expect(
+        doc.substring(head),
+        startsWith(
+            '<meta http-equiv="Content-Security-Policy" content="${PluginRuntime.webPolicy}">'));
+    expect(PluginRuntime.webPolicy, contains("connect-src 'none'"));
+    expect(doc, contains('window.__asemanInitialEnv='));
+    expect(doc, isNot(contains('"</script>"')), reason: 'the env cannot end its script');
+    expect(doc.indexOf('window.Aseman = {};'), lessThan(doc.indexOf('<title>')));
+    // A fragment becomes a document.
+    expect(PluginRuntime.webDocument('<canvas></canvas>', const {}, ''),
+        startsWith('<!doctype html><html><head><meta'));
+  });
 }
+

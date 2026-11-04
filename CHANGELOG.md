@@ -51,6 +51,21 @@
   and restore. A minimised plugin leaves no dock chip behind; it waits in the
   manager. It replaces the per-surface gadgets buttons (left panel, chat
   header) and My bots → Your gadgets.
+- **Plugins are built to the platform's standard.** An Elpian plugin now runs
+  on the Aseman Elpian SDK (`App.create`, the UI kit, Material 3 Expressive)
+  plus a plugin shim (`Aseman.plugin.get / set / call / api / context`).
+  **Web is the fallback** (`ui: "web"`, with a reason) for 3D, rich
+  visualization Elpian draws poorly, or when the person asked for web: one
+  self-contained HTML document (libraries inlined, 6 MB) shown in the app's
+  sandboxed web frame under a no-network policy, with a bridge that gives it
+  the same API and the person's theme as `--aseman-*` CSS variables (Windows
+  and Linux desktops open it in the browser). `create_plugin` builds from
+  files on the computer and runs `aseman-plugin-check` first: Elpian on
+  QuickJS with every reached screen validated at phone and desk size, web in
+  headless Chromium at 360×640 and 1280×800; a plugin that would break is
+  refused with the findings. Agents follow `PLUGINS.md` (in the computer's
+  Elpian kit) and ELPIAN.md's Design section; the plugins panel marks web
+  plugins.
 - **Typed API catalog:** `aseman_api_search` shows each action's body fields,
   read from the source by `cmd/gen-action-schemas` (kept current by a test).
 - **Confinement:** a room agent, and a space's plugin, may name only its own

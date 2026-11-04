@@ -29,8 +29,8 @@ enum PluginPlacement {
   String get wire => name;
 }
 
-/// A plugin agents made for people (Creator mode): an Elpian screen with its
-/// backend. App-wide plugins are the person's own universal gadgets;
+/// A plugin agents made for people (Creator mode): an Elpian screen (or, as
+/// the fallback, a web document) with its backend. App-wide plugins are the person's own universal gadgets;
 /// a space's plugins belong to that space and its members.
 class PluginInfo {
   const PluginInfo({
@@ -43,6 +43,7 @@ class PluginInfo {
     this.placement = PluginPlacement.chat,
     this.permissions = const [],
     this.removed = false,
+    this.web = false,
   });
 
   factory PluginInfo.fromJson(Map<String, dynamic> j) => PluginInfo(
@@ -57,6 +58,7 @@ class PluginInfo {
           for (final p in (j['permissions'] as List?) ?? const []) '$p'
         ],
         removed: j['status'] == 'removed',
+        web: j['ui'] == 'web',
       );
 
   final String id;
@@ -68,6 +70,10 @@ class PluginInfo {
   final PluginPlacement placement;
   final List<String> permissions;
   final bool removed;
+
+  /// Its screen is a web document (3D, rich visualization, or web asked
+  /// for) rather than native Elpian.
+  final bool web;
 }
 
 /// The plugins of the tools namespace, as the signed-in person.

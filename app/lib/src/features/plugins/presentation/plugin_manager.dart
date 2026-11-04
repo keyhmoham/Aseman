@@ -642,6 +642,8 @@ class _PluginTile extends StatelessWidget {
                     Wrap(spacing: 6, runSpacing: 4, children: [
                       _Meta(label: status, color: tone, dot: onScreen),
                       _Meta(label: _where, color: scheme.onSurfaceVariant),
+                      if (plugin.web)
+                        _Meta(label: 'Web', color: scheme.tertiary),
                     ]),
                   ],
                 ),

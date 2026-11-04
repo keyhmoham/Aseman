@@ -93,7 +93,7 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 	for _, t := range dbTools() {
 		used[t.Name] = true
 	}
-	sandboxID, hasSandbox := s.sandboxBotID(ctx, spaceID)
+	sandboxID, hasSandbox := s.sandboxBotID(ctx, s.personalSandboxSpace(ctx, spaceID))
 	builder := "you build"
 	caller := helper.Actor(ctx)
 	sp, _ := s.GetSpace(ctx, spaceID)

@@ -34,7 +34,6 @@ const sandboxPreviewTTL = sandboxIdleTTL
 // Node.js/Python/git toolchain so agents can build and run software there.
 const defaultSandboxImage = "aseman/sandbox-computer:latest"
 
-
 // sandboxLLMEnv points new sandboxes at the node's metered LLM gateway: an
 // in-turn tool (an app build) authenticates with the turn's own token, so its
 // usage bills with the agent turn.
@@ -89,19 +88,32 @@ type sandboxState struct {
 
 // Bots is the bot service used to provision the sandbox VM. It is injected by
 // the composition root to avoid an import cycle at the package level.
-// personalSandboxSpace resolves the caller's personal computer for a direct
-// chat: one home-space sandbox shared across that person's DMs. Project spaces
-// keep their own shared sandbox. Returns spaceID unchanged when not a DM.
+// personalSandboxSpace resolves the person's own computer for a direct chat:
+// one home-space sandbox shared across that person's direct chats, used by
+// the agents working in them for that person. The person is the actor in ctx
+// or, for an agent, the person whose run it works in. Project spaces keep
+// their own shared sandbox: it returns spaceID unchanged when not a DM (and
+// when the person has no home space).
 func (s *Service) personalSandboxSpace(ctx context.Context, spaceID identity.ID) identity.ID {
+	actor := helper.Actor(ctx)
+	if actor.IsZero() {
+		actor, _ = identity.Parse(vmm.ExecutionFrom(ctx).ActorID)
+	}
+	return s.computerOf(ctx, spaceID, actor)
+}
+
+// computerOf is the computer a space's work runs on for caller: the space's
+// own, or for a direct chat the person's home computer (an agent caller works
+// for the person whose run it is in).
+func (s *Service) computerOf(ctx context.Context, spaceID, caller identity.ID) identity.ID {
+	if caller.IsZero() {
+		return spaceID
+	}
 	sp, err := s.GetSpace(ctx, spaceID)
 	if err != nil || sp == nil || !sp.Direct {
 		return spaceID
 	}
-	actor := helper.Actor(ctx)
-	if actor.IsZero() {
-		return spaceID
-	}
-	home, err := s.HomeSpace(ctx, actor)
+	home, err := s.PersonalComputer(ctx, s.payer(ctx, caller))
 	if err != nil || home == nil {
 		return spaceID
 	}

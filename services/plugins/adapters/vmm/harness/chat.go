@@ -41,7 +41,18 @@ func (a *Adapter) PersonalChat(ctx context.Context, chat vmm.PersonalChat) (stri
 			window = provider.ContextWindow
 		}
 	}
+	// With its tools, Aseman works on the person's own computer (their home
+	// workspace's), as the person: the same one their direct chats use.
+	computer := ""
+	if chat.WithTools && a.platform != nil {
+		if id, err := a.platform.PersonalComputer(s.base, person.String()); err == nil {
+			computer = id
+		} else if a.Log != nil {
+			a.Log.Warn("personal chat without the person's computer", "person", person.String(), "error", err)
+		}
+	}
 	body := map[string]any{
+		"computer_space": computer,
 		"system":         chat.System,
 		"messages":       chat.Messages,
 		"thread_id":      strings.TrimSpace(chat.ThreadID),

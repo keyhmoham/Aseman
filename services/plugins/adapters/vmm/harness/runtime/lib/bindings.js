@@ -34,6 +34,9 @@ export class Binding {
     this.roomId = init.roomId ?? ''
     this.threadId = init.threadId ?? ''
     this.accountId = init.accountId ?? ''
+    /** The space whose computer this conversation works on when it is not its
+     * own space's (the person's own computer, for their personal Aseman). */
+    this.computerSpace = ''
     this.agent = init.agent ?? null
     this.turn = null
     this.flags = {}
@@ -46,8 +49,9 @@ export class Binding {
   }
 
   /** Start a turn: the token and everything the node sent with it. */
-  begin({ token, agent, turn, flags = {}, roomId, threadId }) {
+  begin({ token, agent, turn, flags = {}, roomId, threadId, computerSpace }) {
     this.token = token
+    if (computerSpace !== undefined) this.computerSpace = computerSpace
     if (agent) this.agent = agent
     if (turn) this.turn = turn
     if (roomId !== undefined) this.roomId = roomId

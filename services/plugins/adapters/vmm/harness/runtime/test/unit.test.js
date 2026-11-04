@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Bindings, sessionIdFor } from '../lib/bindings.js'
-import { applyEdit, absolute, numbered, shq } from '../lib/tools/sandbox.js'
+import { applyEdit, absolute, numbered, shq, computerOf, Computer } from '../lib/tools/sandbox.js'
 import { toolName, allowedBy, spaceTools, asImage } from '../lib/tools/space.js'
 import { modelFor } from '../lib/models.js'
 import { buildPatch, compactionPolicies } from '../lib/profile.js'
@@ -216,4 +216,19 @@ test('catalog bodies read in one line', () => {
   assert.equal(bodyLine(schema), '{space: string, tags: [string], when: {at: string}, raw: any}')
   assert.equal(bodyLine({ type: 'object', properties: {} }), '{}')
   assert.equal(bodyLine(undefined), 'any')
+})
+
+test("a personal conversation works on the person's own computer", async () => {
+  assert.equal(computerOf({ spaceId: 'dm', computerSpace: '' }), 'dm')
+  assert.equal(computerOf({ spaceId: '', computerSpace: 'home' }), 'home')
+  assert.equal(computerOf(undefined), '')
+  const calls = []
+  const gateway = { call: async (_t, ns, action, body) => (calls.push({ ns, action, body }), action === 'ask' ? { exit_code: 0, output: 'ok' } : { ok: true }) }
+  const b = { kind: 'personal', token: 't', spaceId: '', roomId: '', computerSpace: 'home', flags: {} }
+  const pc = new Computer(gateway, () => b)
+  assert.deepEqual(await pc.exec('ls', undefined), { code: 0, output: 'ok' })
+  await pc.write('/workspace/a.txt', Buffer.from('hi'), undefined)
+  assert.deepEqual(calls.map((c) => [c.action, c.body.space, c.body.room]), [['ask', 'home', ''], ['sandbox_files', 'home', undefined]])
+  await assert.rejects(new Computer(gateway, () => ({ flags: {} })).exec('ls'), /no computer/)
+  await assert.rejects(new Computer(gateway, () => ({ ...b, flags: { no_sandbox: true } })).exec('ls'), /disabled/)
 })

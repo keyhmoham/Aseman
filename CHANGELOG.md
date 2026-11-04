@@ -43,6 +43,12 @@
 - **Personal Aseman:** acts only on DeepSeek Harness; its older in-node tools
   (proposals, reminders, `work_on_it` jobs) are gone. Proposals and work they
   already stored are still answered and delivered.
+- **Personal computer:** the agents of a person's direct chats work on that
+  person's own computer (their home workspace's sandbox, made when they have
+  none) for everything, not only shell commands: workspace files, file tools,
+  the desk's computer and desktop, and the turn's computer. Each person in a
+  shared direct chat works on their own. The personal Aseman has the same
+  computer with its tools (shell, files, images, desktop), as the person.
 - **Fix:** reports of direct messages have their own `direct_reports` table;
   they shared `chat_reports` with room reports, which lost who was reported.
 

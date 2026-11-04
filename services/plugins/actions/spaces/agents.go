@@ -50,6 +50,11 @@ func (s *Service) agentRuntime(rec *bot.Bot) (vmm.AgentRuntime, error) {
 // runs the computer is kept from idling out. A space that has no computer yet
 // is not given one here either: creating it is starting it, so that too waits
 // for the agent's first command (spaces.ask with bot "sandbox").
+func (s *Service) hasSandbox(ctx context.Context, spaceID identity.ID) bool {
+	_, ok := s.sandboxBotID(ctx, spaceID)
+	return ok
+}
+
 func (s *Service) reserveSandbox(ctx context.Context, spaceID identity.ID) (vmm.SandboxRef, func(), error) {
 	if err := s.retireLegacySandbox(ctx, spaceID); err != nil {
 		return vmm.SandboxRef{}, nil, err
@@ -174,9 +179,10 @@ func (s *Service) prepareTurn(ctx context.Context, spaceID, roomID identity.ID, 
 	ref, release := vmm.SandboxRef{}, func() {}
 	if turn.NoSandbox {
 		// The agent engine runs on the node; the space machine stays untouched.
-	} else if _, recorded := s.sandboxBotID(ctx, spaceID); recorded || s.K.VMMFor(vmm.Type(s.sandboxVMType())) != nil {
+	} else if box := s.personalSandboxSpace(ctx, spaceID); s.hasSandbox(ctx, box) || s.K.VMMFor(vmm.Type(s.sandboxVMType())) != nil {
+		// In a direct chat the turn works on the person's own computer.
 		endSandbox := vmm.Trace(ctx, "sandbox.reserve", "start or wake the project computer")
-		ref, release, err = s.reserveSandbox(ctx, spaceID)
+		ref, release, err = s.reserveSandbox(ctx, box)
 		endSandbox()
 		if err != nil {
 			return nil, nil, err

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/aseman/aseman/internal/plugins/identity"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 func TestPersonalSessionAllowsAccountActionsDeniesAdmin(t *testing.T) {
@@ -69,5 +70,27 @@ func TestOpenPersonalMintsToken(t *testing.T) {
 	a.close(s)
 	if a.byToken("tok-personal") != nil {
 		t.Fatal("session not revoked")
+	}
+}
+
+// With its tools, the personal Aseman works on the person's own computer
+// (their home workspace's): the runtime is told which.
+func TestPersonalChatWorksOnThePersonsOwnComputer(t *testing.T) {
+	a, rt, _ := newTestAdapter(t)
+	person := mustID(t)
+	a.platform = fakePlatform{homes: map[string]string{person: "home-1"}}
+	chat := vmm.PersonalChat{PersonID: person, WithTools: true, Messages: []vmm.ChatMessage{{Role: "user", Content: "build it"}}}
+	if _, err := a.PersonalChat(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	if got := rt.chats[0]["computer_space"]; got != "home-1" {
+		t.Fatalf("computer_space = %v", got)
+	}
+	chat.WithTools = false
+	if _, err := a.PersonalChat(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	if got := rt.chats[1]["computer_space"]; got != "" {
+		t.Fatalf("a chat without tools got a computer: %v", got)
 	}
 }

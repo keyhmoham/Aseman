@@ -55,6 +55,11 @@ export function applyEdit(text, old, replacement, replaceAll = false) {
   return { text: replaceAll ? text.split(old).join(replacement) : text.replace(old, () => replacement), count: replaceAll ? count : 1 }
 }
 
+/** The space whose computer a conversation works on. */
+export function computerOf(b) {
+  return String(b?.computerSpace || b?.spaceId || '')
+}
+
 export class Computer {
   constructor(gateway, binding) {
     this.gateway = gateway
@@ -63,15 +68,15 @@ export class Computer {
 
   guard() {
     const b = this.binding()
-    if (!b?.spaceId) throw new Error('this conversation has no space computer')
-    if (b.flags?.no_sandbox) throw new Error('the space computer is disabled for this request')
+    if (!computerOf(b)) throw new Error('this conversation has no computer')
+    if (b.flags?.no_sandbox) throw new Error('the computer is disabled for this request')
     return b
   }
 
   async exec(command, signal) {
     const b = this.guard()
     const out = await this.gateway.call(b.token, 'spaces', 'ask', {
-      space: b.spaceId, room: b.roomId, bot: b.flags?.sandbox_bot || 'sandbox', body: command, raw: true,
+      space: computerOf(b), room: b.computerSpace ? '' : b.roomId, bot: b.flags?.sandbox_bot || 'sandbox', body: command, raw: true,
     }, { signal })
     const code = Number.isInteger(out.exit_code) ? out.exit_code : -1
     return { code, output: String(out.output ?? out.reply ?? '') }
@@ -84,7 +89,7 @@ export class Computer {
     if (rel === null) return null
     let out
     try {
-      out = await this.gateway.call(b.token, 'spaces', 'sandbox_files', { space: b.spaceId, operation, path: rel, ...extra }, { signal })
+      out = await this.gateway.call(b.token, 'spaces', 'sandbox_files', { space: computerOf(b), operation, path: rel, ...extra }, { signal })
     } catch {
       return null
     }

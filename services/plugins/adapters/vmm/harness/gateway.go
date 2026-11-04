@@ -75,6 +75,9 @@ type platform interface {
 	TimelineEntry(ctx context.Context, spaceID, id string) ([]byte, error)
 	// RoomSpace is the space a room (or thread) is in.
 	RoomSpace(ctx context.Context, roomID string) (string, error)
+	// PersonalComputer is the space whose computer is the person's own (their
+	// home workspace, made when they have none).
+	PersonalComputer(ctx context.Context, person string) (string, error)
 }
 
 type kernelPlatform struct{ K api.Kernel }
@@ -127,6 +130,20 @@ func (p kernelPlatform) RoomSpace(ctx context.Context, roomID string) (string, e
 		return "", err
 	}
 	return room.SpaceID, nil
+}
+
+func (p kernelPlatform) PersonalComputer(ctx context.Context, person string) (string, error) {
+	id, err := identity.Parse(person)
+	if err != nil {
+		return "", errs.InvalidArgument("not a person: " + person)
+	}
+	var home struct {
+		ID string `json:"id"`
+	}
+	if err := bridge.Invoke(ctx, p.K, "spaces", "PersonalComputer", []any{ctx, id}, &home); err != nil {
+		return "", err
+	}
+	return home.ID, nil
 }
 
 // timelineOn reports whether turns get the timeline (an error means the

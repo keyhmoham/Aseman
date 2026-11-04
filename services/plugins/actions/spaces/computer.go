@@ -29,22 +29,34 @@ func computerActions(s *Service) []api.Action {
 	}
 }
 func (s *Service) computerScope(ctx context.Context, req *api.ActionRequest, write bool) (identity.ID, error) {
+	_, box, e := s.computerScopes(ctx, req, write)
+	return box, e
+}
+
+// computerScopes is the space a request names (whose access was checked) and
+// the computer it works on: the same, or in a direct chat the person's home
+// computer (see computerOf).
+func (s *Service) computerScopes(ctx context.Context, req *api.ActionRequest, write bool) (space, box identity.ID, err error) {
 	var in struct {
 		Space string `json:"space"`
 	}
 	if e := helper.Decode(req, &in); e != nil {
-		return identity.ID{}, e
+		return identity.ID{}, identity.ID{}, e
 	}
 	id, e := identity.Parse(in.Space)
 	if e != nil {
-		return id, e
+		return id, id, e
 	}
 	perm := permission.RoomRead
 	if write {
 		perm = permission.RoomSend
 	}
-	return id, s.Can(ctx, id, identity.ID{}, req.Caller.ID, perm)
+	if e := s.Can(ctx, id, identity.ID{}, req.Caller.ID, perm); e != nil {
+		return id, id, e
+	}
+	return id, s.computerOf(ctx, id, req.Caller.ID), nil
 }
+
 func (s *Service) computerAction(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	var in struct {
 		Operation string `json:"operation"`
@@ -207,7 +219,7 @@ func (s *Service) sandboxFilesAction(ctx context.Context, req *api.ActionRequest
 		return nil, e
 	}
 	write := in.Operation != "list" && in.Operation != "read"
-	sp, e := s.computerScope(ctx, req, write)
+	named, sp, e := s.computerScopes(ctx, req, write)
 	if e != nil {
 		return nil, e
 	}
@@ -234,7 +246,7 @@ func (s *Service) sandboxFilesAction(ctx context.Context, req *api.ActionRequest
 		return nil, errs.Permission("saved space memory is disabled for this request")
 	}
 	// The agents' notes are in their memory server, not in the sandbox.
-	if resp, ok, e := s.memoryNotes(ctx, req, sp, in.Operation, target, in.Content, in.Base64); ok || e != nil {
+	if resp, ok, e := s.memoryNotes(ctx, req, named, in.Operation, target, in.Content, in.Base64); ok || e != nil {
 		return resp, e
 	}
 	id, ok := s.sandboxBotID(ctx, sp)

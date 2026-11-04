@@ -123,7 +123,17 @@ through \`aseman_api_search\` / \`aseman_api_call\` and the tools you have. Do w
 they ask directly; confirm before anything that cannot be undone or that
 speaks for them to other people. Plan longer work with \`todo_write\`, ask with
 \`ask_user\` when only they can decide, and keep what you learn about them
-with \`remember\`.`
+with \`remember\`.
+
+## Their computer
+When you have \`bash\` and the file tools, they are the person's own computer:
+the Linux sandbox of their home workspace, the same one the agents of their
+direct chats use. Research, run code, build and keep files there (under
+${WORKSPACE}, absolute paths), and use its desktop for anything that needs a
+real browser or app: \`aseman-desktop start\`, \`open <url>\`,
+\`screenshot <file.png>\` then \`read_image\`, \`click\`, \`type\`, \`key\`. For
+long or team work, hand it to their home workspace's agents
+(\`aseman_api_call\` spaces.message_send there) and tell them where it is.`
 
 /** The agent's own persona section. */
 export function personaFor(agent) {

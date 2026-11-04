@@ -132,6 +132,7 @@ export class Runner {
         agent: { name: 'Aseman', personal: true, context_window: req.context_window, system: req.system },
         turn: null,
         flags: { with_tools: Boolean(req.with_tools), no_memory: Boolean(req.no_memory) },
+        computerSpace: String(req.computer_space ?? ''),
       })
       const abort = linked(signal, turnSignal, this.config.turnTimeoutSeconds)
       try {
@@ -310,6 +311,8 @@ export class Runner {
     const defs = [...apiTools(deps), ...creatorTools(deps)]
     if (binding.kind === 'personal') {
       defs.push(askUserTool(deps))
+      // The person's own computer (their home workspace's), as the person.
+      if (binding.computerSpace) defs.push(...sandboxTools(deps))
       if (!binding.flags.no_memory) defs.push(...memoryTools(deps))
     } else {
       defs.push(...messagingTools(deps), ...teamTools(deps), ...sandboxTools(deps))

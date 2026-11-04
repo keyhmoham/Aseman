@@ -34,6 +34,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -82,6 +83,9 @@ const (
 	defaultLLMCallTimeout             = 5 * time.Minute
 	defaultLLMFirstEventTimeout       = 2 * time.Minute
 	defaultLLMStreamIdleTimeout       = 45 * time.Second
+	// runtimeSecretFile keeps a generated runtime secret across node restarts
+	// so Nomad's long-lived runtime VM stays usable without a replace.
+	runtimeSecretFile = "data/agent-runtime-secret"
 )
 
 func envDuration(name string, fallback time.Duration) time.Duration {
@@ -205,14 +209,36 @@ func (a *Adapter) Init(ctx context.Context, deps *api.Dependencies) error {
 		a.memoryMB = v
 	}
 	if a.secret == "" {
-		// The runtime started here learns the secret from its environment.
-		raw := make([]byte, 24)
-		if _, err := rand.Read(raw); err != nil {
+		// Prefer a previously generated secret so a node restart reuses the
+		// runtime Nomad still has running; mint one only on first boot.
+		secret, err := loadOrCreateRuntimeSecret(runtimeSecretFile)
+		if err != nil {
 			return err
 		}
-		a.secret = hex.EncodeToString(raw)
+		a.secret = secret
 	}
 	return nil
+}
+
+// loadOrCreateRuntimeSecret returns the secret at path, or writes a new one.
+func loadOrCreateRuntimeSecret(path string) (string, error) {
+	if stored, err := os.ReadFile(path); err == nil {
+		if s := strings.TrimSpace(string(stored)); s != "" {
+			return s, nil
+		}
+	}
+	raw := make([]byte, 24)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	secret := hex.EncodeToString(raw)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, []byte(secret), 0o600); err != nil {
+		return "", err
+	}
+	return secret, nil
 }
 
 // Start implements api.Plugin: it binds the gateway routes and starts the

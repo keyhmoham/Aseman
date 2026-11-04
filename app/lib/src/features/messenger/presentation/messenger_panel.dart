@@ -403,11 +403,16 @@ class _ChatListState extends State<_ChatList> {
 
   /// Direct chats stay one row each. Every room of a project folds into a
   /// single space row, ordered like the chats they replace: pinned first,
-  /// then most recently active.
+  /// then most recently active. Home Aseman is only the Direct row — never
+  /// also a Spaces project row for the same space id.
   List<_ChatEntry> get _shown {
     final q = _search.text.trim().toLowerCase();
     final directs = <_DirectEntry>[];
     final bySpace = <String, _SpaceEntry>{};
+    final asemanSpaceIds = {
+      for (final c in _chats)
+        if (c.isAseman) c.spaceId,
+    };
     for (final chat in _chats) {
       if (_filter == _Filter.direct && !chat.direct) continue;
       if (_filter == _Filter.spaces && chat.direct) continue;
@@ -415,6 +420,8 @@ class _ChatListState extends State<_ChatList> {
         if (_chatMatches(chat, q)) directs.add(_DirectEntry(chat));
         continue;
       }
+      // Home is the Aseman Direct; skip a leftover project listing for it.
+      if (asemanSpaceIds.contains(chat.spaceId) || chat.home) continue;
       bySpace
           .putIfAbsent(chat.spaceId, () => _SpaceEntry(chat.spaceId))
           .rooms

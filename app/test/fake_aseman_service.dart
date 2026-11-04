@@ -59,7 +59,8 @@ class FakeAsemanService extends AsemanService {
   }
 
   List<Workspace> _spaces = const [
-    Workspace(id: homeId, ownerId: 'me', name: 'Home', home: true),
+    // Home is the personal Aseman chat — one space, not a separate project.
+    Workspace(id: homeId, ownerId: 'me', name: 'Aseman', home: true),
     Workspace(id: atlasId, ownerId: 'me', name: 'Atlas Collective'),
     Workspace(id: sharedId, ownerId: 'u1', name: 'Shared Desk'),
   ];
@@ -447,10 +448,10 @@ class FakeAsemanService extends AsemanService {
   static const directId = '00000000000000010000000000000007';
   static const agentDirectId = '00000000000000010000000000000008';
 
-  /// The messenger's conversations: personal Aseman, two directs, Atlas rooms.
+  /// The messenger's conversations: personal Aseman (= home), two directs, Atlas rooms.
   List<ChatSummary> chats = [
     ChatSummary(
-      spaceId: '00000000000000010000000000000010',
+      spaceId: homeId,
       roomId: 's1',
       direct: true,
       saved: true,
@@ -722,7 +723,7 @@ class FakeAsemanService extends AsemanService {
   Future<ChatSummary> openSaved() async => chats.firstWhere(
     (c) => c.saved,
     orElse: () => const ChatSummary(
-      spaceId: '00000000000000010000000000000010',
+      spaceId: homeId,
       roomId: 's1',
       direct: true,
       saved: true,
@@ -1030,7 +1031,7 @@ class FakeAsemanService extends AsemanService {
   @override
   Future<SpaceProfile> fetchSpaceProfile(String spaceId) async {
     final name = switch (spaceId) {
-      homeId => 'Home',
+      homeId => 'Aseman',
       sharedId => 'Shared Desk',
       _ => 'Atlas Collective',
     };
@@ -1060,7 +1061,7 @@ class FakeAsemanService extends AsemanService {
     name: 'general',
     topic: 'Room topic',
     spaceId: homeId,
-    spaceName: 'Home',
+    spaceName: 'Aseman',
     memberCount: 3,
     agentCount: 1,
     messageCount: 5,

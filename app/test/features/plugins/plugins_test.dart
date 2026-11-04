@@ -45,7 +45,9 @@ void main() {
     expect(p.permissions, ['spaces.message_list']);
     expect(p.removed, isTrue);
     expect(PluginInfo.fromJson({'scope': 'account'}).appWide, isTrue);
-    expect(PluginPlacement.parse('anything'), PluginPlacement.panel);
+    expect(PluginPlacement.parse('anything'), PluginPlacement.chat);
+    expect(PluginPlacement.parse('panel'), PluginPlacement.chat);
+    expect(PluginPlacement.parse('rail'), PluginPlacement.rail);
   });
 
   test('listing asks for the space and removed plugins only when wanted', () async {

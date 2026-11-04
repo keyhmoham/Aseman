@@ -24,14 +24,15 @@ import (
 // platform actions its screen may call:
 //
 //   - account: made in the person's own Aseman chat. It is the person's,
-//     app-wide: it appears in every space, room and direct chat of theirs and
-//     on its own page, and its screen acts as the person across their account.
+//     universal floating gadget: it stays across home tabs and over
+//     workspaces, and its screen acts as the person across their account.
 //     Its backend runs as a managed service of the node.
 //   - space: made in a room, thread or direct chat of a space. It belongs to
 //     that space, shared by its members (or the chat's participants): its
 //     backend is installed into the space's own sandbox, serving only that
 //     space, and its screen acts as the person using it, inside that space
-//     only.
+//     only — as a floating gadget on the chat, left rail, or desk (or as a
+//     page of the space).
 //
 // Either way the screen is an Elpian program the app runs natively (the
 // person's theme and UI kit); it reaches its own backend with tool.call, and
@@ -47,12 +48,16 @@ const (
 	PluginAccount = "account"
 	PluginSpace   = "space"
 
-	// PlacementPanel: beside the conversation (a room, thread or chat).
+	// PlacementChat: a floating gadget on the conversation (room, thread or
+	// chat). "panel" is kept as an alias for older plugins.
+	PlacementChat  = "chat"
 	PlacementPanel = "panel"
-	// PlacementPage: a page of its own (app-wide plugins: in the app's
-	// plugins page; space plugins: a tab of the space).
+	// PlacementRail: a floating gadget on the space's left panel (nav drawer).
+	PlacementRail = "rail"
+	// PlacementPage: a page of its own (account: openable from Your gadgets;
+	// space: a full-screen page of the space).
 	PlacementPage = "page"
-	// PlacementDesk: a window on the room's desk.
+	// PlacementDesk: a floating gadget / window on the room's desk.
 	PlacementDesk = "desk"
 
 	pluginInstalled = "installed"
@@ -132,10 +137,13 @@ func (in *pluginInput) normalize() error {
 	}
 	switch in.Placement {
 	case "":
-		in.Placement = PlacementPanel
-	case PlacementPanel, PlacementPage, PlacementDesk:
+		in.Placement = PlacementChat
+	case PlacementPanel:
+		// Older Creator plugins used "panel"; the app mounts them on chat.
+		in.Placement = PlacementChat
+	case PlacementChat, PlacementRail, PlacementPage, PlacementDesk:
 	default:
-		return errs.InvalidArgument("placement is panel, page or desk")
+		return errs.InvalidArgument("placement is chat, rail, page or desk")
 	}
 	if strings.TrimSpace(in.Frontend.Source) == "" {
 		return errs.InvalidArgument("a plugin needs its screen: the frontend program")

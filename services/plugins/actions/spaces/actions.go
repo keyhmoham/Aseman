@@ -261,7 +261,8 @@ func (a *spaceListAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 		Limit  int `json:"limit,omitempty"`
 		Offset int `json:"offset,omitempty"`
 		// Direct conversations are spaces too, but not projects: they are
-		// listed only when asked for ("all" or "direct").
+		// listed only when asked for ("all" or "direct"). The person's home
+		// Aseman (self-Direct + Home) is always a project.
 		Kind string `json:"kind,omitempty"`
 	}
 	_ = helper.Decode(req, &in)
@@ -281,7 +282,8 @@ func (a *spaceListAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 			break
 		}
 		if sp, err := a.s.GetSpace(ctx, m.SpaceID); err == nil {
-			if (sp.Direct && in.Kind != "all" && in.Kind != "direct") || (!sp.Direct && in.Kind == "direct") {
+			homeAseman := a.s.isSelfChat(sp, req.Caller.ID) || (sp.Home && sp.Direct)
+			if (sp.Direct && !homeAseman && in.Kind != "all" && in.Kind != "direct") || (!sp.Direct && in.Kind == "direct") {
 				continue
 			}
 			if skipped < offset {
@@ -349,7 +351,8 @@ func (a *spaceSearchAction) Handle(ctx context.Context, req *api.ActionRequest) 
 	}
 	for _, m := range mems {
 		sp, err := a.s.GetSpace(ctx, m.SpaceID)
-		if err != nil || sp.Direct || seen[sp.ID.String()] {
+		// Ordinary directs are not projects; home Aseman is.
+		if err != nil || (sp.Direct && !sp.Home) || seen[sp.ID.String()] {
 			continue
 		}
 		seen[sp.ID.String()] = true
@@ -365,7 +368,7 @@ func (a *spaceSearchAction) Handle(ctx context.Context, req *api.ActionRequest) 
 	}
 	for i := range public {
 		sp := &public[i]
-		if sp.Direct || seen[sp.ID.String()] || !matches(sp) {
+		if (sp.Direct && !sp.Home) || seen[sp.ID.String()] || !matches(sp) {
 			continue
 		}
 		seen[sp.ID.String()] = true
@@ -1360,13 +1363,16 @@ func (a *msgListAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 		// How far the other side has read (the client marks the caller's
 		// messages up to it as seen), and whether anyone can write.
 		peers := a.s.directPeers(ctx, spID, req.Caller.ID)
-		out["saved"] = len(peers) == 0
+		self := sp != nil && a.s.isSelfChat(sp, req.Caller.ID)
+		out["saved"] = self || len(peers) == 0
 		mine := blockedIn(tree, req.Caller.ID)
 		theirs := false
-		for _, p := range peers {
-			theirs = theirs || blockedIn(tree, p)
-			if seen := a.s.SeenAt(ctx, p, spID); !seen.IsZero() {
-				out["peer_seen_at"] = seen
+		if !self {
+			for _, p := range peers {
+				theirs = theirs || blockedIn(tree, p)
+				if seen := a.s.SeenAt(ctx, p, spID); !seen.IsZero() {
+					out["peer_seen_at"] = seen
+				}
 			}
 		}
 		out["blocked"] = mine

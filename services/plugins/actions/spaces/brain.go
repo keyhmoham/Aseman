@@ -98,10 +98,10 @@ type BrainWorkStart struct {
 	TurnID  string `json:"turn_id"`
 }
 
-// BrainWork hands work to the person's own workspace (their home, made now if
-// they have none): its lead and team take it up on the person's computer, the
-// same one their personal Aseman and direct chats use. The turn is the
-// person's own, so their budget and permissions apply.
+// BrainWork hands work to the person's home Aseman (made now if they have
+// none): its lead and team take it up on that same space's computer — the
+// personal Aseman chat is the home workspace. The turn is the person's own,
+// so their budget and permissions apply.
 func (s *Service) BrainWork(ctx context.Context, actor identity.ID, request string) (BrainWorkStart, error) {
 	home, err := s.PersonalComputer(ctx, actor)
 	if err != nil {

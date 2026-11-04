@@ -215,8 +215,12 @@ func TestOnlyTheOwnerRemovesAnAppWidePlugin(t *testing.T) {
 
 func TestPluginInputAndOwner(t *testing.T) {
 	in := pluginInput{Name: " Notes ", Frontend: pluginProgram{Source: "askHost('render','{}')"}, Permissions: []string{"spaces.message_list", "spaces.message_list", " "}}
-	if err := in.normalize(); err != nil || in.Name != "Notes" || in.Placement != PlacementPanel || in.Frontend.Runtime != "quickjs" || len(in.Permissions) != 1 {
+	if err := in.normalize(); err != nil || in.Name != "Notes" || in.Placement != PlacementChat || in.Frontend.Runtime != "quickjs" || len(in.Permissions) != 1 {
 		t.Fatalf("normalize = %+v, %v", in, err)
+	}
+	legacy := pluginInput{Name: "Old", Frontend: pluginProgram{Source: "x"}, Placement: PlacementPanel}
+	if err := legacy.normalize(); err != nil || legacy.Placement != PlacementChat {
+		t.Fatalf("panel aliases to chat: %+v, %v", legacy, err)
 	}
 	for _, bad := range []pluginInput{
 		{Frontend: pluginProgram{Source: "x"}},

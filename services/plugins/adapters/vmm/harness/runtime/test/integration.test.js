@@ -197,7 +197,7 @@ test('creator mode: a plugin is created through the node, a broken program is se
     const r = lastToolResult(body)
     if (r !== undefined) results.push(r)
     if (n === 1) return { tools: [{ name: 'create_plugin', args: { name: 'Bad', description: 'x', frontend: 'function (' } }] }
-    if (results.length === 1) return { tools: [{ name: 'create_plugin', args: { name: 'Habits', description: 'Track habits', placement: 'page', permissions: ['spaces.message_list'], frontend: screen } }] }
+    if (results.length === 1) return { tools: [{ name: 'create_plugin', args: { name: 'Habits', description: 'Track habits', placement: 'chat', permissions: ['spaces.message_list'], frontend: screen } }] }
     return { text: 'made it' }
   }
   gw.llmCalls.length = 0

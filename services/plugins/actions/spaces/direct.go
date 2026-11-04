@@ -21,10 +21,11 @@ import (
 )
 
 // A direct conversation is a space of its own with a single room, shared by
-// two accounts: two people, or a person and an agent. It has everything a
-// project room has (files, agents, the sandbox), but it never shows up among
-// the person's projects and the aseman lead does not join it. Writing to an
-// agent in its direct room addresses that agent without an explicit mention.
+// two accounts: two people, or a person and an agent — or the person's home
+// Aseman self-chat (person:person), which is also their Home workspace (the
+// lead joins that one). Other directs never show up among projects and the
+// lead does not join them. Writing to an agent in its direct room addresses
+// that agent without an explicit mention.
 
 // directMu serializes the creation of direct spaces so two first messages
 // sent at once open the same conversation.
@@ -153,34 +154,11 @@ func (s *Service) openDirect(ctx context.Context, caller, peer identity.ID) (*sp
 	return sp, room, true, nil
 }
 
-// openSaved is a person's Aseman chat: a direct chat with themselves, for
-// notes, links and files, and the personal Aseman assistant. Like any room,
-// other agents added to it answer when mentioned.
+// openSaved is a person's Aseman chat — also their home workspace and
+// personal computer. Notes, the assistant, the lead/team and the sandbox
+// all live in this one space.
 func (s *Service) openSaved(ctx context.Context, caller identity.ID) (*space.Space, *space.Room, bool, error) {
-	var acc account.Account
-	if err := s.R.Get(ctx, "accounts", caller, &acc); err != nil {
-		return nil, nil, false, errs.NotFound("account not found")
-	}
-	if acc.IsBot() {
-		return nil, nil, false, errs.InvalidArgument("choose someone else to talk to")
-	}
-	key := directKey(caller, caller)
-	directMu.Lock()
-	defer directMu.Unlock()
-	created := false
-	sp := s.findDirect(ctx, key)
-	if sp == nil {
-		var err error
-		if sp, err = s.createSpace(ctx, caller, "Aseman", "Your personal Aseman", key); err != nil {
-			return nil, nil, false, err
-		}
-		created = true
-	}
-	room, err := s.generalRoom(ctx, sp.ID)
-	if err != nil {
-		return nil, nil, false, err
-	}
-	return sp, room, created, nil
+	return s.ensurePersonalHome(ctx, caller)
 }
 
 // builtinAsemanPerson reports the person whose Aseman self-chat should be used
@@ -280,9 +258,9 @@ func (s *Service) PostDirect(ctx context.Context, from, to identity.ID, body str
 // Direct: that left Talk / notes showing only the assistant side there, and
 // user notes only in the Aseman self-chat.
 //
-// The assistant is not added as a space member: the Aseman chat is identified as
-// a self-chat by having no other members, and enrichMessages still resolves the
-// sender account (kind=bot) for display.
+// The chat assistant is not added as a space member (the lead may already be
+// one — home Aseman is identified by DirectKey person:person). enrichMessages
+// still resolves the sender account (kind=bot) for display.
 func (s *Service) PostSavedAnswer(ctx context.Context, person, assistant identity.ID, body string, directID identity.ID) error {
 	if person.IsZero() || assistant.IsZero() {
 		return errs.InvalidArgument("person and assistant are required")
@@ -405,6 +383,12 @@ func (s *Service) directOpen(ctx context.Context, req *api.ActionRequest) (*api.
 	out := map[string]any{
 		"space_id": sp.ID.String(), "room_id": room.ID.String(), "room_name": room.Name,
 		"space_name": sp.Name, "peer": s.participants().get(ctx, s.botAccountOf(ctx, peer)),
+		"home": sp.Home,
+	}
+	if s.isSelfChat(sp, req.Caller.ID) {
+		out["saved"] = true
+		out["home"] = true
+		out["peer"] = s.participants().get(ctx, req.Caller.ID)
 	}
 	if mem, err := s.SpaceMembership(ctx, sp.ID, req.Caller.ID); err == nil {
 		out["role"] = mem.Role
@@ -426,6 +410,8 @@ func (s *Service) chatList(ctx context.Context, req *api.ActionRequest) (*api.Ac
 	}
 	_ = helper.Decode(req, &in)
 	q := strings.ToLower(strings.TrimSpace(in.Query))
+	// Collapse a legacy project home and/or a separate self-chat into one Aseman.
+	s.healPersonalHome(ctx, req.Caller.ID)
 	var mems []membership.Membership
 	if err := s.R.List(ctx, "memberships", database.Filter{
 		Equal:   map[string]any{"member_id": req.Caller.ID.String(), "room_id": zeroRoom},
@@ -466,7 +452,16 @@ func (s *Service) chatList(ctx context.Context, req *api.ActionRequest) (*api.Ac
 			}
 			if sp.Direct {
 				row["kind"] = "direct"
-				if peers := s.directPeers(ctx, sp.ID, req.Caller.ID); len(peers) > 0 {
+				// Home Aseman is identified by DirectKey (person:person), not
+				// by empty membership: the lead and added agents are members.
+				if s.isSelfChat(sp, req.Caller.ID) {
+					row["saved"] = true
+					row["home"] = true
+					row["peer"] = people.get(ctx, req.Caller.ID)
+					if sp.Name != "" {
+						row["space_name"] = sp.Name
+					}
+				} else if peers := s.directPeers(ctx, sp.ID, req.Caller.ID); len(peers) > 0 {
 					// Built-in Aseman lives in the self-chat; hide legacy
 					// person↔assistant / lead Directs from the inbox.
 					if s.isBuiltinDirectPeer(ctx, peers[0]) {

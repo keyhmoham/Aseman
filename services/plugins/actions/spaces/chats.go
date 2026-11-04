@@ -475,6 +475,9 @@ func (s *Service) directBlockSet(ctx context.Context, req *api.ActionRequest) (*
 	if err != nil {
 		return nil, err
 	}
+	if sp, err := s.GetSpace(ctx, spID); err == nil && s.isSelfChat(sp, req.Caller.ID) {
+		return nil, errs.InvalidArgument("there is no one to block in your saved messages")
+	}
 	if len(s.directPeers(ctx, spID, req.Caller.ID)) == 0 {
 		return nil, errs.InvalidArgument("there is no one to block in your saved messages")
 	}

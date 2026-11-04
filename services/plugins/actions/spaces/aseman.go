@@ -46,7 +46,9 @@ func (s *Service) EnsureAsemanEverywhere(ctx context.Context) error {
 	}
 	added := 0
 	for i := range spaces {
-		if spaces[i].Direct {
+		// Ordinary directs stay lead-free; the person's home Aseman is both
+		// Direct and Home, and needs the lead like any project.
+		if spaces[i].Direct && !spaces[i].Home {
 			continue
 		}
 		_, before := s.SpaceMembership(ctx, spaces[i].ID, s.asemanAccount(ctx))

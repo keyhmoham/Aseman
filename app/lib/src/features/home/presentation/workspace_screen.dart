@@ -53,6 +53,9 @@ import '../../files/presentation/file_tree.dart';
 import '../../files/presentation/file_viewer.dart';
 import '../../messenger/presentation/chat_page.dart';
 import '../../messenger/presentation/report_dialog.dart';
+import '../../plugins/data/plugins_api.dart';
+import '../../plugins/presentation/plugin_gadgets_overlay.dart';
+import '../../plugins/presentation/plugins_panel.dart';
 import '../../rooms/presentation/widgets/attachment_bubble.dart';
 import '../../rooms/presentation/widgets/new_room_dialog.dart';
 import '../../rooms/presentation/widgets/orbit_strip.dart';
@@ -75,7 +78,6 @@ import '../../tools/presentation/mcp_app_view.dart';
 import '../../tools/presentation/tool_frontend_view.dart';
 import '../../tools/presentation/tool_screen.dart';
 import '../../tools/runtime/tool_media.dart';
-import '../../plugins/presentation/plugins_panel.dart';
 import 'space_settings_panel.dart';
 import 'widgets/space_facility_tabs.dart';
 
@@ -722,6 +724,25 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     await workspaceMotion.forward();
   }
 
+  /// Room chat with space chat-placement plugins as floating gadgets.
+  Widget _chatGadgetHost(Widget chat) {
+    final spaceId = _spaceFor(workspace)?.id ?? '';
+    if (spaceId.isEmpty) return chat;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        chat,
+        PluginSurfaceGadgets(
+          dependencies: widget.dependencies,
+          placement: PluginPlacement.chat,
+          spaceId: spaceId,
+          roomId: _chatRoomId,
+          compact: true,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -899,45 +920,47 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                           spaceId:
                                               _spaceFor(workspace)?.id ?? '',
                                         )
-                                      : RoomChat(
-                                          key: ValueKey(
-                                            '${_spaceFor(workspace)?.id}/$_currentRoomId',
+                                      : _chatGadgetHost(
+                                          RoomChat(
+                                            key: ValueKey(
+                                              '${_spaceFor(workspace)?.id}/$_currentRoomId',
+                                            ),
+                                            room: room!,
+                                            messages: chatMessages,
+                                            working: _workingAgent,
+                                            workingDetail: _workingDetail,
+                                            me:
+                                                widget
+                                                    .dependencies
+                                                    .sessionController
+                                                    .session
+                                                    ?.accountId ??
+                                                '',
+                                            dependencies: widget.dependencies,
+                                            spaceId:
+                                                _spaceFor(workspace)?.id ?? '',
+                                            roomId: _chatRoomId,
+                                            suggestions:
+                                                _spaceFor(workspace)?.home ??
+                                                false,
+                                            threadRoomId: _currentRoomId,
+                                            threadTitle:
+                                                _roomThreads[_currentRoomId]
+                                                    ?.title ??
+                                                '',
+                                            onThread: _switchThread,
+                                            mentionable: spaceBots
+                                                .where((b) => b.isAgent)
+                                                .toList(),
+                                            onSend: _sendRoomMessage,
+                                            onEdit: _editRoomMessage,
+                                            onDelete: _deleteRoomMessage,
+                                            onReport: _reportRoomMessage,
+                                            canModerate: _canManageTasks,
+                                            hasMore: chatHasMore,
+                                            loadingOlder: chatLoadingOlder,
+                                            onLoadOlder: _loadOlderRoomMessages,
                                           ),
-                                          room: room!,
-                                          messages: chatMessages,
-                                          working: _workingAgent,
-                                          workingDetail: _workingDetail,
-                                          me:
-                                              widget
-                                                  .dependencies
-                                                  .sessionController
-                                                  .session
-                                                  ?.accountId ??
-                                              '',
-                                          dependencies: widget.dependencies,
-                                          spaceId:
-                                              _spaceFor(workspace)?.id ?? '',
-                                          roomId: _chatRoomId,
-                                          suggestions:
-                                              _spaceFor(workspace)?.home ??
-                                              false,
-                                          threadRoomId: _currentRoomId,
-                                          threadTitle:
-                                              _roomThreads[_currentRoomId]
-                                                  ?.title ??
-                                              '',
-                                          onThread: _switchThread,
-                                          mentionable: spaceBots
-                                              .where((b) => b.isAgent)
-                                              .toList(),
-                                          onSend: _sendRoomMessage,
-                                          onEdit: _editRoomMessage,
-                                          onDelete: _deleteRoomMessage,
-                                          onReport: _reportRoomMessage,
-                                          canModerate: _canManageTasks,
-                                          hasMore: chatHasMore,
-                                          loadingOlder: chatLoadingOlder,
-                                          onLoadOlder: _loadOlderRoomMessages,
                                         ),
                                 ),
                               ),
@@ -1043,39 +1066,41 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                       dependencies: widget.dependencies,
                       spaceId: _spaceFor(workspace)?.id ?? '',
                     )
-                  : RoomChat(
-                      key: ValueKey(
-                        '${_spaceFor(workspace)?.id}/$_currentRoomId',
+                  : _chatGadgetHost(
+                      RoomChat(
+                        key: ValueKey(
+                          '${_spaceFor(workspace)?.id}/$_currentRoomId',
+                        ),
+                        room: room!,
+                        messages: chatMessages,
+                        working: _workingAgent,
+                        workingDetail: _workingDetail,
+                        me:
+                            widget
+                                .dependencies
+                                .sessionController
+                                .session
+                                ?.accountId ??
+                            '',
+                        dependencies: widget.dependencies,
+                        spaceId: _spaceFor(workspace)?.id ?? '',
+                        roomId: _chatRoomId,
+                        suggestions: _spaceFor(workspace)?.home ?? false,
+                        threadRoomId: _currentRoomId,
+                        threadTitle: _roomThreads[_currentRoomId]?.title ?? '',
+                        onThread: _switchThread,
+                        mentionable: spaceBots.where((b) => b.isAgent).toList(),
+                        onSend: _sendRoomMessage,
+                        onEdit: _editRoomMessage,
+                        onDelete: _deleteRoomMessage,
+                        onReport: _reportRoomMessage,
+                        canModerate: _canManageTasks,
+                        hasMore: chatHasMore,
+                        loadingOlder: chatLoadingOlder,
+                        onLoadOlder: _loadOlderRoomMessages,
+                        flat: true,
+                        topContentInset: contentInset,
                       ),
-                      room: room!,
-                      messages: chatMessages,
-                      working: _workingAgent,
-                      workingDetail: _workingDetail,
-                      me:
-                          widget
-                              .dependencies
-                              .sessionController
-                              .session
-                              ?.accountId ??
-                          '',
-                      dependencies: widget.dependencies,
-                      spaceId: _spaceFor(workspace)?.id ?? '',
-                      roomId: _chatRoomId,
-                      suggestions: _spaceFor(workspace)?.home ?? false,
-                      threadRoomId: _currentRoomId,
-                      threadTitle: _roomThreads[_currentRoomId]?.title ?? '',
-                      onThread: _switchThread,
-                      mentionable: spaceBots.where((b) => b.isAgent).toList(),
-                      onSend: _sendRoomMessage,
-                      onEdit: _editRoomMessage,
-                      onDelete: _deleteRoomMessage,
-                      onReport: _reportRoomMessage,
-                      canModerate: _canManageTasks,
-                      hasMore: chatHasMore,
-                      loadingOlder: chatLoadingOlder,
-                      onLoadOlder: _loadOlderRoomMessages,
-                      flat: true,
-                      topContentInset: contentInset,
                     ),
             ],
           ),
@@ -1332,7 +1357,10 @@ class _LibraryPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _Panel(
     flat: flat,
-    child: Row(
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        Row(
       children: [
         Container(
           width: 58,
@@ -1481,6 +1509,7 @@ class _LibraryPanel extends StatelessWidget {
                         dependencies: dependencies!,
                         spaceId: spaceId,
                         roomId: roomId,
+                        placement: PluginPlacement.rail,
                       ),
                   ],
                 ),
@@ -1510,6 +1539,17 @@ class _LibraryPanel extends StatelessWidget {
             ),
           ),
         ),
+      ],
+        ),
+        if (dependencies != null && spaceId.isNotEmpty)
+          PluginSurfaceGadgets(
+            dependencies: dependencies!,
+            placement: PluginPlacement.rail,
+            spaceId: spaceId,
+            roomId: roomId,
+            dockAlignment: Alignment.bottomCenter,
+            compact: true,
+          ),
       ],
     ),
   );
@@ -2625,6 +2665,17 @@ class _CenterDesk extends StatelessWidget {
               ),
             ),
           ),
+          if (spaceId.isNotEmpty)
+            Positioned.fill(
+              child: PluginSurfaceGadgets(
+                dependencies: dependencies,
+                placement: PluginPlacement.desk,
+                spaceId: spaceId,
+                roomId: roomId,
+                dockAlignment: Alignment.bottomCenter,
+                pad: EdgeInsets.fromLTRB(16, 16, 16, 24 + topContentInset),
+              ),
+            ),
         ],
       ),
     );

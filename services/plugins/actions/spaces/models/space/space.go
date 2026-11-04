@@ -17,12 +17,13 @@ type Space struct {
 	AvatarID    identity.ID `db:"avatar_id" json:"avatar_id,omitempty"`
 	MetadataID  identity.ID `db:"metadata_id" json:"metadata_id"`
 	Public      bool        `db:"public" json:"public"`
-	// Home marks the workspace automatically linked to a user's account at
-	// registration (the "my workspace" default).
+	// Home marks the person's own workspace: their personal Aseman chat
+	// (self-Direct), computer, and lead. One space per person.
 	Home bool `db:"home" json:"home,omitempty"`
 	// Direct marks a direct conversation: a one-room space between two
-	// accounts (two people, or a person and an agent). DirectKey names the
-	// pair so the conversation is found again from either side.
+	// accounts (two people, or a person and an agent), or the person's
+	// home Aseman self-chat (DirectKey is person:person). DirectKey names
+	// the pair so the conversation is found again from either side.
 	Direct    bool   `db:"direct" json:"direct,omitempty"`
 	DirectKey string `db:"direct_key" json:"direct_key,omitempty"`
 }

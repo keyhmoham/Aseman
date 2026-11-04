@@ -200,6 +200,8 @@ services:
       ASEMAN_AGENT_RUNTIME_MEMORY_MB: ${ASEMAN_AGENT_RUNTIME_MEMORY_MB:-2048}
       # Set to run the runtime yourself instead (e.g. http://host:8000).
       ASEMAN_AGENT_RUNTIME_URL: ${ASEMAN_AGENT_RUNTIME_URL:-}
+      # Shared secret with the agent runtime. Empty: the node mints and persists one.
+      ASEMAN_AGENT_RUNTIME_SECRET: ${ASEMAN_AGENT_RUNTIME_SECRET:-}
       # Bound a provider call, its time to first SSE event and silence between events.
       ASEMAN_LLM_CALL_TIMEOUT: ${ASEMAN_LLM_CALL_TIMEOUT:-5m}
       ASEMAN_LLM_FIRST_EVENT_TIMEOUT: ${ASEMAN_LLM_FIRST_EVENT_TIMEOUT:-2m}

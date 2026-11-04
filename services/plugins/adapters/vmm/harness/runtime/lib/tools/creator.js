@@ -3,10 +3,11 @@
  *
  * A plugin is an Elpian screen (and, when it needs one, a small backend) the
  * Aseman app runs natively in the person's theme. Made in a person's own
- * Aseman chat it is theirs, app-wide; made in a room, thread or direct chat it
- * belongs to that space and its members, its backend running in the space's
- * own sandbox. The node decides the scope from the turn (tools.plugin_create)
- * and gates everything the screen calls (tools.plugin_call).
+ * Aseman chat it is theirs — a universal floating gadget across home tabs and
+ * workspaces; made in a room, thread or direct chat it belongs to that space
+ * and its members, floating on chat, the left rail, or the desk (or as a page).
+ * The node decides the scope from the turn (tools.plugin_create) and gates
+ * everything the screen calls (tools.plugin_call).
  */
 
 import vm from 'node:vm'
@@ -14,10 +15,12 @@ import { defineTool, params } from './define.js'
 
 export const CREATOR_GUIDE = `## Plugins (Creator mode)
 A plugin is a small app of its own that stays: a screen the Aseman app draws
-natively, in the person's theme, beside the conversation (placement "panel"),
-as a page of its own ("page") or as a window on the room's desk ("desk").
-Made in a person's own Aseman chat it is theirs everywhere in the app; made in
-a room, thread or direct chat it belongs to that space, shared by its members.
+natively, in the person's theme, as a floating gadget on the conversation
+(placement "chat"), on the space's left panel / nav drawer ("rail"), on the
+room's desk ("desk"), or as a page of its own ("page"). Made in a person's own
+Aseman chat it is theirs everywhere — a universal floating gadget across home
+tabs and while they view workspaces; made in a room, thread or direct chat it
+belongs to that space, shared by its members, mounted on the surface you pick.
 
 When to make one: when the person asks for an interface, a tracker, a board,
 a dashboard, a form or a tool to keep using; or when a result has a clear
@@ -47,7 +50,8 @@ A backend (optional) is a JavaScript program declaring tools() (a list of
 {name, description, input}) and one function per tool; it keeps state with
 askHost('aseman.kv.get' | 'aseman.kv.set', {key, value}).
 Keep it small and working: start from what the person needs most. After
-create_plugin succeeds, tell the person where to find it.`
+create_plugin succeeds, tell the person where to find it (universal gadget,
+chat / left panel / desk gadget, or page).`
 
 /** Parse a program as JavaScript; the error the model should fix, or ''. */
 export function syntaxError(source, label) {
@@ -63,7 +67,7 @@ function plugins(out) {
   const list = out.plugins ?? []
   if (!list.length) return 'No plugins here yet.'
   return list
-    .map((p) => `- ${p.name} (${p.id}; ${p.scope === 'account' ? 'app-wide' : 'this space'}, ${p.placement}${p.status === 'removed' ? ', removed' : ''}): ${String(p.description ?? '').slice(0, 160)}`)
+    .map((p) => `- ${p.name} (${p.id}; ${p.scope === 'account' ? 'universal gadget' : 'this space'}, ${p.placement}${p.status === 'removed' ? ', removed' : ''}): ${String(p.description ?? '').slice(0, 160)}`)
     .join('\n')
 }
 
@@ -74,11 +78,11 @@ export function creatorTools({ gateway, binding }) {
       binding,
       description:
         'Create a plugin for the person (or, with plugin, change one): its Elpian screen program, an optional backend ' +
-        'program, where it shows and the platform actions its screen may call. See "Plugins (Creator mode)".',
+        'program, where it shows as a floating gadget (or page) and the platform actions its screen may call. See "Plugins (Creator mode)".',
       parameters: params({
         name: { type: 'string' },
         description: { type: 'string', description: 'What it is for, in one sentence.' },
-        placement: { type: 'string', enum: ['panel', 'page', 'desk'] },
+        placement: { type: 'string', enum: ['chat', 'rail', 'page', 'desk'], description: 'chat = conversation gadget; rail = left panel / nav drawer; desk = desk gadget; page = full page. Account plugins from Aseman chat are always universal floaters.' },
         permissions: { type: 'array', items: { type: 'string' }, description: 'Platform actions the screen calls: "namespace.action" or "namespace.*".' },
         frontend: { type: 'string', description: 'The screen: a JavaScript program that renders with askHost("render", …).' },
         backend: { type: 'string', description: 'Optional backend program (tools() and one function per tool).' },
@@ -100,7 +104,9 @@ export function creatorTools({ gateway, binding }) {
           backend: args.backend ? { source: String(args.backend), runtime: 'quickjs', language: 'js' } : undefined,
         }, { signal })
         const p = out.plugin ?? {}
-        const where = p.scope === 'account' ? 'everywhere in their app (their plugins page)' : 'in this space for all its members'
+        const where = p.scope === 'account'
+          ? 'as a universal floating gadget across home and workspaces'
+          : `as a ${p.placement || 'chat'} gadget in this space for all its members`
         return `${args.plugin ? 'Changed' : 'Created'} plugin ${p.name} (${p.id}), ${p.placement}, ${where}.`
       },
     }),
@@ -108,7 +114,7 @@ export function creatorTools({ gateway, binding }) {
       name: 'list_plugins',
       binding,
       concurrent: true,
-      description: 'The plugins here: the person\'s app-wide ones and this space\'s (removed ones too, to restore).',
+      description: 'The plugins here: the person\'s universal gadgets and this space\'s (removed ones too, to restore).',
       parameters: params({}),
       async run(_args, { signal }) {
         const b = binding()

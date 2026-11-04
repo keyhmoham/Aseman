@@ -384,12 +384,13 @@ class AsemanService implements BackendService {
     return ChatSummary.fromJson({...m, 'kind': 'direct'});
   }
 
-  /// Opens the caller's personal Aseman chat: the direct chat with themselves.
+  /// Opens the caller's personal Aseman chat — also their home workspace.
   Future<ChatSummary> openSaved() async {
     final resp = await client.call('spaces', 'direct_open',
         body: {'peer': session?.accountId ?? ''});
     final m = (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
-    return ChatSummary.fromJson({...m, 'kind': 'direct', 'saved': true});
+    return ChatSummary.fromJson(
+        {...m, 'kind': 'direct', 'saved': true, 'home': true});
   }
 
   /// Pins a chat to the top of the caller's chats, or unpins it.

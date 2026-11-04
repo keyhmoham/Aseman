@@ -11,6 +11,7 @@ import 'core/theme/theme_runtime_scope.dart';
 import 'features/auth/presentation/auth_screen.dart';
 import 'features/calls/call_overlay.dart';
 import 'features/navigation/presentation/app_shell.dart';
+import 'features/plugins/presentation/plugin_gadgets_overlay.dart';
 
 class AsemanApp extends StatefulWidget {
   const AsemanApp({super.key, required this.dependencies});
@@ -93,7 +94,10 @@ class _AsemanAppState extends State<AsemanApp> {
                   dependencies: widget.dependencies,
                   child: CallOverlay(
                     dependencies: widget.dependencies,
-                    child: AppShell(dependencies: widget.dependencies),
+                    child: PluginGadgetsOverlay(
+                      dependencies: widget.dependencies,
+                      child: AppShell(dependencies: widget.dependencies),
+                    ),
                   ),
                 ),
               ),

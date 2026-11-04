@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased: Aseman chat is home
+
+- **One personal space.** The Aseman self-chat (former Saved Messages) is also
+  the user's home workspace and personal computer — same space id for notes,
+  the assistant, the lead/team, and the sandbox. Legacy `{handle}'s Home`
+  projects collapse into that Aseman chat; the inbox shows a single Aseman row.
+
 ## Unreleased: every agent on DeepSeek Harness
 
 - **One agentic engine.** Every agent turn and every personal Aseman answer
@@ -29,13 +36,15 @@
   project's (`ASEMAN_TIMELINE=off` turns it off).
 - **Plugins (Creator mode):** agents make plugins — an Elpian screen drawn
   natively in the app with a QuickJS backend (`create_plugin`). Made in the
-  personal Aseman chat, a plugin is the person's own and app-wide; made in a
-  space or direct chat, it lives in that space's sandbox, shared by its
-  members, and reaches only that space. A plugin's screen calls its backend
-  (`tools.plugin_invoke`) and the platform actions it declared
-  (`tools.plugin_call`), as the person using it. Plugins open from a Plugins
-  button in chats and the workspace panel, as a side panel, a page or a desk
-  window, and from My bots → Your plugins (remove, restore).
+  personal Aseman chat, a plugin is the person's own **universal floating
+  gadget** (across home tabs and while viewing workspaces); made in a space
+  or direct chat, it lives in that space's sandbox as a floating gadget on
+  chat, the left rail (nav drawer), or the desk (placements `chat` / `rail` /
+  `desk`), or as a `page`, shared by members and confined to that space. A
+  plugin's screen calls its backend (`tools.plugin_invoke`) and the platform
+  actions it declared (`tools.plugin_call`), as the person using it. Gadgets
+  mount on those surfaces (not a centralized plugins sheet); My bots → Your
+  gadgets still lists, removes and restores account plugins.
 - **Typed API catalog:** `aseman_api_search` shows each action's body fields,
   read from the source by `cmd/gen-action-schemas` (kept current by a test).
 - **Confinement:** a room agent, and a space's plugin, may name only its own

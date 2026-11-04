@@ -240,7 +240,7 @@ func (s *Service) mustProject(t *testing.T, ctx context.Context, owner identity.
 }
 
 // Aseman (formerly Saved Messages) is a direct chat with oneself: always the
-// same one, listed among chats, with no one to block.
+// same one, listed among chats, with no one to block — and it is the home workspace.
 func TestSavedMessagesIsADirectChatWithOneself(t *testing.T) {
 	s, ctx := fileToolHarness(t)
 	alice := directPerson(t, s, ctx, "00000000000000010000000000000001", "alice")
@@ -252,8 +252,12 @@ func TestSavedMessagesIsADirectChatWithOneself(t *testing.T) {
 	if err != nil || again.ID != sp.ID || !sp.Direct {
 		t.Fatalf("aseman chat: %v", err)
 	}
-	if sp.Name != "Aseman" {
-		t.Fatalf("aseman space name: %q", sp.Name)
+	if sp.Name != "Aseman" || !sp.Home {
+		t.Fatalf("aseman space: name=%q home=%v", sp.Name, sp.Home)
+	}
+	home, err := s.HomeSpace(ctx, alice)
+	if err != nil || home.ID != sp.ID {
+		t.Fatalf("aseman chat is home: chat=%v home=%v (%v)", sp.ID, home, err)
 	}
 	sendIn(t, s, ctx, alice, sp.ID, room.ID, "remember the milk")
 	chats := chatsOf(t, s, ctx, alice)
@@ -265,6 +269,61 @@ func TestSavedMessagesIsADirectChatWithOneself(t *testing.T) {
 	}
 	if err := callErr(ctx, alice, s.directBlockSet, map[string]any{"space": sp.ID.String()}); err == nil {
 		t.Fatal("blocked oneself")
+	}
+}
+
+// Opening the personal computer and the Aseman chat must yield the same space —
+// never a separate "{handle}'s Home" project beside the assistant Direct.
+func TestPersonalHomeIsTheAsemanChat(t *testing.T) {
+	s, ctx := fileToolHarness(t)
+	alice := directPerson(t, s, ctx, "00000000000000010000000000000001", "alice")
+	home, err := s.PersonalComputer(ctx, alice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, _, err := s.OpenDirect(ctx, alice, alice)
+	if err != nil || saved.ID != home.ID {
+		t.Fatalf("home=%v aseman=%v (%v)", home.ID, saved, err)
+	}
+	if !home.Direct || !home.Home || home.Name != "Aseman" {
+		t.Fatalf("unified home: %+v", home)
+	}
+	chats := chatsOf(t, s, ctx, alice)
+	if len(chats) != 1 || chats[0]["saved"] != true || chats[0]["space_id"] != home.ID.String() {
+		t.Fatalf("inbox must show one Aseman home row: %v", chats)
+	}
+}
+
+// A leftover project home and a separate self-chat collapse into one Aseman on heal.
+func TestLegacyHomeAndAsemanChatCollapse(t *testing.T) {
+	s, ctx := fileToolHarness(t)
+	alice := directPerson(t, s, ctx, "00000000000000010000000000000001", "alice")
+	// Simulate the old split: a non-direct Home project plus a self-Direct.
+	legacy, err := s.CreateSpace(ctx, alice, "alice's Home", "Your personal workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy.Home = true
+	legacy.UpdatedAt = time.Now().UTC()
+	if err := s.R.Update(ctx, "spaces", legacy.ID, legacy); err != nil {
+		t.Fatal(err)
+	}
+	key := directKey(alice, alice)
+	saved, err := s.createSpace(ctx, alice, "Aseman", "Your personal Aseman", key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.healPersonalHome(ctx, alice)
+	home, err := s.HomeSpace(ctx, alice)
+	if err != nil || home.ID != saved.ID || !home.Home || !home.Direct {
+		t.Fatalf("canonical home: %+v (%v)", home, err)
+	}
+	if _, err := s.GetSpace(ctx, legacy.ID); err == nil {
+		t.Fatal("legacy project home should be retired")
+	}
+	chats := chatsOf(t, s, ctx, alice)
+	if len(chats) != 1 || chats[0]["space_id"] != saved.ID.String() || chats[0]["saved"] != true {
+		t.Fatalf("inbox after heal: %v", chats)
 	}
 }
 

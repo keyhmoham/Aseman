@@ -44,21 +44,39 @@ func (a *Adapter) runtimeBase() string {
 	return "http://" + a.alias + ":" + a.port
 }
 
-// ensureRuntime makes sure the runtime answers, starting it as a Nomad
-// service VM when this node runs it. The VM has a stable id, so starting it
-// again (after a node restart) replaces the old one instead of adding one.
+// ensureRuntime makes sure the runtime answers *with this node's secret*,
+// starting it as a Nomad service VM when this node runs it. The VM has a
+// stable id, so starting it again (after a node restart, or when the secret
+// no longer matches) replaces the old one instead of adding one.
+//
+// /healthz is unauthenticated, so a runtime left running across a node
+// restart can look healthy while rejecting every turn with 401. Readiness
+// therefore also probes an authenticated route.
 func (a *Adapter) ensureRuntime(ctx context.Context) error {
 	a.runtimeMu.Lock()
 	defer a.runtimeMu.Unlock()
 	if time.Since(a.healthyAt) < healthTTL {
 		return nil
 	}
-	if a.healthy(ctx) {
+	if a.ready(ctx) {
 		a.healthyAt = time.Now()
 		return nil
 	}
 	if a.runtimeURL != "" {
+		if a.healthy(ctx) {
+			return errs.New(errs.CodeVMM, "agent runtime rejected the runtime secret")
+		}
 		return errs.New(errs.CodeUnavailable, "the agent runtime at "+a.runtimeURL+" is not answering")
+	}
+	// Unhealthy or secret-mismatched: schedule (or replace) the managed runtime.
+	if a.runtimeVM != "" && a.healthy(ctx) && !a.authorized(ctx) {
+		a.Log.Warn("agent runtime secret mismatch; replacing the runtime", "vm_id", a.runtimeVM)
+		if host := a.serviceHost(); host != nil {
+			if err := host.DeleteVM(context.WithoutCancel(ctx), a.runtimeVM); err != nil {
+				a.Log.Warn("remove mismatched agent runtime", "vm_id", a.runtimeVM, "error", err)
+			}
+		}
+		a.runtimeVM = ""
 	}
 	if a.runtimeVM == "" {
 		host := a.serviceHost()
@@ -82,6 +100,12 @@ func (a *Adapter) ensureRuntime(ctx context.Context) error {
 				env[key] = v
 			}
 		}
+		// Also covers the common case where this process has no runtimeVM id
+		// (node restart) but Nomad still runs the previous allocation with an
+		// old secret: CreateVM with LabelServiceID replaces that job.
+		if a.healthy(ctx) && !a.authorized(ctx) {
+			a.Log.Warn("agent runtime secret mismatch; replacing the runtime")
+		}
 		vm, err := host.CreateVM(ctx, vmm.VMSpec{
 			Name: runtimeService, Type: vmm.TypeDocker, ImageRef: a.image,
 			Resources:   vmm.ResourceSpec{CPU: 10, MemoryMB: a.memoryMB, DiskMB: 1024, Network: a.network},
@@ -96,7 +120,7 @@ func (a *Adapter) ensureRuntime(ctx context.Context) error {
 	}
 	deadline := time.Now().Add(runtimeStartTimeout)
 	for time.Now().Before(deadline) {
-		if a.healthy(ctx) {
+		if a.ready(ctx) {
 			a.healthyAt = time.Now()
 			return nil
 		}
@@ -137,6 +161,22 @@ func (a *Adapter) healthy(ctx context.Context) bool {
 		OK bool `json:"ok"`
 	}
 	return a.call(hctx, http.MethodGet, "/healthz", nil, &out) == nil && out.OK
+}
+
+// ready is healthy and accepting this node's runtime secret.
+func (a *Adapter) ready(ctx context.Context) bool {
+	return a.healthy(ctx) && a.authorized(ctx)
+}
+
+// authorized probes a secret-gated route. /healthz alone is not enough: it
+// stays open so Nomad can check liveness without the secret.
+func (a *Adapter) authorized(ctx context.Context) bool {
+	hctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	var out struct {
+		Questions []any `json:"questions"`
+	}
+	return a.call(hctx, http.MethodGet, "/v1/questions", nil, &out) == nil
 }
 
 // call performs one request to the runtime, authenticated with the runtime

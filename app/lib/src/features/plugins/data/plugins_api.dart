@@ -2,27 +2,36 @@ import '../../../data/services/aseman_service.dart';
 import '../../tools/data/tools_api.dart';
 import '../../tools/domain/tool_models.dart';
 
-/// Where a plugin is shown.
+/// Where a space plugin mounts as a floating gadget (account plugins are
+/// always universal floaters across home and workspaces).
 enum PluginPlacement {
-  /// Beside the conversation (a room, thread or chat).
-  panel,
+  /// Floating gadget on the conversation (room, thread or chat).
+  chat,
+
+  /// Floating gadget on the space's left panel / nav drawer.
+  rail,
 
   /// A page of its own.
   page,
 
-  /// A window on the room's desk.
+  /// A floating gadget / window on the room's desk.
   desk;
 
+  /// Older plugins stored `panel`; treat it as [chat].
   static PluginPlacement parse(Object? v) => switch ('$v') {
         'page' => PluginPlacement.page,
         'desk' => PluginPlacement.desk,
-        _ => PluginPlacement.panel,
+        'rail' => PluginPlacement.rail,
+        'panel' || 'chat' => PluginPlacement.chat,
+        _ => PluginPlacement.chat,
       };
+
+  String get wire => name;
 }
 
 /// A plugin agents made for people (Creator mode): an Elpian screen with its
-/// backend. App-wide plugins are the person's own, everywhere in the app; a
-/// space's plugins belong to that space and its members.
+/// backend. App-wide plugins are the person's own universal gadgets;
+/// a space's plugins belong to that space and its members.
 class PluginInfo {
   const PluginInfo({
     required this.id,
@@ -31,7 +40,7 @@ class PluginInfo {
     this.appWide = false,
     this.spaceId = '',
     this.ownerId = '',
-    this.placement = PluginPlacement.panel,
+    this.placement = PluginPlacement.chat,
     this.permissions = const [],
     this.removed = false,
   });

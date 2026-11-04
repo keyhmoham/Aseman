@@ -5,6 +5,7 @@ package spaces
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -413,24 +414,12 @@ func (s *Service) createSpace(ctx context.Context, owner identity.ID, name, desc
 	return sp, nil
 }
 
-// CreateHomeSpace creates the default workspace linked to a user account at
-// registration. It is marked with the Home flag so the client can open it as
-// "my workspace".
+// CreateHomeSpace creates (or returns) the person's home: their personal
+// Aseman chat. Handle is kept for callers; the space is always named Aseman.
 func (s *Service) CreateHomeSpace(ctx context.Context, owner identity.ID, handle string) (*space.Space, error) {
-	name := "Home"
-	if handle != "" {
-		name = handle + "'s Home"
-	}
-	sp, err := s.CreateSpace(ctx, owner, name, "Your personal workspace")
-	if err != nil {
-		return nil, err
-	}
-	sp.Home = true
-	sp.UpdatedAt = time.Now().UTC()
-	if err := s.R.Update(ctx, "spaces", sp.ID, sp); err != nil {
-		return nil, err
-	}
-	return sp, nil
+	_ = handle
+	sp, _, _, err := s.ensurePersonalHome(ctx, owner)
+	return sp, err
 }
 
 // HomeSpace returns the home workspace of an account, if any.
@@ -448,14 +437,16 @@ func (s *Service) HomeSpace(ctx context.Context, owner identity.ID) (*space.Spac
 }
 
 // PersonalComputer is the space whose computer is a person's own: their home
-// workspace, made now if they have none yet. Their direct chats' agents and
+// Aseman chat, made now if they have none yet. Their direct chats' agents and
 // their personal Aseman work on it. Agents have no personal computer.
 func (s *Service) PersonalComputer(ctx context.Context, person identity.ID) (*space.Space, error) {
 	if person.IsZero() {
 		return nil, errs.InvalidArgument("a personal computer needs a person")
 	}
 	if home, err := s.HomeSpace(ctx, person); err == nil && home != nil {
-		return home, nil
+		if s.isPersonalHome(home, person) {
+			return home, nil
+		}
 	}
 	var acc account.Account
 	if err := s.R.Get(ctx, "accounts", person, &acc); err != nil {
@@ -464,16 +455,160 @@ func (s *Service) PersonalComputer(ctx context.Context, person identity.ID) (*sp
 	if acc.Kind != account.KindUser || s.isBotAccount(ctx, person) {
 		return nil, errs.NotFound("no personal computer")
 	}
-	s.homeMu.Lock()
-	defer s.homeMu.Unlock()
-	if home, err := s.HomeSpace(ctx, person); err == nil && home != nil {
-		return home, nil // made while this waited
-	}
-	home, err := s.CreateHomeSpace(ctx, person, acc.Handle)
+	home, _, _, err := s.ensurePersonalHome(ctx, person)
 	if err != nil {
 		return nil, errs.Wrap(errs.CodeUnavailable, err, "could not open the personal workspace")
 	}
 	return home, nil
+}
+
+// isPersonalHome reports whether sp is the person's Aseman home (self-Direct).
+func (s *Service) isPersonalHome(sp *space.Space, person identity.ID) bool {
+	return sp != nil && sp.Home && sp.Direct && sp.DirectKey == directKey(person, person)
+}
+
+// isSelfChat reports whether sp is the person's Aseman self-chat (home).
+func (s *Service) isSelfChat(sp *space.Space, person identity.ID) bool {
+	return sp != nil && sp.Direct && sp.DirectKey == directKey(person, person)
+}
+
+// healPersonalHome collapses a legacy project home and a separate Aseman
+// self-chat when either already exists. It does not create one from scratch
+// (openSaved / PersonalComputer still do that lazily).
+func (s *Service) healPersonalHome(ctx context.Context, person identity.ID) {
+	if person.IsZero() {
+		return
+	}
+	home, _ := s.HomeSpace(ctx, person)
+	saved := s.findDirect(ctx, directKey(person, person))
+	if home == nil && saved == nil {
+		return
+	}
+	if s.isPersonalHome(home, person) && (saved == nil || saved.ID == home.ID) {
+		return
+	}
+	_, _, _, _ = s.ensurePersonalHome(ctx, person)
+}
+
+// ensurePersonalHome makes the person's home and Aseman chat the same space:
+// Direct self-chat (person:person), Home=true, named Aseman, with the lead.
+// Idempotent; collapses a legacy non-direct home and a separate self-chat.
+func (s *Service) ensurePersonalHome(ctx context.Context, person identity.ID) (*space.Space, *space.Room, bool, error) {
+	if person.IsZero() {
+		return nil, nil, false, errs.InvalidArgument("person required")
+	}
+	var acc account.Account
+	if err := s.R.Get(ctx, "accounts", person, &acc); err == nil {
+		if acc.IsBot() || acc.Kind != account.KindUser || s.isBotAccount(ctx, person) {
+			return nil, nil, false, errs.InvalidArgument("choose someone else to talk to")
+		}
+	} else if s.isBotAccount(ctx, person) {
+		return nil, nil, false, errs.InvalidArgument("choose someone else to talk to")
+	}
+
+	s.homeMu.Lock()
+	defer s.homeMu.Unlock()
+
+	key := directKey(person, person)
+	home, _ := s.HomeSpace(ctx, person)
+	saved := s.findDirect(ctx, key)
+	created := false
+
+	switch {
+	case s.isPersonalHome(home, person):
+		// Already unified.
+	case saved != nil && (home == nil || home.ID == saved.ID):
+		if err := s.markPersonalHome(ctx, saved); err != nil {
+			return nil, nil, false, err
+		}
+		home = saved
+	case home != nil && saved == nil:
+		if err := s.convertHomeToAseman(ctx, home, key); err != nil {
+			return nil, nil, false, err
+		}
+	case home != nil && saved != nil && home.ID != saved.ID:
+		// Prefer the self-chat (notes / assistant thread); retire the legacy project home.
+		if err := s.markPersonalHome(ctx, saved); err != nil {
+			return nil, nil, false, err
+		}
+		s.retireLegacyHome(ctx, home)
+		home = saved
+	default:
+		sp, err := s.createSpace(ctx, person, "Aseman", "Your personal Aseman", key)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		if err := s.markPersonalHome(ctx, sp); err != nil {
+			return nil, nil, false, err
+		}
+		home = sp
+		created = true
+	}
+
+	s.ensureAseman(ctx, home.ID)
+	room, err := s.generalRoom(ctx, home.ID)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	return home, room, created, nil
+}
+
+func (s *Service) markPersonalHome(ctx context.Context, sp *space.Space) error {
+	if sp == nil {
+		return errs.InvalidArgument("space required")
+	}
+	changed := false
+	if !sp.Home {
+		sp.Home = true
+		changed = true
+	}
+	if !sp.Direct || sp.DirectKey == "" {
+		sp.Direct = true
+		sp.DirectKey = directKey(sp.OwnerID, sp.OwnerID)
+		changed = true
+	}
+	if sp.Name != "Aseman" && (sp.Name == "Home" || sp.Name == "Saved Messages" || strings.HasSuffix(sp.Name, "'s Home") || sp.Name == "") {
+		sp.Name = "Aseman"
+		sp.Description = "Your personal Aseman"
+		changed = true
+	}
+	if !changed {
+		return nil
+	}
+	sp.UpdatedAt = time.Now().UTC()
+	return s.R.Update(ctx, "spaces", sp.ID, sp)
+}
+
+func (s *Service) convertHomeToAseman(ctx context.Context, home *space.Space, key string) error {
+	home.Direct = true
+	home.DirectKey = key
+	home.Home = true
+	if home.Name == "Home" || strings.HasSuffix(home.Name, "'s Home") || home.Name == "Saved Messages" || home.Name == "" {
+		home.Name = "Aseman"
+		home.Description = "Your personal Aseman"
+	}
+	home.UpdatedAt = time.Now().UTC()
+	return s.R.Update(ctx, "spaces", home.ID, home)
+}
+
+// retireLegacyHome clears the Home flag on a leftover non-direct project and
+// deletes it when it looks like the old auto-created "{handle}'s Home".
+func (s *Service) retireLegacyHome(ctx context.Context, old *space.Space) {
+	if old == nil || old.Direct {
+		return
+	}
+	old.Home = false
+	old.UpdatedAt = time.Now().UTC()
+	_ = s.R.Update(ctx, "spaces", old.ID, old)
+	legacy := old.Name == "Home" || strings.HasSuffix(old.Name, "'s Home")
+	if !legacy {
+		return
+	}
+	_ = s.SandboxDestroy(ctx, old.ID)
+	s.revokeSpaceInvitations(ctx, old.ID)
+	s.deleteSpaceRoutines(ctx, old.ID)
+	s.deleteSpaceFiles(ctx, old.ID)
+	_ = s.R.Delete(ctx, "spaces", old.ID)
 }
 
 // Invite creates a pending invitation.

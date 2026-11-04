@@ -424,6 +424,7 @@ class ChatSummary {
     this.role = '',
     this.pinnedAt,
     this.saved = false,
+    this.home = false,
     this.blocked = false,
     this.canSend = true,
     this.typing = false,
@@ -455,6 +456,9 @@ class ChatSummary {
   /// The caller's personal Aseman chat: the direct chat with themselves.
   final bool saved;
 
+  /// Whether this Direct is also the caller's home workspace (personal computer).
+  final bool home;
+
   /// Whether the caller blocked the other side of a direct chat, and whether
   /// anyone can write in it (false when either side blocked the other).
   final bool blocked;
@@ -470,10 +474,11 @@ class ChatSummary {
   /// managers may; in a direct chat nobody moderates the other side.
   bool get canModerate => !direct && canManage;
   String get key => '$spaceId/$roomId';
-  /// Personal Aseman self-chat: flagged [saved], or a Direct whose space is
-  /// still named Aseman / legacy "Saved Messages".
+  /// Personal Aseman = home: flagged [saved]/[home], or a Direct whose space
+  /// is still named Aseman / legacy "Saved Messages".
   bool get isAseman =>
       saved ||
+      home ||
       (direct &&
           (spaceName == 'Aseman' || spaceName == 'Saved Messages'));
 
@@ -506,6 +511,7 @@ class ChatSummary {
         role: role,
         pinnedAt: clearPin ? null : pinnedAt ?? this.pinnedAt,
         saved: saved,
+        home: home,
         blocked: blocked ?? this.blocked,
         canSend: canSend ?? this.canSend,
         typing: typing,
@@ -542,6 +548,7 @@ class ChatSummary {
           (json['kind'] == 'direct' &&
               ('${json['space_name'] ?? ''}' == 'Aseman' ||
                   '${json['space_name'] ?? ''}' == 'Saved Messages')),
+      home: json['home'] == true,
       blocked: json['blocked'] == true,
       canSend: json['can_send'] != false,
       typing: json['typing'] == true,

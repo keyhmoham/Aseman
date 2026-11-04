@@ -329,7 +329,7 @@ class _AgentsScreenState extends State<AgentsScreen> {
 
   List<Widget> get _createActions => [
         IconButton(
-          tooltip: 'Your plugins',
+          tooltip: 'Your gadgets',
           icon: const Icon(Icons.extension_outlined),
           onPressed: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => PluginsPage(dependencies: widget.dependencies))),

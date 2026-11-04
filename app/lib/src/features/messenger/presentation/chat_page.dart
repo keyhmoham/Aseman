@@ -25,9 +25,11 @@ import '../../brain/brain_voice.dart';
 import '../../calls/call_page.dart';
 import '../../desk/data/desk_api.dart';
 import '../../desk/presentation/desk_controller.dart';
+import '../../plugins/data/plugins_api.dart';
+import '../../plugins/presentation/plugin_gadgets_overlay.dart';
+import '../../plugins/presentation/plugins_panel.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import 'dm_desk_panel.dart';
-import '../../plugins/presentation/plugins_panel.dart';
 import 'dm_facility_sheet.dart';
 import 'report_dialog.dart';
 import 'widgets/brain_proposals.dart';
@@ -587,7 +589,7 @@ class _ChatPageState extends State<ChatPage> {
     final chrome = _chromeHeight;
     final useOuterAvatar = _isAiChat && _showDualTabs;
 
-    final chatBody = NotificationListener<ScrollNotification>(
+    Widget chatBody = NotificationListener<ScrollNotification>(
       onNotification: _onScroll,
       child: RoomChat(
         room: chat.title,
@@ -638,6 +640,7 @@ class _ChatPageState extends State<ChatPage> {
                   roomId: chat.isAseman ? '' : chat.roomId,
                   appWideOnly: chat.isAseman,
                   desk: _showDualTabs ? _desk : null,
+                  placement: chat.isAseman ? null : PluginPlacement.chat,
                 ),
                 const SizedBox(width: 2),
                 _menu(),
@@ -679,6 +682,23 @@ class _ChatPageState extends State<ChatPage> {
         onLoadOlder: _loadOlder,
       ),
     );
+
+    // Space chat plugins float on the conversation; Aseman's own are universal.
+    if (!chat.isAseman && chat.spaceId.isNotEmpty) {
+      chatBody = Stack(
+        fit: StackFit.expand,
+        children: [
+          chatBody,
+          PluginSurfaceGadgets(
+            dependencies: widget.dependencies,
+            placement: PluginPlacement.chat,
+            spaceId: chat.spaceId,
+            roomId: _roomId,
+            compact: true,
+          ),
+        ],
+      );
+    }
 
     Widget body;
     if (!_showDualTabs) {

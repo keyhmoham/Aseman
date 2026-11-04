@@ -684,20 +684,12 @@ func (s *Service) AskDirect(ctx context.Context, caller, botID identity.ID, body
 	}
 	// The conversation runs where the agent works with the person: the project
 	// they most recently came to share, so it sees that project's files and
-	// sandbox; otherwise the person's home space.
+	// sandbox; otherwise the person's home Aseman.
 	home, ok := s.sharedSpace(ctx, caller, rec.AccountID)
 	if !ok {
 		// Accounts start with no project; the first direct message to an agent
-		// that shares none creates the personal workspace it works in.
-		hs, err := s.HomeSpace(ctx, caller)
-		if err != nil {
-			handle := ""
-			var acc account.Account
-			if s.R.Get(ctx, "accounts", caller, &acc) == nil {
-				handle = acc.Handle
-			}
-			hs, err = s.CreateHomeSpace(ctx, caller, handle)
-		}
+		// that shares none creates the personal Aseman (home) it works in.
+		hs, err := s.PersonalComputer(ctx, caller)
 		if err != nil {
 			return "", errs.Wrap(errs.CodeUnavailable, err, "could not open a workspace for this conversation")
 		}

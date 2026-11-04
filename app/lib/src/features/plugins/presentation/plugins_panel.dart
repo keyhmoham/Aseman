@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
@@ -6,6 +8,7 @@ import '../../tools/data/tools_api.dart';
 import '../../tools/presentation/tool_frontend_view.dart';
 import '../data/plugins_api.dart';
 import '../runtime/plugin_host.dart';
+import 'plugin_gadgets_controller.dart';
 
 /// A plugin's screen: its Elpian program, drawn natively in the person's
 /// theme, reaching its backend and the platform only through the plugin gate.
@@ -44,47 +47,38 @@ class PluginView extends StatelessWidget {
   }
 }
 
-/// Opens a plugin where it belongs: a desk plugin as a window on the room's
-/// desk (when there is one on screen), a panel beside the conversation on a
-/// wide screen, else (and for a page) a screen of its own.
+/// Opens a plugin as a floating gadget on its surface, or as a page when
+/// placement is [PluginPlacement.page]. Desk plugins in a room still open on
+/// the desk when a [DeskController] is in scope.
 Future<void> openPlugin(BuildContext context, AppDependencies dependencies,
     PluginInfo plugin,
     {String spaceId = '', String roomId = '', DeskController? desk}) async {
-  desk ??= DeskScope.maybeOf(context);
-  if (plugin.placement == PluginPlacement.desk && desk != null) {
-    // Close the list it was picked from; the window opens on the desk.
-    Navigator.of(context).maybePop();
-    await desk.open(plugin.id, title: plugin.name);
+  final gadgets = PluginGadgetsScope.maybeOf(context);
+
+  if (plugin.appWide && gadgets != null) {
+    gadgets.open(plugin.id);
     return;
   }
+
+  if (plugin.placement == PluginPlacement.desk) {
+    desk ??= DeskScope.maybeOf(context);
+    if (desk != null) {
+      Navigator.of(context).maybePop();
+      await desk.open(plugin.id, title: plugin.name);
+      return;
+    }
+  }
+
+  if (plugin.placement != PluginPlacement.page && gadgets != null) {
+    gadgets.open(plugin.id);
+    return;
+  }
+
   final view = PluginView(
       dependencies: dependencies,
       plugin: plugin,
       spaceId: spaceId,
       roomId: roomId);
-  final wide = MediaQuery.sizeOf(context).width >= 900;
-  if (wide && plugin.placement != PluginPlacement.page) {
-    return showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: plugin.name,
-      barrierColor: Colors.black12,
-      pageBuilder: (context, _, __) => Align(
-        alignment: Alignment.centerRight,
-        child: Material(
-          elevation: 8,
-          child: SizedBox(
-            width: 460,
-            height: double.infinity,
-            child: Column(children: [
-              _PluginBar(plugin: plugin),
-              Expanded(child: view),
-            ]),
-          ),
-        ),
-      ),
-    );
-  }
   return Navigator.of(context).push<void>(MaterialPageRoute(
     builder: (context) => Scaffold(
       appBar: AppBar(title: Text(plugin.name)),
@@ -93,27 +87,9 @@ Future<void> openPlugin(BuildContext context, AppDependencies dependencies,
   ));
 }
 
-class _PluginBar extends StatelessWidget {
-  const _PluginBar({required this.plugin});
-
-  final PluginInfo plugin;
-
-  @override
-  Widget build(BuildContext context) => ListTile(
-        leading: const Icon(Icons.extension_rounded),
-        title: Text(plugin.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(plugin.appWide ? 'Yours, everywhere' : 'This space'),
-        trailing: IconButton(
-          tooltip: 'Close',
-          icon: const Icon(Icons.close_rounded),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-      );
-}
-
 /// The plugins usable here: the person's app-wide ones and, in a space, the
-/// space's. Each opens in its place; the person's own can be removed and
-/// restored.
+/// space's. Each opens as a gadget on its surface; the person's own can be
+/// removed and restored.
 class PluginsList extends StatefulWidget {
   const PluginsList({
     super.key,
@@ -159,6 +135,7 @@ class _PluginsListState extends State<PluginsList> {
       } else {
         await _api.restore(p.id);
       }
+      unawaited(PluginGadgetsScope.maybeOf(context)?.refresh(force: true));
       messenger?.showSnackBar(SnackBar(
         content: Text(remove ? '${p.name} removed' : '${p.name} restored'),
         action: remove
@@ -166,14 +143,27 @@ class _PluginsListState extends State<PluginsList> {
                 label: 'Undo',
                 onPressed: () async {
                   await _api.restore(p.id);
+                  unawaited(
+                      PluginGadgetsScope.maybeOf(context)?.refresh(force: true));
                   _reload();
                 })
             : null,
       ));
     } catch (e) {
-      messenger?.showSnackBar(SnackBar(content: Text('Could not change ${p.name}: $e')));
+      messenger?.showSnackBar(
+          SnackBar(content: Text('Could not change ${p.name}: $e')));
     }
     _reload();
+  }
+
+  String _where(PluginInfo p) {
+    if (p.appWide) return 'Universal gadget';
+    return switch (p.placement) {
+      PluginPlacement.chat => 'Chat gadget',
+      PluginPlacement.rail => 'Left panel gadget',
+      PluginPlacement.desk => 'Desk gadget',
+      PluginPlacement.page => 'Page',
+    };
   }
 
   @override
@@ -192,9 +182,11 @@ class _PluginsListState extends State<PluginsList> {
           return Padding(
             padding: const EdgeInsets.all(24),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text('Could not load the plugins: ${snap.error}', textAlign: TextAlign.center),
+              Text('Could not load the plugins: ${snap.error}',
+                  textAlign: TextAlign.center),
               const SizedBox(height: 8),
-              FilledButton.tonal(onPressed: _reload, child: const Text('Retry')),
+              FilledButton.tonal(
+                  onPressed: _reload, child: const Text('Retry')),
             ]),
           );
         }
@@ -205,12 +197,13 @@ class _PluginsListState extends State<PluginsList> {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.extension_outlined, size: 40, color: scheme.primary),
               const SizedBox(height: 10),
-              const Text('No plugins yet', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              const Text('No plugins yet',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
               const SizedBox(height: 6),
               Text(
                 widget.appWideOnly || widget.spaceId.isEmpty
-                    ? 'Ask your Aseman for one — a tracker, a board, a dashboard. It stays here for you, everywhere in the app.'
-                    : 'Ask an agent here for one. It stays in this space for everyone in it.',
+                    ? 'Ask your Aseman for one — a tracker, a board, a dashboard. It floats as a gadget across home and your workspaces.'
+                    : 'Ask an agent here for one. It floats as a gadget on chat, the left panel, or the desk in this space.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: scheme.onSurfaceVariant),
               ),
@@ -221,12 +214,14 @@ class _PluginsListState extends State<PluginsList> {
           for (final p in plugins)
             ListTile(
               enabled: !p.removed,
-              leading: Icon(p.appWide ? Icons.extension_rounded : Icons.group_work_outlined),
+              leading: Icon(p.appWide
+                  ? Icons.extension_rounded
+                  : Icons.widgets_outlined),
               title: Text(p.name),
               subtitle: Text(
                 [
                   if (p.description.isNotEmpty) p.description,
-                  p.appWide ? 'Yours, everywhere' : 'This space',
+                  _where(p),
                   if (p.removed) 'Removed',
                 ].join(' · '),
                 maxLines: 2,
@@ -241,7 +236,9 @@ class _PluginsListState extends State<PluginsList> {
               trailing: p.ownerId == me
                   ? IconButton(
                       tooltip: p.removed ? 'Restore' : 'Remove',
-                      icon: Icon(p.removed ? Icons.restore_rounded : Icons.delete_outline_rounded),
+                      icon: Icon(p.removed
+                          ? Icons.restore_rounded
+                          : Icons.delete_outline_rounded),
                       onPressed: () => _setRemoved(p, !p.removed),
                     )
                   : null,
@@ -252,7 +249,9 @@ class _PluginsListState extends State<PluginsList> {
   }
 }
 
-/// The app-bar button that lists the plugins usable here.
+/// Launches or focuses gadgets for this surface. No longer a centralized
+/// plugins sheet — gadgets live on chat, the left rail, the desk, or as
+/// universal floaters from Aseman chat.
 class PluginsButton extends StatelessWidget {
   const PluginsButton({
     super.key,
@@ -261,6 +260,7 @@ class PluginsButton extends StatelessWidget {
     this.roomId = '',
     this.appWideOnly = false,
     this.desk,
+    this.placement,
   });
 
   final AppDependencies dependencies;
@@ -271,41 +271,86 @@ class PluginsButton extends StatelessWidget {
   /// The desk desk plugins open on (else the page's [DeskScope], if any).
   final DeskController? desk;
 
+  /// When set, only show/focus gadgets for this surface placement.
+  final PluginPlacement? placement;
+
   @override
   Widget build(BuildContext context) => IconButton(
-        tooltip: 'Plugins',
+        tooltip: 'Gadgets',
         icon: const Icon(Icons.extension_outlined),
-        onPressed: () => _show(context, desk ?? DeskScope.maybeOf(context)),
+        onPressed: () => _show(context),
       );
 
-  void _show(BuildContext context, DeskController? desk) =>
-      showModalBottomSheet<void>(
-          context: context,
-          showDragHandle: true,
-          isScrollControlled: true,
-          builder: (context) => SafeArea(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.7),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text('Plugins', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                  ),
-                ),
-                Flexible(
-                  child: PluginsList(
-                      dependencies: dependencies,
-                      spaceId: spaceId,
-                      roomId: roomId,
-                      appWideOnly: appWideOnly,
-                      desk: desk),
-                ),
-              ]),
+  void _show(BuildContext context) {
+    final gadgets = PluginGadgetsScope.maybeOf(context);
+    if (gadgets != null) {
+      final list = _candidates(gadgets);
+      if (list.isNotEmpty) {
+        // Focus existing gadgets: open the first docked/hidden, else toggle.
+        for (final p in list) {
+          final mode = gadgets.layoutOf(p.id).mode;
+          if (mode != PluginGadgetMode.open) {
+            gadgets.open(p.id);
+            return;
+          }
+        }
+        // All open — dock them.
+        for (final p in list) {
+          gadgets.dock(p.id);
+        }
+        return;
+      }
+    }
+    // Nothing mounted yet — fall back to a compact picker (manage / open page).
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.5),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Gadgets',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              ),
             ),
-          ),
-      );
+            Flexible(
+              child: PluginsList(
+                  dependencies: dependencies,
+                  spaceId: spaceId,
+                  roomId: roomId,
+                  appWideOnly: appWideOnly,
+                  desk: desk ?? DeskScope.maybeOf(context)),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  List<PluginInfo> _candidates(PluginGadgetsController gadgets) {
+    if (appWideOnly || spaceId.isEmpty) {
+      return gadgets.universal;
+    }
+    if (placement != null) {
+      return [
+        ...gadgets.universal,
+        ...gadgets.forPlacement(placement!),
+      ];
+    }
+    return [
+      ...gadgets.universal,
+      ...gadgets.forPlacement(PluginPlacement.chat),
+      ...gadgets.forPlacement(PluginPlacement.rail),
+      ...gadgets.forPlacement(PluginPlacement.desk),
+    ];
+  }
 }
 
 /// The person's app-wide plugins, removed ones included, to open, remove and
@@ -317,9 +362,12 @@ class PluginsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Your plugins')),
+        appBar: AppBar(title: const Text('Your gadgets')),
         body: SafeArea(
-          child: PluginsList(dependencies: dependencies, appWideOnly: true, showRemoved: true),
+          child: PluginsList(
+              dependencies: dependencies,
+              appWideOnly: true,
+              showRemoved: true),
         ),
       );
 }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/internal/plugins/identity"
+	"github.com/aseman/aseman/plugins/actions/governance/models/gate"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/pkg/logger"
 	"github.com/aseman/aseman/plugins/adapters/network/ports"
@@ -320,5 +321,36 @@ func TestGateStopsAModelCallTheTurnCannotPayFor(t *testing.T) {
 	got.calls = 0
 	if err := a.gate(&session{base: context.Background(), started: time.Now()}); err != nil || got.calls != 0 {
 		t.Fatalf("an unmetered session was gated: %v (%d calls)", err, got.calls)
+	}
+}
+
+// The gate reads a spaces.ask as what it does and returns that part's
+// arguments (secrets put in); the ask keeps its space, room and the rest.
+func TestAGovernedAskKeepsItsShape(t *testing.T) {
+	tool := askBody([]byte(`{"space":"s","room":"r","tool":"appui_create","args":{"brief":"earth"}}`),
+		gate.Result{Args: json.RawMessage(`{"brief":"earth with key k"}`)})
+	var got map[string]any
+	_ = json.Unmarshal(tool, &got)
+	if got["space"] != "s" || got["room"] != "r" || got["tool"] != "appui_create" || got["args"].(map[string]any)["brief"] != "earth with key k" {
+		t.Fatalf("tool ask = %s", tool)
+	}
+	cmd := askBody([]byte(`{"space":"s","bot":"sandbox","body":"echo {{secret:k}}","raw":true}`),
+		gate.Result{Args: json.RawMessage(`{"space":"s","bot":"sandbox","body":"echo {{secret:k}}","raw":true}`), Command: "echo 'v'"})
+	_ = json.Unmarshal(cmd, &got)
+	if got["space"] != "s" || got["body"] != "echo 'v'" || got["raw"] != true {
+		t.Fatalf("command ask = %s", cmd)
+	}
+	fn := askBody([]byte(`{"space":"s","bot":"b","body":"{\"function\":\"f\",\"payload\":{\"q\":\"{{secret:k}}\"}}"}`),
+		gate.Result{Args: json.RawMessage(`{"q":"v"}`)})
+	_ = json.Unmarshal(fn, &got)
+	var call map[string]any
+	_ = json.Unmarshal([]byte(got["body"].(string)), &call)
+	if got["space"] != "s" || call["function"] != "f" || call["payload"].(map[string]any)["q"] != "v" {
+		t.Fatalf("function ask = %s", fn)
+	}
+	plain := askBody([]byte(`{"space":"s","bot":"b","body":"hi"}`), gate.Result{Args: json.RawMessage(`{"space":"s","bot":"b","body":"hi"}`)})
+	_ = json.Unmarshal(plain, &got)
+	if got["space"] != "s" || got["body"] != "hi" {
+		t.Fatalf("plain ask = %s", plain)
 	}
 }

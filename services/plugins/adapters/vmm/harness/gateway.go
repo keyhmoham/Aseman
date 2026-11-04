@@ -279,20 +279,58 @@ func (a *Adapter) govern(ctx context.Context, s *session, name string, body json
 	if err != nil {
 		return nil, res, err
 	}
+	if name == "spaces.ask" {
+		return askBody(body, res), res, nil
+	}
 	out := body
 	if len(res.Args) > 0 {
 		out = res.Args
 	}
-	if name == "spaces.ask" && res.Command != "" {
-		var m map[string]any
-		if json.Unmarshal(out, &m) == nil {
+	return out, res, nil
+}
+
+// askBody puts what the gate returned (its arguments with the person's
+// secrets put in) back where a spaces.ask carries them. The gate reads a
+// spaces.ask as what it does, so its arguments are a platform tool's args, a
+// sandbox command, or an app function's payload, never the whole ask.
+func askBody(body json.RawMessage, res gate.Result) json.RawMessage {
+	var m map[string]any
+	if json.Unmarshal(body, &m) != nil || m == nil {
+		return body
+	}
+	var args map[string]any
+	if len(res.Args) > 0 {
+		_ = json.Unmarshal(res.Args, &args)
+	}
+	tool, _ := m["tool"].(string)
+	bot, _ := m["bot"].(string)
+	switch {
+	case tool != "":
+		if args != nil {
+			m["args"] = args
+		}
+	case bot == "sandbox":
+		if res.Command != "" {
 			m["body"] = res.Command
-			if raw, err := json.Marshal(m); err == nil {
-				out = raw
+		}
+	default:
+		// An app function's call names it in the body: {"function", "payload"}.
+		text, _ := m["body"].(string)
+		var call map[string]any
+		if args != nil && json.Unmarshal([]byte(text), &call) == nil && call != nil {
+			if fn, _ := call["function"].(string); fn != "" {
+				call["payload"] = args
+				if raw, err := json.Marshal(call); err == nil {
+					m["body"] = string(raw)
+				}
 			}
 		}
 	}
-	return out, res, nil
+	raw, err := json.Marshal(m)
+	if err != nil {
+		return body
+	}
+	return raw
 }
 
 func (s *session) checkRequestMode(name string, body json.RawMessage) error {

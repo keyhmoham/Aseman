@@ -43,8 +43,13 @@
   `desk`), or as a `page`, shared by members and confined to that space. A
   plugin's screen calls its backend (`tools.plugin_invoke`) and the platform
   actions it declared (`tools.plugin_call`), as the person using it. Gadgets
-  mount on those surfaces (not a centralized plugins sheet); My bots → Your
-  gadgets still lists, removes and restores account plugins.
+  mount on those surfaces. One **plugins handle** — a curved bump on the
+  right screen edge, under the workspace switcher's rocket, on every shell
+  page — opens the plugin manager (a bottom sheet on phones, a floating panel
+  on desktop): the account's universal plugins and the current workspace's,
+  filtered by on screen / minimised / hidden, to show, minimise, hide, open as
+  a page, remove and restore. It replaces the per-surface gadgets buttons (left
+  panel, chat header) and My bots → Your gadgets.
 - **Typed API catalog:** `aseman_api_search` shows each action's body fields,
   read from the source by `cmd/gen-action-schemas` (kept current by a test).
 - **Confinement:** a room agent, and a space's plugin, may name only its own

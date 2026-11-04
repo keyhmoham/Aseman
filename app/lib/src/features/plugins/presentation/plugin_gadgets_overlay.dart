@@ -5,10 +5,12 @@ import '../../../app_dependencies.dart';
 import '../data/plugins_api.dart';
 import 'plugin_gadget.dart';
 import 'plugin_gadgets_controller.dart';
+import 'plugin_manager.dart';
 
 /// App-wide host for account-scoped Creator plugins as universal floating
 /// gadgets. Lives above the shell navigator so gadgets persist across home
-/// tabs and while a workspace is open.
+/// tabs and while a workspace is open. It also carries the [PluginsEdgeHandle]
+/// — the one shortcut to manage every plugin, on every page of the shell.
 class PluginGadgetsOverlay extends StatefulWidget {
   const PluginGadgetsOverlay({
     super.key,
@@ -33,6 +35,10 @@ class _PluginGadgetsOverlayState extends State<PluginGadgetsOverlay> {
     widget.dependencies.sessionController.addListener(_onSession);
     _controller.attach();
   }
+
+  bool get _signedIn =>
+      (widget.dependencies.sessionController.session?.accountId ?? '')
+          .isNotEmpty;
 
   void _onSession() => _controller.attach(spaceId: _controller.spaceId);
 
@@ -71,6 +77,12 @@ class _PluginGadgetsOverlayState extends State<PluginGadgetsOverlay> {
                       ),
                     ),
                   ),
+                ),
+              if (_signedIn)
+                PluginsEdgeHandle(
+                  dependencies: widget.dependencies,
+                  controller: _controller,
+                  hostContext: context,
                 ),
             ],
           );

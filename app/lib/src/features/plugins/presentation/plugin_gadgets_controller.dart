@@ -66,6 +66,14 @@ class PluginGadgetsController extends ChangeNotifier {
   List<PluginInfo> get universal =>
       [for (final p in _plugins) if (p.appWide && !p.removed) p];
 
+  /// Every live plugin the person can manage here: their account's universal
+  /// plugins first, then the attached space's (any placement).
+  List<PluginInfo> get manageable => [
+        ...universal,
+        for (final p in _plugins)
+          if (!p.appWide && !p.removed && p.spaceId == _spaceId) p
+      ];
+
   /// Space-scoped plugins for the attached space and [placement].
   List<PluginInfo> forPlacement(PluginPlacement placement) => [
         for (final p in _plugins)

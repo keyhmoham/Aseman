@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_shape.dart';
 
 import '../../../app_dependencies.dart';
-import '../../plugins/presentation/plugins_panel.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_roles.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -328,12 +327,6 @@ class _AgentsScreenState extends State<AgentsScreen> {
   }
 
   List<Widget> get _createActions => [
-        IconButton(
-          tooltip: 'Your gadgets',
-          icon: const Icon(Icons.extension_outlined),
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => PluginsPage(dependencies: widget.dependencies))),
-        ),
         AppPopupMenuButton<String>(
           tooltip: 'Create',
           onSelected: _create,

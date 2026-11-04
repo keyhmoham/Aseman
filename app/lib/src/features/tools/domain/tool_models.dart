@@ -32,7 +32,11 @@ enum ToolRuntime {
   quickjs('quickjs', 'QuickJS'),
 
   /// A docker image serving MCP (backends only).
-  docker('docker', 'Docker');
+  docker('docker', 'Docker'),
+
+  /// One self-contained HTML document in the app's sandboxed web frame
+  /// (plugin frontends only: the fallback for 3D and rich visualization).
+  web('web', 'Web');
 
   const ToolRuntime(this.wire, this.label);
   final String wire;

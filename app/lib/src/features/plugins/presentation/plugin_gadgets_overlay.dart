@@ -68,13 +68,6 @@ class _PluginGadgetsOverlayState extends State<PluginGadgetsOverlay> {
                       dependencies: widget.dependencies,
                       controller: _controller,
                       plugins: universal,
-                      dockAlignment: Alignment.bottomLeft,
-                      pad: EdgeInsets.only(
-                        left: 16,
-                        bottom: 16 + MediaQuery.paddingOf(context).bottom,
-                        right: 16,
-                        top: 16,
-                      ),
                     ),
                   ),
                 ),
@@ -118,18 +111,14 @@ class PluginSurfaceGadgets extends StatelessWidget {
     required this.placement,
     this.spaceId = '',
     this.roomId = '',
-    this.dockAlignment = Alignment.bottomRight,
     this.compact = false,
-    this.pad = const EdgeInsets.all(8),
   });
 
   final AppDependencies dependencies;
   final PluginPlacement placement;
   final String spaceId;
   final String roomId;
-  final Alignment dockAlignment;
   final bool compact;
-  final EdgeInsets pad;
 
   @override
   Widget build(BuildContext context) {
@@ -156,9 +145,7 @@ class PluginSurfaceGadgets extends StatelessWidget {
             plugins: plugins,
             spaceId: spaceId,
             roomId: roomId,
-            dockAlignment: dockAlignment,
             compact: compact,
-            pad: pad,
           ),
         );
       },

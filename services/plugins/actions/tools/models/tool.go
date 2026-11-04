@@ -23,6 +23,11 @@ const (
 	RuntimeElpian  = "elpian"  // Elpian VM: Dart or the JS subset, as bytecode
 	RuntimeQuickJS = "quickjs" // plain JavaScript on QuickJS
 	RuntimeDocker  = "docker"  // a docker image serving MCP on its port
+	// RuntimeWeb is a static frontend that is one self-contained HTML
+	// document (scripts, styles and libraries inlined), shown in the app's
+	// sandboxed web frame. Only plugins use it, as the fallback for designs
+	// Elpian draws poorly (3D, rich visualization) or when web was asked for.
+	RuntimeWeb = "web"
 )
 
 // Frontend modes of a tool.

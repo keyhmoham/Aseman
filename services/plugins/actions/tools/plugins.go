@@ -35,8 +35,10 @@ import (
 //     page of the space).
 //
 // Either way the screen is an Elpian program the app runs natively (the
-// person's theme and UI kit); it reaches its own backend with tool.call, and
-// the platform with aseman.call — tools.plugin_call here, which allows only
+// person's theme and UI kit), or — the fallback for 3D and rich
+// visualization, or when web was asked for — one self-contained HTML
+// document the app shows in its sandboxed web frame (ui "web"). It reaches
+// its own backend with tool.call, and the platform with aseman.call — tools.plugin_call here, which allows only
 // the actions the plugin declared, within the scope's policy
 // (pkg/agentpolicy), dispatched as the person. Removing a plugin keeps it
 // (status "removed") so it can be restored.
@@ -60,6 +62,10 @@ const (
 	// PlacementDesk: a floating gadget / window on the room's desk.
 	PlacementDesk = "desk"
 
+	// UIs of a plugin's screen.
+	PluginUIElpian = "elpian"
+	PluginUIWeb    = "web"
+
 	pluginInstalled = "installed"
 	pluginRemoved   = "removed"
 	maxPermissions  = 40
@@ -70,20 +76,23 @@ func pluginModel() database.Model {
 	return database.Model{Name: pluginsTable, Table: pluginsTable, Fields: []database.Field{
 		f("id", database.KindString), {Name: "owner", Kind: database.KindString, Index: true}, f("scope", database.KindString),
 		{Name: "space_id", Kind: database.KindString, Index: true}, f("name", database.KindString), f("description", database.KindString),
-		f("placement", database.KindString), f("permissions", database.KindJSON), f("status", database.KindString),
+		f("placement", database.KindString), f("ui", database.KindString), f("permissions", database.KindJSON), f("status", database.KindString),
 		f("created_by", database.KindString), f("created_at", database.KindTime), f("updated_at", database.KindTime),
 	}}
 }
 
 // Plugin is one plugin: its tool (ID is the tool's bot id) and how it is used.
 type Plugin struct {
-	ID          string    `db:"id" json:"id"`
-	Owner       string    `db:"owner" json:"owner"`
-	Scope       string    `db:"scope" json:"scope"`
-	SpaceID     string    `db:"space_id" json:"space_id,omitempty"`
-	Name        string    `db:"name" json:"name"`
-	Description string    `db:"description" json:"description,omitempty"`
-	Placement   string    `db:"placement" json:"placement"`
+	ID          string `db:"id" json:"id"`
+	Owner       string `db:"owner" json:"owner"`
+	Scope       string `db:"scope" json:"scope"`
+	SpaceID     string `db:"space_id" json:"space_id,omitempty"`
+	Name        string `db:"name" json:"name"`
+	Description string `db:"description" json:"description,omitempty"`
+	Placement   string `db:"placement" json:"placement"`
+	// UI is "elpian" (native, the default) or "web"; empty on plugins made
+	// before web plugins, which are all Elpian.
+	UI          string    `db:"ui" json:"ui,omitempty"`
 	Permissions []string  `db:"permissions" json:"permissions"`
 	Status      string    `db:"status" json:"status"`
 	CreatedBy   string    `db:"created_by" json:"created_by,omitempty"`
@@ -118,10 +127,13 @@ type pluginProgram struct {
 
 type pluginInput struct {
 	// Plugin is an existing plugin to change (its id); empty creates one.
-	Plugin      string         `json:"plugin,omitempty"`
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Placement   string         `json:"placement"`
+	Plugin      string `json:"plugin,omitempty"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Placement   string `json:"placement"`
+	// UI is "elpian" (default) or "web" (Frontend.Source is then one HTML
+	// document; Frontend.Runtime is set to match).
+	UI          string         `json:"ui,omitempty"`
 	Permissions []string       `json:"permissions"`
 	Frontend    pluginProgram  `json:"frontend"`
 	Backend     *pluginProgram `json:"backend,omitempty"`
@@ -148,7 +160,23 @@ func (in *pluginInput) normalize() error {
 	if strings.TrimSpace(in.Frontend.Source) == "" {
 		return errs.InvalidArgument("a plugin needs its screen: the frontend program")
 	}
-	if in.Frontend.Runtime == "" {
+	switch strings.TrimSpace(in.UI) {
+	case "", PluginUIElpian:
+		in.UI = PluginUIElpian
+		if in.Frontend.Runtime == models.RuntimeWeb {
+			in.UI = PluginUIWeb
+		}
+	case PluginUIWeb:
+		in.UI = PluginUIWeb
+	default:
+		return errs.InvalidArgument(`ui is "elpian" (native, the default) or "web"`)
+	}
+	if in.UI == PluginUIWeb {
+		in.Frontend.Runtime, in.Frontend.Language = models.RuntimeWeb, "html"
+		if !looksLikeHTML(in.Frontend.Source) {
+			return errs.InvalidArgument("a web plugin's frontend is one HTML document (<!doctype html>…)")
+		}
+	} else if in.Frontend.Runtime == "" {
 		in.Frontend.Runtime = models.RuntimeQuickJS
 	}
 	if len(in.Permissions) > maxPermissions {
@@ -169,6 +197,16 @@ func (in *pluginInput) normalize() error {
 	}
 	in.Permissions = perms
 	return nil
+}
+
+// looksLikeHTML is whether source is an HTML document rather than a script.
+func looksLikeHTML(source string) bool {
+	head := strings.ToLower(strings.TrimSpace(source))
+	if len(head) > 512 {
+		head = head[:512]
+	}
+	return strings.HasPrefix(head, "<!doctype html") || strings.HasPrefix(head, "<html") ||
+		strings.Contains(head, "<head") || strings.Contains(head, "<body")
 }
 
 // pluginOwner is who a plugin is made for, and in which space: an agent's
@@ -258,7 +296,7 @@ func (s *Service) pluginCreate(ctx context.Context, req *api.ActionRequest) (*ap
 	}
 	now := time.Now().UTC()
 	p := &Plugin{ID: botID, Owner: owner.String(), Scope: scope, Name: in.Name, Description: in.Description,
-		Placement: in.Placement, Permissions: in.Permissions, Status: pluginInstalled, CreatedBy: creatorName(ctx, req), CreatedAt: now, UpdatedAt: now}
+		Placement: in.Placement, UI: in.UI, Permissions: in.Permissions, Status: pluginInstalled, CreatedBy: creatorName(ctx, req), CreatedAt: now, UpdatedAt: now}
 	if scope == PluginSpace {
 		p.SpaceID = spaceID.String()
 	}
@@ -287,7 +325,7 @@ func (s *Service) pluginChange(ctx context.Context, as, req *api.ActionRequest, 
 	if _, err := s.toolUpdate(ctx, as); err != nil {
 		return nil, err
 	}
-	p.Name, p.Description, p.Placement, p.Permissions = in.Name, in.Description, in.Placement, in.Permissions
+	p.Name, p.Description, p.Placement, p.Permissions, p.UI = in.Name, in.Description, in.Placement, in.Permissions, in.UI
 	p.UpdatedAt = time.Now().UTC()
 	if err := s.R.UpdateString(ctx, pluginsTable, p.ID, p); err != nil {
 		return nil, err

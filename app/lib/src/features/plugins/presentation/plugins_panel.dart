@@ -5,11 +5,11 @@ import '../../desk/presentation/desk_controller.dart';
 import '../../tools/data/tools_api.dart';
 import '../../tools/presentation/tool_frontend_view.dart';
 import '../data/plugins_api.dart';
-import '../runtime/plugin_host.dart';
 import 'plugin_gadgets_controller.dart';
 
-/// A plugin's screen: its Elpian program, drawn natively in the person's
-/// theme, reaching its backend and the platform only through the plugin gate.
+/// A plugin's screen: its Elpian program drawn natively in the person's theme
+/// (or its web document in the sandboxed frame), reaching its backend and the
+/// platform only through the plugin gate.
 class PluginView extends StatelessWidget {
   const PluginView({
     super.key,
@@ -31,8 +31,8 @@ class PluginView extends StatelessWidget {
     final service = dependencies.service;
     final userId = dependencies.sessionController.session?.accountId ?? '';
     final space = plugin.appWide ? spaceId : plugin.spaceId;
-    final host = PluginHost(PluginsApi.of(service),
-        plugin: plugin, spaceId: space, roomId: roomId, userId: userId);
+    // The frontend view gives the screen its plugin gate (and, for Elpian,
+    // the SDK and the plugin shim; for web, the sandboxed frame).
     return ToolFrontendView(
       key: ValueKey('plugin-${plugin.id}-$space-$roomId'),
       api: ToolsApi.of(service),
@@ -40,7 +40,6 @@ class PluginView extends StatelessWidget {
       spaceId: space,
       roomId: roomId,
       userId: userId,
-      extraHandlers: host.handlers(),
     );
   }
 }

@@ -1,5 +1,6 @@
-# Checks every change: the node (vet, tests), the agent runtime (pytest), the
-# evals' own tests, the app (analyze, tests), the Compose file and the Helm chart.
+# Checks every change: the node (vet, tests), the agent runtime, the Elpian
+# kit and plugin checker, the evals' own tests, the app (analyze, tests), the
+# Compose file and the Helm chart.
 name: CI
 
 on:
@@ -42,6 +43,20 @@ jobs:
       - run: npm ci --no-audit --no-fund
       # Unit tests, and the real launcher and dsh against a fake node gateway.
       - run: npm test
+
+  elpian:
+    name: Elpian kit and plugin checker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: deploy/tool-runtime/package-lock.json }
+      # QuickJS for the checker (the same engine the client runs programs on).
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: deploy/tool-runtime
+      # The validator, driver and checks, and plugin-check (web plugins load
+      # in the runner's Chrome).
+      - run: node --test deploy/sandbox-computer/appui/elpian/test/*.test.mjs
 
   app:
     name: App (Flutter)

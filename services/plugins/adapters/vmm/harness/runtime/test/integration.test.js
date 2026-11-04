@@ -204,13 +204,13 @@ test('creator mode: a plugin is created through the node, a broken program is se
   const before = gw.calls.length
   const out = await api('POST', '/v1/chat', { token: 'tok-c', account_id: 'person-3', thread_id: 't', with_tools: true, messages: [{ role: 'user', content: 'make me a habits tracker' }] })
   assert.equal(out.reply, 'made it', JSON.stringify(out))
-  assert.match(results[0], /fix the program/)
+  assert.match(results[0], /fix the plugin/)
   const created = gw.calls.slice(before).filter((c) => c.action === 'plugin_create')
   assert.equal(created.length, 1, 'the broken program never reached the node')
   assert.equal(created[0].token, 'tok-c')
   assert.deepEqual(created[0].body.permissions, ['spaces.message_list'])
   assert.equal(created[0].body.frontend.runtime, 'quickjs')
-  assert.match(results[1], /Created plugin Habits \(p1\), page, everywhere/)
+  assert.match(results[1], /Created elpian plugin Habits \(p1\), chat, as a universal floating gadget/)
 })
 
 test('forgetting a room thread drops its conversations', async () => {

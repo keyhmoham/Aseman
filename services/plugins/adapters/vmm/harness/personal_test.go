@@ -94,3 +94,22 @@ func TestPersonalChatWorksOnThePersonsOwnComputer(t *testing.T) {
 		t.Fatalf("a chat without tools got a computer: %v", got)
 	}
 }
+
+// The personal Aseman's work on the person's computer is decided by that
+// workspace's rules (approvals are asked there); anything else by the node's.
+func TestPersonalWorkOnTheComputerIsGovernedByItsWorkspace(t *testing.T) {
+	s := &session{personal: true, computer: "home-1"}
+	if sp, room := s.governedSpace([]byte(`{"space":"home-1","bot":"sandbox","body":"ls"}`)); sp != "home-1" || room != "" {
+		t.Fatalf("computer work governed by %q/%q", sp, room)
+	}
+	if sp, _ := s.governedSpace([]byte(`{"space":"team-9","body":"hi"}`)); sp != "" {
+		t.Fatalf("work elsewhere took the rules of %q", sp)
+	}
+	room := &session{spaceID: "space-1", roomID: "room-1", computer: "home-1"}
+	if sp, r := room.governedSpace([]byte(`{"space":"home-1"}`)); sp != "space-1" || r != "room-1" {
+		t.Fatalf("a room agent governed by %q/%q", sp, r)
+	}
+	if s.agentName() != "Aseman" {
+		t.Fatalf("approvals name %q", s.agentName())
+	}
+}

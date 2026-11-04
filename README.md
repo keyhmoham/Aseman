@@ -206,7 +206,9 @@ dependency. See [`services/README.md`](services/README.md#tools-one-form-three-b
   is where notes are kept or answered by your personal Aseman, which acts for
   you on DeepSeek Harness with your access across the app (your own memory,
   room access, `ask_user` before anything that cannot be undone, app-wide
-  plugins, live voice under Admin → Agents). There is no separate Aseman assistant Direct — opening
+  plugins, your own computer (your home workspace's, shared with your direct
+  chats' agents), work handed to your workspace's team and written back here
+  when done, live voice under Admin → Agents). There is no separate Aseman assistant Direct — opening
   the built-in assistant or lead out of space lands here. Mentions of `@aseman`
   in other personal chats still use the chat assistant; room agents stay
   mentionable in projects, scoped to whoever prompts them.

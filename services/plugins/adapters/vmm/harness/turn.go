@@ -31,6 +31,9 @@ type session struct {
 	// a CLI engine), not a room agent turn: serveCall dispatches as the person
 	// with no space lock.
 	personal bool
+	// computer is the space whose computer a personal session works on (the
+	// person's home workspace), when it has tools.
+	computer string
 	// chat is a personal session's model (the assistant's), served on /llm
 	// to an engine on the platform's models (DeepSeek Harness). Nil: the
 	// session has no model.
@@ -341,6 +344,9 @@ func (a *Adapter) ForgetRoom(ctx context.Context, spaceID, roomID string) error 
 
 // agentName is the turn's agent as people know it.
 func (s *session) agentName() string {
+	if s.personal {
+		return "Aseman"
+	}
 	if s.def == nil {
 		return ""
 	}

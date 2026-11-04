@@ -4196,6 +4196,14 @@
   },
   "type": "object"
  },
+ "users.brain_work": {
+  "properties": {
+   "request": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
  "users.call_accept": {
   "properties": {
    "id": {

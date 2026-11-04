@@ -7,10 +7,11 @@ import { modelFor } from '../lib/models.js'
 import { buildPatch, compactionPolicies } from '../lib/profile.js'
 import { authorized } from '../lib/plugins/host.js'
 import { wrap, wrapped } from '../lib/untrusted.js'
-import { personaFor, notesText } from '../lib/persona.js'
+import { personaFor, personalPersona, notesText } from '../lib/persona.js'
 import { formatMemories } from '../lib/tools/memory.js'
 import { syntaxError, CREATOR_GUIDE } from '../lib/tools/creator.js'
 import { bodyLine } from '../lib/tools/api.js'
+import { workspaceTool } from '../lib/tools/workspace.js'
 import { Gateway, GatewayError } from '../lib/gateway.js'
 import { Store } from '../lib/store.js'
 import { mkdtempSync } from 'node:fs'
@@ -231,4 +232,18 @@ test("a personal conversation works on the person's own computer", async () => {
   assert.deepEqual(calls.map((c) => [c.action, c.body.space, c.body.room]), [['ask', 'home', ''], ['sandbox_files', 'home', undefined]])
   await assert.rejects(new Computer(gateway, () => ({ flags: {} })).exec('ls'), /no computer/)
   await assert.rejects(new Computer(gateway, () => ({ ...b, flags: { no_sandbox: true } })).exec('ls'), /disabled/)
+})
+
+test("the personal Aseman hands work to the person's workspace as the person", async () => {
+  const calls = []
+  const gateway = { call: async (token, ns, action, body) => (calls.push({ token, ns, action, body }), { name: "ann's Home", space_id: 'home' }) }
+  const b = { kind: 'personal', active: true, token: 't' }
+  const tool = workspaceTool({ gateway, binding: () => b })
+  const out = await tool.execute({ request: ' research it ' }, { signal: new AbortController().signal })
+  assert.deepEqual(calls, [{ token: 't', ns: 'users', action: 'brain_work', body: { request: 'research it' } }])
+  assert.match(out, /Started in ann's Home .*written in this chat/)
+  await assert.rejects(tool.execute({ request: ' ' }, { signal: new AbortController().signal }), /say what the work is/)
+  const room = workspaceTool({ gateway, binding: () => ({ ...b, kind: 'room' }) })
+  await assert.rejects(room.execute({ request: 'x' }, { signal: new AbortController().signal }), /personal Aseman/)
+  assert.match(personalPersona(''), /hand_to_workspace/)
 })

@@ -25,6 +25,7 @@ import { apiTools } from './tools/api.js'
 import { teamTools } from './tools/team.js'
 import { memoryTools, timelineTools, formatMemories } from './tools/memory.js'
 import { creatorTools } from './tools/creator.js'
+import { workspaceTool } from './tools/workspace.js'
 
 export { ROUTE, WINDOWS, modelFor } from './models.js'
 import { ROUTE, modelFor } from './models.js'
@@ -312,7 +313,7 @@ export class Runner {
     if (binding.kind === 'personal') {
       defs.push(askUserTool(deps))
       // The person's own computer (their home workspace's), as the person.
-      if (binding.computerSpace) defs.push(...sandboxTools(deps))
+      if (binding.computerSpace) defs.push(...sandboxTools(deps), workspaceTool(deps))
       if (!binding.flags.no_memory) defs.push(...memoryTools(deps))
     } else {
       defs.push(...messagingTools(deps), ...teamTools(deps), ...sandboxTools(deps))

@@ -44,7 +44,8 @@ type Service struct {
 	StorageLimit func(ctx context.Context) int64
 
 	// assistantFn and answerFn replace the bots namespace in tests: who the chat assistant is, and how it answers.
-	// turnFn replaces the spaces plugin in tests: how work handed to the person's workspace stands.
+	// workFn and turnFn replace the spaces plugin in tests: starting work in the person's workspace, and how it stands.
+	workFn func(ctx context.Context, me identity.ID, request string) (workStart, error)
 	turnFn func(ctx context.Context, me identity.ID, turn string) (turnResult, error)
 
 	// voiceActiveFn, speakFn, transcribeFn and voiceAnswerFn replace llm/bots/brain in tests.
@@ -66,8 +67,8 @@ type Service struct {
 	roomsFn       func(ctx context.Context, person identity.ID) ([]brainRoom, error)
 	linesFn       func(ctx context.Context, person identity.ID, space string) []brainLine
 	// What it does for the person (brain_tools.go) in tests: its answers with tools, and the actions it runs as them.
-	actFn      func(ctx context.Context, person identity.ID, brief string, turns []map[string]string) (string, error)
-	fundsFn    func(ctx context.Context, person identity.ID) error
+	actFn   func(ctx context.Context, person identity.ID, brief string, turns []map[string]string) (string, error)
+	fundsFn func(ctx context.Context, person identity.ID) error
 }
 
 // Actions returns the users namespace actions.
@@ -91,6 +92,7 @@ func BuildActions(s *Service) []api.Action {
 		&dmAgentAskAction{s: s},
 		&dmAssistantAction{s: s},
 		brainConfirmAction(s),
+		brainWorkAction(s),
 		adminAILogAction(s),
 		voiceConfigAction(s),
 		voiceSpeakAction(s),

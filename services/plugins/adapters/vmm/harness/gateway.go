@@ -249,10 +249,32 @@ func (a *Adapter) serveCall(ctx context.Context, req *network.Request) (*network
 	return &network.Response{Status: status, Header: map[string]string{"Content-Type": "application/json"}, Body: resp.Body}, nil
 }
 
+// governedSpace is the space and room whose rules decide a call. A room
+// agent's are its turn's. The personal Aseman is in no space, except when it
+// works on the person's own computer: then that workspace's rules, network
+// policy and computer handover apply, and an approval is asked there (its
+// general room) as well as on the person's phone.
+func (s *session) governedSpace(body json.RawMessage) (string, string) {
+	s.mu.Lock()
+	computer := s.computer
+	s.mu.Unlock()
+	if !s.personal || computer == "" {
+		return s.spaceID, s.roomID
+	}
+	var in struct {
+		Space string `json:"space"`
+	}
+	if json.Unmarshal(body, &in) == nil && in.Space == computer {
+		return computer, ""
+	}
+	return s.spaceID, s.roomID
+}
+
 // govern decides a platform action of the turn's agent. A sandbox command is
 // run as the gate returns it (secrets put in, shell-quoted).
 func (a *Adapter) govern(ctx context.Context, s *session, name string, body json.RawMessage) (json.RawMessage, gate.Result, error) {
-	res, err := gate.Check(ctx, a.k, gate.Request{Kind: gate.KindPlatform, Tool: name, Args: body, SpaceID: s.spaceID, RoomID: s.roomID,
+	spaceID, roomID := s.governedSpace(body)
+	res, err := gate.Check(ctx, a.k, gate.Request{Kind: gate.KindPlatform, Tool: name, Args: body, SpaceID: spaceID, RoomID: roomID,
 		AgentID: s.botID, AgentName: s.agentName(), AgentAccount: s.account.String()})
 	if err != nil {
 		return nil, res, err

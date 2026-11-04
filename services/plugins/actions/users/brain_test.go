@@ -136,7 +136,12 @@ func TestANoteToKeepIsKeptWithoutAnAnswer(t *testing.T) {
 	f := newBrainFixture(t)
 	f.plan = brainPlan{decided: true, save: true}
 	n := f.note("milk, eggs, bread")
+	// Keeping it happens after the note is stored: wait for the mark.
 	out := f.settled()
+	for i := 0; i < 200 && f.noteState(out, n["id"])["brain"] != "saved"; i++ {
+		time.Sleep(10 * time.Millisecond)
+		out = f.settled()
+	}
 	if agentAnswers(out) != 0 {
 		t.Fatal("a note to keep was answered")
 	}

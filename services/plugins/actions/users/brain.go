@@ -528,7 +528,8 @@ func (s *Service) runBrain(ctx context.Context, me identity.ID, rec *bot.Bot, no
 	if reply == "" {
 		return ""
 	}
-	s.storeAnswer(ctx, me, me, rec, noteID, reply, "")
+	// Work the answer started shows as cards under it.
+	s.storeAnswer(ctx, me, me, rec, noteID, reply, encodeProposal(nil, takeAnswerCards(noteID)))
 	if err == nil {
 		s.brainRecord(ctx, me, said, reply)
 	}

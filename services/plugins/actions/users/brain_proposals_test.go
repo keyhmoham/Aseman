@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
 	database "github.com/aseman/aseman/plugins/adapters/database/ports"
@@ -44,11 +45,26 @@ func (f *actFixture) lastAnswer() map[string]any {
 	return last
 }
 
+// answerTo waits for Aseman's answer to a note.
+func (f *actFixture) answerTo(t *testing.T, note map[string]any) map[string]any {
+	t.Helper()
+	for i := 0; i < 300; i++ {
+		for _, m := range f.settled()["messages"].([]any) {
+			if mm := m.(map[string]any); mm["agent_id"] != nil && mm["reply_to"] == note["id"] {
+				return mm
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("no answer to %v", note["body"])
+	return nil
+}
+
 // legacyProposal gives Aseman's newest answer a proposal as an earlier
 // version stored them.
-func (f *actFixture) legacyProposal(t *testing.T) map[string]any {
+func (f *actFixture) legacyProposal(t *testing.T, note map[string]any) map[string]any {
 	t.Helper()
-	answer := f.lastAnswer()
+	answer := f.answerTo(t, note)
 	id, err := identity.Parse(answer["id"].(string))
 	if err != nil {
 		t.Fatal(err)
@@ -63,8 +79,7 @@ func (f *actFixture) legacyProposal(t *testing.T) map[string]any {
 // An answer acts on the agent runtime: it proposes nothing of its own.
 func TestAnActingAnswerStoresNoProposal(t *testing.T) {
 	f := newActFixture(t, "Done: the room Launch is ready.")
-	f.note("make me a room for the launch")
-	answer := f.lastAnswer()
+	answer := f.answerTo(t, f.note("make me a room for the launch"))
 	if answer["body"] != "Done: the room Launch is ready." || answer["proposal"] != nil || f.answered != 1 {
 		t.Fatalf("answer %v after %d answers", answer, f.answered)
 	}
@@ -73,8 +88,7 @@ func TestAnActingAnswerStoresNoProposal(t *testing.T) {
 // A proposal an earlier version stored can be cancelled; a yes says to ask again, and nothing runs.
 func TestAnOlderProposalIsCancelledOrAskedAgain(t *testing.T) {
 	f := newActFixture(t, "Create it?")
-	f.note("new room X")
-	answer := f.legacyProposal(t)
+	answer := f.legacyProposal(t, f.note("new room X"))
 	if _, err := f.call("brain_confirm", f.bob, map[string]any{"message": answer["id"], "approve": true}); err == nil {
 		t.Fatal("someone else answered it")
 	}
@@ -87,10 +101,8 @@ func TestAnOlderProposalIsCancelledOrAskedAgain(t *testing.T) {
 	}
 
 	g := newActFixture(t, "Create it?")
-	g.note("new room X")
-	g.legacyProposal(t)
-	g.note("no")
-	if last := g.lastAnswer(); last["body"] != "Cancelled." || g.answered != 1 {
+	g.legacyProposal(t, g.note("new room X"))
+	if last := g.answerTo(t, g.note("no")); last["body"] != "Cancelled." || g.answered != 1 {
 		t.Fatalf("answer %v after %d answers", last["body"], g.answered)
 	}
 }
@@ -133,7 +145,7 @@ func TestOutOfCreditsOffersAWayBackAndPicksTheNoteUpAfter(t *testing.T) {
 		return nil
 	}
 	note := f.note("plan my week")
-	card := f.lastAnswer()
+	card := f.answerTo(t, note)
 	if card["brain"] != "credits" || card["reply_to"] != note["id"] || strings.Contains(card["body"].(string), "wrong") {
 		t.Fatalf("card %v", card)
 	}
@@ -145,7 +157,14 @@ func TestOutOfCreditsOffersAWayBackAndPicksTheNoteUpAfter(t *testing.T) {
 	broke = false
 	f.actedMu.Unlock()
 	f.must("brain_retry", f.alice, map[string]any{"message": card["id"]})
-	answer := f.lastAnswer()
+	// The new answer replaces the card.
+	var answer map[string]any
+	for i := 0; i < 300; i++ {
+		if answer = f.answerTo(t, note); answer["id"] != card["id"] {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if answer["body"] != "Here is your plan." || answer["reply_to"] != note["id"] {
 		t.Fatalf("answer %v", answer)
 	}
@@ -159,14 +178,48 @@ func TestOutOfCreditsOffersAWayBackAndPicksTheNoteUpAfter(t *testing.T) {
 	}
 }
 
-// handOff is work an earlier answer handed to the person's workspace.
+// handOff is the person's Aseman handing work to their workspace while it
+// answers a note (users.brain_work, as the harness calls it for the person).
 func (f *actFixture) handOff(t *testing.T, request string) {
 	t.Helper()
-	f.note(request)
-	note := f.lastAnswer()["reply_to"].(string)
-	start := workStart{SpaceID: "00000000000000010000000000000c01", Name: "shayan's Home", TurnID: "00000000000000010000000000000d01"}
-	if err := f.s.addJob(f.ctx, f.alice.ID, start, request, note); err != nil {
-		t.Fatal(err)
+	var started []string
+	f.s.workFn = func(_ context.Context, _ identity.ID, req string) (workStart, error) {
+		started = append(started, req)
+		return workStart{SpaceID: "00000000000000010000000000000c01", Name: "shayan's Home", TurnID: "00000000000000010000000000000d01"}, nil
+	}
+	f.s.actFn = func(context.Context, identity.ID, string, []map[string]string) (string, error) {
+		out, err := f.call("brain_work", f.alice, map[string]any{"request": request})
+		if err != nil {
+			return "", err
+		}
+		return "I've handed that to your workspace: " + out["name"].(string), nil
+	}
+	note := f.note(request)
+	answer := f.answerTo(t, note)
+	if len(started) != 1 || started[0] != request {
+		t.Fatalf("work started: %v", started)
+	}
+	if answer["reply_to"] != note["id"] {
+		t.Fatalf("answer %v", answer)
+	}
+	cards := answer["proposal"].(map[string]any)["cards"].([]any)
+	if c := cards[0].(map[string]any); c["type"] != "room" || c["id"] != "00000000000000010000000000000c01" || !strings.HasPrefix(c["subtitle"].(string), "Working on it") {
+		t.Fatalf("the answer's card: %v", cards)
+	}
+}
+
+func TestOnlyThePersonHandsWorkToTheirWorkspace(t *testing.T) {
+	f := newActFixture(t, "ok")
+	f.s.workFn = func(context.Context, identity.ID, string) (workStart, error) {
+		t.Fatal("work was started")
+		return workStart{}, nil
+	}
+	agent := api.Caller{ID: f.bob.ID, Kind: "bot"}
+	if _, err := f.call("brain_work", agent, map[string]any{"request": "x"}); err == nil {
+		t.Fatal("an agent started a person's work")
+	}
+	if _, err := f.call("brain_work", f.alice, map[string]any{"request": "  "}); errs.CodeOf(err) != errs.CodeInvalidArgument {
+		t.Fatalf("empty work = %v", err)
 	}
 }
 

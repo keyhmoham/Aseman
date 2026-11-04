@@ -21,7 +21,7 @@ import (
 
 const (
 	aiKindAseman = "aseman" // a note to yourself, read by your Aseman (brain.go)
-	aiKindChat      = "chat"      // @aseman in a personal chat (saved_agents.go)
+	aiKindChat   = "chat"   // @aseman in a personal chat (saved_agents.go)
 
 	aiOK      = "ok"      // answered
 	aiSaved   = "saved"   // kept as a note, no answer

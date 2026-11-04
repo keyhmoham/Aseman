@@ -41,8 +41,15 @@
 - **Confinement:** a room agent, and a space's plugin, may name only its own
   space and the rooms and threads in it, whatever the field is called.
 - **Personal Aseman:** acts only on DeepSeek Harness; its older in-node tools
-  (proposals, reminders, `work_on_it` jobs) are gone. Proposals and work they
-  already stored are still answered and delivered.
+  (proposals, reminders) are gone; proposals already stored are still
+  answered. Long or team work goes to the person's workspace with
+  `hand_to_workspace` (`users.brain_work`): its lead and team do it on the
+  person's computer, and the result is written back into the Aseman chat as
+  an answer to the note, with a card that opens the workspace.
+- **Approvals on the personal computer:** what the personal Aseman does on the
+  person's computer is decided by their workspace's rules, network policy and
+  computer handover, and an approval is asked in that workspace (and on their
+  phone).
 - **Personal computer:** the agents of a person's direct chats work on that
   person's own computer (their home workspace's sandbox, made when they have
   none) for everything, not only shell commands: workspace files, file tools,

@@ -132,8 +132,8 @@ direct chats use. Research, run code, build and keep files there (under
 ${WORKSPACE}, absolute paths), and use its desktop for anything that needs a
 real browser or app: \`aseman-desktop start\`, \`open <url>\`,
 \`screenshot <file.png>\` then \`read_image\`, \`click\`, \`type\`, \`key\`. For
-long or team work, hand it to their home workspace's agents
-(\`aseman_api_call\` spaces.message_send there) and tell them where it is.`
+long or team work, \`hand_to_workspace\` gives it to their workspace's lead
+and team on that computer; the result comes back to this chat by itself.`
 
 /** The agent's own persona section. */
 export function personaFor(agent) {

@@ -6,10 +6,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/internal/plugins/bridge"
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/crypto"
 	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
@@ -58,6 +60,15 @@ type workStart struct {
 	SpaceID string `json:"space_id"`
 	Name    string `json:"name"`
 	TurnID  string `json:"turn_id"`
+}
+
+func (s *Service) startWork(ctx context.Context, me identity.ID, request string) (workStart, error) {
+	if s.workFn != nil {
+		return s.workFn(ctx, me, request)
+	}
+	var out workStart
+	err := bridge.Invoke(ctx, s.K, "spaces", "BrainWork", []any{ctx, me, request}, &out)
+	return out, err
 }
 
 func (s *Service) turnResult(ctx context.Context, me identity.ID, turn string) (turnResult, error) {
@@ -228,4 +239,78 @@ func (s *Service) jobsBrief(ctx context.Context, me identity.ID) string {
 		return ""
 	}
 	return "\n\n<your_work>\n" + b.String() + "</your_work>"
+}
+
+// answeringNote is the note in the person's own notes their Aseman is
+// answering now (the newest, when more than one), or "".
+func answeringNote(me identity.ID) string {
+	savedAsks.Lock()
+	defer savedAsks.Unlock()
+	self, note, at := convKey(me, me), "", time.Time{}
+	for _, a := range savedAsks.by[me] {
+		if a.conv == self && a.since.After(at) {
+			note, at = a.note, a.since
+		}
+	}
+	return note
+}
+
+// answerCards are cards waiting for the answer to a note (what its work
+// started), stored with that answer (see takeAnswerCards).
+var answerCards = struct {
+	sync.Mutex
+	by map[string][]brainCard
+}{by: map[string][]brainCard{}}
+
+func addAnswerCard(note string, c brainCard) {
+	if note == "" {
+		return
+	}
+	answerCards.Lock()
+	defer answerCards.Unlock()
+	answerCards.by[note] = append(answerCards.by[note], c)
+}
+
+func takeAnswerCards(note string) []brainCard {
+	answerCards.Lock()
+	defer answerCards.Unlock()
+	out := answerCards.by[note]
+	delete(answerCards.by, note)
+	return out
+}
+
+// brainWorkAction users.brain_work: the person's Aseman hands work to their
+// own workspace (its lead and team, on the person's computer) and, when the
+// team has finished, writes what came of it into the person's notes as an
+// answer to the note it was asked in. Only the person (their Aseman acts as
+// them) starts their work.
+func brainWorkAction(s *Service) api.Action {
+	return helper.Action{Namespace: "users", Name: "brain_work", Summary: "Hand work to your own workspace's team; the result is written in your Aseman chat when it is done",
+		Handler: func(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+			if err := helper.RequireUser(req); err != nil {
+				return nil, err
+			}
+			var in struct {
+				Request string `json:"request"`
+			}
+			if err := helper.Decode(req, &in); err != nil {
+				return nil, err
+			}
+			request := strings.TrimSpace(in.Request)
+			if request == "" {
+				return nil, errs.InvalidArgument("say what the work is")
+			}
+			me := req.Caller.ID
+			start, err := s.startWork(ctx, me, request)
+			if err != nil {
+				return nil, err
+			}
+			note := answeringNote(me)
+			if err := s.addJob(ctx, me, start, request, note); err != nil {
+				return nil, err
+			}
+			addAnswerCard(note, brainCard{Type: cardRoom, ID: start.SpaceID, Title: start.Name, Subtitle: "Working on it: I'll tell you here when it's done"})
+			return helper.JSON(map[string]any{"ok": true, "space_id": start.SpaceID, "name": start.Name, "turn_id": start.TurnID,
+				"note": "Started in " + start.Name + ". The result is written in the person's Aseman chat when the team finishes; say so."})
+		}}
 }

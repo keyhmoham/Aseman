@@ -47,6 +47,9 @@ func (a *Adapter) PersonalChat(ctx context.Context, chat vmm.PersonalChat) (stri
 	if chat.WithTools && a.platform != nil {
 		if id, err := a.platform.PersonalComputer(s.base, person.String()); err == nil {
 			computer = id
+			s.mu.Lock()
+			s.computer = id
+			s.mu.Unlock()
 		} else if a.Log != nil {
 			a.Log.Warn("personal chat without the person's computer", "person", person.String(), "error", err)
 		}

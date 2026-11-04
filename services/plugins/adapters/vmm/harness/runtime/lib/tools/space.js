@@ -23,7 +23,7 @@ export const RESERVED = new Set([
   'post_message', 'read_messages', 'search_messages', 'send_dm', 'read_dm', 'ask_user',
   'aseman_api_search', 'aseman_api_call', 'remember', 'recall', 'rewrite_notes',
   'list_team', 'delegate_task', 'recruit_agent', 'hire_agent', 'load_skill',
-  'create_plugin', 'list_plugins', 'remove_plugin', 'restore_plugin', 'timeline_search', 'timeline_entry',
+  'create_plugin', 'list_plugins', 'hand_to_workspace', 'remove_plugin', 'restore_plugin', 'timeline_search', 'timeline_entry',
   // dsh's own tools (Agent Teams, planning, workflows, session search).
   'send_message', 'list_agents', 'wait_agent', 'interrupt_agent', 'spawn_teammate',
   'team_task_create', 'team_task_list', 'team_task_get', 'team_task_update',

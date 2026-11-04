@@ -347,6 +347,9 @@ class SwitcherEdgeHandle extends StatelessWidget {
 
   static const _width = 30.0, _height = 168.0;
 
+  /// Height of the bump, so other edge handles can stack under it.
+  static const height = _height;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -363,7 +366,7 @@ class SwitcherEdgeHandle extends StatelessWidget {
                             onTap: onTap,
                             behavior: HitTestBehavior.opaque,
                             child: CustomPaint(
-                                painter: _BumpPainter(
+                                painter: EdgeBumpPainter(
                                     fill: ThemeRoles.selectedFill(context),
                                     shadow: scheme.shadow),
                                 child: SizedBox(
@@ -380,9 +383,10 @@ class SwitcherEdgeHandle extends StatelessWidget {
 }
 
 /// A bell-shaped bump growing out of the right edge, tapering to nothing at
-/// its top and bottom.
-class _BumpPainter extends CustomPainter {
-  const _BumpPainter({required this.fill, required this.shadow});
+/// its top and bottom. Shared by the screen-edge handles (workspace switcher,
+/// plugins).
+class EdgeBumpPainter extends CustomPainter {
+  const EdgeBumpPainter({required this.fill, required this.shadow});
   final Color fill;
   final Color shadow;
 
@@ -399,7 +403,7 @@ class _BumpPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _BumpPainter old) =>
+  bool shouldRepaint(covariant EdgeBumpPainter old) =>
       old.fill != fill || old.shadow != shadow;
 }
 

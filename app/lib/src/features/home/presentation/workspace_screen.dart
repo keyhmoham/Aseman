@@ -55,7 +55,6 @@ import '../../messenger/presentation/chat_page.dart';
 import '../../messenger/presentation/report_dialog.dart';
 import '../../plugins/data/plugins_api.dart';
 import '../../plugins/presentation/plugin_gadgets_overlay.dart';
-import '../../plugins/presentation/plugins_panel.dart';
 import '../../rooms/presentation/widgets/attachment_bubble.dart';
 import '../../rooms/presentation/widgets/new_room_dialog.dart';
 import '../../rooms/presentation/widgets/orbit_strip.dart';
@@ -1504,13 +1503,6 @@ class _LibraryPanel extends StatelessWidget {
                         icon: const Icon(Icons.add_rounded, size: 19),
                       ),
                     ],
-                    if (dependencies != null && spaceId.isNotEmpty)
-                      PluginsButton(
-                        dependencies: dependencies!,
-                        spaceId: spaceId,
-                        roomId: roomId,
-                        placement: PluginPlacement.rail,
-                      ),
                   ],
                 ),
                 if (spaceBots.isNotEmpty) ...[

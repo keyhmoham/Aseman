@@ -56,6 +56,11 @@
   the desk's computer and desktop, and the turn's computer. Each person in a
   shared direct chat works on their own. The personal Aseman has the same
   computer with its tools (shell, files, images, desktop), as the person.
+- **Fix:** agents' platform tools (app building, files, the desk, AG-UI,
+  proxies, routines, …) were refused with "invalid space id": the gateway
+  sent on the governance gate's view of a `spaces.ask` (the tool's own
+  arguments) as the whole ask. It now puts the gate's arguments back in
+  place (the tool's args, the sandbox command, or an app function's payload).
 - **Fix:** reports of direct messages have their own `direct_reports` table;
   they shared `chat_reports` with room reports, which lost who was reported.
 

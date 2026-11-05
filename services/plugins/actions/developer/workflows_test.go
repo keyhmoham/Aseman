@@ -348,3 +348,35 @@ func TestWorkflowCancelFromAnotherNode(t *testing.T) {
 		t.Fatalf("a cancel request is cleared with its run: %v", asks)
 	}
 }
+
+func TestASynchronousRunAnswersBeforeTheProxyGivesUp(t *testing.T) {
+	f := harness(t)
+	fake := &fakeSpaces{}
+	fake.register(t, f)
+	defer func(w time.Duration) { workflowSyncWait = w }(workflowSyncWait)
+	workflowSyncWait = 20 * time.Millisecond
+	release := make(chan struct{})
+	if err := f.s.K.Actions().Register("spaces", helper.Action{Namespace: "spaces", Name: "slow", Handler: func(ctx context.Context, _ *api.ActionRequest) (*api.ActionResponse, error) {
+		<-release
+		return helper.JSON(map[string]any{"ok": true})
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	_, secret := f.key(t, f.personal(t), KeyInput{Name: "w", Permissions: Permissions{Platform: LevelWrite}})
+	resp, out := f.door(t, network.MethodPost, "/workflows/runs", secret, runBody(t, `{"aseman_workflow":"1","name":"slow","steps":[{"action":"spaces.slow"}]}`, nil))
+	if resp.Status != 202 || out["status"] != "running" {
+		t.Fatalf("a run past the wait answers 202: %d %v", resp.Status, out)
+	}
+	close(release)
+	var got map[string]any
+	for i := 0; i < 500; i++ {
+		_, got = f.door(t, network.MethodGet, "/workflows/runs/"+out["id"].(string), secret, "")
+		if got["status"] != "running" {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got["status"] != "succeeded" {
+		t.Fatalf("it finishes on its own: %v", got["status"])
+	}
+}

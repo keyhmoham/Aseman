@@ -34,8 +34,10 @@ const MaxActiveWorkflows = 3
 // cancel another node asked for; a run whose heartbeat is older than
 // workflowStale is taken for interrupted (its node stopped).
 var (
-	workflowHeartbeat = 20 * time.Second
-	workflowStale     = 2 * time.Minute
+	workflowSyncWait    = 9 * time.Minute
+	workflowSyncWaitMax = 25 * time.Minute
+	workflowHeartbeat   = 20 * time.Second
+	workflowStale       = 2 * time.Minute
 )
 
 // WorkflowRequest asks to validate, plan or run a workflow.
@@ -47,6 +49,10 @@ type WorkflowRequest struct {
 	// Mode: run (default), plan or validate.
 	Mode  string `json:"mode,omitempty"`
 	Async bool   `json:"async,omitempty"`
+	// WaitSeconds bounds how long a synchronous call waits before it answers
+	// with the run still going (default 540, at most 1500: under the edge's
+	// and the web app's proxy timeouts).
+	WaitSeconds int `json:"wait_seconds,omitempty"`
 	// ResumeFrom reuses the outputs of the top-level steps a previous run of
 	// the organization finished; the workflow defaults to that run's.
 	ResumeFrom string `json:"resume_from,omitempty"`
@@ -540,20 +546,38 @@ func (s *Service) StartWorkflow(ctx context.Context, a wfActor, in WorkflowReque
 		save(rep, true, true)
 		return rep
 	}
-	if in.Async {
-		view := s.workflowView(ctx, rec, false)
-		go func() {
-			defer func() {
-				if p := recover(); p != nil {
-					s.L.Error("developer: a workflow run panicked", "run", id.String(), "panic", p)
-				}
-			}()
-			exec()
+	view := s.workflowView(ctx, rec, false)
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		defer func() {
+			if p := recover(); p != nil {
+				s.L.Error("developer: a workflow run panicked", "run", id.String(), "panic", p)
+			}
 		}()
+		exec()
+	}()
+	if in.Async {
 		return &view, nil
 	}
-	exec()
-	view := s.workflowView(ctx, rec, true)
+	wait := workflowSyncWait
+	if in.WaitSeconds > 0 {
+		wait = min(time.Duration(in.WaitSeconds)*time.Second, workflowSyncWaitMax)
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-finished:
+		var done models.WorkflowRun
+		if err := s.R.Get(ctx, "dev_workflow_runs", id, &done); err != nil {
+			return nil, err
+		}
+		view = s.workflowView(ctx, done, true)
+	case <-timer.C:
+		// Still going: the caller follows it with GET …/runs/{id}.
+	case <-ctx.Done():
+		// The caller left; the run goes on.
+	}
 	return &view, nil
 }
 

@@ -13,6 +13,8 @@ expressions, upserts, control flow) and
 `services/plugins/actions/developer/workflows.go` (the node binding: who the
 run acts as, what it may call, the stored runs, the HTTP and console doors).
 A complete example: [`docs/workflows/fullstack-product.json`](workflows/fullstack-product.json).
+Editors: [`docs/workflows/workflow.schema.json`](workflows/workflow.schema.json)
+(JSON Schema 2020-12; point `"$schema"` at it for completion and checking).
 
 ---
 
@@ -29,11 +31,12 @@ the organization's sub-platform when it has one.
 | --- | --- |
 | `POST /v1/workflows/validate` | `{workflow}` → `{valid, issues[], steps, inputs, secrets}` |
 | `POST /v1/workflows/plan` | `{workflow, inputs}` → a run record with the plan (nothing is changed) |
-| `POST /v1/workflows/runs` | `{workflow, inputs, secrets, async?, resume_from?}` → `200` with the report, or `202` while it runs (`async: true`) |
+| `POST /v1/workflows/runs` | `{workflow, inputs, secrets, async?, wait_seconds?, resume_from?}` → `200` with the report when it finishes within `wait_seconds` (default 540, at most 1500), else `202` with the run still going; `async: true` answers `202` at once |
 | `GET /v1/workflows/runs` | the organization's runs, newest first (`?limit=`) |
 | `GET /v1/workflows/runs/{id}` | one run with its full report |
 | `POST /v1/workflows/runs/{id}/cancel` | stop a run (it rolls back if the workflow asks to) |
 | `GET /v1/workflows/reference` | step kinds, built-in resources, functions, limits |
+| `GET /v1/workflows/schema` | the JSON Schema |
 
 ```bash
 curl -sS https://dev.example.com/v1/workflows/runs \
@@ -42,15 +45,44 @@ curl -sS https://dev.example.com/v1/workflows/runs \
         '{workflow: $wf[0], inputs: {product: "Acme Bookings"}, secrets: {SESSION_SECRET: "…"}, async: true}')"
 ```
 
-`workflow` may be the document itself or a JSON string of it.
+`workflow` may be the document itself or a JSON string of it. Long runs: use
+`async` (or rely on the `202`) and follow `GET /v1/workflows/runs/{id}`; the
+edge's and the web app's proxies end a request after 30 and 10 minutes.
+
+### The CLI
+
+`aseman workflow` (`go run ./cmd/aseman workflow help`) reaches either door:
+with `--key` (or `$ASEMAN_DEVELOPER_KEY`, `--api` / `$ASEMAN_DEVELOPER_API_URL`)
+the developer API, otherwise the session of `aseman login`.
+
+```bash
+aseman workflow validate docs/workflows/fullstack-product.json
+aseman workflow plan     docs/workflows/fullstack-product.json product="Acme Bookings"
+SESSION_SECRET=… aseman workflow run docs/workflows/fullstack-product.json \
+    product="Acme Bookings" --assets ./my-app=app/ --key "$ASEMAN_DEVELOPER_KEY"
+aseman workflow runs | get <id> | cancel <id> | schema | reference
+```
+
+Declared secrets not given with `--secret NAME=VALUE` are read from the
+environment variable of the same name. `--assets dir=prefix/` adds every file
+under a local folder to the document's assets (text as text, the rest as
+base64, executables keep `0755`; `.git`, `node_modules` and build folders are
+skipped), so a whole source tree ships with the installer. A run still going
+is followed, its log printed as it grows; the exit status says how it ended.
 
 ### Console (signed in)
 
-The same, as signed actions of the `developer` namespace, with `org`
+**Developer API → Build → Workflows** in the app: open a `.json` file or start
+from a template, give inputs and secrets, Validate (issues with their paths),
+Plan, Run; a run is followed live (steps, what each created or updated,
+outputs, log) and can be cancelled or resumed. Runs started with keys are
+listed too.
+
+Underneath, signed actions of the `developer` namespace, with `org`
 ("personal" or a team id): `workflow_validate`, `workflow_plan`,
 `workflow_run`, `workflow_runs`, `workflow_run_get`, `workflow_run_cancel`,
-`workflow_reference`. The console needs the **resources** role in the
-organization (owner, admin or developer).
+`workflow_reference`, `workflow_schema`. The console needs the **resources**
+role in the organization (owner, admin or developer).
 
 ### What each door may call
 
@@ -163,9 +195,9 @@ A plan answers `would_create`, `would_update`, `unchanged`, or
 
 | Resource | Matched by | Actions |
 | --- | --- | --- |
-| `space` | name | `spaces.space_list` / `space_create` / `space_update` / `space_delete` |
-| `room` | name in `space` | `spaces.room_list` / `room_create` / `room_update` / `room_delete` |
-| `agent`, `app`, `theme` | name and kind | `bots.bot_list` / `bot_create` / `bot_edit` / `bot_delete` |
+| `space` | name | `spaces.space_list` (paged) / `space_create` / `space_update` / `space_delete` |
+| `room` | name in `space` | `spaces.room_list` (paged) / `room_create` / `room_update` / `room_delete` |
+| `agent`, `app`, `theme` | name and kind | `bots.bot_list` (paged) / `bot_create` / `bot_edit` / `bot_delete` |
 | `space_bot` | `bot` in `space` | `spaces.bots_list` / `bot_add` / `bot_remove` |
 | `proxy` | `port` in `space` | `spaces.proxy_list` / `proxy_create` / `proxy_delete` |
 | `org` | name | `developer.orgs_list` / `org_create` / `org_delete` (console) |
@@ -189,7 +221,9 @@ Any other resource, or a different way to find one:
 
 In a define: `params` is match + with (+ create_with / update_with), `id`
 the resource's id, `found` the matched record; `items` (a list) or `item`
-(a singleton) says where records are in the find's answer; `id` in create
+(a singleton) says where records are in the find's answer; `page`
+(`{"limit": 200, "max_pages": 50, "limit_field": "limit", "offset_field": "offset"}`)
+reads page after page until a match or an empty page; `id` in create
 is a path into its answer or an expression. A `define` next to `resource`
 replaces just those parts of the built-in one.
 
@@ -222,7 +256,8 @@ replaces just those parts of the built-in one.
 ```
 
 Files go through `spaces.sandbox_files` (a sleeping computer is woken when a
-write needs it); commands through `spaces.sandbox_exec`, each in its working
+write needs it, and one that never ran is started); `clean` is `rm -rf` of
+the root on the computer; commands go through `spaces.sandbox_exec`, each in its working
 folder with the environment exported. **A command that exits non-zero fails
 the step** (its output's tail is the error), as does an `expect` that does
 not appear. The proxy (`spaces.proxy_create`) is reused when the port is
@@ -230,10 +265,17 @@ already served, unless `replace`. Outputs: `{space, root, files, commands:
 [{command, exit_code, output}], proxy: {proxy_id, url, …}}`.
 
 Assets are written byte for byte unless marked `"template": true`, so source
-code that itself contains `${{` (a CI file, a template engine) is safe. For an
-Elpian or web App UI meant for agents to keep building, write the project
-where `appui_create` would and have an agent `appui_publish` it, or publish
-it as the platform's frontend with `developer.platform_frontend_publish`.
+code that itself contains `${{` (a CI file, a template engine) is safe.
+
+**A platform's frontend** must be an app the space's agents built and
+published (`appui_create`, then `appui_publish`): it carries its backend and
+its wiring to the space's agents and apps, and
+`developer.platform_frontend_publish` refuses anything else. So a workflow
+asks an agent for it — a `spaces.ask` step to the Builder ("build the
+platform's frontend with appui_create, audience platform, …, appui_publish,
+then platform_publish") — as the example does with `build_frontend`. An app
+a workflow installs directly (like the example's booking server) is served
+as a preview with `proxy`.
 
 ---
 
@@ -276,18 +318,39 @@ text. `$${{` writes a literal `${{`; `{"$raw": value}` is never rendered.
   newest first, what it created (upserts' deletes, served ports, each
   step's `compensate`). Status `rolled_back`; each undo is in `report.rollback`.
 - **Resume.** `resume_from: <run id>` reuses the outputs of the top-level
-  steps that run finished (the document defaults to that run's). Stored
-  outputs are redacted, so a secret a resumed step produced is not available.
+  steps that run finished; the document and the inputs default to that
+  run's, so only the secrets are given again. A step whose stored outputs
+  had something hidden (a new key's secret), or that is `sensitive`, runs
+  again rather than hand later steps a redacted value.
 - **Secrets** are never stored. Their values, `sensitive` inputs and fields
   named like `secret`, `password`, `token` or `api_key` are replaced with
   `••••••` in the stored report, the events and the answer. Workflow requests
   are not written to the request log.
 - **Limits:** 48 MB document, 5000 executed steps, depth 24, 16 at once,
   20 attempts, 1 h default / 6 h max run time, 3 runs at once per
-  organization. A run whose node stopped reads `interrupted`; cancelling it
+  organization (counted across nodes).
+- **Several nodes.** The node running a workflow saves a heartbeat every 20 s
+  and looks for a cancel asked on any node (`dev_workflow_cancels`); a run
+  without a heartbeat for 2 minutes reads `interrupted`, and cancelling it
   closes it.
 
 The report: `{status, error, error_code, error_path, issues, inputs,
 outputs, steps: [{path, id, kind, action, status, operation, attempts,
 request, outputs, error, duration_ms}], rollback, events, counts}`; status
 `running`, `succeeded`, `planned`, `failed`, `rolled_back`, `cancelled`.
+
+---
+
+## 7. Proving it on a whole node
+
+`services/internal/plugins/host/testdata/workflow` boots a node from the
+native plugins and runs the example from the console — organization,
+member, platform, key, project, rooms, agents, the app written, tested and
+answering HTTP, a model's welcome — then a rerun that creates nothing, a
+key's workflow through the CLI on the developer API, and a rollback. As root
+on a throwaway machine (the project's computer is that machine's
+`/workspace`), after `make plugins` and `npm ci` in `deploy/tool-runtime`:
+
+```bash
+ASEMAN_WORKFLOW_E2E=1 go test ./internal/plugins/host -run WorkflowE2E
+```

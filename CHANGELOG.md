@@ -21,10 +21,22 @@
   `assert`, retries with backoff, timeouts, `continue_on_error`, `on_error`,
   `on_failure`, `finally`, and rollback (`compensate`, and deleting what
   upserts created). Twelve built-in upsert resources, or `define` your own.
+- **Tooling.** A JSON Schema (`docs/workflows/workflow.schema.json`,
+  `GET /v1/workflows/schema`), `aseman workflow …` in the CLI (either door,
+  secrets from the environment, `--assets` ships a local source tree, live
+  follow), and **Developer API → Build → Workflows** in the app.
+- **Proven on a node.** `ASEMAN_WORKFLOW_E2E=1 go test ./internal/plugins/host -run WorkflowE2E`
+  runs the example end to end on a whole node.
+- **Several nodes.** Runs keep a heartbeat, are counted and cancelled
+  through the store, and read `interrupted` when their node stops.
 - **Safe to run again.** Upserts find before they create and skip unchanged
   updates; plans dry-run with real reads; `resume_from` continues a failed
-  run. Runs are stored (`dev_workflow_runs`) with redacted reports; the
-  request log never holds a workflow's body.
+  run with the same document and inputs. Runs are stored
+  (`dev_workflow_runs`) with redacted reports; the request log never holds a
+  workflow's body. A synchronous call answers `202` before a proxy would
+  give up.
+- **Fix:** calls through `POST /v1/platform/{namespace}/{action}` now carry
+  the acting person in the context, as every in-process caller does.
 
 ## Unreleased: agent-built platform frontends, wired to the space for real
 

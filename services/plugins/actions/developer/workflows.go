@@ -433,6 +433,18 @@ func (s *Service) StartWorkflow(ctx context.Context, a wfActor, in WorkflowReque
 		if len(in.Workflow) == 0 {
 			in.Workflow = json.RawMessage(p.Definition)
 		}
+		if in.Inputs == nil {
+			// The inputs it ran with (sensitive ones were not kept).
+			var rep workflow.Report
+			if json.Unmarshal([]byte(p.Report), &rep) == nil {
+				in.Inputs = map[string]any{}
+				for k, v := range rep.Inputs {
+					if !workflow.HasRedacted(v) {
+						in.Inputs[k] = v
+					}
+				}
+			}
+		}
 	}
 	wf, raw, err := decodeWorkflow(in.Workflow)
 	if err != nil {

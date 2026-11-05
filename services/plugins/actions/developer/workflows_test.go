@@ -380,3 +380,28 @@ func TestASynchronousRunAnswersBeforeTheProxyGivesUp(t *testing.T) {
 		t.Fatalf("it finishes on its own: %v", got["status"])
 	}
 }
+
+func TestResumeRunsTheEarlierDocumentWithItsInputs(t *testing.T) {
+	f := harness(t)
+	fake := &fakeSpaces{}
+	fake.register(t, f)
+	_, secret := f.key(t, f.personal(t), KeyInput{Name: "w", Permissions: Permissions{Platform: LevelWrite}})
+	doc := `{"aseman_workflow":"1","name":"res","inputs":{"product":{"type":"string","required":true}},
+	  "secrets":[{"name":"TOKEN"}],
+	  "steps":[
+	    {"id":"space","upsert":{"resource":"space","with":{"name":"${{ inputs.product }}"}}},
+	    {"id":"gate","if":"${{ empty(secrets.TOKEN) }}","fail":"no token yet"}
+	  ],"outputs":{"product":"${{ inputs.product }}"}}`
+	b, _ := json.Marshal(map[string]any{"workflow": json.RawMessage(doc), "inputs": map[string]any{"product": "Zed"}})
+	_, first := f.door(t, network.MethodPost, "/workflows/runs", secret, string(b))
+	if first["status"] != "failed" || len(fake.spaces) != 1 {
+		t.Fatalf("first: %v", first["status"])
+	}
+	b, _ = json.Marshal(map[string]any{"resume_from": first["id"], "secrets": map[string]string{"TOKEN": "t0ken-value"}})
+	_, again := f.door(t, network.MethodPost, "/workflows/runs", secret, string(b))
+	rep := again["report"].(map[string]any)
+	steps := rep["steps"].([]any)
+	if again["status"] != "succeeded" || rep["outputs"].(map[string]any)["product"] != "Zed" || steps[0].(map[string]any)["status"] != "reused" || len(fake.spaces) != 1 || again["resumed_from"] != first["id"] {
+		t.Fatalf("resume: %v %s", again["status"], jsonString(rep))
+	}
+}

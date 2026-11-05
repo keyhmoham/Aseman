@@ -9,6 +9,21 @@ class _Service extends FakeAsemanService {
   final bodies = <String, Map<String, dynamic>>{};
   Map<String, dynamic>? frontend;
   final keys = <Map<String, dynamic>>[];
+  final runs = <Map<String, dynamic>>[];
+  int polls = 0;
+
+  Map<String, dynamic> _report(String status) => {
+        'status': status,
+        'counts': {'created': 2, 'updated': 0, 'unchanged': 1},
+        'steps': [
+          {'path': 'space', 'action': 'upsert:space', 'status': status == 'running' ? 'running' : 'succeeded', 'operation': 'created'},
+          {'path': 'site', 'action': 'sandbox', 'status': status == 'planned' ? 'planned' : 'succeeded'},
+        ],
+        'outputs': {'preview': '/v1/proxy/p1/'},
+        'events': [
+          {'level': 'info', 'path': 'site', 'message': 'wrote 1 file(s)'}
+        ],
+      };
 
   @override
   Future<Map<String, dynamic>> developer(String action,
@@ -100,6 +115,34 @@ class _Service extends FakeAsemanService {
           'lastUsedAt': '',
         });
         return {'key': keys.last, 'secret': 'dk_live_abcdefwxyz'};
+      case 'workflow_validate':
+        final doc = '${body['workflow']}';
+        return {
+          'valid': doc.contains('aseman_workflow'),
+          'name': 'my-product',
+          'steps': 4,
+          'assets': 0,
+          'issues': doc.contains('aseman_workflow')
+              ? <dynamic>[]
+              : [
+                  {'severity': 'error', 'path': 'aseman_workflow', 'message': 'must be "1"'}
+                ],
+          'secrets': [
+            {'name': 'API_TOKEN', 'required': true}
+          ],
+        };
+      case 'workflow_plan':
+        return {'id': 'r-plan', 'name': 'my-product', 'mode': 'plan', 'status': 'planned', 'report': _report('planned')};
+      case 'workflow_run':
+        final run = {'id': 'r1', 'name': 'my-product', 'mode': 'run', 'status': 'running', 'started_at': '2026-11-05T10:00:00Z'};
+        runs.insert(0, run);
+        return run;
+      case 'workflow_run_get':
+        polls++;
+        runs[0] = {...runs[0], 'status': 'succeeded'};
+        return {...runs[0], 'report': _report('succeeded')};
+      case 'workflow_runs':
+        return {'runs': runs};
       case 'platform_catalog':
         return {
           'object': 'list',
@@ -182,5 +225,57 @@ void main() {
     await tester.pumpAndSettle();
     expect(service.calls, contains('platform_frontend_unpublish'));
     expect(find.text('/v1/platforms/acme/app/'), findsNothing);
+  });
+
+  testWidgets('a workflow is checked, planned and run, and its run followed',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final service = _Service();
+    await tester.pumpWidget(MaterialApp(home: DeveloperConsole(service: service)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Workflows'));
+    await tester.pumpAndSettle();
+    expect(find.text('No runs yet. Plan or run a workflow above.'), findsOneWidget);
+
+    // Not JSON: told so, and nothing is sent.
+    await tester.enterText(find.byKey(const ValueKey('workflow-document')), '{nope');
+    await tester.tap(find.text('Validate'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Not valid JSON'), findsOneWidget);
+    expect(service.calls, isNot(contains('workflow_validate')));
+
+    await tester.tap(find.text('Start from a template'));
+    await tester.pumpAndSettle();
+    expect(service.calls, contains('workflow_validate'));
+    expect(find.textContaining('Valid: my-product'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'Secret API_TOKEN (required)'), 'tok-123');
+    await tester.enterText(find.byKey(const ValueKey('workflow-inputs')), '{"product": "Acme"}');
+
+    await tester.tap(find.text('Plan'));
+    await tester.pumpAndSettle();
+    expect(service.bodies['workflow_plan']!['inputs'], {'product': 'Acme'});
+    expect(service.bodies['workflow_plan']!['secrets'], {'API_TOKEN': 'tok-123'});
+    expect(find.text('my-product · planned'), findsOneWidget);
+    expect(find.textContaining('2 created'), findsOneWidget);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Run'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Run').last); // the confirmation
+    await tester.pump();
+    await tester.pump();
+    expect(service.bodies['workflow_run']!['async'], true);
+    expect(find.text('my-product · running'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(service.polls, greaterThan(0));
+    expect(find.text('my-product · succeeded'), findsOneWidget);
+    expect(find.textContaining('/v1/proxy/p1/'), findsOneWidget);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('succeeded · run'), findsOneWidget);
   });
 }

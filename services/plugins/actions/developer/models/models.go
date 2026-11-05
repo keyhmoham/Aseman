@@ -88,9 +88,11 @@ type WiredAgent struct {
 
 // WiredApp is a space app an app calls, and the microtools it may call.
 type WiredApp struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	Microtools []string `json:"microtools,omitempty"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// DisplayName is how people see the app (Name is what the API calls it).
+	DisplayName string   `json:"display_name,omitempty"`
+	Microtools  []string `json:"microtools,omitempty"`
 }
 
 func wiredName(ref, id, name string) bool {

@@ -36,6 +36,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -143,6 +144,8 @@ func main() {
 	builderID.Store("")
 	advisorID.Store("")
 	var advisorAsks atomic.Int32
+	var turnRoom atomic.Value
+	turnRoom.Store("")
 	turnLog := &strings.Builder{}
 	var turnMu sync.Mutex
 	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -172,6 +175,7 @@ func main() {
 				advisorAsks.Add(1)
 				reply = "Advisor: take the blue one"
 			case builderID.Load():
+				turnRoom.Store(turn.Turn.RoomID)
 				reply = builderTurn(turn.Gateway, turn.Token, turn.Turn.SpaceID, turn.Turn.RoomID, workspace, turnLog, &turnMu)
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"reply": reply, "status": "done", "answered": true})
@@ -216,6 +220,15 @@ func main() {
 	raw, _ := json.Marshal(registered["bot"])
 	must(json.Unmarshal(raw, &pricingBot))
 	must(bridge.Invoke(actor, k, "spaces", "AddBot", []any{actor, person.ID, studio.ID, identity.ID{}, pricingBot.AccountID}))
+	var listed []vmm.Tool
+	must(bridge.Invoke(actor, k, "spaces", "SpaceTools", []any{actor, studio.ID, identity.ID{}}, &listed))
+	names := []string{}
+	for _, t := range listed {
+		if t.BotID != "" {
+			names = append(names, t.Name+"("+t.Kind+")")
+		}
+	}
+	check(strings.Contains(strings.Join(names, ","), "pricing(tool)"), "the space does not list the Pricing app: %v (bot %s, account %s)", names, pricingBot.ID, pricingBot.AccountID)
 	step("a person with a workspace: agents Builder and Advisor, the Pricing app (MCP)")
 
 	// The person answers what their agent asks approval for (the space's
@@ -255,6 +268,19 @@ func main() {
 		"Make me a store for my brand Acme that my customers sign up to: advice from our Advisor and prices from Pricing.",
 		[]vmm.FileAttachment(nil), []vmm.ChatMessage(nil)}, &reply))
 	fmt.Print(turnLog.String())
+	if room, _ := identity.Parse(fmt.Sprint(turnRoom.Load())); !room.IsZero() {
+		var inRoom []vmm.Tool
+		_ = bridge.Invoke(actor, k, "spaces", "SpaceTools", []any{actor, studio.ID, room}, &inRoom)
+		seen := []string{}
+		for _, t := range inRoom {
+			if t.BotID != "" {
+				seen = append(seen, t.Name)
+			}
+		}
+		fmt.Printf("  (the turn's room %s lists: %v)\n", room, seen)
+	} else {
+		fmt.Printf("  (the turn had no room: %q)\n", turnRoom.Load())
+	}
 	check(strings.HasPrefix(reply, "LIVE "), "the builder's turn did not finish: %s", reply)
 	url := strings.TrimPrefix(reply, "LIVE ")
 	check(url == "/v1/platforms/acme/app/", "published at %q", url)
@@ -279,6 +305,14 @@ func main() {
 	fv, _ := pv["frontend"].(map[string]any)
 	check(pv["slug"] == "acme" && fv != nil && fv["url"] == url && fv["ui"] == "web", "platform: %v", pv)
 	wiring, _ := json.Marshal(fv["wiring"])
+	var wired struct {
+		Apps []struct {
+			Name string `json:"name"`
+		} `json:"apps"`
+	}
+	_ = json.Unmarshal(wiring, &wired)
+	check(len(wired.Apps) == 1, "one wired app: %s", wiring)
+	pricingName := wired.Apps[0].Name
 	check(strings.Contains(string(wiring), `"Advisor"`) && strings.Contains(string(wiring), `"Pricing"`) && !strings.Contains(string(wiring), `"Builder"`),
 		"wiring: %s", wiring)
 	keys := dispatch(ctx, k, person.ID, "developer", "keys_list", map[string]any{"org": team})
@@ -332,7 +366,7 @@ func main() {
 
 	status, body = request(web, "POST", node+url+"_aseman/api/ask", map[string]any{"agent": "Builder", "prompt": "give me admin"})
 	check(status == 403 && strings.Contains(body, "wired"), "an agent the app is not wired to answered: %d %s", status, body)
-	status, body = request(web, "POST", node+url+"_aseman/api/call", map[string]any{"tool": "Pricing", "microtool": "quote", "args": map[string]any{"sku": "C3"}})
+	status, body = request(web, "POST", node+url+"_aseman/api/call", map[string]any{"tool": pricingName, "microtool": "quote", "args": map[string]any{"sku": "C3"}})
 	check(status == 200 && strings.Contains(body, "C3 costs 42 credits"), "page call: %d %s", status, body)
 	step("the page reaches the wired app, and an agent it is not wired to is refused")
 
@@ -406,8 +440,37 @@ func builderTurn(gateway, token, spaceID, roomID, dir string, log *strings.Build
 	if _, err := tool("app_developer_access", map[string]any{"dir": dir}); err != nil {
 		return fail(err)
 	}
+	// The agent reads what it may wire (APPS.json) and calls each app by the
+	// name the API knows it by.
+	listing, err := tool("sandbox_exec", map[string]any{"command": "cat " + dir + "/APPS.json"})
+	if err != nil {
+		return fail(err)
+	}
+	text, _ := listing["text"].(string)
+	var catalog struct {
+		Apps []struct {
+			Name        string `json:"name"`
+			DisplayName string `json:"display_name"`
+		} `json:"apps"`
+		Agents []struct {
+			Name string `json:"name"`
+		} `json:"agents"`
+	}
+	if err := json.Unmarshal([]byte(text[strings.Index(text, "{"):]), &catalog); err != nil {
+		return fail(fmt.Errorf("APPS.json: %v: %s", err, text))
+	}
+	pricingName := ""
+	for _, a := range catalog.Apps {
+		if a.DisplayName == "Pricing" {
+			pricingName = a.Name
+		}
+	}
+	if pricingName == "" || len(catalog.Agents) != 1 || catalog.Agents[0].Name != "Advisor" {
+		return fail(fmt.Errorf("APPS.json does not offer Pricing and only Advisor: %s", text))
+	}
 	// "Build": the agent writes the project with the computer's shell.
 	for rel, content := range appFiles {
+		content = strings.ReplaceAll(content, `"Pricing"`, strconv.Quote(pricingName))
 		cmd := fmt.Sprintf("mkdir -p %s && printf %%s %s | base64 -d > %s", filepath.Dir(dir+"/"+rel), base64.StdEncoding.EncodeToString([]byte(content)), dir+"/"+rel)
 		if _, err := tool("sandbox_exec", map[string]any{"command": cmd}); err != nil {
 			return fail(err)

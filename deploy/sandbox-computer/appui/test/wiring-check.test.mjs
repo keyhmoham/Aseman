@@ -113,3 +113,11 @@ test("the developer key stays on the server", () => {
   assert.match(res.problems.join("\n"), /page code uses the server's credentials/);
   assert.match(res.problems.join("\n"), /credential is written into the source/);
 });
+
+test("an app called by the name people see gets the name the API uses", () => {
+  const dir = project({ "server.js": `await req.aseman.call("Pricing", "quote", { sku });` },
+    { apps: [{ bot_id: "t9", name: "tool_pricing", display_name: "Pricing", microtools: [{ name: "quote" }] }], agents: [] });
+  const res = checkWiring(dir);
+  assert.equal(res.ok, false);
+  assert.match(res.problems[0], /by the name people see.*"tool_pricing"/);
+});

@@ -86,7 +86,7 @@ const SECRET_NAMES = /ASEMAN_DEVELOPER_KEY|ASEMAN_APP_KEY|dk_live_[A-Za-z0-9_-]{
 function wiringOf(apps) {
   const agents = (apps.agents || []).map((a) => ({ id: String(a.id || ""), name: String(a.name || "") }));
   const tools = (apps.apps || []).map((a) => ({
-    id: String(a.bot_id || a.id || ""), name: String(a.name || ""),
+    id: String(a.bot_id || a.id || ""), name: String(a.name || ""), display: String(a.display_name || ""),
     microtools: (a.microtools || []).map((m) => String(m.name || m)).filter(Boolean),
   }));
   return { agents, tools };
@@ -166,6 +166,11 @@ export function checkWiring(dir, { apps, job } = {}) {
 
     function checkTool(ref, micro, where) {
       const t = tools.find((x) => same(ref, x));
+      const byDisplay = !t && tools.find((x) => x.display && ref.toLowerCase() === x.display.toLowerCase());
+      if (byDisplay) {
+        problems.push(`${where}: calls app "${ref}" by the name people see. The Aseman API calls it "${byDisplay.name}" (APPS.json → apps[].name) or by its id ${byDisplay.id}.`);
+        return;
+      }
       if (!t) {
         problems.push(`${where}: calls app "${ref}", which is no app of this space. APPS.json lists: ${toolList}. Use one of those, by that name — never a made-up app.`);
         return;

@@ -187,7 +187,7 @@ class _SubPlatformState extends _LoadedState<_SubPlatform> {
             for (final t in tools)
               Chip(
                   avatar: const Icon(Icons.extension_outlined, size: 16),
-                  label: Text('${t['name']}')),
+                  label: Text('${t['display_name'] ?? t['name']}')),
           ]),
         const SizedBox(height: AppSpacing.sm),
         Text(
@@ -287,7 +287,7 @@ String _frontendSubtitle(_Json a) {
   final wiring = _map(a['wiring']);
   final names = [
     for (final x in _maps(wiring['agents'])) '${x['name']}',
-    for (final x in _maps(wiring['apps'])) '${x['name']}',
+    for (final x in _maps(wiring['apps'])) '${x['display_name'] ?? x['name']}',
   ];
   return [
     if ('${a['space_name'] ?? ''}'.isNotEmpty) '${a['space_name']}',

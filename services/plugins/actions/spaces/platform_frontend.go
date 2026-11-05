@@ -61,8 +61,9 @@ func appuiAudience(asked, existing string) (string, error) {
 func parseWiring(raw string) models.Wiring {
 	var doc struct {
 		Apps []struct {
-			BotID      string `json:"bot_id"`
-			Name       string `json:"name"`
+			BotID       string `json:"bot_id"`
+			Name        string `json:"name"`
+			DisplayName string `json:"display_name"`
 			Microtools []struct {
 				Name string `json:"name"`
 			} `json:"microtools"`
@@ -86,7 +87,7 @@ func parseWiring(raw string) models.Wiring {
 		if strings.TrimSpace(a.BotID) == "" && strings.TrimSpace(a.Name) == "" {
 			continue
 		}
-		app := models.WiredApp{ID: a.BotID, Name: a.Name}
+		app := models.WiredApp{ID: a.BotID, Name: a.Name, DisplayName: a.DisplayName}
 		for _, m := range a.Microtools {
 			if m.Name != "" {
 				app.Microtools = append(app.Microtools, m.Name)

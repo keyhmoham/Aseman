@@ -53,7 +53,8 @@ Validating view trees). The backend is the same in both cases.
 
 - `APPS.json` lists exactly what you may wire: `apps` (each microtool with
   its `args_schema`) and `agents` (name, description). Use those names and
-  argument shapes; never invent apps, agents, endpoints or fields.
+  argument shapes; never invent apps, agents, endpoints or fields. Call an
+  app by its `name` (or `bot_id`), not its `display_name` (how people see it).
 - **Wire for real.** Every feature the brief gives to an agent or an app of
   the space calls that agent or app through the Aseman API (page or server,
   `vendor/aseman-sdk`): never a made-up agent or app, a hard-coded or canned

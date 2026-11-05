@@ -186,14 +186,22 @@ func (s *Service) appuiCatalog(ctx context.Context, spaceID, roomID identity.ID,
 	if err != nil {
 		return nil, err
 	}
-	wanted := func(list []string, name, id string) bool {
+	// An app or agent is named by the person (and their agent) as people see
+	// it ("Pricing"), by the name the space's tools carry ("tool_pricing"), or
+	// by its bot id.
+	wanted := func(list []string, id string, names ...string) bool {
 		if len(list) == 0 {
 			return true
 		}
 		for _, w := range list {
 			w = strings.TrimSpace(w)
-			if strings.EqualFold(w, name) || w == id {
+			if w == id {
 				return true
+			}
+			for _, n := range names {
+				if n != "" && strings.EqualFold(w, n) {
+					return true
+				}
 			}
 		}
 		return false
@@ -204,8 +212,11 @@ func (s *Service) appuiCatalog(ctx context.Context, spaceID, roomID identity.ID,
 		Args        map[string]any `json:"args_schema,omitempty"`
 	}
 	type app struct {
-		BotID       string      `json:"bot_id,omitempty"`
+		BotID string `json:"bot_id,omitempty"`
+		// Name is what the Aseman API calls it by (call {tool: name});
+		// DisplayName is how people see it.
 		Name        string      `json:"name"`
+		DisplayName string      `json:"display_name,omitempty"`
 		Description string      `json:"description,omitempty"`
 		Microtools  []microtool `json:"microtools,omitempty"`
 	}
@@ -220,10 +231,17 @@ func (s *Service) appuiCatalog(ctx context.Context, spaceID, roomID identity.ID,
 		if t.BotID == "" || strings.HasPrefix(t.Name, "sandbox") || (t.Kind != "" && t.Kind != "tool") {
 			continue
 		}
-		if !wanted(apps, t.Name, t.BotID) {
+		display := ""
+		if id, err := identity.Parse(t.BotID); err == nil {
+			var rec bot.Bot
+			if s.R.Get(ctx, "bots", id, &rec) == nil {
+				display = rec.Name
+			}
+		}
+		if !wanted(apps, t.BotID, t.Name, display) {
 			continue
 		}
-		a := app{BotID: t.BotID, Name: t.Name, Description: t.Description}
+		a := app{BotID: t.BotID, Name: t.Name, DisplayName: display, Description: t.Description}
 		for _, c := range t.Commands {
 			a.Microtools = append(a.Microtools, microtool{Name: c.Name, Description: c.Description, Args: c.Schema})
 		}
@@ -241,7 +259,7 @@ func (s *Service) appuiCatalog(ctx context.Context, spaceID, roomID identity.ID,
 			continue
 		}
 		seen[rec.ID.String()] = true
-		if !wanted(agents, rec.Name, rec.ID.String()) {
+		if !wanted(agents, rec.ID.String(), rec.Name) {
 			continue
 		}
 		agentList = append(agentList, agent{ID: rec.ID.String(), Name: rec.Name, Description: s.toolDescription(ctx, rec)})

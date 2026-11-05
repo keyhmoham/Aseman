@@ -80,12 +80,20 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 		"space_id": spaceID.String(),
 		"role":     string(membership.RoleBot),
 	}
-	if !roomID.IsZero() {
-		eq["room_id"] = roomID.String()
-	}
-	var mems []membership.Membership
-	if err := s.R.List(ctx, "memberships", database.Filter{Equal: eq}, &mems); err != nil {
+	var all []membership.Membership
+	if err := s.R.List(ctx, "memberships", database.Filter{Equal: eq}, &all); err != nil {
 		return nil, err
+	}
+	// In a room: the apps added to that room and the apps added to the whole
+	// space (no room), which AddBot treats as in every room.
+	mems := all
+	if !roomID.IsZero() {
+		mems = mems[:0:0]
+		for _, m := range all {
+			if m.RoomID.IsZero() || m.RoomID == roomID {
+				mems = append(mems, m)
+			}
+		}
 	}
 	// Database providers need not return memberships in a stable order.
 	// Keep discovery and dispatch names deterministic for colliding bot names.

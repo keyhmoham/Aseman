@@ -2,6 +2,7 @@ package spaces
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"testing"
 
@@ -144,5 +145,45 @@ func TestToolCatalogNamesStayBoundToTheSameBackend(t *testing.T) {
 				t.Fatal("database ordering changed the callable tool backend")
 			}
 		}
+	}
+}
+
+// An app added to the whole space (no room) is in every room: an agent
+// working in a room, and the App UI catalog built from there, see it next to
+// the room's own apps — and never another room's.
+func TestSpaceWideAppsAreSeenFromEveryRoom(t *testing.T) {
+	s, ctx := messageToolHarness(t)
+	spaceID := identity.ID{Node: 1, Entity: 99}
+	room, other := identity.ID{Node: 1, Entity: 200}, identity.ID{Node: 1, Entity: 201}
+	add := func(n uint64, name string, roomID identity.ID) {
+		botID := identity.ID{Node: 1, Entity: identity.EntityID(n)}
+		if err := s.R.CreateID(ctx, "bots", botID, &bot.Bot{Entity: entity.Entity{ID: botID}, Name: name, Kind: bot.KindTool}); err != nil {
+			t.Fatal(err)
+		}
+		memberID := identity.ID{Node: 1, Entity: identity.EntityID(100 + n)}
+		if err := s.R.CreateID(ctx, "memberships", memberID, &membership.Membership{Entity: entity.Entity{ID: memberID}, SpaceID: spaceID, RoomID: roomID, MemberID: botID, Role: membership.RoleBot}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add(1, "Pricing", identity.ID{})
+	add(2, "Notes", room)
+	add(3, "Elsewhere", other)
+	names := func(roomID identity.ID) string {
+		tools, err := s.SpaceTools(ctx, spaceID, roomID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, tool := range tools {
+			out = append(out, tool.Name)
+		}
+		sort.Strings(out)
+		return strings.Join(out, ",")
+	}
+	if got := names(room); !strings.Contains(got, "pricing") || !strings.Contains(got, "notes") || strings.Contains(got, "elsewhere") {
+		t.Fatalf("from the room: %s", got)
+	}
+	if got := names(identity.ID{}); !strings.Contains(got, "pricing") || !strings.Contains(got, "notes") || !strings.Contains(got, "elsewhere") {
+		t.Fatalf("the whole space: %s", got)
 	}
 }

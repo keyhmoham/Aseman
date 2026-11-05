@@ -543,7 +543,7 @@ func (s *Service) appuiAgentsBuild(ctx context.Context, spaceID identity.ID, job
 // while it ran) is restarted once, which brings it onto the current image
 // (its /workspace stays), and the command runs again.
 func (s *Service) appuiExec(ctx context.Context, spaceID identity.ID, cmd string) (string, error) {
-	out, err := s.SandboxExec(ctx, spaceID, cmd)
+	out, err := s.appuiRun(ctx, spaceID, cmd)
 	if err != nil || !strings.Contains(out, "aseman-appui: unknown command") {
 		return out, err
 	}
@@ -562,7 +562,19 @@ func (s *Service) appuiExec(ctx context.Context, spaceID identity.ID, cmd string
 	if err != nil {
 		return "", errs.New(errs.CodeUnavailable, "the project's computer runs an older image without the app tools, and it could not be restarted now ("+err.Error()+"); try again in a moment")
 	}
-	return s.SandboxExec(ctx, spaceID, cmd)
+	return s.appuiRun(ctx, spaceID, cmd)
+}
+
+// appuiRun runs an aseman-appui command and answers its output whatever its
+// exit status: its callers read "exit=N" themselves, and a check that failed
+// carries what to fix (REPAIR.md), which the agent must get. Only a command
+// that did not run at all is an error.
+func (s *Service) appuiRun(ctx context.Context, spaceID identity.ID, cmd string) (string, error) {
+	out, err := s.SandboxExec(ctx, spaceID, cmd)
+	if err != nil && errs.CodeOf(err) == vmm.CodeToolExecutionFailed && strings.HasPrefix(out, "exit=") {
+		return out, nil
+	}
+	return out, err
 }
 
 // appuiPublishTool implements appui_publish: the platform's checks of an app

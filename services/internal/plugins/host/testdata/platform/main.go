@@ -111,7 +111,6 @@ func main() {
 	_ = os.Remove("/usr/local/bin/aseman-appui") // a run that was killed
 	must(os.Symlink(filepath.Join(kit, "aseman-appui"), "/usr/local/bin/aseman-appui"))
 	defer os.Remove("/usr/local/bin/aseman-appui")
-	defer os.RemoveAll(workspace)
 
 	// The space's app: a pricing service over MCP.
 	var quotes atomic.Int32
@@ -346,6 +345,8 @@ func main() {
 	check(status != 200, "a main Aseman account signed in to the platform: %d %s", status, body)
 	step("an account of main Aseman cannot sign in to the platform")
 
+	// Passed: the project is not needed any more (a failed run keeps it).
+	_ = os.RemoveAll(workspace)
 	result, _ := json.Marshal(map[string]any{"ok": true, "platform": "acme", "url": url, "advisor_asks": advisorAsks.Load(), "pricing_calls": quotes.Load()})
 	fmt.Println(string(result))
 }

@@ -39,6 +39,12 @@
   `ASEMAN_PLATFORM_E2E=1`): agent → organization, platform, fullstack app
   wired to the space's agent and MCP app, developer API, published; the
   platform's people then use it.
+- **Fixes the end-to-end run found:** `appui_publish` hid the platform's
+  "not ready, here is what to fix" answer behind "sandbox command exited with
+  status 1"; an agent working in a room did not see the apps added to the
+  whole space (so App UIs built there were wired to none); and
+  `appui_create` dropped an app named the way people see it ("Pricing" for
+  `tool_pricing`). `APPS.json` now carries each app's `display_name`.
 - **A platform's own client.** `--dart-define=ASEMAN_PLATFORM=<slug>` (web:
   `--build-arg ASEMAN_PLATFORM`, or `?platform=<slug>`) builds the Aseman
   client for one sub-platform: sign-in on its own accounts under its name,

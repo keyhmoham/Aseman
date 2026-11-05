@@ -45,6 +45,10 @@ COPY --from=tool-runtime /opt/aseman-tool-runtime /opt/aseman-tool-runtime
 COPY appui/AGENTS.md /opt/aseman-appui/AGENTS.md
 COPY appui/openui /opt/aseman-appui/openui
 COPY appui/ASEMAN_API.md /opt/aseman-appui/ASEMAN_API.md
+# A platform's frontend (appui audience platform) and the wiring check every
+# build passes before it is ready (aseman-appui verify).
+COPY appui/PLATFORM.md /opt/aseman-appui/PLATFORM.md
+COPY appui/wiring-check.mjs /opt/aseman-appui/wiring-check.mjs
 # Elpian App UI kit: App UIs default to an Elpian frontend (ELPIAN.md).
 COPY appui/elpian/aseman-elpian.js appui/elpian/openui-elpian.js appui/elpian/bundle.mjs appui/elpian/check.mjs appui/elpian/nodes.json appui/elpian/ELPIAN.md /opt/aseman-appui/elpian/
 # The UI DSL validator: a CLI, and an MCP server.
@@ -59,8 +63,9 @@ COPY appui/elpian/examples /opt/aseman-appui/elpian/examples
 COPY appui/elpian/GADGETS.md /opt/aseman-appui/elpian/
 COPY appui/sdk/aseman.js appui/sdk/server.cjs appui/sdk/server.mjs appui/sdk/aseman_server.py /opt/aseman-appui/sdk/
 COPY appui/aseman-appui /usr/local/bin/aseman-appui
-RUN chmod +x /usr/local/bin/aseman-appui /opt/aseman-appui/elpian/elpian-cli.mjs \
+RUN chmod +x /usr/local/bin/aseman-appui /opt/aseman-appui/elpian/elpian-cli.mjs /opt/aseman-appui/wiring-check.mjs \
  && ln -sf /opt/aseman-appui/elpian/elpian-cli.mjs /usr/local/bin/aseman-elpian \
+ && ln -sf /opt/aseman-appui/wiring-check.mjs /usr/local/bin/aseman-wiring-check \
  && mkdir -p /opt/aseman-appui \
  && ln -sf /usr/local/bin/aseman-appui /opt/aseman-appui/aseman-appui
 # /workspace is the space's shared working tree.

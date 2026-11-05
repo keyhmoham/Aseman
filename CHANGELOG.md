@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased: agent-built platform frontends, wired to the space for real
+
+- **A platform's frontend.** An organization owner or admin publishes an app
+  the agents of a space built (Elpian or web, with its backend) as the
+  sub-platform's frontend: Developer API → Platform → Frontend
+  (`developer.platform_frontend_apps` / `_publish` / `_unpublish`, public
+  `platform_frontend`). The gateway serves it at `/v1/platforms/<slug>/app/`
+  to the platform's people (and the organization; main Aseman when bridged),
+  and to signed-out visitors without any agent access. Web frontends sign
+  people in to the platform through `_aseman/auth/*` (HttpOnly cookie; the
+  page never holds a token). An asleep computer is woken as the publisher.
+- **Backends use the space's agents and apps for the platform's people.** A
+  platform user token (`X-Aseman-User-Token`) and the page API run as, and
+  bill, the person who published the frontend, name the platform's person on
+  usage (`via`), and reach only the agents, apps and microtools the app is
+  wired to (its `APPS.json`, recorded at `appui_publish`).
+- **Builder agents know.** `appui_create` takes `audience: "platform"`; the
+  project gets `PLATFORM.md`; the persona, the tool's usage, `AGENTS.md`,
+  `ASEMAN_API.md` and `TASK.md` say to wire the space's real agents and apps
+  from the page and the server, never imitate one.
+- **Wiring is checked.** `aseman-appui verify` runs `aseman-wiring-check`:
+  an agent, app or microtool missing from `APPS.json`, or a server route at
+  `_aseman/…` standing in for the gateway, and the app is not ready.
+- **Fix:** the production gateway's bridge never implemented the app-server
+  access methods, so apps got no `X-Aseman-User-Token` and `/appapi/v1`
+  answered "app API unavailable": app backends could not reach their space's
+  agents and apps at all. It now does (checked at compile time).
+- Server SDKs expose the platform (`req.asemanPlatform`, `client.platform`,
+  `Aseman.platform_of`); the page SDK works under the platform path and has
+  `me` / `signIn` / `signUp` / `signOut`.
+
 ## Unreleased: developer API platform collection
 
 - **Developer console redesign.** Profile → Developer API uses the app's

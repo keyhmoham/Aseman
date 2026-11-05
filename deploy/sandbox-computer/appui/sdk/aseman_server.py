@@ -77,7 +77,8 @@ def parse_json(text: Any) -> Any:
 class Aseman:
     """A client of the space's page API, acting as one person (who pays)."""
 
-    def __init__(self, token: str, url: str = "", user: dict[str, str] | None = None) -> None:
+    def __init__(self, token: str, url: str = "", user: dict[str, str] | None = None,
+                 platform: dict[str, str] | None = None) -> None:
         if not token:
             raise AsemanError("no Aseman credential: serve a request from the Aseman preview "
                               "(it carries X-Aseman-User-Token) or set ASEMAN_APP_KEY", 401)
@@ -85,14 +86,27 @@ class Aseman:
         self.url = (url or _settings()["ASEMAN_API_URL"]).rstrip("/")
         if not self.url:
             raise AsemanError("ASEMAN_API_URL is not set")
+        # Who the app serves; in a platform's frontend, the platform's person
+        # (calls run as, and bill, the frontend's publisher, within its wiring).
         self.user = user
+        self.platform = platform
 
     @classmethod
     def from_headers(cls, headers: Mapping[str, str]) -> "Aseman":
         """Acts for the person whose request carried [headers]; billed to them."""
         uid = _header(headers, "X-Aseman-User")
         user = {"id": uid, "handle": _header(headers, "X-Aseman-User-Handle")} if uid else None
-        return cls(_header(headers, USER_TOKEN), _header(headers, "X-Aseman-Api"), user)
+        return cls(_header(headers, USER_TOKEN), _header(headers, "X-Aseman-Api"), user,
+                   cls.platform_of(headers))
+
+    @staticmethod
+    def platform_of(headers: Mapping[str, str]) -> dict[str, str] | None:
+        """The sub-platform a request came through ({slug, id, name}), or None."""
+        slug = _header(headers, "X-Aseman-Platform")
+        if not slug:
+            return None
+        return {"slug": slug, "id": _header(headers, "X-Aseman-Platform-Id"),
+                "name": _header(headers, "X-Aseman-Platform-Name")}
 
     @classmethod
     def app(cls, key: str = "", url: str = "") -> "Aseman":

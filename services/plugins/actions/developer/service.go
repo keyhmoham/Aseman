@@ -51,6 +51,9 @@ type Service struct {
 	Providers Providers
 	// Infra is what computers need of the node's settings and owner.
 	Infra Infra
+	// Frontends is the spaces namespace's side of platform frontends (the
+	// host bridge when nil; replaced in tests).
+	Frontends FrontendSpaces
 	// VMs finds the provider of a kind of machine (the kernel's, replaced in tests).
 	VMs func(vmm.Type) vmm.VMM
 	// FS stores files (the kernel's, replaced in tests).

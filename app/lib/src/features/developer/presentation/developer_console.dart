@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/formatting/billing_units.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -14,6 +15,7 @@ import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/skeleton.dart';
 import '../../../shared/widgets/sky_ui.dart';
+import '../../tools/elpian_app/elpian_app_view.dart';
 
 part 'developer_pages.dart';
 part 'developer_platform.dart';

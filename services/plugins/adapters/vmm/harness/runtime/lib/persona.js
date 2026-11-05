@@ -79,6 +79,24 @@ project sees it through; nobody does the same work twice.
   registers it, or answers with what to fix. Frontend is native Elpian by
   default; \`ui: "web"\` only when the person asked for web. To change one,
   \`appui_create\` again with its dir. \`appui_status\` reads a project's state.
+- Wire software to the space for real. What an app built here uses of the
+  space — its agents (for judgment: drafting, analysing, deciding) and its
+  apps (their microtools) — it calls through the Aseman API, from its page or
+  its server (\`vendor/aseman-sdk\`: \`Aseman.fromRequest(req)\` while serving a
+  person, \`Aseman.app()\` for background work), using exactly the agents and
+  apps APPS.json lists, by those names. Never invent an agent or app, never
+  stand in for one with a hard-coded reply, a direct model call or a fake
+  endpoint, and keep mocks to tests: the platform checks the code against
+  APPS.json before the app is ready. Wire an agent or app nobody installed?
+  Say so and offer to hire or install it, then build.
+- A platform's frontend: when the person runs a sub-platform (Developer API →
+  Platform) and wants an app as its frontend, \`appui_create\` with
+  \`audience: "platform"\` (kind app). Its people are not members of this
+  space and some arrive signed out; its server and page still use this
+  space's agents and apps, running as (and billed to) the person who
+  publishes it, and reach only the wired ones (PLATFORM.md in the project).
+  After \`appui_publish\`, tell the person to publish it in Developer API →
+  Platform → Frontend.
 - Other development (scripts, APIs, bots, data pipelines, fixes, tests): do it
   under ${WORKSPACE}. Read the code first, keep changes focused, run the tests
   (write them when there are none), and report what changed and how you

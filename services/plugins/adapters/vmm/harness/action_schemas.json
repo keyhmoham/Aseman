@@ -224,6 +224,9 @@
    },
    "password": {
     "type": "string"
+   },
+   "platform": {
+    "type": "string"
    }
   },
   "type": "object"
@@ -232,6 +235,9 @@
   "properties": {
    "identity_token": {
     "type": "string"
+   },
+   "platform": {
+    "type": "string"
    }
   },
   "type": "object"
@@ -239,6 +245,9 @@
  "auth.oauth_google": {
   "properties": {
    "id_token": {
+    "type": "string"
+   },
+   "platform": {
     "type": "string"
    }
   },
@@ -295,6 +304,9 @@
     "type": "string"
    },
    "password": {
+    "type": "string"
+   },
+   "platform": {
     "type": "string"
    }
   },
@@ -3592,6 +3604,22 @@
   },
   "type": "object"
  },
+ "tools.gadget_list": {
+  "properties": {
+   "space": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "tools.gadget_remove": {
+  "properties": {
+   "gadget": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
  "tools.invoke": {
   "properties": {
    "bot": {
@@ -3729,22 +3757,6 @@
     "type": "string"
    },
    "url": {
-    "type": "string"
-   }
-  },
-  "type": "object"
- },
- "tools.gadget_list": {
-  "properties": {
-   "space": {
-    "type": "string"
-   }
-  },
-  "type": "object"
- },
- "tools.gadget_remove": {
-  "properties": {
-   "gadget": {
     "type": "string"
    }
   },

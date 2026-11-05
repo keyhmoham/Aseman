@@ -280,6 +280,31 @@ func BuildActions(s *Service) []api.Action {
 	scoped("platform_stats", "Users, spaces and bots on this organization's sub-platform", func(ctx context.Context, _ identity.ID, sc Scope, _ map[string]json.RawMessage) (any, error) {
 		return s.PlatformStats(ctx, sc)
 	})
+	scoped("platform_frontend_apps", "Apps the space agents built that can be published as this sub-platform's frontend", func(ctx context.Context, caller identity.ID, sc Scope, _ map[string]json.RawMessage) (any, error) {
+		apps, err := s.FrontendApps(ctx, sc, caller)
+		return map[string]any{"apps": apps}, err
+	})
+	scoped("platform_frontend_publish", "Publish an app built in a space as this sub-platform's frontend", func(ctx context.Context, caller identity.ID, sc Scope, in map[string]json.RawMessage) (any, error) {
+		view, err := s.PublishFrontend(ctx, sc, caller, str(in, "proxy"))
+		return map[string]any{"platform": view}, err
+	})
+	scoped("platform_frontend_unpublish", "Take this sub-platform's frontend down", func(ctx context.Context, _ identity.ID, sc Scope, _ map[string]json.RawMessage) (any, error) {
+		view, err := s.UnpublishFrontend(ctx, sc)
+		return map[string]any{"platform": view}, err
+	})
+	// Public: a client opening a platform needs its frontend before anyone
+	// has signed in.
+	actions = append(actions, helper.Action{Namespace: "developer", Name: "platform_frontend", Summary: "A sub-platform's name and published frontend (no sign-in needed)", Handler: func(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
+		var in map[string]json.RawMessage
+		if err := decode(req, &in); err != nil {
+			return nil, err
+		}
+		out, err := s.PublicFrontend(ctx, str(in, "platform"))
+		if err != nil {
+			return nil, err
+		}
+		return helper.JSON(out)
+	}})
 	scoped("platform_users", "People with accounts local to this sub-platform", func(ctx context.Context, _ identity.ID, sc Scope, in map[string]json.RawMessage) (any, error) {
 		var limit int
 		_ = json.Unmarshal(in["limit"], &limit)

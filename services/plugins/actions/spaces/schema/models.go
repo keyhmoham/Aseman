@@ -199,6 +199,9 @@ func appKeys() database.Model {
 			f("space_id", database.KindString), f("room_id", database.KindString),
 			f("proxy_id", database.KindString), f("owner_id", database.KindString),
 			f("title", database.KindString), f("hash", database.KindString),
+			f("ui", database.KindString), f("entry", database.KindString),
+			f("kind", database.KindString), f("audience", database.KindString),
+			f("wiring", database.KindString),
 			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		},
 	}

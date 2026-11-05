@@ -56,6 +56,9 @@ func (a *API) proxyPage(ctx context.Context, req *network.Request, p *proxy.Prox
 		return nil, errs.NotFound("no such page route")
 	}
 	if id, ok := strings.CutPrefix(op, "file/"); ok {
+		if platformCallFrom(ctx) != nil {
+			return nil, errs.Permission("the space's files are not served to a platform's people")
+		}
 		return a.pageFile(ctx, acc, strings.Trim(id, "/"))
 	}
 	out, err := a.pageAPI(ctx, req, p, acc, method, strings.Trim(op, "/"))
@@ -150,11 +153,29 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		if !p.RoomID.IsZero() {
 			out["room"] = p.RoomID.String()
 		}
+		if who := platformCallFrom(ctx); who != nil {
+			// The person is the platform's; the space is reached for them.
+			if who.User != nil {
+				out["user"] = map[string]any{"id": who.User.ID.String(), "handle": who.User.Handle}
+			}
+			out["platform"] = map[string]any{"id": who.Platform.PlatformID, "slug": who.Platform.Slug, "name": who.Platform.Name}
+			out["wiring"] = who.Platform.Wiring
+			delete(out, "room")
+		}
 		return out, nil
 	case "agents":
 		agents, err := a.pageAgents(ctx, caller, space)
 		if err != nil {
 			return nil, err
+		}
+		if platformCallFrom(ctx) != nil {
+			wired := []pageAgent{}
+			for _, ag := range agents {
+				if platformAllowsAgent(ctx, ag.ID, ag.Name) {
+					wired = append(wired, ag)
+				}
+			}
+			agents = wired
 		}
 		return map[string]any{"agents": agents}, nil
 	case "ask":
@@ -175,6 +196,9 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		rec, err := a.pageResolveAgent(ctx, caller, space, agent)
 		if err != nil {
 			return nil, err
+		}
+		if !platformAllowsAgent(ctx, rec.ID, rec.Name) {
+			return nil, notWired("agents", rec.Name)
 		}
 		// Every ask from an app is its own conversation: the agent works in a
 		// temporary thread of the room, deleted when it is done, so apps never
@@ -202,11 +226,23 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		if err != nil {
 			return nil, err
 		}
+		if platformCallFrom(ctx) != nil {
+			wired := []pageTool{}
+			for _, t := range tools {
+				if platformAllowsApp(ctx, t.ID, t.Name, "") {
+					wired = append(wired, t)
+				}
+			}
+			tools = wired
+		}
 		return map[string]any{"tools": tools}, nil
 	case "microtools":
 		t, err := a.pageResolve(ctx, caller, space, in.Tool)
 		if err != nil {
 			return nil, err
+		}
+		if !platformAllowsApp(ctx, t.ID, t.Name, "") {
+			return nil, notWired("apps", t.Name)
 		}
 		var res struct {
 			Commands []map[string]any `json:"commands"`
@@ -228,6 +264,9 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		t, err := a.pageResolve(ctx, caller, space, in.Tool)
 		if err != nil {
 			return nil, err
+		}
+		if !platformAllowsApp(ctx, t.ID, t.Name, in.Microtool) {
+			return nil, notWired("apps", t.Name+"."+in.Microtool)
 		}
 		if in.Args == nil {
 			in.Args = map[string]any{}
@@ -253,6 +292,9 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		if err != nil {
 			return nil, err
 		}
+		if !platformAllowsApp(ctx, t.ID, t.Name, "") {
+			return nil, notWired("apps", t.Name)
+		}
 		body := map[string]any{"bot": t.ID, "space": space}
 		if in.Microtool != "" {
 			body["microtool"] = in.Microtool
@@ -270,6 +312,9 @@ func (a *API) pageAPI(ctx context.Context, req *network.Request, p *proxy.Proxy,
 		// desk of the page's room, next to the page.
 		if method == http.MethodGet {
 			return nil, errs.InvalidArgument("show with POST")
+		}
+		if platformCallFrom(ctx) != nil {
+			return nil, errs.InvalidArgument("a platform's frontend has no desk to show windows on; render the result in the app")
 		}
 		t, err := a.pageResolve(ctx, caller, space, in.Tool)
 		if err != nil {

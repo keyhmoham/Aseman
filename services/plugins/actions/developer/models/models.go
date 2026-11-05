@@ -3,6 +3,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 
 	"github.com/aseman/aseman/internal/plugins/entity"
@@ -47,6 +48,119 @@ type Platform struct {
 	// users see main Aseman entities and main Aseman users see this
 	// platform's. Other platforms stay invisible either way.
 	MainAccess bool `db:"main_access" json:"main_access"`
+
+	// The platform's frontend: an App UI the agents of a space built (Elpian
+	// or web), published by an owner or admin of the organization as what the
+	// platform's people open. Empty FrontendProxyID: no frontend.
+	FrontendProxyID string `db:"frontend_proxy_id" json:"frontend_proxy_id,omitempty"`
+	FrontendSpaceID string `db:"frontend_space_id" json:"frontend_space_id,omitempty"`
+	// FrontendApp is the app's project directory on the space's computer.
+	FrontendApp   string `db:"frontend_app" json:"frontend_app,omitempty"`
+	FrontendTitle string `db:"frontend_title" json:"frontend_title,omitempty"`
+	// FrontendUI is "elpian" (a program the client runs natively, at
+	// FrontendEntry of the app's server) or "web".
+	FrontendUI    string `db:"frontend_ui" json:"frontend_ui,omitempty"`
+	FrontendEntry string `db:"frontend_entry" json:"frontend_entry,omitempty"`
+	// FrontendWiring is the JSON of the app's [Wiring]: the space's agents and
+	// apps its frontend and backend use. The platform's people reach those and
+	// nothing else of the space.
+	FrontendWiring string `db:"frontend_wiring" json:"-"`
+	// FrontendBy is the person who published it: the platform's use of the
+	// space's agents and apps runs as, and is billed to, them.
+	FrontendBy identity.ID `db:"frontend_by" json:"frontend_by,omitempty"`
+	FrontendAt time.Time   `db:"frontend_at" json:"frontend_at,omitempty"`
+}
+
+// Wiring is what an app built in a space is wired to: the space's agents it
+// asks and the apps (with their microtools) it calls, as the builder was
+// given them in APPS.json. A published platform frontend reaches exactly
+// these; anything else of the space is refused.
+type Wiring struct {
+	Agents []WiredAgent `json:"agents"`
+	Apps   []WiredApp   `json:"apps"`
+}
+
+// WiredAgent is a space agent an app asks.
+type WiredAgent struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// WiredApp is a space app an app calls, and the microtools it may call.
+type WiredApp struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Microtools []string `json:"microtools,omitempty"`
+}
+
+func wiredName(ref, id, name string) bool {
+	ref = strings.TrimSpace(ref)
+	return ref != "" && (ref == id || strings.EqualFold(ref, name))
+}
+
+// AllowsAgent reports whether [ref] (an agent's id or name) is wired.
+func (w Wiring) AllowsAgent(ref string) bool {
+	for _, a := range w.Agents {
+		if wiredName(ref, a.ID, a.Name) {
+			return true
+		}
+	}
+	return false
+}
+
+// AllowsApp reports whether [ref] (an app's id or name) is wired, and, when
+// [microtool] is given, whether that microtool of it is (an app wired with
+// no microtools listed allows all of its own).
+func (w Wiring) AllowsApp(ref, microtool string) bool {
+	for _, a := range w.Apps {
+		if !wiredName(ref, a.ID, a.Name) {
+			continue
+		}
+		if microtool == "" || len(a.Microtools) == 0 {
+			return true
+		}
+		for _, m := range a.Microtools {
+			if m == microtool {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
+// PlatformFrontend is a platform with its published frontend, as the gateway
+// and the spaces namespace see it.
+type PlatformFrontend struct {
+	PlatformID string `json:"platform_id"`
+	OrgID      string `json:"org_id"`
+	Slug       string `json:"slug"`
+	Name       string `json:"name"`
+	MainAccess bool   `json:"main_access"`
+	ProxyID    string `json:"proxy_id"`
+	SpaceID    string `json:"space_id"`
+	App        string `json:"app"`
+	Title      string `json:"title"`
+	UI         string `json:"ui"`
+	Entry      string `json:"entry,omitempty"`
+	Publisher  string `json:"publisher"`
+	Wiring     Wiring `json:"wiring"`
+}
+
+// FrontendApp is an app a person may publish as a platform's frontend (one
+// the agents of a space they belong to built and published there).
+type FrontendApp struct {
+	ProxyID   string `json:"proxy_id"`
+	SpaceID   string `json:"space_id"`
+	SpaceName string `json:"space_name,omitempty"`
+	App       string `json:"app"`
+	Title     string `json:"title"`
+	UI        string `json:"ui"`
+	Entry     string `json:"entry,omitempty"`
+	Kind      string `json:"kind,omitempty"`
+	Audience  string `json:"audience,omitempty"`
+	Wiring    Wiring `json:"wiring"`
+	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
 // Member is a person in an organization.
@@ -202,6 +316,11 @@ func Models() []database.Model {
 		{Name: "dev_platforms", Table: "dev_platforms", Fields: []database.Field{
 			f("id", database.KindString), fi("org_id", database.KindString), fi("slug", database.KindString),
 			f("name", database.KindString), f("main_access", database.KindBool),
+			fi("frontend_proxy_id", database.KindString), f("frontend_space_id", database.KindString),
+			f("frontend_app", database.KindString), f("frontend_title", database.KindString),
+			f("frontend_ui", database.KindString), f("frontend_entry", database.KindString),
+			f("frontend_wiring", database.KindString), f("frontend_by", database.KindString),
+			f("frontend_at", database.KindTime),
 			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		}},
 		{Name: "dev_members", Table: "dev_members", Fields: []database.Field{

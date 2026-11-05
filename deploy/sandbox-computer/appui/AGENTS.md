@@ -54,6 +54,22 @@ Validating view trees). The backend is the same in both cases.
 - `APPS.json` lists exactly what you may wire: `apps` (each microtool with
   its `args_schema`) and `agents` (name, description). Use those names and
   argument shapes; never invent apps, agents, endpoints or fields.
+- **Wire for real.** Every feature the brief gives to an agent or an app of
+  the space calls that agent or app through the Aseman API (page or server,
+  `vendor/aseman-sdk`): never a made-up agent or app, a hard-coded or canned
+  reply, a direct model call, or a route of your own standing in for one.
+  Mocks live in tests only. `aseman-appui verify` checks your source against
+  `APPS.json` (`aseman-wiring-check`: an unknown agent, app or microtool, or a
+  server route at `_aseman/…`, and the app is not ready; `WIRING.md` holds its
+  report). If the brief needs an agent or app the space does not have, say so
+  in `PLAN.md` and leave that feature out.
+- **Backends use the space too.** Put agent and app calls where the feature
+  belongs — often the server: it validates, keeps data, combines several
+  agents and apps, and runs schedules — with `Aseman.fromRequest(req)` while
+  serving a person and `Aseman.app()` for work nobody is in front of.
+- `JOB.json` → `audience: "platform"`: the app is a sub-platform's frontend.
+  Read `PLATFORM.md` (signed-out visitors, the platform's people, wiring-only
+  reach, who pays).
 - `ASEMAN_API.md` is the contract of the Aseman API, open to the page
   (`_aseman/api/*`, as the viewing person) and to your server
   (`$ASEMAN_API_URL`, with the request's `X-Aseman-User-Token`, or
@@ -308,7 +324,9 @@ Validating view trees). The backend is the same in both cases.
 
 ## Model
 
-You build with your own model. Software that needs a model calls the Aseman
-metered LLM gateway already configured for this sandbox (ASEMAN_LLM_BASE_URL);
-do not invent API keys — completions are billed with the agent turn through
-the node gateway.
+You build with your own model. Work that needs judgment goes to the space's
+agents (`APPS.json` → `agents`), not to a model the software prompts itself.
+Only a small mechanical text step no agent is meant for (a format conversion,
+say) may call the Aseman metered LLM gateway already configured for this
+sandbox (ASEMAN_LLM_BASE_URL); do not invent API keys — completions are billed
+with the agent turn through the node gateway.

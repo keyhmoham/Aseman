@@ -189,6 +189,15 @@ test('persona routes lasting screens to appui_create (gadget or desk app)', () =
   assert.ok(!/Prefer create_gadget over appui_create/.test(p))
 })
 
+test('persona wires apps to the space for real and knows platform frontends', () => {
+  const p = personaFor({ name: 'Ava' })
+  assert.match(p, /Wire software to the space for real/)
+  assert.match(p, /Never invent an agent or app/)
+  assert.match(p, /Aseman\.fromRequest\(req\)/)
+  assert.match(p, /audience: "platform"/)
+  assert.match(p, /Developer API →\s+Platform → Frontend/)
+})
+
 test('gateway calls carry the token and surface the node\'s error', async () => {
   const seen = []
   const fake = async (url, init) => {

@@ -66,3 +66,22 @@ test("the ES module entry exposes the same SDK", async () => {
   assert.equal(typeof mod.Aseman.fromRequest, "function");
   assert.equal(mod.default, mod.Aseman);
 });
+
+test("a platform frontend's request carries its platform; visitors have no person", async () => {
+  const { Aseman } = require("./server.cjs");
+  const headers = {
+    "x-aseman-user-token": "pf-token", "x-aseman-user": "u1", "x-aseman-user-handle": "shopper",
+    "x-aseman-api": "http://aseman:8080/appapi/v1",
+    "x-aseman-platform": "acme", "x-aseman-platform-id": "pf1", "x-aseman-platform-name": "Acme",
+  };
+  const client = Aseman.fromRequest({ headers });
+  assert.deepStrictEqual(client.platform, { slug: "acme", id: "pf1", name: "Acme" });
+  assert.strictEqual(client.user.handle, "shopper");
+  const visitor = { headers: { "x-aseman-platform": "acme", "x-aseman-platform-id": "pf1", "x-aseman-platform-name": "Acme" } };
+  const req = { ...visitor };
+  Aseman.middleware()(req, {}, () => {});
+  assert.strictEqual(req.aseman, undefined);
+  assert.strictEqual(req.asemanPlatform.slug, "acme");
+  assert.strictEqual(Aseman.platform({ headers: {} }), null);
+  assert.throws(() => Aseman.fromRequest(visitor), /no Aseman credential/);
+});

@@ -19,6 +19,186 @@ class _SubPlatformState extends _LoadedState<_SubPlatform> {
     return {...p, ...stats, 'users': users['users']};
   }
 
+  /// Picks an app the space agents built and publishes it as the platform's
+  /// frontend.
+  Future<void> _publishFrontend() async {
+    final List<_Json> apps;
+    try {
+      apps = _maps((await call('platform_frontend_apps'))['apps']);
+    } catch (e) {
+      if (mounted) _snack(context, '$e');
+      return;
+    }
+    if (!mounted) return;
+    final picked = await showAppDialog<_Json>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Publish a frontend'),
+        content: SizedBox(
+          width: 460,
+          child: apps.isEmpty
+              ? const Text(
+                  'No apps to publish yet. In a space you belong to, ask its agents '
+                  'to build your platform\'s frontend (an app for the platform\'s '
+                  'people, wired to the space\'s agents and apps), then come back.')
+              : ListView(shrinkWrap: true, children: [
+                  for (final a in apps)
+                    QuietTile(
+                      icon: a['ui'] == 'web'
+                          ? Icons.web_rounded
+                          : Icons.widgets_rounded,
+                      label: '${a['title']}',
+                      subtitle: _frontendSubtitle(a),
+                      trailing: a['audience'] == 'platform'
+                          ? const Chip(label: Text('Built for platforms'))
+                          : null,
+                      onTap: () => Navigator.pop(context, a),
+                    ),
+                ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+        ],
+      ),
+    );
+    if (picked == null || !mounted) return;
+    final ok = await _confirm(
+        context,
+        'Publish “${picked['title']}”?',
+        'The platform\'s people will open it as the platform\'s frontend. '
+            'Its use of the space\'s agents and apps runs as you and is billed '
+            'to you, and reaches only what the app is wired to.',
+        action: 'Publish');
+    if (!ok) return;
+    await change(() =>
+        call('platform_frontend_publish', {'proxy': '${picked['proxy_id']}'}));
+  }
+
+  /// Opens the published frontend as the platform's people see it: an
+  /// Elpian app runs here natively; a web app opens in the browser (signed
+  /// out, as a visitor, until signed in on the page).
+  Future<void> _openFrontend(_Json frontend) async {
+    final url = '${frontend['url']}';
+    if (frontend['ui'] == 'web') {
+      final base = widget.service.client.baseUrl.replaceFirst(RegExp(r'/+$'), '');
+      final ok = await launchUrl(Uri.parse('$base$url'),
+          mode: LaunchMode.externalApplication);
+      if (!ok && mounted) _snack(context, 'Could not open $base$url');
+      return;
+    }
+    final title = '${frontend['title']}';
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (context) => Scaffold(
+        appBar: AppBar(title: Text(title)),
+        body: ElpianAppView(
+          service: widget.service,
+          page: url,
+          entry: '${frontend['entry'] ?? ''}'.isEmpty
+              ? 'elpian/app.js'
+              : '${frontend['entry']}',
+          title: title,
+        ),
+      ),
+    ));
+  }
+
+  Future<void> _unpublishFrontend() async {
+    final ok = await _confirm(context, 'Take the frontend down?',
+        'The platform\'s people will no longer be able to open it.',
+        action: 'Take down');
+    if (!ok) return;
+    await change(() => call('platform_frontend_unpublish'));
+  }
+
+  Widget _frontendCard(BuildContext context, _Json platform) {
+    final scheme = Theme.of(context).colorScheme;
+    final frontend = _map(platform['frontend']);
+    if (frontend.isEmpty) {
+      return _Card(
+        title: 'Frontend',
+        icon: Icons.web_asset_rounded,
+        trailing: FilledButton.icon(
+            onPressed: _publishFrontend,
+            icon: const Icon(Icons.publish_rounded, size: 18),
+            label: const Text('Publish')),
+        child: Text(
+            'Publish an app the agents of one of your spaces built — Elpian or '
+            'web, with its own backend — as what this platform\'s people open. '
+            'Its server and page keep using that space\'s agents and apps.',
+            style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35)),
+      );
+    }
+    final wiring = _map(frontend['wiring']);
+    final agents = _maps(wiring['agents']);
+    final tools = _maps(wiring['apps']);
+    return _Card(
+      title: 'Frontend',
+      icon: Icons.web_asset_rounded,
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(
+            tooltip: 'Open',
+            onPressed: () => _openFrontend(frontend),
+            icon: const Icon(Icons.open_in_new_rounded)),
+        IconButton(
+            tooltip: 'Publish another app',
+            onPressed: _publishFrontend,
+            icon: const Icon(Icons.swap_horiz_rounded)),
+        IconButton(
+            tooltip: 'Take down',
+            onPressed: _unpublishFrontend,
+            icon: const Icon(Icons.unpublished_outlined)),
+      ]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        QuietTile(
+          icon: frontend['ui'] == 'web'
+              ? Icons.web_rounded
+              : Icons.widgets_rounded,
+          label: '${frontend['title']}',
+          subtitle: frontend['ui'] == 'web'
+              ? 'Web app'
+              : 'Elpian app · runs natively in Aseman clients',
+          trailing: IconButton(
+            tooltip: 'Copy address',
+            onPressed: () =>
+                Clipboard.setData(ClipboardData(text: '${frontend['url']}')),
+            icon: const Icon(Icons.copy_rounded, size: 18),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        SelectableText('${frontend['url']}',
+            style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12.5,
+                color: scheme.onSurface)),
+        const SizedBox(height: AppSpacing.sm),
+        Text('In the loop', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: AppSpacing.xs),
+        if (agents.isEmpty && tools.isEmpty)
+          Text('This app uses no agents or apps of its space.',
+              style: TextStyle(color: scheme.onSurfaceVariant))
+        else
+          Wrap(spacing: AppSpacing.xs, runSpacing: AppSpacing.xs, children: [
+            for (final a in agents)
+              Chip(
+                  avatar: const Icon(Icons.smart_toy_outlined, size: 16),
+                  label: Text('${a['name']}')),
+            for (final t in tools)
+              Chip(
+                  avatar: const Icon(Icons.extension_outlined, size: 16),
+                  label: Text('${t['name']}')),
+          ]),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+            'People of this platform reach only these. Their use runs as the '
+            'person who published the frontend and is billed to them.',
+            style: TextStyle(
+                fontSize: 12.5, color: scheme.onSurfaceVariant, height: 1.35)),
+      ]),
+    );
+  }
+
   Future<void> _create() async {
     final name = await _ask(context, 'New sub-platform', 'Name',
         hint: 'Acme', action: 'Next');
@@ -83,6 +263,7 @@ class _SubPlatformState extends _LoadedState<_SubPlatform> {
                   color: scheme.onSurface)),
         ]),
       ),
+      _frontendCard(context, platform),
       _Card(
         title: 'Local users',
         icon: Icons.people_outline_rounded,
@@ -100,6 +281,19 @@ class _SubPlatformState extends _LoadedState<_SubPlatform> {
       ),
     ]);
   }
+}
+
+String _frontendSubtitle(_Json a) {
+  final wiring = _map(a['wiring']);
+  final names = [
+    for (final x in _maps(wiring['agents'])) '${x['name']}',
+    for (final x in _maps(wiring['apps'])) '${x['name']}',
+  ];
+  return [
+    if ('${a['space_name'] ?? ''}'.isNotEmpty) '${a['space_name']}',
+    a['ui'] == 'web' ? 'Web' : 'Elpian',
+    if (names.isNotEmpty) 'uses ${names.join(', ')}',
+  ].join(' · ');
 }
 
 // ── platform API collection ──────────────────────────────────────────────────

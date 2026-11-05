@@ -25,12 +25,14 @@ type PlatformView struct {
 	Name       string `json:"name"`
 	MainAccess bool   `json:"mainAccess"`
 	CreatedAt  string `json:"createdAt"`
+	// Frontend is the app the platform's people open (nil: none published).
+	Frontend *FrontendView `json:"frontend"`
 }
 
 func platformView(p models.Platform) PlatformView {
 	return PlatformView{
 		ID: p.ID.String(), Org: p.OrgID.String(), Slug: p.Slug, Name: p.Name,
-		MainAccess: p.MainAccess, CreatedAt: stamp(p.CreatedAt),
+		MainAccess: p.MainAccess, CreatedAt: stamp(p.CreatedAt), Frontend: frontendView(p),
 	}
 }
 

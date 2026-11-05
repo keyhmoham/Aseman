@@ -55,8 +55,8 @@ COPY appui/elpian/validate.mjs appui/elpian/validate-mcp.mjs appui/elpian/schema
 # the shell, with driver sessions that persist between commands.
 COPY appui/elpian/drive.mjs appui/elpian/drive-mcp.mjs appui/elpian/mcp-stdio.mjs appui/elpian/elpian-cli.mjs /opt/aseman-appui/elpian/
 COPY appui/elpian/examples /opt/aseman-appui/elpian/examples
-# Plugins are App UIs (appui kind=plugin); same Elpian kit / AGENTS.md as desk apps.
-COPY appui/elpian/PLUGINS.md /opt/aseman-appui/elpian/
+# Gadgets are App UIs (appui kind=gadget); same Elpian kit / AGENTS.md as desk apps.
+COPY appui/elpian/GADGETS.md /opt/aseman-appui/elpian/
 COPY appui/sdk/aseman.js appui/sdk/server.cjs appui/sdk/server.mjs appui/sdk/aseman_server.py /opt/aseman-appui/sdk/
 COPY appui/aseman-appui /usr/local/bin/aseman-appui
 RUN chmod +x /usr/local/bin/aseman-appui /opt/aseman-appui/elpian/elpian-cli.mjs \

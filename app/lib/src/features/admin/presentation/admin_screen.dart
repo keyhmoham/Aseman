@@ -242,14 +242,18 @@ class _AppScreenState extends State<AdminScreen> {
       ),
       _Page(
         'Developer API',
-        'Organizations, their spend and requests',
+        'Organizations, sub-platforms and requests',
         Icons.api_outlined,
         Icons.api_rounded,
         calls: [
           _Call('developer', 'admin_orgs'),
           _Call('developer', 'admin_logs', {'limit': 100}),
+          _Call('developer', 'admin_platforms'),
         ],
-        actions: [_Call('developer', 'admin_org')],
+        actions: [
+          _Call('developer', 'admin_org'),
+          _Call('developer', 'admin_platform_access'),
+        ],
       ),
     ]),
     _Section('AI', [

@@ -253,6 +253,39 @@ func BuildActions(s *Service) []api.Action {
 		}
 		return map[string]any{"models": catalog}, err
 	})
+	add("platform_catalog", "Every non-admin platform action callable through the developer API", func(ctx context.Context, _ identity.ID, _ *api.ActionRequest, _ map[string]json.RawMessage) (any, error) {
+		return s.PlatformCatalog(ctx), nil
+	})
+	scoped("platform_get", "This organization's sub-platform, if it has one", func(ctx context.Context, _ identity.ID, sc Scope, _ map[string]json.RawMessage) (any, error) {
+		p, err := s.PlatformOfOrg(ctx, sc.Org)
+		if err != nil {
+			return nil, err
+		}
+		if p == nil {
+			return map[string]any{"platform": nil}, nil
+		}
+		return map[string]any{"platform": platformView(*p)}, nil
+	})
+	scoped("platform_create", "Create the organization's isolated sub-platform", func(ctx context.Context, _ identity.ID, sc Scope, in map[string]json.RawMessage) (any, error) {
+		view, err := s.CreatePlatform(ctx, sc, str(in, "name"), str(in, "slug"))
+		return map[string]any{"platform": view}, err
+	})
+	scoped("platform_rename", "Rename the organization's sub-platform", func(ctx context.Context, _ identity.ID, sc Scope, in map[string]json.RawMessage) (any, error) {
+		view, err := s.RenamePlatform(ctx, sc, str(in, "name"))
+		return map[string]any{"platform": view}, err
+	})
+	scoped("platform_delete", "Delete the organization's sub-platform record", func(ctx context.Context, _ identity.ID, sc Scope, _ map[string]json.RawMessage) (any, error) {
+		return ok, s.DeletePlatform(ctx, sc)
+	})
+	scoped("platform_stats", "Users, spaces and bots on this organization's sub-platform", func(ctx context.Context, _ identity.ID, sc Scope, _ map[string]json.RawMessage) (any, error) {
+		return s.PlatformStats(ctx, sc)
+	})
+	scoped("platform_users", "People with accounts local to this sub-platform", func(ctx context.Context, _ identity.ID, sc Scope, in map[string]json.RawMessage) (any, error) {
+		var limit int
+		_ = json.Unmarshal(in["limit"], &limit)
+		users, err := s.PlatformUsers(ctx, sc, str(in, "query"), limit)
+		return map[string]any{"users": users}, err
+	})
 	scoped("run", "Run a model from the console's playground", func(ctx context.Context, _ identity.ID, sc Scope, in map[string]json.RawMessage) (any, error) {
 		if err := sc.Require("resources"); err != nil {
 			return nil, err
@@ -301,6 +334,16 @@ func BuildActions(s *Service) []api.Action {
 		_ = json.Unmarshal(in["limit"], &limit)
 		logs, err := s.AdminLogs(ctx, str(in, "org"), filter, limit)
 		return map[string]any{"logs": logs}, err
+	})
+	admin("admin_platforms", "Admin: every sub-platform and its main-Aseman bridge", func(ctx context.Context, _ map[string]json.RawMessage) (any, error) {
+		list, err := s.AdminPlatforms(ctx)
+		return map[string]any{"platforms": list}, err
+	})
+	admin("admin_platform_access", "Admin: grant or revoke a platform's bridge to main Aseman", func(ctx context.Context, in map[string]json.RawMessage) (any, error) {
+		var access bool
+		_ = json.Unmarshal(in["access"], &access)
+		view, err := s.SetMainAccess(ctx, str(in, "platform"), access)
+		return map[string]any{"platform": view}, err
 	})
 	return actions
 }

@@ -45,6 +45,9 @@ func (s *Service) catalog(ctx context.Context, caller identity.ID, admin bool, s
 		if e != nil {
 			continue
 		}
+		if !admin && !helper.SeesEntity(ctx, s.R, caller, rec.PlatformID) {
+			continue
+		}
 		row := s.catalogBot(ctx, rec)
 		row["listing"] = l
 		row["status"] = l.Status

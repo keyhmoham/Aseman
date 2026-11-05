@@ -384,7 +384,7 @@ class SwitcherEdgeHandle extends StatelessWidget {
 
 /// A bell-shaped bump growing out of the right edge, tapering to nothing at
 /// its top and bottom. Shared by the screen-edge handles (workspace switcher,
-/// plugins).
+/// gadgets).
 class EdgeBumpPainter extends CustomPainter {
   const EdgeBumpPainter({required this.fill, required this.shadow});
   final Color fill;

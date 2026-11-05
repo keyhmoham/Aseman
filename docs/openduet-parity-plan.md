@@ -23,7 +23,7 @@ records are its own schemas, and other modules reach it only through
 | `plugins/actions/hostaccess` (new) | brokered access to a person's own computer through the desktop app |
 | `plugins/actions/admin` | setup checklist with real checks, telemetry switch |
 | `plugins/actions/spaces` | room purpose (icon, colour, greeting), gate hooks for sandbox commands, handover checks |
-| `plugins/adapters/vmm/deepagents` | gate on every `/call`, initiator in the turn, untrusted envelope, SVID header |
+| `plugins/adapters/vmm/harness` (was deepagents) | gate on every `/call`, initiator in the turn, untrusted envelope, SVID header |
 | `plugins/actions/tools` | gate on every Code Mode request, Composio and Arcade brokers |
 | `deploy/` | egress proxy in the sandbox image, gVisor option, Helm chart, SPIRE profile |
 | `app/` | approval, secret and handover cards, Tasks, brief, Setup, Audit, Policy, Connections, Channels, SSO, desktop host agent, reply chips, dictation, room purpose |

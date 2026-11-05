@@ -16,6 +16,7 @@ import (
 	"github.com/aseman/aseman/pkg/logger"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 	"github.com/aseman/aseman/plugins/actions/posts/models"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/actions/support/mediahost"
 	"github.com/aseman/aseman/plugins/actions/support/repo"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
@@ -197,13 +198,35 @@ func (s *Service) Feed(ctx context.Context, caller identity.ID, spaceID identity
 	default:
 		// Global feed: public posts not tied to any workspace, the featured
 		// ones (imported authors' latest posts) first.
-		return s.globalFeed(ctx, limit, offset)
+		return s.globalFeed(ctx, caller, limit, offset)
 	}
 	var out []post.Post
 	if err := s.R.List(ctx, "posts", f, &out); err != nil {
 		return nil, err
 	}
-	return out, nil
+	return s.filterPostsByAuthorTenancy(ctx, caller, out), nil
+}
+
+// filterPostsByAuthorTenancy drops posts whose author lives on a platform the
+// viewer may not observe.
+func (s *Service) filterPostsByAuthorTenancy(ctx context.Context, viewer identity.ID, in []post.Post) []post.Post {
+	if viewer.IsZero() || len(in) == 0 {
+		return in
+	}
+	cache := map[string]string{}
+	out := in[:0]
+	for i := range in {
+		aid := in[i].AuthorID.String()
+		pid, ok := cache[aid]
+		if !ok {
+			pid = helper.AccountPlatform(ctx, s.R, in[i].AuthorID)
+			cache[aid] = pid
+		}
+		if helper.SeesEntity(ctx, s.R, viewer, pid) {
+			out = append(out, in[i])
+		}
+	}
+	return out
 }
 
 // SpacesFeed aggregates the private top-level posts of every workspace the

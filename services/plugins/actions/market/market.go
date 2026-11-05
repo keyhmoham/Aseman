@@ -161,17 +161,14 @@ func (s *Service) Get(ctx context.Context, id identity.ID) (*market.Listing, err
 }
 
 // List returns active listings, optionally filtered by type, category or query.
-func (s *Service) List(ctx context.Context, itemType string, category, query string, limit, offset int) ([]market.Listing, error) {
+// viewer scopes results to bots that person may see across sub-platforms.
+func (s *Service) List(ctx context.Context, viewer identity.ID, itemType string, category, query string, limit, offset int) ([]market.Listing, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
 	f := database.Filter{
 		Equal:   map[string]any{"status": string(market.StatusActive)},
-		OrderBy: "created_at", Asc: false, Limit: limit, Offset: offset,
-	}
-	// A search pages the matching listings, not the listings it filters.
-	if query != "" {
-		f.Limit, f.Offset = 0, 0
+		OrderBy: "created_at", Asc: false,
 	}
 	if itemType != "" {
 		f.Equal["type"] = itemType
@@ -183,23 +180,37 @@ func (s *Service) List(ctx context.Context, itemType string, category, query str
 	if err := s.R.List(ctx, "market", f, &out); err != nil {
 		return nil, err
 	}
-	if query != "" {
-		kept := out[:0]
-		for i := range out {
-			if containsFold(out[i].Name, query) || containsFold(out[i].Description, query) {
-				kept = append(kept, out[i])
-			}
+	kept := out[:0]
+	for i := range out {
+		if query != "" && !containsFold(out[i].Name, query) && !containsFold(out[i].Description, query) {
+			continue
 		}
-		out = kept
-		if offset > len(out) {
-			offset = len(out)
+		if !viewer.IsZero() && !s.listingVisible(ctx, viewer, &out[i]) {
+			continue
 		}
-		out = out[offset:]
-		if len(out) > limit {
-			out = out[:limit]
-		}
+		kept = append(kept, out[i])
+	}
+	out = kept
+	if offset > len(out) {
+		offset = len(out)
+	}
+	out = out[offset:]
+	if len(out) > limit {
+		out = out[:limit]
 	}
 	return out, nil
+}
+
+// listingVisible reports whether the listed bot lives on a platform viewer may see.
+func (s *Service) listingVisible(ctx context.Context, viewer identity.ID, l *market.Listing) bool {
+	if s.B == nil || l == nil {
+		return true
+	}
+	rec, err := s.B.GetBot(ctx, l.BotID)
+	if err != nil || rec == nil {
+		return false
+	}
+	return helper.SeesEntity(ctx, s.R, viewer, rec.PlatformID)
 }
 
 // MyListings returns listings published by the caller.
@@ -221,6 +232,9 @@ func (s *Service) Install(ctx context.Context, installer identity.ID, listingID 
 	l, err := s.Get(ctx, listingID)
 	if err != nil {
 		return nil, err
+	}
+	if !s.listingVisible(ctx, installer, l) {
+		return nil, errs.NotFound("listing")
 	}
 	if l.Status != market.StatusActive {
 		return nil, errs.Conflict("listing is not active")

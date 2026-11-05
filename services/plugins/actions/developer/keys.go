@@ -34,6 +34,10 @@ type Permissions struct {
 	Computers string `json:"computers"`
 	Files     string `json:"files"`
 	Usage     string `json:"usage"`
+	// Platform is the product surface (spaces, bots, tools, desk, messenger,
+	// finance, themes, …) via POST /v1/platform/{namespace}/{action}. Read
+	// lists the collection; write calls it. Node administration is never included.
+	Platform string `json:"platform"`
 }
 
 func level(l string) int {
@@ -137,6 +141,7 @@ func cleanInput(in KeyInput) (KeyInput, error) {
 	p.Computers = check(p.Computers, LevelNone, LevelRead, LevelWrite)
 	p.Files = check(p.Files, LevelNone, LevelRead, LevelWrite)
 	p.Usage = check(p.Usage, LevelNone, LevelRead)
+	p.Platform = check(p.Platform, LevelNone, LevelRead, LevelWrite)
 	if in.Limits.MonthlyCap < 0 || in.Limits.RPM < 0 {
 		return in, errs.InvalidArgument("Limits cannot be negative.")
 	}
@@ -304,7 +309,11 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (*Principal, 
 
 // Need refuses a request outside the key's permissions.
 func (p *Principal) Need(resource, lvl string) error {
-	have := map[string]string{"models": p.Permissions.Models, "chat": p.Permissions.Chat, "computers": p.Permissions.Computers, "files": p.Permissions.Files, "usage": p.Permissions.Usage}[resource]
+	have := map[string]string{
+		"models": p.Permissions.Models, "chat": p.Permissions.Chat,
+		"computers": p.Permissions.Computers, "files": p.Permissions.Files,
+		"usage": p.Permissions.Usage, "platform": p.Permissions.Platform,
+	}[resource]
 	if allows(have, lvl) {
 		return nil
 	}

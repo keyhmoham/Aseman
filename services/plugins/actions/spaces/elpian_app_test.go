@@ -6,27 +6,29 @@ import (
 	"time"
 )
 
-func TestAppUIKindAndPluginPlacement(t *testing.T) {
+func TestAppUIKindAndGadgetPlacement(t *testing.T) {
 	for _, c := range []struct{ in, want string }{
-		{"", "app"}, {"app", "app"}, {"plugin", "plugin"}, {"PLUGIN", "plugin"},
+		{"", "app"}, {"app", "app"}, {"gadget", "gadget"}, {"GADGET", "gadget"},
 	} {
 		got, err := appuiKind(c.in)
 		if err != nil || got != c.want {
 			t.Fatalf("appuiKind(%q) = %q, %v; want %q", c.in, got, err, c.want)
 		}
 	}
-	if _, err := appuiKind("gadget"); err == nil {
-		t.Fatal("unknown kind accepted")
+	for _, bad := range []string{"window", "plugin", "PLUGIN"} {
+		if _, err := appuiKind(bad); err == nil {
+			t.Fatalf("unknown kind %q accepted", bad)
+		}
 	}
 	for _, c := range []struct{ in, want string }{
 		{"", "chat"}, {"panel", "chat"}, {"chat", "chat"}, {"rail", "rail"}, {"desk", "desk"}, {"page", "page"},
 	} {
-		got, err := appuiPluginPlacement(c.in)
+		got, err := appuiGadgetPlacement(c.in)
 		if err != nil || got != c.want {
-			t.Fatalf("appuiPluginPlacement(%q) = %q, %v; want %q", c.in, got, err, c.want)
+			t.Fatalf("appuiGadgetPlacement(%q) = %q, %v; want %q", c.in, got, err, c.want)
 		}
 	}
-	if _, err := appuiPluginPlacement("dock"); err == nil {
+	if _, err := appuiGadgetPlacement("dock"); err == nil {
 		t.Fatal("unknown placement accepted")
 	}
 }

@@ -71,8 +71,8 @@ before(async () => {
         ],
       }),
       'spaces.ask': (body) => {
-        if (body.tool === 'appui_create' && body.args?.kind === 'plugin') {
-          return { result: JSON.stringify({ id: 'p1', dir: '/workspace/appui/p1', kind: 'plugin', next: 'build then appui_publish' }) }
+        if (body.tool === 'appui_create' && body.args?.kind === 'gadget') {
+          return { result: JSON.stringify({ id: 'p1', dir: '/workspace/appui/p1', kind: 'gadget', next: 'build then appui_publish' }) }
         }
         if (body.raw) return { exit_code: 0, output: `ran: ${body.body}` }
         if (body.tool) return { tool: body.tool, result: `sent ${body.args?.path}` }
@@ -80,7 +80,7 @@ before(async () => {
       },
       'spaces.agent_log': () => ({ ok: true }),
       'spaces.message_send': () => ({ id: 'm1' }),
-      'tools.plugin_list': () => ({ plugins: [] }),
+      'tools.gadget_list': () => ({ gadgets: [] }),
     },
   })
   await gw.start()
@@ -193,37 +193,37 @@ test('in personal chat a question is the reply and the next message answers it',
   assert.equal(answered.reply, 'booked the window seat')
 })
 
-test('list_plugins asks the node for this space\'s plugins', async () => {
+test('list_gadgets asks the node for this space\'s gadgets', async () => {
   script = (body) => (lastToolResult(body) === undefined
-    ? { tools: [{ name: 'list_plugins', args: {} }] }
-    : { text: 'no plugins yet' })
+    ? { tools: [{ name: 'list_gadgets', args: {} }] }
+    : { text: 'no gadgets yet' })
   const before = gw.calls.length
-  const out = await api('POST', '/v1/chat', { token: 'tok-c', account_id: 'person-3', thread_id: 't', with_tools: true, messages: [{ role: 'user', content: 'what plugins do I have?' }] })
-  assert.equal(out.reply, 'no plugins yet', JSON.stringify(out))
-  assert.ok(gw.calls.slice(before).some((c) => c.action === 'plugin_list'))
+  const out = await api('POST', '/v1/chat', { token: 'tok-c', account_id: 'person-3', thread_id: 't', with_tools: true, messages: [{ role: 'user', content: 'what gadgets do I have?' }] })
+  assert.equal(out.reply, 'no gadgets yet', JSON.stringify(out))
+  assert.ok(gw.calls.slice(before).some((c) => c.action === 'gadget_list'))
 })
 
-test('create_plugin starts appui_create with kind=plugin', async () => {
+test('create_gadget starts appui_create with kind=gadget', async () => {
   let result = ''
   script = (body) => {
     const r = lastToolResult(body)
     if (r !== undefined) {
       result = r
-      return { text: 'building the habits plugin' }
+      return { text: 'building the habits gadget' }
     }
-    return { tools: [{ name: 'create_plugin', args: { name: 'Habits', description: 'Track habits', placement: 'chat' } }] }
+    return { tools: [{ name: 'create_gadget', args: { name: 'Habits', description: 'Track habits', placement: 'chat' } }] }
   }
   const before = gw.calls.length
   const out = await api('POST', '/v1/chat', {
     token: 'tok-c2', account_id: 'person-4', thread_id: 't', with_tools: true,
     computer_space: 'home-4',
-    messages: [{ role: 'user', content: 'make me a habits plugin' }],
+    messages: [{ role: 'user', content: 'make me a habits gadget' }],
   })
-  assert.equal(out.reply, 'building the habits plugin', JSON.stringify(out))
+  assert.equal(out.reply, 'building the habits gadget', JSON.stringify(out))
   assert.match(result, /appui\/p1/)
   const ask = gw.calls.slice(before).find((c) => c.action === 'ask' && c.body?.tool === 'appui_create')
-  assert.ok(ask, 'create_plugin should ask appui_create')
-  assert.equal(ask.body.args.kind, 'plugin')
+  assert.ok(ask, 'create_gadget should ask appui_create')
+  assert.equal(ask.body.args.kind, 'gadget')
   assert.equal(ask.body.args.placement, 'chat')
 })
 

@@ -1,24 +1,43 @@
 # Changelog
 
-## Unreleased: plugins are frameless App UIs
+## Unreleased: developer API platform collection
 
-- **Same creation as apps.** Plugins are built with the Elpian / web App UI
-  pipeline (`appui_create` / `appui_publish`). Pass `kind: "plugin"` and
-  `placement` (`chat` / `rail` / `desk` / `page`); omit kind (or
-  `kind: "app"`) for a framed desk card. Built in the person's Aseman
-  (home) they are account-wide / platform gadgets; built in a space they
-  stay on that space's surfaces. Agents start one with `create_plugin`
-  (shorthand for `appui_create` kind=plugin) or `appui_create` directly;
-  `list_plugins` / `remove_plugin` / `restore_plugin` manage what is
-  already registered.
-- **Two host differences only.** No window frame, background pad or title
-  bar (custom shapes); right-click or long-press opens minimise / close /
-  open as page / move. Free positioning over desk, chat, left rail, or
-  universal over home and workspaces.
-- **Removed:** DSH Creator `create_plugin`, `tools.plugin_create` /
-  `plugin_call` / `plugin_invoke`, static QuickJS / HTML plugin programs,
-  `aseman-plugin*` / `plugin-check` / `plugin-inline`, and the Flutter
-  PluginHost / PluginRuntime / PluginWebFrame path.
+- **Developer console redesign.** Profile → Developer API uses the app's
+  theme chrome: SoftCard sections, Sky headers, glass side navigation on
+  wide layouts, and SegmentedTabBar on compact — shaped by the selected
+  theme pack like Settings and Admin.
+- **Platform API.** Bearer keys with Platform access can call every
+  non-admin product action through `GET/POST /v1/platform` and
+  `POST /v1/platform/{namespace}/{action}` (spaces, bots, tools, desk,
+  messenger, finance, themes, market, posts, routines, …). Node
+  administration (`admin.*`, `admin_*`, and the developer console
+  namespace) stays off this door. Acts as the person who created the key.
+- **Sub-platforms.** A developer organization can create one isolated
+  product environment (`dev_platforms`). Spaces, bots and accounts carry
+  `platform_id`. Auth (password, Google, Apple) is the shared system with
+  an optional `platform` slug — accounts stay local to that environment.
+  Platforms never see each other. Node admin can set `main_access` so one
+  platform and main Aseman see each other both ways. Org owners get
+  `platform_*` admin actions; node admin gets `admin_platforms` /
+  `admin_platform_access`.
+
+## Unreleased: App UI window + gadget modes (plugins product purged)
+
+- **One App UI system, two hosts.** Elpian / web apps use `appui_create` /
+  `appui_publish`. `kind: "app"` (default) opens a framed desk window;
+  `kind: "gadget"` registers a compact frameless free-position widget
+  (`placement` chat / rail / desk / page). Built in the person's Aseman
+  (home) gadgets are account-wide / platform; built in a space they stay
+  on that space's surfaces. Agents use `create_gadget` (shorthand) or
+  `appui_create` with `kind: "gadget"`; `list_gadgets` / `tools.gadget_*`.
+  Only the person removes gadgets from the right-edge handle.
+- **Gadget first rule.** Generated gadgets must be compact like mobile
+  home-screen widgets: no window frame, small footprint, only necessary
+  information — not full windows.
+- **Purged product “plugins” naming.** Former `kind: "plugin"`,
+  `create_plugin`, `tools.plugin_*`, Flutter `features/plugins`, and
+  `PLUGINS.md` are replaced by gadget mode (`features/gadgets`,
+  `elpian/GADGETS.md`). Legacy `kind: "plugin"` still maps to gadget.
 
 ## Unreleased: Aseman chat is home
 
@@ -54,17 +73,17 @@
   meaning, learned from finished turns, billed to the project.
 - **Timeline:** kept in the node's own database; agents search their own
   project's (`ASEMAN_TIMELINE=off` turns it off).
-- **Plugins (frameless App UIs):** agents make plugins with the same
-  `appui_create` / `appui_publish` pipeline as desk apps (`kind: "plugin"`,
+- **App UI gadgets:** agents make compact frameless gadgets with the same
+  `appui_create` / `appui_publish` pipeline as desk windows (`kind: "gadget"`,
   `placement` chat / rail / desk / page). Made in the personal Aseman chat,
-  a plugin is the person's own **universal floating gadget** (across home
+  a gadget is the person's own **universal floating widget** (across home
   tabs and while viewing workspaces); made in a space or DM it stays on that
-  space's surfaces. Hosted **without** a window frame / pad (custom shapes;
-  right-click or long-press for minimise / close / …). One **plugins handle**
-  on the right screen edge opens the plugin manager.
+  space's surfaces. One **gadgets handle** on the right screen edge opens
+  the gadget manager. Agents only create; people remove. Desk apps stay
+  framed windows; gadgets stay compact frameless widgets.
 - **Typed API catalog:** `aseman_api_search` shows each action's body fields,
   read from the source by `cmd/gen-action-schemas` (kept current by a test).
-- **Confinement:** a room agent, and a space's plugin, may name only its own
+- **Confinement:** a room agent, and a space's gadget, may name only its own
   space and the rooms and threads in it, whatever the field is called.
 - **Personal Aseman:** acts only on DeepSeek Harness; its older in-node tools
   (proposals, reminders) are gone; proposals already stored are still

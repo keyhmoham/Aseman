@@ -17,7 +17,7 @@ import (
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/pkg/idutil"
 	"github.com/aseman/aseman/pkg/logger"
-	"github.com/aseman/aseman/plugins/actions/auth/mechanisms/mail"
+	"github.com/aseman/aseman/plugins/actions/support/mail"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 	"github.com/aseman/aseman/plugins/actions/auth/models/session"
 	"github.com/aseman/aseman/plugins/actions/finance/models/wallet"
@@ -58,10 +58,27 @@ func BuildActions(s *Service) []api.Action {
 
 // Account finds an account by handle or email.
 func (s *Service) Account(ctx context.Context, handleOrEmail string) (*account.Account, error) {
+	return s.AccountOn(ctx, handleOrEmail, "")
+}
+
+// AccountOn finds a person in one environment (empty platform = main Aseman).
+func (s *Service) AccountOn(ctx context.Context, handleOrEmail, platformID string) (*account.Account, error) {
 	lookup := func(equal map[string]any) (*account.Account, bool) {
+		equal["platform_id"] = platformID
 		var list []account.Account
 		if err := s.R.List(ctx, "accounts", database.Filter{Equal: equal}, &list); err == nil && len(list) > 0 {
 			return &list[0], true
+		}
+		// Older rows may omit platform_id; treat missing as main.
+		if platformID == "" {
+			delete(equal, "platform_id")
+			if err := s.R.List(ctx, "accounts", database.Filter{Equal: equal}, &list); err == nil {
+				for i := range list {
+					if list[i].PlatformID == "" {
+						return &list[i], true
+					}
+				}
+			}
 		}
 		return nil, false
 	}
@@ -82,7 +99,12 @@ func (s *Service) Account(ctx context.Context, handleOrEmail string) (*account.A
 // Login authenticates a user and issues a session token plus the caller's
 // decrypted private identity key.
 func (s *Service) Login(ctx context.Context, handleOrEmail, password string) (*account.Account, string, string, error) {
-	acc, err := s.Account(ctx, handleOrEmail)
+	return s.LoginOn(ctx, handleOrEmail, password, "")
+}
+
+// LoginOn authenticates inside one environment (empty = main Aseman).
+func (s *Service) LoginOn(ctx context.Context, handleOrEmail, password, platformID string) (*account.Account, string, string, error) {
+	acc, err := s.AccountOn(ctx, handleOrEmail, platformID)
 	if err != nil {
 		return nil, "", "", errs.Unauthenticated("invalid credentials")
 	}
@@ -175,6 +197,16 @@ func (s *Service) Authenticate(ctx context.Context, rawToken string) (*account.A
 // keypair. The private key is stored encrypted with the password and returned
 // once to the caller.
 func (s *Service) Register(ctx context.Context, handle, email, password string) (*account.Account, string, string, error) {
+	return s.RegisterOn(ctx, handle, email, password, "")
+}
+
+// RegisterOn creates an account in one environment (empty = main Aseman).
+// Handles and emails are unique per environment, so the same Google identity
+// can exist on main Aseman and on each sub-platform as separate local accounts.
+func (s *Service) RegisterOn(ctx context.Context, handle, email, password, platformID string) (*account.Account, string, string, error) {
+	if platformID != "" && handle == s.K.Env()["admin_handle"] {
+		return nil, "", "", errs.InvalidArgument("the node administrator belongs to main Aseman")
+	}
 	if handle != s.K.Env()["admin_handle"] {
 		clean, err := helper.NormalizeHandle(handle)
 		if err != nil {
@@ -189,15 +221,33 @@ func (s *Service) Register(ctx context.Context, handle, email, password string) 
 		return nil, "", "", errs.InvalidArgument("invalid email")
 	}
 	var existing []account.Account
-	if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"handle": handle}}, &existing); err == nil && len(existing) > 0 {
+	if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"handle": handle, "platform_id": platformID}}, &existing); err == nil && len(existing) > 0 {
 		return nil, "", "", errs.AlreadyExists("handle " + handle)
+	}
+	if platformID == "" {
+		if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"handle": handle}}, &existing); err == nil {
+			for _, a := range existing {
+				if a.PlatformID == "" {
+					return nil, "", "", errs.AlreadyExists("handle " + handle)
+				}
+			}
+		}
 	}
 	// Renaming the administrator must not free a handle that grants admin access.
 	if handle == s.K.Env()["admin_handle"] && s.hasAdminAccount(ctx) {
 		return nil, "", "", errs.AlreadyExists("bootstrap administrator handle is reserved")
 	}
-	if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"email": email}}, &existing); err == nil && len(existing) > 0 {
+	if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"email": email, "platform_id": platformID}}, &existing); err == nil && len(existing) > 0 {
 		return nil, "", "", errs.AlreadyExists("email " + email)
+	}
+	if platformID == "" {
+		if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"email": email}}, &existing); err == nil {
+			for _, a := range existing {
+				if a.PlatformID == "" {
+					return nil, "", "", errs.AlreadyExists("email " + email)
+				}
+			}
+		}
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -231,9 +281,10 @@ func (s *Service) Register(ctx context.Context, handle, email, password string) 
 		PrivateKeyEnc: encPriv,
 		Status:        account.StatusPending,
 		MetadataID:    accID, // metadata keyed by owner id
+		PlatformID:    platformID,
 	}
 	acc.Role = "user"
-	if handle == s.K.Env()["admin_handle"] {
+	if handle == s.K.Env()["admin_handle"] && platformID == "" {
 		acc.Role = "admin"
 		acc.Status = account.StatusActive
 		acc.EmailVerified = true
@@ -300,6 +351,11 @@ func (s *Service) Logout(ctx context.Context, rawToken string) error {
 // deterministically from the provider's stable subject so the identity key
 // remains recoverable across sign-ins.
 func (s *Service) OAuthSignIn(ctx context.Context, provider string, claims map[string]any) (*account.Account, string, string, bool, error) {
+	return s.OAuthSignInOn(ctx, provider, claims, "")
+}
+
+// OAuthSignInOn is OAuthSignIn scoped to one environment (empty = main Aseman).
+func (s *Service) OAuthSignInOn(ctx context.Context, provider string, claims map[string]any, platformID string) (*account.Account, string, string, bool, error) {
 	email, _ := claims["email"].(string)
 	sub, _ := claims["sub"].(string)
 	verified, _ := claims["email_verified"].(bool)
@@ -316,10 +372,22 @@ func (s *Service) OAuthSignIn(ctx context.Context, provider string, claims map[s
 	var targetAccount *account.Account
 
 	var list []account.Account
-	if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"email": email}}, &list); err == nil && len(list) > 0 {
+	if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"email": email, "platform_id": platformID}}, &list); err == nil && len(list) > 0 {
 		targetAccount = &list[0]
-	} else if existing, ok := s.findAccountByOAuth(ctx, provider, sub); ok {
-		targetAccount = existing
+	} else if platformID == "" {
+		if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"email": email}}, &list); err == nil {
+			for i := range list {
+				if list[i].PlatformID == "" {
+					targetAccount = &list[i]
+					break
+				}
+			}
+		}
+	}
+	if targetAccount == nil {
+		if existing, ok := s.findAccountByOAuthOn(ctx, provider, sub, platformID); ok {
+			targetAccount = existing
+		}
 	}
 
 	if targetAccount != nil {
@@ -360,11 +428,11 @@ func (s *Service) OAuthSignIn(ctx context.Context, provider string, claims map[s
 		}
 		return targetAccount, token, priv, false, nil
 	}
-	handle, err := s.freeHandle(ctx, helper.SanitizeHandle("u_"+strings.Split(email, "@")[0]))
+	handle, err := s.freeHandleOn(ctx, helper.SanitizeHandle("u_"+strings.Split(email, "@")[0]), platformID)
 	if err != nil {
 		return nil, "", "", false, err
 	}
-	acc, token, priv, err := s.Register(ctx, handle, email, oauthPass)
+	acc, token, priv, err := s.RegisterOn(ctx, handle, email, oauthPass, platformID)
 	if err != nil {
 		return nil, "", "", false, err
 	}
@@ -381,16 +449,32 @@ func (s *Service) OAuthSignIn(ctx context.Context, provider string, claims map[s
 
 // freeHandle returns base, or base with a numeric suffix when it is taken.
 func (s *Service) freeHandle(ctx context.Context, base string) (string, error) {
+	return s.freeHandleOn(ctx, base, "")
+}
+
+func (s *Service) freeHandleOn(ctx context.Context, base, platformID string) (string, error) {
 	for i := 0; i < 50; i++ {
 		candidate := base
 		if i > 0 {
 			candidate = base + "_" + strconv.Itoa(i+1)
 		}
 		var existing []account.Account
-		if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"handle": candidate}, Limit: 1}, &existing); err != nil {
+		if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"handle": candidate, "platform_id": platformID}, Limit: 1}, &existing); err != nil {
 			return "", err
 		}
-		if len(existing) == 0 {
+		taken := len(existing) > 0
+		if !taken && platformID == "" {
+			if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"handle": candidate}, Limit: 20}, &existing); err != nil {
+				return "", err
+			}
+			for _, a := range existing {
+				if a.PlatformID == "" {
+					taken = true
+					break
+				}
+			}
+		}
+		if !taken {
 			return candidate, nil
 		}
 	}
@@ -421,15 +505,20 @@ func (a *registerAction) Handle(ctx context.Context, req *api.ActionRequest) (*a
 		Handle   string `json:"handle"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Platform string `json:"platform"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
 	}
-	acc, token, priv, err := a.s.Register(ctx, in.Handle, in.Email, in.Password)
+	platformID, err := helper.ResolvePlatformID(ctx, a.s.R, in.Platform)
 	if err != nil {
 		return nil, err
 	}
-	return helper.JSON(map[string]any{"account_id": acc.ID.String(), "handle": acc.Handle, "token": token, "private_key": priv, "public_key": acc.PublicKey, "home_space_id": a.s.HomeSpaceID(ctx, acc.ID)})
+	acc, token, priv, err := a.s.RegisterOn(ctx, in.Handle, in.Email, in.Password, platformID)
+	if err != nil {
+		return nil, err
+	}
+	return helper.JSON(map[string]any{"account_id": acc.ID.String(), "handle": acc.Handle, "token": token, "private_key": priv, "public_key": acc.PublicKey, "platform_id": acc.PlatformID, "home_space_id": a.s.HomeSpaceID(ctx, acc.ID)})
 }
 
 // loginAction implements auth.login.
@@ -442,15 +531,20 @@ func (a *loginAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.
 	var in struct {
 		Account  string `json:"account"`
 		Password string `json:"password"`
+		Platform string `json:"platform"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
 	}
-	acc, token, priv, err := a.s.Login(ctx, in.Account, in.Password)
+	platformID, err := helper.ResolvePlatformID(ctx, a.s.R, in.Platform)
 	if err != nil {
 		return nil, err
 	}
-	return helper.JSON(map[string]any{"account_id": acc.ID.String(), "handle": acc.Handle, "token": token, "private_key": priv, "public_key": acc.PublicKey, "home_space_id": a.s.HomeSpaceID(ctx, acc.ID)})
+	acc, token, priv, err := a.s.LoginOn(ctx, in.Account, in.Password, platformID)
+	if err != nil {
+		return nil, err
+	}
+	return helper.JSON(map[string]any{"account_id": acc.ID.String(), "handle": acc.Handle, "token": token, "private_key": priv, "public_key": acc.PublicKey, "platform_id": acc.PlatformID, "home_space_id": a.s.HomeSpaceID(ctx, acc.ID)})
 }
 
 // logoutAction implements auth.logout.
@@ -501,23 +595,28 @@ func (a *oauthGoogleAction) Meta() api.ActionMeta {
 }
 func (a *oauthGoogleAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	var in struct {
-		IDToken string `json:"id_token"`
+		IDToken  string `json:"id_token"`
+		Platform string `json:"platform"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
+		return nil, err
+	}
+	platformID, err := helper.ResolvePlatformID(ctx, a.s.R, in.Platform)
+	if err != nil {
 		return nil, err
 	}
 	claims, err := crypto.VerifyGoogleIDToken(ctx, in.IDToken, a.s.K.Env()["google_client_id"])
 	if err != nil {
 		return nil, errs.Wrap(errs.CodeInvalidArgument, err, "invalid google token")
 	}
-	acc, token, priv, isNew, err := a.s.OAuthSignIn(ctx, "google", claims)
+	acc, token, priv, isNew, err := a.s.OAuthSignInOn(ctx, "google", claims, platformID)
 	if err != nil {
 		return nil, err
 	}
 	return helper.JSON(map[string]any{
 		"account_id": acc.ID.String(), "handle": acc.Handle,
 		"token": token, "private_key": priv, "public_key": acc.PublicKey, "new": isNew,
-		"home_space_id": a.s.HomeSpaceID(ctx, acc.ID),
+		"platform_id": acc.PlatformID, "home_space_id": a.s.HomeSpaceID(ctx, acc.ID),
 	})
 }
 

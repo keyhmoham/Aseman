@@ -40,6 +40,12 @@ type Account struct {
 	Status         Status      `db:"status" json:"status"`
 	MetadataID     identity.ID `db:"metadata_id" json:"metadata_id"`
 	LastSeen       time.Time   `db:"last_seen" json:"last_seen,omitempty"`
+	// PlatformID is empty for main Aseman accounts. Non-empty values are
+	// platform-local: the same email/handle may exist on another platform or
+	// on main Aseman as a separate account. Auth (password, Google, SSO) is
+	// the shared system; visibility across platforms is controlled by the
+	// node admin's MainAccess bridge on the platform.
+	PlatformID string `db:"platform_id" json:"platform_id,omitempty"`
 }
 
 // New assembles a fresh account record.

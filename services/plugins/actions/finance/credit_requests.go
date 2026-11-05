@@ -12,11 +12,11 @@ import (
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
-	"github.com/aseman/aseman/plugins/actions/auth/mechanisms/mail"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 	"github.com/aseman/aseman/plugins/actions/finance/models"
 	"github.com/aseman/aseman/plugins/actions/support/emailtpl"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
+	"github.com/aseman/aseman/plugins/actions/support/mail"
 	database "github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 

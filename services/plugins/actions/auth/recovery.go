@@ -17,7 +17,7 @@ import (
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/crypto"
 	"github.com/aseman/aseman/pkg/errs"
-	"github.com/aseman/aseman/plugins/actions/auth/mechanisms/mail"
+	"github.com/aseman/aseman/plugins/actions/support/mail"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 	"github.com/aseman/aseman/plugins/actions/auth/models/challenge"
 	"github.com/aseman/aseman/plugins/actions/auth/models/session"
@@ -416,8 +416,13 @@ func (s *Service) verifyEmail(ctx context.Context, req *api.ActionRequest) (*api
 func (s *Service) oauthApple(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	var in struct {
 		IdentityToken string `json:"identity_token"`
+		Platform      string `json:"platform"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
+		return nil, err
+	}
+	platformID, err := helper.ResolvePlatformID(ctx, s.R, in.Platform)
+	if err != nil {
 		return nil, err
 	}
 	audiences := appleClientIDs()
@@ -428,13 +433,13 @@ func (s *Service) oauthApple(ctx context.Context, req *api.ActionRequest) (*api.
 	if err != nil {
 		return nil, errs.Wrap(errs.CodeInvalidArgument, err, "invalid apple token")
 	}
-	acc, token, priv, isNew, err := s.OAuthSignIn(ctx, "apple", claims)
+	acc, token, priv, isNew, err := s.OAuthSignInOn(ctx, "apple", claims, platformID)
 	if err != nil {
 		return nil, err
 	}
 	return helper.JSON(map[string]any{
 		"account_id": acc.ID.String(), "handle": acc.Handle,
 		"token": token, "private_key": priv, "public_key": acc.PublicKey, "new": isNew,
-		"home_space_id": s.HomeSpaceID(ctx, acc.ID),
+		"platform_id": acc.PlatformID, "home_space_id": s.HomeSpaceID(ctx, acc.ID),
 	})
 }

@@ -92,7 +92,7 @@ func (a *listAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.A
 		Offset   int    `json:"offset,omitempty"`
 	}
 	_ = helper.Decode(req, &in)
-	list, err := a.s.List(ctx, in.Type, in.Category, in.Query, in.Limit, in.Offset)
+	list, err := a.s.List(ctx, req.Caller.ID, in.Type, in.Category, in.Query, in.Limit, in.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +133,9 @@ func (a *getAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.Ac
 	d, err := a.s.DetailFor(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if d.Bot != nil && !helper.SeesEntity(ctx, a.s.R, req.Caller.ID, d.Bot.PlatformID) {
+		return nil, errs.NotFound("listing")
 	}
 	return helper.JSON(d)
 }

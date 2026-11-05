@@ -2,9 +2,9 @@ package spaces
 
 // App UI generation: on-demand fullstack apps built in the space sandbox,
 // calling space apps and agents via the preview `_aseman/api/*` API.
-// kind=app (default) opens as a desk card window; kind=plugin registers the
-// same verified app as a frameless free-position plugin (chat / rail / desk /
-// page, or account-wide when built in the person's home Aseman).
+// kind=app (default) opens as a framed desk card window; kind=gadget registers
+// the same verified app as a compact frameless free-position gadget (chat / rail /
+// desk / page, or account-wide when built in the person's home Aseman).
 // The space's agents build them. Both share the project layout, guides and
 // toolchain (aseman-appui), and the platform verifies every app the same way.
 
@@ -64,9 +64,9 @@ const (
 	appuiElpian = "elpian"
 	appuiWeb    = "web"
 
-	// Hosting: a desk window, or a frameless free-position plugin.
+	// Hosting: a framed desk window, or a compact frameless free-position gadget.
 	appuiKindApp    = "app"
-	appuiKindPlugin = "plugin"
+	appuiKindGadget = "gadget"
 )
 
 // appuiKind picks how a verified App UI is hosted.
@@ -74,22 +74,22 @@ func appuiKind(asked string) (string, error) {
 	switch k := strings.ToLower(strings.TrimSpace(asked)); k {
 	case "", appuiKindApp:
 		return appuiKindApp, nil
-	case appuiKindPlugin:
-		return appuiKindPlugin, nil
+	case appuiKindGadget:
+		return appuiKindGadget, nil
 	default:
-		return "", errs.InvalidArgument(`kind is "app" (desk window, the default) or "plugin" (frameless free-position gadget)`)
+		return "", errs.InvalidArgument(`kind is "app" (framed desk window, the default) or "gadget" (compact frameless free-position widget)`)
 	}
 }
 
-// appuiPluginPlacement normalises a plugin's surface.
-func appuiPluginPlacement(asked string) (string, error) {
+// appuiGadgetPlacement normalises a gadget's size / surface hint.
+func appuiGadgetPlacement(asked string) (string, error) {
 	switch p := strings.ToLower(strings.TrimSpace(asked)); p {
 	case "", "chat", "panel":
 		return "chat", nil
 	case "rail", "page", "desk":
 		return p, nil
 	default:
-		return "", errs.InvalidArgument(`placement for a plugin is "chat", "rail", "desk" or "page"`)
+		return "", errs.InvalidArgument(`placement for a gadget is "chat", "rail", "desk" or "page"`)
 	}
 }
 
@@ -284,8 +284,8 @@ type appuiJob struct {
 	Port   int        `json:"port"`
 	Mode   string     `json:"mode"`
 	UI     string     `json:"ui"`
-	Kind   string     `json:"kind,omitempty"` // app (default) | plugin
-	// Placement is only for kind=plugin: chat | rail | desk | page.
+	Kind   string     `json:"kind,omitempty"` // app (default) | gadget
+	// Placement is only for kind=gadget: chat | rail | desk | page.
 	Placement string     `json:"placement,omitempty"`
 	HasKey    bool       `json:"has_key"`
 	Place     appuiPlace `json:"place"`
@@ -346,8 +346,8 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 		return "", err
 	}
 	placement := ""
-	if kind == appuiKindPlugin {
-		if placement, err = appuiPluginPlacement(in.Placement); err != nil {
+	if kind == appuiKindGadget {
+		if placement, err = appuiGadgetPlacement(in.Placement); err != nil {
 			return "", err
 		}
 	}
@@ -447,8 +447,8 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	if job.UI, err = appuiFrontend(in.UI, existingUI); err != nil {
 		return "", err
 	}
-	flags := fmt.Sprintf(`--dir %s --brief-file %s --apps-file %s --title %s --port %d --mode %s --ui %s`,
-		shellQuote(dir), shellQuote(briefPath), shellQuote(appsPath), shellQuote(job.Title), job.Port, job.Mode, job.UI)
+	flags := fmt.Sprintf(`--dir %s --brief-file %s --apps-file %s --title %s --port %d --mode %s --ui %s --kind %s`,
+		shellQuote(dir), shellQuote(briefPath), shellQuote(appsPath), shellQuote(job.Title), job.Port, job.Mode, job.UI, job.Kind)
 	return s.appuiAgentsBuild(opCtx, spaceID, job, flags)
 }
 
@@ -473,8 +473,8 @@ func (s *Service) appuiAgentsBuild(ctx context.Context, spaceID identity.ID, job
 		task = strings.TrimPrefix(out, "exit=0\n")
 	}
 	hostHint := "opens it on the desk"
-	if job.Kind == appuiKindPlugin {
-		hostHint = "registers it as a frameless free-position plugin (" + job.Placement + ")"
+	if job.Kind == appuiKindGadget {
+		hostHint = "registers it as a compact frameless gadget (" + job.Placement + ")"
 	}
 	next := "Build the app now, exactly as the task says (or hand the whole task to a developer agent of the space with this dir and TASK.md): plan, build, test, drive it end to end with aseman-elpian, write READY.json. Then call appui_publish {\"dir\": \"" + job.Dir + "\"}: the platform verifies it and " + hostHint + ", or answers with what to fix."
 	b, _ := json.Marshal(map[string]any{
@@ -601,12 +601,12 @@ func (s *Service) appuiPublishTool(ctx context.Context, spaceID, roomID identity
 	if job.Kind == "" {
 		job.Kind = appuiKindApp
 	}
-	if job.Kind == appuiKindPlugin {
+	if job.Kind == appuiKindGadget {
 		place := in.Placement
 		if place == "" {
 			place = job.Placement
 		}
-		p, perr := appuiPluginPlacement(place)
+		p, perr := appuiGadgetPlacement(place)
 		if perr != nil {
 			return "", perr
 		}
@@ -659,9 +659,9 @@ func (s *Service) appuiPublishTool(ctx context.Context, spaceID, roomID identity
 	return s.appuiOpen(opCtx, ctx, spaceID, agentName, job, ready, "agents")
 }
 
-// appuiOpen serves a verified app: as a desk card (kind=app) or as a
-// frameless free-position plugin (kind=plugin). The preview gateway runs its
-// start command either way; plugins keep the desk window off (show=false).
+// appuiOpen serves a verified app: as a framed desk card (kind=app) or as a
+// compact frameless gadget (kind=gadget). The preview gateway runs its
+// start command either way; gadgets keep the desk window off (show=false).
 func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, agentName string, job appuiJob, ready appuiReady, builder string) (string, error) {
 	dir, port, title := job.Dir, job.Port, job.Title
 	if ready.Port > 0 {
@@ -676,7 +676,7 @@ func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, age
 	}
 
 	show := true
-	if job.Kind == appuiKindPlugin {
+	if job.Kind == appuiKindGadget {
 		show = false
 	} else if job.Place.Show != nil {
 		show = *job.Place.Show
@@ -729,13 +729,13 @@ func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, age
 		}
 	}
 
-	var pluginOut any
-	if job.Kind == appuiKindPlugin {
+	var gadgetOut any
+	if job.Kind == appuiKindGadget {
 		if m == nil {
 			return "", errs.Conflict("the app started but its preview path was not returned; call appui_publish again")
 		}
 		preview := "/v1/proxy/" + m[1] + "/"
-		pluginOut, err = s.appuiRegisterPlugin(opCtx, spaceID, agentName, job, title, preview, elpianEntry)
+		gadgetOut, err = s.appuiRegisterGadget(opCtx, spaceID, agentName, job, title, preview, elpianEntry)
 		if err != nil {
 			return "", err
 		}
@@ -773,28 +773,28 @@ func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, age
 			"billing":    "Calls with a request's X-Aseman-User-Token are billed to the person using the app; background calls with ASEMAN_APP_KEY to the person who asked for it.",
 		},
 	}
-	if pluginOut != nil {
-		result["plugin"] = pluginOut
+	if gadgetOut != nil {
+		result["gadget"] = gadgetOut
 	}
 	b, _ := json.Marshal(result)
 	return string(b), nil
 }
 
-// appuiRegisterPlugin registers a verified App UI as a frameless plugin.
-// Built in the person's home Aseman → account-wide (universal) plugin;
-// otherwise a space plugin on the given placement.
-func (s *Service) appuiRegisterPlugin(ctx context.Context, spaceID identity.ID, agentName string, job appuiJob, title, preview, entry string) (any, error) {
+// appuiRegisterGadget registers a verified App UI as a compact frameless gadget.
+// Built in the person's home Aseman → account-wide (universal) gadget;
+// otherwise a space gadget on the given placement.
+func (s *Service) appuiRegisterGadget(ctx context.Context, spaceID identity.ID, agentName string, job appuiJob, title, preview, entry string) (any, error) {
 	owner := appOwner(ctx)
 	if owner.IsZero() {
-		return nil, errs.Permission("no person to create the plugin for")
+		return nil, errs.Permission("no person to create the gadget for")
 	}
-	pluginSpace := spaceID.String()
+	gadgetSpace := spaceID.String()
 	if sp, err := s.GetSpace(ctx, spaceID); err == nil && sp != nil && sp.Home {
-		pluginSpace = "" // account-wide / platform plugin
+		gadgetSpace = "" // account-wide / platform gadget
 	}
 	var out any
-	err := bridge.Invoke(ctx, s.K, "tools", "RegisterAppPlugin", []any{
-		ctx, owner.String(), pluginSpace, title, "", job.Placement, job.UI, preview, entry, job.ID, agentName,
+	err := bridge.Invoke(ctx, s.K, "tools", "RegisterAppGadget", []any{
+		ctx, owner.String(), gadgetSpace, title, "", job.Placement, job.UI, preview, entry, job.ID, agentName,
 	}, &out)
 	if err != nil {
 		return nil, err

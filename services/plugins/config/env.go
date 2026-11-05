@@ -182,7 +182,7 @@ func (c *Config) ApplyEnv() {
 
 // AutoAdapters builds the adapter plugin set from the environment: postgres
 // when a DSN is given (in-memory otherwise), the local cache and filesystem,
-// HTTP, the nomad and docker VMM providers when reachable, the deep agents
+// HTTP, the nomad and docker VMM providers when reachable, the Harness agent
 // runtime (LLM providers are managed in the admin panel),
 // Modal sandboxes when credentials are set, and wasm app backends.
 func (c *Config) AutoAdapters() []PluginSpec {

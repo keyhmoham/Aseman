@@ -10,8 +10,8 @@ import 'core/theme/theme_pack_controller.dart';
 import 'core/theme/theme_runtime_scope.dart';
 import 'features/auth/presentation/auth_screen.dart';
 import 'features/calls/call_overlay.dart';
+import 'features/gadgets/presentation/gadgets_overlay.dart';
 import 'features/navigation/presentation/app_shell.dart';
-import 'features/plugins/presentation/plugin_gadgets_overlay.dart';
 
 class AsemanApp extends StatefulWidget {
   const AsemanApp({super.key, required this.dependencies});
@@ -88,19 +88,23 @@ class _AsemanAppState extends State<AsemanApp> {
                 paletteId: settings.paletteId,
               ),
               themeMode: settings.themeMode,
-              home: ThemeRuntimeScope(
+              // Overlay above the navigator so the gadgets edge handle and
+              // GadgetsScope cover home and every pushed workspace.
+              builder: (context, child) => ThemeRuntimeScope(
                 dependencies: widget.dependencies,
                 child: AuthGate(
                   dependencies: widget.dependencies,
                   child: CallOverlay(
                     dependencies: widget.dependencies,
-                    child: PluginGadgetsOverlay(
+                    child: GadgetsOverlay(
                       dependencies: widget.dependencies,
-                      child: AppShell(dependencies: widget.dependencies),
+                      navigatorKey: AsemanApp.navigatorKey,
+                      child: child ?? const SizedBox.shrink(),
                     ),
                   ),
                 ),
               ),
+              home: AppShell(dependencies: widget.dependencies),
             ),
           ),
         ),

@@ -2,6 +2,8 @@
 
 **Aseman AIOS** is an agentic social workspace and federated AI operating system. Users deploy LLM-backed autonomous agents and apps, collaborate in shared spaces/rooms, and manage execution costs via in-platform wallets powered by a distributed ledger.
 
+**Full platform documentation** (architecture, modular philosophy, product surfaces, developer API, sub-platforms, deploy): [`docs/PLATFORM.md`](docs/PLATFORM.md).
+
 ---
 
 ## Architecture Overview
@@ -205,7 +207,7 @@ dependency. See [`services/README.md`](services/README.md#tools-one-form-three-b
 - **Aseman chat is your home:** the former Saved Messages self-chat is also
   your home workspace — one space for notes answered by your personal Aseman,
   your computer (shared with your other direct chats' agents), your lead and
-  team, and universal floating plugin gadgets. Your Aseman acts for you on DeepSeek Harness with
+  team, and universal floating App UI gadgets. Your Aseman acts for you on DeepSeek Harness with
   your access across the app (your own memory, room access, `ask_user` before
   anything that cannot be undone). Long work stays in this same home; live
   voice is under Admin → Agents. There is no separate home project or Aseman

@@ -21,6 +21,7 @@ import (
 	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/permission"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/space"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/actions/support/kvs"
 	"github.com/aseman/aseman/plugins/actions/support/metasvc"
 	"github.com/aseman/aseman/plugins/actions/support/models/metadata"
@@ -382,7 +383,8 @@ func (s *Service) createSpace(ctx context.Context, owner identity.ID, name, desc
 		Entity:  entity.Entity{ID: spID, CreatedAt: now, UpdatedAt: now},
 		OwnerID: owner, Name: name, Description: description,
 		MetadataID: spID, Public: false,
-		Direct: directKey != "", DirectKey: directKey,
+		PlatformID: helper.EntityPlatform(ctx, s.R, owner),
+		Direct:     directKey != "", DirectKey: directKey,
 	}
 	if err := s.R.CreateID(ctx, "spaces", spID, sp); err != nil {
 		return nil, err

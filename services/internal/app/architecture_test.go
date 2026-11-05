@@ -72,14 +72,25 @@ func TestNamespacesDoNotImportSiblingServices(t *testing.T) {
 			return err
 		}
 		prefix := "github.com/aseman/aseman/plugins/actions/"
+		// Sibling DTO/model/schema/ports packages are allowed; sibling service
+		// implementations (and other code under the namespace root) are not —
+		// cross-namespace calls go through the bridge.
+		allowedSibling := map[string]bool{"models": true, "dto": true, "schema": true, "ports": true}
 		for _, spec := range file.Imports {
 			importPath, _ := strconv.Unquote(spec.Path.Value)
 			if !strings.HasPrefix(importPath, prefix) {
 				continue
 			}
 			parts := strings.Split(strings.TrimPrefix(importPath, prefix), "/")
-			if parts[0] != owner && len(parts) == 1 {
+			if parts[0] == owner || parts[0] == "support" {
+				continue
+			}
+			if len(parts) == 1 {
 				t.Errorf("namespace %s imports sibling service %s", owner, importPath)
+				continue
+			}
+			if !allowedSibling[parts[1]] {
+				t.Errorf("namespace %s imports sibling implementation %s (use bridge; models/dto/schema/ports only)", owner, importPath)
 			}
 		}
 		return nil

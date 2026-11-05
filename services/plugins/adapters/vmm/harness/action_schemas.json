@@ -3734,28 +3734,17 @@
   },
   "type": "object"
  },
- "tools.plugin_list": {
+ "tools.gadget_list": {
   "properties": {
-   "removed": {
-    "type": "boolean"
-   },
    "space": {
     "type": "string"
    }
   },
   "type": "object"
  },
- "tools.plugin_remove": {
+ "tools.gadget_remove": {
   "properties": {
-   "plugin": {
-    "type": "string"
-   }
-  },
-  "type": "object"
- },
- "tools.plugin_restore": {
-  "properties": {
-   "plugin": {
+   "gadget": {
     "type": "string"
    }
   },

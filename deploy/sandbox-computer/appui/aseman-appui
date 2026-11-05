@@ -190,7 +190,7 @@ check_ready() {
 }
 
 build_prompt() {
-  local dir="$1" port="$2" mode="$3" ui="${4:-elpian}" engine="${5:-agents}" task frontend tools="" finish=""
+  local dir="$1" port="$2" mode="$3" ui="${4:-elpian}" engine="${5:-agents}" kind="${6:-app}" task frontend host="" tools="" finish=""
   if [[ "$mode" == "update" ]]; then
     task="This is an existing app (BRIEF.md is what it was built for). Make the change requested last in CHANGES.md and keep everything else working. Read the project before editing; change only what the request needs. With an Elpian frontend, replay the existing end-to-end scenarios (elpian/e2e) first, then drive the changed and new parts headlessly step by step, and update or add scenarios so they cover them."
   else
@@ -278,6 +278,29 @@ or node vendor/aseman-elpian/validate.mjs --program elpian/widget.js --widget-on
 FRONT
 )
   fi
+  if [[ "$kind" == "gadget" ]]; then
+    host=$(cat <<HOST
+
+## Hosting: gadget mode (JOB.json kind: gadget)
+Read GADGETS.md. This App UI is a **compact frameless widget**, not a desk
+window:
+- No window frame, title bar or background pad — any custom shape.
+- Very compact like a mobile home-screen widget: only the necessary live facts
+  and controls; dense, glanceable; do not take much screen space; no multi-pane
+  app chrome or full-window layouts.
+- People float it over chat / rail / desk or open it as a page.
+Design every screen for a small footprint first. The phone widget still applies.
+HOST
+)
+  else
+    host=$(cat <<HOST
+
+## Hosting: window mode (JOB.json kind: app)
+This App UI opens as a **framed desk card window** (title bar, resize, pin).
+Design for a desk window and for phones; include the phone widget.
+HOST
+)
+  fi
   if [[ "$engine" == "agents" ]]; then
     tools=$(cat <<TOOLS
 
@@ -299,7 +322,7 @@ TOOLS
 6. Call appui_publish with dir $dir. The platform verifies the app itself
    (READY.json, the start command answering on the port$( [[ "$ui" == "elpian" ]] && printf '%s' ', the bundle, the
    program on QuickJS against your server, your end-to-end scenarios') and
-   opens it on the desk. If it reports a problem, find the root cause, fix it,
+   $( [[ "$kind" == "gadget" ]] && printf '%s' 'registers it as a compact frameless gadget' || printf '%s' 'opens it as a framed desk window'). If it reports a problem, find the root cause, fix it,
    run your tests again, rewrite READY.json and call appui_publish again
    (REPAIR.md holds the last problem) until it opens.
 FINISH
@@ -307,12 +330,12 @@ FINISH
   fi
   cat <<PROMPT
 You are the software engineer of an Aseman space. $task
-
+$host
 $frontend
 $tools
 
 Context files here: AGENTS.md (your rules: follow them), ELPIAN.md (the Elpian
-frontend guide and reference), BRIEF.md (+ CHANGES.md),
+frontend guide and reference)$( [[ "$kind" == "gadget" ]] && printf '%s' ', GADGETS.md (gadget mode: compact widget rules)'), BRIEF.md (+ CHANGES.md),
 APPS.json (the space: apps with microtools and their args_schema, and agents),
 ASEMAN_API.md (the exact page API contract), JOB.json (port $port, dir),
 vendor/aseman-sdk/ (aseman.js for the page; server.cjs / server.mjs /
@@ -375,7 +398,7 @@ PROMPT
 
 # parse_job reads the flags of build / prepare into the job_* variables.
 parse_job() {
-  job_dir="" job_brief="" job_apps="" job_title="App" job_port=8787 job_mode="new" job_ui="elpian"
+  job_dir="" job_brief="" job_apps="" job_title="App" job_port=8787 job_mode="new" job_ui="elpian" job_kind="app"
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --dir) job_dir="$2"; shift 2 ;;
@@ -385,6 +408,7 @@ parse_job() {
       --port) job_port="$2"; shift 2 ;;
       --mode) job_mode="$2"; shift 2 ;;
       --ui) job_ui="$2"; shift 2 ;;
+      --kind) job_kind="$2"; shift 2 ;;
       *) die "unknown flag $1" ;;
     esac
   done
@@ -392,6 +416,8 @@ parse_job() {
   [[ -n "$job_brief" && -f "$job_brief" ]] || die "needs --brief-file"
   [[ "$job_mode" == "new" || "$job_mode" == "update" ]] || die "--mode is new or update"
   [[ "$job_ui" == "elpian" || "$job_ui" == "web" ]] || die "--ui is elpian or web"
+  [[ "$job_kind" == "app" || "$job_kind" == "gadget" || "$job_kind" == "plugin" ]] || die "--kind is app or gadget"
+  [[ "$job_kind" == "plugin" ]] && job_kind="gadget"
   job_dir=$(mkdir -p "$job_dir" && cd "$job_dir" && pwd)
 }
 
@@ -414,6 +440,7 @@ prepare_project() {
       [[ -f "$ROOT/elpian/$f" ]] && cp -f "$ROOT/elpian/$f" "$dir/vendor/aseman-elpian/$f"
     done
     [[ -f "$ROOT/elpian/ELPIAN.md" ]] && cp -f "$ROOT/elpian/ELPIAN.md" "$dir/ELPIAN.md"
+    [[ -f "$ROOT/elpian/GADGETS.md" ]] && cp -f "$ROOT/elpian/GADGETS.md" "$dir/GADGETS.md"
     if [[ -d "$ROOT/elpian/examples" ]]; then
       mkdir -p "$dir/vendor/aseman-elpian/examples"
       cp -a "$ROOT/elpian/examples/." "$dir/vendor/aseman-elpian/examples/"
@@ -439,8 +466,8 @@ prepare_project() {
   else
     echo '{"apps":[],"agents":[]}' >"$dir/APPS.json"
   fi
-  jq -n --arg t "$job_title" --argjson p "$job_port" --arg d "$dir" --arg m "$job_mode" --arg u "$job_ui" --arg e "$engine" \
-    '{title:$t, port:$p, dir:$d, mode:$m, ui:$u, engine:$e}' >"$dir/JOB.json"
+  jq -n --arg t "$job_title" --argjson p "$job_port" --arg d "$dir" --arg m "$job_mode" --arg u "$job_ui" --arg k "$job_kind" --arg e "$engine" \
+    '{title:$t, port:$p, dir:$d, mode:$m, ui:$u, kind:$k, engine:$e}' >"$dir/JOB.json"
   rm -f "$dir/READY.json" "$dir/REPAIR.md"
 }
 
@@ -467,7 +494,7 @@ cmd_prepare() {
   parse_job "$@"
   local dir="$job_dir"
   prepare_project agents
-  build_prompt "$dir" "$job_port" "$job_mode" "$job_ui" agents >"$dir/TASK.md"
+  build_prompt "$dir" "$job_port" "$job_mode" "$job_ui" agents "$job_kind" >"$dir/TASK.md"
   jq -n --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{state:"building", engine:"agents", started_at:$at}' >"$dir/STATUS.json"
   cat "$dir/TASK.md"
 }
@@ -511,12 +538,13 @@ Apps are built by the space's agents: prepare lays the project out and prints
 their task, they build it, and verify runs the platform's checks.
 
 Commands:
-  prepare --dir DIR --brief-file FILE [--apps-file FILE] [--title T] [--port N] [--mode new|update] [--ui elpian|web]
+  prepare --dir DIR --brief-file FILE [--apps-file FILE] [--title T] [--port N] [--mode new|update] [--ui elpian|web] [--kind app|gadget]
                          Lay out the project for an agent to build and print its
                          task (TASK.md). update changes an existing app in place
                          (CHANGES.md). --ui elpian (default: an Elpian program,
                          ELPIAN.md) or web (only when the person asked for web
-                         technology).
+                         technology). --kind app (default: framed desk window)
+                         or gadget (compact frameless widget; see GADGETS.md).
   verify [--dir] DIR     The platform's checks of a built app (READY.json, start
                          and answer, Elpian bundle, QuickJS, end-to-end
                          scenarios); exit 1 with the problem (REPAIR.md).

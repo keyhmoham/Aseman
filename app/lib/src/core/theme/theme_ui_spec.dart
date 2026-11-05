@@ -152,7 +152,7 @@ class ThemeSurfaceSpec {
   }
 }
 
-/// A new UI section / page contributed by a theme pack (working Elpian plugin).
+/// A new UI section / page contributed by a theme pack (Elpian island).
 @immutable
 class ThemeIslandSpec {
   const ThemeIslandSpec({

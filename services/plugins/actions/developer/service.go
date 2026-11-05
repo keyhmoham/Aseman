@@ -1,9 +1,11 @@
 // Package developer is the developer API: organizations with their own wallets,
 // API keys, a unified model catalog served from the node's LLM providers, and
-// the HTTP door (the developer host's /v1/...) that runs models and bills them
-// to the organization behind the key.
+// the HTTP door (the developer host's /v1/...) that runs models, computers and
+// storage, and exposes the non-admin platform action collection
+// (/v1/platform/...) so a key can drive the same product surface as the
+// Aseman client.
 //
-// The console (the app's /developers pages) manages all of it through ordinary
+// The console (the app's Developer API pages) manages all of it through ordinary
 // signed actions in this namespace; the API itself is plain bearer-key HTTP.
 package developer
 

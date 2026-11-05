@@ -282,6 +282,9 @@ func (a *spaceListAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 			break
 		}
 		if sp, err := a.s.GetSpace(ctx, m.SpaceID); err == nil {
+			if !helper.SeesEntity(ctx, a.s.R, req.Caller.ID, sp.PlatformID) {
+				continue
+			}
 			homeAseman := a.s.isSelfChat(sp, req.Caller.ID) || (sp.Home && sp.Direct)
 			if (sp.Direct && !homeAseman && in.Kind != "all" && in.Kind != "direct") || (!sp.Direct && in.Kind == "direct") {
 				continue
@@ -355,6 +358,9 @@ func (a *spaceSearchAction) Handle(ctx context.Context, req *api.ActionRequest) 
 		if err != nil || (sp.Direct && !sp.Home) || seen[sp.ID.String()] {
 			continue
 		}
+		if !helper.SeesEntity(ctx, a.s.R, req.Caller.ID, sp.PlatformID) {
+			continue
+		}
 		seen[sp.ID.String()] = true
 		if matches(sp) {
 			out = append(out, row(sp, string(m.Role)))
@@ -369,6 +375,9 @@ func (a *spaceSearchAction) Handle(ctx context.Context, req *api.ActionRequest) 
 	for i := range public {
 		sp := &public[i]
 		if (sp.Direct && !sp.Home) || seen[sp.ID.String()] || !matches(sp) {
+			continue
+		}
+		if !helper.SeesEntity(ctx, a.s.R, req.Caller.ID, sp.PlatformID) {
 			continue
 		}
 		seen[sp.ID.String()] = true

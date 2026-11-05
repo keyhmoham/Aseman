@@ -10,6 +10,7 @@ import (
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 	"github.com/aseman/aseman/plugins/actions/developer/models"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
 )
 
@@ -277,17 +278,15 @@ func (s *Service) handleOf(ctx context.Context, id identity.ID) string {
 	return acc.Handle
 }
 
-func (s *Service) accountByHandle(ctx context.Context, handle string) (*account.Account, error) {
-	var list []account.Account
-	if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"handle": handle}}, &list); err != nil {
-		return nil, err
+func (s *Service) accountByHandle(ctx context.Context, caller identity.ID, handle string) (*account.Account, error) {
+	acc, err := helper.FindAccountByHandle(ctx, s.R, caller, handle)
+	if err != nil {
+		return nil, errs.InvalidArgument("Nobody has the username @" + handle + ".")
 	}
-	for i := range list {
-		if list[i].Kind == account.KindUser && list[i].Status == account.StatusActive {
-			return &list[i], nil
-		}
+	if acc.Kind != account.KindUser || acc.Status != account.StatusActive {
+		return nil, errs.InvalidArgument("Nobody has the username @" + handle + ".")
 	}
-	return nil, errs.InvalidArgument("Nobody has the username @" + handle + ".")
+	return acc, nil
 }
 
 func validRole(role string) bool {
@@ -323,7 +322,7 @@ func (s *Service) Invite(ctx context.Context, caller identity.ID, sc Scope, hand
 		return nil, errs.InvalidArgument("Choose a role you can give.")
 	}
 	handle = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(handle), "@"))
-	acc, err := s.accountByHandle(ctx, handle)
+	acc, err := s.accountByHandle(ctx, caller, handle)
 	if err != nil {
 		return nil, err
 	}

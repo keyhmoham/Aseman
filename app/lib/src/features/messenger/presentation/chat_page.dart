@@ -25,8 +25,7 @@ import '../../brain/brain_voice.dart';
 import '../../calls/call_page.dart';
 import '../../desk/data/desk_api.dart';
 import '../../desk/presentation/desk_controller.dart';
-import '../../plugins/data/plugins_api.dart';
-import '../../plugins/presentation/plugin_gadgets_overlay.dart';
+import '../../gadgets/presentation/gadgets_overlay.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import 'dm_desk_panel.dart';
 import 'dm_facility_sheet.dart';
@@ -674,15 +673,15 @@ class _ChatPageState extends State<ChatPage> {
       ),
     );
 
-    // Space chat plugins float on the conversation; Aseman's own are universal.
+    // Outside the workspace shell (home chats), space gadgets still float
+    // over this page; Aseman's own stay universal on the app overlay.
     if (!chat.isAseman && chat.spaceId.isNotEmpty) {
       chatBody = Stack(
         fit: StackFit.expand,
         children: [
           chatBody,
-          PluginSurfaceGadgets(
+          WorkspaceGadgets(
             dependencies: widget.dependencies,
-            placement: PluginPlacement.chat,
             spaceId: chat.spaceId,
             roomId: _roomId,
             compact: true,

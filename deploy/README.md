@@ -60,7 +60,7 @@ Point both names at the server's IP (A/AAAA records):
 |------|--------|
 | `app.example.com` | the web app (it also proxies `/v1` to the node on its own origin) |
 | `api.example.com` | the node's API directly (native apps, webhooks, other nodes) |
-| `developer.example.com` *(optional, `DEVELOPER_DOMAIN`)* | the developer API: bearer API keys, `/v1/chat/completions` and friends. The node serves only that API on this host. |
+| `developer.example.com` *(optional, `DEVELOPER_DOMAIN`)* | the developer API: bearer API keys, OpenAI-shaped `/v1/chat/completions` and friends, plus `/v1/platform/{namespace}/{action}` for every non-admin product action. The node serves only that API on this host. |
 
 ### 3. The server's `.env` (your settings live here, not in GitHub)
 Create it once on the server, in the deploy path:

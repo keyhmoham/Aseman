@@ -33,6 +33,22 @@ type Org struct {
 	OwnerID identity.ID `db:"owner_id" json:"owner_id"`
 }
 
+// Platform is a product environment owned by a developer organization. Its
+// users, spaces, agents and apps are isolated from main Aseman and from every
+// other platform unless the node admin sets MainAccess (a boolean bridge to
+// the shared Aseman environment, both ways).
+type Platform struct {
+	entity.Entity
+	// OrgID is the team org's id, or the account's id for a personal org.
+	OrgID identity.ID `db:"org_id" json:"org_id"`
+	Slug  string      `db:"slug" json:"slug"`
+	Name  string      `db:"name" json:"name"`
+	// MainAccess is set only by the node admin: when true, this platform's
+	// users see main Aseman entities and main Aseman users see this
+	// platform's. Other platforms stay invisible either way.
+	MainAccess bool `db:"main_access" json:"main_access"`
+}
+
 // Member is a person in an organization.
 type Member struct {
 	entity.Entity
@@ -181,6 +197,11 @@ func Models() []database.Model {
 	return []database.Model{
 		{Name: "dev_orgs", Table: "dev_orgs", Fields: []database.Field{
 			f("id", database.KindString), f("name", database.KindString), f("owner_id", database.KindString),
+			f("created_at", database.KindTime), f("updated_at", database.KindTime),
+		}},
+		{Name: "dev_platforms", Table: "dev_platforms", Fields: []database.Field{
+			f("id", database.KindString), fi("org_id", database.KindString), fi("slug", database.KindString),
+			f("name", database.KindString), f("main_access", database.KindBool),
 			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		}},
 		{Name: "dev_members", Table: "dev_members", Fields: []database.Field{

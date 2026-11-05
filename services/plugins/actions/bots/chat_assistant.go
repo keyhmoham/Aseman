@@ -23,8 +23,10 @@ import (
 // or fallbacks. An administrator manages it like any agent (model, fallbacks, thinking
 // effort, name, avatar) and, unlike the lead, can edit its instructions.
 
-// chatAssistantVMID is the agent runtime id the assistant's record carries (it
-// never runs a turn: a chat answer is one model call).
+// chatAssistantVMID is the stable runtime id stamped on the assistant's bot
+// record. The deepagents- prefix is historical (pre-Harness); the chat
+// assistant never runs a turn — answers are one model call — so renaming the
+// id would only churn existing rows.
 const chatAssistantVMID = "deepagents-aseman-chat"
 
 // DefaultChatAssistantInstructions is what the assistant is told until an administrator

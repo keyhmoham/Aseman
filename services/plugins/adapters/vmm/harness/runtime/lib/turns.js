@@ -140,7 +140,7 @@ export class Runner {
       try {
         await this.loadMemory(binding, lastUserText(req.messages), abort)
         const agent = await this.agentFor(binding, scopeDir(this.config, { kind: 'personal', accountId }), abort)
-        // Home computer: same App UI / plugin builtins as a space turn (appui_*).
+        // Home computer: same App UI / gadget builtins as a space turn (appui_*).
         let listed = []
         if (binding.computerSpace) {
           try {
@@ -323,7 +323,7 @@ export class Runner {
     if (binding.kind === 'personal') {
       defs.push(askUserTool(deps))
       // The person's own computer (their home workspace's), as the person —
-      // sandbox + App UI / plugin builtins from that space's tools_list.
+      // sandbox + App UI / gadget builtins from that space's tools_list.
       if (binding.computerSpace) {
         defs.push(...sandboxTools(deps), workspaceTool(deps))
         if (listed?.length) defs.push(...spaceTools({ ...deps, listed }))

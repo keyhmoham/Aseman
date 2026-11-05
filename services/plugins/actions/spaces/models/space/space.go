@@ -17,6 +17,10 @@ type Space struct {
 	AvatarID    identity.ID `db:"avatar_id" json:"avatar_id,omitempty"`
 	MetadataID  identity.ID `db:"metadata_id" json:"metadata_id"`
 	Public      bool        `db:"public" json:"public"`
+	// PlatformID is empty on main Aseman spaces; otherwise the space belongs
+	// to that sub-platform and is invisible outside it (unless the platform
+	// has MainAccess).
+	PlatformID string `db:"platform_id" json:"platform_id,omitempty"`
 	// Home marks the person's own workspace: their personal Aseman chat
 	// (self-Direct), computer, and lead. One space per person.
 	Home bool `db:"home" json:"home,omitempty"`

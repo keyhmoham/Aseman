@@ -43,7 +43,7 @@ func (s *Service) accountView(ctx context.Context, id identity.ID, private bool)
 			profile = p
 		}
 	}
-	out := map[string]any{"id": a.ID.String(), "handle": a.Handle, "kind": a.Kind, "status": a.Status, "profile": profile, "created_at": a.CreatedAt, "is_admin": (a.Role == "admin" || a.Handle == s.K.Env()["admin_handle"])}
+	out := map[string]any{"id": a.ID.String(), "handle": a.Handle, "kind": a.Kind, "status": a.Status, "profile": profile, "created_at": a.CreatedAt, "platform_id": a.PlatformID, "is_admin": (a.Role == "admin" || a.Handle == s.K.Env()["admin_handle"]) && a.PlatformID == ""}
 	if private {
 		out["email"] = a.Email
 		hasPassword := a.PasswordHash != ""

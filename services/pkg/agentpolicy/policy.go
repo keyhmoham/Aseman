@@ -8,9 +8,9 @@
 //   - Space: a room agent acts inside one space: the space-bound namespaces
 //     (never to create or list other spaces) and a few account-wide lookups.
 //
-// Never: node administration, authentication and identity, the plugin host,
-// federation, the developer surface, model providers and their keys, usage
-// and node settings, and moving money.
+// Never: node administration, authentication and identity, federation, the
+// developer surface, model providers and their keys, usage and node settings,
+// and moving money. (Node plugin-host control stays under admin.* / admin_.)
 package agentpolicy
 
 import "strings"
@@ -26,7 +26,7 @@ const (
 )
 
 var deniedNamespaces = map[string]bool{
-	"admin": true, "auth": true, "plugins": true, "federation": true, "developer": true,
+	"admin": true, "auth": true, "federation": true, "developer": true,
 	"usage": true, "llm": true, "settings": true, "hostaccess": true, "enterprise": true,
 }
 
@@ -39,6 +39,8 @@ var deniedActions = map[string]bool{
 	"users.account_create": true,
 	"bots.entity_put":      true, "bots.entity_delete": true,
 	"market.approve": true, "market.deny": true, "market.stats": true,
+	// Gadgets: agents create; only the person removes them in the app.
+	"tools.gadget_remove": true,
 }
 
 // spaceNamespaces are the space-bound namespaces.

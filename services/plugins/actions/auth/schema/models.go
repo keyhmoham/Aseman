@@ -20,7 +20,7 @@ func accounts() database.Model {
 			f("handle", database.KindString), f("email", database.KindString),
 			f("role", database.KindString), f("recovery_key_enc", database.KindString), f("email_verified", database.KindBool), f("password_hash", database.KindString), f("public_key", database.KindString),
 			f("private_key_enc", database.KindString), f("status", database.KindString),
-			f("metadata_id", database.KindString),
+			f("metadata_id", database.KindString), f("platform_id", database.KindString),
 			f("last_seen", database.KindTime), f("created_at", database.KindTime),
 			f("updated_at", database.KindTime),
 		},

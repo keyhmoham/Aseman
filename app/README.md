@@ -111,19 +111,26 @@ lib/
     ├── shared/widgets/             # Reusable design-system components
     └── features/
         ├── auth/                   # Login / register + auth gate
-        ├── search_feed/            # Post feed + search (server-backed)
-        ├── home/                   # The workspace desk + room library
-        ├── agents/                 # Bot list, create, lifecycle, chat
-        ├── workflows/              # Room tasks, verification, recovery, delivered files
-        ├── market/                 # Publish / browse / install agents+miniapps
-        ├── miniapps/               # elpian sandbox + host bridge
-        ├── wallet/ chats/ explore/ admin/ settings/
-        └── navigation/             # Super-app shell (rail + destinations)
+        ├── navigation/             # AppShell: Pulse feed root, push workspace
+        ├── search_feed/            # Pulse home (Chats / Explore / You)
+        ├── home/                   # Workspace desk, rooms, bots, facilities
+        ├── messenger/              # DMs and chat surfaces
+        ├── desk/                   # Floating framed windows in a space
+        ├── gadgets/                # Compact frameless App UI widgets
+        ├── computer/               # Sandbox preview / computer host
+        ├── rooms/                  # Room chat, turns, orbit strip
+        ├── tools/                  # Apps, App UI, MCP, Elpian frontends
+        ├── agents/                 # Bot list, create, lifecycle
+        ├── market/                 # Publish / browse / install agents+apps+themes
+        ├── files/ admin/ developer/ explore/ settings/ …
 ```
 
-View models own mutable UI state and commands; repositories own data; the
-service isolates the remote (signed) infrastructure. Offline/mock mode falls
-back to bundled showcase data so the UI stays testable without a node.
+`AppShell` keeps Pulse (`SearchFeedScreen`) as the navigator root and **pushes**
+`WorkspaceScreen` for a project; it does not use a permanent side-rail of
+destinations. View models own mutable UI state and commands; repositories own
+data; the service isolates the remote (signed) infrastructure. Offline/mock
+mode falls back to bundled showcase data so the UI stays testable without a
+node.
 
 ## Agent work in a room
 

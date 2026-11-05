@@ -205,3 +205,28 @@ CREATE TABLE IF NOT EXISTS nodes (
     last_seen   TIMESTAMPTZ,
     is_central  BOOLEAN
 );
+
+-- App UI gadgets (tools namespace). Models also create this via RegisterModel.
+-- Nodes that still have the retired tool_plugins table are migrated at tools
+-- Bootstrap (copy into tool_gadgets). Manual equivalent:
+--   ALTER TABLE tool_plugins RENAME TO tool_gadgets;
+CREATE TABLE IF NOT EXISTS tool_gadgets (
+    id          TEXT PRIMARY KEY,
+    owner       TEXT,
+    scope       TEXT,
+    space_id    TEXT,
+    name        TEXT,
+    description TEXT,
+    placement   TEXT,
+    ui          TEXT,
+    preview     TEXT,
+    entry       TEXT,
+    app_id      TEXT,
+    status      TEXT,
+    created_by  TEXT,
+    created_at  TIMESTAMPTZ,
+    updated_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_tool_gadgets_owner ON tool_gadgets (owner);
+CREATE INDEX IF NOT EXISTS idx_tool_gadgets_space_id ON tool_gadgets (space_id);
+CREATE INDEX IF NOT EXISTS idx_tool_gadgets_app_id ON tool_gadgets (app_id);

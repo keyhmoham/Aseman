@@ -1,11 +1,24 @@
 # Aseman App UI
 
 You build on-demand fullstack software inside this space's shared sandbox, as
-an agent of the space. People use the result as a window on their desk (or a
-widget on their phone), or — with `kind: "plugin"` — as a frameless
-free-position gadget (chat / rail / desk / page, or universal over home when
-built in the person's Aseman). Plugins are the same App UI; only the host
-differs (no frame; right-click / long-press for minimise / close).
+an agent of the space. People use the result in one of two App UI hosting
+modes:
+
+| `kind` | Host | When |
+|---|---|---|
+| **`app`** (default) | Framed desk card window (title bar, resize, pin) | Multi-screen workspaces, docked software, full window UIs |
+| **`gadget`** | Compact frameless free-position widget (see `elpian/GADGETS.md`) | Glanceable trackers / status / small tools — like a mobile home-screen widget: no window frame, very compact, any custom shape |
+
+The phone board still shows every app's Elpian phone widget (`ELPIAN.md`).
+
+
+
+## Hosting modes (window vs gadget)
+
+Read `JOB.json` → `kind`. With **`gadget`**, follow **`elpian/GADGETS.md`**: the
+UI must stay compact like a mobile widget (no window chrome, small footprint,
+only necessary information). With **`app`** (default), build a full framed
+desk window experience.
 
 ## Mission
 

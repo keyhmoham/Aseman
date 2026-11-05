@@ -23,6 +23,7 @@ func bots() database.Model {
 			f("vm_id", database.KindString), f("image_ref", database.KindString),
 			f("spec_yml", database.KindString), f("resources", database.KindJSON),
 			f("cost", database.KindJSON), f("pool_id", database.KindString),
+			f("platform_id", database.KindString),
 			f("frontend", database.KindString), f("frontend_ref", database.KindString),
 			f("started_at", database.KindTime), f("stopped_at", database.KindTime),
 			f("created_at", database.KindTime), f("updated_at", database.KindTime),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
 import '../../assistant/assistant.dart';
+import '../../gadgets/presentation/gadgets_controller.dart';
 import '../../home/presentation/workspace_screen.dart';
 import '../../search_feed/presentation/rich_post_content.dart';
 import '../../search_feed/presentation/search_feed_screen.dart';
@@ -110,10 +111,12 @@ class _AppShellState extends State<AppShell> {
         .whenComplete(_onReturnedHome);
   }
 
-  /// After any pop back to Home (Home control or system back), land on chats.
+  /// After any pop back to Home (Home control or system back), land on chats
+  /// and retarget the gadgets manager to account / universal gadgets only.
   void _onReturnedHome() {
     if (!mounted) return;
     setState(() => _mobileTab = HomeMobileTab.chats);
+    GadgetsScope.maybeOf(context)?.attach();
   }
 
   /// Workspace Home: pop every route above the feed. Home stays the first

@@ -17,6 +17,7 @@ import (
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 	em "github.com/aseman/aseman/plugins/actions/enterprise/models"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
 	"github.com/aseman/aseman/plugins/adapters/network/ports"
 )
@@ -213,11 +214,11 @@ func (s *Service) createUser(ctx context.Context, req *network.Request) *network
 	if len(existing) > 0 {
 		return scimError(http.StatusConflict, "userName already exists")
 	}
-	var accs []account.Account
-	_ = s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"email": email}, Limit: 1}, &accs)
+	// SCIM lives on main Aseman; never pick a sub-platform account that
+	// happens to share the same email.
 	var acc *account.Account
-	if len(accs) > 0 {
-		acc = &accs[0]
+	if found, err := helper.FindAccountByEmail(ctx, s.R, email, ""); err == nil {
+		acc = found
 	} else {
 		base := strings.Trim(handleClean.ReplaceAllString(strings.ToLower(strings.Split(email, "@")[0]), "_"), "_")
 		if len(base) < 3 {

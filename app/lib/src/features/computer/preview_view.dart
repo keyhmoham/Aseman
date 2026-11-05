@@ -122,6 +122,7 @@ class LivePreview extends StatefulWidget {
     this.onClose,
     this.content,
     this.compact = false,
+    this.frameless = false,
   });
 
   final AsemanService service;
@@ -134,7 +135,7 @@ class LivePreview extends StatefulWidget {
   final String spaceId;
   final String title;
 
-  /// Where it is shown (desk, screen).
+  /// Where it is shown (desk, screen, gadget).
   final String embed;
 
   /// In a sheet: a header names the page and closes it.
@@ -147,6 +148,10 @@ class LivePreview extends StatefulWidget {
   /// Shown as a phone-board widget: while it is not ready, a quiet tile
   /// state instead of the full explanations (a tap opens it in full).
   final bool compact;
+
+  /// App gadgets: no web URL strip or other host chrome — the content
+  /// draws its own shape. Desk apps keep their CardWindow frame instead.
+  final bool frameless;
 
   @override
   State<LivePreview> createState() => _LivePreviewState();
@@ -299,8 +304,8 @@ class _LivePreviewState extends State<LivePreview> {
         service: widget.service,
         page: widget.page,
         embed: widget.embed,
-        // The sheet's header carries what the strip would.
-        showStrip: widget.onClose == null,
+        // Sheet header or a frameless App UI gadget replaces the strip.
+        showStrip: widget.onClose == null && !widget.frameless,
         claimGestures: widget.onClose != null,
       ),
       _Phase.preparing => _Preparing(

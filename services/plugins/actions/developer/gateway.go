@@ -75,7 +75,8 @@ type route struct {
 }
 
 func (s *Service) routes() []route {
-	return append(s.modelRoutes(), s.apiComputers()...)
+	out := append(s.modelRoutes(), s.apiComputers()...)
+	return append(out, s.apiPlatform()...)
 }
 
 func (s *Service) modelRoutes() []route {

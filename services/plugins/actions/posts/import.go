@@ -191,7 +191,17 @@ func (s *Service) feature(ctx context.Context, author identity.ID) error {
 
 // globalFeed lists the public top-level posts: the featured ones first
 // (newest at their source first), then every other one newest first.
-func (s *Service) globalFeed(ctx context.Context, limit, offset int) ([]post.Post, error) {
+// Results are scoped to authors the caller may see across sub-platforms.
+func (s *Service) globalFeed(ctx context.Context, caller identity.ID, limit, offset int) ([]post.Post, error) {
+	// Over-fetch then filter by author tenancy so pages stay full when some
+	// posts belong to isolated sub-platforms.
+	fetch := (offset + limit) * 4
+	if fetch < limit*2 {
+		fetch = limit * 2
+	}
+	if fetch > 500 {
+		fetch = 500
+	}
 	var featured []post.Post
 	if err := s.R.List(ctx, "posts", database.Filter{
 		Equal:   map[string]any{"parent_id": zeroID, "space_id": zeroID, "featured": int64(1)},
@@ -199,6 +209,7 @@ func (s *Service) globalFeed(ctx context.Context, limit, offset int) ([]post.Pos
 	}, &featured); err != nil {
 		return nil, err
 	}
+	featured = s.filterPostsByAuthorTenancy(ctx, caller, featured)
 	out := make([]post.Post, 0, limit)
 	if offset < len(featured) {
 		out = append(out, featured[offset:min(len(featured), offset+limit)]...)
@@ -207,8 +218,6 @@ func (s *Service) globalFeed(ctx context.Context, limit, offset int) ([]post.Pos
 	if need <= 0 {
 		return out, nil
 	}
-	// The other posts after the ones earlier pages showed; the featured
-	// ones among them were shown in their block already.
 	skip := max(0, offset-len(featured))
 	shown := make(map[identity.ID]bool, len(featured))
 	for _, p := range featured {
@@ -217,10 +226,11 @@ func (s *Service) globalFeed(ctx context.Context, limit, offset int) ([]post.Pos
 	var rest []post.Post
 	if err := s.R.List(ctx, "posts", database.Filter{
 		Equal:   map[string]any{"parent_id": zeroID, "space_id": zeroID},
-		OrderBy: "created_at", Limit: skip + need + len(featured),
+		OrderBy: "created_at", Limit: fetch + len(featured),
 	}, &rest); err != nil {
 		return nil, err
 	}
+	rest = s.filterPostsByAuthorTenancy(ctx, caller, rest)
 	for _, p := range rest {
 		if shown[p.ID] {
 			continue

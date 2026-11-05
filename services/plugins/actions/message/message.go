@@ -17,6 +17,7 @@ import (
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
 	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 	"github.com/aseman/aseman/plugins/actions/message/models/message"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/actions/support/repo"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
 	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
@@ -79,6 +80,9 @@ func (s *Service) SendPacket(ctx context.Context, from, to identity.ID, body, pa
 	if err != nil {
 		return nil, err
 	}
+	if err := s.requireVisible(ctx, from, rec); err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
 	id, err := identity.New(s.K.NodeID())
 	if err != nil {
@@ -111,6 +115,9 @@ func (s *Service) Ask(ctx context.Context, from, to identity.ID, body, payload s
 	}
 	rec, err := s.resolve(ctx, to)
 	if err != nil {
+		return nil, "", err
+	}
+	if err := s.requireVisible(ctx, from, rec); err != nil {
 		return nil, "", err
 	}
 	now := time.Now().UTC()
@@ -234,6 +241,11 @@ func (s *Service) List(ctx context.Context, caller identity.ID, peer identity.ID
 		return nil, err
 	}
 	if !peer.IsZero() {
+		if rec, err := s.resolve(ctx, peer); err != nil {
+			return nil, err
+		} else if err := s.requireVisible(ctx, caller, rec); err != nil {
+			return nil, err
+		}
 		filter := func(list []message.Packet, field func(*message.Packet) identity.ID) []message.Packet {
 			var kept []message.Packet
 			for i := range list {
@@ -328,6 +340,25 @@ func (s *Service) resolve(ctx context.Context, id identity.ID) (*recipient, erro
 		}
 	}
 	return nil, errs.NotFound("recipient account not found")
+}
+
+// requireVisible rejects messaging a recipient whose platform the caller may
+// not observe (same isolation as search/catalog).
+func (s *Service) requireVisible(ctx context.Context, viewer identity.ID, rec *recipient) error {
+	if rec == nil || rec.account == nil {
+		return errs.NotFound("recipient account not found")
+	}
+	platform := rec.account.PlatformID
+	if !rec.botRecord.IsZero() {
+		var b bot.Bot
+		if err := s.R.Get(ctx, "bots", rec.botRecord, &b); err == nil {
+			platform = b.PlatformID
+		}
+	}
+	if !helper.SeesEntity(ctx, s.R, viewer, platform) {
+		return errs.NotFound("recipient account not found")
+	}
+	return nil
 }
 
 // account loads an account by id, verifying it exists.

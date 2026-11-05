@@ -269,7 +269,7 @@ func (p *pkg) helperAction(lit *ast.CompositeLit, out map[string]map[string]any)
 			body = d.Body
 		}
 	case *ast.CallExpr:
-		// A handler made by a function: s.pluginSetStatus("removed").
+		// A handler made by a function (legacy note; gadget_remove is direct).
 		switch fn := h.Fun.(type) {
 		case *ast.SelectorExpr:
 			if ds := p.methods[fn.Sel.Name]; len(ds) == 1 {

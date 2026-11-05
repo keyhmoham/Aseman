@@ -406,9 +406,9 @@ func (s *Service) Rebuild(ctx context.Context, id identity.ID, image string) (*b
 	return rec, nil
 }
 
-// usernameTaken reports whether a public @username belongs to someone else:
-// any person's handle, a reserved name, or another agent's username. Usernames
-// are unique across people and agents.
+// usernameTaken reports whether a public @username belongs to someone else on
+// the same platform: a person's handle, a reserved name, or another agent's
+// username. Handles are unique per platform, not globally.
 func (s *Service) usernameTaken(ctx context.Context, username string, self *bot.Bot) (bool, error) {
 	switch username {
 	case "aseman", "lead":
@@ -416,19 +416,25 @@ func (s *Service) usernameTaken(ctx context.Context, username string, self *bot.
 			return true, nil
 		}
 	}
+	platformID := ""
+	if self != nil {
+		platformID = self.PlatformID
+	}
 	var people []account.Account
 	if e := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"kind": "user", "handle": username}}, &people); e != nil {
 		return false, e
 	}
-	if len(people) > 0 {
-		return true, nil
+	for i := range people {
+		if people[i].PlatformID == platformID {
+			return true, nil
+		}
 	}
 	var agents []bot.Bot
 	if e := s.R.List(ctx, "bots", database.Filter{Equal: map[string]any{"kind": "agent"}}, &agents); e != nil {
 		return false, e
 	}
 	for _, other := range agents {
-		if other.ID == self.ID {
+		if other.ID == self.ID || other.PlatformID != platformID {
 			continue
 		}
 		m, e := s.M.Get(ctx, other.AccountID)

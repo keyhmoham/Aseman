@@ -9,6 +9,9 @@ import 'tool_avatar.dart';
 /// A tool's frontend as a floating card window: a title bar to drag it by
 /// (with the result it shows, pin, minimize, maximize and close), the
 /// frontend, and a grip to resize it. Pressing anywhere brings it to the front.
+/// A framed desk-app window: glass shell, title bar and chrome controls.
+/// App UI gadgets deliberately do **not** use this — they float as frameless
+/// gadgets so they can take custom shapes.
 class CardWindow extends StatefulWidget {
   const CardWindow({
     super.key,

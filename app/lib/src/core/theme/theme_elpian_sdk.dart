@@ -24,7 +24,7 @@ abstract final class ThemeElpianSdk {
     return '$boot\n$program\n';
   }
 
-  /// Shim: core platform API for theme UI plugins.
+  /// Shim: core platform API for theme UI islands.
   static const _themeShim = r'''
 (function (root) {
   "use strict";

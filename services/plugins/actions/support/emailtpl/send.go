@@ -5,7 +5,7 @@ import (
 
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/internal/plugins/bridge"
-	"github.com/aseman/aseman/plugins/actions/auth/mechanisms/mail"
+	"github.com/aseman/aseman/plugins/actions/support/mail"
 )
 
 // Send writes the email `key` with the wording the admin saved in settings

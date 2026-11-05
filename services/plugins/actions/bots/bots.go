@@ -269,9 +269,11 @@ func (s *Service) CreateBot(ctx context.Context, owner identity.ID, req CreateBo
 	if err != nil {
 		return nil, err
 	}
+	platformID := helper.EntityPlatform(ctx, s.R, owner)
 	acc := &account.Account{
 		Entity: entity.Entity{ID: accID, CreatedAt: now, UpdatedAt: now},
 		Kind:   account.KindBot, Handle: req.Name, Status: account.StatusActive, MetadataID: accID,
+		PlatformID: platformID,
 	}
 	if err := s.R.CreateID(ctx, "accounts", accID, acc); err != nil {
 		return nil, err
@@ -300,7 +302,8 @@ func (s *Service) CreateBot(ctx context.Context, owner identity.ID, req CreateBo
 		VMType: req.VMType,
 		Status: bot.StatusPending, ImageRef: req.ImageRef, SpecYML: req.SpecYML,
 		Resources: string(resJSON), Cost: string(costJSON),
-		Frontend: req.Frontend, FrontendRef: req.FrontendRef,
+		PlatformID:  platformID,
+		Frontend:    req.Frontend, FrontendRef: req.FrontendRef,
 	}
 	if err := s.R.CreateID(ctx, "bots", botID, rec); err != nil {
 		return nil, err

@@ -149,6 +149,8 @@ type Bot struct {
 	Resources string      `db:"resources" json:"resources,omitempty"` // JSON ResourceProfile
 	Cost      string      `db:"cost" json:"cost,omitempty"`           // JSON CostModel
 	PoolID    string      `db:"pool_id" json:"pool_id,omitempty"`     // finance pool id
+	// PlatformID scopes the bot to a sub-platform (empty = main Aseman).
+	PlatformID string `db:"platform_id" json:"platform_id,omitempty"`
 	// Frontend is the elpian mini-app bundle (JSON manifest + source) served to
 	// clients that launch the bot's UI inside an elpian sandbox.
 	Frontend string `db:"frontend" json:"frontend,omitempty"`

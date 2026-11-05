@@ -43,8 +43,28 @@ class _Service extends FakeAsemanService {
           'prefix': 'dk_live_ab',
           'last4': 'wxyz',
           'status': 'active',
+          'spentMonth': 0,
+          'requests': 0,
+          'lastUsedAt': '',
         });
         return {'key': keys.last, 'secret': 'dk_live_abcdefwxyz'};
+      case 'platform_catalog':
+        return {
+          'object': 'list',
+          'base': '/v1/platform',
+          'namespaces': [
+            {
+              'name': 'spaces',
+              'actions': [
+                {
+                  'name': 'message_send',
+                  'summary': 'Send a message',
+                  'path': '/v1/platform/spaces/message_send',
+                }
+              ],
+            }
+          ],
+        };
     }
     return const {};
   }

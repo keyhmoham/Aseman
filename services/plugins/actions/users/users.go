@@ -108,7 +108,8 @@ func BuildActions(s *Service) []api.Action {
 	}, append(append(append(append(append(append(append(append(append(append(accountActions(s), pushActions(s)...), notificationActions(s)...), directActions(s)...), directLiveActions(s)...), reportActions(s)...), callActions(s)...), dmFileActions(s)...), notifyActions(s)...), privacyActions(s)...), brainActions(s)...)...)
 }
 
-// GetAccount resolves an account by universal id or handle.
+// GetAccount resolves an account by universal id or handle. Handle lookup is
+// ambiguous across sub-platforms — prefer GetVisibleAccount for product APIs.
 func (s *Service) GetAccount(ctx context.Context, ref string) (*account.Account, error) {
 	if id, err := identity.Parse(ref); err == nil {
 		acc := &account.Account{}
@@ -118,9 +119,33 @@ func (s *Service) GetAccount(ctx context.Context, ref string) (*account.Account,
 	}
 	var list []account.Account
 	if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"handle": ref}}, &list); err == nil && len(list) > 0 {
+		// Prefer main Aseman when several platforms share a handle.
+		for i := range list {
+			if list[i].PlatformID == "" {
+				return &list[i], nil
+			}
+		}
 		return &list[0], nil
 	}
 	return nil, errs.NotFound("account " + ref)
+}
+
+// GetVisibleAccount resolves an account the viewer may observe (id or handle).
+func (s *Service) GetVisibleAccount(ctx context.Context, viewer identity.ID, ref string) (*account.Account, error) {
+	if id, err := identity.Parse(ref); err == nil {
+		acc := &account.Account{}
+		if err := s.R.Get(ctx, "accounts", id, acc); err != nil {
+			return nil, errs.NotFound("account " + ref)
+		}
+		if !viewer.IsZero() && !helper.SeesEntity(ctx, s.R, viewer, acc.PlatformID) {
+			return nil, errs.NotFound("account " + ref)
+		}
+		return acc, nil
+	}
+	if viewer.IsZero() {
+		return s.GetAccount(ctx, ref)
+	}
+	return helper.FindAccountByHandle(ctx, s.R, viewer, ref)
 }
 
 // UploadFile stores bytes in the filesystem and records the file row.
@@ -189,7 +214,7 @@ func (a *accountGetAction) Handle(ctx context.Context, req *api.ActionRequest) (
 	if resp, ok, err := helper.ProxyIfRemote(ctx, a.s.K, in.Account, "users", "account_get", req); ok {
 		return resp, err
 	}
-	acc, err := a.s.GetAccount(ctx, in.Account)
+	acc, err := a.s.GetVisibleAccount(ctx, req.Caller.ID, in.Account)
 	if err != nil {
 		return nil, err
 	}
@@ -216,6 +241,7 @@ func (a *accountGetAction) Handle(ctx context.Context, req *api.ActionRequest) (
 		"profile":   profile,
 		"followers": followers, "following": following,
 		"am_following": amFollowing,
+		"platform_id":  acc.PlatformID,
 	})
 }
 
@@ -249,6 +275,9 @@ func (a *searchAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	q := strings.ToLower(strings.TrimSpace(in.Query))
 	var out []map[string]any
 	for _, acc := range list {
+		if !helper.SeesEntity(ctx, a.s.R, req.Caller.ID, acc.PlatformID) {
+			continue
+		}
 		if q == "" || strings.Contains(strings.ToLower(acc.Handle), q) ||
 			strings.Contains(strings.ToLower(acc.Email), q) {
 			out = append(out, a.s.publicRef(ctx, req.Caller.ID, acc.ID))
@@ -273,7 +302,7 @@ func (a *metadataViewAction) Handle(ctx context.Context, req *api.ActionRequest)
 	if resp, ok, err := helper.ProxyIfRemote(ctx, a.s.K, in.Account, "users", "metadata_view", req); ok {
 		return resp, err
 	}
-	acc, err := a.s.GetAccount(ctx, in.Account)
+	acc, err := a.s.GetVisibleAccount(ctx, req.Caller.ID, in.Account)
 	if err != nil {
 		return nil, err
 	}

@@ -11,7 +11,7 @@ import '../../features/tools/elpian/host_values.dart';
 ///
 /// Speaks the same `aseman.*` protocol as [ElpianAppHost], but routes
 /// `target: "core"` (and core-shaped `aseman` calls) through the signed-in
-/// [AsemanService] client — so theme plugins can use the full platform API.
+/// [AsemanService] client — so theme islands can use the full platform API.
 class ThemeElpianHost {
   ThemeElpianHost({
     required this.service,

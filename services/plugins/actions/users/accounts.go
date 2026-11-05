@@ -25,7 +25,9 @@ func accountActions(s *Service) []api.Action {
 		helper.Action{Namespace: "users", Name: "hireable_list", Summary: "Approved people available for hire", Handler: s.hireableList},
 	}
 }
-func (s *Service) directory(ctx context.Context, admin, hireable bool) ([]map[string]any, error) {
+// directory lists people. Node-admin directories (admin=true) stay global. Product
+// surfaces (hireable) are scoped to platforms the viewer may observe.
+func (s *Service) directory(ctx context.Context, viewer identity.ID, admin, hireable bool) ([]map[string]any, error) {
 	var rows []account.Account
 	if e := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"kind": "user"}, OrderBy: "created_at", Asc: false}, &rows); e != nil {
 		return nil, e
@@ -44,6 +46,9 @@ func (s *Service) directory(ctx context.Context, admin, hireable bool) ([]map[st
 	}
 	out := []map[string]any{}
 	for _, a := range rows {
+		if !admin && !viewer.IsZero() && !helper.SeesEntity(ctx, s.R, viewer, a.PlatformID) {
+			continue
+		}
 		profile := map[string]any{}
 		var authTree map[string]any
 		if m, e := s.M.View(ctx, a.ID, a.ID); e == nil {
@@ -104,7 +109,7 @@ func (s *Service) accountsList(ctx context.Context, req *api.ActionRequest) (*ap
 	if e := helper.RequireNodeAdmin(ctx, s.R, req, s.K.Env()["admin_handle"]); e != nil {
 		return nil, e
 	}
-	rows, e := s.directory(ctx, true, false)
+	rows, e := s.directory(ctx, req.Caller.ID, true, false)
 	if e != nil {
 		return nil, e
 	}
@@ -114,7 +119,7 @@ func (s *Service) hireableList(ctx context.Context, req *api.ActionRequest) (*ap
 	if e := helper.RequireUser(req); e != nil {
 		return nil, e
 	}
-	rows, e := s.directory(ctx, false, true)
+	rows, e := s.directory(ctx, req.Caller.ID, false, true)
 	if e != nil {
 		return nil, e
 	}
@@ -172,14 +177,12 @@ func (s *Service) accountUpdate(ctx context.Context, req *api.ActionRequest) (*a
 		if e != nil {
 			return nil, e
 		}
-		var taken []account.Account
-		if e = s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"handle": handle}}, &taken); e != nil {
+		taken, e := helper.HandleTaken(ctx, s.R, handle, a.PlatformID, a.ID)
+		if e != nil {
 			return nil, e
 		}
-		for _, other := range taken {
-			if other.ID != a.ID {
-				return nil, errs.AlreadyExists("handle " + handle)
-			}
+		if taken {
+			return nil, errs.AlreadyExists("handle " + handle)
 		}
 		if handle == s.K.Env()["admin_handle"] && handle != a.Handle && a.Role != "admin" {
 			return nil, errs.AlreadyExists("bootstrap administrator handle is reserved")
@@ -200,7 +203,7 @@ func (s *Service) accountUpdate(ctx context.Context, req *api.ActionRequest) (*a
 			return nil, e
 		}
 		for _, other := range taken {
-			if other.ID != a.ID {
+			if other.ID != a.ID && other.PlatformID == a.PlatformID {
 				return nil, errs.AlreadyExists("email " + email)
 			}
 		}

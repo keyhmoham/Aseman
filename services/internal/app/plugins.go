@@ -17,7 +17,7 @@ import (
 	"github.com/aseman/aseman/plugins/config"
 )
 
-var defaultNamespaces = []string{"auth", "users", "finance", "federation", "llm", "usage", "developer", "bots", "message", "posts", "market", "spaces", "routines", "settings", "talent", "tools", "timeline", "governance", "google", "proactive", "responsibilities", "channels", "enterprise", "hostaccess", "admin"}
+var defaultNamespaces = []string{"auth", "users", "finance", "federation", "llm", "usage", "developer", "bots", "message", "posts", "market", "themes", "spaces", "routines", "settings", "talent", "tools", "timeline", "governance", "google", "proactive", "responsibilities", "channels", "enterprise", "hostaccess", "admin"}
 
 func bootPlugins(cfg *dconfig.Config, k *kernel.Kernel, ring *logs.Ring) error {
 	root, directory, err := pluginPaths(cfg)

@@ -84,21 +84,36 @@ func (a *botSearchAction) Handle(ctx context.Context, req *api.ActionRequest) (*
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
 	}
-	list, err := a.s.SearchBots(ctx, in.Query, in.Kind, in.Limit, in.Offset)
+	limit, offset := in.Limit, in.Offset
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	list, err := a.s.SearchBots(ctx, in.Query, in.Kind, limit*4+offset+20, 0)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]map[string]any, 0, len(list))
+	out := make([]map[string]any, 0, limit)
+	skipped := 0
 	for i := range list {
+		if !helper.SeesEntity(ctx, a.s.R, req.Caller.ID, list[i].PlatformID) {
+			continue
+		}
+		if skipped < offset {
+			skipped++
+			continue
+		}
 		out = append(out, map[string]any{
 			"id": list[i].ID.String(), "account_id": list[i].AccountID.String(), "name": list[i].Name,
 			"kind": string(list[i].Kind), "vm_type": string(list[i].VMType),
 			"status": string(list[i].Status), "owner_id": list[i].OwnerID.String(),
-			"image_ref": list[i].ImageRef,
-			"avatar":    a.s.avatarOf(ctx, list[i].AccountID),
+			"image_ref": list[i].ImageRef, "platform_id": list[i].PlatformID,
+			"avatar": a.s.avatarOf(ctx, list[i].AccountID),
 		})
 		if h := a.s.humanoidOf(ctx, list[i].AccountID); h != nil {
 			out[len(out)-1]["humanoid"] = h
+		}
+		if len(out) >= limit {
+			break
 		}
 	}
 	return helper.JSON(map[string]any{"bots": out})

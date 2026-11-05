@@ -137,6 +137,10 @@ func (s *Service) recoverKey(a *account.Account) (string, error) {
 
 // findAccountByOAuth searches for an account linked to the given OAuth provider and sub.
 func (s *Service) findAccountByOAuth(ctx context.Context, provider, sub string) (*account.Account, bool) {
+	return s.findAccountByOAuthOn(ctx, provider, sub, "")
+}
+
+func (s *Service) findAccountByOAuthOn(ctx context.Context, provider, sub, platformID string) (*account.Account, bool) {
 	if provider == "" || sub == "" {
 		return nil, false
 	}
@@ -177,7 +181,9 @@ func (s *Service) findAccountByOAuth(ctx context.Context, provider, sub string) 
 			}
 			var acc account.Account
 			if err := s.R.Get(ctx, "accounts", ownerID, &acc); err == nil {
-				return &acc, true
+				if acc.PlatformID == platformID {
+					return &acc, true
+				}
 			}
 		}
 	}

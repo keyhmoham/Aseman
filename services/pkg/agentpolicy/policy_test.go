@@ -8,12 +8,12 @@ func TestTheTwoScopes(t *testing.T) {
 			t.Errorf("account scope refused %s", name)
 		}
 	}
-	for _, name := range []string{"admin.health", "auth.login", "finance.transfer", "llm.llm_provider_set", "spaces.admin_storage", "plugins.list", "x"} {
+	for _, name := range []string{"admin.health", "auth.login", "finance.transfer", "llm.llm_provider_set", "spaces.admin_storage", "admin.plugins_list", "tools.gadget_remove", "x"} {
 		if Allows(Account, name) || Allows(Space, name) {
 			t.Errorf("%s is allowed", name)
 		}
 	}
-	for _, name := range []string{"spaces.message_send", "spaces.room_create", "routines.create", "tools.plugin_list", "users.search", "market.catalog"} {
+	for _, name := range []string{"spaces.message_send", "spaces.room_create", "routines.create", "tools.gadget_list", "users.search", "market.catalog"} {
 		if !Allows(Space, name) {
 			t.Errorf("space scope refused %s", name)
 		}

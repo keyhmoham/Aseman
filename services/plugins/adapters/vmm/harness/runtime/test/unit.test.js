@@ -178,14 +178,15 @@ test('persona: lead or specialist, instructions and skills catalog', () => {
   assert.match(formatMemories([{ text: 'x', shared: true, kind: 'fact' }]), /- \[space\] \(fact\) x/)
 })
 
-test('persona routes lasting screens to appui_create (plugin or desk app)', () => {
+test('persona routes lasting screens to appui_create (gadget or desk app)', () => {
   const p = personaFor({ name: 'Ava' })
-  assert.match(p, /kind: "plugin"/)
-  assert.match(p, /appui_create` with\s+`kind: "plugin"`/)
+  assert.match(p, /kind: "gadget"/)
+  assert.match(p, /appui_create` with\s+`kind: "gadget"`/)
   assert.match(p, /kind: "app"/)
-  assert.match(CREATOR_GUIDE, /exactly the same as an App UI/)
-  assert.match(CREATOR_GUIDE, /kind: "plugin"/)
-  assert.ok(!/Prefer create_plugin over appui_create/.test(p))
+  assert.match(CREATOR_GUIDE, /App UI hosting: window vs gadget/)
+  assert.match(CREATOR_GUIDE, /kind: "gadget"/)
+  assert.match(CREATOR_GUIDE, /Very compact/)
+  assert.ok(!/Prefer create_gadget over appui_create/.test(p))
 })
 
 test('gateway calls carry the token and surface the node\'s error', async () => {
@@ -252,11 +253,11 @@ test('the store keeps one open question per session and survives a reload', () =
   assert.equal(again.questions({}).length, 0)
 })
 
-test('creator tools include create_plugin which starts appui_create kind=plugin', async () => {
-  assert.match(personaFor({ name: 'Ava' }), /Plugins \(frameless App UIs\)/)
-  assert.match(CREATOR_GUIDE, /create_plugin/)
-  assert.match(CREATOR_GUIDE, /kind: "plugin"/)
-  assert.match(CREATOR_GUIDE, /exactly the same as an App UI/)
+test('creator tools include create_gadget which starts appui_create kind=gadget', async () => {
+  assert.match(personaFor({ name: 'Ava' }), /App UI hosting: window vs gadget/)
+  assert.match(CREATOR_GUIDE, /create_gadget/)
+  assert.match(CREATOR_GUIDE, /kind: "gadget"/)
+  assert.match(CREATOR_GUIDE, /compact widget/)
   assert.match(CREATOR_GUIDE, /No frame/)
   const seen = []
   const gateway = {
@@ -266,8 +267,8 @@ test('creator tools include create_plugin which starts appui_create kind=plugin'
     },
   }
   const tools = creatorTools({ gateway, binding: () => ({ active: true, token: 't', spaceId: 's1', roomId: 'r1' }) })
-  assert.deepEqual(tools.map((t) => t.name), ['create_plugin', 'list_plugins', 'remove_plugin', 'restore_plugin'])
-  const create = tools.find((t) => t.name === 'create_plugin')
+  assert.deepEqual(tools.map((t) => t.name), ['create_gadget', 'list_gadgets'])
+  const create = tools.find((t) => t.name === 'create_gadget')
   const out = await create.execute(
     { name: 'Habits', description: 'Track habits', placement: 'chat', ui: 'elpian' },
     { signal: new AbortController().signal },
@@ -276,7 +277,7 @@ test('creator tools include create_plugin which starts appui_create kind=plugin'
   assert.equal(seen[0].ns, 'spaces')
   assert.equal(seen[0].action, 'ask')
   assert.equal(seen[0].body.tool, 'appui_create')
-  assert.equal(seen[0].body.args.kind, 'plugin')
+  assert.equal(seen[0].body.args.kind, 'gadget')
   assert.equal(seen[0].body.args.placement, 'chat')
   assert.equal(seen[0].body.args.ui, 'elpian')
   assert.match(seen[0].body.args.brief, /Habits/)

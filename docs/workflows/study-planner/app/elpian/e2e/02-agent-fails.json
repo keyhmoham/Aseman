@@ -1,0 +1,155 @@
+{
+ "name": "the agent cannot make the plan: a human error, then back",
+ "viewport": "phone",
+ "mocks": [
+  {
+   "path": "api/profiles/me",
+   "method": "GET",
+   "json": {
+    "exists": false
+   }
+  },
+  {
+   "path": "api/profiles/me/plans",
+   "method": "POST",
+   "json": {
+    "job": "job_fail",
+    "status": "queued"
+   }
+  },
+  {
+   "path": "api/jobs/job_fail",
+   "method": "GET",
+   "json": {
+    "id": "job_fail",
+    "status": "failed",
+    "error": "مشاور در دسترس نیست؛ کمی بعد دوباره امتحان کن."
+   }
+  }
+ ],
+ "steps": [
+  {
+   "expect": {
+    "text": "در چه پایه‌ای درس می‌خوانی؟"
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "grade_7"
+   }
+  },
+  {
+   "expect": {
+    "text": "منبع رسمی"
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "wiz_next"
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "goal_habit"
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "wiz_next"
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "wiz_next"
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "preset_weekend"
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "preset_clear"
+   }
+  },
+  {
+   "expect": {
+    "text": "دست‌کم یک ساعت انتخاب کن"
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "preset_evening"
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "wiz_next"
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "wiz_back"
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "wiz_next"
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "wiz_next"
+   }
+  },
+  {
+   "do": "wait",
+   "ms": 5000
+  },
+  {
+   "expect": {
+    "text": "برنامه ساخته نشد"
+   }
+  },
+  {
+   "expect": {
+    "text": "مشاور در دسترس نیست؛ کمی بعد دوباره امتحان کن."
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "think_back"
+   }
+  },
+  {
+   "expect": {
+    "text": "آماده‌ای؟"
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "wiz_close"
+   }
+  },
+  {
+   "expect": {
+    "text": "هنوز برنامه‌ای نداری"
+   }
+  }
+ ]
+}

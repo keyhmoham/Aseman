@@ -1,0 +1,12 @@
+__pycache__/
+app/.data/
+app/config.json
+app/READY.json
+app/APPS.json
+app/elpian/app.js
+app/elpian/widget.js
+app/STATUS.json
+app/REPAIR.md
+app/WIRING.md
+app/verify.log
+.deploy/

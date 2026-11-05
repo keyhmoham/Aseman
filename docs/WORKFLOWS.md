@@ -13,6 +13,9 @@ expressions, upserts, control flow) and
 `services/plugins/actions/developer/workflows.go` (the node binding: who the
 run acts as, what it may call, the stored runs, the HTTP and console doors).
 A complete example: [`docs/workflows/fullstack-product.json`](workflows/fullstack-product.json).
+An agentic product: [`docs/workflows/study-planner.json`](workflows/study-planner.json)
+— a study planner whose plans are written by a custom Planner agent the
+workflow creates ([`study-planner/README.md`](workflows/study-planner/README.md)).
 Editors: [`docs/workflows/workflow.schema.json`](workflows/workflow.schema.json)
 (JSON Schema 2020-12; point `"$schema"` at it for completion and checking).
 **Writing one well** (patterns, pitfalls, a checklist — for models and

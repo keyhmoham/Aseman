@@ -59,6 +59,36 @@ jobs:
       # The App UI kit: the wiring check every build passes, and the server SDK.
       - run: node --test deploy/sandbox-computer/appui/test/*.test.mjs deploy/sandbox-computer/appui/sdk/server.test.js
 
+  study-planner:
+    name: Study planner workflow app (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      # The app the workflow installs: planner, agent loop and server, offline.
+      - run: python3 test_app.py && python3 plan_tool.py selftest
+        working-directory: docs/workflows/study-planner/app
+      # The workflow document carries exactly this source.
+      - run: python3 docs/workflows/study-planner/bundle.py --check
+      # The Elpian frontend: its Jalali calendar against ICU, the program on
+      # QuickJS and its end-to-end scenarios, against the app's server.
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: deploy/tool-runtime/package-lock.json }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: deploy/tool-runtime
+      - name: Elpian frontend
+        working-directory: docs/workflows/study-planner/app
+        run: |
+          KIT=../../../../deploy/sandbox-computer/appui/elpian
+          node --test elpian/test/jalali.test.mjs
+          node $KIT/bundle.mjs .
+          PLANNER_QUIET=1 PLANNER_MODE=draft PORT=8787 DATA_DIR=$RUNNER_TEMP/sp python3 server.py &
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8787/healthz && break; sleep 0.5; done
+          echo '{"apps":[],"agents":[]}' > $RUNNER_TEMP/APPS.json
+          node $KIT/check.mjs elpian/app.js --apps $RUNNER_TEMP/APPS.json --server http://127.0.0.1:8787
+          node $KIT/drive.mjs run elpian/e2e --dir . --bundle elpian/app.js --server http://127.0.0.1:8787
+
   app:
     name: App (Flutter)
     runs-on: ubuntu-latest

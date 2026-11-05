@@ -2,6 +2,30 @@
 
 ## Unreleased: the workflow installer
 
+- **An agentic product as a workflow: آسمان‌درس.** `docs/workflows/study-planner.json`
+  brings up a study planner for Iranian school students: organization,
+  sub-platform and server key, a project with a custom **Planner** agent
+  (plus a Curator for the official curriculum and a Counselor), and the web
+  app installed, tested and served. The app's wizard takes the grade (and
+  field from grade 10), confirms the official course list (chap.sch.ir),
+  the goals, evidence-based difficulties (ADHD, test anxiety, sleep, …) and
+  the free hours; the Planner agent writes the plan and counsel through
+  `POST /v1/platform/spaces/ask`, the app checks it against the rules and
+  asks the agent to repair what breaks one, then files every session into a
+  Jalali calendar shown day by day on the home page. The run ends by having
+  the agent make a real plan. Source in `docs/workflows/study-planner/app`,
+  bundled by `bundle.py`; CI runs its tests and checks the bundle.
+- **آسمان‌درس: one command to install or update, and a native Elpian
+  frontend.** `docs/workflows/study-planner/deploy.sh` checks the app
+  locally, signs in, validates, shows the plan (first install or update,
+  what would change), runs and follows the workflow and resumes a failed
+  run. The product also ships as an Elpian program with the web app's
+  steps, screens, palette and features (wizard, today from the calendar, a
+  Jalali calendar computed without `Intl`, the plan's table and charts, a
+  phone widget); the workflow opens it on the project's desk with
+  `appui_publish`, after the platform's QuickJS check and end-to-end
+  scenarios. The server serves `GET /elpian/app.js` and names the Aseman
+  person `me`.
 - **One document brings up a whole product.** The developer API runs a JSON
   workflow (`aseman_workflow: "1"`) that calls the platform's actions in
   order: upsert the organization, its members, sub-platform and keys (from

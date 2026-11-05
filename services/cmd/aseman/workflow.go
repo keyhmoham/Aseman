@@ -28,6 +28,7 @@ Usage:
   aseman workflow cancel   <run-id>
   aseman workflow schema   > workflow.schema.json
   aseman workflow reference
+  aseman workflow guide    how to write a rich, professional workflow (markdown)
 
 Flags:
   --key <dk_live_…>    use the developer API with this key (or $ASEMAN_DEVELOPER_KEY);
@@ -149,6 +150,8 @@ func runWorkflow(args []string) {
 		fmt.Println(prettyJSON(c.call("cancel", rest[0], nil)))
 	case "schema", "reference":
 		fmt.Println(prettyJSON(c.call(sub, "", nil)))
+	case "guide":
+		fmt.Println(c.call("guide", "", nil)["content"])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown workflow command %q\n\n%s", sub, workflowUsage)
 		os.Exit(1)
@@ -293,13 +296,14 @@ func (c *wfClient) call(op, id string, body map[string]any) map[string]any {
 			method, path = http.MethodGet, "/workflows/runs/"+id
 		case "cancel":
 			path = "/workflows/runs/" + id + "/cancel"
-		case "schema", "reference":
+		case "schema", "reference", "guide":
 			method, path = http.MethodGet, "/workflows/"+op
 		}
 		b, err = c.keyRequest(method, path, body)
 	} else {
 		action := map[string]string{"validate": "workflow_validate", "plan": "workflow_plan", "run": "workflow_run", "runs": "workflow_runs",
-			"get": "workflow_run_get", "cancel": "workflow_run_cancel", "schema": "workflow_schema", "reference": "workflow_reference"}[op]
+			"get": "workflow_run_get", "cancel": "workflow_run_cancel", "schema": "workflow_schema", "reference": "workflow_reference",
+			"guide": "workflow_guide"}[op]
 		if body == nil {
 			body = map[string]any{}
 		}

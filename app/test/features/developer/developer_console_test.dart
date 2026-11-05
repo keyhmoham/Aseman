@@ -141,6 +141,8 @@ class _Service extends FakeAsemanService {
         polls++;
         runs[0] = {...runs[0], 'status': 'succeeded'};
         return {...runs[0], 'report': _report('succeeded')};
+      case 'workflow_guide':
+        return {'content': '# Writing workflows: a guide for models'};
       case 'workflow_runs':
         return {'runs': runs};
       case 'platform_catalog':
@@ -245,6 +247,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Not valid JSON'), findsOneWidget);
     expect(service.calls, isNot(contains('workflow_validate')));
+
+    await tester.tap(find.text('Writing guide'));
+    await tester.pumpAndSettle();
+    expect(find.text('# Writing workflows: a guide for models'), findsOneWidget);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Start from a template'));
     await tester.pumpAndSettle();

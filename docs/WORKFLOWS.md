@@ -15,6 +15,9 @@ run acts as, what it may call, the stored runs, the HTTP and console doors).
 A complete example: [`docs/workflows/fullstack-product.json`](workflows/fullstack-product.json).
 Editors: [`docs/workflows/workflow.schema.json`](workflows/workflow.schema.json)
 (JSON Schema 2020-12; point `"$schema"` at it for completion and checking).
+**Writing one well** (patterns, pitfalls, a checklist — for models and
+people): [`docs/workflows/AUTHORING.md`](workflows/AUTHORING.md), served as
+`GET /v1/workflows/guide`.
 
 ---
 
@@ -37,6 +40,7 @@ the organization's sub-platform when it has one.
 | `POST /v1/workflows/runs/{id}/cancel` | stop a run (it rolls back if the workflow asks to) |
 | `GET /v1/workflows/reference` | step kinds, built-in resources, functions, limits |
 | `GET /v1/workflows/schema` | the JSON Schema |
+| `GET /v1/workflows/guide` | the authoring guide (markdown in `content`) |
 
 ```bash
 curl -sS https://dev.example.com/v1/workflows/runs \
@@ -60,7 +64,7 @@ aseman workflow validate docs/workflows/fullstack-product.json
 aseman workflow plan     docs/workflows/fullstack-product.json product="Acme Bookings"
 SESSION_SECRET=… aseman workflow run docs/workflows/fullstack-product.json \
     product="Acme Bookings" --assets ./my-app=app/ --key "$ASEMAN_DEVELOPER_KEY"
-aseman workflow runs | get <id> | cancel <id> | schema | reference
+aseman workflow runs | get <id> | cancel <id> | schema | reference | guide
 ```
 
 Declared secrets not given with `--secret NAME=VALUE` are read from the
@@ -81,7 +85,7 @@ listed too.
 Underneath, signed actions of the `developer` namespace, with `org`
 ("personal" or a team id): `workflow_validate`, `workflow_plan`,
 `workflow_run`, `workflow_runs`, `workflow_run_get`, `workflow_run_cancel`,
-`workflow_reference`, `workflow_schema`. The console needs the **resources**
+`workflow_reference`, `workflow_schema`, `workflow_guide`. The console needs the **resources**
 role in the organization (owner, admin or developer).
 
 ### What each door may call

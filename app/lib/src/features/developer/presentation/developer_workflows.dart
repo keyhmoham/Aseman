@@ -119,6 +119,48 @@ class _WorkflowsState extends _LoadedState<_Workflows> {
     await _validate(quiet: true);
   }
 
+  /// How to write a rich, professional workflow — the same guide the API
+  /// gives models (docs/workflows/AUTHORING.md).
+  Future<void> _guide() async {
+    final String text;
+    try {
+      text = '${(await call('workflow_guide'))['content'] ?? ''}';
+    } catch (e) {
+      if (mounted) _snack(context, '$e');
+      return;
+    }
+    if (!mounted) return;
+    await showAppDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Writing workflows'),
+        content: SizedBox(
+          width: 760,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              text,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12.5,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Clipboard.setData(ClipboardData(text: text)),
+            child: const Text('Copy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _starter() {
     setState(() {
       _doc.text = kWorkflowStarter;
@@ -312,6 +354,11 @@ class _WorkflowsState extends _LoadedState<_Workflows> {
             onPressed: _open,
             icon: const Icon(Icons.file_open_outlined, size: 18),
             label: const Text('Open file'),
+          ),
+          TextButton.icon(
+            onPressed: _guide,
+            icon: const Icon(Icons.menu_book_outlined, size: 18),
+            label: const Text('Writing guide'),
           ),
           TextButton.icon(
             onPressed: _starter,

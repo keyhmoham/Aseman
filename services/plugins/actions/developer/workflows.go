@@ -767,6 +767,11 @@ var workflowKinds = map[string]string{
 	"common":  `id, name, if, for_each (+as, index_as, concurrency, collect), retry {attempts, delay, backoff, max_delay, on}, timeout, continue_on_error, on_error [...], compensate {step}, outputs, export, sensitive, plan ("run"|"skip")`,
 }
 
+// workflowGuide is the authoring guide as the API answers it.
+func workflowGuide() map[string]any {
+	return map[string]any{"object": "workflow.guide", "format": "markdown", "content": workflow.Guide}
+}
+
 // ---- console actions ----
 
 // workflowActions are the console's workflow actions, signed in as the person.
@@ -828,6 +833,9 @@ func (s *Service) workflowActions(scoped func(name, summary string, fn func(ctx 
 	scoped("workflow_reference", "The workflow format: step kinds, built-in resources and functions", func(context.Context, identity.ID, Scope, map[string]json.RawMessage) (any, error) {
 		return WorkflowReference(), nil
 	})
+	scoped("workflow_guide", "How to write a rich, professional workflow (markdown), for models and people", func(context.Context, identity.ID, Scope, map[string]json.RawMessage) (any, error) {
+		return workflowGuide(), nil
+	})
 	scoped("workflow_schema", "The workflow format as a JSON Schema, for editors", func(context.Context, identity.ID, Scope, map[string]json.RawMessage) (any, error) {
 		return workflow.JSONSchema(), nil
 	})
@@ -885,6 +893,9 @@ func (s *Service) apiWorkflows() []route {
 		})),
 		get("/workflows/schema", s.resource(res, r, svc, func(context.Context, *Principal, *network.Request) (any, int, error) {
 			return workflow.JSONSchema(), http.StatusOK, nil
+		})),
+		get("/workflows/guide", s.resource(res, r, svc, func(context.Context, *Principal, *network.Request) (any, int, error) {
+			return workflowGuide(), http.StatusOK, nil
 		})),
 		post("/workflows/validate", s.resourceLogged(res, r, svc, false, start("validate"))),
 		post("/workflows/plan", s.resourceLogged(res, w, svc, false, start(workflow.ModePlan))),

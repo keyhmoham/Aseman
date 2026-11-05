@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -776,5 +777,87 @@ func TestSandboxStartsAComputerThatNeverRan(t *testing.T) {
 	rep := run(t, f, `{"aseman_workflow":"1","name":"w","steps":[{"id":"w","sandbox":{"space":"s9","files":{"a.txt":"x"}}}]}`, ModeRun, nil, nil)
 	if rep.Status != StatusSucceeded || f.files["s9:/workspace/a.txt"] != "x" {
 		t.Fatalf("%s %s %v", rep.Status, rep.Error, f.files)
+	}
+}
+
+// The guide served by the API is docs/workflows/AUTHORING.md, and what it
+// shows is valid: every complete example validates, and every step snippet
+// decodes strictly (no misspelt fields).
+func TestGuide(t *testing.T) {
+	const file = "../../../../../docs/workflows/AUTHORING.md"
+	doc, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if os.Getenv("ASEMAN_WRITE_SCHEMA") == "1" {
+		if err := os.WriteFile("guide.md", doc, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	} else if string(doc) != Guide {
+		t.Fatal("workflow/guide.md is stale: run ASEMAN_WRITE_SCHEMA=1 go test ./plugins/actions/developer/workflow -run TestGuide")
+	}
+	blocks := regexp.MustCompile("(?s)```(json[^\\n]*)\\n(.*?)```").FindAllStringSubmatch(string(doc), -1)
+	if len(blocks) < 8 {
+		t.Fatalf("only %d json blocks", len(blocks))
+	}
+	whole := 0
+	for i, b := range blocks {
+		info, src := strings.TrimSpace(b[1]), b[2]
+		if info == "jsonc" {
+			continue
+		}
+		if info == "json workflow" {
+			whole++
+			wf, err := Decode([]byte(src))
+			if err != nil {
+				t.Fatalf("example %d: %v", i, err)
+			}
+			if issues := Validate(wf, nil); HasErrors(issues) || len(issues) > 0 {
+				t.Fatalf("example %d: %+v", i, issues)
+			}
+			if rep := Run(context.Background(), wf, newFake(), nil, Options{Mode: ModePlan, ErrorCode: codeOf}); rep.Status != StatusPlanned {
+				t.Fatalf("example %d plan: %s %s", i, rep.Status, rep.Error)
+			}
+			continue
+		}
+		// A fragment: an object, members of one, or a list of steps.
+		var v any
+		for _, wrap := range [][2]string{{"", ""}, {"{", "}"}, {"[", "]"}} {
+			if json.Unmarshal([]byte(wrap[0]+src+wrap[1]), &v) == nil {
+				break
+			}
+			v = nil
+		}
+		if v == nil {
+			t.Fatalf("block %d is not JSON:\n%s", i, src)
+		}
+		var steps []any
+		switch x := v.(type) {
+		case []any:
+			steps = x
+		case map[string]any:
+			if _, isMembers := x["templates"]; isMembers {
+				continue
+			}
+			if _, isMembers := x["defaults"]; isMembers {
+				continue
+			}
+			steps = []any{x}
+		}
+		for _, s := range steps {
+			raw, _ := json.Marshal(s)
+			dec := json.NewDecoder(strings.NewReader(string(raw)))
+			dec.DisallowUnknownFields()
+			var st Step
+			if err := dec.Decode(&st); err != nil {
+				t.Fatalf("block %d step: %v\n%s", i, err, raw)
+			}
+			if st.Kind() == "" {
+				t.Fatalf("block %d step has no single kind: %s", i, raw)
+			}
+		}
+	}
+	if whole == 0 {
+		t.Fatal("the guide has no complete example")
 	}
 }

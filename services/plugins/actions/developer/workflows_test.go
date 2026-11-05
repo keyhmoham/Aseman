@@ -3,6 +3,7 @@ package developer
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -200,6 +201,9 @@ func TestWorkflowInstallerOnTheDeveloperHost(t *testing.T) {
 	}
 	if resp, schema := f.door(t, network.MethodGet, "/workflows/schema", secret, ""); resp.Status != 200 || schema["$id"] != workflow.SchemaID {
 		t.Fatalf("schema: %d", resp.Status)
+	}
+	if resp, guide := f.door(t, network.MethodGet, "/workflows/guide", secret, ""); resp.Status != 200 || !strings.Contains(fmt.Sprint(guide["content"]), "Writing workflows") {
+		t.Fatalf("guide: %d", resp.Status)
 	}
 	_, list := f.door(t, network.MethodGet, "/workflows/runs", secret, "")
 	if data, _ := list["data"].([]any); len(data) != 3 {

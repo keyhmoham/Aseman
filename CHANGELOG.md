@@ -25,6 +25,12 @@
   `GET /v1/workflows/schema`), `aseman workflow …` in the CLI (either door,
   secrets from the environment, `--assets` ships a local source tree, live
   follow), and **Developer API → Build → Workflows** in the app.
+- **A guide for models.** `docs/workflows/AUTHORING.md` — how to write a
+  rich, professional workflow: what to decide first, the phases, the rules
+  the engine enforces, patterns, a complete example, how to read a failed
+  run, and a checklist. Served as `GET /v1/workflows/guide`
+  (`developer.workflow_guide`, `aseman workflow guide`, the console's
+  Writing guide); a test keeps its examples valid.
 - **Proven on a node.** `ASEMAN_WORKFLOW_E2E=1 go test ./internal/plugins/host -run WorkflowE2E`
   runs the example end to end on a whole node.
 - **Several nodes.** Runs keep a heartbeat, are counted and cancelled

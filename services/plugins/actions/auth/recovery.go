@@ -141,11 +141,33 @@ func (s *Service) openChallenges(ctx context.Context, owner identity.ID, purpose
 	return open, nil
 }
 
+// emailAccountOn is the account with [email] in one environment: the
+// platform named by [platform] (slug or id), or main Aseman when empty. An
+// email is unique per environment, so the same address may also be someone
+// else on another platform. Nil when there is none.
+func (s *Service) emailAccountOn(ctx context.Context, email, platform string) (*account.Account, error) {
+	platformID, err := helper.ResolvePlatformID(ctx, s.R, platform)
+	if err != nil {
+		return nil, err
+	}
+	var list []account.Account
+	if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"email": email}}, &list); err != nil {
+		return nil, err
+	}
+	for i := range list {
+		if list[i].PlatformID == platformID {
+			return &list[i], nil
+		}
+	}
+	return nil, nil
+}
+
 // passwordForgot answers ok for any address so it cannot be used to discover
 // which emails have accounts.
 func (s *Service) passwordForgot(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	var in struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
+		Platform string `json:"platform"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
@@ -155,14 +177,14 @@ func (s *Service) passwordForgot(ctx context.Context, req *api.ActionRequest) (*
 		return nil, errs.InvalidArgument("email is invalid")
 	}
 	reply := map[string]any{"ok": true, "delivery": s.mailer().Transport()}
-	var list []account.Account
-	if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"email": email}, Limit: 1}, &list); err != nil {
+	found, err := s.emailAccountOn(ctx, email, in.Platform)
+	if err != nil {
 		return nil, err
 	}
-	if len(list) == 0 || list[0].Kind != account.KindUser || list[0].Status == account.StatusDisabled {
+	if found == nil || found.Kind != account.KindUser || found.Status == account.StatusDisabled {
 		return helper.JSON(reply)
 	}
-	acc := list[0]
+	acc := *found
 	open, err := s.openChallenges(ctx, acc.ID, challenge.PurposePasswordReset)
 	if err != nil {
 		return nil, err
@@ -201,6 +223,7 @@ func (s *Service) passwordReset(ctx context.Context, req *api.ActionRequest) (*a
 		Email    string `json:"email"`
 		Code     string `json:"code"`
 		Password string `json:"password"`
+		Platform string `json:"platform"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
@@ -210,14 +233,14 @@ func (s *Service) passwordReset(ctx context.Context, req *api.ActionRequest) (*a
 		return nil, errs.InvalidArgument("password must be at least 8 characters")
 	}
 	code := strings.TrimSpace(in.Code)
-	var list []account.Account
-	if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"email": strings.TrimSpace(in.Email)}, Limit: 1}, &list); err != nil {
+	found, err := s.emailAccountOn(ctx, strings.TrimSpace(in.Email), in.Platform)
+	if err != nil {
 		return nil, err
 	}
-	if len(list) == 0 || code == "" {
+	if found == nil || code == "" {
 		return nil, invalid
 	}
-	acc := list[0]
+	acc := *found
 	open, err := s.openChallenges(ctx, acc.ID, challenge.PurposePasswordReset)
 	if err != nil {
 		return nil, err
@@ -246,13 +269,14 @@ func (s *Service) passwordReset(ctx context.Context, req *api.ActionRequest) (*a
 		return nil, err
 	}
 	if !acc.EmailVerified || acc.Status == account.StatusPending {
-		if fresh, e := s.Account(ctx, acc.Handle); e == nil {
+		var fresh account.Account
+		if e := s.R.Get(ctx, "accounts", acc.ID, &fresh); e == nil {
 			fresh.EmailVerified = true
 			if fresh.Status == account.StatusPending {
 				fresh.Status = account.StatusActive
 			}
 			fresh.UpdatedAt = now
-			_ = s.R.Update(ctx, "accounts", fresh.ID, fresh)
+			_ = s.R.Update(ctx, "accounts", fresh.ID, &fresh)
 		}
 	}
 	return helper.JSON(map[string]any{"ok": true})
@@ -298,7 +322,8 @@ func (s *Service) sendVerificationCode(ctx context.Context, acc *account.Account
 // sendVerification handles auth.send_verification and auth.resend_verification.
 func (s *Service) sendVerification(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	var in struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
+		Platform string `json:"platform"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
@@ -308,14 +333,14 @@ func (s *Service) sendVerification(ctx context.Context, req *api.ActionRequest) 
 	if email == "" || !strings.Contains(email, "@") {
 		return helper.JSON(reply)
 	}
-	var list []account.Account
-	if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"email": email}, Limit: 1}, &list); err != nil {
+	found, err := s.emailAccountOn(ctx, email, in.Platform)
+	if err != nil {
 		return nil, err
 	}
-	if len(list) == 0 {
+	if found == nil {
 		return helper.JSON(reply)
 	}
-	acc := list[0]
+	acc := *found
 	if acc.EmailVerified && acc.Status == account.StatusActive {
 		return helper.JSON(reply)
 	}
@@ -339,6 +364,7 @@ func (s *Service) verifyEmail(ctx context.Context, req *api.ActionRequest) (*api
 		Email    string `json:"email"`
 		Code     string `json:"code"`
 		Password string `json:"password"`
+		Platform string `json:"platform"`
 	}
 	if err := helper.Decode(req, &in); err != nil {
 		return nil, err
@@ -349,14 +375,14 @@ func (s *Service) verifyEmail(ctx context.Context, req *api.ActionRequest) (*api
 	if email == "" || code == "" {
 		return nil, invalid
 	}
-	var list []account.Account
-	if err := s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"email": email}, Limit: 1}, &list); err != nil {
+	found, err := s.emailAccountOn(ctx, email, in.Platform)
+	if err != nil {
 		return nil, err
 	}
-	if len(list) == 0 {
+	if found == nil {
 		return nil, invalid
 	}
-	acc := list[0]
+	acc := *found
 	open, err := s.openChallenges(ctx, acc.ID, challenge.PurposeEmailVerification)
 	if err != nil {
 		return nil, err

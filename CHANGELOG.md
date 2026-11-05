@@ -27,6 +27,14 @@
   access methods, so apps got no `X-Aseman-User-Token` and `/appapi/v1`
   answered "app API unavailable": app backends could not reach their space's
   agents and apps at all. It now does (checked at compile time).
+- **A platform's own client.** `--dart-define=ASEMAN_PLATFORM=<slug>` (web:
+  `--build-arg ASEMAN_PLATFORM`, or `?platform=<slug>`) builds the Aseman
+  client for one sub-platform: sign-in on its own accounts under its name,
+  home on its published frontend (Elpian natively, web in the in-app view),
+  a menu to the workspace and sign-out. Sessions remember their platform.
+- **Fix:** password reset and email verification looked accounts up by email
+  across every environment, so the same address on main Aseman and on a
+  platform could reset the wrong account. They take `platform` and stay in it.
 - Server SDKs expose the platform (`req.asemanPlatform`, `client.platform`,
   `Aseman.platform_of`); the page SDK works under the platform path and has
   `me` / `signIn` / `signUp` / `signOut`.

@@ -420,8 +420,21 @@ The gateway serves it at **`/v1/platforms/{slug}/app/`**:
 | Agents and apps | page and server calls run as — and are billed to — **the person who published the frontend**, name the platform's person on the usage record (`via`), and reach **only the wired** agents, apps and microtools; desk windows and space files are not served |
 | Asleep | the first request that finds the service down wakes the computer as the publisher |
 
-An Elpian frontend runs natively in the Aseman client (`ElpianAppView` with
-the platform path); the console's **Open** button runs it.
+**A platform's own client.** Build the Aseman client for one platform with
+`--dart-define=ASEMAN_PLATFORM=<slug>` (the web image: `docker build
+--build-arg ASEMAN_PLATFORM=<slug> app`), or open a web build with
+`?platform=<slug>`. Its sign-in screen carries the platform's name and signs
+people in to — and up on — the platform's own accounts (password, Google,
+Apple, password reset and email verification all pass `platform`; enterprise
+SSO stays main Aseman's). Home is the published frontend, full screen: an
+Elpian frontend runs natively (`ElpianAppView` on the platform path), a web
+one in the in-app web view. A menu reaches the regular workspace and signs
+out. A platform with no frontend yet opens the workspace. The console's
+**Open** button runs the frontend for the owner.
+
+Password reset and email verification look the account up within its
+environment: an email is unique per platform, so the same address on main
+Aseman and on a platform are two accounts.
 
 ### 8.4 Building a product on Aseman
 

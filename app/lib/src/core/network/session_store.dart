@@ -12,6 +12,7 @@ class Session {
     required this.publicKey,
     this.homeSpaceId = '',
     this.email = '',
+    this.platformId = '',
   });
 
   final String accountId;
@@ -21,6 +22,9 @@ class Session {
   final String publicKey;
   final String homeSpaceId;
   final String email;
+
+  /// The sub-platform the account belongs to ('' for main Aseman).
+  final String platformId;
 
   bool get isLoggedIn => token.isNotEmpty && accountId.isNotEmpty;
 
@@ -32,6 +36,7 @@ class Session {
         'public_key': publicKey,
         'home_space_id': homeSpaceId,
         'email': email,
+        'platform_id': platformId,
       };
 
   factory Session.fromJson(Map<String, dynamic> json) => Session(
@@ -42,6 +47,7 @@ class Session {
         publicKey: json['public_key'] as String? ?? '',
         homeSpaceId: json['home_space_id'] as String? ?? '',
         email: json['email'] as String? ?? '',
+        platformId: json['platform_id'] as String? ?? '',
       );
 }
 

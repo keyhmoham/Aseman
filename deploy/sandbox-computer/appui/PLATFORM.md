@@ -61,8 +61,9 @@ if Aseman.has_user(request.headers):
 
 ## Signing people in
 
-The platform's people have the platform's own accounts. An Aseman client
-signed in to the platform opens the frontend already signed in. In a browser,
+The platform's people have the platform's own accounts. The platform's
+Aseman client (built for it) signs them in and opens the frontend as its
+home, already signed in. In a browser,
 the frontend signs them in itself, through the gateway — the session goes
 into the frontend's own HttpOnly cookie, never into your page or server:
 

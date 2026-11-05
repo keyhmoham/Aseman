@@ -60,6 +60,7 @@ var codeModePlatform = map[string]bool{
 	"file_send": true, "file_upload": true, "image_generate": true, "ui_present": true,
 	"proxy_create": true, "proxy_list": true, "proxy_get": true, "proxy_delete": true,
 	"appui_create": true, "appui_publish": true, "appui_status": true,
+	"platform_setup": true, "app_developer_access": true, "platform_publish": true,
 	"routine_create": true, "routine_list": true, "routine_get": true, "routine_update": true, "routine_delete": true,
 	"desk_state": true, "desk_arrange": true, "desk_close": true,
 	"db_tables": true, "db_read": true,

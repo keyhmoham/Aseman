@@ -159,6 +159,25 @@ check_elpian() {
   return 0
 }
 
+# check_wiring prints why the app is not wired to its space for real: an
+# agent or app it uses that APPS.json does not list, or a stand-in for the
+# gateway's Aseman API (nothing when it is wired for real; warnings go to
+# WIRING.md for the builder).
+check_wiring() {
+  local dir="$1" checker out
+  checker="$ROOT/wiring-check.mjs"
+  [[ -f "$checker" ]] || return 0
+  if out=$(node "$checker" "$dir" 2>&1); then
+    printf '%s\n' "$out" >"$dir/WIRING.md"
+    return 0
+  fi
+  printf '%s\n' "$out" >"$dir/WIRING.md"
+  echo "The app is not wired to this space for real (aseman-wiring-check, APPS.json):"
+  echo "$out" | grep '^PROBLEM' | head -n 40
+  echo "Use only the agents and apps APPS.json lists, by those names, through the Aseman API (vendor/aseman-sdk); never imitate one."
+  return 1
+}
+
 # check_ready prints why READY.json is not acceptable (nothing when it is).
 check_ready() {
   local dir="$1"
@@ -190,7 +209,7 @@ check_ready() {
 }
 
 build_prompt() {
-  local dir="$1" port="$2" mode="$3" ui="${4:-elpian}" engine="${5:-agents}" kind="${6:-app}" task frontend host="" tools="" finish=""
+  local dir="$1" port="$2" mode="$3" ui="${4:-elpian}" engine="${5:-agents}" kind="${6:-app}" audience="${7:-space}" task frontend host="" tools="" finish="" people=""
   if [[ "$mode" == "update" ]]; then
     task="This is an existing app (BRIEF.md is what it was built for). Make the change requested last in CHANGES.md and keep everything else working. Read the project before editing; change only what the request needs. With an Elpian frontend, replay the existing end-to-end scenarios (elpian/e2e) first, then drive the changed and new parts headlessly step by step, and update or add scenarios so they cover them."
   else
@@ -301,6 +320,27 @@ Design for a desk window and for phones; include the phone widget.
 HOST
 )
   fi
+  if [[ "$audience" == "platform" ]]; then
+    people=$(cat <<PEOPLE
+
+## Audience: a platform's frontend (JOB.json audience: platform)
+Read PLATFORM.md first. This app will be the frontend of a sub-platform the
+person runs: its people are that platform's, not members of this space, and
+some arrive signed out. It is still wired to THIS space's agents and apps
+(APPS.json): they are the platform's backend services in the loop.
+- Signed-out visitors (no X-Aseman-User-Token on the request, no person in
+  Aseman.context()): serve them what needs no agent or app, and a clear way to
+  sign in; never call the Aseman API for them.
+- Signed-in people: the page's Aseman calls and your server's calls with the
+  request's token (Aseman.fromRequest(req)) reach the wired agents and apps,
+  run as (and billed to) the person who publishes the frontend, and name the
+  platform's person on the usage record. Key your own data by the person's
+  id (X-Aseman-User) and keep each person's data their own.
+- Only the agents and apps in APPS.json answer for a platform; anything else
+  is refused.
+PEOPLE
+)
+  fi
   if [[ "$engine" == "agents" ]]; then
     tools=$(cat <<TOOLS
 
@@ -330,13 +370,14 @@ FINISH
   fi
   cat <<PROMPT
 You are the software engineer of an Aseman space. $task
-$host
+$host$people
 $frontend
 $tools
 
 Context files here: AGENTS.md (your rules: follow them), ELPIAN.md (the Elpian
 frontend guide and reference)$( [[ "$kind" == "gadget" ]] && printf '%s' ', GADGETS.md (gadget mode: compact widget rules)'), BRIEF.md (+ CHANGES.md),
-APPS.json (the space: apps with microtools and their args_schema, and agents),
+APPS.json (the space: apps with microtools and their args_schema, and agents —
+the only ones the app may use, by those names),$( [[ "$audience" == "platform" ]] && printf '\n%s' 'PLATFORM.md (building a platform'"'"'s frontend),')
 ASEMAN_API.md (the exact page API contract), JOB.json (port $port, dir),
 vendor/aseman-sdk/ (aseman.js for the page; server.cjs / server.mjs /
 aseman_server.py for your server: use them for every Aseman call),
@@ -350,7 +391,14 @@ Work in this order:
    app calls use the server SDK: Aseman.fromRequest(req) while serving a
    person (billed to them), Aseman.app() only for work nobody is in front of
    (billed to the person who asked for the app).
-   Use only the apps, microtools, argument shapes and agents APPS.json lists.
+   Use only the apps, microtools, argument shapes and agents APPS.json lists,
+   by those names, and use them for real: every feature the brief gives to
+   an agent or an app calls that agent or app through the Aseman API — never
+   a made-up agent or app, a hard-coded reply, a direct model call or a fake
+   endpoint standing in for one (mocks belong in tests only). The platform
+   checks the code against APPS.json (aseman-wiring-check) before the app is
+   ready. If the brief needs an agent or app the space does not have, say so
+   in PLAN.md and leave that feature out rather than imitating it.
    Decide what the phone widget shows: the live facts someone checks at a
    glance for this app. Decide the design: the hero of each screen, the
    layout on a phone and on a wide desk window, the components, the
@@ -398,7 +446,7 @@ PROMPT
 
 # parse_job reads the flags of build / prepare into the job_* variables.
 parse_job() {
-  job_dir="" job_brief="" job_apps="" job_title="App" job_port=8787 job_mode="new" job_ui="elpian" job_kind="app"
+  job_dir="" job_brief="" job_apps="" job_title="App" job_port=8787 job_mode="new" job_ui="elpian" job_kind="app" job_audience="space"
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --dir) job_dir="$2"; shift 2 ;;
@@ -409,6 +457,7 @@ parse_job() {
       --mode) job_mode="$2"; shift 2 ;;
       --ui) job_ui="$2"; shift 2 ;;
       --kind) job_kind="$2"; shift 2 ;;
+      --audience) job_audience="$2"; shift 2 ;;
       *) die "unknown flag $1" ;;
     esac
   done
@@ -418,6 +467,7 @@ parse_job() {
   [[ "$job_ui" == "elpian" || "$job_ui" == "web" ]] || die "--ui is elpian or web"
   [[ "$job_kind" == "app" || "$job_kind" == "gadget" || "$job_kind" == "plugin" ]] || die "--kind is app or gadget"
   [[ "$job_kind" == "plugin" ]] && job_kind="gadget"
+  [[ "$job_audience" == "space" || "$job_audience" == "platform" ]] || die "--audience is space or platform"
   job_dir=$(mkdir -p "$job_dir" && cd "$job_dir" && pwd)
 }
 
@@ -441,6 +491,11 @@ prepare_project() {
     done
     [[ -f "$ROOT/elpian/ELPIAN.md" ]] && cp -f "$ROOT/elpian/ELPIAN.md" "$dir/ELPIAN.md"
     [[ -f "$ROOT/elpian/GADGETS.md" ]] && cp -f "$ROOT/elpian/GADGETS.md" "$dir/GADGETS.md"
+    if [[ "$job_audience" == "platform" && -f "$ROOT/PLATFORM.md" ]]; then
+      cp -f "$ROOT/PLATFORM.md" "$dir/PLATFORM.md"
+    fi
+    # The developer API guide, for a server given app_developer_access.
+    [[ -f "$ROOT/DEVELOPER.md" ]] && cp -f "$ROOT/DEVELOPER.md" "$dir/DEVELOPER.md"
     if [[ -d "$ROOT/elpian/examples" ]]; then
       mkdir -p "$dir/vendor/aseman-elpian/examples"
       cp -a "$ROOT/elpian/examples/." "$dir/vendor/aseman-elpian/examples/"
@@ -466,8 +521,8 @@ prepare_project() {
   else
     echo '{"apps":[],"agents":[]}' >"$dir/APPS.json"
   fi
-  jq -n --arg t "$job_title" --argjson p "$job_port" --arg d "$dir" --arg m "$job_mode" --arg u "$job_ui" --arg k "$job_kind" --arg e "$engine" \
-    '{title:$t, port:$p, dir:$d, mode:$m, ui:$u, kind:$k, engine:$e}' >"$dir/JOB.json"
+  jq -n --arg t "$job_title" --argjson p "$job_port" --arg d "$dir" --arg m "$job_mode" --arg u "$job_ui" --arg k "$job_kind" --arg e "$engine" --arg a "$job_audience" \
+    '{title:$t, port:$p, dir:$d, mode:$m, ui:$u, kind:$k, engine:$e, audience:$a}' >"$dir/JOB.json"
   rm -f "$dir/READY.json" "$dir/REPAIR.md"
 }
 
@@ -477,6 +532,9 @@ prepare_project() {
 check_app() {
   local dir="$1" problem
   problem=$(check_ready "$dir") || true
+  if [[ -z "$problem" ]]; then
+    problem=$(check_wiring "$dir") || true
+  fi
   if [[ -z "$problem" ]]; then
     problem=$(verify_app "$dir") || true
   fi
@@ -494,7 +552,7 @@ cmd_prepare() {
   parse_job "$@"
   local dir="$job_dir"
   prepare_project agents
-  build_prompt "$dir" "$job_port" "$job_mode" "$job_ui" agents "$job_kind" >"$dir/TASK.md"
+  build_prompt "$dir" "$job_port" "$job_mode" "$job_ui" agents "$job_kind" "$job_audience" >"$dir/TASK.md"
   jq -n --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{state:"building", engine:"agents", started_at:$at}' >"$dir/STATUS.json"
   cat "$dir/TASK.md"
 }
@@ -538,14 +596,17 @@ Apps are built by the space's agents: prepare lays the project out and prints
 their task, they build it, and verify runs the platform's checks.
 
 Commands:
-  prepare --dir DIR --brief-file FILE [--apps-file FILE] [--title T] [--port N] [--mode new|update] [--ui elpian|web] [--kind app|gadget]
+  prepare --dir DIR --brief-file FILE [--apps-file FILE] [--title T] [--port N] [--mode new|update] [--ui elpian|web] [--kind app|gadget] [--audience space|platform]
                          Lay out the project for an agent to build and print its
                          task (TASK.md). update changes an existing app in place
                          (CHANGES.md). --ui elpian (default: an Elpian program,
                          ELPIAN.md) or web (only when the person asked for web
                          technology). --kind app (default: framed desk window)
                          or gadget (compact frameless widget; see GADGETS.md).
-  verify [--dir] DIR     The platform's checks of a built app (READY.json, start
+                         --audience space (default) or platform (the frontend
+                         of a sub-platform; see PLATFORM.md).
+  verify [--dir] DIR     The platform's checks of a built app (READY.json, its
+                         wiring to the space (APPS.json), start
                          and answer, Elpian bundle, QuickJS, end-to-end
                          scenarios); exit 1 with the problem (REPAIR.md).
   status [--dir DIR]     Show STATUS.json / READY.json

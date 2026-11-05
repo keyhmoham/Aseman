@@ -181,6 +181,9 @@ The platform collection exposes every registered **non-admin** product action (e
 | `/harness/v1/call`, `/catalog`, `/llm/*`, `/memory/*`, `/timeline/*` | Turn-scoped agent gateway (policy-bound) |
 | `/tools/v1/codemode/{openapi,request,mcp}` | Code Mode: search/execute against a generated OpenAPI of space capabilities |
 | `/tools/v1/runtime/host` | Managed/installed tool backends calling back into the platform |
+| `/v1/proxy/{id}/*` | An app's preview (space members); its page API at `_aseman/api/*` |
+| `/appapi/v1/{op}` | An app's server using its space's agents and apps (user token or app key) |
+| `/v1/platforms/{slug}/app/*` | A sub-platform's published frontend (§8.3) |
 
 ### 4.4 Other HTTP doors
 
@@ -387,13 +390,90 @@ Product discovery applies `SeesEntity`: user search / hireable, bot search, spac
 | Node admin | `developer.admin_platforms`, `developer.admin_platform_access` |
 | End users of a sub-platform | Same product actions as the main app, scoped by their `platform_id` |
 
-### 8.3 Building a product on Aseman
+### 8.3 A platform's frontend
+
+An organization owner or admin can publish an **app the agents of a space
+built** (an Elpian or web App UI with its own backend) as the platform's
+**frontend** — what the platform's people open:
+
+1. In a space they belong to, the person asks its agents for the app.
+   Agents call `appui_create` with `audience: "platform"`: the project gets
+   `PLATFORM.md` (signed-out visitors, the platform's people, who pays) next to
+   `APPS.json`, the space's agents and apps the software is wired to.
+2. The agents build, test and `appui_publish` it. `aseman-appui verify`
+   refuses an app whose code names an agent, app or microtool that
+   `APPS.json` does not list, or that serves its own `_aseman/…` routes in
+   place of the gateway (`aseman-wiring-check`): wiring is real, never
+   imitated. The published app records its wiring with its key.
+3. **Developer API → Platform → Frontend → Publish** picks the app
+   (`developer.platform_frontend_apps`, `platform_frontend_publish`,
+   `platform_frontend_unpublish`; public `platform_frontend {platform}`).
+
+**Agents can do all of it for the person.** Three tools of the spaces
+namespace act as the person whose request the turn serves (never as the
+agent), through the developer namespace's own role checks; the developer
+namespace itself stays closed to agents:
+
+| Tool | Does |
+| --- | --- |
+| `platform_setup {name, slug, org_name?, org?}` | makes (or reuses) a team organization by name, or uses `org` / the personal one, and its platform |
+| `app_developer_access {dir, org?, platform_api?}` | a developer key of that organization (models: read, chat: write, platform collection: write) written into the app's `.aseman/server.env` (`ASEMAN_DEVELOPER_KEY`, `ASEMAN_DEVELOPER_API_URL` = node `/dev/v1`, `ASEMAN_PLATFORM`); the agent never sees it; calling again revokes and replaces it; rebuilds keep it |
+| `platform_publish {dir, org?}` | publishes the app `appui_publish` verified as the platform's frontend and answers its address |
+
+The server SDKs' `Aseman.developer()` uses the key (`models`, `chat`,
+`platform(namespace, action, body)`, `catalog`); `DEVELOPER.md` in the project
+says when (a model call no agent is meant for, the platform's own product
+surface) and the wiring check refuses the key in page code or written into
+source. Governance classifies `platform_publish` as a send and the other two
+as writes, so a space's approval rules apply.
+
+**End to end.** `internal/plugins/host/testdata/platform` boots a whole node
+from the native plugins and proves the flow: a person's Builder agent, through
+the real agent gateway, sets up the organization and platform, starts the app
+with `appui_create`, gives it developer access, writes it on the space's
+computer, passes `appui_publish` (the real kit: wiring check, widget on QuickJS,
+start), and `platform_publish`es it. Then a visitor and a signed-in person of
+the platform use it: the app's server asks the space's Advisor agent and calls
+its Pricing app (a real MCP server) for them, uses the developer API, and an
+agent the app is not wired to is refused. Run it after `make plugins`, as root
+on a throwaway machine (the space's computer is that machine):
+`ASEMAN_PLATFORM_E2E=1 go test ./internal/plugins/host -run PlatformE2E`.
+
+The gateway serves it at **`/v1/platforms/{slug}/app/`**:
+
+| | |
+| --- | --- |
+| Visitors (signed out) | see its pages; no person headers, no page API |
+| Signing in | `_aseman/auth/login`, `register`, `logout`, `GET _aseman/auth/me` — platform-local accounts; the session stays in the frontend's HttpOnly cookie |
+| Who may use it | the platform's accounts, the organization's members, and main Aseman when bridged (`main_access`) |
+| Its server | gets `X-Aseman-Platform*` and, for a signed-in person, a **platform user token** (`X-Aseman-User-Token`) |
+| Agents and apps | page and server calls run as — and are billed to — **the person who published the frontend**, name the platform's person on the usage record (`via`), and reach **only the wired** agents, apps and microtools; desk windows and space files are not served |
+| Asleep | the first request that finds the service down wakes the computer as the publisher |
+
+**A platform's own client.** Build the Aseman client for one platform with
+`--dart-define=ASEMAN_PLATFORM=<slug>` (the web image: `docker build
+--build-arg ASEMAN_PLATFORM=<slug> app`), or open a web build with
+`?platform=<slug>`. Its sign-in screen carries the platform's name and signs
+people in to — and up on — the platform's own accounts (password, Google,
+Apple, password reset and email verification all pass `platform`; enterprise
+SSO stays main Aseman's). Home is the published frontend, full screen: an
+Elpian frontend runs natively (`ElpianAppView` on the platform path), a web
+one in the in-app web view. A menu reaches the regular workspace and signs
+out. A platform with no frontend yet opens the workspace. The console's
+**Open** button runs the frontend for the owner.
+
+Password reset and email verification look the account up within its
+environment: an email is unique per platform, so the same address on main
+Aseman and on a platform are two accounts.
+
+### 8.4 Building a product on Aseman
 
 1. Create a developer org + API keys (Platform permission).
 2. Create a sub-platform (`slug`).
 3. Point your client at the node API; register/login with `platform: "<slug>"`.
 4. Optionally use the developer host for models/computers and `POST /v1/platform/{ns}/{action}` for automation as the key creator.
-5. Ask the node admin to **Bridge to Aseman** only if you want shared discovery with the main app.
+5. Or skip writing a client: have a space's agents build the frontend and publish it (§8.3).
+6. Ask the node admin to **Bridge to Aseman** only if you want shared discovery with the main app.
 
 ---
 

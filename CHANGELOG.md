@@ -1,5 +1,62 @@
 # Changelog
 
+## Unreleased: agent-built platform frontends, wired to the space for real
+
+- **A platform's frontend.** An organization owner or admin publishes an app
+  the agents of a space built (Elpian or web, with its backend) as the
+  sub-platform's frontend: Developer API → Platform → Frontend
+  (`developer.platform_frontend_apps` / `_publish` / `_unpublish`, public
+  `platform_frontend`). The gateway serves it at `/v1/platforms/<slug>/app/`
+  to the platform's people (and the organization; main Aseman when bridged),
+  and to signed-out visitors without any agent access. Web frontends sign
+  people in to the platform through `_aseman/auth/*` (HttpOnly cookie; the
+  page never holds a token). An asleep computer is woken as the publisher.
+- **Backends use the space's agents and apps for the platform's people.** A
+  platform user token (`X-Aseman-User-Token`) and the page API run as, and
+  bill, the person who published the frontend, name the platform's person on
+  usage (`via`), and reach only the agents, apps and microtools the app is
+  wired to (its `APPS.json`, recorded at `appui_publish`).
+- **Builder agents know.** `appui_create` takes `audience: "platform"`; the
+  project gets `PLATFORM.md`; the persona, the tool's usage, `AGENTS.md`,
+  `ASEMAN_API.md` and `TASK.md` say to wire the space's real agents and apps
+  from the page and the server, never imitate one.
+- **Wiring is checked.** `aseman-appui verify` runs `aseman-wiring-check`:
+  an agent, app or microtool missing from `APPS.json`, or a server route at
+  `_aseman/…` standing in for the gateway, and the app is not ready.
+- **Fix:** the production gateway's bridge never implemented the app-server
+  access methods, so apps got no `X-Aseman-User-Token` and `/appapi/v1`
+  answered "app API unavailable": app backends could not reach their space's
+  agents and apps at all. It now does (checked at compile time).
+- **Agents set the whole product up for the person.** New agent tools
+  `platform_setup` (organization + platform, made or reused),
+  `app_developer_access` (an organization developer key in one app's server
+  settings only; `Aseman.developer()` in the server SDKs; `DEVELOPER.md`)
+  and `platform_publish` (the verified app as the platform's frontend, with
+  its address). They act as the person, never the agent; the developer
+  namespace stays closed to agents. The wiring check refuses a developer or
+  app key in page code or written into source.
+- **End-to-end test on a whole node** (`testdata/platform`,
+  `ASEMAN_PLATFORM_E2E=1`): agent → organization, platform, fullstack app
+  wired to the space's agent and MCP app, developer API, published; the
+  platform's people then use it.
+- **Fixes the end-to-end run found:** `appui_publish` hid the platform's
+  "not ready, here is what to fix" answer behind "sandbox command exited with
+  status 1"; an agent working in a room did not see the apps added to the
+  whole space (so App UIs built there were wired to none); and
+  `appui_create` dropped an app named the way people see it ("Pricing" for
+  `tool_pricing`). `APPS.json` now carries each app's `display_name`.
+- **A platform's own client.** `--dart-define=ASEMAN_PLATFORM=<slug>` (web:
+  `--build-arg ASEMAN_PLATFORM`, or `?platform=<slug>`) builds the Aseman
+  client for one sub-platform: sign-in on its own accounts under its name,
+  home on its published frontend (Elpian natively, web in the in-app view),
+  a menu to the workspace and sign-out. Sessions remember their platform.
+- **Fix:** password reset and email verification looked accounts up by email
+  across every environment, so the same address on main Aseman and on a
+  platform could reset the wrong account. They take `platform` and stay in it.
+- Server SDKs expose the platform (`req.asemanPlatform`, `client.platform`,
+  `Aseman.platform_of`); the page SDK works under the platform path and has
+  `me` / `signIn` / `signUp` / `signOut`.
+
 ## Unreleased: developer API platform collection
 
 - **Developer console redesign.** Profile → Developer API uses the app's

@@ -66,3 +66,57 @@ test("the ES module entry exposes the same SDK", async () => {
   assert.equal(typeof mod.Aseman.fromRequest, "function");
   assert.equal(mod.default, mod.Aseman);
 });
+
+test("a platform frontend's request carries its platform; visitors have no person", async () => {
+  const { Aseman } = require("./server.cjs");
+  const headers = {
+    "x-aseman-user-token": "pf-token", "x-aseman-user": "u1", "x-aseman-user-handle": "shopper",
+    "x-aseman-api": "http://aseman:8080/appapi/v1",
+    "x-aseman-platform": "acme", "x-aseman-platform-id": "pf1", "x-aseman-platform-name": "Acme",
+  };
+  const client = Aseman.fromRequest({ headers });
+  assert.deepStrictEqual(client.platform, { slug: "acme", id: "pf1", name: "Acme" });
+  assert.strictEqual(client.user.handle, "shopper");
+  const visitor = { headers: { "x-aseman-platform": "acme", "x-aseman-platform-id": "pf1", "x-aseman-platform-name": "Acme" } };
+  const req = { ...visitor };
+  Aseman.middleware()(req, {}, () => {});
+  assert.strictEqual(req.aseman, undefined);
+  assert.strictEqual(req.asemanPlatform.slug, "acme");
+  assert.strictEqual(Aseman.platform({ headers: {} }), null);
+  assert.throws(() => Aseman.fromRequest(visitor), /no Aseman credential/);
+});
+
+test("the developer API client uses the app's key from its settings, on the server", async () => {
+  const seen = [];
+  const server = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      seen.push({ url: req.url, auth: req.headers.authorization, body: body ? JSON.parse(body) : undefined });
+      res.writeHead(req.url.includes("nope") ? 403 : 200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(req.url.includes("nope") ? { error: { message: "This key cannot use the platform collection." } } : { ok: true }));
+    });
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${server.address().port}/dev/v1`;
+  process.env.ASEMAN_DEVELOPER_API_URL = url;
+  process.env.ASEMAN_DEVELOPER_KEY = "dk_live_test";
+  process.env.ASEMAN_PLATFORM = "acme";
+  try {
+    const { Aseman } = require("./server.cjs");
+    const dev = Aseman.developer();
+    assert.strictEqual(dev.platformSlug, "acme");
+    await dev.platform("spaces", "space_list", { limit: 5 });
+    await dev.chat({ model: "m", messages: [{ role: "user", content: "hi" }] });
+    assert.deepStrictEqual(seen.map((s) => s.url), ["/dev/v1/platform/spaces/space_list", "/dev/v1/chat/completions"]);
+    assert.ok(seen.every((s) => s.auth === "Bearer dk_live_test"));
+    assert.deepStrictEqual(seen[0].body, { limit: 5 });
+    await assert.rejects(dev.platform("x", "nope"), (e) => e.status === 403 && /platform collection/.test(e.message));
+    delete process.env.ASEMAN_DEVELOPER_KEY;
+    assert.throws(() => Aseman.developer(), /app_developer_access/);
+  } finally {
+    server.close();
+    delete process.env.ASEMAN_DEVELOPER_API_URL;
+    delete process.env.ASEMAN_PLATFORM;
+  }
+});

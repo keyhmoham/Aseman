@@ -31,6 +31,17 @@ So: while serving a request, always use that request's token — never the
 app key — so the person using the app pays for what they asked for. Use the
 app key only for work nobody is in front of. Never call the API from tests.
 
+### A platform's frontend
+
+When the app is published as the frontend of a sub-platform (`JOB.json` →
+`audience: "platform"`, see `PLATFORM.md`), it is served at
+`/v1/platforms/<slug>/app/` to the platform's people, who are not members of
+this space. Their calls (page and server, with the request's token) run as,
+and are billed to, **the person who published the frontend**, name the
+platform's person on the usage record, and reach **only the agents and apps
+in `APPS.json`**. Visitors who have not signed in have no token and no page
+API.
+
 ## From your server
 
 Every request the gateway forwards to your server carries:
@@ -41,6 +52,7 @@ Every request the gateway forwards to your server carries:
 | `X-Aseman-User`, `X-Aseman-User-Handle` | who is using the app |
 | `X-Aseman-Space`, `X-Aseman-Room` | where |
 | `X-Aseman-Api` | the API URL (same as `ASEMAN_API_URL`) |
+| `X-Aseman-Platform`, `-Id`, `-Name` | the sub-platform the request came through, when the app is a platform's frontend |
 
 Call `<ASEMAN_API_URL>/<op>` (the ops below) with
 `Authorization: Bearer <token>`: the request's `X-Aseman-User-Token`, or
@@ -79,7 +91,7 @@ Ops are the same from the page (`_aseman/api/<op>`) and the server
 
 | Op | Method | Request | Response |
 |---|---|---|---|
-| `context` | GET | — | `{space, user:{id, handle}, room?, preview:{id, title, path}}` |
+| `context` | GET | — | `{space, user:{id, handle}, room?, preview:{id, title, path}, platform?:{id, slug, name}, wiring?}` |
 | `tools` | GET | — | `{tools:[{name, id, description, microtools:[…]}]}` |
 | `microtools` | GET | `?tool=<name or id>` | `{tool, id, microtools:[{name, description, schema}]}` |
 | `call` | POST | `{tool, microtool, args}` | `{tool, microtool, result}` |

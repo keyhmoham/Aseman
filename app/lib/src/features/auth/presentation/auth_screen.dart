@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/auth/federated_sign_in.dart';
 import '../../../core/network/session_controller.dart';
+import '../../../core/platform/platform_mode.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/theme_pack_controller.dart';
 import '../../../shared/widgets/app_brand.dart';
@@ -132,9 +133,14 @@ class _AuthScreenState extends State<AuthScreen>
   StreamSubscription<String>? _googleTokens;
   StreamSubscription<Object>? _googleErrors;
 
+  /// The sub-platform this client signs people in to (null: main Aseman, or
+  /// not loaded yet).
+  PlatformInfo? _platform;
+
   @override
   void initState() {
     super.initState();
+    if (PlatformMode.active) _loadPlatform();
     tabs = TabController(length: 2, vsync: this)
       ..addListener(() {
         if (!tabs.indexIsChanging && mounted) setState(() {});
@@ -146,7 +152,19 @@ class _AuthScreenState extends State<AuthScreen>
     _loadSso();
   }
 
+  Future<void> _loadPlatform() async {
+    try {
+      final info = await widget.dependencies.service.platformInfo();
+      if (mounted) setState(() => _platform = info);
+    } catch (_) {
+      // The slug's name stands in until the node answers.
+    }
+  }
+
   Future<void> _loadSso() async {
+    // Enterprise single sign-on is main Aseman's; a platform has its own
+    // accounts.
+    if (PlatformMode.active) return;
     if (returnedFromSso) {
       try {
         await completeSso(widget.dependencies, Uri.base);
@@ -309,7 +327,7 @@ class _AuthScreenState extends State<AuthScreen>
     if (email == null || email.trim().isEmpty || !mounted) return;
     try {
       await widget.dependencies.service.invokeAction('auth', 'password_forgot',
-          body: {'email': email.trim()});
+          body: {'email': email.trim(), ...PlatformMode.authField});
       if (!mounted) return;
       final code = await _textDialog(title: 'Verification code', label: 'Code');
       if (code == null || code.trim().isEmpty || !mounted) return;
@@ -321,6 +339,7 @@ class _AuthScreenState extends State<AuthScreen>
         'email': email.trim(),
         'code': code.trim(),
         'password': password,
+        ...PlatformMode.authField,
       });
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -339,7 +358,8 @@ class _AuthScreenState extends State<AuthScreen>
     if (email == null || email.isEmpty || !mounted) return;
     try {
       await widget.dependencies.service
-          .invokeAction('auth', 'send_verification', body: {'email': email});
+          .invokeAction('auth', 'send_verification',
+              body: {'email': email, ...PlatformMode.authField});
       if (!mounted) return;
       final code =
           await _textDialog(title: 'Verify email', label: '6-digit code');
@@ -376,7 +396,11 @@ class _AuthScreenState extends State<AuthScreen>
                       const AppBrand(),
                       const SizedBox(height: 8),
                       Text(
-                        'Aseman',
+                        PlatformMode.active
+                            ? (_platform?.name.isNotEmpty == true
+                                ? _platform!.name
+                                : PlatformMode.slug)
+                            : 'Aseman',
                         style:
                             Theme.of(context).textTheme.headlineSmall?.copyWith(
                                   fontWeight: FontWeight.w900,
@@ -385,7 +409,9 @@ class _AuthScreenState extends State<AuthScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Your federated agentic workspace',
+                        PlatformMode.active
+                            ? 'Sign in or create your account'
+                            : 'Your federated agentic workspace',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color:
                                 Theme.of(context).colorScheme.onSurfaceVariant),
@@ -393,7 +419,7 @@ class _AuthScreenState extends State<AuthScreen>
                       const SizedBox(height: 28),
                       _panel(context),
                       const SizedBox(height: 12),
-                      const MarketingLinkRow(),
+                      if (!PlatformMode.active) const MarketingLinkRow(),
                       const SizedBox(height: 16),
                       if (session.isBusy)
                         const SizedBox(

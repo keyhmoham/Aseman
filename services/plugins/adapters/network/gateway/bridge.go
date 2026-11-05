@@ -8,6 +8,7 @@ import (
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/logger"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/developer/models"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/filedata"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/proxy"
@@ -57,6 +58,48 @@ func NewHost(k Host, log *logger.Logger) *API {
 	return gateway
 }
 
+// App server access (app_api.go): the user token the gateway hands an app,
+// and who an app server's credential acts as.
+func (p gatewayBridge) AppUserToken(px *proxy.Proxy, viewer identity.ID) (string, error) {
+	var out string
+	err := bridge.Invoke(context.Background(), p.k, "spaces", "AppUserToken", []any{px, viewer}, &out)
+	return out, err
+}
+func (p gatewayBridge) AppCaller(ctx context.Context, token string) (*proxy.Access, error) {
+	var out *proxy.Access
+	err := bridge.Invoke(ctx, p.k, "spaces", "AppCaller", []any{ctx, token}, &out)
+	return out, err
+}
+func (p gatewayBridge) AppAPIURL() string {
+	var out string
+	_ = bridge.Invoke(context.Background(), p.k, "spaces", "AppAPIURL", []any{}, &out)
+	return out
+}
+
+// Platform frontends (platform_app.go).
+func (p gatewayBridge) PlatformFrontendFor(ctx context.Context, ref string, viewer identity.ID) (*models.PlatformFrontend, error) {
+	var out *models.PlatformFrontend
+	err := bridge.Invoke(ctx, p.k, "developer", "PlatformFrontendFor", []any{ctx, ref, viewer}, &out)
+	return out, err
+}
+func (p gatewayBridge) PlatformUserToken(px *proxy.Proxy, viewer identity.ID, platformID string) (string, error) {
+	var out string
+	err := bridge.Invoke(context.Background(), p.k, "spaces", "PlatformUserToken", []any{px, viewer, platformID}, &out)
+	return out, err
+}
+func (p gatewayBridge) ProxyOpen(ctx context.Context, id, actor identity.ID) (map[string]any, error) {
+	var out map[string]any
+	err := bridge.Invoke(ctx, p.k, "spaces", "ProxyOpen", []any{ctx, id, actor}, &out)
+	return out, err
+}
+
 func (p gatewayBridge) CanProxy(ctx context.Context, id, actor identity.ID, write bool) error {
 	return bridge.Invoke(ctx, p.k, "spaces", "CanProxy", []any{ctx, id, actor, write})
 }
+
+// The bridge serves app servers and platform frontends: without these the
+// gateway hands apps no user token and answers their API "unavailable".
+var (
+	_ appAccess         = gatewayBridge{}
+	_ platformFrontends = gatewayBridge{}
+)

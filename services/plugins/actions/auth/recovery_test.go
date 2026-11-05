@@ -10,7 +10,10 @@ import (
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/pkg/logger"
+	"github.com/aseman/aseman/internal/plugins/entity"
+	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	devmodels "github.com/aseman/aseman/plugins/actions/developer/models"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/actions/support/repo"
 	"github.com/aseman/aseman/plugins/adapters/database/memory"
@@ -247,5 +250,44 @@ func TestBootstrapAdminDoesNotRecreateIfAdminExists(t *testing.T) {
 
 	if _, err := s.Account(ctx, "node-master"); err == nil {
 		t.Fatal("expected node-master to NOT be recreated because an admin account already exists")
+	}
+}
+
+// An email is unique per environment: resetting on a platform touches that
+// platform's account, never main Aseman's with the same address.
+func TestPasswordResetStaysOnItsPlatform(t *testing.T) {
+	s, mail, ctx := recoveryHarness(t)
+	id, _ := identity.New(1)
+	pid := id.String()
+	if err := s.R.CreateID(ctx, "dev_platforms", id, &devmodels.Platform{Entity: entity.Entity{ID: id}, Slug: "acme", Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+	mainAcc, _, _, err := s.RegisterOn(ctx, "sam", "sam@example.com", "main-password", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := s.RegisterOn(ctx, "sam", "sam@example.com", "acme-password", pid); err != nil {
+		t.Fatal(err)
+	}
+	if err := call(t, ctx, s.passwordForgot, map[string]any{"email": "sam@example.com", "platform": "acme"}); err != nil {
+		t.Fatal(err)
+	}
+	code := regexp.MustCompile(`\b\d{6}\b`).FindString(mail.sent[len(mail.sent)-1].body)
+	// The code is the platform account's: main Aseman's account cannot use it.
+	if err := call(t, ctx, s.passwordReset, map[string]any{"email": "sam@example.com", "code": code, "password": "stolen-password"}); err == nil {
+		t.Fatal("a platform's code reset main Aseman's account")
+	}
+	if err := call(t, ctx, s.passwordReset, map[string]any{"email": "sam@example.com", "code": code, "password": "new-acme-password", "platform": "acme"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := s.LoginOn(ctx, "sam", "new-acme-password", pid); err != nil {
+		t.Fatalf("the platform account: %v", err)
+	}
+	var after account.Account
+	if err := s.R.Get(ctx, "accounts", mainAcc.ID, &after); err != nil || after.PasswordHash != mainAcc.PasswordHash || after.EmailVerified {
+		t.Fatalf("main Aseman's account must be untouched: %v", err)
+	}
+	if err := call(t, ctx, s.passwordForgot, map[string]any{"email": "sam@example.com", "platform": "nope"}); errs.CodeOf(err) != errs.CodeNotFound {
+		t.Fatalf("unknown platform: %v", err)
 	}
 }

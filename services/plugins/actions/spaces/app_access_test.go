@@ -127,7 +127,7 @@ func TestAnAppsKeyActsForThePersonWhoAskedForIt(t *testing.T) {
 	}
 
 	p := appPreview(t, s, ctx, sp.ID, "Orders")
-	if err := s.BindAppKey(ctx, sp.ID, dir, p.ID); err != nil {
+	if err := s.BindAppKey(ctx, sp.ID, dir, p.ID, appKeyMeta{}); err != nil {
 		t.Fatal(err)
 	}
 	if who, err = s.AppCaller(ctx, key); err != nil || who.Proxy.ID != p.ID {

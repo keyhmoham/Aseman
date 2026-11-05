@@ -4,6 +4,7 @@ package spaces
 
 import (
 	"context"
+	devmodels "github.com/aseman/aseman/plugins/actions/developer/models"
 	"sort"
 	"strings"
 	"sync"
@@ -37,6 +38,9 @@ const zeroRoom = "00000000000000000000000000000000"
 type Service struct {
 	// agentMemoryFn replaces the agent runtime's memory (tests).
 	agentMemoryFn func() vmm.EngineMemory
+	// frontendLookup replaces the developer namespace's platform frontends
+	// (tests; platform_frontend.go).
+	frontendLookup func(context.Context, string, identity.ID) (*devmodels.PlatformFrontend, error)
 	// homeMu keeps two first uses from making two home workspaces.
 	homeMu sync.Mutex
 	teams  teamRuns

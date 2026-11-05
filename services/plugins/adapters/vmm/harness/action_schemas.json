@@ -224,6 +224,9 @@
    },
    "password": {
     "type": "string"
+   },
+   "platform": {
+    "type": "string"
    }
   },
   "type": "object"
@@ -231,6 +234,9 @@
  "auth.oauth_apple": {
   "properties": {
    "identity_token": {
+    "type": "string"
+   },
+   "platform": {
     "type": "string"
    }
   },
@@ -240,6 +246,9 @@
   "properties": {
    "id_token": {
     "type": "string"
+   },
+   "platform": {
+    "type": "string"
    }
   },
   "type": "object"
@@ -247,6 +256,9 @@
  "auth.password_forgot": {
   "properties": {
    "email": {
+    "type": "string"
+   },
+   "platform": {
     "type": "string"
    }
   },
@@ -261,6 +273,9 @@
     "type": "string"
    },
    "password": {
+    "type": "string"
+   },
+   "platform": {
     "type": "string"
    }
   },
@@ -296,6 +311,9 @@
    },
    "password": {
     "type": "string"
+   },
+   "platform": {
+    "type": "string"
    }
   },
   "type": "object"
@@ -304,6 +322,9 @@
   "properties": {
    "email": {
     "type": "string"
+   },
+   "platform": {
+    "type": "string"
    }
   },
   "type": "object"
@@ -311,6 +332,9 @@
  "auth.send_verification": {
   "properties": {
    "email": {
+    "type": "string"
+   },
+   "platform": {
     "type": "string"
    }
   },
@@ -325,6 +349,9 @@
     "type": "string"
    },
    "password": {
+    "type": "string"
+   },
+   "platform": {
     "type": "string"
    }
   },
@@ -3592,6 +3619,22 @@
   },
   "type": "object"
  },
+ "tools.gadget_list": {
+  "properties": {
+   "space": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "tools.gadget_remove": {
+  "properties": {
+   "gadget": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
  "tools.invoke": {
   "properties": {
    "bot": {
@@ -3729,22 +3772,6 @@
     "type": "string"
    },
    "url": {
-    "type": "string"
-   }
-  },
-  "type": "object"
- },
- "tools.gadget_list": {
-  "properties": {
-   "space": {
-    "type": "string"
-   }
-  },
-  "type": "object"
- },
- "tools.gadget_remove": {
-  "properties": {
-   "gadget": {
     "type": "string"
    }
   },

@@ -15,15 +15,29 @@
     }
   }
 
-  // The preview's root (".../v1/proxy/<id>/"), so calls work from any route
+  // The app's root — a preview (".../v1/proxy/<id>/") or a platform's
+  // frontend (".../v1/platforms/<slug>/app/") — so calls work from any route
   // of the app, not only from its first page.
-  function apiBase() {
+  function appBase(part) {
     const loc = root.location || { href: "http://localhost/", pathname: "/" };
-    const m = /^(.*?\/v1\/proxy\/[^/]+\/)/.exec(loc.pathname || "");
+    const m = /^(.*?\/v1\/(?:proxy\/[^/]+|platforms\/[^/]+\/app)\/)/.exec(loc.pathname || "");
     const origin = loc.origin || "";
-    if (m) return origin + m[1] + "_aseman/api/";
+    if (m) return origin + m[1] + part;
     const base = (root.document && root.document.baseURI) || loc.href;
-    return new URL("_aseman/api/", base).toString();
+    return new URL(part, base).toString();
+  }
+  const apiBase = () => appBase("_aseman/api/");
+
+  // Sign-in on a platform's frontend: the gateway keeps the session in the
+  // frontend's own cookie; the page never sees a token.
+  async function auth(op, body) {
+    const res = await fetch(new URL(op, appBase("_aseman/auth/")), body === undefined ? {} : {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    let data = null;
+    try { data = await res.json(); } catch (_) { /* not JSON */ }
+    if (!res.ok) throw new AsemanError((data && (data.error || data.message)) || res.statusText || "request failed", res.status, "auth/" + op);
+    return data;
   }
 
   async function request(op, { method = "GET", body, query, timeoutMs = 120000, signal } = {}) {
@@ -125,6 +139,15 @@
         },
       };
     },
+
+    // A platform's frontend (see PLATFORM.md): who is signed in to the
+    // platform ({user, platform}; user null for a visitor), and signing a
+    // person in, up and out with the platform's own accounts. Reload (or
+    // refetch) after a change: the next requests carry the new session.
+    me: () => auth("me"),
+    signIn: (account, password) => auth("login", { account, password }),
+    signUp: (handle, email, password) => auth("register", { handle, email, password }),
+    signOut: () => auth("logout", {}),
 
     // Opens a space tool's frontend as a window on the room's desk.
     show: (tool, { microtool, args, title, rect } = {}, opts) =>

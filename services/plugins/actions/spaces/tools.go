@@ -57,6 +57,12 @@ func toolDetail(toolName string) string {
 		return "verifying and opening an app…"
 	case "appui_status":
 		return "checking an app…"
+	case "platform_setup":
+		return "setting up your platform…"
+	case "app_developer_access":
+		return "giving the app developer API access…"
+	case "platform_publish":
+		return "publishing the platform's frontend…"
 	case "desk_state", "desk_arrange", "desk_close":
 		return "arranging the desk…"
 	default:
@@ -74,12 +80,20 @@ func (s *Service) SpaceTools(ctx context.Context, spaceID, roomID identity.ID) (
 		"space_id": spaceID.String(),
 		"role":     string(membership.RoleBot),
 	}
-	if !roomID.IsZero() {
-		eq["room_id"] = roomID.String()
-	}
-	var mems []membership.Membership
-	if err := s.R.List(ctx, "memberships", database.Filter{Equal: eq}, &mems); err != nil {
+	var all []membership.Membership
+	if err := s.R.List(ctx, "memberships", database.Filter{Equal: eq}, &all); err != nil {
 		return nil, err
+	}
+	// In a room: the apps added to that room and the apps added to the whole
+	// space (no room), which AddBot treats as in every room.
+	mems := all
+	if !roomID.IsZero() {
+		mems = mems[:0:0]
+		for _, m := range all {
+			if m.RoomID.IsZero() || m.RoomID == roomID {
+				mems = append(mems, m)
+			}
+		}
 	}
 	// Database providers need not return memberships in a stable order.
 	// Keep discovery and dispatch names deterministic for colliding bot names.
@@ -247,7 +261,7 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 	if vmm.ExecutionFrom(ctx).NoSandbox {
 		switch toolName {
 		case "sandbox_exec", "file_send", "file_upload", "file_edit", "proxy_create", "proxy_list", "proxy_get", "proxy_delete",
-			"appui_create", "appui_publish", "appui_status":
+			"appui_create", "appui_publish", "appui_status", "app_developer_access":
 			return "", errs.Permission("sandbox access is disabled for this request")
 		}
 	}
@@ -396,6 +410,12 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 		result, terr = s.appuiPublishTool(ctx, id, roomID, agentName, argsJSON)
 	case toolName == "appui_status":
 		result, terr = s.appuiStatusTool(ctx, id, argsJSON)
+	case toolName == "platform_setup":
+		result, terr = s.platformSetupTool(ctx, argsJSON)
+	case toolName == "app_developer_access":
+		result, terr = s.appDeveloperAccessTool(ctx, id, argsJSON)
+	case toolName == "platform_publish":
+		result, terr = s.platformPublishTool(ctx, id, argsJSON)
 	case toolName == "desk_state":
 		result, terr = s.deskStateTool(ctx, id, roomID, argsJSON)
 	case toolName == "desk_arrange":

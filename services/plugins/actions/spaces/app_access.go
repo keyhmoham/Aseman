@@ -62,6 +62,20 @@ type AppKey struct {
 	Title   string      `db:"title" json:"title"`
 	// Hash is the SHA-256 of the key's secret; the secret is never stored.
 	Hash string `db:"hash" json:"-"`
+	// What the published app is (set by appui_publish): its frontend ("elpian"
+	// or "web") and Elpian program, its hosting kind, who it was built for
+	// ("space" or "platform") and its Wiring (JSON) — the space's agents and
+	// apps it was built against (APPS.json).
+	UI       string `db:"ui" json:"ui,omitempty"`
+	Entry    string `db:"entry" json:"entry,omitempty"`
+	Kind     string `db:"kind" json:"kind,omitempty"`
+	Audience string `db:"audience" json:"audience,omitempty"`
+	Wiring   string `db:"wiring" json:"-"`
+}
+
+// appKeyMeta is what appui_publish records about the app with its key.
+type appKeyMeta struct {
+	UI, Entry, Kind, Audience, Wiring string
 }
 
 // appSecret is the node's key for app user tokens, derived from its private
@@ -80,6 +94,10 @@ type appUserClaims struct {
 	Proxy string `json:"p"`
 	User  string `json:"u"`
 	Exp   int64  `json:"e"`
+	// Platform is set when the person uses the app as a sub-platform's
+	// frontend (platform_frontend.go): they are the platform's, not the
+	// space's, and the call runs as the frontend's publisher.
+	Platform string `json:"pf,omitempty"`
 }
 
 // AppUserToken is the token the gateway hands an app with each request of
@@ -135,8 +153,8 @@ func (s *Service) IssueAppKey(ctx context.Context, spaceID, roomID, owner identi
 }
 
 // BindAppKey ties an app's key to its preview: the key works only while the
-// preview exists.
-func (s *Service) BindAppKey(ctx context.Context, spaceID identity.ID, appID string, proxyID identity.ID) error {
+// preview exists. [meta] records what the published app is.
+func (s *Service) BindAppKey(ctx context.Context, spaceID identity.ID, appID string, proxyID identity.ID, meta appKeyMeta) error {
 	var keys []AppKey
 	if err := s.R.List(ctx, "app_keys", database.Filter{Equal: map[string]any{"app_id": appID, "space_id": spaceID.String()}, Limit: 1}, &keys); err != nil {
 		return err
@@ -146,6 +164,7 @@ func (s *Service) BindAppKey(ctx context.Context, spaceID identity.ID, appID str
 	}
 	k := keys[0]
 	k.ProxyID, k.UpdatedAt = proxyID.String(), time.Now().UTC()
+	k.UI, k.Entry, k.Kind, k.Audience, k.Wiring = meta.UI, meta.Entry, meta.Kind, meta.Audience, meta.Wiring
 	return s.R.Update(ctx, "app_keys", k.ID, &k)
 }
 
@@ -189,6 +208,9 @@ func (s *Service) AppCaller(ctx context.Context, token string) (*proxy.Access, e
 		claims, err := s.openAppUserToken(token)
 		if err != nil {
 			return nil, err
+		}
+		if claims.Platform != "" {
+			return s.platformAppCaller(ctx, claims)
 		}
 		pid, err := identity.Parse(claims.Proxy)
 		if err != nil {

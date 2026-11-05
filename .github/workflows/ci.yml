@@ -56,6 +56,8 @@ jobs:
         working-directory: deploy/tool-runtime
       # The Elpian validator, driver and checks.
       - run: node --test deploy/sandbox-computer/appui/elpian/test/*.test.mjs
+      # The App UI kit: the wiring check every build passes, and the server SDK.
+      - run: node --test deploy/sandbox-computer/appui/test/*.test.mjs deploy/sandbox-computer/appui/sdk/server.test.js
 
   app:
     name: App (Flutter)

@@ -107,5 +107,9 @@ func (a *API) appAPI(ctx context.Context, req *network.Request) (*network.Respon
 	if method == "" || req.Method == network.MethodCall {
 		method = http.MethodGet
 	}
-	return a.proxyPage(withVia(ctx, who.Via), req, who.Proxy, who.Payer, method, "api/"+op)
+	p := who.Proxy
+	if who.Platform != nil {
+		p = platformView(p, who.Platform.Slug)
+	}
+	return a.proxyPage(withPlatformCall(withVia(ctx, who.Via), who), req, p, who.Payer, method, "api/"+op)
 }

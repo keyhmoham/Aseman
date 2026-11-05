@@ -40,7 +40,8 @@ def _settings() -> dict[str, str]:
                     found[m.group(1)] = m.group(2).strip("\"'")
     except OSError:
         pass
-    return {k: os.environ.get(k) or found.get(k, "") for k in ("ASEMAN_API_URL", "ASEMAN_APP_KEY")}
+    return {k: os.environ.get(k) or found.get(k, "") for k in (
+        "ASEMAN_API_URL", "ASEMAN_APP_KEY", "ASEMAN_DEVELOPER_API_URL", "ASEMAN_DEVELOPER_KEY", "ASEMAN_PLATFORM")}
 
 
 def _header(headers: Mapping[str, str] | None, name: str) -> str:
@@ -77,7 +78,8 @@ def parse_json(text: Any) -> Any:
 class Aseman:
     """A client of the space's page API, acting as one person (who pays)."""
 
-    def __init__(self, token: str, url: str = "", user: dict[str, str] | None = None) -> None:
+    def __init__(self, token: str, url: str = "", user: dict[str, str] | None = None,
+                 platform: dict[str, str] | None = None) -> None:
         if not token:
             raise AsemanError("no Aseman credential: serve a request from the Aseman preview "
                               "(it carries X-Aseman-User-Token) or set ASEMAN_APP_KEY", 401)
@@ -85,14 +87,27 @@ class Aseman:
         self.url = (url or _settings()["ASEMAN_API_URL"]).rstrip("/")
         if not self.url:
             raise AsemanError("ASEMAN_API_URL is not set")
+        # Who the app serves; in a platform's frontend, the platform's person
+        # (calls run as, and bill, the frontend's publisher, within its wiring).
         self.user = user
+        self.platform = platform
 
     @classmethod
     def from_headers(cls, headers: Mapping[str, str]) -> "Aseman":
         """Acts for the person whose request carried [headers]; billed to them."""
         uid = _header(headers, "X-Aseman-User")
         user = {"id": uid, "handle": _header(headers, "X-Aseman-User-Handle")} if uid else None
-        return cls(_header(headers, USER_TOKEN), _header(headers, "X-Aseman-Api"), user)
+        return cls(_header(headers, USER_TOKEN), _header(headers, "X-Aseman-Api"), user,
+                   cls.platform_of(headers))
+
+    @staticmethod
+    def platform_of(headers: Mapping[str, str]) -> dict[str, str] | None:
+        """The sub-platform a request came through ({slug, id, name}), or None."""
+        slug = _header(headers, "X-Aseman-Platform")
+        if not slug:
+            return None
+        return {"slug": slug, "id": _header(headers, "X-Aseman-Platform-Id"),
+                "name": _header(headers, "X-Aseman-Platform-Name")}
 
     @classmethod
     def app(cls, key: str = "", url: str = "") -> "Aseman":
@@ -152,3 +167,45 @@ class Aseman:
     def ask_json(self, agent: str, prompt: str, data: Any = None, **kw: Any) -> Any:
         text = prompt + (("\n\nData (JSON):\n" + json.dumps(data)) if data is not None else "")
         return parse_json(self.ask(agent, text + "\n\nAnswer only with JSON, no prose.", **kw)["reply"])
+
+
+class Developer:
+    """The developer API of the person's organization (DEVELOPER.md), for the
+    app's server only: models and chat, and the platform collection."""
+
+    def __init__(self, url: str = "", key: str = "", platform: str = "") -> None:
+        s = _settings()
+        self.url = (url or s["ASEMAN_DEVELOPER_API_URL"]).rstrip("/")
+        self.key = key or s["ASEMAN_DEVELOPER_KEY"]
+        self.platform_slug = platform or s["ASEMAN_PLATFORM"]
+        if not self.url or not self.key:
+            raise AsemanError("no developer API access: ask for app_developer_access", 401, "developer")
+
+    def request(self, path: str, *, method: str = "GET", body: Any = None, timeout: float = 120) -> Any:
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(self.url + "/" + path.lstrip("/"), data=data, method=method, headers={
+            "Authorization": "Bearer " + self.key, **({"Content-Type": "application/json"} if data else {})})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read() or b"null")
+        except urllib.error.HTTPError as exc:
+            try:
+                err = json.loads(exc.read() or b"{}").get("error") or exc.reason
+                msg = err.get("message") if isinstance(err, dict) else err
+            except ValueError:
+                msg = exc.reason
+            raise AsemanError(str(msg), exc.code, path) from None
+        except (urllib.error.URLError, TimeoutError) as exc:
+            raise AsemanError(str(exc), 0, path) from None
+
+    def models(self) -> Any:
+        return self.request("models")
+
+    def chat(self, body: Mapping[str, Any]) -> Any:
+        return self.request("chat/completions", method="POST", body=dict(body))
+
+    def platform(self, namespace: str, action: str, body: Mapping[str, Any] | None = None) -> Any:
+        return self.request("platform/%s/%s" % (namespace, action), method="POST", body=dict(body or {}))
+
+
+Aseman.developer = staticmethod(lambda **kw: Developer(**kw))  # type: ignore[attr-defined]

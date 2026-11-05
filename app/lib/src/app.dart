@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app_dependencies.dart';
+import 'core/platform/platform_mode.dart';
 import 'core/settings/app_settings.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/halo_ring_cache.dart';
@@ -12,6 +13,7 @@ import 'features/auth/presentation/auth_screen.dart';
 import 'features/calls/call_overlay.dart';
 import 'features/gadgets/presentation/gadgets_overlay.dart';
 import 'features/navigation/presentation/app_shell.dart';
+import 'features/platform/platform_home.dart';
 
 class AsemanApp extends StatefulWidget {
   const AsemanApp({super.key, required this.dependencies});
@@ -76,7 +78,7 @@ class _AsemanAppState extends State<AsemanApp> {
             child: MaterialApp(
               navigatorKey: AsemanApp.navigatorKey,
               debugShowCheckedModeBanner: false,
-              title: 'Aseman',
+              title: PlatformMode.active ? PlatformMode.slug : 'Aseman',
               theme: AppTheme.lightWith(
                 settings.accent,
                 pack: themePacks.pack,
@@ -104,7 +106,10 @@ class _AsemanAppState extends State<AsemanApp> {
                   ),
                 ),
               ),
-              home: AppShell(dependencies: widget.dependencies),
+              // A sub-platform's client opens on the platform's frontend.
+              home: PlatformMode.active
+                  ? PlatformHome(dependencies: widget.dependencies)
+                  : AppShell(dependencies: widget.dependencies),
             ),
           ),
         ),

@@ -181,19 +181,27 @@ func (s *Service) sandboxReadText(ctx context.Context, spaceID identity.ID, p st
 // argument schemas, and the agents it may ask, so it wires real names and
 // real argument shapes instead of guessing. [apps] / [agents] narrow the
 // lists to what the brief names (names or bot ids); empty keeps them all.
-func (s *Service) appuiCatalog(ctx context.Context, spaceID, roomID identity.ID, apps, agents []string) ([]byte, error) {
+func (s *Service) appuiCatalog(ctx context.Context, spaceID, roomID identity.ID, apps, agents []string, audience string) ([]byte, error) {
 	tools, err := s.SpaceTools(ctx, spaceID, roomID)
 	if err != nil {
 		return nil, err
 	}
-	wanted := func(list []string, name, id string) bool {
+	// An app or agent is named by the person (and their agent) as people see
+	// it ("Pricing"), by the name the space's tools carry ("tool_pricing"), or
+	// by its bot id.
+	wanted := func(list []string, id string, names ...string) bool {
 		if len(list) == 0 {
 			return true
 		}
 		for _, w := range list {
 			w = strings.TrimSpace(w)
-			if strings.EqualFold(w, name) || w == id {
+			if w == id {
 				return true
+			}
+			for _, n := range names {
+				if n != "" && strings.EqualFold(w, n) {
+					return true
+				}
 			}
 		}
 		return false
@@ -204,8 +212,11 @@ func (s *Service) appuiCatalog(ctx context.Context, spaceID, roomID identity.ID,
 		Args        map[string]any `json:"args_schema,omitempty"`
 	}
 	type app struct {
-		BotID       string      `json:"bot_id,omitempty"`
+		BotID string `json:"bot_id,omitempty"`
+		// Name is what the Aseman API calls it by (call {tool: name});
+		// DisplayName is how people see it.
 		Name        string      `json:"name"`
+		DisplayName string      `json:"display_name,omitempty"`
 		Description string      `json:"description,omitempty"`
 		Microtools  []microtool `json:"microtools,omitempty"`
 	}
@@ -220,10 +231,17 @@ func (s *Service) appuiCatalog(ctx context.Context, spaceID, roomID identity.ID,
 		if t.BotID == "" || strings.HasPrefix(t.Name, "sandbox") || (t.Kind != "" && t.Kind != "tool") {
 			continue
 		}
-		if !wanted(apps, t.Name, t.BotID) {
+		display := ""
+		if id, err := identity.Parse(t.BotID); err == nil {
+			var rec bot.Bot
+			if s.R.Get(ctx, "bots", id, &rec) == nil {
+				display = rec.Name
+			}
+		}
+		if !wanted(apps, t.BotID, t.Name, display) {
 			continue
 		}
-		a := app{BotID: t.BotID, Name: t.Name, Description: t.Description}
+		a := app{BotID: t.BotID, Name: t.Name, DisplayName: display, Description: t.Description}
 		for _, c := range t.Commands {
 			a.Microtools = append(a.Microtools, microtool{Name: c.Name, Description: c.Description, Args: c.Schema})
 		}
@@ -241,7 +259,7 @@ func (s *Service) appuiCatalog(ctx context.Context, spaceID, roomID identity.ID,
 			continue
 		}
 		seen[rec.ID.String()] = true
-		if !wanted(agents, rec.Name, rec.ID.String()) {
+		if !wanted(agents, rec.ID.String(), rec.Name) {
 			continue
 		}
 		agentList = append(agentList, agent{ID: rec.ID.String(), Name: rec.Name, Description: s.toolDescription(ctx, rec)})
@@ -250,12 +268,29 @@ func (s *Service) appuiCatalog(ctx context.Context, spaceID, roomID identity.ID,
 	if rec, err := s.GetSpace(ctx, spaceID); err == nil {
 		sp["name"] = rec.Name
 	}
-	return json.MarshalIndent(map[string]any{
+	doc := map[string]any{
 		"space":  sp,
 		"apps":   appList,
 		"agents": agentList,
 		"api":    "See ASEMAN_API.md: apps via POST _aseman/api/call {tool, microtool, args}; agents via POST _aseman/api/ask {agent, prompt}. vendor/aseman-sdk/aseman.js wraps both.",
-	}, "", "  ")
+		// These are the only agents and apps the software may use, by these
+		// names: the platform checks the code against this list before the
+		// app is ready (aseman-appui verify), and a platform frontend reaches
+		// nothing else of the space.
+		"rule": "Wire only these apps (and their microtools) and agents, by exactly these names and ids. Never invent an agent or app, and never stand in for one (a hard-coded reply, a direct model call, a fake endpoint): every agent or app the software uses is called through the Aseman API, from the page or from the server.",
+	}
+	// The brief named what to wire: each of these is expected to be used.
+	if len(apps) > 0 || len(agents) > 0 {
+		doc["narrowed"] = true
+	}
+	if audience == appuiAudiencePlatform {
+		doc["audience"] = map[string]any{
+			"kind":   appuiAudiencePlatform,
+			"people": "the people of a sub-platform the person runs, not members of this space; some arrive signed out",
+			"guide":  "PLATFORM.md",
+		}
+	}
+	return json.MarshalIndent(doc, "", "  ")
 }
 
 // appuiPlace is where and how a built app opens: on whose desk, its dock
@@ -286,7 +321,10 @@ type appuiJob struct {
 	UI     string     `json:"ui"`
 	Kind   string     `json:"kind,omitempty"` // app (default) | gadget
 	// Placement is only for kind=gadget: chat | rail | desk | page.
-	Placement string     `json:"placement,omitempty"`
+	Placement string `json:"placement,omitempty"`
+	// Audience is who the app is for: "space" (its people, the default) or
+	// "platform" (a sub-platform's people, as that platform's frontend).
+	Audience  string     `json:"audience,omitempty"`
 	HasKey    bool       `json:"has_key"`
 	Place     appuiPlace `json:"place"`
 }
@@ -322,6 +360,7 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 		UI        string       `json:"ui"`
 		Kind      string       `json:"kind"`
 		Placement string       `json:"placement"`
+		Audience  string       `json:"audience"`
 		Tool      string       `json:"tool"`
 		Dir       string       `json:"dir"`
 		Port      int          `json:"port"`
@@ -397,7 +436,21 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	if t := strings.TrimSpace(in.Tool); t != "" && len(wantApps) > 0 {
 		wantApps = append(wantApps, t)
 	}
-	catalog, err := s.appuiCatalog(opCtx, spaceID, target, wantApps, in.Agents)
+	// A project built before keeps who it was built for unless asked again.
+	existingAudience := ""
+	if raw, jerr := s.sandboxReadText(opCtx, spaceID, appuiPublishFile(job.Dir)); jerr == nil {
+		var prev appuiJob
+		if json.Unmarshal([]byte(raw), &prev) == nil {
+			existingAudience = prev.Audience
+		}
+	}
+	if job.Audience, err = appuiAudience(in.Audience, existingAudience); err != nil {
+		return "", err
+	}
+	if job.Audience == appuiAudiencePlatform && kind == appuiKindGadget {
+		return "", errs.InvalidArgument("a platform's frontend is a framed app (kind app), not a gadget")
+	}
+	catalog, err := s.appuiCatalog(opCtx, spaceID, target, wantApps, in.Agents, job.Audience)
 	if err != nil {
 		return "", err
 	}
@@ -447,8 +500,8 @@ func (s *Service) appuiCreateTool(ctx context.Context, spaceID, roomID identity.
 	if job.UI, err = appuiFrontend(in.UI, existingUI); err != nil {
 		return "", err
 	}
-	flags := fmt.Sprintf(`--dir %s --brief-file %s --apps-file %s --title %s --port %d --mode %s --ui %s --kind %s`,
-		shellQuote(dir), shellQuote(briefPath), shellQuote(appsPath), shellQuote(job.Title), job.Port, job.Mode, job.UI, job.Kind)
+	flags := fmt.Sprintf(`--dir %s --brief-file %s --apps-file %s --title %s --port %d --mode %s --ui %s --kind %s --audience %s`,
+		shellQuote(dir), shellQuote(briefPath), shellQuote(appsPath), shellQuote(job.Title), job.Port, job.Mode, job.UI, job.Kind, job.Audience)
 	return s.appuiAgentsBuild(opCtx, spaceID, job, flags)
 }
 
@@ -476,6 +529,9 @@ func (s *Service) appuiAgentsBuild(ctx context.Context, spaceID identity.ID, job
 	if job.Kind == appuiKindGadget {
 		hostHint = "registers it as a compact frameless gadget (" + job.Placement + ")"
 	}
+	if job.Audience == appuiAudiencePlatform {
+		hostHint += "; the person then publishes it as their platform's frontend (Developer API → Platform → Frontend)"
+	}
 	next := "Build the app now, exactly as the task says (or hand the whole task to a developer agent of the space with this dir and TASK.md): plan, build, test, drive it end to end with aseman-elpian, write READY.json. Then call appui_publish {\"dir\": \"" + job.Dir + "\"}: the platform verifies it and " + hostHint + ", or answers with what to fix."
 	b, _ := json.Marshal(map[string]any{
 		"state":     "building",
@@ -488,6 +544,7 @@ func (s *Service) appuiAgentsBuild(ctx context.Context, spaceID identity.ID, job
 		"ui":        job.UI,
 		"kind":      job.Kind,
 		"placement": job.Placement,
+		"audience":  job.Audience,
 		"task":      clipTrace(task, 12000),
 		"next":      next,
 		"server_api": map[string]any{
@@ -504,7 +561,7 @@ func (s *Service) appuiAgentsBuild(ctx context.Context, spaceID identity.ID, job
 // while it ran) is restarted once, which brings it onto the current image
 // (its /workspace stays), and the command runs again.
 func (s *Service) appuiExec(ctx context.Context, spaceID identity.ID, cmd string) (string, error) {
-	out, err := s.SandboxExec(ctx, spaceID, cmd)
+	out, err := s.appuiRun(ctx, spaceID, cmd)
 	if err != nil || !strings.Contains(out, "aseman-appui: unknown command") {
 		return out, err
 	}
@@ -523,7 +580,19 @@ func (s *Service) appuiExec(ctx context.Context, spaceID identity.ID, cmd string
 	if err != nil {
 		return "", errs.New(errs.CodeUnavailable, "the project's computer runs an older image without the app tools, and it could not be restarted now ("+err.Error()+"); try again in a moment")
 	}
-	return s.SandboxExec(ctx, spaceID, cmd)
+	return s.appuiRun(ctx, spaceID, cmd)
+}
+
+// appuiRun runs an aseman-appui command and answers its output whatever its
+// exit status: its callers read "exit=N" themselves, and a check that failed
+// carries what to fix (REPAIR.md), which the agent must get. Only a command
+// that did not run at all is an error.
+func (s *Service) appuiRun(ctx context.Context, spaceID identity.ID, cmd string) (string, error) {
+	out, err := s.SandboxExec(ctx, spaceID, cmd)
+	if err != nil && errs.CodeOf(err) == vmm.CodeToolExecutionFailed && strings.HasPrefix(out, "exit=") {
+		return out, nil
+	}
+	return out, err
 }
 
 // appuiPublishTool implements appui_publish: the platform's checks of an app
@@ -723,7 +792,7 @@ func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, age
 	// The key works while the app's preview exists.
 	if job.HasKey && m != nil {
 		if pid, perr := identity.Parse(m[1]); perr == nil {
-			if err := s.BindAppKey(opCtx, spaceID, dir, pid); err != nil {
+			if err := s.BindAppKey(opCtx, spaceID, dir, pid, s.appKeyMetaFor(opCtx, spaceID, job, elpianEntry)); err != nil {
 				return "", err
 			}
 		}
@@ -775,6 +844,12 @@ func (s *Service) appuiOpen(opCtx, ctx context.Context, spaceID identity.ID, age
 	}
 	if gadgetOut != nil {
 		result["gadget"] = gadgetOut
+	}
+	if job.Audience == appuiAudiencePlatform {
+		result["audience"] = job.Audience
+		result["platform"] = map[string]any{
+			"publish": "Tell the person the app is ready to be their platform's frontend: in Developer API → Platform → Frontend they pick \"" + title + "\" and publish it. Its people then open it at /v1/platforms/<slug>/app/ (or in an Aseman client signed in to the platform); its use of this space's agents and apps runs as, and is billed to, the person who publishes it.",
+		}
 	}
 	b, _ := json.Marshal(result)
 	return string(b), nil
@@ -882,6 +957,16 @@ func (s *Service) writeAppServerEnv(ctx context.Context, spaceID identity.ID, di
 		lines = append(lines, "ASEMAN_APP_KEY="+key)
 	}
 	path := appServerEnvFile(dir)
+	// A rebuild keeps the developer access app_developer_access gave the app.
+	if current, err := s.sandboxReadText(ctx, spaceID, path); err == nil {
+		for _, line := range strings.Split(current, "\n") {
+			for _, kept := range keptServerEnv {
+				if strings.HasPrefix(line, kept) {
+					lines = append(lines, line)
+				}
+			}
+		}
+	}
 	if err := s.sandboxWriteBytes(ctx, spaceID, path, []byte(strings.Join(lines, "\n")+"\n")); err != nil {
 		return err
 	}

@@ -26,7 +26,7 @@ import (
 // computerTools are the actions that use the project computer.
 var computerTools = map[string]bool{
 	"sandbox_exec": true, "file_edit": true, "file_upload": true, "appui_create": true, "appui_publish": true,
-	"proxy_create": true,
+	"proxy_create": true, "app_developer_access": true,
 }
 
 func touchesComputer(req gate.Request) bool {

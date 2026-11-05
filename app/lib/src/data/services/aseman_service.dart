@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../../core/network/api_client.dart';
 import '../../core/network/session_store.dart';
+import '../../core/platform/platform_mode.dart';
 import '../../core/theme/app_colors.dart';
 import '../../domain/models/market_quote.dart';
 import '../../domain/models/message.dart';
@@ -98,6 +99,7 @@ class AsemanService implements BackendService {
       'handle': handle,
       'email': email,
       'password': password,
+      ...PlatformMode.authField,
     });
     return _adopt(_sessionFrom(resp.body as Map<String, dynamic>));
   }
@@ -109,6 +111,7 @@ class AsemanService implements BackendService {
     final resp = await client.call('auth', 'login', body: {
       'account': account,
       'password': password,
+      ...PlatformMode.authField,
     });
     return _adopt(_sessionFrom(resp.body as Map<String, dynamic>));
   }
@@ -120,6 +123,7 @@ class AsemanService implements BackendService {
     final response = await client.call('auth', 'oauth_$provider', body: {
       if (provider == 'google') 'id_token': identityToken,
       if (provider == 'apple') 'identity_token': identityToken,
+      ...PlatformMode.authField,
     });
     return _adopt(_sessionFrom((response.body as Map).cast<String, dynamic>()));
   }
@@ -133,6 +137,7 @@ class AsemanService implements BackendService {
       'email': email,
       'code': code,
       if (password.isNotEmpty) 'password': password,
+      ...PlatformMode.authField,
     });
     final token = result['token'] as String? ?? '';
     if (token.isEmpty) return null;
@@ -173,7 +178,16 @@ class AsemanService implements BackendService {
     if (stored != null) client.session = stored;
   }
 
+  /// The sub-platform this client is for (see [PlatformMode]): its name and
+  /// published frontend. Needs no sign-in.
+  Future<PlatformInfo> platformInfo([String? slug]) async {
+    final result = await actionMap('developer', 'platform_frontend',
+        body: {'platform': slug ?? PlatformMode.slug});
+    return PlatformInfo.fromJson(result);
+  }
+
   static Session _sessionFrom(Map<String, dynamic> json) => Session(
+        platformId: json['platform_id'] as String? ?? '',
         accountId: json['account_id'] as String? ?? '',
         handle: json['handle'] as String? ?? '',
         token: json['token'] as String? ?? '',
@@ -895,7 +909,7 @@ class AsemanService implements BackendService {
   }
 
   /// Build the absolute gateway URL for a sandbox proxy path (e.g.
-  /// `/v1/proxy/{id}/`). The session token is appended as a query parameter so
+  /// `/v1/proxy/{id}/`, or a platform's frontend `/v1/platforms/{slug}/app/`). The session token is appended as a query parameter so
   /// a webview (which cannot reliably set Authorization headers on every
   /// platform) can authenticate against the gateway.
   String proxyUrl(String proxyPath) {
@@ -903,7 +917,8 @@ class AsemanService implements BackendService {
     final path = Uri.parse(p);
     if (path.hasScheme ||
         path.hasAuthority ||
-        !RegExp(r'^/v1/proxy/[0-9a-fA-F]{32}/').hasMatch(path.path) ||
+        !RegExp(r'^/v1/(proxy/[0-9a-fA-F]{32}|platforms/[a-z][a-z0-9-]{1,47}/app)/')
+            .hasMatch(path.path) ||
         path.pathSegments.any((segment) => segment == '..' || segment == '.')) {
       throw const FormatException('Invalid gateway preview path');
     }

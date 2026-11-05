@@ -84,6 +84,16 @@ func (a *API) Register(net network.Network) error {
 	if err := net.Handle(network.MethodGet, "/v1/proxy/{id}", a.proxyServe); err != nil {
 		return err
 	}
+	// A sub-platform's frontend: an app built in a space, served to the
+	// platform's people (platform_app.go).
+	for _, method := range []network.Method{network.MethodGet, network.MethodPost, network.MethodPut, network.MethodPatch, network.MethodDelete} {
+		if err := net.Handle(method, "/v1/platforms/{slug}/app/*", a.platformServe); err != nil {
+			return err
+		}
+	}
+	if err := net.Handle(network.MethodGet, "/v1/platforms/{slug}/app", a.platformServe); err != nil {
+		return err
+	}
 	// App servers in a sandbox use the space's agents and apps (app_api.go).
 	for _, method := range []network.Method{network.MethodGet, network.MethodPost} {
 		if err := net.Handle(method, "/appapi/v1/*", a.appAPI); err != nil {
@@ -199,21 +209,7 @@ func (a *API) proxyServe(ctx context.Context, req *network.Request) (*network.Re
 	// query (relative URLs don't inherit it). After the first authenticated load
 	// we set a path-scoped auth cookie, so subsequent asset requests are allowed.
 	cookieName := "oc_proxy_" + id.String()
-	token := strings.TrimPrefix(signing.Header(req.Header, "Authorization"), "Bearer ")
-	if token == "" && len(req.Query["token"]) > 0 {
-		token = req.Query["token"][0]
-	}
-	fromCookie := false
-	if token == "" {
-		cookie := (&http.Request{Header: http.Header{"Cookie": []string{signing.Header(req.Header, "Cookie")}}})
-		if value, err := cookie.Cookie(cookieName); err == nil {
-			decoded, err := base64.RawURLEncoding.DecodeString(value.Value)
-			if err == nil {
-				token = string(decoded)
-				fromCookie = true
-			}
-		}
-	}
+	token, fromCookie := requestToken(req, cookieName)
 	if token == "" {
 		return nil, errs.Unauthenticated("authentication required")
 	}
@@ -224,10 +220,8 @@ func (a *API) proxyServe(ctx context.Context, req *network.Request) (*network.Re
 	// A request that changes something and is carried by the cookie must come
 	// from the preview's own page: another site must not be able to submit to
 	// a person's preview with their sign-in.
-	if method != http.MethodGet && fromCookie {
-		if site := signing.Header(req.Header, "Sec-Fetch-Site"); site != "" && site != "same-origin" {
-			return nil, errs.Permission("this request did not come from the preview itself")
-		}
+	if method != http.MethodGet && fromCookie && !sameOrigin(req) {
+		return nil, errs.Permission("this request did not come from the preview itself")
 	}
 	acc, err := a.Auth.Authenticate(ctx, token)
 	if err != nil {
@@ -248,6 +242,85 @@ func (a *API) proxyServe(ctx context.Context, req *network.Request) (*network.Re
 	if page, ok := strings.CutPrefix(strings.TrimLeft(rest, "/"), pagePrefix); ok {
 		return a.proxyPage(ctx, req, p, acc, method, page)
 	}
+	fw := proxyForward{
+		rest: rest, method: method,
+		headers: a.appHeaders(p, acc.ID, acc.Handle),
+		socket: func() error {
+			access, ok := a.Spaces.(interface {
+				CanProxy(context.Context, identity.ID, identity.ID, bool) error
+			})
+			if !ok {
+				return errs.Permission("duplex proxy authorization unavailable")
+			}
+			return access.CanProxy(ctx, p.ID, acc.ID, true)
+		},
+	}
+	// Only the first (authenticated) load needs the token; the cookie then
+	// authorizes the page's css/js/images on the same proxy path.
+	if !fromCookie {
+		fw.cookie = proxyCookie(req, cookieName, token, p.GatewayPath())
+	}
+	return a.forwardProxy(ctx, req, p, fw)
+}
+
+// requestToken is the session a preview request carries: the Authorization
+// header, the ?token= of a first load, or the preview's cookie after it.
+func requestToken(req *network.Request, cookieName string) (token string, fromCookie bool) {
+	token = strings.TrimPrefix(signing.Header(req.Header, "Authorization"), "Bearer ")
+	if token == "" && len(req.Query["token"]) > 0 {
+		token = req.Query["token"][0]
+	}
+	if token != "" {
+		return token, false
+	}
+	cookie := (&http.Request{Header: http.Header{"Cookie": []string{signing.Header(req.Header, "Cookie")}}})
+	if value, err := cookie.Cookie(cookieName); err == nil {
+		if decoded, err := base64.RawURLEncoding.DecodeString(value.Value); err == nil && len(decoded) > 0 {
+			return string(decoded), true
+		}
+	}
+	return "", false
+}
+
+// sameOrigin reports whether a request came from the page's own origin (or
+// from a client that does not say).
+func sameOrigin(req *network.Request) bool {
+	site := signing.Header(req.Header, "Sec-Fetch-Site")
+	return site == "" || site == "same-origin"
+}
+
+// proxyForward is how one request is forwarded to a preview's service.
+type proxyForward struct {
+	// rest is the path after the gateway prefix; method the HTTP method.
+	rest, method string
+	// headers are the app headers for the person using it (app_api.go).
+	headers map[string]string
+	// cookie is the Set-Cookie value of a first authenticated load ("" none).
+	cookie string
+	// socket authorizes a WebSocket upgrade.
+	socket func() error
+}
+
+// proxyCookie is the path-scoped cookie that authorizes a preview page's own
+// assets after its first, token-carrying, load.
+func proxyCookie(req *network.Request, name, token, gatewayPath string) string {
+	cookie := &http.Cookie{Name: name, Value: base64.RawURLEncoding.EncodeToString([]byte(token)), Path: strings.TrimRight(gatewayPath, "/"), SameSite: http.SameSiteLaxMode, HttpOnly: true}
+	// The app shows a preview in a frame, and the app may be on another
+	// site than this node (a different domain, a local build). A Lax
+	// cookie is not sent for a framed page's css and scripts there, which
+	// left the page unstyled. Over HTTPS the cookie is therefore usable in
+	// a frame, and partitioned: it exists only inside the site that
+	// framed it, so no other site can ride on it.
+	if strings.EqualFold(signing.Header(req.Header, "X-Forwarded-Proto"), "https") {
+		cookie.SameSite, cookie.Secure, cookie.Partitioned = http.SameSiteNoneMode, true, true
+	}
+	return cookie.String()
+}
+
+// forwardProxy sends a request on to the preview's service and answers with
+// its response, rewritten to stay under the preview's gateway path.
+func (a *API) forwardProxy(ctx context.Context, req *network.Request, p *proxy.Proxy, fw proxyForward) (*network.Response, error) {
+	rest, method := fw.rest, fw.method
 	upstream := strings.TrimRight(p.TargetURL, "/")
 	if rest != "" {
 		upstream += "/" + strings.TrimLeft(rest, "/")
@@ -275,11 +348,10 @@ func (a *API) proxyServe(ctx context.Context, req *network.Request) (*network.Re
 		u.RawQuery = query.Encode()
 	}
 	if strings.EqualFold(signing.Header(req.Header, "Upgrade"), "websocket") {
-		if access, ok := a.Spaces.(interface {
-			CanProxy(context.Context, identity.ID, identity.ID, bool) error
-		}); !ok {
+		if fw.socket == nil {
 			return nil, errs.Permission("duplex proxy authorization unavailable")
-		} else if err := access.CanProxy(ctx, p.ID, acc.ID, true); err != nil {
+		}
+		if err := fw.socket(); err != nil {
 			return nil, err
 		}
 		if u.Scheme == "https" {
@@ -288,7 +360,7 @@ func (a *API) proxyServe(ctx context.Context, req *network.Request) (*network.Re
 			u.Scheme = "ws"
 		}
 		tunnelHeader := map[string]string{"Authorization": "Bearer " + p.Token}
-		for k, v := range a.appHeaders(p, acc.ID, acc.Handle) {
+		for k, v := range fw.headers {
 			tunnelHeader[k] = v
 		}
 		return &network.Response{Status: 101, Tunnel: &network.Tunnel{Protocol: "websocket", Target: u.String(), Header: tunnelHeader}}, nil
@@ -311,7 +383,7 @@ func (a *API) proxyServe(ctx context.Context, req *network.Request) (*network.Re
 	// Who is using the app, and the token its server uses the space's agents
 	// and apps for them with (billed to them; app_api.go). Never taken from
 	// the browser: these are set here only.
-	for k, v := range a.appHeaders(p, acc.ID, acc.Handle) {
+	for k, v := range fw.headers {
 		upReq.Header.Set(k, v)
 	}
 	client := &http.Client{Timeout: 120 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
@@ -357,20 +429,8 @@ func (a *API) proxyServe(ctx context.Context, req *network.Request) (*network.Re
 		}
 		hdr["Location"] = location
 	}
-	// Only the first (authenticated) load needs the token; the cookie then
-	// authorizes the page's css/js/images on the same proxy path.
-	if !fromCookie {
-		cookie := &http.Cookie{Name: cookieName, Value: base64.RawURLEncoding.EncodeToString([]byte(token)), Path: strings.TrimRight(p.GatewayPath(), "/"), SameSite: http.SameSiteLaxMode, HttpOnly: true}
-		// The app shows a preview in a frame, and the app may be on another
-		// site than this node (a different domain, a local build). A Lax
-		// cookie is not sent for a framed page's css and scripts there, which
-		// left the page unstyled. Over HTTPS the cookie is therefore usable in
-		// a frame, and partitioned: it exists only inside the site that
-		// framed it, so no other site can ride on it.
-		if strings.EqualFold(signing.Header(req.Header, "X-Forwarded-Proto"), "https") {
-			cookie.SameSite, cookie.Secure, cookie.Partitioned = http.SameSiteNoneMode, true, true
-		}
-		hdr["Set-Cookie"] = cookie.String()
+	if fw.cookie != "" {
+		hdr["Set-Cookie"] = fw.cookie
 	}
 	return &network.Response{
 		Status: resp.StatusCode,

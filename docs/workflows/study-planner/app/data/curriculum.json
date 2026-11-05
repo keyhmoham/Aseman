@@ -1,0 +1,272 @@
+{
+  "source": {
+    "publisher": "سازمان پژوهش و برنامه‌ریزی آموزشی وزارت آموزش و پرورش — دفتر تألیف کتاب‌های درسی",
+    "title": "فهرست کتاب‌های درسی مدارس (نظام آموزشی ۶-۳-۳)",
+    "url": "https://chap.sch.ir",
+    "also": ["https://www.roshd.ir", "https://oerp.ir"],
+    "year": "۱۴۰۴–۱۴۰۵",
+    "note": "فهرست دروس هر پایه و رشته از روی کتاب‌های درسی رسمی سازمان پژوهش و برنامه‌ریزی آموزشی تنظیم شده است. دروس بدون کتاب (مثل تربیت بدنی) در برنامه‌ی مطالعه‌ی خانه نیامده‌اند. دروس تخصصی شاخه‌های فنی‌وحرفه‌ای و کاردانش برای هر رشته متفاوت است و خودت اضافه‌شان می‌کنی."
+  },
+  "categories": {
+    "math": "ریاضی",
+    "science": "علوم",
+    "language": "زبان و ادبیات",
+    "humanities": "علوم انسانی",
+    "religion": "دینی و قرآن",
+    "skill": "مهارتی و عمومی",
+    "custom": "درس دلخواه"
+  },
+  "stages": [
+    {"id": "elementary", "name": "دوره‌ی ابتدایی", "grades": [1, 2, 3, 4, 5, 6]},
+    {"id": "lower_secondary", "name": "دوره‌ی اول متوسطه", "grades": [7, 8, 9]},
+    {"id": "upper_secondary", "name": "دوره‌ی دوم متوسطه", "grades": [10, 11, 12]}
+  ],
+  "fields": {
+    "math": {"name": "ریاضی و فیزیک", "icon": "∑"},
+    "science": {"name": "علوم تجربی", "icon": "⚗"},
+    "humanities": {"name": "ادبیات و علوم انسانی", "icon": "✎"},
+    "islamic": {"name": "علوم و معارف اسلامی", "icon": "☪"},
+    "vocational": {"name": "فنی‌وحرفه‌ای / کاردانش", "icon": "⚙"}
+  },
+  "grades": {
+    "1": {"name": "پایه‌ی اول", "nick": "اول دبستان", "courses": [
+      {"id": "farsi_read", "name": "فارسی (بخوانیم)", "weight": 3, "category": "language"},
+      {"id": "farsi_write", "name": "فارسی (بنویسیم)", "weight": 3, "category": "language"},
+      {"id": "math", "name": "ریاضی", "weight": 3, "category": "math"},
+      {"id": "science", "name": "علوم تجربی", "weight": 2, "category": "science"},
+      {"id": "quran", "name": "آموزش قرآن", "weight": 1, "category": "religion"}
+    ]},
+    "2": {"name": "پایه‌ی دوم", "nick": "دوم دبستان", "courses": [
+      {"id": "farsi", "name": "فارسی", "weight": 3, "category": "language"},
+      {"id": "negaresh", "name": "نگارش فارسی", "weight": 2, "category": "language"},
+      {"id": "math", "name": "ریاضی", "weight": 3, "category": "math"},
+      {"id": "science", "name": "علوم تجربی", "weight": 2, "category": "science"},
+      {"id": "quran", "name": "آموزش قرآن", "weight": 1, "category": "religion"},
+      {"id": "hedye", "name": "هدیه‌های آسمان", "weight": 1, "category": "religion"}
+    ]},
+    "3": {"name": "پایه‌ی سوم", "nick": "سوم دبستان", "courses": [
+      {"id": "farsi", "name": "فارسی", "weight": 3, "category": "language"},
+      {"id": "negaresh", "name": "نگارش فارسی", "weight": 2, "category": "language"},
+      {"id": "math", "name": "ریاضی", "weight": 3, "category": "math"},
+      {"id": "science", "name": "علوم تجربی", "weight": 2, "category": "science"},
+      {"id": "social", "name": "مطالعات اجتماعی", "weight": 2, "category": "humanities"},
+      {"id": "quran", "name": "آموزش قرآن", "weight": 1, "category": "religion"},
+      {"id": "hedye", "name": "هدیه‌های آسمان", "weight": 1, "category": "religion"}
+    ]},
+    "4": {"name": "پایه‌ی چهارم", "nick": "چهارم دبستان", "courses": [
+      {"id": "farsi", "name": "فارسی", "weight": 3, "category": "language"},
+      {"id": "negaresh", "name": "نگارش فارسی", "weight": 2, "category": "language"},
+      {"id": "math", "name": "ریاضی", "weight": 3, "category": "math"},
+      {"id": "science", "name": "علوم تجربی", "weight": 2, "category": "science"},
+      {"id": "social", "name": "مطالعات اجتماعی", "weight": 2, "category": "humanities"},
+      {"id": "quran", "name": "آموزش قرآن", "weight": 1, "category": "religion"},
+      {"id": "hedye", "name": "هدیه‌های آسمان", "weight": 1, "category": "religion"}
+    ]},
+    "5": {"name": "پایه‌ی پنجم", "nick": "پنجم دبستان", "courses": [
+      {"id": "farsi", "name": "فارسی", "weight": 3, "category": "language"},
+      {"id": "negaresh", "name": "نگارش فارسی", "weight": 2, "category": "language"},
+      {"id": "math", "name": "ریاضی", "weight": 3, "category": "math"},
+      {"id": "science", "name": "علوم تجربی", "weight": 2, "category": "science"},
+      {"id": "social", "name": "مطالعات اجتماعی", "weight": 2, "category": "humanities"},
+      {"id": "quran", "name": "آموزش قرآن", "weight": 1, "category": "religion"},
+      {"id": "hedye", "name": "هدیه‌های آسمان", "weight": 1, "category": "religion"}
+    ]},
+    "6": {"name": "پایه‌ی ششم", "nick": "ششم دبستان", "courses": [
+      {"id": "farsi", "name": "فارسی", "weight": 3, "category": "language"},
+      {"id": "negaresh", "name": "نگارش فارسی", "weight": 2, "category": "language"},
+      {"id": "math", "name": "ریاضی", "weight": 3, "category": "math", "exam": true},
+      {"id": "science", "name": "علوم تجربی", "weight": 3, "category": "science", "exam": true},
+      {"id": "social", "name": "مطالعات اجتماعی", "weight": 2, "category": "humanities"},
+      {"id": "quran", "name": "آموزش قرآن", "weight": 1, "category": "religion"},
+      {"id": "hedye", "name": "هدیه‌های آسمان", "weight": 1, "category": "religion"},
+      {"id": "tafakor", "name": "تفکر و پژوهش", "weight": 1, "category": "skill"},
+      {"id": "kar", "name": "کار و فناوری", "weight": 1, "category": "skill"}
+    ]},
+    "7": {"name": "پایه‌ی هفتم", "nick": "هفتم", "courses": [
+      {"id": "math", "name": "ریاضی", "weight": 3, "category": "math", "exam": true},
+      {"id": "science", "name": "علوم تجربی", "weight": 3, "category": "science", "exam": true},
+      {"id": "farsi", "name": "فارسی", "weight": 2, "category": "language"},
+      {"id": "negaresh", "name": "نگارش", "weight": 2, "category": "language"},
+      {"id": "english", "name": "زبان انگلیسی", "weight": 2, "category": "language"},
+      {"id": "arabic", "name": "عربی", "weight": 2, "category": "language"},
+      {"id": "social", "name": "مطالعات اجتماعی", "weight": 2, "category": "humanities"},
+      {"id": "quran", "name": "آموزش قرآن", "weight": 1, "category": "religion"},
+      {"id": "payam", "name": "پیام‌های آسمان", "weight": 1, "category": "religion"},
+      {"id": "honar", "name": "فرهنگ و هنر", "weight": 1, "category": "skill"},
+      {"id": "kar", "name": "کار و فناوری", "weight": 1, "category": "skill"},
+      {"id": "tafakor", "name": "تفکر و سبک زندگی", "weight": 1, "category": "skill"}
+    ]},
+    "8": {"name": "پایه‌ی هشتم", "nick": "هشتم", "courses": [
+      {"id": "math", "name": "ریاضی", "weight": 3, "category": "math", "exam": true},
+      {"id": "science", "name": "علوم تجربی", "weight": 3, "category": "science", "exam": true},
+      {"id": "farsi", "name": "فارسی", "weight": 2, "category": "language"},
+      {"id": "negaresh", "name": "نگارش", "weight": 2, "category": "language"},
+      {"id": "english", "name": "زبان انگلیسی", "weight": 2, "category": "language"},
+      {"id": "arabic", "name": "عربی", "weight": 2, "category": "language"},
+      {"id": "social", "name": "مطالعات اجتماعی", "weight": 2, "category": "humanities"},
+      {"id": "quran", "name": "آموزش قرآن", "weight": 1, "category": "religion"},
+      {"id": "payam", "name": "پیام‌های آسمان", "weight": 1, "category": "religion"},
+      {"id": "honar", "name": "فرهنگ و هنر", "weight": 1, "category": "skill"},
+      {"id": "kar", "name": "کار و فناوری", "weight": 1, "category": "skill"},
+      {"id": "tafakor", "name": "تفکر و سبک زندگی", "weight": 1, "category": "skill"}
+    ]},
+    "9": {"name": "پایه‌ی نهم", "nick": "نهم", "courses": [
+      {"id": "math", "name": "ریاضی", "weight": 3, "category": "math", "exam": true},
+      {"id": "science", "name": "علوم تجربی", "weight": 3, "category": "science", "exam": true},
+      {"id": "farsi", "name": "فارسی", "weight": 2, "category": "language", "exam": true},
+      {"id": "negaresh", "name": "نگارش", "weight": 2, "category": "language"},
+      {"id": "english", "name": "زبان انگلیسی", "weight": 2, "category": "language", "exam": true},
+      {"id": "arabic", "name": "عربی", "weight": 2, "category": "language"},
+      {"id": "social", "name": "مطالعات اجتماعی", "weight": 2, "category": "humanities"},
+      {"id": "quran", "name": "آموزش قرآن", "weight": 1, "category": "religion"},
+      {"id": "payam", "name": "پیام‌های آسمان", "weight": 1, "category": "religion"},
+      {"id": "honar", "name": "فرهنگ و هنر", "weight": 1, "category": "skill"},
+      {"id": "kar", "name": "کار و فناوری", "weight": 1, "category": "skill"},
+      {"id": "defa", "name": "آمادگی دفاعی", "weight": 1, "category": "skill"}
+    ]},
+    "10": {"name": "پایه‌ی دهم", "nick": "دهم (اول دبیرستان)", "common": [
+      {"id": "farsi", "name": "فارسی ۱", "weight": 2, "category": "language", "exam": true},
+      {"id": "negaresh", "name": "نگارش ۱", "weight": 1, "category": "language"},
+      {"id": "din", "name": "دین و زندگی ۱", "weight": 2, "category": "religion", "exam": true},
+      {"id": "arabic", "name": "عربی، زبان قرآن ۱", "weight": 2, "category": "language", "exam": true},
+      {"id": "english", "name": "زبان انگلیسی ۱", "weight": 2, "category": "language", "exam": true},
+      {"id": "geo_iran", "name": "جغرافیای ایران", "weight": 1, "category": "humanities"},
+      {"id": "defa", "name": "آمادگی دفاعی", "weight": 1, "category": "skill"},
+      {"id": "media", "name": "تفکر و سواد رسانه‌ای", "weight": 1, "category": "skill"}
+    ], "fields": {
+      "math": [
+        {"id": "riazi", "name": "ریاضی ۱", "weight": 3, "category": "math", "exam": true},
+        {"id": "hendese", "name": "هندسه ۱", "weight": 3, "category": "math", "exam": true},
+        {"id": "physics", "name": "فیزیک ۱", "weight": 3, "category": "science", "exam": true},
+        {"id": "chemistry", "name": "شیمی ۱", "weight": 3, "category": "science", "exam": true},
+        {"id": "lab", "name": "آزمایشگاه علوم تجربی ۱", "weight": 1, "category": "science"},
+        {"id": "karafarini", "name": "کارگاه کارآفرینی و تولید", "weight": 1, "category": "skill"}
+      ],
+      "science": [
+        {"id": "riazi", "name": "ریاضی ۱", "weight": 3, "category": "math", "exam": true},
+        {"id": "biology", "name": "زیست‌شناسی ۱", "weight": 3, "category": "science", "exam": true},
+        {"id": "physics", "name": "فیزیک ۱", "weight": 3, "category": "science", "exam": true},
+        {"id": "chemistry", "name": "شیمی ۱", "weight": 3, "category": "science", "exam": true},
+        {"id": "lab", "name": "آزمایشگاه علوم تجربی ۱", "weight": 1, "category": "science"},
+        {"id": "karafarini", "name": "کارگاه کارآفرینی و تولید", "weight": 1, "category": "skill"}
+      ],
+      "humanities": [
+        {"id": "riazi_amar", "name": "ریاضی و آمار ۱", "weight": 3, "category": "math", "exam": true},
+        {"id": "fonoon", "name": "علوم و فنون ادبی ۱", "weight": 3, "category": "language", "exam": true},
+        {"id": "eghtesad", "name": "اقتصاد", "weight": 2, "category": "humanities", "exam": true},
+        {"id": "manteq", "name": "منطق", "weight": 2, "category": "humanities", "exam": true},
+        {"id": "tarikh", "name": "تاریخ ۱ (ایران و جهان باستان)", "weight": 2, "category": "humanities", "exam": true},
+        {"id": "jamee", "name": "جامعه‌شناسی ۱", "weight": 2, "category": "humanities", "exam": true}
+      ],
+      "islamic": [
+        {"id": "maaref_quran", "name": "علوم و معارف قرآنی ۱", "weight": 3, "category": "religion", "exam": true},
+        {"id": "ahkam", "name": "احکام ۱", "weight": 2, "category": "religion", "exam": true},
+        {"id": "aqaed", "name": "اصول عقاید ۱", "weight": 2, "category": "religion", "exam": true},
+        {"id": "riazi_amar", "name": "ریاضی و آمار ۱", "weight": 3, "category": "math", "exam": true},
+        {"id": "fonoon", "name": "علوم و فنون ادبی ۱", "weight": 2, "category": "language", "exam": true},
+        {"id": "manteq", "name": "منطق", "weight": 2, "category": "humanities", "exam": true},
+        {"id": "eghtesad", "name": "اقتصاد", "weight": 2, "category": "humanities"},
+        {"id": "tarikh", "name": "تاریخ ۱ (ایران و جهان باستان)", "weight": 2, "category": "humanities"}
+      ],
+      "vocational": [
+        {"id": "riazi", "name": "ریاضی ۱ (شاخه‌ی فنی/کاردانش)", "weight": 3, "category": "math"},
+        {"id": "specialty", "name": "دروس تخصصی و کارگاهی رشته", "weight": 3, "category": "skill", "placeholder": true}
+      ]
+    }},
+    "11": {"name": "پایه‌ی یازدهم", "nick": "یازدهم (دوم دبیرستان)", "common": [
+      {"id": "farsi", "name": "فارسی ۲", "weight": 2, "category": "language", "exam": true},
+      {"id": "negaresh", "name": "نگارش ۲", "weight": 1, "category": "language"},
+      {"id": "din", "name": "دین و زندگی ۲", "weight": 2, "category": "religion", "exam": true},
+      {"id": "arabic", "name": "عربی، زبان قرآن ۲", "weight": 2, "category": "language", "exam": true},
+      {"id": "english", "name": "زبان انگلیسی ۲", "weight": 2, "category": "language", "exam": true},
+      {"id": "tarikh_moaser", "name": "تاریخ معاصر ایران", "weight": 1, "category": "humanities"},
+      {"id": "mohit", "name": "انسان و محیط زیست", "weight": 1, "category": "skill"}
+    ], "fields": {
+      "math": [
+        {"id": "hesaban", "name": "حسابان ۱", "weight": 3, "category": "math", "exam": true},
+        {"id": "hendese", "name": "هندسه ۲", "weight": 3, "category": "math", "exam": true},
+        {"id": "amar", "name": "آمار و احتمال", "weight": 2, "category": "math", "exam": true},
+        {"id": "physics", "name": "فیزیک ۲", "weight": 3, "category": "science", "exam": true},
+        {"id": "chemistry", "name": "شیمی ۲", "weight": 3, "category": "science", "exam": true},
+        {"id": "zamin", "name": "زمین‌شناسی", "weight": 1, "category": "science"},
+        {"id": "lab", "name": "آزمایشگاه علوم تجربی ۲", "weight": 1, "category": "science"}
+      ],
+      "science": [
+        {"id": "riazi", "name": "ریاضی ۲", "weight": 3, "category": "math", "exam": true},
+        {"id": "biology", "name": "زیست‌شناسی ۲", "weight": 3, "category": "science", "exam": true},
+        {"id": "physics", "name": "فیزیک ۲", "weight": 3, "category": "science", "exam": true},
+        {"id": "chemistry", "name": "شیمی ۲", "weight": 3, "category": "science", "exam": true},
+        {"id": "zamin", "name": "زمین‌شناسی", "weight": 1, "category": "science"},
+        {"id": "lab", "name": "آزمایشگاه علوم تجربی ۲", "weight": 1, "category": "science"}
+      ],
+      "humanities": [
+        {"id": "riazi_amar", "name": "ریاضی و آمار ۲", "weight": 3, "category": "math", "exam": true},
+        {"id": "fonoon", "name": "علوم و فنون ادبی ۲", "weight": 3, "category": "language", "exam": true},
+        {"id": "falsafe", "name": "فلسفه", "weight": 2, "category": "humanities", "exam": true},
+        {"id": "ravan", "name": "روان‌شناسی", "weight": 2, "category": "humanities", "exam": true},
+        {"id": "jamee", "name": "جامعه‌شناسی ۲", "weight": 2, "category": "humanities", "exam": true},
+        {"id": "tarikh", "name": "تاریخ ۲ (ایران و جهان میانه)", "weight": 2, "category": "humanities", "exam": true},
+        {"id": "joghrafia", "name": "جغرافیا ۲", "weight": 2, "category": "humanities", "exam": true}
+      ],
+      "islamic": [
+        {"id": "maaref_quran", "name": "علوم و معارف قرآنی ۲", "weight": 3, "category": "religion", "exam": true},
+        {"id": "ahkam", "name": "احکام ۲", "weight": 2, "category": "religion", "exam": true},
+        {"id": "aqaed", "name": "اصول عقاید ۲", "weight": 2, "category": "religion", "exam": true},
+        {"id": "riazi_amar", "name": "ریاضی و آمار ۲", "weight": 3, "category": "math", "exam": true},
+        {"id": "fonoon", "name": "علوم و فنون ادبی ۲", "weight": 2, "category": "language", "exam": true},
+        {"id": "falsafe", "name": "فلسفه", "weight": 2, "category": "humanities", "exam": true},
+        {"id": "ravan", "name": "روان‌شناسی", "weight": 2, "category": "humanities"},
+        {"id": "tarikh", "name": "تاریخ ۲ (ایران و جهان میانه)", "weight": 2, "category": "humanities"}
+      ],
+      "vocational": [
+        {"id": "riazi", "name": "ریاضی ۲ (شاخه‌ی فنی/کاردانش)", "weight": 3, "category": "math"},
+        {"id": "specialty", "name": "دروس تخصصی و کارگاهی رشته", "weight": 3, "category": "skill", "placeholder": true}
+      ]
+    }},
+    "12": {"name": "پایه‌ی دوازدهم", "nick": "دوازدهم (سوم دبیرستان)", "common": [
+      {"id": "farsi", "name": "فارسی ۳", "weight": 2, "category": "language", "exam": true},
+      {"id": "negaresh", "name": "نگارش ۳", "weight": 1, "category": "language"},
+      {"id": "din", "name": "دین و زندگی ۳", "weight": 2, "category": "religion", "exam": true},
+      {"id": "arabic", "name": "عربی، زبان قرآن ۳", "weight": 2, "category": "language", "exam": true},
+      {"id": "english", "name": "زبان انگلیسی ۳", "weight": 2, "category": "language", "exam": true},
+      {"id": "salamat", "name": "سلامت و بهداشت", "weight": 1, "category": "skill"},
+      {"id": "hoviat", "name": "هویت اجتماعی", "weight": 1, "category": "humanities"},
+      {"id": "khanevade", "name": "مدیریت خانواده و سبک زندگی", "weight": 1, "category": "skill"}
+    ], "fields": {
+      "math": [
+        {"id": "hesaban", "name": "حسابان ۲", "weight": 3, "category": "math", "exam": true},
+        {"id": "hendese", "name": "هندسه ۳", "weight": 3, "category": "math", "exam": true},
+        {"id": "gosaste", "name": "ریاضیات گسسته", "weight": 3, "category": "math", "exam": true},
+        {"id": "physics", "name": "فیزیک ۳", "weight": 3, "category": "science", "exam": true},
+        {"id": "chemistry", "name": "شیمی ۳", "weight": 3, "category": "science", "exam": true}
+      ],
+      "science": [
+        {"id": "riazi", "name": "ریاضی ۳", "weight": 3, "category": "math", "exam": true},
+        {"id": "biology", "name": "زیست‌شناسی ۳", "weight": 3, "category": "science", "exam": true},
+        {"id": "physics", "name": "فیزیک ۳", "weight": 3, "category": "science", "exam": true},
+        {"id": "chemistry", "name": "شیمی ۳", "weight": 3, "category": "science", "exam": true}
+      ],
+      "humanities": [
+        {"id": "riazi_amar", "name": "ریاضی و آمار ۳", "weight": 3, "category": "math", "exam": true},
+        {"id": "fonoon", "name": "علوم و فنون ادبی ۳", "weight": 3, "category": "language", "exam": true},
+        {"id": "falsafe", "name": "فلسفه ۲", "weight": 2, "category": "humanities", "exam": true},
+        {"id": "jamee", "name": "جامعه‌شناسی ۳", "weight": 2, "category": "humanities", "exam": true},
+        {"id": "tarikh", "name": "تاریخ ۳ (ایران و جهان معاصر)", "weight": 2, "category": "humanities", "exam": true},
+        {"id": "joghrafia", "name": "جغرافیا ۳", "weight": 2, "category": "humanities", "exam": true}
+      ],
+      "islamic": [
+        {"id": "maaref_quran", "name": "علوم و معارف قرآنی ۳", "weight": 3, "category": "religion", "exam": true},
+        {"id": "ahkam", "name": "احکام ۳", "weight": 2, "category": "religion", "exam": true},
+        {"id": "aqaed", "name": "اصول عقاید ۳", "weight": 2, "category": "religion", "exam": true},
+        {"id": "riazi_amar", "name": "ریاضی و آمار ۳", "weight": 3, "category": "math", "exam": true},
+        {"id": "fonoon", "name": "علوم و فنون ادبی ۳", "weight": 2, "category": "language", "exam": true},
+        {"id": "falsafe", "name": "فلسفه ۲", "weight": 2, "category": "humanities", "exam": true},
+        {"id": "tarikh", "name": "تاریخ ۳ (ایران و جهان معاصر)", "weight": 2, "category": "humanities"}
+      ],
+      "vocational": [
+        {"id": "riazi", "name": "ریاضی ۳ (شاخه‌ی فنی/کاردانش)", "weight": 3, "category": "math"},
+        {"id": "specialty", "name": "دروس تخصصی و کارگاهی رشته", "weight": 3, "category": "skill", "placeholder": true}
+      ]
+    }}
+  }
+}

@@ -2,6 +2,19 @@
 
 ## Unreleased: the workflow installer
 
+- **An agentic product as a workflow: آسمان‌درس.** `docs/workflows/study-planner.json`
+  brings up a study planner for Iranian school students: organization,
+  sub-platform and server key, a project with a custom **Planner** agent
+  (plus a Curator for the official curriculum and a Counselor), and the web
+  app installed, tested and served. The app's wizard takes the grade (and
+  field from grade 10), confirms the official course list (chap.sch.ir),
+  the goals, evidence-based difficulties (ADHD, test anxiety, sleep, …) and
+  the free hours; the Planner agent writes the plan and counsel through
+  `POST /v1/platform/spaces/ask`, the app checks it against the rules and
+  asks the agent to repair what breaks one, then files every session into a
+  Jalali calendar shown day by day on the home page. The run ends by having
+  the agent make a real plan. Source in `docs/workflows/study-planner/app`,
+  bundled by `bundle.py`; CI runs its tests and checks the bundle.
 - **One document brings up a whole product.** The developer API runs a JSON
   workflow (`aseman_workflow: "1"`) that calls the platform's actions in
   order: upsert the organization, its members, sub-platform and keys (from

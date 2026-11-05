@@ -48,6 +48,7 @@ COPY appui/ASEMAN_API.md /opt/aseman-appui/ASEMAN_API.md
 # A platform's frontend (appui audience platform) and the wiring check every
 # build passes before it is ready (aseman-appui verify).
 COPY appui/PLATFORM.md /opt/aseman-appui/PLATFORM.md
+COPY appui/DEVELOPER.md /opt/aseman-appui/DEVELOPER.md
 COPY appui/wiring-check.mjs /opt/aseman-appui/wiring-check.mjs
 # Elpian App UI kit: App UIs default to an Elpian frontend (ELPIAN.md).
 COPY appui/elpian/aseman-elpian.js appui/elpian/openui-elpian.js appui/elpian/bundle.mjs appui/elpian/check.mjs appui/elpian/nodes.json appui/elpian/ELPIAN.md /opt/aseman-appui/elpian/

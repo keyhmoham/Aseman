@@ -27,6 +27,18 @@
   access methods, so apps got no `X-Aseman-User-Token` and `/appapi/v1`
   answered "app API unavailable": app backends could not reach their space's
   agents and apps at all. It now does (checked at compile time).
+- **Agents set the whole product up for the person.** New agent tools
+  `platform_setup` (organization + platform, made or reused),
+  `app_developer_access` (an organization developer key in one app's server
+  settings only; `Aseman.developer()` in the server SDKs; `DEVELOPER.md`)
+  and `platform_publish` (the verified app as the platform's frontend, with
+  its address). They act as the person, never the agent; the developer
+  namespace stays closed to agents. The wiring check refuses a developer or
+  app key in page code or written into source.
+- **End-to-end test on a whole node** (`testdata/platform`,
+  `ASEMAN_PLATFORM_E2E=1`): agent → organization, platform, fullstack app
+  wired to the space's agent and MCP app, developer API, published; the
+  platform's people then use it.
 - **A platform's own client.** `--dart-define=ASEMAN_PLATFORM=<slug>` (web:
   `--build-arg ASEMAN_PLATFORM`, or `?platform=<slug>`) builds the Aseman
   client for one sub-platform: sign-in on its own accounts under its name,

@@ -42,7 +42,10 @@ function settings() {
     } catch (_) { /* no file: environment only */ }
   }
   const get = (k) => process.env[k] || fileSettings[k] || "";
-  return { url: get("ASEMAN_API_URL"), key: get("ASEMAN_APP_KEY") };
+  return {
+    url: get("ASEMAN_API_URL"), key: get("ASEMAN_APP_KEY"),
+    devUrl: get("ASEMAN_DEVELOPER_API_URL"), devKey: get("ASEMAN_DEVELOPER_KEY"), platform: get("ASEMAN_PLATFORM"),
+  };
 }
 
 function header(req, name) {
@@ -151,9 +154,63 @@ class Client {
   }
 }
 
+// The developer API of the person's organization (DEVELOPER.md), for the
+// app's server only: models and chat (OpenAI-shaped), and the platform
+// collection — the platform's own product surface, as the person.
+class Developer {
+  constructor({ url, key, platform } = {}) {
+    const s = settings();
+    this.url = (url || s.devUrl || "").replace(/\/+$/, "");
+    this.key = key || s.devKey;
+    this.platformSlug = platform || s.platform || "";
+    if (!this.key || !this.url) {
+      throw new AsemanError("no developer API access: ask for app_developer_access (ASEMAN_DEVELOPER_KEY, ASEMAN_DEVELOPER_API_URL)", 401, "developer");
+    }
+  }
+
+  async request(path, { method = "GET", body, timeoutMs = 120000, signal } = {}) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(new AsemanError(path + " timed out", 504, path)), timeoutMs);
+    if (signal) signal.addEventListener("abort", () => ctrl.abort(signal.reason), { once: true });
+    let res;
+    try {
+      res = await fetch(this.url + "/" + path.replace(/^\/+/, ""), {
+        method,
+        headers: { Authorization: "Bearer " + this.key, ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: ctrl.signal,
+      });
+    } catch (err) {
+      if (ctrl.signal.reason instanceof AsemanError) throw ctrl.signal.reason;
+      throw new AsemanError((err && err.message) || "network error", 0, path);
+    } finally {
+      clearTimeout(timer);
+    }
+    let data = null;
+    try { data = await res.json(); } catch (_) { /* not JSON */ }
+    if (!res.ok) {
+      const e = data && data.error;
+      throw new AsemanError((e && (e.message || e)) || res.statusText || "request failed", res.status, path);
+    }
+    return data;
+  }
+
+  models(opts) { return this.request("models", opts); }
+  // OpenAI-shaped chat completion: {model, messages, …}.
+  chat(body, opts = {}) { return this.request("chat/completions", { ...opts, method: "POST", body }); }
+  // The platform collection: any non-admin product action, as the person.
+  platform(namespace, action, body = {}, opts = {}) {
+    return this.request("platform/" + namespace + "/" + action, { ...opts, method: "POST", body });
+  }
+  catalog(opts) { return this.request("platform", opts); }
+}
+
 const Aseman = {
   Error: AsemanError,
   Client,
+  Developer,
+  // The organization's developer API (server only; see DEVELOPER.md).
+  developer: (opts) => new Developer(opts),
   parseJSON,
 
   // Acts for the person whose request [req] is (Node http, Express, Fastify
@@ -194,5 +251,5 @@ const Aseman = {
   },
 };
 
-module.exports = { Aseman, AsemanError, Client };
+module.exports = { Aseman, AsemanError, Client, Developer };
 module.exports.default = Aseman;

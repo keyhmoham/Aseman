@@ -494,6 +494,8 @@ prepare_project() {
     if [[ "$job_audience" == "platform" && -f "$ROOT/PLATFORM.md" ]]; then
       cp -f "$ROOT/PLATFORM.md" "$dir/PLATFORM.md"
     fi
+    # The developer API guide, for a server given app_developer_access.
+    [[ -f "$ROOT/DEVELOPER.md" ]] && cp -f "$ROOT/DEVELOPER.md" "$dir/DEVELOPER.md"
     if [[ -d "$ROOT/elpian/examples" ]]; then
       mkdir -p "$dir/vendor/aseman-elpian/examples"
       cp -a "$ROOT/elpian/examples/." "$dir/vendor/aseman-elpian/examples/"

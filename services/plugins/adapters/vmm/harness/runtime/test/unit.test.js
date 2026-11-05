@@ -195,7 +195,9 @@ test('persona wires apps to the space for real and knows platform frontends', ()
   assert.match(p, /Never invent an agent or app/)
   assert.match(p, /Aseman\.fromRequest\(req\)/)
   assert.match(p, /audience: "platform"/)
-  assert.match(p, /Developer API →\s+Platform → Frontend/)
+  assert.match(p, /`platform_setup`/)
+  assert.match(p, /`app_developer_access`/)
+  assert.match(p, /`platform_publish`/)
 })
 
 test('gateway calls carry the token and surface the node\'s error', async () => {

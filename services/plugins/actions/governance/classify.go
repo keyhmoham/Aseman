@@ -31,6 +31,9 @@ var toolEffects = map[string]string{
 	"file_read": gate.EffectRead, "room_info": gate.EffectRead, "ask_user": gate.EffectRead,
 	"routine_list": gate.EffectRead, "routine_get": gate.EffectRead, "proxy_list": gate.EffectRead, "proxy_get": gate.EffectRead,
 	"appui_status": gate.EffectRead,
+	// A person's organization, platform and keys: made as them; publishing
+	// puts the app before the platform's people.
+	"platform_setup": gate.EffectWrite, "app_developer_access": gate.EffectWrite, "platform_publish": gate.EffectSend,
 	"desk_state": gate.EffectRead, "db_tables": gate.EffectRead, "db_read": gate.EffectRead,
 	"secret_request": gate.EffectRead, "computer_help": gate.EffectRead, "offer_task": gate.EffectRead,
 	"routine_delete": gate.EffectDelete, "proxy_delete": gate.EffectDelete,

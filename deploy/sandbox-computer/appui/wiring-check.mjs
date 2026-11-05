@@ -79,6 +79,9 @@ const FAKE_GATEWAY = [
 ];
 const DIRECT_MODEL = /ASEMAN_LLM_BASE_URL|api\.openai\.com|api\.anthropic\.com|generativelanguage\.googleapis\.com|\/chat\/completions|\/v1\/messages\b/;
 const APP_KEY_IN_HANDLER = /Aseman\.app\(\)|Aseman\.app\(\s*\)|ASEMAN_APP_KEY/;
+// Code that runs in the person's browser or the Aseman client, not the server.
+const PAGE_CODE = /^(public|static|www|web|client|frontend|src\/client|elpian\/src)\/|\.(html?|vue|svelte|jsx|tsx)$/i;
+const SECRET_NAMES = /ASEMAN_DEVELOPER_KEY|ASEMAN_APP_KEY|dk_live_[A-Za-z0-9_-]{8,}|aak_[0-9a-f]{8,}|Aseman\.developer\(/;
 
 function wiringOf(apps) {
   const agents = (apps.agents || []).map((a) => ({ id: String(a.id || ""), name: String(a.name || "") }));
@@ -143,6 +146,15 @@ export function checkWiring(dir, { apps, job } = {}) {
       for (let m; (m = re.exec(text));) {
         problems.push(`${at(m.index)}: the app serves its own route at _aseman/…. That path is the Aseman gateway's: it answers it with the space's real agents and apps, so a route of yours there only stands in for them. Remove it; mock the Aseman API in tests only.`);
       }
+    }
+    if (PAGE_CODE.test(rel)) {
+      const m = SECRET_NAMES.exec(text);
+      if (m) {
+        problems.push(`${at(m.index)}: page code uses the server's credentials (${m[0].slice(0, 24)}). The developer key and the app key stay on the server: give the page a route of your own server that does the call.`);
+      }
+    } else {
+      const leak = /dk_live_[A-Za-z0-9_-]{8,}|aak_[0-9a-f]{8,}/.exec(text);
+      if (leak) problems.push(`${at(leak.index)}: a credential is written into the source. Read it from the environment (.aseman/server.env) instead.`);
     }
     if (agents.length && DIRECT_MODEL.test(text)) {
       warnings.push(`${rel}: calls a model directly. Work that needs the judgment of this space's agents (${agentList}) goes to them (ask), not to a model you prompt yourself.`);

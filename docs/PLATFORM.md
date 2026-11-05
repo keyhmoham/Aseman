@@ -409,6 +409,36 @@ built** (an Elpian or web App UI with its own backend) as the platform's
    (`developer.platform_frontend_apps`, `platform_frontend_publish`,
    `platform_frontend_unpublish`; public `platform_frontend {platform}`).
 
+**Agents can do all of it for the person.** Three tools of the spaces
+namespace act as the person whose request the turn serves (never as the
+agent), through the developer namespace's own role checks; the developer
+namespace itself stays closed to agents:
+
+| Tool | Does |
+| --- | --- |
+| `platform_setup {name, slug, org_name?, org?}` | makes (or reuses) a team organization by name, or uses `org` / the personal one, and its platform |
+| `app_developer_access {dir, org?, platform_api?}` | a developer key of that organization (models: read, chat: write, platform collection: write) written into the app's `.aseman/server.env` (`ASEMAN_DEVELOPER_KEY`, `ASEMAN_DEVELOPER_API_URL` = node `/dev/v1`, `ASEMAN_PLATFORM`); the agent never sees it; calling again revokes and replaces it; rebuilds keep it |
+| `platform_publish {dir, org?}` | publishes the app `appui_publish` verified as the platform's frontend and answers its address |
+
+The server SDKs' `Aseman.developer()` uses the key (`models`, `chat`,
+`platform(namespace, action, body)`, `catalog`); `DEVELOPER.md` in the project
+says when (a model call no agent is meant for, the platform's own product
+surface) and the wiring check refuses the key in page code or written into
+source. Governance classifies `platform_publish` as a send and the other two
+as writes, so a space's approval rules apply.
+
+**End to end.** `internal/plugins/host/testdata/platform` boots a whole node
+from the native plugins and proves the flow: a person's Builder agent, through
+the real agent gateway, sets up the organization and platform, starts the app
+with `appui_create`, gives it developer access, writes it on the space's
+computer, passes `appui_publish` (the real kit: wiring check, widget on QuickJS,
+start), and `platform_publish`es it. Then a visitor and a signed-in person of
+the platform use it: the app's server asks the space's Advisor agent and calls
+its Pricing app (a real MCP server) for them, uses the developer API, and an
+agent the app is not wired to is refused. Run it after `make plugins`, as root
+on a throwaway machine (the space's computer is that machine):
+`ASEMAN_PLATFORM_E2E=1 go test ./internal/plugins/host -run PlatformE2E`.
+
 The gateway serves it at **`/v1/platforms/{slug}/app/`**:
 
 | | |

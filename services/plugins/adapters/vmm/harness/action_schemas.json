@@ -257,6 +257,9 @@
   "properties": {
    "email": {
     "type": "string"
+   },
+   "platform": {
+    "type": "string"
    }
   },
   "type": "object"
@@ -270,6 +273,9 @@
     "type": "string"
    },
    "password": {
+    "type": "string"
+   },
+   "platform": {
     "type": "string"
    }
   },
@@ -316,6 +322,9 @@
   "properties": {
    "email": {
     "type": "string"
+   },
+   "platform": {
+    "type": "string"
    }
   },
   "type": "object"
@@ -323,6 +332,9 @@
  "auth.send_verification": {
   "properties": {
    "email": {
+    "type": "string"
+   },
+   "platform": {
     "type": "string"
    }
   },
@@ -337,6 +349,9 @@
     "type": "string"
    },
    "password": {
+    "type": "string"
+   },
+   "platform": {
     "type": "string"
    }
   },

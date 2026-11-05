@@ -927,6 +927,16 @@ func (s *Service) writeAppServerEnv(ctx context.Context, spaceID identity.ID, di
 		lines = append(lines, "ASEMAN_APP_KEY="+key)
 	}
 	path := appServerEnvFile(dir)
+	// A rebuild keeps the developer access app_developer_access gave the app.
+	if current, err := s.sandboxReadText(ctx, spaceID, path); err == nil {
+		for _, line := range strings.Split(current, "\n") {
+			for _, kept := range keptServerEnv {
+				if strings.HasPrefix(line, kept) {
+					lines = append(lines, line)
+				}
+			}
+		}
+	}
 	if err := s.sandboxWriteBytes(ctx, spaceID, path, []byte(strings.Join(lines, "\n")+"\n")); err != nil {
 		return err
 	}

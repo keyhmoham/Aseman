@@ -147,6 +147,16 @@ type PlatformFrontend struct {
 	Wiring     Wiring `json:"wiring"`
 }
 
+// AppAccess is a developer API key made for one app's server: the spaces
+// namespace writes it into that server's settings only (never the page, never
+// an agent's reply).
+type AppAccess struct {
+	KeyID    string `json:"key_id"`
+	Secret   string `json:"secret"`
+	Org      string `json:"org"`
+	Platform string `json:"platform,omitempty"`
+}
+
 // FrontendApp is an app a person may publish as a platform's frontend (one
 // the agents of a space they belong to built and published there).
 type FrontendApp struct {

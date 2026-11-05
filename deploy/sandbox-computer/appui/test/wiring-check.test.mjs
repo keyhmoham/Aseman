@@ -100,3 +100,16 @@ test("a page calling the Aseman API is not a fake gateway", () => {
   const res = checkWiring(dir);
   assert.deepStrictEqual(res.problems, []);
 });
+
+test("the developer key stays on the server", () => {
+  const dir = project({
+    "server.js": `const dev = Aseman.developer(); app.post("/api/space", async (req, res) => res.json(await dev.platform("spaces", "space_create", req.body)));`,
+    "public/app.js": `fetch("/dev/v1/platform/spaces/space_create", { headers: { Authorization: "Bearer " + window.ASEMAN_DEVELOPER_KEY } });`,
+    "lib/config.js": `export const KEY = "dk_live_abcdefghijklmnop";`,
+  });
+  const res = checkWiring(dir);
+  assert.equal(res.ok, false);
+  assert.equal(res.problems.length, 2, res.problems.join("\n"));
+  assert.match(res.problems.join("\n"), /page code uses the server's credentials/);
+  assert.match(res.problems.join("\n"), /credential is written into the source/);
+});

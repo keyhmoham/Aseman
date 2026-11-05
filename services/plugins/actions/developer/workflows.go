@@ -204,6 +204,9 @@ func (c *wfCaller) Call(ctx context.Context, name string, with map[string]any) (
 	if c.a.key != nil {
 		meta["developer_key"] = c.a.key.Key.ID.String()
 	}
+	// Acting as the person, as every in-process caller does: what the action
+	// starts on their behalf (a computer woken, time billed) is theirs.
+	ctx = helper.WithActor(ctx, c.a.person)
 	resp, err := router.Dispatch(ctx, ns, action, &api.ActionRequest{Caller: api.Caller{ID: c.a.person, Kind: "user"}, Origin: c.s.K.NodeID(), Body: body, Meta: meta})
 	if err != nil {
 		return nil, err

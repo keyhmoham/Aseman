@@ -26,8 +26,9 @@ type fakePlatform struct {
 	platform map[string]any
 	keys     []map[string]any
 	calls    []string
-	running  map[string]int // space → status polls until running
-	fail     map[string]int // action → failures left
+	running  map[string]int  // space → status polls until running
+	never    map[string]bool // spaces whose computer was never started
+	fail     map[string]int  // action → failures left
 	failErr  error
 	deleted  []string
 	models   []map[string]any
@@ -38,7 +39,7 @@ type codedErr struct{ code, msg string }
 func (e *codedErr) Error() string { return e.msg }
 
 func newFake() *fakePlatform {
-	return &fakePlatform{members: map[string][]string{}, files: map[string]string{}, running: map[string]int{}, fail: map[string]int{}}
+	return &fakePlatform{never: map[string]bool{}, members: map[string][]string{}, files: map[string]string{}, running: map[string]int{}, fail: map[string]int{}}
 }
 
 func (f *fakePlatform) id(prefix string) string {
@@ -137,6 +138,7 @@ func (f *fakePlatform) Call(_ context.Context, action string, with map[string]an
 		f.deleted = append(f.deleted, "member:"+s("bot"))
 		return map[string]any{"ok": true}, nil
 	case "spaces.sandbox_start":
+		delete(f.never, s("space"))
 		return map[string]any{"status": "starting"}, nil
 	case "spaces.sandbox_status":
 		if f.running[s("space")] > 0 {
@@ -145,7 +147,16 @@ func (f *fakePlatform) Call(_ context.Context, action string, with map[string]an
 		}
 		return map[string]any{"status": "running"}, nil
 	case "spaces.sandbox_files":
-		key := s("space") + ":" + s("path")
+		if s("space") == "" {
+			return nil, &codedErr{"invalid_argument", "sandbox_files needs a space"}
+		}
+		if strings.HasPrefix(s("path"), "/workspace") {
+			return nil, &codedErr{"invalid_argument", "sandbox_files paths are relative to /workspace"}
+		}
+		if f.never[s("space")] {
+			return map[string]any{"ok": false, "asleep": true, "error": "The computer has not been started yet."}, nil
+		}
+		key := s("space") + ":/workspace/" + strings.TrimPrefix(s("path"), "/")
 		switch s("operation") {
 		case "write":
 			if b := s("data_base64"); b != "" {
@@ -162,6 +173,9 @@ func (f *fakePlatform) Call(_ context.Context, action string, with map[string]an
 		}
 		return map[string]any{"ok": true}, nil
 	case "spaces.sandbox_exec":
+		if s("space") == "" {
+			return nil, &codedErr{"invalid_argument", "sandbox_exec needs a space"}
+		}
 		cmd := s("command")
 		f.commands = append(f.commands, cmd)
 		code := 0
@@ -367,7 +381,11 @@ func TestWorkflowBringsUpAProductAndIsIdempotent(t *testing.T) {
 	if _, ok := f.files[space+":"+root+"/web/index.html"]; ok {
 		t.Fatalf("only the assets under the prefix: %v", f.files)
 	}
-	if len(f.commands) < 3 || !strings.Contains(f.commands[0], "chmod 0755") || !strings.Contains(f.commands[1], "export STRIPE_KEY='sk_test_123456'") || !strings.Contains(f.commands[1], "cd '/workspace/apps/acme-shop'") {
+	if len(f.commands) < 4 || !strings.Contains(f.commands[0], "rm -rf -- '/workspace/apps/acme-shop'") {
+		t.Fatalf("clean: %q", f.commands)
+	}
+	f.commands = f.commands[1:]
+	if !strings.Contains(f.commands[0], "chmod 0755") || !strings.Contains(f.commands[1], "export STRIPE_KEY='sk_test_123456'") || !strings.Contains(f.commands[1], "cd '/workspace/apps/acme-shop'") {
 		t.Fatalf("commands: %q", f.commands)
 	}
 	if rep.Outputs["url"] != "/v1/proxy/px7/" || fmt.Sprint(rep.Outputs["agents"]) != "[Builder Advisor]" {
@@ -749,5 +767,14 @@ func TestSchemaFileIsCurrent(t *testing.T) {
 	got, err := os.ReadFile(file)
 	if err != nil || string(got) != string(want) {
 		t.Fatalf("%s is stale: run ASEMAN_WRITE_SCHEMA=1 go test ./plugins/actions/developer/workflow -run TestSchemaFileIsCurrent", file)
+	}
+}
+
+func TestSandboxStartsAComputerThatNeverRan(t *testing.T) {
+	f := newFake()
+	f.never["s9"] = true
+	rep := run(t, f, `{"aseman_workflow":"1","name":"w","steps":[{"id":"w","sandbox":{"space":"s9","files":{"a.txt":"x"}}}]}`, ModeRun, nil, nil)
+	if rep.Status != StatusSucceeded || f.files["s9:/workspace/a.txt"] != "x" {
+		t.Fatalf("%s %s %v", rep.Status, rep.Error, f.files)
 	}
 }

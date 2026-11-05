@@ -8,12 +8,13 @@
   "inputs": {
     "product":   {"type": "string", "default": "Acme Bookings", "min": 3, "max": 40},
     "team":      {"type": "list", "default": [], "description": "Handles to invite as developers"},
-    "model":     {"type": "string", "default": "openai/gpt-5-mini"},
+    "model":     {"type": "string", "default": "openai/gpt-5-mini", "description": "A model of the developer API's catalog (GET /v1/models), for the welcome note"},
+    "agent_model": {"type": "string", "default": "", "description": "The agents' model, as the node's providers name it; empty: the node's default"},
     "agents": {"type": "list", "default": [
       {"name": "Builder", "description": "Builds and maintains the app", "instructions": "You build and maintain the Acme Bookings app in /workspace/apps."},
       {"name": "Concierge", "description": "Answers customers", "instructions": "You help customers book a table. Be brief and friendly."}
     ]},
-    "publish_frontend": {"type": "boolean", "default": false}
+    "build_frontend": {"type": "boolean", "default": false, "description": "Ask the Builder agent to build and publish the platform's frontend (an app the space's agents build is the only kind a platform can publish)"}
   },
   "secrets": {
     "SESSION_SECRET": {"description": "Signs the app's session cookies", "required": true}
@@ -44,10 +45,10 @@
       "params": {
         "space": {"type": "string", "required": true},
         "agent": {"type": "object", "required": true},
-        "model": {"type": "string", "required": true}
+        "model": {"type": "string", "default": ""}
       },
       "steps": [
-        {"id": "agent", "upsert": {"resource": "agent", "with": "${{ merge(object('model', params.model), params.agent) }}"}},
+        {"id": "agent", "upsert": {"resource": "agent", "with": "${{ params.model ? merge(object('model', params.model), params.agent) : params.agent }}"}},
         {"id": "member", "upsert": {"resource": "space_bot", "with": {"space": "${{ params.space }}", "bot": "${{ steps.agent.outputs.id }}"}}}
       ],
       "outputs": {"id": "${{ steps.agent.outputs.id }}", "name": "${{ params.agent.name }}", "operation": "${{ steps.agent.outputs.operation }}"}
@@ -69,7 +70,7 @@
     {"id": "rooms", "for_each": ["Engineering", "Support"], "as": "room",
      "upsert": {"resource": "room", "with": {"space": "${{ steps.space.outputs.id }}", "name": "${{ room }}"}}},
     {"id": "agents", "name": "Agents", "for_each": "${{ inputs.agents }}", "as": "agent", "concurrency": 2,
-     "use": "agent_in_space", "with": {"space": "${{ steps.space.outputs.id }}", "agent": "${{ agent }}", "model": "${{ inputs.model }}"}},
+     "use": "agent_in_space", "with": {"space": "${{ steps.space.outputs.id }}", "agent": "${{ agent }}", "model": "${{ inputs.agent_model }}"}},
 
     {"id": "install", "name": "Install, test and serve the app", "timeout": "20m", "retry": {"attempts": 1},
      "sandbox": {
@@ -92,7 +93,7 @@
      }},
     {"id": "healthy", "name": "Wait until it answers", "wait": {
        "action": "spaces.sandbox_exec",
-       "with": {"space": "${{ steps.space.outputs.id }}", "command": "curl -fsS http://127.0.0.1:${{ vars.port }}/healthz || true"},
+       "with": {"space": "${{ steps.space.outputs.id }}", "command": "python3 -c \"import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:${{ vars.port }}/healthz', timeout=3).read().decode())\" 2>&1 || true"},
        "until": "contains(result.output, '\"ok\": true')", "interval": "5s", "timeout": "3m"}},
 
     {"id": "welcome", "name": "A welcome note, written by a model", "continue_on_error": true,
@@ -101,9 +102,10 @@
     {"id": "announce", "if": "${{ steps.welcome.status == 'succeeded' }}", "action": "spaces.message_send",
      "with": {"space": "${{ steps.space.outputs.id }}", "body": "${{ steps.welcome.outputs.text }}\n\nPreview: ${{ steps.install.outputs.proxy.url }}"}},
 
-    {"id": "frontend", "name": "Publish as the platform's frontend", "if": "${{ inputs.publish_frontend }}", "continue_on_error": true,
-     "action": "developer.platform_frontend_publish",
-     "with": {"org": "${{ steps.org.outputs.id }}", "proxy": "${{ steps.install.outputs.proxy.proxy_id }}"}},
+    {"id": "frontend", "name": "Ask the Builder agent for the platform's frontend", "if": "${{ inputs.build_frontend }}",
+     "timeout": "30m", "continue_on_error": true, "action": "spaces.ask",
+     "with": {"space": "${{ steps.space.outputs.id }}", "bot": "${{ find(steps.agents.outputs, 'name', 'Builder').id }}",
+              "body": "Build the frontend of the ${{ inputs.product }} platform: start it with appui_create (audience platform), wire it to Concierge, use the booking API in /workspace/${{ vars.app_dir }} as its backend, test it, appui_publish it, then platform_publish it."}},
 
     {"assert": [
       {"that": "${{ len(steps.agents.outputs) == len(inputs.agents) }}", "message": "every agent is in the project"},

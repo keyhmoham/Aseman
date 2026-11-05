@@ -1917,35 +1917,25 @@ func (r *runner) sandbox(ctx context.Context, sc *scope, s *Step, path string, r
 	}
 
 	if b.Start {
-		r.event("info", path, "waking the computer of space "+space)
-		if _, err := r.call(ctx, path, "spaces.sandbox_start", map[string]any{"space": space}); err != nil {
+		if err := r.startComputer(ctx, path, space); err != nil {
 			return nil, err
-		}
-		deadline := r.opts.Now().Add(5 * time.Minute)
-		for {
-			st, err := r.call(ctx, path, "spaces.sandbox_status", map[string]any{"space": space})
-			if err != nil {
-				return nil, err
-			}
-			if ToString(getPath(st, "status")) == "running" {
-				break
-			}
-			if r.opts.Now().After(deadline) {
-				return nil, &StepError{Path: path, Code: "timeout", Message: "the computer did not start within 5m"}
-			}
-			if err := r.opts.Sleep(ctx, 3*time.Second); err != nil {
-				return nil, err
-			}
 		}
 	}
 	if b.Clean && root != "" {
-		if _, err := r.fileOp(ctx, path, space, map[string]any{"operation": "delete", "path": abs("")}, true); err != nil {
+		// rm -rf: the first run has nothing to clean yet. The root is a
+		// non-empty folder under /workspace (cleaned of ".." above).
+		res, err := r.call(ctx, path, "spaces.sandbox_exec", map[string]any{"space": space, "command": "rm -rf -- " + shellQuote(abs("")) + "; echo \"" + exitMarker + "$?\""})
+		if err != nil {
 			return nil, err
+		}
+		if m := exitRe.FindStringSubmatch(ToString(getPath(res, "output"))); m != nil && m[1] != "0" {
+			return nil, &StepError{Path: path, Code: "failed", Message: "could not clean " + abs("")}
 		}
 	}
 	modes := map[string]string{}
 	for i, f := range files {
-		req := map[string]any{"space": space, "operation": "write", "path": abs(f.path), "wake": true}
+		// sandbox_files paths are relative to /workspace.
+		req := map[string]any{"space": space, "operation": "write", "path": pathpkg.Join(root, f.path), "wake": true}
 		if f.text != nil {
 			req["content"] = *f.text
 		} else {
@@ -2056,9 +2046,20 @@ func (r *runner) sandbox(ctx context.Context, sc *scope, s *Step, path string, r
 }
 
 func (r *runner) fileOp(ctx context.Context, path, space string, req map[string]any, tolerateMissing bool) (any, error) {
+	req["space"] = space
 	res, err := r.call(ctx, path, "spaces.sandbox_files", req)
 	if err != nil {
 		return nil, err
+	}
+	// A project whose computer was never started has nowhere to write: start
+	// it, once, and try again.
+	if m, ok := res.(map[string]any); ok && Truthy(m["asleep"]) && !Truthy(m["needs_wake"]) {
+		if err := r.startComputer(ctx, path, space); err != nil {
+			return nil, err
+		}
+		if res, err = r.call(ctx, path, "spaces.sandbox_files", req); err != nil {
+			return nil, err
+		}
 	}
 	if m, ok := res.(map[string]any); ok {
 		if okv, has := m["ok"]; has && !Truthy(okv) {
@@ -2069,6 +2070,30 @@ func (r *runner) fileOp(ctx context.Context, path, space string, req map[string]
 		}
 	}
 	return res, nil
+}
+
+// startComputer wakes a space's computer and waits until it runs.
+func (r *runner) startComputer(ctx context.Context, path, space string) error {
+	r.event("info", path, "waking the computer of space "+space)
+	if _, err := r.call(ctx, path, "spaces.sandbox_start", map[string]any{"space": space}); err != nil {
+		return err
+	}
+	deadline := r.opts.Now().Add(5 * time.Minute)
+	for {
+		st, err := r.call(ctx, path, "spaces.sandbox_status", map[string]any{"space": space})
+		if err != nil {
+			return err
+		}
+		if ToString(getPath(st, "status")) == "running" {
+			return nil
+		}
+		if r.opts.Now().After(deadline) {
+			return &StepError{Path: path, Code: "timeout", Message: "the computer did not start within 5m"}
+		}
+		if err := r.opts.Sleep(ctx, 3*time.Second); err != nil {
+			return err
+		}
+	}
 }
 
 func sortedKeysString(m map[string]string) []string {

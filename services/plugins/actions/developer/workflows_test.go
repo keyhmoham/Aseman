@@ -166,7 +166,7 @@ func TestWorkflowInstallerOnTheDeveloperHost(t *testing.T) {
 			t.Fatalf("every call acts as the person behind the key: %v", fake.callers)
 		}
 	}
-	if fake.files["/workspace/app/main.py"] != "print('hi')" || !strings.Contains(fake.commands[0], "export DB_PASSWORD='hunter2-very-secret'") {
+	if fake.files["app/main.py"] != "print('hi')" || !strings.Contains(fake.commands[0], "export DB_PASSWORD='hunter2-very-secret'") {
 		t.Fatalf("install: %v %v", fake.files, fake.commands)
 	}
 	// The secret is in neither the stored run nor the request log.

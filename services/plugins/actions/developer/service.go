@@ -83,6 +83,10 @@ type Service struct {
 	compMu     sync.Mutex
 	compActMu  sync.Mutex
 	compActive map[string]int
+
+	// wfRuns cancels the workflows running on this node, by org/run id.
+	wfMu   sync.Mutex
+	wfRuns map[string]context.CancelFunc
 }
 
 // SandboxType is the kind of machine computers are: what the node's sandbox

@@ -77,6 +77,8 @@ func main() {
 		runGet("auth/whoami", args)
 	case "lead":
 		runLead(args)
+	case "workflow", "workflows":
+		runWorkflow(args)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n", cmd)
 		usage()
@@ -112,6 +114,8 @@ Commands:
   logs [limit=N]              Recent system logs (admin)
   nodes                       List federation nodes
   lead setup|run|questions|answer  Manage the built-in project lead
+  workflow validate|plan|run|runs|get|cancel|schema  The workflow installer
+                             (aseman workflow help)
 
 Flags (global):
   --server <url>   Node API URL (default http://localhost:8080)

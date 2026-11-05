@@ -1,0 +1,1151 @@
+{
+  "$defs": {
+    "check": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "description": "a ${{ expression }} or text holding some",
+          "type": "string"
+        },
+        "that": {
+          "description": "a boolean, a bare expression, or ${{ … }}",
+          "type": [
+            "boolean",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "that"
+      ],
+      "type": "object"
+    },
+    "file": {
+      "additionalProperties": false,
+      "properties": {
+        "$raw": {},
+        "asset": {
+          "type": "string"
+        },
+        "base64": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "json": {},
+        "mode": {
+          "pattern": "^[0-7]{3,4}$",
+          "type": "string"
+        },
+        "template": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "step": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "action"
+          ]
+        },
+        {
+          "required": [
+            "upsert"
+          ]
+        },
+        {
+          "required": [
+            "model"
+          ]
+        },
+        {
+          "required": [
+            "sandbox"
+          ]
+        },
+        {
+          "required": [
+            "wait"
+          ]
+        },
+        {
+          "required": [
+            "set"
+          ]
+        },
+        {
+          "required": [
+            "assert"
+          ]
+        },
+        {
+          "required": [
+            "log"
+          ]
+        },
+        {
+          "required": [
+            "sleep"
+          ]
+        },
+        {
+          "required": [
+            "fail"
+          ]
+        },
+        {
+          "required": [
+            "steps"
+          ]
+        },
+        {
+          "required": [
+            "use"
+          ]
+        }
+      ],
+      "properties": {
+        "action": {
+          "pattern": "^[a-z0-9_-]+\\.[a-z0-9_]+$",
+          "type": "string"
+        },
+        "as": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "type": "string"
+        },
+        "assert": {
+          "oneOf": [
+            {
+              "description": "a boolean, a bare expression, or ${{ … }}",
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "items": {
+                "oneOf": [
+                  {
+                    "description": "a boolean, a bare expression, or ${{ … }}",
+                    "type": [
+                      "boolean",
+                      "string"
+                    ]
+                  },
+                  {
+                    "$ref": "#/$defs/check"
+                  }
+                ]
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "collect": {},
+        "compensate": {
+          "$ref": "#/$defs/step"
+        },
+        "concurrency": {
+          "maximum": 16,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "continue_on_error": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "export": {
+          "additionalProperties": {},
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "type": "object"
+        },
+        "fail": {},
+        "for_each": {},
+        "id": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "type": "string"
+        },
+        "if": {
+          "description": "a boolean, a bare expression, or ${{ … }}",
+          "type": [
+            "boolean",
+            "string"
+          ]
+        },
+        "index_as": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "type": "string"
+        },
+        "log": {},
+        "model": {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "description": "an object, or one ${{ expression }} that is one",
+              "type": [
+                "object",
+                "string"
+              ]
+            },
+            "type": {
+              "enum": [
+                "chat",
+                "embeddings",
+                "image",
+                "speech",
+                "transcription",
+                "rerank",
+                "decision"
+              ]
+            }
+          },
+          "required": [
+            "body"
+          ],
+          "type": "object"
+        },
+        "name": {
+          "type": "string"
+        },
+        "on_error": {
+          "items": {
+            "$ref": "#/$defs/step"
+          },
+          "type": "array"
+        },
+        "outputs": {},
+        "parallel": {
+          "type": "boolean"
+        },
+        "plan": {
+          "enum": [
+            "run",
+            "skip"
+          ]
+        },
+        "retry": {
+          "additionalProperties": false,
+          "properties": {
+            "attempts": {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "backoff": {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "number"
+            },
+            "delay": {
+              "description": "30s, 5m, 1h30m, or seconds",
+              "oneOf": [
+                {
+                  "pattern": "^\\s*(\\d+(\\.\\d+)?|(\\d+(\\.\\d+)?(ns|us|µs|ms|s|m|h))+)\\s*$",
+                  "type": "string"
+                },
+                {
+                  "minimum": 0,
+                  "type": "number"
+                }
+              ]
+            },
+            "max_delay": {
+              "description": "30s, 5m, 1h30m, or seconds",
+              "oneOf": [
+                {
+                  "pattern": "^\\s*(\\d+(\\.\\d+)?|(\\d+(\\.\\d+)?(ns|us|µs|ms|s|m|h))+)\\s*$",
+                  "type": "string"
+                },
+                {
+                  "minimum": 0,
+                  "type": "number"
+                }
+              ]
+            },
+            "on": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "attempts"
+          ],
+          "type": "object"
+        },
+        "sandbox": {
+          "additionalProperties": false,
+          "properties": {
+            "assets": {
+              "type": "string"
+            },
+            "clean": {
+              "type": "boolean"
+            },
+            "env": {
+              "type": "object"
+            },
+            "exec": {
+              "oneOf": [
+                {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "object"
+                        },
+                        "expect": {
+                          "type": "string"
+                        },
+                        "ignore_exit": {
+                          "type": "boolean"
+                        },
+                        "run": {
+                          "type": "string"
+                        },
+                        "workdir": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "run"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                },
+                {
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "env": {
+                            "type": "object"
+                          },
+                          "expect": {
+                            "type": "string"
+                          },
+                          "ignore_exit": {
+                            "type": "boolean"
+                          },
+                          "run": {
+                            "type": "string"
+                          },
+                          "workdir": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "run"
+                        ],
+                        "type": "object"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "expect": {
+              "type": "string"
+            },
+            "files": {
+              "additionalProperties": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/file"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "proxy": {
+              "type": "object"
+            },
+            "render": {
+              "type": "boolean"
+            },
+            "root": {
+              "type": "string"
+            },
+            "space": {
+              "type": "string"
+            },
+            "start": {
+              "type": "boolean"
+            },
+            "workdir": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "space"
+          ],
+          "type": "object"
+        },
+        "sensitive": {
+          "type": "boolean"
+        },
+        "set": {
+          "additionalProperties": {},
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "type": "object"
+        },
+        "sleep": {
+          "description": "30s, 5m, 1h30m, or seconds",
+          "oneOf": [
+            {
+              "pattern": "^\\s*(\\d+(\\.\\d+)?|(\\d+(\\.\\d+)?(ns|us|µs|ms|s|m|h))+)\\s*$",
+              "type": "string"
+            },
+            {
+              "minimum": 0,
+              "type": "number"
+            }
+          ]
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/step"
+          },
+          "type": "array"
+        },
+        "timeout": {
+          "description": "30s, 5m, 1h30m, or seconds",
+          "oneOf": [
+            {
+              "pattern": "^\\s*(\\d+(\\.\\d+)?|(\\d+(\\.\\d+)?(ns|us|µs|ms|s|m|h))+)\\s*$",
+              "type": "string"
+            },
+            {
+              "minimum": 0,
+              "type": "number"
+            }
+          ]
+        },
+        "upsert": {
+          "additionalProperties": false,
+          "anyOf": [
+            {
+              "required": [
+                "resource"
+              ]
+            },
+            {
+              "required": [
+                "define"
+              ]
+            }
+          ],
+          "properties": {
+            "create_with": {
+              "description": "an object, or one ${{ expression }} that is one",
+              "type": [
+                "object",
+                "string"
+              ]
+            },
+            "define": {
+              "additionalProperties": false,
+              "properties": {
+                "compare": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "create": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "action": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "item": {
+                      "type": "string"
+                    },
+                    "items": {
+                      "type": "string"
+                    },
+                    "page": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "limit": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "limit_field": {
+                          "type": "string"
+                        },
+                        "max_pages": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "offset_field": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "with": {}
+                  },
+                  "required": [
+                    "action"
+                  ],
+                  "type": "object"
+                },
+                "delete": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "action": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "item": {
+                      "type": "string"
+                    },
+                    "items": {
+                      "type": "string"
+                    },
+                    "page": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "limit": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "limit_field": {
+                          "type": "string"
+                        },
+                        "max_pages": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "offset_field": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "with": {}
+                  },
+                  "required": [
+                    "action"
+                  ],
+                  "type": "object"
+                },
+                "find": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "action": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "item": {
+                      "type": "string"
+                    },
+                    "items": {
+                      "type": "string"
+                    },
+                    "page": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "limit": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "limit_field": {
+                          "type": "string"
+                        },
+                        "max_pages": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "offset_field": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "with": {}
+                  },
+                  "required": [
+                    "action"
+                  ],
+                  "type": "object"
+                },
+                "match": {
+                  "type": "object"
+                },
+                "record_id": {
+                  "type": "string"
+                },
+                "update": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "action": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "item": {
+                      "type": "string"
+                    },
+                    "items": {
+                      "type": "string"
+                    },
+                    "page": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "limit": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "limit_field": {
+                          "type": "string"
+                        },
+                        "max_pages": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "offset_field": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "with": {}
+                  },
+                  "required": [
+                    "action"
+                  ],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            },
+            "match": {
+              "type": "object"
+            },
+            "mode": {
+              "enum": [
+                "upsert",
+                "ensure",
+                "update",
+                "create"
+              ]
+            },
+            "resource": {
+              "enum": [
+                "agent",
+                "app",
+                "computer",
+                "key",
+                "member",
+                "org",
+                "platform",
+                "proxy",
+                "room",
+                "space",
+                "space_bot",
+                "theme"
+              ]
+            },
+            "rollback": {
+              "type": "boolean"
+            },
+            "skip_unchanged": {
+              "type": "boolean"
+            },
+            "update_with": {
+              "description": "an object, or one ${{ expression }} that is one",
+              "type": [
+                "object",
+                "string"
+              ]
+            },
+            "with": {
+              "description": "an object, or one ${{ expression }} that is one",
+              "type": [
+                "object",
+                "string"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "use": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "type": "string"
+        },
+        "wait": {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "type": "string"
+            },
+            "interval": {
+              "description": "30s, 5m, 1h30m, or seconds",
+              "oneOf": [
+                {
+                  "pattern": "^\\s*(\\d+(\\.\\d+)?|(\\d+(\\.\\d+)?(ns|us|µs|ms|s|m|h))+)\\s*$",
+                  "type": "string"
+                },
+                {
+                  "minimum": 0,
+                  "type": "number"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "30s, 5m, 1h30m, or seconds",
+              "oneOf": [
+                {
+                  "pattern": "^\\s*(\\d+(\\.\\d+)?|(\\d+(\\.\\d+)?(ns|us|µs|ms|s|m|h))+)\\s*$",
+                  "type": "string"
+                },
+                {
+                  "minimum": 0,
+                  "type": "number"
+                }
+              ]
+            },
+            "until": {
+              "description": "a boolean, a bare expression, or ${{ … }}",
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "with": {}
+          },
+          "required": [
+            "action",
+            "until"
+          ],
+          "type": "object"
+        },
+        "with": {}
+      },
+      "type": "object"
+    }
+  },
+  "$id": "https://raw.githubusercontent.com/keyhmoham/Aseman/main/docs/workflows/workflow.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One document that brings up a product on Aseman through the developer API. See docs/WORKFLOWS.md.",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "aseman_workflow": {
+      "const": "1"
+    },
+    "assets": {
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "required": [
+                  "content"
+                ]
+              },
+              {
+                "required": [
+                  "base64"
+                ]
+              },
+              {
+                "required": [
+                  "json"
+                ]
+              }
+            ],
+            "properties": {
+              "base64": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "json": {},
+              "mime": {
+                "type": "string"
+              },
+              "mode": {
+                "pattern": "^[0-7]{3,4}$",
+                "type": "string"
+              },
+              "template": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          }
+        ]
+      },
+      "type": "object"
+    },
+    "defaults": {
+      "additionalProperties": false,
+      "properties": {
+        "continue_on_error": {
+          "type": "boolean"
+        },
+        "retry": {
+          "additionalProperties": false,
+          "properties": {
+            "attempts": {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "backoff": {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "number"
+            },
+            "delay": {
+              "description": "30s, 5m, 1h30m, or seconds",
+              "oneOf": [
+                {
+                  "pattern": "^\\s*(\\d+(\\.\\d+)?|(\\d+(\\.\\d+)?(ns|us|µs|ms|s|m|h))+)\\s*$",
+                  "type": "string"
+                },
+                {
+                  "minimum": 0,
+                  "type": "number"
+                }
+              ]
+            },
+            "max_delay": {
+              "description": "30s, 5m, 1h30m, or seconds",
+              "oneOf": [
+                {
+                  "pattern": "^\\s*(\\d+(\\.\\d+)?|(\\d+(\\.\\d+)?(ns|us|µs|ms|s|m|h))+)\\s*$",
+                  "type": "string"
+                },
+                {
+                  "minimum": 0,
+                  "type": "number"
+                }
+              ]
+            },
+            "on": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "attempts"
+          ],
+          "type": "object"
+        },
+        "timeout": {
+          "description": "30s, 5m, 1h30m, or seconds",
+          "oneOf": [
+            {
+              "pattern": "^\\s*(\\d+(\\.\\d+)?|(\\d+(\\.\\d+)?(ns|us|µs|ms|s|m|h))+)\\s*$",
+              "type": "string"
+            },
+            {
+              "minimum": 0,
+              "type": "number"
+            }
+          ]
+        },
+        "with": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "description": {
+      "type": "string"
+    },
+    "finally": {
+      "items": {
+        "$ref": "#/$defs/step"
+      },
+      "type": "array"
+    },
+    "inputs": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "default": {},
+          "description": {
+            "type": "string"
+          },
+          "enum": {
+            "type": "array"
+          },
+          "max": {
+            "type": "number"
+          },
+          "min": {
+            "type": "number"
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "sensitive": {
+            "type": "boolean"
+          },
+          "type": {
+            "enum": [
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "object",
+              "list",
+              "array",
+              "any"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "on_failure": {
+      "items": {
+        "$ref": "#/$defs/step"
+      },
+      "type": "array"
+    },
+    "options": {
+      "additionalProperties": false,
+      "properties": {
+        "max_steps": {
+          "maximum": 5000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "org": {
+          "type": "string"
+        },
+        "rollback_on_failure": {
+          "type": "boolean"
+        },
+        "stamp_platform": {
+          "type": "boolean"
+        },
+        "timeout": {
+          "description": "30s, 5m, 1h30m, or seconds",
+          "oneOf": [
+            {
+              "pattern": "^\\s*(\\d+(\\.\\d+)?|(\\d+(\\.\\d+)?(ns|us|µs|ms|s|m|h))+)\\s*$",
+              "type": "string"
+            },
+            {
+              "minimum": 0,
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "outputs": {
+      "type": "object"
+    },
+    "secrets": {
+      "oneOf": [
+        {
+          "items": {
+            "oneOf": [
+              {
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                    "type": "string"
+                  },
+                  "required": {
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/step"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "templates": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "outputs": {},
+          "params": {
+            "additionalProperties": {
+              "additionalProperties": false,
+              "properties": {
+                "default": {},
+                "description": {
+                  "type": "string"
+                },
+                "enum": {
+                  "type": "array"
+                },
+                "max": {
+                  "type": "number"
+                },
+                "min": {
+                  "type": "number"
+                },
+                "pattern": {
+                  "type": "string"
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "sensitive": {
+                  "type": "boolean"
+                },
+                "type": {
+                  "enum": [
+                    "string",
+                    "number",
+                    "integer",
+                    "boolean",
+                    "object",
+                    "list",
+                    "array",
+                    "any"
+                  ]
+                }
+              },
+              "type": "object"
+            },
+            "propertyNames": {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            },
+            "type": "object"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/$defs/step"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "steps"
+        ],
+        "type": "object"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "vars": {
+      "additionalProperties": {},
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "type": "object"
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "aseman_workflow",
+    "name",
+    "steps"
+  ],
+  "title": "Aseman workflow installer",
+  "type": "object"
+}

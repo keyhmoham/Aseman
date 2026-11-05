@@ -335,6 +335,7 @@ func BuildActions(s *Service) []api.Action {
 		}
 		return s.VideoStatus(ctx, &job)
 	})
+	s.workflowActions(scoped)
 	// The node admin's view across every organization (read-only).
 	admin := func(name, summary string, fn func(ctx context.Context, in map[string]json.RawMessage) (any, error)) {
 		add(name, summary, func(ctx context.Context, _ identity.ID, req *api.ActionRequest, in map[string]json.RawMessage) (any, error) {

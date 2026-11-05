@@ -1,0 +1,131 @@
+{
+  "$schema": "./workflow.schema.json",
+  "aseman_workflow": "1",
+  "name": "acme-bookings",
+  "description": "Brings up the Acme Bookings product: a team organization with its sub-platform and server key, a project with its agents and app, and a full-stack web app installed, built, tested and served on the project's computer.",
+  "version": "1.0.0",
+
+  "inputs": {
+    "product":   {"type": "string", "default": "Acme Bookings", "min": 3, "max": 40},
+    "team":      {"type": "list", "default": [], "description": "Handles to invite as developers"},
+    "model":     {"type": "string", "default": "openai/gpt-5-mini", "description": "A model of the developer API's catalog (GET /v1/models), for the welcome note"},
+    "agent_model": {"type": "string", "default": "", "description": "The agents' model, as the node's providers name it; empty: the node's default"},
+    "agents": {"type": "list", "default": [
+      {"name": "Builder", "description": "Builds and maintains the app", "instructions": "You build and maintain the Acme Bookings app in /workspace/apps."},
+      {"name": "Concierge", "description": "Answers customers", "instructions": "You help customers book a table. Be brief and friendly."}
+    ]},
+    "build_frontend": {"type": "boolean", "default": false, "description": "Ask the Builder agent to build and publish the platform's frontend (an app the space's agents build is the only kind a platform can publish)"}
+  },
+  "secrets": {
+    "SESSION_SECRET": {"description": "Signs the app's session cookies", "required": true}
+  },
+
+  "vars": {
+    "slug":    "${{ slug(inputs.product) }}",
+    "app_dir": "apps/${{ vars.slug }}",
+    "port":    8080
+  },
+
+  "defaults": {
+    "retry":   {"attempts": 3, "delay": "2s", "backoff": 2, "max_delay": "30s"},
+    "timeout": "5m"
+  },
+  "options": {"rollback_on_failure": true, "timeout": "45m", "stamp_platform": false},
+
+  "assets": {
+    "app/server.py": {"mode": "0755", "content": "import json, os\nfrom http.server import BaseHTTPRequestHandler, HTTPServer\n\nBOOKINGS = []\n\nclass Handler(BaseHTTPRequestHandler):\n    def _send(self, code, body, kind='application/json'):\n        data = body if isinstance(body, bytes) else json.dumps(body).encode()\n        self.send_response(code)\n        self.send_header('Content-Type', kind)\n        self.end_headers()\n        self.wfile.write(data)\n\n    def do_GET(self):\n        if self.path == '/healthz':\n            return self._send(200, {'ok': True})\n        if self.path == '/api/bookings':\n            return self._send(200, BOOKINGS)\n        name = 'index.html' if self.path in ('/', '') else self.path.lstrip('/')\n        path = os.path.join(os.path.dirname(__file__), 'public', name)\n        if not os.path.isfile(path):\n            return self._send(404, {'error': 'not found'})\n        kind = 'text/html' if name.endswith('.html') else 'application/javascript'\n        with open(path, 'rb') as f:\n            return self._send(200, f.read(), kind)\n\n    def do_POST(self):\n        if self.path != '/api/bookings':\n            return self._send(404, {'error': 'not found'})\n        length = int(self.headers.get('Content-Length', 0))\n        BOOKINGS.append(json.loads(self.rfile.read(length) or b'{}'))\n        return self._send(201, BOOKINGS[-1])\n\nif __name__ == '__main__':\n    HTTPServer(('0.0.0.0', int(os.environ.get('PORT', '8080'))), Handler).serve_forever()\n"},
+    "app/test_server.py": "import json, threading, urllib.request\nfrom http.server import HTTPServer\nimport server\n\ndef test_bookings():\n    httpd = HTTPServer(('127.0.0.1', 0), server.Handler)\n    threading.Thread(target=httpd.serve_forever, daemon=True).start()\n    base = 'http://127.0.0.1:%d' % httpd.server_address[1]\n    req = urllib.request.Request(base + '/api/bookings', data=json.dumps({'name': 'Ada'}).encode(), method='POST')\n    assert urllib.request.urlopen(req).status == 201\n    assert json.load(urllib.request.urlopen(base + '/api/bookings'))[0]['name'] == 'Ada'\n    httpd.shutdown()\n\nif __name__ == '__main__':\n    test_bookings()\n    print('1 passed')\n",
+    "app/public/index.html": {"template": true, "content": "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>${{ inputs.product }}</title></head>\n<body><h1>${{ inputs.product }}</h1>\n<form id=\"book\"><input name=\"name\" placeholder=\"Your name\" required><button>Book a table</button></form>\n<ul id=\"list\"></ul><script src=\"app.js\"></script></body></html>\n"},
+    "app/public/app.js": "const list = document.getElementById('list');\nasync function load() {\n  const items = await (await fetch('api/bookings')).json();\n  list.innerHTML = items.map(b => `<li>${b.name}</li>`).join('');\n}\ndocument.getElementById('book').onsubmit = async (e) => {\n  e.preventDefault();\n  await fetch('api/bookings', {method: 'POST', body: JSON.stringify({name: e.target.name.value})});\n  e.target.reset();\n  load();\n};\nload();\n"
+  },
+
+  "templates": {
+    "agent_in_space": {
+      "description": "An agent, upserted by name and installed in a space",
+      "params": {
+        "space": {"type": "string", "required": true},
+        "agent": {"type": "object", "required": true},
+        "model": {"type": "string", "default": ""}
+      },
+      "steps": [
+        {"id": "agent", "upsert": {"resource": "agent", "with": "${{ params.model ? merge(object('model', params.model), params.agent) : params.agent }}"}},
+        {"id": "member", "upsert": {"resource": "space_bot", "with": {"space": "${{ params.space }}", "bot": "${{ steps.agent.outputs.id }}"}}}
+      ],
+      "outputs": {"id": "${{ steps.agent.outputs.id }}", "name": "${{ params.agent.name }}", "operation": "${{ steps.agent.outputs.operation }}"}
+    }
+  },
+
+  "steps": [
+    {"id": "org", "name": "Team organization", "upsert": {"resource": "org", "with": {"name": "${{ inputs.product }}"}}},
+    {"id": "team", "name": "Invite the team", "for_each": "${{ inputs.team }}", "as": "handle",
+     "upsert": {"resource": "member", "with": {"org": "${{ steps.org.outputs.id }}", "handle": "${{ handle }}", "role": "developer"}}},
+    {"id": "platform", "name": "Sub-platform", "upsert": {"resource": "platform",
+     "with": {"org": "${{ steps.org.outputs.id }}", "name": "${{ inputs.product }}", "slug": "${{ vars.slug }}"}}},
+    {"id": "server_key", "name": "The app server's API key", "sensitive": true, "upsert": {"resource": "key", "mode": "ensure",
+     "with": {"org": "${{ steps.org.outputs.id }}", "name": "${{ vars.slug }}-server",
+              "permissions": {"models": "read", "chat": "write", "platform": "write"}, "limits": {"rpm": 300}}}},
+
+    {"id": "space", "name": "The project", "upsert": {"resource": "space",
+     "with": {"name": "${{ inputs.product }}", "description": "Where ${{ inputs.product }} is built and run"}}},
+    {"id": "rooms", "for_each": ["Engineering", "Support"], "as": "room",
+     "upsert": {"resource": "room", "with": {"space": "${{ steps.space.outputs.id }}", "name": "${{ room }}"}}},
+    {"id": "agents", "name": "Agents", "for_each": "${{ inputs.agents }}", "as": "agent", "concurrency": 2,
+     "use": "agent_in_space", "with": {"space": "${{ steps.space.outputs.id }}", "agent": "${{ agent }}", "model": "${{ inputs.agent_model }}"}},
+
+    {"id": "install", "name": "Install, test and serve the app", "timeout": "20m", "retry": {"attempts": 1},
+     "sandbox": {
+       "space": "${{ steps.space.outputs.id }}",
+       "start": true,
+       "root": "${{ vars.app_dir }}",
+       "clean": true,
+       "assets": "app/",
+       "files": {
+         ".env": "PORT=${{ vars.port }}\nSESSION_SECRET=${{ secrets.SESSION_SECRET }}\n",
+         "aseman.json": {"json": {"product": "${{ inputs.product }}", "agents": "${{ map(steps.agents.outputs, 'name') }}", "platform": "${{ vars.slug }}"}}
+       },
+       "render": true,
+       "env": {"PORT": "${{ vars.port }}"},
+       "exec": [
+         "python3 --version",
+         {"run": "python3 test_server.py", "expect": "1 passed"}
+       ],
+       "proxy": {"port": "${{ vars.port }}", "title": "${{ inputs.product }}", "start": "cd /workspace/${{ vars.app_dir }} && python3 server.py"}
+     }},
+    {"id": "healthy", "name": "Wait until it answers", "wait": {
+       "action": "spaces.sandbox_exec",
+       "with": {"space": "${{ steps.space.outputs.id }}", "command": "python3 -c \"import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:${{ vars.port }}/healthz', timeout=3).read().decode())\" 2>&1 || true"},
+       "until": "contains(result.output, '\"ok\": true')", "interval": "5s", "timeout": "3m"}},
+
+    {"id": "welcome", "name": "A welcome note, written by a model", "continue_on_error": true,
+     "model": {"type": "chat", "body": {"model": "${{ inputs.model }}", "max_tokens": 120,
+       "messages": [{"role": "user", "content": "Write a two-sentence welcome for the team building ${{ inputs.product }}."}]}}},
+    {"id": "announce", "if": "${{ steps.welcome.status == 'succeeded' }}", "action": "spaces.message_send",
+     "with": {"space": "${{ steps.space.outputs.id }}", "body": "${{ steps.welcome.outputs.text }}\n\nPreview: ${{ steps.install.outputs.proxy.url }}"}},
+
+    {"id": "frontend", "name": "Ask the Builder agent for the platform's frontend", "if": "${{ inputs.build_frontend }}",
+     "timeout": "30m", "continue_on_error": true, "action": "spaces.ask",
+     "with": {"space": "${{ steps.space.outputs.id }}", "bot": "${{ find(steps.agents.outputs, 'name', 'Builder').id }}",
+              "body": "Build the frontend of the ${{ inputs.product }} platform: start it with appui_create (audience platform), wire it to Concierge, use the booking API in /workspace/${{ vars.app_dir }} as its backend, test it, appui_publish it, then platform_publish it."}},
+
+    {"assert": [
+      {"that": "${{ len(steps.agents.outputs) == len(inputs.agents) }}", "message": "every agent is in the project"},
+      {"that": "${{ not_empty(steps.install.outputs.proxy.url) }}", "message": "the app has a preview address"}
+    ]}
+  ],
+
+  "on_failure": [
+    {"log": "Install failed at ${{ failure.path }}: ${{ failure.message }}"}
+  ],
+  "finally": [
+    {"log": "${{ run.workflow }} ${{ outcome.status }} (run ${{ run.id }})"}
+  ],
+
+  "outputs": {
+    "org": "${{ steps.org.outputs.id }}",
+    "platform": "${{ steps.platform.outputs.id }}",
+    "space": "${{ steps.space.outputs.id }}",
+    "agents": "${{ steps.agents.outputs }}",
+    "preview": "${{ steps.install.outputs.proxy.url }}",
+    "server_key_created": "${{ steps.server_key.outputs.created }}"
+  }
+}

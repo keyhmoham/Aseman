@@ -1,5 +1,49 @@
 # Changelog
 
+## Unreleased: the workflow installer
+
+- **One document brings up a whole product.** The developer API runs a JSON
+  workflow (`aseman_workflow: "1"`) that calls the platform's actions in
+  order: upsert the organization, its members, sub-platform and keys (from
+  the console), spaces, rooms, agents and apps and install them in spaces,
+  write a full-stack app's source onto a space's computer, run its build and
+  tests (a non-zero exit fails the step), serve it, wait until it answers,
+  call models, and publish the platform's frontend. `docs/WORKFLOWS.md`;
+  example `docs/workflows/fullstack-product.json`.
+- **Doors.** `POST /v1/workflows/validate|plan|runs`, `GET /v1/workflows/runs[/{id}]`,
+  `POST /v1/workflows/runs/{id}/cancel`, `GET /v1/workflows/reference` with a
+  key (platform permission; acts as the key's person, stamped with the
+  org's platform, held to the key's permissions); console actions
+  `developer.workflow_*` as the signed-in person.
+- **The format.** Typed inputs, secrets (never stored), vars, assets,
+  templates with params, `${{ }}` expressions with ~90 functions and
+  lambdas, `if`, `for_each` (with concurrency), parallel groups, `wait`,
+  `assert`, retries with backoff, timeouts, `continue_on_error`, `on_error`,
+  `on_failure`, `finally`, and rollback (`compensate`, and deleting what
+  upserts created). Twelve built-in upsert resources, or `define` your own.
+- **Tooling.** A JSON Schema (`docs/workflows/workflow.schema.json`,
+  `GET /v1/workflows/schema`), `aseman workflow …` in the CLI (either door,
+  secrets from the environment, `--assets` ships a local source tree, live
+  follow), and **Developer API → Build → Workflows** in the app.
+- **A guide for models.** `docs/workflows/AUTHORING.md` — how to write a
+  rich, professional workflow: what to decide first, the phases, the rules
+  the engine enforces, patterns, a complete example, how to read a failed
+  run, and a checklist. Served as `GET /v1/workflows/guide`
+  (`developer.workflow_guide`, `aseman workflow guide`, the console's
+  Writing guide); a test keeps its examples valid.
+- **Proven on a node.** `ASEMAN_WORKFLOW_E2E=1 go test ./internal/plugins/host -run WorkflowE2E`
+  runs the example end to end on a whole node.
+- **Several nodes.** Runs keep a heartbeat, are counted and cancelled
+  through the store, and read `interrupted` when their node stops.
+- **Safe to run again.** Upserts find before they create and skip unchanged
+  updates; plans dry-run with real reads; `resume_from` continues a failed
+  run with the same document and inputs. Runs are stored
+  (`dev_workflow_runs`) with redacted reports; the request log never holds a
+  workflow's body. A synchronous call answers `202` before a proxy would
+  give up.
+- **Fix:** calls through `POST /v1/platform/{namespace}/{action}` now carry
+  the acting person in the context, as every in-process caller does.
+
 ## Unreleased: agent-built platform frontends, wired to the space for real
 
 - **A platform's frontend.** An organization owner or admin publishes an app

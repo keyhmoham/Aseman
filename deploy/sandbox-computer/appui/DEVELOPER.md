@@ -21,6 +21,7 @@ reaches the developer API only through routes of your own server.
 | An app of the space (its microtools) | **the app** (`call`), not the developer API |
 | A model call no agent is meant for (embeddings, a cheap classifier, a summary of your own data) | `developer.chat(...)` / `developer.request("embeddings", …)` |
 | The platform's own product surface: its accounts, their spaces, rooms, agents, apps, posts, wallets… | `developer.platform(namespace, action, body)` — `POST /v1/platform/{namespace}/{action}`, as the person |
+| Bringing up (or repeating) a whole setup in one go: spaces, agents and apps installed in them, software written to a computer and served, checked | a **workflow installer**: `POST /v1/workflows/runs` with one JSON document (idempotent: a rerun changes only what differs). Before writing one, read `GET /v1/workflows/guide` — how to write it well — and check it with `POST /v1/workflows/validate` |
 
 `developer.catalog()` lists every action the platform collection offers (node
 administration is never in it). Entities you create through it are stamped

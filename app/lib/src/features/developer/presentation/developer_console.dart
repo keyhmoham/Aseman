@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
+
+import 'package:file_selector/file_selector.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,6 +22,7 @@ import '../../tools/elpian_app/elpian_app_view.dart';
 
 part 'developer_pages.dart';
 part 'developer_platform.dart';
+part 'developer_workflows.dart';
 
 /// Where the developer API answers, set at build time
 /// (`--dart-define=DEVELOPER_API_BASE=https://api.example.com/v1`). Empty
@@ -113,6 +117,11 @@ class _DeveloperConsoleState extends State<DeveloperConsole> {
           'Every non-admin action for a full Aseman client',
           Icons.hub_outlined,
           Icons.hub_rounded),
+      _DevPage(
+          'Workflows',
+          'Install a whole product from one JSON document',
+          Icons.account_tree_outlined,
+          Icons.account_tree_rounded),
     ]),
   ];
 
@@ -220,6 +229,8 @@ class _DeveloperConsoleState extends State<DeveloperConsole> {
           service: widget.service,
           org: org),
       ('4', '1') => _Platform(service: widget.service),
+      ('4', '2') => _Workflows(
+          key: ValueKey('workflows$org'), service: widget.service, org: org),
       _ => const SizedBox.shrink(),
     };
   }

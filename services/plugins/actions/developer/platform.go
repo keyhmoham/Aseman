@@ -144,7 +144,7 @@ func (s *Service) apiPlatformCall(ctx context.Context, p *Principal, req *networ
 			"platform_id": platformID,
 		},
 	}
-	resp, err := s.K.Actions().Dispatch(ctx, ns, action, ar)
+	resp, err := s.K.Actions().Dispatch(helper.WithActor(ctx, actor), ns, action, ar)
 	if err != nil {
 		return nil, 0, err
 	}

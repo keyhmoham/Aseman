@@ -65,7 +65,7 @@ func botPreset(kind, summary string, editable ...string) Preset {
 		quoted[i] = "'" + f + "'"
 	}
 	return Preset{Summary: summary, ResourceDef: ResourceDef{
-		Find:    &Call{Action: "bots.bot_list", With: map[string]any{"limit": 200.0}, Items: "bots"},
+		Find:    &Call{Action: "bots.bot_list", Items: "bots", Page: &Page{}},
 		Match:   map[string]any{"name": "${{ params.name }}", "kind": kind},
 		Create:  &Call{Action: "bots.bot_create", With: "${{ merge(omit(params, 'avatar'), object('kind', '" + kind + "')) }}", ID: "bot_id"},
 		Update:  &Call{Action: "bots.bot_edit", With: "${{ merge(pick(params, " + strings.Join(quoted, ", ") + "), object('bot', id)) }}"},
@@ -77,7 +77,7 @@ func botPreset(kind, summary string, editable ...string) Preset {
 // Presets are the built-in resources.
 var Presets = map[string]Preset{
 	"space": {Summary: "A space (project) the person belongs to, by name. with: name, description, metadata, bots, avatar.", ResourceDef: ResourceDef{
-		Find:    &Call{Action: "spaces.space_list", With: map[string]any{"kind": "all", "limit": 200.0}, Items: "spaces"},
+		Find:    &Call{Action: "spaces.space_list", With: map[string]any{"kind": "all"}, Items: "spaces", Page: &Page{}},
 		Match:   map[string]any{"name": "${{ params.name }}"},
 		Create:  &Call{Action: "spaces.space_create", With: "${{ pick(params, 'name', 'description', 'metadata', 'bots') }}", ID: "space_id"},
 		Update:  &Call{Action: "spaces.space_update", With: "${{ merge(pick(params, 'name', 'description', 'avatar'), object('space', id)) }}"},
@@ -85,7 +85,7 @@ var Presets = map[string]Preset{
 		Compare: []string{"name", "description", "avatar"},
 	}},
 	"room": {Summary: "A room of a space, by name. with: space, name, topic, purpose, icon, color.", ResourceDef: ResourceDef{
-		Find:    &Call{Action: "spaces.room_list", With: map[string]any{"space": "${{ params.space }}", "limit": 200.0}, Items: "rooms"},
+		Find:    &Call{Action: "spaces.room_list", With: map[string]any{"space": "${{ params.space }}"}, Items: "rooms", Page: &Page{}},
 		Match:   map[string]any{"name": "${{ params.name }}"},
 		Create:  &Call{Action: "spaces.room_create", With: "${{ params }}", ID: "room_id"},
 		Update:  &Call{Action: "spaces.room_update", With: "${{ merge(pick(params, 'name', 'topic', 'purpose', 'icon', 'color'), object('room', id)) }}"},

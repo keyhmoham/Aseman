@@ -1,5 +1,5 @@
 {
-  "$schema": "https://aseman.dev/schemas/workflow/v1.json",
+  "$schema": "./workflow.schema.json",
   "aseman_workflow": "1",
   "name": "acme-bookings",
   "description": "Brings up the Acme Bookings product: a team organization with its sub-platform and server key, a project with its agents and app, and a full-stack web app installed, built, tested and served on the project's computer.",

@@ -30,9 +30,13 @@ import (
 // MaxActiveWorkflows is how many runs one organization may have going at once.
 const MaxActiveWorkflows = 3
 
-// workflowStale is how long a run may go without saving progress before a
-// reader takes it for interrupted (its node stopped).
-const workflowStale = 15 * time.Minute
+// A running workflow's node saves a heartbeat this often, and looks for a
+// cancel another node asked for; a run whose heartbeat is older than
+// workflowStale is taken for interrupted (its node stopped).
+var (
+	workflowHeartbeat = 20 * time.Second
+	workflowStale     = 2 * time.Minute
+)
 
 // WorkflowRequest asks to validate, plan or run a workflow.
 type WorkflowRequest struct {
@@ -438,18 +442,14 @@ func (s *Service) StartWorkflow(ctx context.Context, a wfActor, in WorkflowReque
 			a.org, a.orgRef = sc.Org, wf.Options.Org
 		}
 	}
-	mu, active := s.wfActive()
-	mu.Lock()
-	running := 0
-	for id := range active {
-		if strings.HasPrefix(id, a.org.String()+"/") {
-			running++
-		}
+	running, err := s.activeWorkflows(ctx, a.org)
+	if err != nil {
+		return nil, err
 	}
-	mu.Unlock()
 	if running >= MaxActiveWorkflows {
 		return nil, errs.Conflict("this organization already has " + strconv.Itoa(running) + " workflows running; wait for one to finish or cancel it")
 	}
+	mu, active := s.wfActive()
 
 	id, err := s.newID()
 	if err != nil {
@@ -478,40 +478,66 @@ func (s *Service) StartWorkflow(ctx context.Context, a wfActor, in WorkflowReque
 	caller := &wfCaller{s: s, a: a, runID: id.String(), stamp: a.key != nil || wf.Options.StampPlatform}
 	var saveMu sync.Mutex
 	lastSave := time.Time{}
-	save := func(rep *workflow.Report, final bool) {
+	var lastRep *workflow.Report
+	// save writes the run's progress; heartbeat-only saves (rep nil) just
+	// say the run is alive.
+	save := func(rep *workflow.Report, final, force bool) {
 		saveMu.Lock()
 		defer saveMu.Unlock()
-		if !final && s.now().Sub(lastSave) < 2*time.Second {
+		if rep != nil {
+			lastRep = rep
+		}
+		if !final && !force && s.now().Sub(lastSave) < 2*time.Second {
 			return
 		}
 		lastSave = s.now()
-		b, _ := json.Marshal(rep)
 		r := rec
-		r.Report = string(b)
+		if lastRep != nil {
+			b, _ := json.Marshal(lastRep)
+			r.Report = string(b)
+		}
 		r.UpdatedAt = s.now()
-		if final {
-			r.Status, r.Error, r.FinishedAt = rep.Status, rep.Error, rep.FinishedAt
+		if final && lastRep != nil {
+			r.Status, r.Error, r.FinishedAt = lastRep.Status, lastRep.Error, lastRep.FinishedAt
 		}
 		if err := s.R.Update(context.WithoutCancel(ctx), "dev_workflow_runs", id, r); err != nil {
 			s.L.Warn("developer: saving a workflow run", "run", id.String(), "error", err)
 		}
-		if final {
-			rec = r
-		}
+		rec = r
 	}
+	heartbeat := workflowHeartbeat
 	exec := func() *workflow.Report {
+		done := make(chan struct{})
 		defer func() {
+			close(done)
 			mu.Lock()
 			delete(active, runKey)
 			mu.Unlock()
 			cancel()
+			_ = s.R.Delete(context.WithoutCancel(ctx), "dev_workflow_cancels", id)
+		}()
+		go func() {
+			tick := time.NewTicker(heartbeat)
+			defer tick.Stop()
+			for {
+				select {
+				case <-done:
+					return
+				case <-tick.C:
+					var asked models.WorkflowCancel
+					if s.R.Get(context.WithoutCancel(ctx), "dev_workflow_cancels", id, &asked) == nil {
+						cancel()
+					}
+					save(nil, false, true)
+				}
+			}
 		}()
 		rep := workflow.Run(runCtx, wf, caller, wfCatalog{s: s, a: a}, workflow.Options{
 			Mode: mode, Inputs: in.Inputs, Secrets: in.Secrets, Resume: resume, ErrorCode: workflowErrorCode,
 			Now: s.now, Run: map[string]any{"id": id.String(), "org": a.org.String(), "actor": a.handle, "via": map[bool]string{true: "api_key", false: "console"}[a.key != nil]},
-			OnProgress: func(rep *workflow.Report) { save(rep, false) },
+			OnProgress: func(rep *workflow.Report) { save(rep, false, false) },
 		})
-		save(rep, true)
+		save(rep, true, true)
 		return rep
 	}
 	if in.Async {
@@ -531,6 +557,15 @@ func (s *Service) StartWorkflow(ctx context.Context, a wfActor, in WorkflowReque
 	return &view, nil
 }
 
+// activeWorkflows counts an organization's runs that are alive on any node.
+func (s *Service) activeWorkflows(ctx context.Context, org identity.ID) (int, error) {
+	n, err := s.R.Count(ctx, "dev_workflow_runs", database.Filter{
+		Equal:       map[string]any{"org_id": org.String(), "status": workflow.StatusRunning},
+		GreaterThan: map[string]any{"updated_at": s.now().Add(-workflowStale)},
+	})
+	return int(n), err
+}
+
 // resumable is what a previous run finished: its top-level steps' outputs.
 func resumable(p *models.WorkflowRun) map[string]any {
 	var rep workflow.Report
@@ -539,7 +574,10 @@ func resumable(p *models.WorkflowRun) map[string]any {
 	}
 	out := map[string]any{}
 	for _, st := range rep.Steps {
-		if st.ID != "" && st.Path == st.ID && (st.Status == workflow.StatusSucceeded || st.Status == workflow.StatusReused) {
+		// A step whose stored outputs had secrets hidden runs again: its
+		// redacted outputs are not what later steps need.
+		if st.ID != "" && st.Path == st.ID && (st.Status == workflow.StatusSucceeded || st.Status == workflow.StatusReused) &&
+			st.Request != "(sensitive)" && !workflow.HasRedacted(st.Outputs) {
 			out[st.ID] = st.Outputs
 		}
 	}
@@ -611,7 +649,7 @@ func (s *Service) WorkflowRun(ctx context.Context, org identity.ID, ref string) 
 
 // CancelWorkflow stops a running workflow; what it already did stays (or is
 // rolled back, when the workflow asks for that).
-func (s *Service) CancelWorkflow(ctx context.Context, org identity.ID, ref string) (*WorkflowRunView, error) {
+func (s *Service) CancelWorkflow(ctx context.Context, org, by identity.ID, ref string) (*WorkflowRunView, error) {
 	rec, err := s.loadWorkflowRun(ctx, org, ref)
 	if err != nil {
 		return nil, err
@@ -620,9 +658,18 @@ func (s *Service) CancelWorkflow(ctx context.Context, org identity.ID, ref strin
 	mu.Lock()
 	cancel, live := active[org.String()+"/"+rec.ID.String()]
 	mu.Unlock()
+	asked := false
 	switch {
 	case live:
 		cancel()
+	case rec.Status == workflow.StatusRunning && s.now().Sub(rec.UpdatedAt) <= workflowStale:
+		// Another node runs it: ask it, through the store, on its heartbeat.
+		c := models.WorkflowCancel{OrgID: org, By: by}
+		c.ID, c.CreatedAt, c.UpdatedAt = rec.ID, s.now(), s.now()
+		if err := s.R.EnsureCreated(ctx, "dev_workflow_cancels", rec.ID, c); err != nil {
+			return nil, err
+		}
+		asked = true
 	case rec.Status == workflow.StatusRunning:
 		// Its node stopped: nothing is running it any more.
 		rec.Status, rec.Error, rec.FinishedAt, rec.UpdatedAt = workflow.StatusCancelled, "cancelled after the run was interrupted", s.now(), s.now()
@@ -633,7 +680,7 @@ func (s *Service) CancelWorkflow(ctx context.Context, org identity.ID, ref strin
 		return nil, errs.Conflict("this run is already " + rec.Status)
 	}
 	v := s.workflowView(ctx, *rec, false)
-	if live {
+	if live || asked {
 		v.Status = "cancelling"
 	}
 	return &v, nil
@@ -731,16 +778,19 @@ func (s *Service) workflowActions(scoped func(name, summary string, fn func(ctx 
 		_ = json.Unmarshal(in["id"], &id)
 		return s.WorkflowRun(ctx, sc.Org, id)
 	})
-	scoped("workflow_run_cancel", "Cancel a running workflow", func(ctx context.Context, _ identity.ID, sc Scope, in map[string]json.RawMessage) (any, error) {
+	scoped("workflow_run_cancel", "Cancel a running workflow", func(ctx context.Context, caller identity.ID, sc Scope, in map[string]json.RawMessage) (any, error) {
 		if err := sc.Require("resources"); err != nil {
 			return nil, err
 		}
 		var id string
 		_ = json.Unmarshal(in["id"], &id)
-		return s.CancelWorkflow(ctx, sc.Org, id)
+		return s.CancelWorkflow(ctx, sc.Org, caller, id)
 	})
 	scoped("workflow_reference", "The workflow format: step kinds, built-in resources and functions", func(context.Context, identity.ID, Scope, map[string]json.RawMessage) (any, error) {
 		return WorkflowReference(), nil
+	})
+	scoped("workflow_schema", "The workflow format as a JSON Schema, for editors", func(context.Context, identity.ID, Scope, map[string]json.RawMessage) (any, error) {
+		return workflow.JSONSchema(), nil
 	})
 }
 
@@ -794,6 +844,9 @@ func (s *Service) apiWorkflows() []route {
 		get("/workflows/reference", s.resource(res, r, svc, func(context.Context, *Principal, *network.Request) (any, int, error) {
 			return WorkflowReference(), http.StatusOK, nil
 		})),
+		get("/workflows/schema", s.resource(res, r, svc, func(context.Context, *Principal, *network.Request) (any, int, error) {
+			return workflow.JSONSchema(), http.StatusOK, nil
+		})),
 		post("/workflows/validate", s.resourceLogged(res, r, svc, false, start("validate"))),
 		post("/workflows/plan", s.resourceLogged(res, w, svc, false, start(workflow.ModePlan))),
 		post("/workflows/runs", s.resourceLogged(res, w, svc, false, start(""))),
@@ -807,7 +860,7 @@ func (s *Service) apiWorkflows() []route {
 			return v, http.StatusOK, err
 		})),
 		post("/workflows/runs/{id}/cancel", s.resource(res, w, svc, func(ctx context.Context, p *Principal, req *network.Request) (any, int, error) {
-			v, err := s.CancelWorkflow(ctx, p.Org, param(req, "id"))
+			v, err := s.CancelWorkflow(ctx, p.Org, p.Key.CreatedBy, param(req, "id"))
 			return v, http.StatusOK, err
 		})),
 	}

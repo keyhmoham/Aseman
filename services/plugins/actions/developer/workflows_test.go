@@ -10,6 +10,7 @@ import (
 
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/plugins/actions/developer/models"
+	"github.com/aseman/aseman/plugins/actions/developer/workflow"
 	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
 	"github.com/aseman/aseman/plugins/adapters/network/ports"
@@ -197,6 +198,9 @@ func TestWorkflowInstallerOnTheDeveloperHost(t *testing.T) {
 	if !strings.Contains(jsonString(got["report"]), `"operation":"unchanged"`) {
 		t.Fatalf("a rerun leaves what exists alone: %s", jsonString(got["report"]))
 	}
+	if resp, schema := f.door(t, network.MethodGet, "/workflows/schema", secret, ""); resp.Status != 200 || schema["$id"] != workflow.SchemaID {
+		t.Fatalf("schema: %d", resp.Status)
+	}
 	_, list := f.door(t, network.MethodGet, "/workflows/runs", secret, "")
 	if data, _ := list["data"].([]any); len(data) != 3 {
 		t.Fatalf("list: %v", list)
@@ -273,5 +277,74 @@ func TestWorkflowFromTheConsole(t *testing.T) {
 	runs, _ := call("workflow_runs", map[string]any{})
 	if l, _ := runs["runs"].([]any); len(l) != 2 {
 		t.Fatalf("runs: %v", runs)
+	}
+}
+
+func TestWorkflowCancelFromAnotherNode(t *testing.T) {
+	f := harness(t)
+	fake := &fakeSpaces{}
+	fake.register(t, f)
+	defer func(h time.Duration) { workflowHeartbeat = h }(workflowHeartbeat)
+	workflowHeartbeat = 5 * time.Millisecond
+	started := make(chan struct{}, 1)
+	if err := f.s.K.Actions().Register("spaces", helper.Action{Namespace: "spaces", Name: "block", Handler: func(ctx context.Context, _ *api.ActionRequest) (*api.ActionResponse, error) {
+		started <- struct{}{}
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	_, secret := f.key(t, f.personal(t), KeyInput{Name: "w", Permissions: Permissions{Platform: LevelWrite}})
+	doc := `{"aseman_workflow":"1","name":"long","steps":[{"id":"b","action":"spaces.block"}]}`
+	body := runBody(t, doc, map[string]any{"async": true})
+	ids := []string{}
+	for i := 0; i < MaxActiveWorkflows; i++ {
+		resp, out := f.door(t, network.MethodPost, "/workflows/runs", secret, body)
+		if resp.Status != 202 {
+			t.Fatalf("start %d: %d %s", i, resp.Status, resp.Body)
+		}
+		ids = append(ids, out["id"].(string))
+		<-started
+	}
+	if resp, _ := f.door(t, network.MethodPost, "/workflows/runs", secret, body); resp.Status != 409 {
+		t.Fatalf("a fourth run at once is refused: %d", resp.Status)
+	}
+	// Pretend the first run is on another node: this one no longer holds it.
+	mu, active := f.s.wfActive()
+	mu.Lock()
+	var key string
+	for k := range active {
+		if strings.HasSuffix(k, ids[0]) {
+			key = k
+		}
+	}
+	elsewhere := active[key]
+	delete(active, key)
+	mu.Unlock()
+	defer elsewhere()
+	resp, out := f.door(t, network.MethodPost, "/workflows/runs/"+ids[0]+"/cancel", secret, "")
+	if resp.Status != 200 || out["status"] != "cancelling" {
+		t.Fatalf("cancel: %d %v", resp.Status, out)
+	}
+	for _, id := range ids[1:] {
+		f.door(t, network.MethodPost, "/workflows/runs/"+id+"/cancel", secret, "")
+	}
+	for _, id := range ids {
+		var got map[string]any
+		for i := 0; i < 500; i++ {
+			_, got = f.door(t, network.MethodGet, "/workflows/runs/"+id, secret, "")
+			if got["status"] != "running" {
+				break
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		if got["status"] != "cancelled" {
+			t.Fatalf("run %s: %v", id, got["status"])
+		}
+	}
+	var asks []models.WorkflowCancel
+	_ = f.s.R.List(f.ctx, "dev_workflow_cancels", database.Filter{}, &asks)
+	if len(asks) != 0 {
+		t.Fatalf("a cancel request is cleared with its run: %v", asks)
 	}
 }

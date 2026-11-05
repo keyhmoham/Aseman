@@ -196,6 +196,14 @@ type WorkflowRun struct {
 	FinishedAt  time.Time `db:"finished_at" json:"finished_at,omitempty"`
 }
 
+// WorkflowCancel asks the node running a workflow to stop it: its id is the
+// run's. Any node may write it; the running one reads it on its heartbeat.
+type WorkflowCancel struct {
+	entity.Entity
+	OrgID identity.ID `db:"org_id" json:"org_id"`
+	By    identity.ID `db:"by" json:"by"`
+}
+
 // Member is a person in an organization.
 type Member struct {
 	entity.Entity
@@ -401,6 +409,10 @@ func Models() []database.Model {
 			f("mode", database.KindString), fi("status", database.KindString), f("error", database.KindString),
 			f("definition", database.KindString), f("report", database.KindString), f("resumed_from", database.KindString),
 			f("started_at", database.KindTime), f("finished_at", database.KindTime),
+			f("created_at", database.KindTime), f("updated_at", database.KindTime),
+		}},
+		{Name: "dev_workflow_cancels", Table: "dev_workflow_cancels", Fields: []database.Field{
+			f("id", database.KindString), f("org_id", database.KindString), f("by", database.KindString),
 			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		}},
 		{Name: "dev_logs", Table: "dev_logs", Fields: []database.Field{

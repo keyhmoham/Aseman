@@ -330,6 +330,17 @@ type Call struct {
 	Item  string `json:"item,omitempty"`
 	// ID is the path of the new resource's id in a create's answer.
 	ID string `json:"id,omitempty"`
+	// Page makes a find read page after page until it finds a match or a
+	// page comes back empty.
+	Page *Page `json:"page,omitempty"`
+}
+
+// Page is how a find pages through a list action.
+type Page struct {
+	Limit       int    `json:"limit,omitempty"`        // default 200
+	MaxPages    int    `json:"max_pages,omitempty"`    // default 50
+	LimitField  string `json:"limit_field,omitempty"`  // default "limit"
+	OffsetField string `json:"offset_field,omitempty"` // default "offset"
 }
 
 // ModelStep calls a model through the developer API's router.

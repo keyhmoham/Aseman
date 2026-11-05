@@ -96,7 +96,12 @@ func (f *fakePlatform) Call(_ context.Context, action string, with map[string]an
 		f.spaces = out
 		return map[string]any{"ok": true}, nil
 	case "bots.bot_list":
-		return map[string]any{"bots": copyList(f.bots)}, nil
+		all := copyList(f.bots)
+		off, lim := int(num([]any{with["offset"]}, 0, 0)), int(num([]any{with["limit"]}, 0, 50))
+		if off > len(all) {
+			off = len(all)
+		}
+		return map[string]any{"bots": all[off:min(off+lim, len(all))]}, nil
 	case "bots.bot_create":
 		if s("name") == "" {
 			return nil, &codedErr{"invalid_argument", "a bot needs a name"}
@@ -703,5 +708,46 @@ func TestDocumentedExampleIsValid(t *testing.T) {
 	rep := Run(context.Background(), wf, newFake(), nil, Options{Mode: ModePlan, ErrorCode: codeOf, Inputs: map[string]any{"team": []any{"bob"}}})
 	if rep.Status != StatusPlanned {
 		t.Fatalf("plan: %s %s\n%s", rep.Status, rep.Error, dump(rep))
+	}
+}
+
+func TestUpsertFindsPastTheFirstPage(t *testing.T) {
+	f := newFake()
+	for i := 0; i < 450; i++ {
+		f.bots = append(f.bots, map[string]any{"id": fmt.Sprintf("b%d", i), "name": fmt.Sprintf("agent %d", i), "kind": "agent"})
+	}
+	doc := `{"aseman_workflow":"1","name":"p","steps":[{"id":"a","upsert":{"resource":"agent","mode":"ensure","with":{"name":"agent 420"}}}]}`
+	rep := run(t, f, doc, ModeRun, nil, nil)
+	if rep.Status != StatusSucceeded || step(rep, "a").Operation != "unchanged" || len(f.bots) != 450 {
+		t.Fatalf("%s %s %d", rep.Status, step(rep, "a").Operation, len(f.bots))
+	}
+	pages := 0
+	for _, c := range f.calls {
+		if c == "bots.bot_list" {
+			pages++
+		}
+	}
+	if pages != 3 {
+		t.Fatalf("pages read: %d", pages)
+	}
+}
+
+// docs/workflows/workflow.schema.json is JSONSchema() written out; run with
+// ASEMAN_WRITE_SCHEMA=1 to rewrite it.
+func TestSchemaFileIsCurrent(t *testing.T) {
+	const file = "../../../../../docs/workflows/workflow.schema.json"
+	want, err := json.MarshalIndent(JSONSchema(), "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = append(want, '\n')
+	if os.Getenv("ASEMAN_WRITE_SCHEMA") == "1" {
+		if err := os.WriteFile(file, want, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := os.ReadFile(file)
+	if err != nil || string(got) != string(want) {
+		t.Fatalf("%s is stale: run ASEMAN_WRITE_SCHEMA=1 go test ./plugins/actions/developer/workflow -run TestSchemaFileIsCurrent", file)
 	}
 }

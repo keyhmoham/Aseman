@@ -637,7 +637,11 @@ func (r *runner) closeRecord(rec *StepRecord, status string, outputs any, err er
 	rec.FinishedAt = r.opts.Now()
 	rec.DurationMs = rec.FinishedAt.Sub(rec.StartedAt).Milliseconds()
 	if outputs != nil {
-		rec.Outputs = r.redactor.value(outputs, 0)
+		if rec.Request == "(sensitive)" {
+			rec.Outputs = "(sensitive)"
+		} else {
+			rec.Outputs = r.redactor.value(outputs, 0)
+		}
 	}
 	if err != nil {
 		var se *StepError
@@ -1547,21 +1551,50 @@ func getPath(v any, p string) any {
 }
 
 func (r *runner) find(ctx context.Context, path string, def *ResourceDef, with, match map[string]any) (any, error) {
-	res, err := r.call(ctx, path, def.Find.Action, with)
-	if err != nil {
-		return nil, err
-	}
 	if def.Find.Item != "" {
+		res, err := r.call(ctx, path, def.Find.Action, with)
+		if err != nil {
+			return nil, err
+		}
 		item := getPath(res, def.Find.Item)
 		if item == nil || !matches(item, match) {
 			return nil, nil
 		}
 		return item, nil
 	}
+	pg := def.Find.Page
+	pages, limit := 1, 0
+	limitField, offsetField := "limit", "offset"
+	if pg != nil {
+		pages, limit = 50, 200
+		if pg.MaxPages > 0 {
+			pages = pg.MaxPages
+		}
+		if pg.Limit > 0 {
+			limit = pg.Limit
+		}
+		limitField, offsetField = firstNonEmpty(pg.LimitField, "limit"), firstNonEmpty(pg.OffsetField, "offset")
+	}
 	var hits []any
-	for _, rec := range list(getPath(res, def.Find.Items)) {
-		if matches(rec, match) {
-			hits = append(hits, rec)
+	for page := 0; page < pages; page++ {
+		req := with
+		if pg != nil {
+			req = mergeMaps(with, map[string]any{limitField: float64(limit), offsetField: float64(page * limit)})
+		}
+		res, err := r.call(ctx, path, def.Find.Action, req)
+		if err != nil {
+			return nil, err
+		}
+		records := list(getPath(res, def.Find.Items))
+		for _, rec := range records {
+			if matches(rec, match) {
+				hits = append(hits, rec)
+			}
+		}
+		// A page may come back short when the action filters what it read,
+		// so only an empty page (or a match) ends the search.
+		if pg == nil || len(hits) > 0 || len(records) == 0 {
+			break
 		}
 	}
 	if len(hits) > 1 {
@@ -2092,6 +2125,27 @@ func newRedactor(values []string) *redactor {
 }
 
 const redacted = "••••••"
+
+// HasRedacted reports whether a stored value had something hidden in it.
+func HasRedacted(v any) bool {
+	switch x := v.(type) {
+	case string:
+		return strings.Contains(x, redacted)
+	case []any:
+		for _, e := range x {
+			if HasRedacted(e) {
+				return true
+			}
+		}
+	case map[string]any:
+		for _, e := range x {
+			if HasRedacted(e) {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 var sensitiveKey = regexp.MustCompile(`(?i)(^|_)(secret|password|passwd|token|api_?key|private_?key|credentials?)$`)
 

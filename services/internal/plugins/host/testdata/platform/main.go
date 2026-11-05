@@ -83,6 +83,9 @@ func main() {
 	node := "http://" + addr
 	// The app's server (on "the computer", this machine) reaches the node here.
 	must(os.Setenv("ASEMAN_SANDBOX_APP_API_URL", node+"/appapi/v1"))
+	// The space's app (an MCP server) is in this process, on loopback: the
+	// operator's switch for private MCP addresses (off in production).
+	must(os.Setenv("ASEMAN_MCP_ALLOW_PRIVATE", "true"))
 	for _, name := range []string{"ASEMAN_LLM_BASE_URL", "ASEMAN_LLM_API_KEY", "ASEMAN_LLM_MODEL", "ASEMAN_IMAGE_MODEL"} {
 		must(os.Unsetenv(name))
 	}
@@ -105,6 +108,7 @@ func main() {
 	must(k.Register(computer))
 	must(k.Init(computer.Info().Name))
 	must(k.Start(computer.Info().Name))
+	_ = os.Remove("/usr/local/bin/aseman-appui") // a run that was killed
 	must(os.Symlink(filepath.Join(kit, "aseman-appui"), "/usr/local/bin/aseman-appui"))
 	defer os.Remove("/usr/local/bin/aseman-appui")
 	defer os.RemoveAll(workspace)
@@ -180,6 +184,9 @@ func main() {
 
 	_, err = k.LoadPlugin(ctx, filepath.Join(root, "bin/plugins/adapters/harness.so"), map[string]any{"options": map[string]string{"runtime_url": runtime.URL, "runtime_secret": "e2e-secret", "node_url": node}})
 	must(err)
+	// Connected apps (remote MCP servers) are logical VMs of the mcp adapter.
+	_, err = k.LoadPlugin(ctx, filepath.Join(root, "bin/plugins/adapters/mcp.so"), nil)
+	must(err)
 	_, err = k.LoadPlugin(ctx, filepath.Join(root, "bin/plugins/adapters/http.so"), map[string]any{"addr": addr})
 	must(err)
 	serveCtx, stopServing := context.WithCancel(ctx)
@@ -212,6 +219,37 @@ func main() {
 	must(bridge.Invoke(actor, k, "spaces", "AddBot", []any{actor, person.ID, studio.ID, identity.ID{}, pricingBot.AccountID}))
 	step("a person with a workspace: agents Builder and Advisor, the Pricing app (MCP)")
 
+	// The person answers what their agent asks approval for (the space's
+	// governance rules decide what needs it), once each, and keeps a record.
+	var approvedMu sync.Mutex
+	approved := []string{}
+	approving, stopApproving := context.WithCancel(ctx)
+	defer stopApproving()
+	go func() {
+		for approving.Err() == nil {
+			list, err := tryDispatch(approving, k, person.ID, "governance", "approval_list", map[string]any{"status": "pending"})
+			if err != nil {
+				time.Sleep(200 * time.Millisecond)
+				continue
+			}
+			rows, _ := list["approvals"].([]any)
+			for _, row := range rows {
+				a, _ := row.(map[string]any)
+				id, _ := a["id"].(string)
+				if id == "" {
+					continue
+				}
+				if _, err := tryDispatch(approving, k, person.ID, "governance", "approval_answer", map[string]any{"id": id, "answer": "once"}); err != nil {
+					continue
+				}
+				approvedMu.Lock()
+				approved = append(approved, fmt.Sprint(a["tool"]))
+				approvedMu.Unlock()
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+	}()
+
 	// The person asks; the Builder agent does the whole job with its tools.
 	var reply string
 	must(bridge.Invoke(actor, k, "spaces", "AskBot", []any{actor, studio.ID, builder.ID,
@@ -221,7 +259,11 @@ func main() {
 	check(strings.HasPrefix(reply, "LIVE "), "the builder's turn did not finish: %s", reply)
 	url := strings.TrimPrefix(reply, "LIVE ")
 	check(url == "/v1/platforms/acme/app/", "published at %q", url)
-	step("the Builder's turn published the platform at %s", url)
+	stopApproving()
+	approvedMu.Lock()
+	step("the Builder's turn published the platform at %s (the person approved: %s)", url, strings.Join(approved, ", "))
+	check(strings.Contains(strings.Join(approved, ","), "platform_publish"), "publishing the platform did not ask the person: %v", approved)
+	approvedMu.Unlock()
 
 	// What the person now owns, as the developer console shows it.
 	var orgs []map[string]any
@@ -478,12 +520,22 @@ func personOn(ctx context.Context, k api.Kernel, r *repo.Repo, handle, platformI
 }
 
 func dispatch(ctx context.Context, k api.Kernel, caller identity.ID, ns, action string, body map[string]any) map[string]any {
+	out, err := tryDispatch(ctx, k, caller, ns, action, body)
+	must(err)
+	return out
+}
+
+func tryDispatch(ctx context.Context, k api.Kernel, caller identity.ID, ns, action string, body map[string]any) (map[string]any, error) {
 	raw, _ := json.Marshal(body)
 	resp, err := k.Actions().Dispatch(helper.WithActor(ctx, caller), ns, action, &api.ActionRequest{Caller: api.Caller{ID: caller, Kind: "user"}, Body: raw})
-	must(err)
+	if err != nil {
+		return nil, err
+	}
 	var out map[string]any
-	must(json.Unmarshal(resp.Body, &out))
-	return out
+	if err := json.Unmarshal(resp.Body, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func request(c *http.Client, method, url string, body any) (int, string) {

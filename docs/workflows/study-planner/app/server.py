@@ -23,6 +23,7 @@ import planner
 HERE = os.path.dirname(os.path.abspath(__file__))
 PUBLIC = os.path.join(HERE, "public")
 PID = re.compile(r"^[a-zA-Z0-9_-]{8,64}$")
+ELPIAN = os.path.join(HERE, "elpian", "app.js")
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
          ".svg": "image/svg+xml", ".json": "application/json", ".png": "image/png", ".ico": "image/x-icon", ".webmanifest": "application/manifest+json"}
@@ -168,7 +169,7 @@ class App:
                     raise agent.AgentError("; ".join(errors))
             else:
                 out, log = agent.plan_with_agent(ctx, self.client.ask, self.cfg["rounds"], progress)
-                by = {"kind": "agent", "agent": "Planner", "space": self.cfg["space"], "bot": self.cfg["planner_bot"], "rounds": len(log)}
+                by = {"kind": "agent", "agent": self.cfg.get("planner_name") or "planner", "space": self.cfg["space"], "bot": self.cfg["planner_bot"], "rounds": len(log)}
             job["status"] = "saving"
             plan = planner.assemble(ctx, out, plan_id, dict(by, log=log))
             self.store.save_plan(job["profile"], plan)
@@ -255,11 +256,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, app.concerns)
         if len(api) >= 2 and api[0] == "jobs" and method == "GET":
             job = app.jobs.get(api[1])
-            if not job or job["profile"] != q.get("profile"):
+            if not job or job["profile"] != self.profile_id(q.get("profile") or ""):
                 return self.fail(404, "no such job")
             return self.send(200, {k: v for k, v in job.items() if k != "profile"})
         if len(api) >= 2 and api[0] == "profiles":
-            pid = api[1]
+            pid = self.profile_id(api[1])
             if not PID.match(pid):
                 return self.fail(400, "invalid profile id")
             rest = api[2:]
@@ -293,7 +294,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, x) if x else self.fail(404, "no such session")
         return self.fail(404, "not found")
 
+    def profile_id(self, pid):
+        """"me" is the Aseman person using the app (the Elpian frontend,
+        reached through the preview gateway, which names them)."""
+        if pid != "me":
+            return pid
+        who = re.sub(r"[^a-zA-Z0-9_-]", "", self.headers.get("X-Aseman-User") or "")[:56]
+        return "u_" + who if len(who) >= 4 else ""
+
     def static(self, path):
+        if path == "/elpian/app.js":
+            # The Elpian program, read on every request (the platform checks
+            # that what is served is the current bundle).
+            if not os.path.isfile(ELPIAN):
+                return self.fail(404, "the Elpian frontend is not built: node bundle.mjs .")
+            with open(ELPIAN, "rb") as f:
+                return self.send(200, f.read(), "application/javascript; charset=utf-8", "no-cache")
         if path in ("", "/"):
             path = "/index.html"
         full = os.path.normpath(os.path.join(PUBLIC, path.lstrip("/")))

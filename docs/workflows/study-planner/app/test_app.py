@@ -290,6 +290,25 @@ class Server(unittest.TestCase):
         reloaded = server.Store(self.tmp).db["profiles"][pid]["calendar"]
         self.assertTrue(next(x for d in reloaded.values() for x in d if x["id"] == some["id"])["done"])
 
+    def test_the_aseman_person_is_me(self):
+        req = urllib.request.Request(self.base + "/api/profiles/me", headers={"X-Aseman-User": "acc_42abc"})
+        self.assertEqual(json.load(urllib.request.urlopen(req)), {"exists": False})
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            self.get("/api/profiles/me")  # no person named by the gateway
+        self.assertEqual(e.exception.code, 400)
+        self.assertEqual(self.app.store.profile("u_acc_42abc"), None)
+
+    def test_elpian_bundle_is_served_as_is(self):
+        if not os.path.isfile(server.ELPIAN):
+            with self.assertRaises(urllib.error.HTTPError) as e:
+                urllib.request.urlopen(self.base + "/elpian/app.js")
+            self.assertEqual(e.exception.code, 404)
+            return
+        r = urllib.request.urlopen(self.base + "/elpian/app.js")
+        self.assertIn("javascript", r.headers["Content-Type"])
+        with open(server.ELPIAN, "rb") as f:
+            self.assertEqual(r.read(), f.read())
+
     def test_static_and_bad_ids(self):
         page = urllib.request.urlopen(self.base + "/").read().decode()
         self.assertIn('dir="rtl"', page)

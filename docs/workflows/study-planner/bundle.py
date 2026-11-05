@@ -12,8 +12,12 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 APP = os.path.join(HERE, "app")
 DOC = os.path.join(os.path.dirname(HERE), "study-planner.json")
-SKIP_DIRS = {"__pycache__", ".data", "node_modules"}
-SKIP_FILES = {"config.json"}
+SKIP_DIRS = {"__pycache__", ".data", "node_modules", ".aseman"}
+# Written on the project's computer, not shipped: the workflow writes the
+# settings (config.json, READY.json, APPS.json), the install step builds the
+# Elpian bundle, and the platform's checks leave their reports.
+SKIP_FILES = {"config.json", "READY.json", "APPS.json", "STATUS.json", "REPAIR.md", "WIRING.md", "verify.log", ".elpian-served.js"}
+SKIP_PATHS = {"elpian/app.js", "elpian/widget.js"}
 
 
 def assets():
@@ -21,10 +25,11 @@ def assets():
     for root, dirs, files in os.walk(APP):
         dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
         for name in sorted(files):
-            if name in SKIP_FILES or name.endswith((".pyc", ".tmp")):
-                continue
             path = os.path.join(root, name)
-            rel = "app/" + os.path.relpath(path, APP).replace(os.sep, "/")
+            inner = os.path.relpath(path, APP).replace(os.sep, "/")
+            if name in SKIP_FILES or inner in SKIP_PATHS or name.endswith((".pyc", ".tmp")):
+                continue
+            rel = "app/" + inner
             with open(path, encoding="utf-8") as f:
                 text = f.read()
             out[rel] = {"mode": "0755", "content": text} if os.access(path, os.X_OK) else text

@@ -22,10 +22,33 @@ the accepted plan into the student's calendar.
 | `agent_plan` | **proof**: `plan_tool.py e2e` asks the running app for a real plan and waits until the Planner agent has made it (`prove_agent`) |
 | `curate` | optional (`verify_curriculum`): the Curator checks the lists against chap.sch.ir and writes `curriculum.overrides.json`, which the app merges on every request |
 
-Run it from the console (it creates an organization and a key):
+| `elpian_app` | the **native Elpian frontend** opened on the project's desk: `appui_publish` (the platform bundles it, runs it on QuickJS against the server and replays its end-to-end scenarios first) (`elpian_frontend`) |
+
+## Install or update: `deploy.sh`
+
+One command installs the product on a node, or updates an install in place
+(the workflow converges: a rerun changes only what differs; the students'
+data and the key stay):
 
 ```bash
-aseman workflow validate docs/workflows/study-planner.json
+docs/workflows/study-planner/deploy.sh --server https://aseman.example.com
+```
+
+It bundles the app into the workflow, runs the app's tests, checks the
+Elpian frontend on QuickJS with its scenarios, signs in when there is no
+session (`--handle`, `$ASEMAN_PASSWORD`), validates on the node, shows the
+plan (what would be created, updated or left unchanged — first install or
+update), asks, runs and follows it, and keeps the run in `.deploy/` so a
+failed one resumes with `--resume`. `--plan` only shows the plan, `--yes`
+does not ask, and any input follows as `name=value`
+(`product=… agent_model=gpt-5-mini verify_curriculum=true`). `--dev-api` is
+the developer API as the project's computer reaches it (in the Docker
+stack: `http://aseman:8080/dev/v1`). It uses `aseman` from `PATH`, or builds
+it from `services/cmd/aseman`.
+
+The same by hand, from the console door (it creates an organization and a key):
+
+```bash
 aseman workflow plan docs/workflows/study-planner.json developer_api_url=https://aseman.example.com/dev/v1
 aseman workflow run  docs/workflows/study-planner.json developer_api_url=https://aseman.example.com/dev/v1
 ```
@@ -77,12 +100,36 @@ never depends on the agent.
   work, the plan (counsel, weekly table, donut, bars), the Jalali calendar,
   and the today page that shows the day's sessions from the calendar.
 
+- `elpian/` — the same product as a **native Elpian frontend** for the Aseman
+  client (phone, desktop, web): the same steps, screens, palette and
+  features, drawn as Flutter widgets from QuickJS. `src/util.js` (Persian
+  digits, a Jalali calendar — QuickJS has no `Intl`; `test/jalali.test.mjs`
+  checks it day by day against ICU for two centuries), `ui.js` (right-to-left
+  rows, the night-sky header, navigation), `data.js` (the server API, the
+  agent's job), `wizard.js`, `views.js` (today, calendar, plan), `main.js`
+  (the app and its phone widget: today's sessions and the next one). The
+  server serves the bundle at `GET /elpian/app.js`; requests through the
+  gateway name the Aseman person (`X-Aseman-User`), whose profile is `me`.
+  `e2e/*.json` are the journeys the platform replays before it opens the
+  app, written by `../elpian_scenarios.py` (the plan and the agent's job are
+  mocked there, so a check never costs a plan).
+
 Local development (no Aseman needed — `draft` mode plans without the agent):
 
 ```bash
 cd docs/workflows/study-planner/app
 python3 test_app.py
 PLANNER_MODE=draft PORT=8080 python3 server.py
+```
+
+The Elpian frontend, with the kit in `deploy/sandbox-computer/appui/elpian`
+(QuickJS from `cd deploy/tool-runtime && npm ci`):
+
+```bash
+KIT=../../../../deploy/sandbox-computer/appui/elpian
+node $KIT/bundle.mjs .
+node $KIT/check.mjs elpian/app.js --server http://127.0.0.1:8080
+node $KIT/drive.mjs run elpian/e2e --dir . --server http://127.0.0.1:8080
 ```
 
 After changing anything under `app/`, refresh the workflow's assets:

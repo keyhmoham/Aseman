@@ -27,10 +27,14 @@ func TestStudyPlannerWorkflowIsValid(t *testing.T) {
 	const app = "../../../../../docs/workflows/study-planner/app"
 	files := 0
 	err = filepath.WalkDir(app, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || strings.Contains(path, "__pycache__") || strings.Contains(path, ".data") || d.Name() == "config.json" {
+		if err != nil || d.IsDir() || strings.Contains(path, "__pycache__") || strings.Contains(path, ".data") || strings.Contains(path, ".aseman") {
 			return err
 		}
 		rel, _ := filepath.Rel(app, path)
+		switch filepath.ToSlash(rel) {
+		case "config.json", "READY.json", "APPS.json", "STATUS.json", "REPAIR.md", "WIRING.md", "verify.log", ".elpian-served.js", "elpian/app.js", "elpian/widget.js":
+			return nil // written on the project's computer (bundle.py skips them too)
+		}
 		key := "app/" + filepath.ToSlash(rel)
 		want, _ := os.ReadFile(path)
 		a, ok := wf.Assets[key]
@@ -48,7 +52,10 @@ func TestStudyPlannerWorkflowIsValid(t *testing.T) {
 	if rep.Status != StatusPlanned {
 		t.Fatalf("plan: %s %s\n%s", rep.Status, rep.Error, dump(rep))
 	}
-	if !strings.Contains(dump(rep), "Planner") {
-		t.Fatal("the plan does not make the Planner agent")
+	text := dump(rep)
+	for _, want := range []string{"Planner", "appui_publish", "READY.json"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("the plan has no %q", want)
+		}
 	}
 }

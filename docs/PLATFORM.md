@@ -171,6 +171,14 @@ Configured with `ASEMAN_DEVELOPER_HOST` / `DEVELOPER_DOMAIN`. On that host only:
 | Org metering | `/balance`, `/organization`, `/usage` |
 | Computers & storage | `/computers`, `/files`, … |
 | **Platform collection** | `GET /v1/platform`, `POST /v1/platform/{namespace}/{action}` |
+| **Workflow installer** | `POST /v1/workflows/{validate,plan,runs}`, `GET /v1/workflows/runs[/{id}]`, `…/cancel`, `GET /v1/workflows/reference` |
+
+The **workflow installer** runs one JSON document that brings up a whole
+product through those same actions, in order — organization, platform, keys
+(from the console), spaces, agents, apps, the full source of an app written,
+built and served on a space's computer — validated, planned (dry run) and
+idempotent, with retries, loops, templates and rollback. See
+[`WORKFLOWS.md`](WORKFLOWS.md).
 
 The platform collection exposes every registered **non-admin** product action (excludes `admin`, `developer`, and `admin_*`). Calls act as the **person who created the key**. If that key’s organization owns a sub-platform, new entities are stamped with that platform id.
 
@@ -473,7 +481,8 @@ Aseman and on a platform are two accounts.
 3. Point your client at the node API; register/login with `platform: "<slug>"`.
 4. Optionally use the developer host for models/computers and `POST /v1/platform/{ns}/{action}` for automation as the key creator.
 5. Or skip writing a client: have a space's agents build the frontend and publish it (§8.3).
-6. Ask the node admin to **Bridge to Aseman** only if you want shared discovery with the main app.
+6. Or describe the whole product as one workflow installer document and run it (`docs/WORKFLOWS.md`): every step above, repeatable.
+7. Ask the node admin to **Bridge to Aseman** only if you want shared discovery with the main app.
 
 ---
 

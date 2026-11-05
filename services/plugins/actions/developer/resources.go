@@ -73,6 +73,12 @@ func header(req *network.Request, name string) string {
 // resource serves an endpoint of a resource (computers, files): the key must
 // allow it, the answer is JSON, and the call is logged against the key.
 func (s *Service) resource(res, lvl, service string, fn func(ctx context.Context, p *Principal, req *network.Request) (any, int, error)) network.Handler {
+	return s.resourceLogged(res, lvl, service, true, fn)
+}
+
+// resourceLogged is resource; logBody false keeps the request out of the log
+// (for requests that carry secrets, like a workflow run's).
+func (s *Service) resourceLogged(res, lvl, service string, logBody bool, fn func(ctx context.Context, p *Principal, req *network.Request) (any, int, error)) network.Handler {
 	return func(ctx context.Context, req *network.Request) (*network.Response, error) {
 		return s.authenticated(req, func(p *Principal, _ map[string]string) *network.Response {
 			started := s.now()
@@ -93,7 +99,9 @@ func (s *Service) resource(res, lvl, service string, fn func(ctx context.Context
 				resp = jsonResponse(status, out, map[string]string{"X-Aseman-Request-Id": reqID})
 			}
 			request := ""
-			if len(req.Body) > 0 && strings.Contains(header(req, "Content-Type"), "json") {
+			if !logBody {
+				request = "(not logged)"
+			} else if len(req.Body) > 0 && strings.Contains(header(req, "Content-Type"), "json") {
 				request = clip(string(req.Body), 2000)
 			}
 			s.writeLog(context.WithoutCancel(ctx), models.Log{OrgID: p.Org.String(), KeyID: p.Key.ID.String(), KeyName: p.Key.Name, Service: service, Method: string(req.Method),

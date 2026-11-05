@@ -175,6 +175,27 @@ type FrontendApp struct {
 	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
+// WorkflowRun is one run (or plan) of a workflow installer. Secrets are never
+// stored; the report has them redacted.
+type WorkflowRun struct {
+	entity.Entity
+	OrgID     identity.ID `db:"org_id" json:"org_id"`
+	KeyID     string      `db:"key_id" json:"key_id,omitempty"`
+	CreatedBy identity.ID `db:"created_by" json:"created_by"`
+	Name      string      `db:"name" json:"name"`
+	Version   string      `db:"version" json:"version,omitempty"`
+	Mode      string      `db:"mode" json:"mode"`
+	Status    string      `db:"status" json:"status"`
+	Error     string      `db:"error" json:"error,omitempty"`
+	// Definition is the workflow document as it was given.
+	Definition string `db:"definition" json:"-"`
+	// Report is the JSON of the run's report.
+	Report      string    `db:"report" json:"-"`
+	ResumedFrom string    `db:"resumed_from" json:"resumed_from,omitempty"`
+	StartedAt   time.Time `db:"started_at" json:"started_at"`
+	FinishedAt  time.Time `db:"finished_at" json:"finished_at,omitempty"`
+}
+
 // Member is a person in an organization.
 type Member struct {
 	entity.Entity
@@ -373,6 +394,14 @@ func Models() []database.Model {
 			f("operation", database.KindString), f("status", database.KindString), f("seconds", database.KindInt64),
 			f("resolution", database.KindString), f("cost", database.KindInt64), f("error", database.KindString),
 			f("payee", database.KindString), f("created_at", database.KindTime), f("updated_at", database.KindTime),
+		}},
+		{Name: "dev_workflow_runs", Table: "dev_workflow_runs", Fields: []database.Field{
+			f("id", database.KindString), fi("org_id", database.KindString), f("key_id", database.KindString),
+			f("created_by", database.KindString), f("name", database.KindString), f("version", database.KindString),
+			f("mode", database.KindString), fi("status", database.KindString), f("error", database.KindString),
+			f("definition", database.KindString), f("report", database.KindString), f("resumed_from", database.KindString),
+			f("started_at", database.KindTime), f("finished_at", database.KindTime),
+			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		}},
 		{Name: "dev_logs", Table: "dev_logs", Fields: []database.Field{
 			f("id", database.KindString), fi("org_id", database.KindString), fi("key_id", database.KindString),

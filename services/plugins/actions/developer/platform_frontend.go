@@ -1,6 +1,6 @@
 package developer
 
-// A sub-platform's frontend: an app the agents of a space built (an Elpian or
+// A platform's frontend: an app the agents of a space built (an Elpian or
 // web App UI with its own backend, wired to the space's agents and apps),
 // published by an owner or admin of the organization as what the platform's
 // people open. The gateway serves it at /v1/platforms/<slug>/app/; an Aseman
@@ -124,15 +124,16 @@ func (s *Service) FrontendApps(ctx context.Context, sc Scope, caller identity.ID
 	return out, nil
 }
 
-// PublishFrontend makes the app behind preview [proxy] the platform's
-// frontend. The caller must be an owner or admin of the organization and a
+// PublishFrontend makes the app behind preview [proxy] the frontend of the
+// organization's platform [ref] (its id or slug; may be empty when the
+// organization has one platform). The caller must be an owner or admin of the organization and a
 // member of the app's space: the platform's use of that space's agents and
 // apps runs as, and is billed to, them.
-func (s *Service) PublishFrontend(ctx context.Context, sc Scope, caller identity.ID, proxyRef string) (PlatformView, error) {
+func (s *Service) PublishFrontend(ctx context.Context, sc Scope, caller identity.ID, ref, proxyRef string) (PlatformView, error) {
 	if err := canManageFrontend(sc); err != nil {
 		return PlatformView{}, err
 	}
-	p, err := s.PlatformOfOrg(ctx, sc.Org)
+	p, err := s.OrgPlatform(ctx, sc.Org, ref)
 	if err != nil {
 		return PlatformView{}, err
 	}
@@ -157,14 +158,14 @@ func (s *Service) PublishFrontend(ctx context.Context, sc Scope, caller identity
 	return platformView(*p), nil
 }
 
-// UnpublishFrontend takes the platform's frontend down.
-func (s *Service) UnpublishFrontend(ctx context.Context, sc Scope) (PlatformView, error) {
+// UnpublishFrontend takes platform [ref]'s frontend down.
+func (s *Service) UnpublishFrontend(ctx context.Context, sc Scope, ref string) (PlatformView, error) {
 	if err := canManageFrontend(sc); err != nil {
 		return PlatformView{}, err
 	}
-	p, err := s.PlatformOfOrg(ctx, sc.Org)
-	if err != nil || p == nil {
-		return PlatformView{}, errs.NotFound("platform")
+	p, err := s.mustOrgPlatform(ctx, sc.Org, ref)
+	if err != nil {
+		return PlatformView{}, err
 	}
 	p.FrontendProxyID, p.FrontendSpaceID, p.FrontendApp, p.FrontendTitle = "", "", "", ""
 	p.FrontendUI, p.FrontendEntry, p.FrontendWiring, p.FrontendBy = "", "", "", identity.ID{}

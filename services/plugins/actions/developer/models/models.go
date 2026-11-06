@@ -235,6 +235,10 @@ type Key struct {
 	// MonthKey is the calendar month (2026-10) MonthSpent counts.
 	MonthKey   string `db:"month_key" json:"month_key"`
 	MonthSpent int64  `db:"month_spent" json:"month_spent"`
+	// PlatformID binds the key to one of the organization's platforms: what
+	// it makes through the developer host joins that platform. Empty: the
+	// organization's only platform, if it has exactly one.
+	PlatformID string `db:"platform_id" json:"platform_id,omitempty"`
 }
 
 // Computer is a machine an organization runs: a VM at the node's sandbox
@@ -375,6 +379,7 @@ func Models() []database.Model {
 			f("permissions", database.KindString), f("limits", database.KindString), f("status", database.KindString),
 			f("created_by", database.KindString), f("last_used_at", database.KindTime), f("expires_at", database.KindTime),
 			f("requests", database.KindInt64), f("month_key", database.KindString), f("month_spent", database.KindInt64),
+			f("platform_id", database.KindString),
 			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		}},
 		{Name: "dev_computers", Table: "dev_computers", Fields: []database.Field{

@@ -1,11 +1,11 @@
-// Package tenancy is how product surfaces stay isolated across sub-platforms
+// Package tenancy is how product surfaces stay isolated across platforms
 // on one Aseman node. The empty platform id is main Aseman. A platform with
 // MainAccess (granted only by the node admin) may see main Aseman entities,
 // and main Aseman users may see that platform's — platforms never see each
 // other through the bridge.
 package tenancy
 
-// Main is the shared Aseman environment (no sub-platform).
+// Main is the shared Aseman environment (no platform).
 const Main = ""
 
 // Sees reports whether a viewer whose home is viewerPlatform may observe an

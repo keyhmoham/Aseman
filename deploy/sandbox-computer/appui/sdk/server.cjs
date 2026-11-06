@@ -56,7 +56,7 @@ function header(req, name) {
   return Array.isArray(v) ? v[0] : v || "";
 }
 
-// The sub-platform a request came through, when the app is a platform's
+// The platform a request came through, when the app is a platform's
 // frontend (X-Aseman-Platform*), else null.
 function platformOf(req) {
   const slug = header(req, "x-aseman-platform");
@@ -226,7 +226,7 @@ const Aseman = {
     });
   },
 
-  // The sub-platform [req] came through ({slug, id, name}), or null when the
+  // The platform [req] came through ({slug, id, name}), or null when the
   // app is not serving as a platform's frontend.
   platform: platformOf,
 
@@ -241,7 +241,7 @@ const Aseman = {
 
   // Express/Connect middleware: req.aseman acts for the person using the app
   // (absent for a visitor who has not signed in); req.asemanPlatform is the
-  // sub-platform the request came through, if any.
+  // platform the request came through, if any.
   middleware(opts = {}) {
     return (req, _res, next) => {
       req.asemanPlatform = platformOf(req);

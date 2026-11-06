@@ -2,7 +2,7 @@
   "$schema": "./workflow.schema.json",
   "aseman_workflow": "1",
   "name": "acme-bookings",
-  "description": "Brings up the Acme Bookings product: a team organization with its sub-platform and server key, a project with its agents and app, and a full-stack web app installed, built, tested and served on the project's computer.",
+  "description": "Brings up the Acme Bookings product: a team organization with its platform and server key, a project with its agents and app, and a full-stack web app installed, built, tested and served on the project's computer.",
   "version": "1.0.0",
 
   "inputs": {
@@ -59,7 +59,7 @@
     {"id": "org", "name": "Team organization", "upsert": {"resource": "org", "with": {"name": "${{ inputs.product }}"}}},
     {"id": "team", "name": "Invite the team", "for_each": "${{ inputs.team }}", "as": "handle",
      "upsert": {"resource": "member", "with": {"org": "${{ steps.org.outputs.id }}", "handle": "${{ handle }}", "role": "developer"}}},
-    {"id": "platform", "name": "Sub-platform", "upsert": {"resource": "platform",
+    {"id": "platform", "name": "Platform", "upsert": {"resource": "platform",
      "with": {"org": "${{ steps.org.outputs.id }}", "name": "${{ inputs.product }}", "slug": "${{ vars.slug }}"}}},
     {"id": "server_key", "name": "The app server's API key", "sensitive": true, "upsert": {"resource": "key", "mode": "ensure",
      "with": {"org": "${{ steps.org.outputs.id }}", "name": "${{ vars.slug }}-server",

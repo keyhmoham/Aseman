@@ -84,7 +84,7 @@ func (a *API) Register(net network.Network) error {
 	if err := net.Handle(network.MethodGet, "/v1/proxy/{id}", a.proxyServe); err != nil {
 		return err
 	}
-	// A sub-platform's frontend: an app built in a space, served to the
+	// A platform's frontend: an app built in a space, served to the
 	// platform's people (platform_app.go).
 	for _, method := range []network.Method{network.MethodGet, network.MethodPost, network.MethodPut, network.MethodPatch, network.MethodDelete} {
 		if err := net.Handle(method, "/v1/platforms/{slug}/app/*", a.platformServe); err != nil {

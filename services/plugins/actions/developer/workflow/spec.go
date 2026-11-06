@@ -142,9 +142,13 @@ type Settings struct {
 	// none ("personal" or an id; the API key's own on the developer host).
 	Org string `json:"org,omitempty"`
 	// StampPlatform makes what the run creates (spaces, agents, apps) part
-	// of the organization's sub-platform, as the developer host does for a
-	// key. Runs on the developer host always do.
+	// of one of the organization's platforms, as the developer host does for
+	// a key: the one Platform names, else the key's, else the
+	// organization's only one. Runs on the developer host always do.
 	StampPlatform bool `json:"stamp_platform,omitempty"`
+	// Platform names the platform (its slug or id) the run stamps, for an
+	// organization with several. Setting it implies StampPlatform.
+	Platform string `json:"platform,omitempty"`
 }
 
 // Asset is a file the document carries: text, base64 bytes, or JSON.

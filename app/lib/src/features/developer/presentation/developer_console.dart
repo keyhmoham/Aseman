@@ -108,8 +108,8 @@ class _DeveloperConsoleState extends State<DeveloperConsole> {
     ]),
     _DevSection('Build', [
       _DevPage(
-          'Sub-platform',
-          'Your isolated product environment and its users',
+          'Platforms',
+          'Your isolated product environments and their users',
           Icons.layers_outlined,
           Icons.layers_rounded),
       _DevPage(
@@ -224,8 +224,8 @@ class _DeveloperConsoleState extends State<DeveloperConsole> {
           key: ValueKey('computers$org'), service: widget.service, org: org),
       ('3', '1') => _Storage(
           key: ValueKey('storage$org'), service: widget.service, org: org),
-      ('4', '0') => _SubPlatform(
-          key: ValueKey('subplatform$org'),
+      ('4', '0') => _Platforms(
+          key: ValueKey('platforms$org'),
           service: widget.service,
           org: org),
       ('4', '1') => _Platform(service: widget.service),

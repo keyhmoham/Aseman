@@ -242,7 +242,7 @@ class _AppScreenState extends State<AdminScreen> {
       ),
       _Page(
         'Developer API',
-        'Organizations, sub-platforms and requests',
+        'Organizations, platforms and requests',
         Icons.api_outlined,
         Icons.api_rounded,
         calls: [

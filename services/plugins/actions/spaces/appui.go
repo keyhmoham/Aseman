@@ -286,7 +286,7 @@ func (s *Service) appuiCatalog(ctx context.Context, spaceID, roomID identity.ID,
 	if audience == appuiAudiencePlatform {
 		doc["audience"] = map[string]any{
 			"kind":   appuiAudiencePlatform,
-			"people": "the people of a sub-platform the person runs, not members of this space; some arrive signed out",
+			"people": "the people of a platform the person runs, not members of this space; some arrive signed out",
 			"guide":  "PLATFORM.md",
 		}
 	}
@@ -323,7 +323,7 @@ type appuiJob struct {
 	// Placement is only for kind=gadget: chat | rail | desk | page.
 	Placement string `json:"placement,omitempty"`
 	// Audience is who the app is for: "space" (its people, the default) or
-	// "platform" (a sub-platform's people, as that platform's frontend).
+	// "platform" (a platform's people, as that platform's frontend).
 	Audience  string     `json:"audience,omitempty"`
 	HasKey    bool       `json:"has_key"`
 	Place     appuiPlace `json:"place"`

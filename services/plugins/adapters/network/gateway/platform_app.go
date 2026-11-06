@@ -1,6 +1,6 @@
 package apihttp
 
-// A sub-platform's frontend (developer/platform_frontend.go) is an app the
+// A platform's frontend (developer/platform_frontend.go) is an app the
 // agents of a space built, served to the platform's people at
 // /v1/platforms/<slug>/app/ — the same preview as /v1/proxy/<id>/, with
 // another door:

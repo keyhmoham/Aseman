@@ -44,8 +44,8 @@ Ask, or infer from the request and say what you assumed:
 
 | Decide | Why it matters |
 | --- | --- |
-| **Which door runs it** — the console (signed-in person) or an API key | Only the console can create organizations, invite members, make keys or fund wallets. A key's workflow is held to the key's permissions and stamps what it makes with the org's sub-platform. If the product needs an org, its team or keys, it runs from the console. |
-| **Is there a sub-platform** | `upsert platform` before anything that should belong to it. From the console, set `options.stamp_platform: true` if the spaces and agents should be the platform's. |
+| **Which door runs it** — the console (signed-in person) or an API key | Only the console can create organizations, invite members, make keys or fund wallets. A key's workflow is held to the key's permissions and stamps what it makes with the platform the key is bound to (or the org's only one). If the product needs an org, its team or keys, it runs from the console. |
+| **Is there a platform** | `upsert platform` (by slug; an org may have several) before anything that should belong to it. From the console, set `options.platform` to its slug if the spaces and agents should be that platform's. |
 | **What the inputs are** | Everything a second customer would change: product name, team handles, model, ports, feature switches. Give each a type, a default when there is a sensible one, and constraints. |
 | **What the secrets are** | API keys of third parties, session secrets, passwords. Declared in `secrets`, used as `${{ secrets.NAME }}`, never written in the document. |
 | **What proves success** | A preview that answers, a test command that prints "passed", agents installed, a key created. These become `wait` and `assert` steps at the end. |

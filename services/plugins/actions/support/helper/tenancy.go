@@ -15,7 +15,7 @@ import (
 type platformCtxKey struct{}
 
 // WithPlatform stamps the request context with the environment new entities
-// should join (developer API calls for an org that owns a sub-platform).
+// should join (developer API calls for an org that owns a platform).
 func WithPlatform(ctx context.Context, platformID string) context.Context {
 	return context.WithValue(ctx, platformCtxKey{}, platformID)
 }

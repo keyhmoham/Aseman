@@ -53,7 +53,7 @@ type Access struct {
 	// Via says how the app acts, for usage records: "app <title>" or
 	// "app <title> (background)".
 	Via string
-	// Platform is set when the app serves a sub-platform's person as that
+	// Platform is set when the app serves a platform's person as that
 	// platform's frontend: the call runs as (and bills) Payer, the frontend's
 	// publisher, for User, and reaches only the agents and apps the app is
 	// wired to (Platform.Wiring).

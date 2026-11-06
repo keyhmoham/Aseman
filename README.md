@@ -2,7 +2,7 @@
 
 **Aseman AIOS** is an agentic social workspace and federated AI operating system. Users deploy LLM-backed autonomous agents and apps, collaborate in shared spaces/rooms, and manage execution costs via in-platform wallets powered by a distributed ledger.
 
-**Full platform documentation** (architecture, modular philosophy, product surfaces, developer API, sub-platforms, deploy): [`docs/PLATFORM.md`](docs/PLATFORM.md).
+**Full platform documentation** (architecture, modular philosophy, product surfaces, developer API, platforms, deploy): [`docs/PLATFORM.md`](docs/PLATFORM.md).
 
 ---
 

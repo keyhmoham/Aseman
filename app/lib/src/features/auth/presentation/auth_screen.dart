@@ -133,7 +133,7 @@ class _AuthScreenState extends State<AuthScreen>
   StreamSubscription<String>? _googleTokens;
   StreamSubscription<Object>? _googleErrors;
 
-  /// The sub-platform this client signs people in to (null: main Aseman, or
+  /// The platform this client signs people in to (null: main Aseman, or
   /// not loaded yet).
   PlatformInfo? _platform;
 

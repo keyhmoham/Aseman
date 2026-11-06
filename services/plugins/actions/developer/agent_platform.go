@@ -48,10 +48,12 @@ func orgViewOf(sc Scope) OrgView {
 	return OrgView{ID: sc.Org.String(), Name: sc.Name, Kind: "team", Role: sc.Role}
 }
 
-// SetupPlatform gives [person] an organization with a sub-platform: the
+// SetupPlatform gives [person] an organization with a platform: the
 // organization [orgRef] names ("personal" or a team's id), or a team
 // organization called [orgName] (made when they have none by that name), or
-// their personal one. The platform is made unless the organization has one.
+// their personal one. An organization may have several platforms: the one
+// with [slug] is reused when the organization has it, else it is made. With
+// no slug, the organization's only platform is reused.
 func (s *Service) SetupPlatform(ctx context.Context, person identity.ID, orgRef, orgName, name, slug string) (PlatformSetup, error) {
 	if err := s.requirePerson(ctx, person); err != nil {
 		return PlatformSetup{}, err
@@ -81,13 +83,23 @@ func (s *Service) SetupPlatform(ctx context.Context, person identity.ID, orgRef,
 		return PlatformSetup{}, err
 	}
 	out.Org = orgViewOf(sc)
-	existing, err := s.PlatformOfOrg(ctx, sc.Org)
+	list, err := s.PlatformsOfOrg(ctx, sc.Org)
 	if err != nil {
 		return PlatformSetup{}, err
 	}
-	if existing != nil {
-		out.Platform = platformView(*existing)
-		return out, nil
+	want := strings.ToLower(strings.TrimSpace(slug))
+	for _, p := range list {
+		if p.Slug == want || (want == "" && len(list) == 1) {
+			out.Platform = platformView(p)
+			return out, nil
+		}
+	}
+	if want == "" && len(list) > 1 {
+		slugs := make([]string, 0, len(list))
+		for _, p := range list {
+			slugs = append(slugs, p.Slug)
+		}
+		return PlatformSetup{}, errs.InvalidArgument(sc.Name + " has several platforms: give the slug of one (" + strings.Join(slugs, ", ") + ") or of a new one")
 	}
 	if strings.TrimSpace(name) == "" {
 		name = sc.Name
@@ -100,16 +112,42 @@ func (s *Service) SetupPlatform(ctx context.Context, person identity.ID, orgRef,
 	return out, nil
 }
 
-// platformScope is the organization whose platform [person] means: the one
-// [orgRef] names, else the only one of theirs that has a platform they may
+// orgRefOf is how the console names organization [org] for [person].
+func orgRefOf(person, org identity.ID) string {
+	if org == person {
+		return PersonalOrg
+	}
+	return org.String()
+}
+
+// platformScope is the platform [person] means and its organization: the
+// platform [platformRef] names (its slug or id), else the only one in the
+// organization [orgRef] names, else the only one of all theirs they may
 // manage.
-func (s *Service) platformScope(ctx context.Context, person identity.ID, orgRef string) (Scope, *models.Platform, error) {
-	if strings.TrimSpace(orgRef) != "" {
+func (s *Service) platformScope(ctx context.Context, person identity.ID, orgRef, platformRef string) (Scope, *models.Platform, error) {
+	orgRef, platformRef = strings.TrimSpace(orgRef), strings.TrimSpace(platformRef)
+	if platformRef != "" {
+		p, err := s.PlatformByRef(ctx, platformRef)
+		if err != nil {
+			return Scope{}, nil, err
+		}
+		sc, err := s.Scope(ctx, person, orgRefOf(person, p.OrgID))
+		if err != nil {
+			return Scope{}, nil, errs.NotFound("platform")
+		}
+		if orgRef != "" {
+			if named, err := s.Scope(ctx, person, orgRef); err != nil || named.Org != p.OrgID {
+				return Scope{}, nil, errs.InvalidArgument("platform " + p.Slug + " is not in that organization")
+			}
+		}
+		return sc, p, nil
+	}
+	if orgRef != "" {
 		sc, err := s.Scope(ctx, person, orgRef)
 		if err != nil {
 			return Scope{}, nil, err
 		}
-		p, err := s.PlatformOfOrg(ctx, sc.Org)
+		p, err := s.OrgPlatform(ctx, sc.Org, "")
 		if err != nil {
 			return Scope{}, nil, err
 		}
@@ -123,13 +161,17 @@ func (s *Service) platformScope(ctx context.Context, person identity.ID, orgRef 
 		return Scope{}, nil, err
 	}
 	var found []Scope
-	var platforms []*models.Platform
+	var platforms []models.Platform
 	for _, o := range orgs {
 		sc, err := s.Scope(ctx, person, o.ID)
 		if err != nil || (sc.Role != models.RoleOwner && sc.Role != models.RoleAdmin) {
 			continue
 		}
-		if p, err := s.PlatformOfOrg(ctx, sc.Org); err == nil && p != nil {
+		list, err := s.PlatformsOfOrg(ctx, sc.Org)
+		if err != nil {
+			continue
+		}
+		for _, p := range list {
 			found, platforms = append(found, sc), append(platforms, p)
 		}
 	}
@@ -137,32 +179,35 @@ func (s *Service) platformScope(ctx context.Context, person identity.ID, orgRef 
 	case 0:
 		return Scope{}, nil, errs.NotFound("the person has no platform yet: set one up first (platform_setup)")
 	case 1:
-		return found[0], platforms[0], nil
+		return found[0], &platforms[0], nil
 	}
 	names := make([]string, 0, len(found))
-	for i, sc := range found {
-		names = append(names, orgViewOf(sc).ID+" ("+platforms[i].Slug+")")
+	for i := range found {
+		names = append(names, platforms[i].Slug)
 	}
-	return Scope{}, nil, errs.InvalidArgument("the person has several platforms; name the organization (org): " + strings.Join(names, ", "))
+	return Scope{}, nil, errs.InvalidArgument("the person has several platforms; name one (platform): " + strings.Join(names, ", "))
 }
 
 // AppDeveloperKey makes a developer API key of [person]'s organization for
 // one app's server ([appName]): models to list, chat to write, and, with
-// [platformAPI], the platform collection to write. It acts as the person.
-// [replace] (an earlier key of the same app) is revoked first.
-func (s *Service) AppDeveloperKey(ctx context.Context, person identity.ID, orgRef, appName string, platformAPI bool, replace string) (models.AppAccess, error) {
+// [platformAPI], the platform collection to write. The key is bound to the
+// platform [platformRef] names (or the person's only one). It acts as the
+// person. [replace] (an earlier key of the same app) is revoked first.
+func (s *Service) AppDeveloperKey(ctx context.Context, person identity.ID, orgRef, platformRef, appName string, platformAPI bool, replace string) (models.AppAccess, error) {
 	if err := s.requirePerson(ctx, person); err != nil {
 		return models.AppAccess{}, err
 	}
 	var sc Scope
-	platform := ""
+	platform, platformID := "", ""
 	if p, err := func() (*models.Platform, error) {
 		var p *models.Platform
 		var err error
-		sc, p, err = s.platformScope(ctx, person, orgRef)
+		sc, p, err = s.platformScope(ctx, person, orgRef, platformRef)
 		return p, err
 	}(); err == nil {
-		platform = p.Slug
+		platform, platformID = p.Slug, p.ID.String()
+	} else if strings.TrimSpace(platformRef) != "" {
+		return models.AppAccess{}, err
 	} else {
 		// No platform: the key is still the organization's (personal by default).
 		var serr error
@@ -187,7 +232,11 @@ func (s *Service) AppDeveloperKey(ctx context.Context, person identity.ID, orgRe
 	if len([]rune(name)) > 50 {
 		name = string([]rune(name)[:50])
 	}
-	view, secret, err := s.CreateKey(ctx, person, sc, KeyInput{Name: "App · " + name, Permissions: perms})
+	in := KeyInput{Name: "App · " + name, Permissions: perms}
+	if platformID != "" {
+		in.Platform = &platformID
+	}
+	view, secret, err := s.CreateKey(ctx, person, sc, in)
 	if err != nil {
 		return models.AppAccess{}, err
 	}
@@ -195,14 +244,15 @@ func (s *Service) AppDeveloperKey(ctx context.Context, person identity.ID, orgRe
 }
 
 // PublishFrontendAs publishes the app behind preview [proxyRef] as the
-// frontend of [person]'s platform (in [orgRef], or their only one).
-func (s *Service) PublishFrontendAs(ctx context.Context, person identity.ID, orgRef, proxyRef string) (PlatformView, error) {
+// frontend of [person]'s platform [platformRef] (or the only one in [orgRef],
+// or their only one).
+func (s *Service) PublishFrontendAs(ctx context.Context, person identity.ID, orgRef, platformRef, proxyRef string) (PlatformView, error) {
 	if err := s.requirePerson(ctx, person); err != nil {
 		return PlatformView{}, err
 	}
-	sc, _, err := s.platformScope(ctx, person, orgRef)
+	sc, p, err := s.platformScope(ctx, person, orgRef, platformRef)
 	if err != nil {
 		return PlatformView{}, err
 	}
-	return s.PublishFrontend(ctx, sc, person, proxyRef)
+	return s.PublishFrontend(ctx, sc, person, p.ID.String(), proxyRef)
 }

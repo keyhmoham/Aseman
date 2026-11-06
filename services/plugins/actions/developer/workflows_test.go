@@ -155,7 +155,7 @@ func TestWorkflowInstallerOnTheDeveloperHost(t *testing.T) {
 	if resp.Status != 200 || run["status"] != "succeeded" {
 		t.Fatalf("run: %d %s", resp.Status, resp.Body)
 	}
-	p, _ := f.s.PlatformOfOrg(f.ctx, f.me)
+	p, _ := f.s.OrgPlatform(f.ctx, f.me, "")
 	if p == nil || p.Slug != "shop" {
 		t.Fatalf("the platform was made through the developer namespace: %+v", p)
 	}
@@ -262,7 +262,7 @@ func TestWorkflowFromTheConsole(t *testing.T) {
 	if keys, _ := f.s.Keys(f.ctx, sc); len(keys) != 1 || keys[0].Permissions.Platform != LevelWrite {
 		t.Fatalf("keys: %+v", keys)
 	}
-	if p, _ := f.s.PlatformOfOrg(f.ctx, sc.Org); p == nil || p.Slug != "acme" {
+	if p, _ := f.s.OrgPlatform(f.ctx, sc.Org, ""); p == nil || p.Slug != "acme" {
 		t.Fatalf("platform: %+v", p)
 	}
 	if fake.platform[0] != "" {

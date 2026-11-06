@@ -2,7 +2,7 @@ package spaces
 
 // The tools a person's agents use to give them a product on Aseman:
 //
-//	platform_setup        an organization and its sub-platform (made or reused)
+//	platform_setup        an organization and one of its platforms (made or reused)
 //	app_developer_access  a developer API key of that organization, written
 //	                      into one app's server settings (never the page)
 //	platform_publish      a verified app as the platform's frontend
@@ -66,8 +66,8 @@ func (s *Service) platformSetupTool(ctx context.Context, argsJSON string) (strin
 		return "", err
 	}
 	out["next"] = "Build the platform's frontend: appui_create with audience \"platform\" (kind app), wired to the space's agents and apps it needs. " +
-		"If its server should use the developer API (models, or the platform's own accounts and spaces through the platform collection), call app_developer_access with the app's dir. " +
-		"Build, test, appui_publish, then platform_publish with the dir."
+		"If its server should use the developer API (models, or the platform's own accounts and spaces through the platform collection), call app_developer_access with the app's dir and this platform's slug. " +
+		"Build, test, appui_publish, then platform_publish with the dir and this platform's slug (the person may have several platforms)."
 	b, _ := json.Marshal(out)
 	return string(b), nil
 }
@@ -77,10 +77,11 @@ func (s *Service) appDeveloperAccessTool(ctx context.Context, spaceID identity.I
 	var in struct {
 		Dir         string `json:"dir"`
 		Org         string `json:"org"`
+		Platform    string `json:"platform"`
 		PlatformAPI *bool  `json:"platform_api"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
-		return "", errs.InvalidArgument(`app_developer_access takes {"dir", "org"?, "platform_api"?}`)
+		return "", errs.InvalidArgument(`app_developer_access takes {"dir", "platform"?, "org"?, "platform_api"?}`)
 	}
 	dir := strings.TrimRight(strings.TrimSpace(in.Dir), "/")
 	if !strings.HasPrefix(dir, "/workspace/") || strings.Contains(dir, "..") {
@@ -110,7 +111,7 @@ func (s *Service) appDeveloperAccessTool(ctx context.Context, spaceID identity.I
 	platformAPI := in.PlatformAPI == nil || *in.PlatformAPI
 	var access models.AppAccess
 	if err := bridge.Invoke(ctx, s.K, "developer", "AppDeveloperKey",
-		[]any{ctx, person, in.Org, title, platformAPI, prev.KeyID}, &access); err != nil {
+		[]any{ctx, person, in.Org, in.Platform, title, platformAPI, prev.KeyID}, &access); err != nil {
 		return "", err
 	}
 	if access.Secret == "" {
@@ -173,12 +174,13 @@ func (s *Service) setAppServerEnv(ctx context.Context, spaceID identity.ID, dir 
 // platformPublishTool implements platform_publish.
 func (s *Service) platformPublishTool(ctx context.Context, spaceID identity.ID, argsJSON string) (string, error) {
 	var in struct {
-		Dir   string `json:"dir"`
-		Proxy string `json:"proxy"`
-		Org   string `json:"org"`
+		Dir      string `json:"dir"`
+		Proxy    string `json:"proxy"`
+		Org      string `json:"org"`
+		Platform string `json:"platform"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
-		return "", errs.InvalidArgument(`platform_publish takes {"dir", "org"?}`)
+		return "", errs.InvalidArgument(`platform_publish takes {"dir", "platform"?, "org"?}`)
 	}
 	person, err := s.toolPerson(ctx)
 	if err != nil {
@@ -199,7 +201,7 @@ func (s *Service) platformPublishTool(ctx context.Context, spaceID identity.ID, 
 		return "", errs.InvalidArgument("name the app by its dir (from appui_create)")
 	}
 	var view map[string]any
-	if err := bridge.Invoke(ctx, s.K, "developer", "PublishFrontendAs", []any{ctx, person, in.Org, proxyID}, &view); err != nil {
+	if err := bridge.Invoke(ctx, s.K, "developer", "PublishFrontendAs", []any{ctx, person, in.Org, in.Platform, proxyID}, &view); err != nil {
 		return "", err
 	}
 	frontend, _ := view["frontend"].(map[string]any)

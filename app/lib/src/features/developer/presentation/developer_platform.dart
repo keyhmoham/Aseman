@@ -1,22 +1,61 @@
 part of 'developer_console.dart';
 
-// ── sub-platform product environment ─────────────────────────────────────────
+// ── platforms: the organization's product environments ──────────────────────
 
-class _SubPlatform extends _Loaded {
-  const _SubPlatform(
-      {super.key, required super.service, required super.org});
+class _Platforms extends _Loaded {
+  const _Platforms({super.key, required super.service, required super.org});
   @override
-  State<_SubPlatform> createState() => _SubPlatformState();
+  State<_Platforms> createState() => _PlatformsState();
 }
 
-class _SubPlatformState extends _LoadedState<_SubPlatform> {
+class _PlatformsState extends _LoadedState<_Platforms> {
+  /// The id of the platform shown (null: the first).
+  String? selected;
+
   @override
   Future<_Json> fetch() async {
-    final p = await call('platform_get');
-    if (p['platform'] == null) return p;
-    final stats = await call('platform_stats');
-    final users = await call('platform_users', {'limit': 50});
-    return {...p, ...stats, 'users': users['users']};
+    final platforms = _maps((await call('platforms_list'))['platforms']);
+    if (platforms.isEmpty) return {'platforms': platforms};
+    final p = platforms.firstWhere((p) => p['id'] == selected,
+        orElse: () => platforms.first);
+    selected = '${p['id']}';
+    final _Json ref = {'platform': selected};
+    final stats = await call('platform_stats', ref);
+    final users = await call('platform_users', {...ref, 'limit': 50});
+    return {
+      'platform': p,
+      ...stats,
+      'platforms': platforms,
+      'users': users['users'],
+    };
+  }
+
+  /// Shows platform [id].
+  Future<void> _select(String id) async {
+    if (id == selected) return;
+    selected = id;
+    await reload();
+  }
+
+  Future<void> _rename(_Json platform) async {
+    final name = await _ask(context, 'Rename platform', 'Name',
+        initial: '${platform['name']}');
+    if (name == null || name.trim().isEmpty) return;
+    await change(() => call('platform_rename',
+        {'platform': '${platform['id']}', 'name': name.trim()}));
+  }
+
+  Future<void> _delete(_Json platform) async {
+    final ok = await _confirm(
+        context,
+        'Delete ${platform['name']}?',
+        'New sign-ups to @${platform['slug']} stop and its frontend goes '
+            'away. Accounts, spaces and agents already on it stay.',
+        action: 'Delete');
+    if (!ok) return;
+    selected = null;
+    await change(
+        () => call('platform_delete', {'platform': '${platform['id']}'}));
   }
 
   /// Picks an app the space agents built and publishes it as the platform's
@@ -72,8 +111,8 @@ class _SubPlatformState extends _LoadedState<_SubPlatform> {
             'to you, and reaches only what the app is wired to.',
         action: 'Publish');
     if (!ok) return;
-    await change(() =>
-        call('platform_frontend_publish', {'proxy': '${picked['proxy_id']}'}));
+    await change(() => call('platform_frontend_publish',
+        {'platform': selected, 'proxy': '${picked['proxy_id']}'}));
   }
 
   /// Opens the published frontend as the platform's people see it: an
@@ -109,7 +148,8 @@ class _SubPlatformState extends _LoadedState<_SubPlatform> {
         'The platform\'s people will no longer be able to open it.',
         action: 'Take down');
     if (!ok) return;
-    await change(() => call('platform_frontend_unpublish'));
+    await change(
+        () => call('platform_frontend_unpublish', {'platform': selected}));
   }
 
   Widget _frontendCard(BuildContext context, _Json platform) {
@@ -200,48 +240,92 @@ class _SubPlatformState extends _LoadedState<_SubPlatform> {
   }
 
   Future<void> _create() async {
-    final name = await _ask(context, 'New sub-platform', 'Name',
+    final name = await _ask(context, 'New platform', 'Name',
         hint: 'Acme', action: 'Next');
     if (name == null || name.trim().isEmpty || !mounted) return;
     final slug = await _ask(context, 'Slug', 'URL slug',
         hint: 'acme', action: 'Create');
     if (slug == null || slug.trim().isEmpty) return;
-    await change(() => call(
-        'platform_create', {'name': name.trim(), 'slug': slug.trim()}));
+    await change(() async {
+      final made = await call(
+          'platform_create', {'name': name.trim(), 'slug': slug.trim()});
+      final id = _map(made['platform'])['id'];
+      if (id != null) selected = '$id';
+    });
+  }
+
+  /// The organization's platforms, one chosen, and a way to add another.
+  Widget _picker(BuildContext context, List<_Json> platforms) {
+    final scheme = Theme.of(context).colorScheme;
+    return _Card(
+      title: 'Platforms',
+      icon: Icons.layers_outlined,
+      trailing: FilledButton.icon(
+          onPressed: _create,
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('New platform')),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(
+            'Each platform is an isolated product of this organization, with '
+            'its own accounts, spaces, agents and frontend.',
+            style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35)),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(spacing: AppSpacing.xs, runSpacing: AppSpacing.xs, children: [
+          for (final p in platforms)
+            ChoiceChip(
+                label: Text('${p['name']}'),
+                selected: p['id'] == selected,
+                onSelected: (_) => _select('${p['id']}')),
+        ]),
+      ]),
+    );
   }
 
   @override
   Widget content(BuildContext context) {
     final platform = _map(data['platform']);
+    final platforms = _maps(data['platforms']);
     final scheme = Theme.of(context).colorScheme;
     if (platform.isEmpty) {
       return ListView(padding: const EdgeInsets.all(AppSpacing.md), children: [
         _Card(
-          title: 'No sub-platform yet',
+          title: 'No platform yet',
           icon: Icons.layers_outlined,
           trailing: FilledButton.icon(
               onPressed: _create,
               icon: const Icon(Icons.add_rounded, size: 18),
               label: const Text('Create')),
           child: Text(
-              'Create an isolated product environment for this organization. '
-              'Its users, spaces and agents stay private unless the node admin '
-              'bridges it to main Aseman. Auth (password, Google, Apple) is the '
-              'same system — pass a platform slug when signing people up.',
+              'Create an isolated product environment for this organization '
+              '(it can have several). Its users, spaces and agents stay private '
+              'unless the node admin bridges it to main Aseman. Auth (password, '
+              'Google, Apple) is the same system — pass the platform slug when '
+              'signing people up.',
               style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35)),
         ),
       ]);
     }
     final users = _maps(data['users']);
     return ListView(padding: const EdgeInsets.all(AppSpacing.md), children: [
+      _picker(context, platforms),
       _Card(
         title: '${platform['name']}',
         icon: Icons.layers_rounded,
-        trailing: Text('@${platform['slug']}',
-            style: TextStyle(
-                fontFamily: 'monospace',
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600)),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text('@${platform['slug']}',
+              style: TextStyle(
+                  fontFamily: 'monospace',
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600)),
+          IconButton(
+              tooltip: 'Rename',
+              onPressed: () => _rename(platform),
+              icon: const Icon(Icons.edit_outlined, size: 18)),
+          IconButton(
+              tooltip: 'Delete',
+              onPressed: () => _delete(platform),
+              icon: const Icon(Icons.delete_outline_rounded, size: 18)),
+        ]),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Wrap(spacing: 24, runSpacing: 16, children: [
             _Figure('Users', _count(data['users'] is num ? data['users'] : users.length)),

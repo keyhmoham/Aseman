@@ -324,7 +324,7 @@ HOST
     people=$(cat <<PEOPLE
 
 ## Audience: a platform's frontend (JOB.json audience: platform)
-Read PLATFORM.md first. This app will be the frontend of a sub-platform the
+Read PLATFORM.md first. This app will be the frontend of a platform the
 person runs: its people are that platform's, not members of this space, and
 some arrive signed out. It is still wired to THIS space's agents and apps
 (APPS.json): they are the platform's backend services in the loop.
@@ -604,7 +604,7 @@ Commands:
                          technology). --kind app (default: framed desk window)
                          or gadget (compact frameless widget; see GADGETS.md).
                          --audience space (default) or platform (the frontend
-                         of a sub-platform; see PLATFORM.md).
+                         of a platform; see PLATFORM.md).
   verify [--dir] DIR     The platform's checks of a built app (READY.json, its
                          wiring to the space (APPS.json), start
                          and answer, Elpian bundle, QuickJS, end-to-end

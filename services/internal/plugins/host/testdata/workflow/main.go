@@ -1,7 +1,7 @@
 // This runner proves, on a whole node, that the developer API's workflow
 // installer brings a product up from one document: it runs
 // docs/workflows/fullstack-product.json from the console as a person — an
-// organization with a member, its sub-platform and server key, a project
+// organization with a member, its platform and server key, a project
 // with rooms and agents, and a full-stack app written onto the project's
 // computer, tested and served — checks what each step made, runs it again to
 // show nothing is made twice, runs a workflow through the aseman CLI with an

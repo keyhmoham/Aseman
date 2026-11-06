@@ -94,7 +94,7 @@ type appUserClaims struct {
 	Proxy string `json:"p"`
 	User  string `json:"u"`
 	Exp   int64  `json:"e"`
-	// Platform is set when the person uses the app as a sub-platform's
+	// Platform is set when the person uses the app as a platform's
 	// frontend (platform_frontend.go): they are the platform's, not the
 	// space's, and the call runs as the frontend's publisher.
 	Platform string `json:"pf,omitempty"`

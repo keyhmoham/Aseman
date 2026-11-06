@@ -1,7 +1,7 @@
 # Building a platform's frontend
 
 `JOB.json` → `audience: "platform"`: this app becomes the **frontend of a
-sub-platform** — a product someone runs on Aseman as a developer organization
+platform** — a product someone runs on Aseman as a developer organization
 (Developer API → Platform). Once you `appui_publish` it, the person publishes
 it in **Developer API → Platform → Frontend**, and the platform's people open
 it at `/v1/platforms/<slug>/app/` (or in an Aseman client signed in to that

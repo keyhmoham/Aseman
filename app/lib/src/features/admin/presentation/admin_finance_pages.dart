@@ -136,17 +136,17 @@ Widget _buildDeveloperPlatformsPage(_AppPageContentState state) {
       _map(state.widget.results['developer.admin_platforms'])['platforms'],
     );
     return AdminSectionCard(
-      title: 'Sub-platforms',
+      title: 'Platforms',
       icon: Icons.layers_rounded,
       subtitle:
           'Isolated by default. Bridging lets that platform and main Aseman see each other; platforms never see each other.',
       child: platforms.isEmpty
           ? const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('No sub-platforms yet.'),
+              child: Text('No platforms yet.'),
             )
           : AdminDataTable(
-              empty: 'No sub-platforms yet.',
+              empty: 'No platforms yet.',
               columns: const [
                 AdminTableColumn('Platform', width: 220),
                 AdminTableColumn('Slug', width: 140),

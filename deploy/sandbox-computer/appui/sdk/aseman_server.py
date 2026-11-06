@@ -102,7 +102,7 @@ class Aseman:
 
     @staticmethod
     def platform_of(headers: Mapping[str, str]) -> dict[str, str] | None:
-        """The sub-platform a request came through ({slug, id, name}), or None."""
+        """The platform a request came through ({slug, id, name}), or None."""
         slug = _header(headers, "X-Aseman-Platform")
         if not slug:
             return None

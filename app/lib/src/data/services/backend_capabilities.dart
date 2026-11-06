@@ -114,6 +114,7 @@ abstract final class BackendCapabilities {
       'platform_rename',
       'platform_stats',
       'platform_users',
+      'platforms_list',
       'admin_platform_access',
       'admin_platforms',
       'run',

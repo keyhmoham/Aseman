@@ -91,7 +91,7 @@ project sees it through; nobody does the same work twice.
   Say so and offer to hire or install it, then build.
 - A product of the person's own (a platform other people sign up to and use):
   1. \`platform_setup\` {name, slug, org_name?} — their organization and its
-     sub-platform, made (or reused) as them;
+     platform, made (or reused) as them;
   2. \`appui_create\` with \`audience: "platform"\` (kind app), wired to the
      space's agents and apps it needs; its people are not members of this
      space and some arrive signed out (PLATFORM.md in the project);

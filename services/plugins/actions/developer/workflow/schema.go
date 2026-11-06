@@ -147,7 +147,7 @@ func JSONSchema() map[string]any {
 			"options": object(map[string]any{
 				"rollback_on_failure": map[string]any{"type": "boolean"}, "timeout": duration,
 				"max_steps": map[string]any{"type": "integer", "minimum": 1, "maximum": MaxSteps},
-				"org":       str, "stamp_platform": map[string]any{"type": "boolean"},
+				"org":       str, "stamp_platform": map[string]any{"type": "boolean"}, "platform": str,
 			}),
 			"assets": map[string]any{"type": "object", "additionalProperties": asset},
 			"templates": names(object(map[string]any{

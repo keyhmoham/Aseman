@@ -18,7 +18,7 @@ type Space struct {
 	MetadataID  identity.ID `db:"metadata_id" json:"metadata_id"`
 	Public      bool        `db:"public" json:"public"`
 	// PlatformID is empty on main Aseman spaces; otherwise the space belongs
-	// to that sub-platform and is invisible outside it (unless the platform
+	// to that platform and is invisible outside it (unless the platform
 	// has MainAccess).
 	PlatformID string `db:"platform_id" json:"platform_id,omitempty"`
 	// Home marks the person's own workspace: their personal Aseman chat

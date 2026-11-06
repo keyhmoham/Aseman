@@ -81,6 +81,8 @@ type KeyView struct {
 	Limits      Limits      `json:"limits"`
 	SpentMonth  int64       `json:"spentMonth"`
 	Requests    int64       `json:"requests"`
+	// Platform is the id of the platform the key is bound to ("": none).
+	Platform string `json:"platform"`
 }
 
 // KeyInput is what a key is created or changed with.
@@ -88,6 +90,9 @@ type KeyInput struct {
 	Name        string      `json:"name"`
 	Permissions Permissions `json:"permissions"`
 	Limits      Limits      `json:"limits"`
+	// Platform binds the key to one of the organization's platforms (its id
+	// or slug). Omitted on an update: the binding stays; "": unbound.
+	Platform *string `json:"platform,omitempty"`
 }
 
 func hashSecret(secret string) string {
@@ -113,7 +118,7 @@ func (s *Service) keyView(ctx context.Context, k models.Key) KeyView {
 		spent = 0
 	}
 	return KeyView{ID: k.ID.String(), Name: k.Name, Prefix: k.Prefix, Last4: k.Last4, Status: k.Status, CreatedAt: stamp(k.CreatedAt),
-		CreatedBy: s.handleOf(ctx, k.CreatedBy), LastUsedAt: stamp(k.LastUsedAt), Permissions: perms, Limits: limits, SpentMonth: spent, Requests: k.Requests}
+		CreatedBy: s.handleOf(ctx, k.CreatedBy), LastUsedAt: stamp(k.LastUsedAt), Permissions: perms, Limits: limits, SpentMonth: spent, Requests: k.Requests, Platform: k.PlatformID}
 }
 
 func cleanInput(in KeyInput) (KeyInput, error) {
@@ -196,16 +201,52 @@ func (s *Service) CreateKey(ctx context.Context, caller identity.ID, sc Scope, i
 	if err != nil {
 		return KeyView{}, "", err
 	}
+	platform, err := s.keyPlatformOf(ctx, sc, in.Platform)
+	if err != nil {
+		return KeyView{}, "", err
+	}
 	perms, _ := json.Marshal(in.Permissions)
 	limits, _ := json.Marshal(in.Limits)
 	now := s.now()
-	k := &models.Key{Entity: entity.Entity{ID: id, CreatedAt: now, UpdatedAt: now}, OrgID: sc.Org, Name: in.Name,
+	k := &models.Key{PlatformID: platform, Entity: entity.Entity{ID: id, CreatedAt: now, UpdatedAt: now}, OrgID: sc.Org, Name: in.Name,
 		Prefix: secret[:len(KeyPrefix)+4], Last4: secret[len(secret)-4:], Hash: hashSecret(secret),
 		Permissions: string(perms), Limits: string(limits), Status: "active", CreatedBy: caller, MonthKey: monthKey(now)}
 	if err := s.R.CreateID(ctx, "dev_keys", id, k); err != nil {
 		return KeyView{}, "", err
 	}
 	return s.keyView(ctx, *k), secret, nil
+}
+
+// keyPlatformOf is the id of the organization's platform [ref] names ("" for
+// none).
+func (s *Service) keyPlatformOf(ctx context.Context, sc Scope, ref *string) (string, error) {
+	if ref == nil || strings.TrimSpace(*ref) == "" {
+		return "", nil
+	}
+	p, err := s.mustOrgPlatform(ctx, sc.Org, *ref)
+	if err != nil {
+		return "", err
+	}
+	return p.ID.String(), nil
+}
+
+// KeyPlatform is the platform what key [k] makes joins: the one it is bound
+// to, else the organization's only platform. Nil: main Aseman (the
+// organization has no platform). An unbound key of an organization with
+// several platforms is refused: it must be bound to one.
+func (s *Service) KeyPlatform(ctx context.Context, k models.Key) (*models.Platform, error) {
+	if k.PlatformID != "" {
+		p, err := s.PlatformByRef(ctx, k.PlatformID)
+		if err != nil || p.OrgID != k.OrgID {
+			return nil, errs.NotFound("the platform this key is bound to is gone: bind the key to another one")
+		}
+		return p, nil
+	}
+	p, err := s.OrgPlatform(ctx, k.OrgID, "")
+	if err != nil {
+		return nil, errs.InvalidArgument("this key is not bound to a platform and its organization has several: bind the key to one in the console")
+	}
+	return p, nil
 }
 
 // UpdateKey changes a key's name, permissions and limits.
@@ -220,6 +261,11 @@ func (s *Service) UpdateKey(ctx context.Context, sc Scope, id string, in KeyInpu
 	in, err = cleanInput(in)
 	if err != nil {
 		return KeyView{}, err
+	}
+	if in.Platform != nil {
+		if k.PlatformID, err = s.keyPlatformOf(ctx, sc, in.Platform); err != nil {
+			return KeyView{}, err
+		}
 	}
 	perms, _ := json.Marshal(in.Permissions)
 	limits, _ := json.Marshal(in.Limits)

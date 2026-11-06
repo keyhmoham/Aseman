@@ -11,7 +11,7 @@ the accepted plan into the student's calendar.
 
 | Step | What |
 | --- | --- |
-| `org`, `team`, `platform` | the product's organization, its developers, its sub-platform |
+| `org`, `team`, `platform` | the product's organization, its developers, its platform |
 | `server_key` | a developer key (`platform: write`) for the app server, `ensure`d and sensitive; written once to `/workspace/secrets/<slug>/server.env` (`server_secrets`) |
 | `space`, `planning_room`, `team_room` | the project; the app's asks run in temporary threads of **Planning** |
 | `planner` | **the Planner agent**: its instructions are the planning method (spaced practice, interleaving, retrieval practice, the concerns' adaptations), the answer contract and the self-check tool |

@@ -72,7 +72,7 @@ Validating view trees). The backend is the same in both cases.
   `app_developer_access`): the server may use the organization's developer
   API — models, and the platform's own product surface — with
   `Aseman.developer()`; read `DEVELOPER.md`. Server only, never the page.
-- `JOB.json` → `audience: "platform"`: the app is a sub-platform's frontend.
+- `JOB.json` → `audience: "platform"`: the app is a platform's frontend.
   Read `PLATFORM.md` (signed-out visitors, the platform's people, wiring-only
   reach, who pays).
 - `ASEMAN_API.md` is the contract of the Aseman API, open to the page

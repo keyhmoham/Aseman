@@ -214,7 +214,7 @@ func (s *Service) createUser(ctx context.Context, req *network.Request) *network
 	if len(existing) > 0 {
 		return scimError(http.StatusConflict, "userName already exists")
 	}
-	// SCIM lives on main Aseman; never pick a sub-platform account that
+	// SCIM lives on main Aseman; never pick a platform account that
 	// happens to share the same email.
 	var acc *account.Account
 	if found, err := helper.FindAccountByEmail(ctx, s.R, email, ""); err == nil {

@@ -202,7 +202,7 @@ func (s *Service) Register(ctx context.Context, handle, email, password string) 
 
 // RegisterOn creates an account in one environment (empty = main Aseman).
 // Handles and emails are unique per environment, so the same Google identity
-// can exist on main Aseman and on each sub-platform as separate local accounts.
+// can exist on main Aseman and on each platform as separate local accounts.
 func (s *Service) RegisterOn(ctx context.Context, handle, email, password, platformID string) (*account.Account, string, string, error) {
 	if platformID != "" && handle == s.K.Env()["admin_handle"] {
 		return nil, "", "", errs.InvalidArgument("the node administrator belongs to main Aseman")

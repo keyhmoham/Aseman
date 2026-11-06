@@ -1,6 +1,6 @@
 # Aseman — Platform Documentation
 
-> **Brief:** Aseman is a federated AI operating system and agentic social workspace. People collaborate in spaces, run LLM-backed agents and apps, share a desk and a computer per project, pay from in-platform wallets, and optionally expose the same product surface through a developer API — including isolated sub-platforms built on one node.
+> **Brief:** Aseman is a federated AI operating system and agentic social workspace. People collaborate in spaces, run LLM-backed agents and apps, share a desk and a computer per project, pay from in-platform wallets, and optionally expose the same product surface through a developer API — including isolated platforms built on one node.
 >
 > **This document** is the full map: philosophy, architecture, product surfaces, identity, tenancy, agents, money, deploy, and how the pieces fit. Paths are relative to the repository root.
 
@@ -180,7 +180,7 @@ built and served on a space's computer — validated, planned (dry run) and
 idempotent, with retries, loops, templates and rollback. See
 [`WORKFLOWS.md`](WORKFLOWS.md).
 
-The platform collection exposes every registered **non-admin** product action (excludes `admin`, `developer`, and `admin_*`). Calls act as the **person who created the key**. If that key’s organization owns a sub-platform, new entities are stamped with that platform id.
+The platform collection exposes every registered **non-admin** product action (excludes `admin`, `developer`, and `admin_*`). Calls act as the **person who created the key**. If that key’s organization owns a platform, new entities are stamped with that platform id.
 
 ### 4.3 Agent & tool surfaces
 
@@ -191,7 +191,7 @@ The platform collection exposes every registered **non-admin** product action (e
 | `/tools/v1/runtime/host` | Managed/installed tool backends calling back into the platform |
 | `/v1/proxy/{id}/*` | An app's preview (space members); its page API at `_aseman/api/*` |
 | `/appapi/v1/{op}` | An app's server using its space's agents and apps (user token or app key) |
-| `/v1/platforms/{slug}/app/*` | A sub-platform's published frontend (§8.3) |
+| `/v1/platforms/{slug}/app/*` | A platform's published frontend (§8.3) |
 
 ### 4.4 Other HTTP doors
 
@@ -245,7 +245,7 @@ Under `services/plugins/actions/`:
 | `timeline` | Dated project history tools |
 | `settings` | Node settings, email templates |
 | `admin` | Node administration |
-| `developer` | Developer orgs, keys, computers, files, sub-platforms, playground; HTTP developer door |
+| `developer` | Developer orgs, keys, computers, files, platforms, playground; HTTP developer door |
 | `support/` | Shared helpers (repo, authorization, metasvc) — not a product namespace |
 | `greeter` | Sample plugin |
 
@@ -330,13 +330,13 @@ Tasks, approvals, connections, shared folders, CEL policy gates, secrets, comput
 
 ### 6.13 Admin console
 
-Node operators manage providers, models, voice, finance ops, users, market moderation, enterprise SSO/SCIM, developer orgs/sub-platforms, plugins, health, email templates.
+Node operators manage providers, models, voice, finance ops, users, market moderation, enterprise SSO/SCIM, developer orgs/platforms, plugins, health, email templates.
 
 Client: `features/admin/`. Requires node admin (`Role == "admin"` or configured `admin_handle`).
 
 ### 6.14 Developer console
 
-Profile → **Developer API**: orgs, API keys, usage, logs, models playground, computers, storage, **sub-platform**, and the live **platform action collection**. Styled with the app’s theme chrome (SoftCard, glass nav, SegmentedTabBar).
+Profile → **Developer API**: orgs, API keys, usage, logs, models playground, computers, storage, **platform**, and the live **platform action collection**. Styled with the app’s theme chrome (SoftCard, glass nav, SegmentedTabBar).
 
 Client: `features/developer/`.
 
@@ -361,7 +361,7 @@ Client: `features/developer/`.
 | Enterprise OIDC | `enterprise` + `/sso/v1/callback` | Domain can require SSO |
 | SCIM | `/scim/v2` | Directory sync / deprovision |
 
-Sub-platform clients use the **same APIs**; pass `"platform": "acme"` so the account is local to that environment. The same Google email can exist on main Aseman and on `acme` as **separate** accounts.
+Platform clients use the **same APIs**; pass `"platform": "acme"` so the account is local to that environment. The same Google email can exist on main Aseman and on `acme` as **separate** accounts.
 
 ### 7.3 Sessions & third-party OAuth
 
@@ -369,15 +369,15 @@ Sessions are bearer tokens (hashed at rest). Apps that need “each person conne
 
 ### 7.4 Enterprise extras
 
-Organizations by email domain, SSO providers, SCIM people/groups, SPIFFE/SVID for workload identity (`deploy/spire`). Enterprise “admin groups” elevate to **node** admin — they are not sub-platform tenants.
+Organizations by email domain, SSO providers, SCIM people/groups, SPIFFE/SVID for workload identity (`deploy/spire`). Enterprise “admin groups” elevate to **node** admin — they are not platform tenants.
 
 ---
 
-## 8. Sub-platforms & isolation
+## 8. Platforms & isolation
 
 ### 8.1 Model
 
-A **developer organization** may create **one** `Platform` (`dev_platforms`): slug, name, `main_access`.
+A **developer organization** may create **any number of** `Platform`s (`dev_platforms`): each with a node-unique slug, a name and `main_access`. Org-scoped platform actions name the one they act on with `platform` (its id or slug); it may be omitted while the organization has only one.
 
 | Concept | Behavior |
 | --- | --- |
@@ -390,13 +390,20 @@ Visibility rules: `services/pkg/tenancy` (`Sees`). Helpers: `plugins/actions/sup
 
 Product discovery applies `SeesEntity`: user search / hireable, bot search, space list/search, market list/catalog/install, posts feeds, message send/ask/list-by-peer. **Node-admin** directories (`users.accounts_list`, finance ops, …) stay **global** on purpose.
 
+**API keys and platforms.** A developer key may be bound to one of its
+organization's platforms (`key_create` / `key_update` with
+`input.platform`). What the key makes through the developer host's platform
+collection joins that platform. An unbound key uses the organization's only
+platform; with several, it must be bound to one (the call is refused
+otherwise).
+
 ### 8.2 Who manages what
 
 | Role | APIs |
 | --- | --- |
-| Org owner/admin | `developer.platform_create|get|rename|delete|stats|users` |
+| Org owner/admin | `developer.platforms_list`, `developer.platform_create|get|rename|delete|stats|users` (each takes `platform`) |
 | Node admin | `developer.admin_platforms`, `developer.admin_platform_access` |
-| End users of a sub-platform | Same product actions as the main app, scoped by their `platform_id` |
+| End users of a platform | Same product actions as the main app, scoped by their `platform_id` |
 
 ### 8.3 A platform's frontend
 
@@ -413,7 +420,7 @@ built** (an Elpian or web App UI with its own backend) as the platform's
    `APPS.json` does not list, or that serves its own `_aseman/…` routes in
    place of the gateway (`aseman-wiring-check`): wiring is real, never
    imitated. The published app records its wiring with its key.
-3. **Developer API → Platform → Frontend → Publish** picks the app
+3. **Developer API → Platforms → (a platform) → Frontend → Publish** picks the app
    (`developer.platform_frontend_apps`, `platform_frontend_publish`,
    `platform_frontend_unpublish`; public `platform_frontend {platform}`).
 
@@ -424,9 +431,9 @@ namespace itself stays closed to agents:
 
 | Tool | Does |
 | --- | --- |
-| `platform_setup {name, slug, org_name?, org?}` | makes (or reuses) a team organization by name, or uses `org` / the personal one, and its platform |
-| `app_developer_access {dir, org?, platform_api?}` | a developer key of that organization (models: read, chat: write, platform collection: write) written into the app's `.aseman/server.env` (`ASEMAN_DEVELOPER_KEY`, `ASEMAN_DEVELOPER_API_URL` = node `/dev/v1`, `ASEMAN_PLATFORM`); the agent never sees it; calling again revokes and replaces it; rebuilds keep it |
-| `platform_publish {dir, org?}` | publishes the app `appui_publish` verified as the platform's frontend and answers its address |
+| `platform_setup {name, slug, org_name?, org?}` | makes (or reuses) a team organization by name, or uses `org` / the personal one, and a platform in it: reused when the organization has one with that slug, else made (an organization may have several) |
+| `app_developer_access {dir, platform?, org?, platform_api?}` | a developer key of that organization, bound to the platform (`platform`, or the person's only one) (models: read, chat: write, platform collection: write) written into the app's `.aseman/server.env` (`ASEMAN_DEVELOPER_KEY`, `ASEMAN_DEVELOPER_API_URL` = node `/dev/v1`, `ASEMAN_PLATFORM`); the agent never sees it; calling again revokes and replaces it; rebuilds keep it |
+| `platform_publish {dir, platform?, org?}` | publishes the app `appui_publish` verified as the platform's frontend and answers its address |
 
 The server SDKs' `Aseman.developer()` uses the key (`models`, `chat`,
 `platform(namespace, action, body)`, `catalog`); `DEVELOPER.md` in the project
@@ -477,7 +484,7 @@ Aseman and on a platform are two accounts.
 ### 8.4 Building a product on Aseman
 
 1. Create a developer org + API keys (Platform permission).
-2. Create a sub-platform (`slug`).
+2. Create a platform (`slug`).
 3. Point your client at the node API; register/login with `platform: "<slug>"`.
 4. Optionally use the developer host for models/computers and `POST /v1/platform/{ns}/{action}` for automation as the key creator.
 5. Or skip writing a client: have a space's agents build the frontend and publish it (§8.3).
@@ -590,10 +597,10 @@ Documented in depth in `deploy/README.md`. Highlights:
 | **Desk** | Floating window surface inside a space |
 | **Gadget** | Compact frameless App UI widget (gadget mode) over chat/rail/desk/page |
 | **Turn** | One agent work unit in a room |
-| **Developer org** | Team (or personal) owner of API keys, computers, optional sub-platform |
-| **Sub-platform** | Isolated product environment on one node (`dev_platforms`) |
+| **Developer org** | Team (or personal) owner of API keys, computers, optional platform |
+| **Platform** | Isolated product environment on one node (`dev_platforms`) |
 | **Main Aseman** | Empty `platform_id` — the shared app environment |
-| **Main access** | Admin boolean bridge between one sub-platform and main |
+| **Main access** | Admin boolean bridge between one platform and main |
 | **Universal ID** | `node(16hex)+entity(16hex)` address |
 
 ---
@@ -607,11 +614,11 @@ Documented in depth in `deploy/README.md`. Highlights:
 | `services/plugins/README.md` | Plugin layers, build, replace, bridge rules |
 | `deploy/README.md` | Domains, env, Caddy, shipping |
 | `app/README.md` | Flutter run defines, OAuth for apps |
-| `CHANGELOG.md` | Recent product changes (gadgets, harness, themes, developer/sub-platforms) |
+| `CHANGELOG.md` | Recent product changes (gadgets, harness, themes, developer/platforms) |
 | `deploy/sandbox-computer/appui/elpian/GADGETS.md` | App UI gadget mode |
 | `services/plugins/adapters/vmm/harness/runtime/README.md` | Agent runtime internals |
 | `docs/telemetry.md` | Telemetry policy |
 
 ---
 
-*Aseman’s modular bet: a fixed kernel, swappable infrastructure, and product features as loadable namespaces — so the same node can host the social AI workspace, an OpenAI-compatible developer door, and isolated sub-platforms without forking the stack.*
+*Aseman’s modular bet: a fixed kernel, swappable infrastructure, and product features as loadable namespaces — so the same node can host the social AI workspace, an OpenAI-compatible developer door, and isolated platforms without forking the stack.*

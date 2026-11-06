@@ -1,5 +1,5 @@
 // This runner proves, on a whole node, that a person's agent can give them a
-// product on Aseman: an organization with its own sub-platform, a fullstack
+// product on Aseman: an organization with its own platform, a fullstack
 // app built in a space and wired to that space's real agents and apps, the
 // organization's developer API in the app's server, and the app published as
 // the platform's frontend — and that the platform's people then use it.

@@ -2,6 +2,21 @@
 
 ## Unreleased: the workflow installer
 
+- **Platforms, not sub-platforms; several per organization.** "Sub-platform"
+  is gone as a term: it was the same thing as a platform. An organization
+  may now own any number of platforms (each with a node-unique slug).
+  `developer.platforms_list` lists them, and `platform_get`, `rename`,
+  `delete`, `stats`, `users` and `frontend_publish` / `unpublish` take
+  `platform` (id or slug; optional while the organization has one). A
+  developer key can be bound to one platform (`input.platform`): what it
+  makes through the platform collection joins that platform, and an unbound
+  key of an organization with several platforms is refused there. Workflows
+  find the `platform` resource by slug and stamp the platform
+  `options.platform` names. The agents' `platform_setup` reuses a platform
+  by slug and otherwise makes another; `app_developer_access` and
+  `platform_publish` take `platform`. The console's **Platforms** page
+  switches between an organization's platforms, makes, renames and deletes
+  them, and the key dialog binds a key to one.
 - **An agentic product as a workflow: آسمان‌درس.** `docs/workflows/study-planner.json`
   brings up a study planner for Iranian school students: organization,
   sub-platform and server key, a project with a custom **Planner** agent

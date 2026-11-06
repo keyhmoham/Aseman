@@ -3,7 +3,7 @@ package spaces
 // Platform frontends. An app the agents of a space built and published with
 // appui_publish (an Elpian or web App UI with its own backend) can be
 // published by an owner or admin of a developer organization as the frontend
-// of the organization's sub-platform (developer/platform_frontend.go). The
+// of the organization's platform (developer/platform_frontend.go). The
 // gateway then serves it to the platform's people at /v1/platforms/<slug>/app/.
 //
 // The platform's people are not members of the space, so the app reaches the
@@ -42,7 +42,7 @@ const (
 )
 
 // appuiAudience picks who an App UI is built for: the space's own people
-// (the default) or a sub-platform's people, as that platform's frontend.
+// (the default) or a platform's people, as that platform's frontend.
 func appuiAudience(asked, existing string) (string, error) {
 	switch a := strings.ToLower(strings.TrimSpace(asked)); a {
 	case appuiAudienceSpace, appuiAudiencePlatform:
@@ -53,7 +53,7 @@ func appuiAudience(asked, existing string) (string, error) {
 		}
 		return appuiAudienceSpace, nil
 	default:
-		return "", errs.InvalidArgument(`audience is "space" (the default: people of this space) or "platform" (the frontend of a sub-platform the person runs, used by that platform's people)`)
+		return "", errs.InvalidArgument(`audience is "space" (the default: people of this space) or "platform" (the frontend of a platform the person runs, used by that platform's people)`)
 	}
 }
 

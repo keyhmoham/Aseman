@@ -7,7 +7,7 @@ import '../desk/presentation/web_page_view.dart';
 import '../navigation/presentation/app_shell.dart';
 import '../tools/elpian_app/elpian_app_view.dart';
 
-/// Home of a sub-platform's client ([PlatformMode]): the frontend the
+/// Home of a platform's client ([PlatformMode]): the frontend the
 /// platform's organization published — an app the agents of a space built —
 /// full screen, as the signed-in person of the platform. An Elpian frontend
 /// runs natively; a web one in a web view. Its backend uses that space's

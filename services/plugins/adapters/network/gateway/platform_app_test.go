@@ -76,7 +76,7 @@ func platformRequest(slug, rest, method, token string, body any) *network.Reques
 	return req
 }
 
-// A sub-platform's people open the frontend an agent built in a space they
+// A platform's people open the frontend an agent built in a space they
 // are not members of; the app's page and server reach the space's agents and
 // apps as the person who published it, for them, and only what it is wired to.
 func TestPlatformFrontendServesThePlatformsPeopleWithinItsWiring(t *testing.T) {

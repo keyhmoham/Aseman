@@ -31,15 +31,24 @@ class _Service extends FakeAsemanService {
     calls.add(action);
     bodies[action] = body;
     switch (action) {
-      case 'platform_get':
+      case 'platforms_list':
         return {
-          'platform': {
-            'id': 'pf1',
-            'slug': 'acme',
-            'name': 'Acme',
-            'mainAccess': false,
-            'frontend': frontend,
-          }
+          'platforms': [
+            {
+              'id': 'pf1',
+              'slug': 'acme',
+              'name': 'Acme',
+              'mainAccess': false,
+              'frontend': frontend,
+            },
+            {
+              'id': 'pf2',
+              'slug': 'acme-shop',
+              'name': 'Acme Shop',
+              'mainAccess': false,
+              'frontend': null,
+            },
+          ]
         };
       case 'platform_stats':
         return {'users': 0, 'spaces': 1, 'bots': 2};
@@ -194,6 +203,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Server'), findsOneWidget);
     expect(service.calls, contains('key_create'));
+    // The key is bound to the organization's first platform by default.
+    expect((service.bodies['key_create']!['input'] as Map)['platform'], 'pf1');
   });
 
   testWidgets('an owner publishes an agent-built app as the platform frontend',
@@ -204,9 +215,12 @@ void main() {
     final service = _Service();
     await tester.pumpWidget(MaterialApp(home: DeveloperConsole(service: service)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Sub-platform').first);
+    await tester.tap(find.text('Platforms').first);
     await tester.pumpAndSettle();
     expect(find.text('Frontend'), findsOneWidget);
+    // The organization has two platforms; the first is shown.
+    expect(find.widgetWithText(ChoiceChip, 'Acme Shop'), findsOneWidget);
+    expect(service.bodies['platform_stats']!['platform'], 'pf1');
 
     await tester.tap(find.text('Publish'));
     await tester.pumpAndSettle();
@@ -218,6 +232,7 @@ void main() {
     await tester.tap(find.text('Publish').last);
     await tester.pumpAndSettle();
     expect(service.bodies['platform_frontend_publish']!['proxy'], 'p1');
+    expect(service.bodies['platform_frontend_publish']!['platform'], 'pf1');
     expect(find.text('/v1/platforms/acme/app/'), findsOneWidget);
     expect(find.widgetWithText(Chip, 'Advisor'), findsOneWidget);
 
@@ -226,7 +241,14 @@ void main() {
     await tester.tap(find.text('Take down').last);
     await tester.pumpAndSettle();
     expect(service.calls, contains('platform_frontend_unpublish'));
+    expect(service.bodies['platform_frontend_unpublish']!['platform'], 'pf1');
     expect(find.text('/v1/platforms/acme/app/'), findsNothing);
+
+    // Choosing the other platform shows it.
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Acme Shop'));
+    await tester.pumpAndSettle();
+    expect(service.bodies['platform_stats']!['platform'], 'pf2');
+    expect(find.text('@acme-shop'), findsOneWidget);
   });
 
   testWidgets('a workflow is checked, planned and run, and its run followed',

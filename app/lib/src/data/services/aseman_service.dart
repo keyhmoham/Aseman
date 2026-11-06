@@ -178,7 +178,7 @@ class AsemanService implements BackendService {
     if (stored != null) client.session = stored;
   }
 
-  /// The sub-platform this client is for (see [PlatformMode]): its name and
+  /// The platform this client is for (see [PlatformMode]): its name and
   /// published frontend. Needs no sign-in.
   Future<PlatformInfo> platformInfo([String? slug]) async {
     final result = await actionMap('developer', 'platform_frontend',

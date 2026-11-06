@@ -65,16 +65,57 @@ func cleanPlatformName(name string) (string, error) {
 	return name, nil
 }
 
-// PlatformOfOrg returns the platform owned by an organization, if any.
-func (s *Service) PlatformOfOrg(ctx context.Context, org identity.ID) (*models.Platform, error) {
+// PlatformsOfOrg lists the platforms an organization owns, oldest first.
+func (s *Service) PlatformsOfOrg(ctx context.Context, org identity.ID) ([]models.Platform, error) {
 	var list []models.Platform
-	if err := s.R.List(ctx, "dev_platforms", database.Filter{Equal: map[string]any{"org_id": org.String()}, Limit: 1}, &list); err != nil {
+	if err := s.R.List(ctx, "dev_platforms", database.Filter{Equal: map[string]any{"org_id": org.String()}, OrderBy: "created_at", Asc: true}, &list); err != nil {
 		return nil, err
 	}
-	if len(list) == 0 {
-		return nil, nil
+	return list, nil
+}
+
+// OrgPlatform is the platform of organization [org] that [ref] names (its id
+// or slug). With no ref it is the organization's only platform: nil when it
+// has none, and an error naming them when it has several.
+func (s *Service) OrgPlatform(ctx context.Context, org identity.ID, ref string) (*models.Platform, error) {
+	ref = strings.TrimSpace(ref)
+	if ref != "" {
+		p, err := s.PlatformByRef(ctx, ref)
+		if err != nil {
+			return nil, err
+		}
+		if p.OrgID != org {
+			return nil, errs.NotFound("platform")
+		}
+		return p, nil
 	}
-	return &list[0], nil
+	list, err := s.PlatformsOfOrg(ctx, org)
+	if err != nil {
+		return nil, err
+	}
+	switch len(list) {
+	case 0:
+		return nil, nil
+	case 1:
+		return &list[0], nil
+	}
+	slugs := make([]string, 0, len(list))
+	for _, p := range list {
+		slugs = append(slugs, p.Slug)
+	}
+	return nil, errs.InvalidArgument("this organization has several platforms; name one (platform): " + strings.Join(slugs, ", "))
+}
+
+// mustOrgPlatform is OrgPlatform for actions that need a platform.
+func (s *Service) mustOrgPlatform(ctx context.Context, org identity.ID, ref string) (*models.Platform, error) {
+	p, err := s.OrgPlatform(ctx, org, ref)
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		return nil, errs.NotFound("platform")
+	}
+	return p, nil
 }
 
 // PlatformByRef finds a platform by id or slug.
@@ -99,15 +140,24 @@ func (s *Service) PlatformByRef(ctx context.Context, ref string) (*models.Platfo
 	return &list[0], nil
 }
 
-// CreatePlatform makes a sub-platform for an organization. One per org.
+// ListPlatforms is every platform of the organization.
+func (s *Service) ListPlatforms(ctx context.Context, sc Scope) ([]PlatformView, error) {
+	list, err := s.PlatformsOfOrg(ctx, sc.Org)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PlatformView, 0, len(list))
+	for _, p := range list {
+		out = append(out, platformView(p))
+	}
+	return out, nil
+}
+
+// CreatePlatform makes a platform for an organization. An organization may
+// own any number of platforms; each has a slug unique on the node.
 func (s *Service) CreatePlatform(ctx context.Context, sc Scope, name, slug string) (PlatformView, error) {
 	if sc.Role != models.RoleOwner && sc.Role != models.RoleAdmin {
 		return PlatformView{}, errs.Permission("only owners and admins of the organization can create a platform")
-	}
-	if existing, err := s.PlatformOfOrg(ctx, sc.Org); err != nil {
-		return PlatformView{}, err
-	} else if existing != nil {
-		return PlatformView{}, errs.AlreadyExists("This organization already has a platform.")
 	}
 	name, err := cleanPlatformName(name)
 	if err != nil {
@@ -137,14 +187,14 @@ func (s *Service) CreatePlatform(ctx context.Context, sc Scope, name, slug strin
 	return platformView(*p), nil
 }
 
-// RenamePlatform changes the display name (not the slug).
-func (s *Service) RenamePlatform(ctx context.Context, sc Scope, name string) (PlatformView, error) {
+// RenamePlatform changes a platform's display name (not the slug).
+func (s *Service) RenamePlatform(ctx context.Context, sc Scope, ref, name string) (PlatformView, error) {
 	if sc.Role != models.RoleOwner && sc.Role != models.RoleAdmin {
-		return PlatformView{}, errs.Permission("only owners and admins can rename the platform")
+		return PlatformView{}, errs.Permission("only owners and admins can rename a platform")
 	}
-	p, err := s.PlatformOfOrg(ctx, sc.Org)
-	if err != nil || p == nil {
-		return PlatformView{}, errs.NotFound("platform")
+	p, err := s.mustOrgPlatform(ctx, sc.Org, ref)
+	if err != nil {
+		return PlatformView{}, err
 	}
 	name, err = cleanPlatformName(name)
 	if err != nil {
@@ -157,15 +207,15 @@ func (s *Service) RenamePlatform(ctx context.Context, sc Scope, name string) (Pl
 	return platformView(*p), nil
 }
 
-// DeletePlatform removes the platform record. Existing accounts/spaces stamped
+// DeletePlatform removes a platform record. Existing accounts/spaces stamped
 // with its id stay, but new signups and discovery treat it as gone.
-func (s *Service) DeletePlatform(ctx context.Context, sc Scope) error {
+func (s *Service) DeletePlatform(ctx context.Context, sc Scope, ref string) error {
 	if sc.Role != models.RoleOwner {
-		return errs.Permission("only the owner can delete the platform")
+		return errs.Permission("only the owner can delete a platform")
 	}
-	p, err := s.PlatformOfOrg(ctx, sc.Org)
-	if err != nil || p == nil {
-		return errs.NotFound("platform")
+	p, err := s.mustOrgPlatform(ctx, sc.Org, ref)
+	if err != nil {
+		return err
 	}
 	return s.R.Delete(ctx, "dev_platforms", p.ID)
 }
@@ -184,13 +234,13 @@ func (s *Service) SetMainAccess(ctx context.Context, ref string, access bool) (P
 }
 
 // PlatformUsers lists people whose accounts belong to this platform.
-func (s *Service) PlatformUsers(ctx context.Context, sc Scope, query string, limit int) ([]map[string]any, error) {
+func (s *Service) PlatformUsers(ctx context.Context, sc Scope, ref, query string, limit int) ([]map[string]any, error) {
 	if sc.Role != models.RoleOwner && sc.Role != models.RoleAdmin && sc.Role != models.RoleDeveloper {
 		return nil, errs.Permission("your role cannot list platform users")
 	}
-	p, err := s.PlatformOfOrg(ctx, sc.Org)
-	if err != nil || p == nil {
-		return nil, errs.NotFound("platform")
+	p, err := s.mustOrgPlatform(ctx, sc.Org, ref)
+	if err != nil {
+		return nil, err
 	}
 	if limit <= 0 || limit > 200 {
 		limit = 100
@@ -216,11 +266,11 @@ func (s *Service) PlatformUsers(ctx context.Context, sc Scope, query string, lim
 	return out, nil
 }
 
-// PlatformStats is a short overview for the sub-platform admin console.
-func (s *Service) PlatformStats(ctx context.Context, sc Scope) (map[string]any, error) {
-	p, err := s.PlatformOfOrg(ctx, sc.Org)
-	if err != nil || p == nil {
-		return nil, errs.NotFound("platform")
+// PlatformStats is a short overview of one platform for the console.
+func (s *Service) PlatformStats(ctx context.Context, sc Scope, ref string) (map[string]any, error) {
+	p, err := s.mustOrgPlatform(ctx, sc.Org, ref)
+	if err != nil {
+		return nil, err
 	}
 	var users []account.Account
 	_ = s.R.List(ctx, "accounts", database.Filter{Equal: map[string]any{"platform_id": p.ID.String(), "kind": string(account.KindUser)}}, &users)

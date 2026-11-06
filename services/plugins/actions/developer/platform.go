@@ -131,7 +131,11 @@ func (s *Service) apiPlatformCall(ctx context.Context, p *Principal, req *networ
 		return nil, 0, errs.New(errs.CodeUnavailable, "The platform is unavailable right now.")
 	}
 	platformID := ""
-	if form, _ := s.PlatformOfOrg(ctx, p.Org); form != nil {
+	form, err := s.KeyPlatform(ctx, p.Key)
+	if err != nil {
+		return nil, 0, err
+	}
+	if form != nil {
 		platformID = form.ID.String()
 		ctx = helper.WithPlatform(ctx, platformID)
 	}

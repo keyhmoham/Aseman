@@ -109,7 +109,7 @@ func BuildActions(s *Service) []api.Action {
 }
 
 // GetAccount resolves an account by universal id or handle. Handle lookup is
-// ambiguous across sub-platforms — prefer GetVisibleAccount for product APIs.
+// ambiguous across platforms — prefer GetVisibleAccount for product APIs.
 func (s *Service) GetAccount(ctx context.Context, ref string) (*account.Account, error) {
 	if id, err := identity.Parse(ref); err == nil {
 		acc := &account.Account{}

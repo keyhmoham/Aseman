@@ -178,11 +178,58 @@ class _Keys extends _Loaded {
 
 class _KeysState extends _LoadedState<_Keys> {
   @override
-  Future<_Json> fetch() => call('keys_list');
+  Future<_Json> fetch() async {
+    final keys = await call('keys_list');
+    var platforms = <_Json>[];
+    try {
+      platforms = _maps((await call('platforms_list'))['platforms']);
+    } catch (_) {
+      // An older node, or a role that cannot see platforms: keys still show.
+    }
+    return {...keys, 'platforms': platforms};
+  }
+
+  List<_Json> get _platforms => _maps(data['platforms']);
+
+  String _platformName(dynamic id) {
+    if ('${id ?? ''}'.isEmpty) return '';
+    final p = _platforms.firstWhere((p) => p['id'] == id,
+        orElse: () => {'name': 'a deleted platform'});
+    return '${p['name']}';
+  }
+
+  /// Binds key [k] to one of the organization's platforms (or none).
+  Future<void> _bind(_Json k) async {
+    final picked = await showAppDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text('Platform of ${k['name']}'),
+        children: [
+          SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, ''),
+              child: const Text('None')),
+          for (final p in _platforms)
+            SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, '${p['id']}'),
+                child: Text('${p['name']}  @${p['slug']}')),
+        ],
+      ),
+    );
+    if (picked == null) return;
+    await change(() => call('key_update', {
+          'id': k['id'],
+          'input': {
+            'name': k['name'],
+            'permissions': k['permissions'],
+            'limits': k['limits'],
+            'platform': picked,
+          },
+        }));
+  }
 
   Future<void> _create() async {
     final input = await showAppDialog<_Json>(
-        context: context, builder: (_) => const _KeyDialog());
+        context: context, builder: (_) => _KeyDialog(platforms: _platforms));
     if (input == null) return;
     try {
       final r = await call('key_create', {'input': input});
@@ -214,11 +261,16 @@ class _KeysState extends _LoadedState<_Keys> {
                         ? Icons.key_rounded
                         : Icons.key_off_rounded),
                     title: Text('${k['name']}'),
-                    subtitle: Text(
-                        '${k['prefix']}…${k['last4']} · ${k['status']} · ${_usd(k['spentMonth'])} this month · ${_count(k['requests'])} requests · last used ${_date(k['lastUsedAt'])}'),
+                    subtitle: Text([
+                      '${k['prefix']}…${k['last4']} · ${k['status']}',
+                      if (_platformName(k['platform']).isNotEmpty)
+                        'on ${_platformName(k['platform'])}',
+                      '${_usd(k['spentMonth'])} this month · ${_count(k['requests'])} requests · last used ${_date(k['lastUsedAt'])}',
+                    ].join(' · ')),
                     trailing: AppPopupMenuButton<String>(
                       tooltip: 'Key options',
                       onSelected: (v) async {
+                        if (v == 'platform') await _bind(k);
                         if (v == 'revoke' &&
                             await _confirm(context, 'Revoke ${k['name']}?',
                                 'Calls with it stop working at once.',
@@ -234,6 +286,9 @@ class _KeysState extends _LoadedState<_Keys> {
                         }
                       },
                       itemBuilder: (_) => [
+                        if (k['status'] == 'active' && _platforms.isNotEmpty)
+                          const PopupMenuItem(
+                              value: 'platform', child: Text('Platform…')),
                         if (k['status'] == 'active')
                           const PopupMenuItem(
                               value: 'revoke', child: Text('Revoke')),
@@ -274,7 +329,10 @@ Future<void> _showSecret(BuildContext context, String secret) =>
     );
 
 class _KeyDialog extends StatefulWidget {
-  const _KeyDialog();
+  const _KeyDialog({this.platforms = const []});
+
+  /// The organization's platforms: the key may be bound to one.
+  final List<_Json> platforms;
   @override
   State<_KeyDialog> createState() => _KeyDialogState();
 }
@@ -283,6 +341,8 @@ class _KeyDialogState extends State<_KeyDialog> {
   final _name = TextEditingController();
   final _cap = TextEditingController();
   final _rpm = TextEditingController();
+  late String platform =
+      widget.platforms.isEmpty ? '' : '${widget.platforms.first['id']}';
   final perms = <String, String>{
     'models': 'read',
     'chat': 'write',
@@ -345,6 +405,19 @@ class _KeyDialogState extends State<_KeyDialog> {
                     ),
                     const SizedBox(height: 12),
                   ],
+                  if (widget.platforms.isNotEmpty) ...[
+                    AppChoiceField<String>(
+                      label: 'Platform',
+                      value: platform,
+                      onChanged: (v) => setState(() => platform = v),
+                      choices: [
+                        const AppChoice('', 'None'),
+                        for (final p in widget.platforms)
+                          AppChoice('${p['id']}', '${p['name']}'),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   Row(children: [
                     Expanded(
                         child: TextField(
@@ -383,6 +456,7 @@ class _KeyDialogState extends State<_KeyDialog> {
                       'models': <String>[],
                       'providers': <String>[],
                     },
+                    if (platform.isNotEmpty) 'platform': platform,
                   }),
               child: const Text('Create key')),
         ],

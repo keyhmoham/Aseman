@@ -191,10 +191,10 @@ func (s *Service) feature(ctx context.Context, author identity.ID) error {
 
 // globalFeed lists the public top-level posts: the featured ones first
 // (newest at their source first), then every other one newest first.
-// Results are scoped to authors the caller may see across sub-platforms.
+// Results are scoped to authors the caller may see across platforms.
 func (s *Service) globalFeed(ctx context.Context, caller identity.ID, limit, offset int) ([]post.Post, error) {
 	// Over-fetch then filter by author tenancy so pages stay full when some
-	// posts belong to isolated sub-platforms.
+	// posts belong to isolated platforms.
 	fetch := (offset + limit) * 4
 	if fetch < limit*2 {
 		fetch = limit * 2

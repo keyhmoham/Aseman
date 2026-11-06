@@ -211,11 +211,11 @@ func (f *fakePlatform) Call(_ context.Context, action string, with map[string]an
 		org := map[string]any{"id": id, "name": s("name"), "role": "owner"}
 		f.orgs = append(f.orgs, org)
 		return map[string]any{"org": org}, nil
-	case "developer.platform_get":
+	case "developer.platforms_list":
 		if f.platform == nil {
-			return map[string]any{"platform": nil}, nil
+			return map[string]any{"platforms": []any{}}, nil
 		}
-		return map[string]any{"platform": f.platform}, nil
+		return map[string]any{"platforms": copyList([]map[string]any{f.platform})}, nil
 	case "developer.platform_create":
 		f.platform = map[string]any{"id": f.id("pf"), "org": s("org"), "name": s("name"), "slug": s("slug")}
 		return map[string]any{"platform": f.platform}, nil

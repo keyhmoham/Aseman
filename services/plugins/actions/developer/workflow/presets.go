@@ -125,18 +125,19 @@ var Presets = map[string]Preset{
 		Delete:  &Call{Action: "developer.member_remove", With: map[string]any{"org": "${{ params.org }}", "member": "${{ id }}"}},
 		Compare: []string{"role"},
 	}},
-	"platform": {Summary: "The organization's sub-platform (one per organization). with: org, name, slug.", ResourceDef: ResourceDef{
-		Find:    &Call{Action: "developer.platform_get", With: map[string]any{"org": "${{ params.org }}"}, Item: "platform"},
+	"platform": {Summary: "A platform of the organization, by slug (an organization may have several). with: org, name, slug.", ResourceDef: ResourceDef{
+		Find:    &Call{Action: "developer.platforms_list", With: map[string]any{"org": "${{ params.org }}"}, Items: "platforms"},
+		Match:   map[string]any{"slug": "${{ lower(params.slug) }}"},
 		Create:  &Call{Action: "developer.platform_create", With: "${{ pick(params, 'org', 'name', 'slug') }}", ID: "platform.id"},
-		Update:  &Call{Action: "developer.platform_rename", With: "${{ pick(params, 'org', 'name') }}"},
-		Delete:  &Call{Action: "developer.platform_delete", With: map[string]any{"org": "${{ params.org }}"}},
+		Update:  &Call{Action: "developer.platform_rename", With: map[string]any{"org": "${{ params.org }}", "platform": "${{ id }}", "name": "${{ params.name }}"}},
+		Delete:  &Call{Action: "developer.platform_delete", With: map[string]any{"org": "${{ params.org }}", "platform": "${{ id }}"}},
 		Compare: []string{"name"},
 	}},
-	"key": {Summary: "A developer API key, by name. with: org, name, permissions, limits. The secret is in outputs.result.secret when it is created.", ResourceDef: ResourceDef{
+	"key": {Summary: "A developer API key, by name. with: org, name, permissions, limits, platform (the slug or id of the platform it is bound to). The secret is in outputs.result.secret when it is created.", ResourceDef: ResourceDef{
 		Find:    &Call{Action: "developer.keys_list", With: map[string]any{"org": "${{ params.org }}"}, Items: "keys"},
 		Match:   map[string]any{"name": "${{ params.name }}", "status": "active"},
-		Create:  &Call{Action: "developer.key_create", With: map[string]any{"org": "${{ params.org }}", "input": "${{ pick(params, 'name', 'permissions', 'limits') }}"}, ID: "key.id"},
-		Update:  &Call{Action: "developer.key_update", With: map[string]any{"org": "${{ params.org }}", "id": "${{ id }}", "input": "${{ pick(params, 'name', 'permissions', 'limits') }}"}},
+		Create:  &Call{Action: "developer.key_create", With: map[string]any{"org": "${{ params.org }}", "input": "${{ pick(params, 'name', 'permissions', 'limits', 'platform') }}"}, ID: "key.id"},
+		Update:  &Call{Action: "developer.key_update", With: map[string]any{"org": "${{ params.org }}", "id": "${{ id }}", "input": "${{ pick(params, 'name', 'permissions', 'limits', 'platform') }}"}},
 		Delete:  &Call{Action: "developer.key_delete", With: map[string]any{"org": "${{ params.org }}", "id": "${{ id }}"}},
 		Compare: []string{"name", "permissions", "limits"},
 	}},

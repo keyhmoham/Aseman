@@ -23,7 +23,7 @@ class Session {
   final String homeSpaceId;
   final String email;
 
-  /// The sub-platform the account belongs to ('' for main Aseman).
+  /// The platform the account belongs to ('' for main Aseman).
   final String platformId;
 
   bool get isLoggedIn => token.isNotEmpty && accountId.isNotEmpty;

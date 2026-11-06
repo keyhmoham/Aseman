@@ -8,7 +8,7 @@ command and the SDKs):
 |---|---|
 | `ASEMAN_DEVELOPER_API_URL` | the node's developer API (`…/dev/v1`) |
 | `ASEMAN_DEVELOPER_KEY` | the key (`dk_live_…`): acts as the person who asked for it, spends from the organization |
-| `ASEMAN_PLATFORM` | the organization's platform slug, when it has one |
+| `ASEMAN_PLATFORM` | the slug of the platform the key is bound to, when there is one |
 
 Never send the key to the page, print it, log it, or commit it. The page
 reaches the developer API only through routes of your own server.
@@ -25,7 +25,7 @@ reaches the developer API only through routes of your own server.
 
 `developer.catalog()` lists every action the platform collection offers (node
 administration is never in it). Entities you create through it are stamped
-with the organization's platform.
+with the platform the key is bound to.
 
 ```js
 const { Aseman } = require("./vendor/aseman-sdk/server.cjs");

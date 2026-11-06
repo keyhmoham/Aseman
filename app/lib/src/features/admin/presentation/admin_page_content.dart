@@ -319,7 +319,7 @@ class _AppPageContentState extends State<AdminPageContent> {
   /// in the last days, and the latest requests (read-only).
   Widget _developer() => _buildDeveloperPage(this);
 
-  /// Sub-platforms and the boolean bridge onto main Aseman.
+  /// Platforms and the boolean bridge onto main Aseman.
   Widget _developerPlatforms() => _buildDeveloperPlatformsPage(this);
 
   Widget _developerLogs(

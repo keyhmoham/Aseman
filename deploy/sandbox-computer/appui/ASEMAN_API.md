@@ -33,7 +33,7 @@ app key only for work nobody is in front of. Never call the API from tests.
 
 ### A platform's frontend
 
-When the app is published as the frontend of a sub-platform (`JOB.json` →
+When the app is published as the frontend of a platform (`JOB.json` →
 `audience: "platform"`, see `PLATFORM.md`), it is served at
 `/v1/platforms/<slug>/app/` to the platform's people, who are not members of
 this space. Their calls (page and server, with the request's token) run as,
@@ -52,7 +52,7 @@ Every request the gateway forwards to your server carries:
 | `X-Aseman-User`, `X-Aseman-User-Handle` | who is using the app |
 | `X-Aseman-Space`, `X-Aseman-Room` | where |
 | `X-Aseman-Api` | the API URL (same as `ASEMAN_API_URL`) |
-| `X-Aseman-Platform`, `-Id`, `-Name` | the sub-platform the request came through, when the app is a platform's frontend |
+| `X-Aseman-Platform`, `-Id`, `-Name` | the platform the request came through, when the app is a platform's frontend |
 
 Call `<ASEMAN_API_URL>/<op>` (the ops below) with
 `Authorization: Bearer <token>`: the request's `X-Aseman-User-Token`, or

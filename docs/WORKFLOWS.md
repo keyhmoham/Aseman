@@ -1,7 +1,7 @@
 # Workflow installer
 
 > **Brief:** one JSON document describes, in order, everything a product
-> needs on Aseman: the developer organization, its team, sub-platform and API
+> needs on Aseman: the developer organization, its team, platform and API
 > keys; the spaces, rooms, agents and apps; the full source of an Elpian or
 > web app written onto a space's computer, built, tested and served; model
 > calls; and the checks that prove it worked. The developer API validates it,
@@ -31,7 +31,7 @@ people): [`docs/workflows/AUTHORING.md`](workflows/AUTHORING.md), served as
 The key needs **platform: write** to plan or run (read to validate and read
 runs). Every step acts as **the person who created the key**, exactly like
 `POST /v1/platform/{namespace}/{action}`, and what it creates is stamped with
-the organization's sub-platform when it has one.
+the platform the key is bound to (or the organization's only platform).
 
 | | |
 | --- | --- |
@@ -122,7 +122,8 @@ cannot name another.
   "defaults": { "retry": {...}, "timeout": "5m", "continue_on_error": false,
                 "with": {"developer": {"org": "…"}} },       // merged under every action of a namespace
   "options":  { "rollback_on_failure": true, "timeout": "45m", "max_steps": 5000,
-                "org": "personal", "stamp_platform": false },
+                "org": "personal", "stamp_platform": false,
+                "platform": "acme" },           // which of the org's platforms to stamp
   "assets":   { "app/server.py": "text", "logo.png": {"base64": "…"}, "cfg.json": {"json": {...}},
                 "index.html": {"content": "…", "template": true, "mode": "0644"} },
   "templates": { "name": {"params": {...}, "steps": [...], "outputs": {...}} },
@@ -209,7 +210,7 @@ A plan answers `would_create`, `would_update`, `unchanged`, or
 | `proxy` | `port` in `space` | `spaces.proxy_list` / `proxy_create` / `proxy_delete` |
 | `org` | name | `developer.orgs_list` / `org_create` / `org_delete` (console) |
 | `member` | handle in `org` | `developer.members_list` / `member_invite` / `member_role` / `member_remove` (console) |
-| `platform` | the org's one | `developer.platform_get` / `platform_create` / `platform_rename` / `platform_delete` |
+| `platform` | slug in `org` (an org may have several) | `developer.platforms_list` / `platform_create` / `platform_rename` / `platform_delete` |
 | `key` | name (active) in `org` | `developer.keys_list` / `key_create` / `key_update` / `key_delete` (console); the secret is in `outputs.result.secret` when created |
 | `computer` | name in `org` | `developer.computers_list` / `computer_create` / `computer_delete` |
 

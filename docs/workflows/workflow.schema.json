@@ -978,6 +978,9 @@
         "org": {
           "type": "string"
         },
+        "platform": {
+          "type": "string"
+        },
         "rollback_on_failure": {
           "type": "boolean"
         },

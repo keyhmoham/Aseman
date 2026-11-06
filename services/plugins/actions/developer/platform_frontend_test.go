@@ -39,7 +39,7 @@ func TestPublishAnAppAsThePlatformsFrontend(t *testing.T) {
 		Entry: "elpian/app.js", Wiring: models.Wiring{Agents: []models.WiredAgent{{ID: "a1", Name: "Research"}}}}
 	f.s.Frontends = fakeFrontends{apps: map[string]models.FrontendApp{"p1": store}}
 
-	if _, err := f.s.PublishFrontend(f.ctx, sc, f.me, "p1"); errs.CodeOf(err) != errs.CodeNotFound {
+	if _, err := f.s.PublishFrontend(f.ctx, sc, f.me, "", "p1"); errs.CodeOf(err) != errs.CodeNotFound {
 		t.Fatalf("published before the platform exists: %v", err)
 	}
 	if _, err := f.s.CreatePlatform(f.ctx, sc, "Acme", "acme"); err != nil {
@@ -53,13 +53,13 @@ func TestPublishAnAppAsThePlatformsFrontend(t *testing.T) {
 	}
 	viewer := sc
 	viewer.Role = models.RoleViewer
-	if _, err := f.s.PublishFrontend(f.ctx, viewer, f.me, "p1"); errs.CodeOf(err) != errs.CodePermission {
+	if _, err := f.s.PublishFrontend(f.ctx, viewer, f.me, "", "p1"); errs.CodeOf(err) != errs.CodePermission {
 		t.Fatalf("a viewer published: %v", err)
 	}
-	if _, err := f.s.PublishFrontend(f.ctx, sc, f.me, "nope"); errs.CodeOf(err) != errs.CodeNotFound {
+	if _, err := f.s.PublishFrontend(f.ctx, sc, f.me, "", "nope"); errs.CodeOf(err) != errs.CodeNotFound {
 		t.Fatalf("an unknown app: %v", err)
 	}
-	view, err := f.s.PublishFrontend(f.ctx, sc, f.me, "p1")
+	view, err := f.s.PublishFrontend(f.ctx, sc, f.me, "", "p1")
 	if err != nil || view.Frontend == nil || view.Frontend.URL != "/v1/platforms/acme/app/" || view.Frontend.UI != "elpian" ||
 		view.Frontend.PublishedBy != f.me.String() || !view.Frontend.Wiring.AllowsAgent("research") {
 		t.Fatalf("publish: %+v %v", view.Frontend, err)
@@ -97,7 +97,7 @@ func TestPublishAnAppAsThePlatformsFrontend(t *testing.T) {
 		t.Fatalf("public: %+v", pub)
 	}
 
-	view, err = f.s.UnpublishFrontend(f.ctx, sc)
+	view, err = f.s.UnpublishFrontend(f.ctx, sc, "")
 	if err != nil || view.Frontend != nil {
 		t.Fatalf("unpublish: %+v %v", view, err)
 	}

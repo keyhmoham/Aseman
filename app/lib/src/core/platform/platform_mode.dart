@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 /// Which product environment this client is for.
 ///
-/// Empty is main Aseman. A sub-platform's own client is built with
+/// Empty is main Aseman. A platform's own client is built with
 /// `--dart-define=ASEMAN_PLATFORM=<slug>`; a web build can also be opened as
 /// one with `?platform=<slug>`. In a platform's client people sign in to (and
 /// up on) that platform's own accounts, and home is the frontend the
@@ -28,7 +28,7 @@ abstract final class PlatformMode {
     return '';
   }
 
-  /// Whether this client is a sub-platform's.
+  /// Whether this client is a platform's.
   static bool get active => slug.isNotEmpty;
 
   /// The `platform` field auth actions take ({} on main Aseman).

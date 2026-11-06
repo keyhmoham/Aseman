@@ -161,7 +161,7 @@ func (s *Service) Get(ctx context.Context, id identity.ID) (*market.Listing, err
 }
 
 // List returns active listings, optionally filtered by type, category or query.
-// viewer scopes results to bots that person may see across sub-platforms.
+// viewer scopes results to bots that person may see across platforms.
 func (s *Service) List(ctx context.Context, viewer identity.ID, itemType string, category, query string, limit, offset int) ([]market.Listing, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50

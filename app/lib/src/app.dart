@@ -106,7 +106,7 @@ class _AsemanAppState extends State<AsemanApp> {
                   ),
                 ),
               ),
-              // A sub-platform's client opens on the platform's frontend.
+              // A platform's client opens on the platform's frontend.
               home: PlatformMode.active
                   ? PlatformHome(dependencies: widget.dependencies)
                   : AppShell(dependencies: widget.dependencies),

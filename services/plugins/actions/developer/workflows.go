@@ -94,7 +94,7 @@ type wfActor struct {
 // the signed-in console.
 var keyDeveloperActions = map[string]string{
 	"models": "models", "platform_catalog": "platform",
-	"platform_get": "platform", "platform_create": "platform", "platform_rename": "platform", "platform_stats": "platform",
+	"platforms_list": "platform", "platform_get": "platform", "platform_create": "platform", "platform_rename": "platform", "platform_stats": "platform",
 	"platform_users": "platform", "platform_frontend_apps": "platform", "platform_frontend_publish": "platform",
 	"platform_frontend_unpublish": "platform", "platform_frontend": "platform",
 	"settings_get": "usage", "wallet_get": "usage", "usage_report": "usage", "logs_list": "usage",
@@ -169,6 +169,46 @@ type wfCaller struct {
 	a     wfActor
 	runID string
 	stamp bool
+	// platformRef is the platform the run stamps (options.platform): its id
+	// or slug. Empty: the key's, else the organization's only one.
+	platformRef string
+}
+
+// platformScopedAction are the developer actions that act on one platform
+// of the organization (named by "platform").
+var platformScopedAction = map[string]bool{
+	"platform_get": true, "platform_rename": true, "platform_delete": true, "platform_stats": true,
+	"platform_users": true, "platform_frontend_publish": true, "platform_frontend_unpublish": true,
+}
+
+// boundPlatform is the id of the platform the run's key is bound to ("": none).
+func (c *wfCaller) boundPlatform() string {
+	if c.a.key == nil {
+		return ""
+	}
+	return c.a.key.Key.PlatformID
+}
+
+// platform is the platform what the run makes joins (nil: main Aseman).
+func (c *wfCaller) platform(ctx context.Context) (*models.Platform, error) {
+	if c.platformRef == "" {
+		if c.a.key != nil {
+			return c.s.KeyPlatform(ctx, c.a.key.Key)
+		}
+		return c.s.OrgPlatform(ctx, c.a.org, "")
+	}
+	p, err := c.s.OrgPlatform(ctx, c.a.org, c.platformRef)
+	if err != nil {
+		if errs.CodeOf(err) == errs.CodeNotFound {
+			// Not made yet: a later step may create it.
+			return nil, nil
+		}
+		return nil, err
+	}
+	if bound := c.boundPlatform(); bound != "" && p != nil && bound != p.ID.String() {
+		return nil, errs.Permission("a key's workflow works on the platform the key is bound to")
+	}
+	return p, nil
 }
 
 func (c *wfCaller) Call(ctx context.Context, name string, with map[string]any) (any, error) {
@@ -183,6 +223,15 @@ func (c *wfCaller) Call(ctx context.Context, name string, with map[string]any) (
 		} else if c.a.key != nil && given != c.a.orgRef && given != c.a.org.String() {
 			return nil, errs.Permission("a key's workflow works in the key's own organization")
 		}
+		// A key bound to a platform manages that platform only.
+		if bound := c.boundPlatform(); bound != "" && platformScopedAction[action] {
+			given := strings.TrimSpace(ToStringAny(with["platform"]))
+			if given == "" {
+				with["platform"] = bound
+			} else if p, err := c.s.PlatformByRef(ctx, given); err != nil || p.ID.String() != bound {
+				return nil, errs.Permission("a key's workflow works on the platform the key is bound to")
+			}
+		}
 	}
 	router := c.s.K.Actions()
 	if router == nil {
@@ -191,7 +240,11 @@ func (c *wfCaller) Call(ctx context.Context, name string, with map[string]any) (
 	platformID := ""
 	if c.stamp && ns != "developer" {
 		// Looked up each time: a step may have just created the platform.
-		if p, _ := c.s.PlatformOfOrg(ctx, c.a.org); p != nil {
+		p, err := c.platform(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if p != nil {
 			platformID = p.ID.String()
 			ctx = helper.WithPlatform(ctx, platformID)
 		}
@@ -496,7 +549,8 @@ func (s *Service) StartWorkflow(ctx context.Context, a wfActor, in WorkflowReque
 	active[runKey] = cancel
 	mu.Unlock()
 
-	caller := &wfCaller{s: s, a: a, runID: id.String(), stamp: a.key != nil || wf.Options.StampPlatform}
+	caller := &wfCaller{s: s, a: a, runID: id.String(), stamp: a.key != nil || wf.Options.StampPlatform || wf.Options.Platform != "",
+		platformRef: strings.TrimSpace(wf.Options.Platform)}
 	var saveMu sync.Mutex
 	lastSave := time.Time{}
 	var lastRep *workflow.Report

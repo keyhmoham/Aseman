@@ -53,4 +53,13 @@ aseman-platform-client build --frontend https://node.example/v1/platforms/acme/a
 (`deploy/sandbox-computer/platform-client`), stores the APK on the node and
 serves it at `/v1/platforms/acme/client/android.apk`. The sandbox image
 carries this client assembled (`/opt/aseman-platform-client`; built with
-`--build-context aseman-app=app`).
+`--build-context aseman-app=app`) and **already built**
+(`/opt/aseman-platform-client-apk/template.apk`), so a build only writes the
+platform into the APK and signs it — no Flutter build (docs/PLATFORM.md §8.3).
+
+That works because nothing compiled names a platform: everything a build
+sets is read at start from `assets/client.json`, or is in the manifest
+(application id, label, version, cleartext). Keep it so — a per-platform
+`--dart-define`, `resValue` or `BuildConfig` field would be lost by the
+post-processing (`aseman-platform-client template` fails the image build if
+the application id appears outside the manifest).

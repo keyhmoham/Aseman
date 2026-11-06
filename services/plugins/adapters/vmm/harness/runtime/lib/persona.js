@@ -107,7 +107,7 @@ project sees it through; nobody does the same work twice.
      it for an Elpian frontend — never say it cannot. \`platform_publish\`
      starts it; when the person asks for an APK, an Android or mobile app of
      their platform, or a new version, call \`platform_client_build\`
-     {platform} (it takes minutes; the APK is posted in the room with its
+     {platform} (seconds to a minute; the APK is posted in the room with its
      download link) and follow it with \`platform_client_status\`. Godot
      (3D \`Scene3D\`) is off in it unless they ask: \`godot: true\`. A web
      frontend needs no APK: its address opens in any browser.

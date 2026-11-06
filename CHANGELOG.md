@@ -2,6 +2,24 @@
 
 ## Unreleased: the workflow installer
 
+- **A platform's Android app in seconds: prebuilt, then post-processed.**
+  The sandbox image now carries the platform client already built
+  (`/opt/aseman-platform-client-apk/template.apk`, built with Flutter once,
+  in the image's amd64 `platform-client-apk` stage), so publishing a
+  platform's app no longer runs a Flutter build: `aseman-platform-client
+  build` writes the platform into a copy (`apkpatch.py`: `client.json` with
+  the frontend's address, name and accent; the binary manifest's
+  application id — with the authorities and permissions named after it —
+  label, version and cleartext flag; the resource table's package name; the
+  asked ABIs), aligns it as `zipalign -P 16 4` does, signs it with the
+  platform's key with `apksigner` and verifies it (certificate, manifest and
+  `client.json` read back). About 3 s instead of minutes; the result is the
+  same app a Flutter build of that platform makes (every entry byte for byte
+  but the manifest, whose decoded tree is identical). Godot builds, `--full`
+  and images without the template still build with Flutter.
+  `--build-arg PREBUILD_PLATFORM_CLIENT=0` leaves the template out;
+  `ASEMAN_MAVEN_MIRROR` works as a build arg. App ids are now at most 127
+  characters (the resource table's limit).
 - **A platform's own Android app, and waking from anywhere.** Publishing an
   Elpian app as a platform's frontend now also builds the platform an app of
   its own: the lightweight Elpian client (`app/platform_client`: the Elpian

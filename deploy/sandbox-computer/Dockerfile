@@ -1,3 +1,4 @@
+# check=skip=FromPlatformFlagConstDisallowed
 # Sandbox computer: the default per-space sandbox image of aseman.
 #
 # Every space runs one. It is the shared computer of the space's agents: the
@@ -35,6 +36,34 @@ RUN if [ -x /src/app/platform_client/tool/assemble.sh ]; then \
       ASEMAN_APP=/src/app /src/app/platform_client/tool/assemble.sh /out; \
     else mkdir -p /out; fi
 
+# The platform client, built once: a release APK named for no platform
+# (template.apk), which aseman-platform-client turns into a platform's app in
+# seconds (its frontend address, name, application id and version written in,
+# aligned, signed with the platform's key by apksigner) instead of a Flutter
+# build on every publish. Built on amd64 whatever the image's platform: the
+# Android SDK's tools are x86_64 only, and an APK is the same for every host.
+# The toolchain stays in this stage; the image keeps the APK and apksigner.
+# --build-arg PREBUILD_PLATFORM_CLIENT=0 skips it (builds then use Flutter).
+# (The constant --platform is deliberate: the check skipped on line 1.)
+FROM --platform=linux/amd64 public.ecr.aws/docker/library/node:22-bookworm AS platform-client-apk
+ARG PREBUILD_PLATFORM_CLIENT=1
+# A mirror of Maven Central for Gradle, where it rate limits the builder
+# (e.g. https://maven-central.storage-download.googleapis.com/maven2).
+ARG ASEMAN_MAVEN_MIRROR=
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends jq zip unzip xz-utils openjdk-17-jdk-headless \
+ && rm -rf /var/lib/apt/lists/*
+COPY platform-client/aseman-platform-client platform-client/apkpatch.py /usr/local/lib/aseman-platform-client/
+COPY --from=platform-client /out /opt/aseman-platform-client
+ENV ASEMAN_PLATFORM_CLIENT_SRC=/opt/aseman-platform-client ASEMAN_TOOLCHAIN=/opt/aseman-toolchain
+RUN mkdir -p /out \
+ && if [ "$PREBUILD_PLATFORM_CLIENT" = "1" ] && [ -f /opt/aseman-platform-client/pubspec.yaml ]; then \
+      bash /usr/local/lib/aseman-platform-client/aseman-platform-client toolchain; \
+    fi
+RUN if [ "$PREBUILD_PLATFORM_CLIENT" = "1" ] && [ -f /opt/aseman-platform-client/pubspec.yaml ]; then \
+      bash /usr/local/lib/aseman-platform-client/aseman-platform-client template --out /out --state /tmp/template; \
+    fi
+
 # The official node image from Amazon's public mirror of Docker Hub: anonymous
 # pulls from Docker Hub itself are rate limited per IP, and CI runners share theirs.
 FROM public.ecr.aws/docker/library/node:22-bookworm
@@ -43,6 +72,7 @@ RUN apt-get update \
       bash ca-certificates curl wget git jq less procps psmisc ripgrep fd-find tree \
       python3 python3-pip python3-venv build-essential sqlite3 \
       zip unzip file tini \
+      openjdk-17-jre-headless \
  && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
  && rm -rf /var/lib/apt/lists/*
 # The project's desktop (Computer): a virtual X screen, a VNC server and noVNC,
@@ -89,14 +119,20 @@ RUN chmod +x /usr/local/bin/aseman-appui /opt/aseman-appui/elpian/elpian-cli.mjs
  && ln -sf /opt/aseman-appui/wiring-check.mjs /usr/local/bin/aseman-wiring-check \
  && mkdir -p /opt/aseman-appui \
  && ln -sf /usr/local/bin/aseman-appui /opt/aseman-appui/aseman-appui
-# A platform's own Android app: the client kit (assembled above) and its
-# builder. The first build on a computer downloads Flutter and the Android
-# SDK into /opt/aseman-toolchain; --build-arg WITH_ANDROID_TOOLCHAIN=1 bakes
-# them into the image instead (a few GB, but builds start at once).
+# A platform's own Android app: the client prebuilt (template.apk, above)
+# with apksigner, which a build turns into the platform's app in seconds
+# (Java above runs apksigner and keytool); the client kit (assembled above)
+# and its builder for a Flutter build (Godot, or --full). A Flutter build
+# downloads Flutter and the Android SDK into /opt/aseman-toolchain;
+# --build-arg WITH_ANDROID_TOOLCHAIN=1 bakes them into the image instead (a
+# few GB, but such builds start at once).
+COPY --from=platform-client-apk /out /opt/aseman-platform-client-apk
 COPY --from=platform-client /out /opt/aseman-platform-client
 COPY --from=aseman-godot / /opt/aseman-godot/
 COPY platform-client/aseman-platform-client /usr/local/bin/aseman-platform-client
-ENV ASEMAN_PLATFORM_CLIENT_SRC=/opt/aseman-platform-client ASEMAN_TOOLCHAIN=/opt/aseman-toolchain
+COPY platform-client/apkpatch.py /usr/local/lib/aseman-platform-client/apkpatch.py
+ENV ASEMAN_PLATFORM_CLIENT_SRC=/opt/aseman-platform-client ASEMAN_PLATFORM_CLIENT_APK=/opt/aseman-platform-client-apk \
+    ASEMAN_TOOLCHAIN=/opt/aseman-toolchain
 ARG WITH_ANDROID_TOOLCHAIN=0
 RUN chmod +x /usr/local/bin/aseman-platform-client \
  && if [ "$WITH_ANDROID_TOOLCHAIN" = "1" ]; then aseman-platform-client toolchain; fi

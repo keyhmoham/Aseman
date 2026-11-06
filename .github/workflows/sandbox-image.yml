@@ -77,7 +77,12 @@ jobs:
         with:
           context: deploy/sandbox-computer
           build-contexts: aseman-app=app
-          build-args: TOOL_RUNTIME_IMAGE=${{ env.TOOL_RUNTIME_IMAGE }}
+          # The image prebuilds the platform client with Flutter (Gradle
+          # fetches from Maven Central, which rate limits shared runners: its
+          # Google mirror instead).
+          build-args: |
+            TOOL_RUNTIME_IMAGE=${{ env.TOOL_RUNTIME_IMAGE }}
+            ASEMAN_MAVEN_MIRROR=https://maven-central.storage-download.googleapis.com/maven2
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

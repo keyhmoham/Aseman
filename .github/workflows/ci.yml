@@ -118,6 +118,10 @@ jobs:
       - run: flutter test
       - name: The build script parses
         run: bash -n ../../deploy/sandbox-computer/platform-client/aseman-platform-client
+      # The post-processing that makes a platform's APK from the prebuilt client.
+      - name: apkpatch (APK post-processing)
+        working-directory: deploy/sandbox-computer/platform-client
+        run: python3 -m unittest -v test_apkpatch
 
   deploy:
     name: Compose and Helm

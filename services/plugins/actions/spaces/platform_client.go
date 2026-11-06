@@ -9,8 +9,12 @@ package spaces
 // app's proxy, /v1/platforms/<slug>/app/ on this node's public address.
 //
 // The build runs on the frontend space's computer (aseman-platform-client,
-// deploy/sandbox-computer/platform-client), detached: it takes minutes, and
-// the computer runs one command at a time for everyone. The node watches it
+// deploy/sandbox-computer/platform-client), detached. The sandbox image
+// carries the client already built, so a build only writes the platform into
+// it (the frontend's address, name, application id and version) and signs it
+// with the platform's key: seconds. A Godot build, or a computer whose image
+// has no prebuilt client, builds with Flutter instead: minutes, and the
+// computer runs one command at a time for everyone. The node watches it
 // (each look keeps the computer awake for the build), then stores the APK as
 // a file of the space, records it on the platform (developer namespace), and
 // posts it in the room the build was asked from. Anyone downloads it at
@@ -43,6 +47,9 @@ const (
 	// clientBuildPoll is how often a build is looked at (and its computer
 	// kept awake: well inside the computer's idle window).
 	clientBuildPoll = 15 * time.Second
+	// clientBuildFirstLook is when a build is first looked at: a prebuilt
+	// client is written and signed in seconds.
+	clientBuildFirstLook = 3 * time.Second
 	// clientBuildTimeout bounds a build, the first one on a computer
 	// (downloading Flutter and the Android SDK) included.
 	clientBuildTimeout = 75 * time.Minute
@@ -176,8 +183,8 @@ func (s *Service) StartPlatformClientBuild(ctx context.Context, person identity.
 	if appID == "" {
 		appID = "io.aseman.platform." + strings.ReplaceAll(target.Slug, "-", "_")
 	}
-	if !clientAppIDRE.MatchString(appID) || len(appID) > 150 {
-		return models.PlatformClientBuild{}, errs.InvalidArgument("app_id is an Android application id, e.g. com.example.shop")
+	if !clientAppIDRE.MatchString(appID) || len(appID) > 127 { // resources.arsc names it in 128 chars
+		return models.PlatformClientBuild{}, errs.InvalidArgument("app_id is an Android application id of at most 127 characters, e.g. com.example.shop")
 	}
 	version := strings.TrimSpace(opts.Version)
 	if version == "" {
@@ -319,9 +326,9 @@ func (s *Service) lookAtClientBuild(ctx context.Context, b *clientBuild) (client
 func (s *Service) watchClientBuild(b *clientBuild) {
 	ctx, cancel := context.WithTimeout(helper.WithActor(context.Background(), b.person), clientBuildTimeout)
 	defer cancel()
-	poll := clientBuildPoll
+	poll, wait := clientBuildPoll, clientBuildFirstLook
 	if s.clientPollEvery > 0 {
-		poll = s.clientPollEvery
+		poll, wait = s.clientPollEvery, s.clientPollEvery
 	}
 	stale := 0
 	for {
@@ -331,8 +338,9 @@ func (s *Service) watchClientBuild(b *clientBuild) {
 				st.State, st.Error = "failed", "the build took longer than "+clientBuildTimeout.String()
 			})
 			return
-		case <-time.After(poll):
+		case <-time.After(wait):
 		}
+		wait = poll
 		look, err := s.lookAtClientBuild(ctx, b)
 		if err != nil {
 			if stale++; stale >= 8 {

@@ -186,6 +186,27 @@ class AsemanService implements BackendService {
     return PlatformInfo.fromJson(result);
   }
 
+  /// Wakes the computer behind platform [slug]'s published frontend and
+  /// reports `{state, ready, error, retry_after_ms}`, waiting up to [wait] for
+  /// the wake to finish. Anyone may wake it, so it carries no session.
+  Future<Map<String, dynamic>> platformWake(String slug,
+      {Duration wait = const Duration(seconds: 15)}) async {
+    final base = client.baseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final res = await http
+        .post(Uri.parse(
+            '$base/v1/platforms/$slug/app/_aseman/wake?wait=${wait.inSeconds}'))
+        .timeout(wait + const Duration(seconds: 30));
+    final decoded = res.body.isEmpty ? null : jsonDecode(res.body);
+    final map =
+        decoded is Map ? decoded.cast<String, dynamic>() : <String, dynamic>{};
+    if (res.statusCode >= 400) {
+      throw ApiException('${map['code'] ?? 'ERROR'}',
+          '${map['error'] ?? 'The platform could not be woken'}',
+          status: res.statusCode);
+    }
+    return map;
+  }
+
   static Session _sessionFrom(Map<String, dynamic> json) => Session(
         platformId: json['platform_id'] as String? ?? '',
         accountId: json['account_id'] as String? ?? '',

@@ -34,6 +34,8 @@ var toolEffects = map[string]string{
 	// A person's organization, platform and keys: made as them; publishing
 	// puts the app before the platform's people.
 	"platform_setup": gate.EffectWrite, "app_developer_access": gate.EffectWrite, "platform_publish": gate.EffectSend,
+	// The platform's Android app: built as the person and offered to anyone.
+	"platform_client_build": gate.EffectSend, "platform_client_status": gate.EffectRead,
 	"desk_state": gate.EffectRead, "db_tables": gate.EffectRead, "db_read": gate.EffectRead,
 	"secret_request": gate.EffectRead, "computer_help": gate.EffectRead, "offer_task": gate.EffectRead,
 	"routine_delete": gate.EffectDelete, "proxy_delete": gate.EffectDelete,

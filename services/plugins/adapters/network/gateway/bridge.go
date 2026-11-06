@@ -2,6 +2,7 @@ package apihttp
 
 import (
 	"context"
+	"time"
 
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/internal/plugins/bridge"
@@ -91,6 +92,15 @@ func (p gatewayBridge) ProxyOpen(ctx context.Context, id, actor identity.ID) (ma
 	var out map[string]any
 	err := bridge.Invoke(ctx, p.k, "spaces", "ProxyOpen", []any{ctx, id, actor}, &out)
 	return out, err
+}
+
+func (p gatewayBridge) WakeFrontend(ctx context.Context, id, publisher identity.ID, wait time.Duration) (proxy.Wake, error) {
+	var out proxy.Wake
+	err := bridge.Invoke(ctx, p.k, "spaces", "WakeFrontend", []any{ctx, id, publisher, wait}, &out)
+	return out, err
+}
+func (p gatewayBridge) HoldFrontend(ctx context.Context, id identity.ID) error {
+	return bridge.Invoke(ctx, p.k, "spaces", "HoldFrontend", []any{ctx, id})
 }
 
 func (p gatewayBridge) CanProxy(ctx context.Context, id, actor identity.ID, write bool) error {

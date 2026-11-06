@@ -28,6 +28,7 @@ class ElpianAppView extends StatefulWidget {
     this.spaceId = '',
     this.roomId = '',
     this.title = '',
+    this.onAsleep,
   });
 
   final AsemanService service;
@@ -36,6 +37,11 @@ class ElpianAppView extends StatefulWidget {
   final String spaceId;
   final String roomId;
   final String title;
+
+  /// Wakes the app's computer when it answers 503 (a platform's frontend
+  /// whose computer fell asleep) and reports whether it is up; the request
+  /// is then sent again. Null: the 503 is the program's.
+  final Future<bool> Function()? onAsleep;
 
   @override
   State<ElpianAppView> createState() => _ElpianAppViewState();
@@ -132,13 +138,18 @@ class _ElpianAppViewState extends State<ElpianAppView> {
           _vm.callFunction('__asemanSettle', input: jsonEncode(result)),
       onCompact: _onCompact,
       onExpand: () => FrontendPresentation.maybeOf(context)?.onExpand?.call(),
+      onAsleep: widget.onAsleep,
     );
     try {
       final page = widget.page.endsWith('/') ? widget.page : '${widget.page}/';
       final entry = widget.entry.replaceFirst(RegExp(r'^/+'), '');
-      final res = await http.get(
-          Uri.parse('${_base.replaceFirst(RegExp(r'/+$'), '')}$page$entry'),
-          headers: widget.service.authHeaders());
+      final url =
+          Uri.parse('${_base.replaceFirst(RegExp(r'/+$'), '')}$page$entry');
+      var res = await http.get(url, headers: widget.service.authHeaders());
+      final asleep = widget.onAsleep;
+      if (res.statusCode == 503 && asleep != null && await asleep()) {
+        res = await http.get(url, headers: widget.service.authHeaders());
+      }
       if (!mounted) return;
       if (res.statusCode != 200) {
         throw StateError('The app did not serve its program ($entry): HTTP ${res.statusCode}');

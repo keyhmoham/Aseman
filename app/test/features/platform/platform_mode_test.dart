@@ -57,6 +57,20 @@ class _PlatformService extends FakeAsemanService {
   PlatformInfo? info;
   int asked = 0;
 
+  /// What waking the platform's computer answers, in turn (the last repeats).
+  List<Map<String, dynamic>> wakes = [
+    {'state': 'ready', 'ready': true},
+  ];
+  int woken = 0;
+
+  @override
+  Future<Map<String, dynamic>> platformWake(String slug,
+      {Duration wait = const Duration(seconds: 15)}) async {
+    final w = wakes[woken < wakes.length ? woken : wakes.length - 1];
+    woken++;
+    return w;
+  }
+
   @override
   Future<PlatformInfo> platformInfo([String? slug]) async {
     asked++;
@@ -117,8 +131,10 @@ void main() {
   group('platform home', () {
     setUp(() => SharedPreferences.setMockInitialValues({}));
 
-    Future<_PlatformService> pump(WidgetTester tester, PlatformInfo? info) async {
+    Future<_PlatformService> pump(WidgetTester tester, PlatformInfo? info,
+        {List<Map<String, dynamic>>? wakes}) async {
       final service = _PlatformService(info);
+      if (wakes != null) service.wakes = wakes;
       final deps = AppDependencies(
         sessionController: SessionController(service),
         service: service,
@@ -153,13 +169,58 @@ void main() {
                 entry: 'elpian/app.js',
                 url: '/v1/platforms/acme/app/'),
           ));
+      await tester.pump();
       final view = tester.widget<ElpianAppView>(find.byType(ElpianAppView));
       expect(view.page, '/v1/platforms/acme/app/');
+      expect(view.onAsleep, isNotNull);
       expect(view.entry, 'elpian/app.js');
       await tester.tap(find.byKey(const ValueKey('platform-menu')));
       await tester.pumpAndSettle();
       expect(find.text('Workspace'), findsOneWidget);
       expect(find.text('Sign out'), findsOneWidget);
+    });
+
+    const store = PlatformInfo(
+      id: 'pf1',
+      slug: 'acme',
+      name: 'Acme',
+      frontend: PlatformFrontendInfo(
+          title: 'Store',
+          ui: 'elpian',
+          entry: 'elpian/app.js',
+          url: '/v1/platforms/acme/app/'),
+    );
+
+    testWidgets('opening the platform wakes its computer first',
+        (tester) async {
+      final service = await pump(tester, store, wakes: [
+        {'state': 'waking', 'retry_after_ms': 500},
+        {'state': 'ready', 'ready': true},
+      ]);
+      expect(find.text('Waking up… this takes a moment the first time.'),
+          findsOneWidget);
+      expect(find.byType(ElpianAppView), findsNothing);
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump();
+      expect(service.woken, 2);
+      expect(find.byType(ElpianAppView), findsOneWidget);
+    });
+
+    testWidgets('a computer that could not wake says why and retries',
+        (tester) async {
+      final service = await pump(tester, store, wakes: [
+        {'state': 'failed', 'error': 'the publisher is out of funds'},
+      ]);
+      await tester.pump();
+      expect(find.text('Could not wake up: the publisher is out of funds'),
+          findsOneWidget);
+      service.wakes = [
+        {'state': 'ready', 'ready': true},
+      ];
+      await tester.tap(find.text('Try again'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(ElpianAppView), findsOneWidget);
     });
   });
 }

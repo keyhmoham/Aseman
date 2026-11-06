@@ -64,3 +64,27 @@ type Access struct {
 
 // Keep the time import used even if JSON tags change.
 var _ = time.Now
+
+// Wake is how far waking a published frontend's computer has got
+// (spaces/platform_wake.go): what a client polls while the platform's
+// computer starts.
+type Wake struct {
+	// State is "ready" (the app answers), "waking" (its computer is starting
+	// or its service is coming up) or "failed" (it could not be woken).
+	State string `json:"state"`
+	Ready bool   `json:"ready"`
+	// Error says why it failed.
+	Error string `json:"error,omitempty"`
+	// RetryAfterMs is when to ask again while it is waking (or, after a
+	// failure, when another try is allowed).
+	RetryAfterMs int `json:"retry_after_ms,omitempty"`
+	// Since is when this wake began (RFC 3339; empty when it was awake).
+	Since string `json:"since,omitempty"`
+}
+
+// Wake states.
+const (
+	WakeReady  = "ready"
+	WakeWaking = "waking"
+	WakeFailed = "failed"
+)

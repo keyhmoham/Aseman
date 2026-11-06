@@ -102,6 +102,23 @@ jobs:
       - run: flutter analyze --no-fatal-infos
       - run: flutter test
 
+  platform-client:
+    name: Platform client (Flutter)
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: app/platform_client } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      # The app sources it shares are listed, and copied in from the app.
+      - run: python3 tool/shared_closure.py --check
+      - run: tool/assemble.sh
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+      - name: The build script parses
+        run: bash -n ../../deploy/sandbox-computer/platform-client/aseman-platform-client
+
   deploy:
     name: Compose and Helm
     runs-on: ubuntu-latest

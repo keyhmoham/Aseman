@@ -66,6 +66,12 @@ An app's static frontend is a `{ manifest, source }` bundle in its bot's
 | `host.send`     | `message.send` (fire-and-forget)     |
 | `ctx.user`      | the signed-in user context           |
 
+A platform's published Elpian frontend also gets an Android app of its own:
+`platform_client/`, a separate Flutter package with only this engine, the UI
+kit and the Elpian host (shared from `lib/`, listed in
+`platform_client/tool/shared.txt`) plus sign-in to the platform's accounts.
+See its README and `docs/PLATFORM.md` §8.3.
+
 ## Apps
 
 Apps are created from one form (`features/tools/presentation/tool_create_form.dart`,

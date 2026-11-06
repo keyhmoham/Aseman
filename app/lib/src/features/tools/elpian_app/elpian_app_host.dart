@@ -36,6 +36,7 @@ class ElpianAppHost {
     http.Client? client,
     this.onCompact,
     this.onExpand,
+    this.onAsleep,
   }) : _client = client ?? http.Client();
 
   /// The node, e.g. `https://node.example`.
@@ -55,6 +56,11 @@ class ElpianAppHost {
 
   final void Function(Map<String, dynamic> summary)? onCompact;
   final void Function()? onExpand;
+
+  /// Called when the app answered 503 (its computer is asleep or waking, as
+  /// a platform's frontend says): wakes it and reports whether it is up, and
+  /// the request is sent once more. Null: the 503 reaches the program.
+  final Future<bool> Function()? onAsleep;
 
   final http.Client _client;
   bool _disposed = false;
@@ -178,13 +184,21 @@ class ElpianAppHost {
       ...headers(),
       if (hasBody) 'Content-Type': 'application/json',
     };
-    try {
+    Future<http.Response> send() async {
       final request = http.Request(method, url)..headers.addAll(h);
       if (hasBody) {
         request.body = body is String ? body : jsonEncode(body);
       }
       final streamed = await _client.send(request).timeout(timeout);
-      final res = await http.Response.fromStream(streamed).timeout(timeout);
+      return http.Response.fromStream(streamed).timeout(timeout);
+    }
+
+    try {
+      var res = await send();
+      final asleep = onAsleep;
+      if (res.statusCode == 503 && asleep != null && !_disposed && await asleep()) {
+        res = await send();
+      }
       final text = utf8.decode(res.bodyBytes, allowMalformed: true);
       final json = _json(text);
       if (req['target'] == 'app') {

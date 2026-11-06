@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aseman/aseman/internal/plugins/api"
 	"github.com/aseman/aseman/internal/plugins/entity"
@@ -27,6 +28,9 @@ type platformSpaces struct {
 	allowed   map[identity.ID]bool // who may use the platform
 	publisher identity.ID
 	woken     int
+	held      int
+	// wakeState, when set, is what a wake reports instead of opening.
+	wakeState *proxy.Wake
 }
 
 func (s *platformSpaces) PlatformFrontendFor(_ context.Context, ref string, viewer identity.ID) (*models.PlatformFrontend, error) {
@@ -62,6 +66,20 @@ func (s *platformSpaces) AppCaller(ctx context.Context, token string) (*proxy.Ac
 func (s *platformSpaces) ProxyOpen(context.Context, identity.ID, identity.ID) (map[string]any, error) {
 	s.woken++
 	return map[string]any{"ready": true}, nil
+}
+
+func (s *platformSpaces) WakeFrontend(ctx context.Context, id, publisher identity.ID, _ time.Duration) (proxy.Wake, error) {
+	if s.wakeState != nil {
+		return *s.wakeState, nil
+	}
+	if _, err := s.ProxyOpen(ctx, id, publisher); err != nil {
+		return proxy.Wake{State: proxy.WakeFailed, Error: err.Error()}, nil
+	}
+	return proxy.Wake{State: proxy.WakeReady, Ready: true}, nil
+}
+func (s *platformSpaces) HoldFrontend(context.Context, identity.ID) error {
+	s.held++
+	return nil
 }
 
 func platformRequest(slug, rest, method, token string, body any) *network.Request {
@@ -234,6 +252,100 @@ type wakingSpaces struct {
 func (s *wakingSpaces) ProxyOpen(ctx context.Context, id, actor identity.ID) (map[string]any, error) {
 	s.wake()
 	return s.platformSpaces.ProxyOpen(ctx, id, actor)
+}
+func (s *wakingSpaces) WakeFrontend(ctx context.Context, id, publisher identity.ID, _ time.Duration) (proxy.Wake, error) {
+	if _, err := s.ProxyOpen(ctx, id, publisher); err != nil {
+		return proxy.Wake{State: proxy.WakeFailed, Error: err.Error()}, nil
+	}
+	return proxy.Wake{State: proxy.WakeReady, Ready: true}, nil
+}
+
+// Anyone, signed in or not, may wake a sleeping frontend from wherever they
+// open it, before asking for anything (what the platform's clients do).
+func TestPlatformFrontendWakeEndpointIsOpenToAnyone(t *testing.T) {
+	id := identity.ID{Node: 1, Entity: 2}
+	p := &proxy.Proxy{Entity: entity.Entity{ID: id}, SpaceID: identity.ID{Node: 1, Entity: 3}, Title: "Store", TargetURL: "http://127.0.0.1:1", Token: "t"}
+	spaces := &platformSpaces{
+		appSpaces: appSpaces{previewSpaces: previewSpaces{p: p}},
+		pf:        &models.PlatformFrontend{PlatformID: "pf1", Slug: "acme", Name: "Acme", ProxyID: id.String(), Publisher: identity.ID{Node: 1, Entity: 9}.String()},
+	}
+	a := &API{Auth: &viewerAuth{}, Spaces: spaces}
+	for _, method := range []string{"POST", "GET"} {
+		resp, err := a.platformServe(context.Background(), platformRequest("acme", "_aseman/wake", method, "", nil))
+		if err != nil || resp.Status != 200 {
+			t.Fatalf("%s wake: %+v %v", method, resp, err)
+		}
+		var out map[string]any
+		_ = json.Unmarshal(resp.Body, &out)
+		if out["ready"] != true || out["state"] != "ready" {
+			t.Fatalf("%s wake answered %s", method, resp.Body)
+		}
+	}
+	if spaces.woken != 2 || spaces.held == 0 {
+		t.Fatalf("woken %d times, held %d", spaces.woken, spaces.held)
+	}
+	spaces.wakeState = &proxy.Wake{State: proxy.WakeWaking, RetryAfterMs: 2000}
+	resp, _ := a.platformServe(context.Background(), platformRequest("acme", "_aseman/wake", "POST", "", nil))
+	if resp == nil || !strings.Contains(string(resp.Body), `"state":"waking"`) {
+		t.Fatalf("a wake under way: %+v", resp)
+	}
+	if _, err := a.platformServe(context.Background(), platformRequest("acme", "_aseman/wake", "DELETE", "", nil)); errs.CodeOf(err) != errs.CodeInvalidArgument {
+		t.Fatalf("DELETE wake: %v", err)
+	}
+}
+
+// While its computer wakes, a browser opening the frontend gets a page that
+// waits for it, and a script or an API call a 503 with Retry-After.
+func TestPlatformFrontendWhileWaking(t *testing.T) {
+	id := identity.ID{Node: 1, Entity: 2}
+	p := &proxy.Proxy{Entity: entity.Entity{ID: id}, SpaceID: identity.ID{Node: 1, Entity: 3}, Title: "Store", TargetURL: "http://127.0.0.1:1", Token: "t"}
+	spaces := &platformSpaces{
+		appSpaces: appSpaces{previewSpaces: previewSpaces{p: p}},
+		pf:        &models.PlatformFrontend{PlatformID: "pf1", Slug: "acme", Name: "Acme <Shop>", ProxyID: id.String(), Publisher: identity.ID{Node: 1, Entity: 9}.String()},
+		wakeState: &proxy.Wake{State: proxy.WakeWaking, RetryAfterMs: 2000},
+	}
+	a := &API{Auth: &viewerAuth{}, Spaces: spaces}
+	page := platformRequest("acme", "", "GET", "", nil)
+	page.Header["Sec-Fetch-Dest"] = "document"
+	resp, err := a.platformServe(context.Background(), page)
+	if err != nil || resp.Status != http.StatusServiceUnavailable || !strings.Contains(resp.Header["Content-Type"], "text/html") {
+		t.Fatalf("navigation while waking: %+v %v", resp, err)
+	}
+	body := string(resp.Body)
+	if !strings.Contains(body, "Acme &lt;Shop&gt;") || !strings.Contains(body, platformAppPath("acme")+"_aseman/wake") || resp.Header["Retry-After"] != "2" {
+		t.Fatalf("waking page: %s %v", body, resp.Header)
+	}
+	resp, err = a.platformServe(context.Background(), platformRequest("acme", "api/items", "GET", "", nil))
+	if err != nil || resp.Status != http.StatusServiceUnavailable || !strings.Contains(string(resp.Body), `"code":"WAKING"`) || resp.Header["Retry-After"] == "" {
+		t.Fatalf("api call while waking: %+v %v", resp, err)
+	}
+	spaces.wakeState = &proxy.Wake{State: proxy.WakeFailed, Error: "out of funds"}
+	resp, _ = a.platformServe(context.Background(), platformRequest("acme", "api/items", "GET", "", nil))
+	if resp == nil || !strings.Contains(string(resp.Body), "out of funds") {
+		t.Fatalf("failed wake: %+v", resp)
+	}
+}
+
+// Requests the frontend serves keep its computer awake.
+func TestPlatformFrontendTrafficHoldsItsComputer(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) }))
+	defer upstream.Close()
+	id := identity.ID{Node: 1, Entity: 2}
+	p := &proxy.Proxy{Entity: entity.Entity{ID: id}, SpaceID: identity.ID{Node: 1, Entity: 3}, Title: "Store", TargetURL: upstream.URL, Token: "t"}
+	spaces := &platformSpaces{
+		appSpaces: appSpaces{previewSpaces: previewSpaces{p: p}},
+		pf:        &models.PlatformFrontend{PlatformID: "pf1", Slug: "acme", Name: "Acme", ProxyID: id.String(), Publisher: identity.ID{Node: 1, Entity: 9}.String()},
+	}
+	a := &API{Auth: &viewerAuth{}, Spaces: spaces}
+	for range 3 {
+		if resp, err := a.platformServe(context.Background(), platformRequest("acme", "", "GET", "", nil)); err != nil || resp.Status != 200 {
+			t.Fatalf("serve: %+v %v", resp, err)
+		}
+	}
+	// Renewed once: the next renewal waits platformHoldEvery.
+	if spaces.held != 1 || spaces.woken != 0 {
+		t.Fatalf("held %d, woken %d", spaces.held, spaces.woken)
+	}
 }
 
 // A web frontend signs the platform's people in through the gateway: the

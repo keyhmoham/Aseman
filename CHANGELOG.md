@@ -2,6 +2,42 @@
 
 ## Unreleased: the workflow installer
 
+- **A platform's own Android app, and waking from anywhere.** Publishing an
+  Elpian app as a platform's frontend now also builds the platform an app of
+  its own: the lightweight Elpian client (`app/platform_client`: the Elpian
+  engine, the UI kit and the Elpian host — 264 files of the app, listed in
+  `tool/shared.txt` and copied in when it is assembled, never forked — plus
+  sign-in to the platform's accounts and nothing else of Aseman), with the
+  frontend's address (the platform's door to the Elpian app's proxy) in it.
+  `aseman-platform-client` builds it on the frontend space's computer,
+  detached (Flutter and the Android SDK are fetched on the first build, or
+  baked with `--build-arg WITH_ANDROID_TOOLCHAIN=1`); the node watches the
+  build — which keeps the computer awake for it — stores the APK as a file
+  of the space, records it on the platform and posts it in the room. Anyone
+  downloads it at `/v1/platforms/<slug>/client/android.apk`, also while the
+  computer sleeps. One signing key per platform (kept in the project's
+  files) signs every version, so updates install over the last. Agents:
+  `platform_publish` starts the build (`android: false` skips it),
+  `platform_client_build` builds again (name, app id, version, accent),
+  `platform_client_status` follows it. Console: an **Android app** card on
+  the platform with Build and the download; `developer.platform_client_build`
+  / `platform_client_status`; publishing an Elpian frontend from the console
+  starts a build too. The public `platform_frontend` names the client and the
+  wake door.
+- **A sleeping platform wakes for whoever opens it.** Waking is no longer a
+  side effect inside the space: `/v1/platforms/<slug>/app/_aseman/wake`
+  (GET or POST, no sign-in, `?wait=` up to 25 s) wakes the frontend's
+  computer as its publisher and reports `{state, ready, error,
+  retry_after_ms}`. One wake per frontend at a time, shared by everyone who
+  arrives meanwhile, and a failed wake is reported for 15 s instead of
+  retried by each visitor. A browser opening a sleeping web frontend gets a
+  "waking up" page that reloads itself when the app answers; other requests
+  get a 503 with `Retry-After`. Traffic through the platform's door renews
+  the computer's lease, so it no longer falls asleep under the platform's
+  people two minutes after it woke. The lightweight client and the Aseman
+  client's platform home wake it when opened and when brought back to the
+  foreground, and an Elpian program's request that meets a 503 wakes it and
+  is sent again (`ElpianAppHost.onAsleep`).
 - **Platforms, not sub-platforms; several per organization.** "Sub-platform"
   is gone as a term: it was the same thing as a platform. An organization
   may now own any number of platforms (each with a node-unique slug).

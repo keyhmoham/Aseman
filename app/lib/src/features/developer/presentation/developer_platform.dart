@@ -22,11 +22,21 @@ class _PlatformsState extends _LoadedState<_Platforms> {
     final _Json ref = {'platform': selected};
     final stats = await call('platform_stats', ref);
     final users = await call('platform_users', {...ref, 'limit': 50});
+    final frontend = _map(p['frontend']);
+    _Json build = const {};
+    if (frontend.isNotEmpty && frontend['ui'] != 'web') {
+      try {
+        build = _map((await call('platform_client_status', ref))['build']);
+      } catch (_) {
+        // An older node: no platform apps.
+      }
+    }
     return {
       'platform': p,
       ...stats,
       'platforms': platforms,
       'users': users['users'],
+      'clientBuild': build,
     };
   }
 
@@ -239,6 +249,99 @@ class _PlatformsState extends _LoadedState<_Platforms> {
     );
   }
 
+  Future<void> _buildClient() async {
+    await change(() => call('platform_client_build', {'platform': selected}));
+  }
+
+  /// The platform's own Android app: the lightweight Elpian client built
+  /// for its published Elpian frontend, which anyone can install.
+  Widget? _clientCard(BuildContext context, _Json platform) {
+    final frontend = _map(platform['frontend']);
+    if (frontend.isEmpty || frontend['ui'] == 'web') return null;
+    final scheme = Theme.of(context).colorScheme;
+    final client = _map(platform['client']);
+    final build = _map(data['clientBuild']);
+    final state = '${build['state'] ?? 'none'}';
+    final base =
+        widget.service.client.baseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final link = client.isEmpty ? '' : '$base${client['url']}';
+    final building = state == 'building';
+    return _Card(
+      title: 'Android app',
+      icon: Icons.android_rounded,
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (building)
+          IconButton(
+              tooltip: 'Refresh',
+              onPressed: reload,
+              icon: const Icon(Icons.refresh_rounded)),
+        FilledButton.icon(
+            onPressed: building ? null : _buildClient,
+            icon: const Icon(Icons.build_rounded, size: 18),
+            label: Text(client.isEmpty ? 'Build' : 'Build again')),
+      ]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(
+            'A lightweight app of this platform: the Elpian engine and its '
+            'frontend, nothing else of Aseman. People sign in with their '
+            'platform accounts, and opening it wakes the platform\'s computer '
+            'wherever they are.',
+            style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35)),
+        const SizedBox(height: AppSpacing.sm),
+        if (client.isNotEmpty) ...[
+          QuietTile(
+            icon: Icons.download_rounded,
+            label: 'Version ${client['version']}',
+            subtitle:
+                '${((client['size'] as num? ?? 0) / (1 << 20)).toStringAsFixed(1)} MB · ${client['appId']}',
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                tooltip: 'Copy download address',
+                onPressed: () => Clipboard.setData(ClipboardData(text: link)),
+                icon: const Icon(Icons.copy_rounded, size: 18),
+              ),
+              IconButton(
+                tooltip: 'Download',
+                onPressed: () => launchUrl(Uri.parse(link),
+                    mode: LaunchMode.externalApplication),
+                icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              ),
+            ]),
+          ),
+          SelectableText(link,
+              style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12.5,
+                  color: scheme.onSurface)),
+          const SizedBox(height: AppSpacing.xs),
+        ],
+        if (building)
+          Row(children: [
+            const SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+                child: Text('Building ${build['version'] ?? ''}: '
+                    '${build['step'] ?? 'starting'}…')),
+          ])
+        else if (state == 'failed') ...[
+          Text('The last build failed: ${build['error'] ?? ''}',
+              style: TextStyle(color: scheme.error)),
+          if ('${build['log'] ?? ''}'.isNotEmpty)
+            SelectableText('${build['log']}',
+                maxLines: 8,
+                style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 11.5,
+                    color: scheme.onSurfaceVariant)),
+        ] else if (client.isEmpty)
+          Text('Not built yet.',
+              style: TextStyle(color: scheme.onSurfaceVariant)),
+      ]),
+    );
+  }
+
   Future<void> _create() async {
     final name = await _ask(context, 'New platform', 'Name',
         hint: 'Acme', action: 'Next');
@@ -348,6 +451,7 @@ class _PlatformsState extends _LoadedState<_Platforms> {
         ]),
       ),
       _frontendCard(context, platform),
+      ?_clientCard(context, platform),
       _Card(
         title: 'Local users',
         icon: Icons.people_outline_rounded,

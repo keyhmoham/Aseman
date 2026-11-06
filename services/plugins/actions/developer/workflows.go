@@ -97,6 +97,7 @@ var keyDeveloperActions = map[string]string{
 	"platforms_list": "platform", "platform_get": "platform", "platform_create": "platform", "platform_rename": "platform", "platform_stats": "platform",
 	"platform_users": "platform", "platform_frontend_apps": "platform", "platform_frontend_publish": "platform",
 	"platform_frontend_unpublish": "platform", "platform_frontend": "platform",
+	"platform_client_build": "platform", "platform_client_status": "platform",
 	"settings_get": "usage", "wallet_get": "usage", "usage_report": "usage", "logs_list": "usage",
 	"computers_options": "computers", "computers_list": "computers", "computer_create": "computers",
 	"computer_status": "computers", "computer_delete": "computers", "computer_exec": "computers",
@@ -109,7 +110,7 @@ func readOnlyAction(name string) bool {
 			return true
 		}
 	}
-	return name == "models" || name == "platform_frontend"
+	return name == "models" || name == "platform_frontend" || name == "platform_client_status"
 }
 
 // workflowPolicy says whether an actor's workflow may call an action.

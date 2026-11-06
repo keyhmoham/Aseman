@@ -290,7 +290,21 @@ func BuildActions(s *Service) []api.Action {
 	})
 	scoped("platform_frontend_publish", "Publish an app built in a space as a platform's frontend", func(ctx context.Context, caller identity.ID, sc Scope, in map[string]json.RawMessage) (any, error) {
 		view, err := s.PublishFrontend(ctx, sc, caller, str(in, "platform"), str(in, "proxy"))
+		if err == nil {
+			// An Elpian frontend gets its own Android app, built on its space's computer.
+			s.autoBuildClient(caller, view)
+		}
 		return map[string]any{"platform": view}, err
+	})
+	scoped("platform_client_build", "Build the platform's own Android app (the lightweight Elpian client) for its published frontend", func(ctx context.Context, caller identity.ID, sc Scope, in map[string]json.RawMessage) (any, error) {
+		build, err := s.BuildPlatformClient(ctx, sc, caller, str(in, "platform"), models.PlatformClientOptions{
+			Name: str(in, "name"), AppID: str(in, "app_id"), Version: str(in, "version"), Accent: str(in, "accent"),
+		})
+		return map[string]any{"build": build}, err
+	})
+	scoped("platform_client_status", "How the latest build of the platform's Android app stands", func(ctx context.Context, caller identity.ID, sc Scope, in map[string]json.RawMessage) (any, error) {
+		build, err := s.PlatformClientStatus(ctx, sc, caller, str(in, "platform"))
+		return map[string]any{"build": build}, err
 	})
 	scoped("platform_frontend_unpublish", "Take a platform's frontend down", func(ctx context.Context, _ identity.ID, sc Scope, in map[string]json.RawMessage) (any, error) {
 		view, err := s.UnpublishFrontend(ctx, sc, str(in, "platform"))

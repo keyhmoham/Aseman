@@ -27,12 +27,14 @@ type PlatformView struct {
 	CreatedAt  string `json:"createdAt"`
 	// Frontend is the app the platform's people open (nil: none published).
 	Frontend *FrontendView `json:"frontend"`
+	// Client is the platform's own Android app (nil: none built).
+	Client *ClientView `json:"client"`
 }
 
 func platformView(p models.Platform) PlatformView {
 	return PlatformView{
 		ID: p.ID.String(), Org: p.OrgID.String(), Slug: p.Slug, Name: p.Name,
-		MainAccess: p.MainAccess, CreatedAt: stamp(p.CreatedAt), Frontend: frontendView(p),
+		MainAccess: p.MainAccess, CreatedAt: stamp(p.CreatedAt), Frontend: frontendView(p), Client: clientView(p),
 	}
 }
 

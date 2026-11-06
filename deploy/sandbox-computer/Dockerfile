@@ -10,10 +10,24 @@
 # Default UI for those apps is Material 3 Expressive (@material/web).
 #
 #   docker build -t aseman/tool-runtime:v1 deploy/tool-runtime
-#   docker build -t aseman/sandbox-computer:latest deploy/sandbox-computer
+#   docker build -t aseman/sandbox-computer:latest --build-context aseman-app=app deploy/sandbox-computer
 # The tool runtime (deploy/tool-runtime), whose files are copied in below.
 ARG TOOL_RUNTIME_IMAGE=aseman/tool-runtime:v1
 FROM ${TOOL_RUNTIME_IMAGE} AS tool-runtime
+
+# The Aseman app's sources, as the build context named aseman-app (./app):
+#   docker build --build-context aseman-app=app deploy/sandbox-computer
+# A platform's lightweight Android client (app/platform_client: the Elpian
+# engine and what it needs to reach Aseman) is assembled from them, so the
+# space's computer can build a platform its own app (aseman-platform-client).
+# Without that context this empty stage stands in and the image has no kit:
+# platform_client_build then says so.
+FROM scratch AS aseman-app
+FROM public.ecr.aws/docker/library/node:22-bookworm AS platform-client
+COPY --from=aseman-app / /src/app/
+RUN if [ -x /src/app/platform_client/tool/assemble.sh ]; then \
+      ASEMAN_APP=/src/app /src/app/platform_client/tool/assemble.sh /out; \
+    else mkdir -p /out; fi
 
 # The official node image from Amazon's public mirror of Docker Hub: anonymous
 # pulls from Docker Hub itself are rate limited per IP, and CI runners share theirs.
@@ -69,6 +83,16 @@ RUN chmod +x /usr/local/bin/aseman-appui /opt/aseman-appui/elpian/elpian-cli.mjs
  && ln -sf /opt/aseman-appui/wiring-check.mjs /usr/local/bin/aseman-wiring-check \
  && mkdir -p /opt/aseman-appui \
  && ln -sf /usr/local/bin/aseman-appui /opt/aseman-appui/aseman-appui
+# A platform's own Android app: the client kit (assembled above) and its
+# builder. The first build on a computer downloads Flutter and the Android
+# SDK into /opt/aseman-toolchain; --build-arg WITH_ANDROID_TOOLCHAIN=1 bakes
+# them into the image instead (a few GB, but builds start at once).
+COPY --from=platform-client /out /opt/aseman-platform-client
+COPY platform-client/aseman-platform-client /usr/local/bin/aseman-platform-client
+ENV ASEMAN_PLATFORM_CLIENT_SRC=/opt/aseman-platform-client ASEMAN_TOOLCHAIN=/opt/aseman-toolchain
+ARG WITH_ANDROID_TOOLCHAIN=0
+RUN chmod +x /usr/local/bin/aseman-platform-client \
+ && if [ "$WITH_ANDROID_TOOLCHAIN" = "1" ]; then aseman-platform-client toolchain; fi
 # /workspace is the space's shared working tree.
 RUN mkdir -p /workspace && git config --system init.defaultBranch main \
  && git config --system --add safe.directory '*'

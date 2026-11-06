@@ -80,6 +80,36 @@ location.reload();                                        // next requests carry
 `Aseman.context()` to know who is there.) Never ask for or store passwords on
 your server, and never call the node's auth actions from your page.
 
+## Its computer sleeps; anyone wakes it
+
+This app runs on this space's computer, which sleeps when nobody uses it.
+Whoever opens the frontend — a visitor, the platform's person, on any device —
+wakes it: the gateway starts it as the person who published the frontend.
+While it starts, a browser gets a *waking up* page that reloads by itself,
+and other requests a `503` with `Retry-After` (a client may also call
+`_aseman/wake` first). So:
+
+- **Start fast, from the project's files.** After a wake the computer is a
+  fresh machine with nothing running: the preview's start command
+  (`appui_publish` records it) brings the server up. Keep state in files or
+  the space's database, never only in memory.
+- **Treat a 503 as "waking", not as an error** in a web page's own `fetch`
+  calls: wait for `Retry-After` and try again. (An Elpian frontend's host
+  does this for you.)
+
+## The platform's own Android app
+
+For an Elpian frontend, `platform_publish` also starts building the
+platform's app: a lightweight Android client with only the Elpian engine and
+what it needs to reach Aseman, and this frontend's address in it. It builds
+on this computer for minutes (the first time longer) and is posted in the
+room with its download address, `/v1/platforms/<slug>/client/android.apk`.
+`platform_client_status` tells how it stands; `platform_client_build` builds
+it again (a new `version`, `name`, `accent` or `app_id`). The app signs
+people in to the platform's accounts and runs this frontend full screen as
+them — exactly as the Aseman client does — so build nothing special for it.
+A web frontend needs no app: its address opens in any browser.
+
 ## Rules
 
 1. **Signed out first.** A visitor has no token: serve what needs no agent or

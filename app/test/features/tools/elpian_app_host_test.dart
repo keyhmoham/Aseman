@@ -103,4 +103,30 @@ void main() {
     expect((unwrap(bad) as Map)['status'], 400);
     expect(calls, 0);
   });
+
+  test('an app that answers 503 is woken and asked again', () async {
+    var calls = 0, wakes = 0;
+    final settled = Completer<Map<String, dynamic>>();
+    final h = ElpianAppHost(
+      baseUrl: 'https://node.example/',
+      page: '/v1/platforms/acme/app/',
+      headers: () => const {},
+      env: () => const {},
+      settle: (r) async => settled.complete(r),
+      onAsleep: () async {
+        wakes++;
+        return true;
+      },
+      client: MockClient((req) async => ++calls == 1
+          ? http.Response('{"code":"WAKING"}', 503)
+          : http.Response('{"items":[]}', 200)),
+    );
+    h.handlers()['aseman.request']!(
+        'aseman.request', jsonEncode({'id': 'r1', 'target': 'app', 'path': 'api/items'}));
+    final r = await settled.future;
+    expect(calls, 2);
+    expect(wakes, 1);
+    expect(r['ok'], isTrue);
+    expect(r['status'], 200);
+  });
 }

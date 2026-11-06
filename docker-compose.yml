@@ -69,6 +69,8 @@ services:
       # space run inside its sandbox on it.
       additional_contexts:
         tool-runtime-image: service:tool-runtime
+        # The app's sources: the platform client kit is assembled from them.
+        aseman-app: ./app
       args:
         TOOL_RUNTIME_IMAGE: tool-runtime-image
     image: aseman/sandbox-computer:latest

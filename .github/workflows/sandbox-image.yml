@@ -11,6 +11,12 @@ on:
     paths:
       - "deploy/sandbox-computer/**"
       - "deploy/tool-runtime/**"
+      # The platform client kit the image carries (assembled from the app).
+      - "app/platform_client/**"
+      - "app/lib/src/elpian/**"
+      - "app/lib/src/features/tools/**"
+      - "app/lib/src/core/theme/**"
+      - "app/lib/src/shared/widgets/**"
       - ".github/workflows/sandbox-image.yml"
   workflow_dispatch:
 
@@ -70,6 +76,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: deploy/sandbox-computer
+          build-contexts: aseman-app=app
           build-args: TOOL_RUNTIME_IMAGE=${{ env.TOOL_RUNTIME_IMAGE }}
           platforms: linux/amd64,linux/arm64
           push: true

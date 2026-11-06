@@ -69,6 +69,19 @@ type Platform struct {
 	// space's agents and apps runs as, and is billed to, them.
 	FrontendBy identity.ID `db:"frontend_by" json:"frontend_by,omitempty"`
 	FrontendAt time.Time   `db:"frontend_at" json:"frontend_at,omitempty"`
+
+	// The platform's own Android app: the lightweight Elpian client built
+	// for its frontend on the frontend space's computer
+	// (spaces/platform_client.go) and stored as a file of that space. Anyone
+	// downloads it at /v1/platforms/<slug>/client/android.apk. Empty
+	// ClientFileID: none built yet.
+	ClientFileID  string      `db:"client_file_id" json:"client_file_id,omitempty"`
+	ClientVersion string      `db:"client_version" json:"client_version,omitempty"`
+	ClientSize    int64       `db:"client_size" json:"client_size,omitempty"`
+	ClientSHA256  string      `db:"client_sha256" json:"client_sha256,omitempty"`
+	ClientAppID   string      `db:"client_app_id" json:"client_app_id,omitempty"`
+	ClientBy      identity.ID `db:"client_by" json:"client_by,omitempty"`
+	ClientAt      time.Time   `db:"client_at" json:"client_at,omitempty"`
 }
 
 // Wiring is what an app built in a space is wired to: the space's agents it
@@ -147,6 +160,69 @@ type PlatformFrontend struct {
 	Entry      string `json:"entry,omitempty"`
 	Publisher  string `json:"publisher"`
 	Wiring     Wiring `json:"wiring"`
+}
+
+// PlatformClient is a platform's built Android client, as the spaces and
+// developer namespaces hand it to each other.
+type PlatformClient struct {
+	FileID  string `json:"file_id"`
+	Version string `json:"version"`
+	Size    int64  `json:"size"`
+	SHA256  string `json:"sha256"`
+	AppID   string `json:"app_id"`
+	BuiltBy string `json:"built_by"`
+	BuiltAt string `json:"built_at"`
+}
+
+// PlatformClientTarget is what building a platform's client needs to know
+// about the platform: its frontend (built for) and its current client.
+type PlatformClientTarget struct {
+	PlatformID string `json:"platform_id"`
+	Slug       string `json:"slug"`
+	Name       string `json:"name"`
+	// The published frontend (ProxyID empty: none).
+	ProxyID string `json:"proxy_id"`
+	SpaceID string `json:"space_id"`
+	UI      string `json:"ui"`
+	Entry   string `json:"entry"`
+	Title   string `json:"title"`
+	// Client is the client built last (nil: none).
+	Client *PlatformClient `json:"client,omitempty"`
+}
+
+// PlatformClientOptions are what a person may choose about a build of their
+// platform's client (all optional).
+type PlatformClientOptions struct {
+	// Name is the app's name on the phone (default: the platform's).
+	Name string `json:"name,omitempty"`
+	// AppID is the Android application id (default io.aseman.platform.<slug>).
+	AppID string `json:"app_id,omitempty"`
+	// Version is the version people see (default: one past the last build).
+	Version string `json:"version,omitempty"`
+	// Accent is the app's accent color, #RRGGBB.
+	Accent string `json:"accent,omitempty"`
+	// NodeURL is the node's public address the app reaches (default
+	// ASEMAN_PUBLIC_URL).
+	NodeURL string `json:"node_url,omitempty"`
+	// Room and Agent are where the finished app is posted (an agent's tool
+	// call); empty: it is only recorded.
+	Room  string `json:"room,omitempty"`
+	Agent string `json:"agent,omitempty"`
+}
+
+// PlatformClientBuild is how a build of a platform's client stands.
+type PlatformClientBuild struct {
+	Platform string `json:"platform"`
+	// State is "building", "done", "failed" or "none" (never built here).
+	State   string `json:"state"`
+	Step    string `json:"step,omitempty"`
+	Error   string `json:"error,omitempty"`
+	Log     string `json:"log,omitempty"`
+	Version string `json:"version,omitempty"`
+	// URL is where anyone downloads the client (once one is built).
+	URL     string `json:"url,omitempty"`
+	Size    int64  `json:"size,omitempty"`
+	Started string `json:"started_at,omitempty"`
 }
 
 // AppAccess is a developer API key made for one app's server: the spaces
@@ -366,6 +442,10 @@ func Models() []database.Model {
 			f("frontend_ui", database.KindString), f("frontend_entry", database.KindString),
 			f("frontend_wiring", database.KindString), f("frontend_by", database.KindString),
 			f("frontend_at", database.KindTime),
+			f("client_file_id", database.KindString), f("client_version", database.KindString),
+			f("client_size", database.KindInt64), f("client_sha256", database.KindString),
+			f("client_app_id", database.KindString), f("client_by", database.KindString),
+			f("client_at", database.KindTime),
 			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		}},
 		{Name: "dev_members", Table: "dev_members", Fields: []database.Field{

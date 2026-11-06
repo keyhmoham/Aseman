@@ -53,6 +53,9 @@ type API struct {
 	// platformHolds is when each platform frontend last renewed its
 	// computer's lease (platform_app.go), by preview id.
 	platformHolds sync.Map
+	// publicOrigins is the origin each person was last noted at
+	// (public_origin.go), by account id.
+	publicOrigins sync.Map
 }
 
 // New builds the API gateway.
@@ -486,6 +489,9 @@ func (a *API) dispatch(ctx context.Context, req *network.Request) (*network.Resp
 	}
 	actionReq.Origin = a.K.NodeID()
 	actionReq.Body = req.Body
+	if acc != nil && acc.Kind != account.KindBot {
+		a.notePublicOrigin(acc.ID, req)
+	}
 	var resp *api.ActionResponse
 	if ns == "_node" {
 		resp, err = a.K.Control(ctx, name, actionReq)

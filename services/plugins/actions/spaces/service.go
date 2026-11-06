@@ -62,8 +62,11 @@ type Service struct {
 	// "modal"), wired from sandbox.backend in config. docker provisions one
 	// standalone docker container per space; modal keeps using Modal remote
 	// sandboxes. Empty means "docker".
-	SandboxBackend   string
-	SandboxImage     string
+	SandboxBackend string
+	SandboxImage   string
+	// NodeURL is the node's own URL from its config (node.url, or
+	// ASEMAN_NODE_URL); a public address when it is one (public_url.go).
+	NodeURL          string
 	SandboxResources bot.ResourceProfile
 	proxyCreateMu    sync.Mutex
 
@@ -123,6 +126,11 @@ type Service struct {
 	clientReadFn    func(ctx context.Context, space identity.ID, path string) ([]byte, error)
 	clientRecordFn  func(ctx context.Context, platformID string, c devmodels.PlatformClient) error
 	clientPollEvery time.Duration
+
+	// publicOrigins are the addresses people were last seen reaching this
+	// node at (public_url.go), by person; guarded by publicMu.
+	publicMu      sync.Mutex
+	publicOrigins map[identity.ID]seenOrigin
 }
 
 // roomActivity is the live status of the agent currently working in a room.

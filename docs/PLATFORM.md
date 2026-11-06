@@ -543,9 +543,18 @@ so; the package's README says how to make them.
 Opening the app (or bringing it back) wakes the platform's computer; people
 sign in to and up on the platform's own accounts in it, and the frontend
 runs full screen as them. A web frontend needs no app: its people open its
-address in any browser, which wakes the computer the same way. The node
-needs `ASEMAN_PUBLIC_URL` (a phone must reach it); an agent may name another
-address with `node_url`.
+address in any browser, which wakes the computer the same way.
+
+The app is built with the node's **public address** (a phone must reach it):
+`node_url` when the agent names one, else `ASEMAN_PUBLIC_URL`, else the
+node's own URL (`node.url`; compose sets it from `ASEMAN_PUBLIC_URL`, the
+production overlay to `https://API_DOMAIN`), else the address the person
+building opens Aseman at — the gateway notes each signed-in person's origin
+(the forwarded host and scheme behind nginx or Caddy, or the browser's
+`Origin`), per person, so no one's request decides another's app. Chosen
+automatically, an address a phone cannot reach (localhost, 127.x, a private
+network's, a bare container name such as `aseman`) is passed over; with none
+left the build says what it found and to set `ASEMAN_PUBLIC_URL`.
 
 **A platform's own client.** Build the Aseman client for one platform with
 `--dart-define=ASEMAN_PLATFORM=<slug>` (the web image: `docker build

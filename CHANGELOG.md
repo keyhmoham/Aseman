@@ -36,6 +36,13 @@
   The app's native libraries are now compressed and limited to the ABIs the
   build is for (Flutter's own filter let a plugin's every ABI in): the
   default APK went from 48 MB to 23 MB, and a Godot one is 32 MB.
+- **A platform app finds the node's public address.** The build no longer
+  needs `ASEMAN_PUBLIC_URL` in the node's own environment (compose passes it
+  as `ASEMAN_NODE_URL`): it takes `node_url`, `ASEMAN_PUBLIC_URL`, the node's
+  `node.url`, or the address the person building opens Aseman at (noted per
+  person by the gateway from the forwarded host or Origin), and passes over
+  addresses a phone cannot reach (localhost, private networks, container
+  names) instead of building an app that points at them.
 - **A sleeping platform wakes for whoever opens it.** Waking is no longer a
   side effect inside the space: `/v1/platforms/<slug>/app/_aseman/wake`
   (GET or POST, no sign-in, `?wait=` up to 25 s) wakes the frontend's

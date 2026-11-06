@@ -129,7 +129,7 @@ func Builtins() []Tool {
 			"app_id":   str("The Android application id, e.g. com.example.shop (default io.aseman.platform.<slug>; kept from the last build)."),
 			"version":  str("The version people see, major.minor.patch (default: one past the last build)."),
 			"accent":   str("The app's accent color, #RRGGBB."),
-			"node_url": str("The node's public address phones reach (default: the node's own, ASEMAN_PUBLIC_URL)."),
+			"node_url": str("The node's public address phones reach, e.g. https://aseman.example (default: the node's configured public address, else the address the person opens Aseman at)."),
 			"godot":    boolean("Turn the embedded Godot engine on (true) or off (false) in the app, for 3D Scene3D scenes. Off by default; a rebuild keeps the last build's choice. On makes the APK much larger (it is built for arm64 only) and needs the engine's artifacts on the computer."),
 		}),
 		tool("platform_client_status", "How the build of the person's platform's Android app stands, and its download address once it is built.", "Use after platform_publish or platform_client_build: state building (with the step), done (with url), failed (with error and the build's last output) or none.", `{"platform":"acme"}`, map[string]any{

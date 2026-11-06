@@ -198,6 +198,8 @@ test('persona wires apps to the space for real and knows platform frontends', ()
   assert.match(p, /`platform_setup`/)
   assert.match(p, /`app_developer_access`/)
   assert.match(p, /`platform_publish`/)
+  assert.match(p, /`platform_client_build`/)
+  assert.match(p, /APK/)
 })
 
 test('gateway calls carry the token and surface the node\'s error', async () => {

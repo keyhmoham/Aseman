@@ -44,6 +44,7 @@ class _PlatformsState extends _LoadedState<_Platforms> {
   Future<void> _select(String id) async {
     if (id == selected) return;
     selected = id;
+    _godot = null;
     await reload();
   }
 
@@ -249,8 +250,14 @@ class _PlatformsState extends _LoadedState<_Platforms> {
     );
   }
 
-  Future<void> _buildClient() async {
-    await change(() => call('platform_client_build', {'platform': selected}));
+  /// Whether the next build carries the Godot engine (null: as the last
+  /// build had it, off for the first).
+  bool? _godot;
+
+  Future<void> _buildClient(bool godot) async {
+    await change(() => call(
+        'platform_client_build', {'platform': selected, 'godot': godot}));
+    _godot = null;
   }
 
   /// The platform's own Android app: the lightweight Elpian client built
@@ -266,6 +273,7 @@ class _PlatformsState extends _LoadedState<_Platforms> {
         widget.service.client.baseUrl.replaceFirst(RegExp(r'/+$'), '');
     final link = client.isEmpty ? '' : '$base${client['url']}';
     final building = state == 'building';
+    final godot = _godot ?? client['godot'] == true;
     return _Card(
       title: 'Android app',
       icon: Icons.android_rounded,
@@ -276,7 +284,7 @@ class _PlatformsState extends _LoadedState<_Platforms> {
               onPressed: reload,
               icon: const Icon(Icons.refresh_rounded)),
         FilledButton.icon(
-            onPressed: building ? null : _buildClient,
+            onPressed: building ? null : () => _buildClient(godot),
             icon: const Icon(Icons.build_rounded, size: 18),
             label: Text(client.isEmpty ? 'Build' : 'Build again')),
       ]),
@@ -287,11 +295,26 @@ class _PlatformsState extends _LoadedState<_Platforms> {
             'platform accounts, and opening it wakes the platform\'s computer '
             'wherever they are.',
             style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35)),
-        const SizedBox(height: AppSpacing.sm),
+        SwitchListTile(
+          key: const ValueKey('client-godot'),
+          contentPadding: EdgeInsets.zero,
+          value: godot,
+          onChanged: building ? null : (v) => setState(() => _godot = v),
+          title: const Text('3D scenes (Godot engine)'),
+          subtitle: Text(
+              godot
+                  ? 'The next build carries the Godot engine: Scene3D runs '
+                      'live. The app is much larger (arm64 only).'
+                  : 'Off: a Scene3D shows its placeholder and the app stays '
+                      'small.',
+              style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant)),
+        ),
+        const SizedBox(height: AppSpacing.xs),
         if (client.isNotEmpty) ...[
           QuietTile(
             icon: Icons.download_rounded,
-            label: 'Version ${client['version']}',
+            label: 'Version ${client['version']}'
+                '${client['godot'] == true ? ' · with Godot' : ''}',
             subtitle:
                 '${((client['size'] as num? ?? 0) / (1 << 20)).toStringAsFixed(1)} MB · ${client['appId']}',
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [

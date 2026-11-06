@@ -48,3 +48,4 @@ app.*.map.json
 # tool/assemble.sh copies them in from app/.
 /lib/src/
 /assets/elpian/
+/packages/

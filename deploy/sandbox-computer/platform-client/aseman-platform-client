@@ -10,12 +10,23 @@
 #
 #   aseman-platform-client build --frontend URL --out FILE.apk --state DIR \
 #       [--name NAME] [--app-id ID] [--version 1.0.0] [--build-number N] \
-#       [--accent '#RRGGBB'] [--keystore FILE.jks] [--abis arm,arm64]
+#       [--accent '#RRGGBB'] [--keystore FILE.jks] [--abis arm,arm64] \
+#       [--godot [--godot-artifacts DIR]]
 #   aseman-platform-client status --state DIR
 #   aseman-platform-client toolchain        # prepare Flutter + the Android SDK only
 #
 # The node runs `build` detached (spaces: platform_client_build) and reads
 # DIR/status.json until it says done or failed; DIR/build.log has the output.
+#
+# Godot (the embedded 3D engine behind Elpian's Scene3D) is OFF unless --godot:
+# without it the APK carries no engine and a Scene3D shows its placeholder.
+# With it the Godot plugin (app/packages/elpian_godot_native) and the
+# engine's artifacts join the build: DIR/embed.pck (the packed op-sink
+# project) and, when present, DIR/jniLibs/<abi>/libelpian_godot.*.so (the
+# GDExtension), found at --godot-artifacts, $ASEMAN_GODOT_ARTIFACTS,
+# /workspace/.aseman/godot or /opt/aseman-godot (see that package's README
+# for how they are made). A Godot build defaults to arm64 only: the engine
+# adds tens of MB per ABI.
 # The first build on a computer downloads Flutter and the Android SDK (a few
 # GB, several minutes) into $ASEMAN_TOOLCHAIN unless the image carries them.
 set -uo pipefail
@@ -138,6 +149,15 @@ GRADLE
   fi
 }
 
+# godot_artifacts — the first directory with Godot's embed.pck.
+godot_artifacts() {
+  local d
+  for d in "$GODOT_ARTIFACTS" "${ASEMAN_GODOT_ARTIFACTS:-}" /workspace/.aseman/godot /opt/aseman-godot; do
+    [ -n "$d" ] && [ -f "$d/embed.pck" ] && { echo "$d"; return 0; }
+  done
+  return 1
+}
+
 cmd_status() {
   [ -n "$STATE" ] || die "status needs --state DIR"
   if [ -f "$STATE/status.json" ]; then cat "$STATE/status.json"; else echo '{"state":"none"}'; fi
@@ -161,6 +181,10 @@ cmd_build() {
   : > "$LOG"
   STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   trap 'fail "the build was interrupted"' INT TERM
+  local godot_art=""
+  if [ "$GODOT" = "1" ]; then
+    godot_art="$(godot_artifacts)" || fail "Godot is on, but this computer has no Godot engine artifacts (an embed.pck) in --godot-artifacts, \$ASEMAN_GODOT_ARTIFACTS, /workspace/.aseman/godot or /opt/aseman-godot: export them (app/packages/elpian_godot_native/README.md) or build without Godot"
+  fi
   [ -f "$SRC/pubspec.yaml" ] && [ -f "$SRC/lib/src/elpian/elpian.dart" ] \
     || fail "this computer has no platform client kit at $SRC (its image predates it, or was built without the app's sources)"
 
@@ -170,15 +194,48 @@ cmd_build() {
   local work="$STATE/project"
   rm -rf "$work"
   cp -a "$SRC" "$work" || fail "the client could not be copied"
+  local godot_json=false
+  [ "$GODOT" = "1" ] && godot_json=true
   jq -n --arg node "$node" --arg platform "$slug" --arg name "$NAME" --arg frontend "$FRONTEND" --arg accent "${ACCENT:-}" \
-    '{node:$node, platform:$platform, name:$name, frontend:$frontend, accent:$accent}' > "$work/assets/client.json"
+    --argjson godot "$godot_json" \
+    '{node:$node, platform:$platform, name:$name, frontend:$frontend, accent:$accent, godot:$godot}' > "$work/assets/client.json"
+  local defines=()
+  if [ "$GODOT" = "1" ]; then
+    step "adding the Godot engine"
+    local pkg="$work/packages/elpian_godot_native"
+    [ -f "$pkg/pubspec.yaml" ] || fail "this computer's client kit has no Godot plugin (packages/elpian_godot_native)"
+    mkdir -p "$pkg/android/src/main/assets/godot"
+    cp -f "$godot_art/embed.pck" "$pkg/android/src/main/assets/godot/embed.pck" || fail "the Godot artifacts could not be copied"
+    if [ -d "$godot_art/jniLibs" ]; then
+      mkdir -p "$pkg/android/src/main/jniLibs"
+      cp -R "$godot_art/jniLibs/." "$pkg/android/src/main/jniLibs/" || fail "the Godot extension could not be copied"
+    fi
+    # The plugin joins the app only now: an app without Godot pays nothing.
+    awk '{print} /^dependencies:/ && !done {print "  aseman_elpian_godot:"; print "    path: packages/elpian_godot_native"; done=1}' \
+      "$work/pubspec.yaml" > "$work/pubspec.yaml.tmp" && mv "$work/pubspec.yaml.tmp" "$work/pubspec.yaml"
+    grep -q '^  aseman_elpian_godot:' "$work/pubspec.yaml" || fail "the Godot plugin could not be added to the client"
+    defines+=(--dart-define=ASEMAN_GODOT=true)
+  fi
   local cleartext=false
   case "$node" in http://*) cleartext=true ;; esac
+  local targets="" android_abis=""
+  local default_abis=arm,arm64
+  [ "$GODOT" = "1" ] && default_abis=arm64
+  IFS=',' read -ra abis <<< "${ABIS:-$default_abis}"
+  for a in "${abis[@]}"; do
+    case "$a" in
+      arm) targets="${targets:+$targets,}android-arm"; android_abis="${android_abis:+$android_abis,}armeabi-v7a" ;;
+      arm64) targets="${targets:+$targets,}android-arm64"; android_abis="${android_abis:+$android_abis,}arm64-v8a" ;;
+      x64) targets="${targets:+$targets,}android-x64"; android_abis="${android_abis:+$android_abis,}x86_64" ;;
+      *) fail "unknown ABI $a (arm, arm64, x64)" ;;
+    esac
+  done
   {
     echo "applicationId=$APP_ID"
     # A properties file reads backslashes and line breaks specially.
     printf 'label=%s\n' "$(printf '%s' "$NAME" | tr -d '\r\n' | sed 's/\\/\\\\/g')"
     echo "cleartext=$cleartext"
+    echo "abis=$android_abis"
   } > "$work/android/client.properties"
   printf 'flutter.sdk=%s\nsdk.dir=%s\n' "$(cd "$(dirname "$FLUTTER")/.." && pwd)" "$SDK" > "$work/android/local.properties"
   if [ -n "$(proxy_host)" ]; then
@@ -206,13 +263,8 @@ cmd_build() {
   step "fetching packages"
   (cd "$work" && run "$FLUTTER" pub get) || fail "the client's packages could not be fetched (pub.dev)"
 
-  local targets=""
-  IFS=',' read -ra abis <<< "${ABIS:-arm,arm64}"
-  for a in "${abis[@]}"; do
-    case "$a" in arm|arm64|x64) targets="${targets:+$targets,}android-$a" ;; *) fail "unknown ABI $a (arm, arm64, x64)" ;; esac
-  done
   step "building the APK"
-  (cd "$work" && run "$FLUTTER" build apk --release --target-platform "$targets" --build-name "$VERSION" --build-number "$BUILD_NUMBER") \
+  (cd "$work" && run "$FLUTTER" build apk --release --target-platform "$targets" --build-name "$VERSION" --build-number "$BUILD_NUMBER" "${defines[@]}") \
     || fail "the APK did not build"
   local apk="$work/build/app/outputs/flutter-apk/app-release.apk"
   [ -f "$apk" ] || fail "the build made no APK"
@@ -223,13 +275,13 @@ cmd_build() {
   # The project and its build are big; the APK and the key are what stay.
   rm -rf "$work"
   EXTRA="$(jq -n --argjson size "$size" --arg sha "$sha" --arg name "$NAME" --arg platform "$slug" --arg node "$node" \
-    '{size:$size, sha256:$sha, name:$name, platform:$platform, node:$node}')" status done "built"
+    --argjson godot "$godot_json" '{size:$size, sha256:$sha, name:$name, platform:$platform, node:$node, godot:$godot}')" status done "built"
   echo "built $OUT ($size bytes)"
 }
 
 COMMAND="${1:-}"
 [ $# -gt 0 ] && shift
-FRONTEND="" OUT="" NAME="" APP_ID="" VERSION="" BUILD_NUMBER="" ACCENT="" KEYSTORE="" ABIS=""
+FRONTEND="" OUT="" NAME="" APP_ID="" VERSION="" BUILD_NUMBER="" ACCENT="" KEYSTORE="" ABIS="" GODOT=0 GODOT_ARTIFACTS=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --frontend) FRONTEND="$2"; shift 2 ;;
@@ -242,7 +294,9 @@ while [ $# -gt 0 ]; do
     --accent) ACCENT="$2"; shift 2 ;;
     --keystore) KEYSTORE="$2"; shift 2 ;;
     --abis) ABIS="$2"; shift 2 ;;
-    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
+    --godot) GODOT=1; shift ;;
+    --godot-artifacts) GODOT_ARTIFACTS="$2"; shift 2 ;;
+    -h|--help) sed -n '2,31p' "$0"; exit 0 ;;
     *) die "unknown option $1" ;;
   esac
 done
@@ -250,5 +304,5 @@ case "$COMMAND" in
   build) cmd_build ;;
   status) cmd_status ;;
   toolchain) LOG=/dev/stderr; toolchain; echo "flutter: $FLUTTER"; echo "android sdk: $SDK" ;;
-  *) sed -n '2,24p' "$0"; exit 2 ;;
+  *) sed -n '2,31p' "$0"; exit 2 ;;
 esac

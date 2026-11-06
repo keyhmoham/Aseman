@@ -5,8 +5,14 @@ The Android app a platform gets when it publishes an Elpian frontend
 the Aseman client runs frontends with, plus what it needs to reach Aseman —
 the platform's public description, sign-in to the platform's own accounts,
 and the wake door. Nothing else of Aseman: no workspace, no messenger, no
-Elpian VM native library (a platform's frontend runs on QuickJS), no Godot
-(a 3D scene shows its placeholder).
+Elpian VM native library (a platform's frontend runs on QuickJS).
+
+**Godot is off by default**: a `Scene3D` shows its placeholder
+(`lib/client/client_godot.dart`). A build with `--godot`
+(`aseman-platform-client`; `godot: true` from the agents or the console)
+adds the Godot plugin (`packages/elpian_godot_native`, copied in by
+`tool/assemble.sh` but a dependency only then), the engine's artifacts and
+`--dart-define=ASEMAN_GODOT=true`; `assets/client.json` says `"godot": true`.
 
 | Here | What |
 |---|---|

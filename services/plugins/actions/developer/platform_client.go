@@ -31,6 +31,8 @@ type ClientView struct {
 	Size    int64  `json:"size"`
 	SHA256  string `json:"sha256"`
 	AppID   string `json:"appId"`
+	// Godot: the app carries the embedded Godot engine (3D scenes).
+	Godot   bool   `json:"godot"`
 	BuiltAt string `json:"builtAt"`
 }
 
@@ -39,7 +41,7 @@ func clientView(p models.Platform) *ClientView {
 		return nil
 	}
 	return &ClientView{URL: PlatformClientPath(p.Slug), Version: p.ClientVersion, Size: p.ClientSize,
-		SHA256: p.ClientSHA256, AppID: p.ClientAppID, BuiltAt: stamp(p.ClientAt)}
+		SHA256: p.ClientSHA256, AppID: p.ClientAppID, Godot: p.ClientGodot, BuiltAt: stamp(p.ClientAt)}
 }
 
 func platformClientOf(p models.Platform) *models.PlatformClient {
@@ -47,7 +49,7 @@ func platformClientOf(p models.Platform) *models.PlatformClient {
 		return nil
 	}
 	return &models.PlatformClient{FileID: p.ClientFileID, Version: p.ClientVersion, Size: p.ClientSize, SHA256: p.ClientSHA256,
-		AppID: p.ClientAppID, BuiltBy: p.ClientBy.String(), BuiltAt: stamp(p.ClientAt)}
+		AppID: p.ClientAppID, Godot: p.ClientGodot, BuiltBy: p.ClientBy.String(), BuiltAt: stamp(p.ClientAt)}
 }
 
 func clientTargetOf(p models.Platform) *models.PlatformClientTarget {
@@ -92,7 +94,7 @@ func (s *Service) RecordPlatformClient(ctx context.Context, platformID string, c
 	by, _ := identity.Parse(c.BuiltBy)
 	now := s.now()
 	p.ClientFileID, p.ClientVersion, p.ClientSize, p.ClientSHA256 = c.FileID, c.Version, c.Size, c.SHA256
-	p.ClientAppID, p.ClientBy, p.ClientAt, p.UpdatedAt = c.AppID, by, now, now
+	p.ClientAppID, p.ClientGodot, p.ClientBy, p.ClientAt, p.UpdatedAt = c.AppID, c.Godot, by, now, now
 	return s.R.Update(ctx, "dev_platforms", p.ID, &p)
 }
 

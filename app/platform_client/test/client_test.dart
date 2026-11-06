@@ -1,9 +1,11 @@
 import 'dart:convert';
 
 import 'package:aseman_platform_client/client/client_app.dart';
+import 'package:aseman_platform_client/client/client_godot.dart';
 import 'package:aseman_platform_client/client/config.dart';
 import 'package:aseman_platform_client/client/node_api.dart';
 import 'package:aseman_platform_client/client/wake.dart';
+import 'package:aseman_platform_client/src/elpian/elpian.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -33,6 +35,25 @@ void main() {
       expect(ClientConfig.parseColor('nope'), isNull);
       expect(ClientConfig.fromJson({'node': 'ftp://x', 'platform': 'acme'}).isValid, isFalse);
       expect(ClientConfig.fromJson({'node': 'https://x', 'platform': 'A!'}).isValid, isFalse);
+    });
+  });
+
+  group('Godot', () {
+    tearDown(() => useGodot(false));
+
+    test('is off unless the build turned it on', () {
+      expect(ClientConfig.fromJson({'frontend': 'https://n/v1/platforms/acme/app/'}).godot, isFalse);
+      expect(ClientConfig.fromJson({'frontend': 'https://n/v1/platforms/acme/app/', 'godot': true}).godot, isTrue);
+      expect(ClientConfig.fromJson({'godot': 'yes'}).godot, isFalse);
+      expect(ClientConfig.fromJson({}, godotOverride: true).godot, isTrue);
+    });
+
+    test('off: a Scene3D gets the placeholder binding, never the plugin', () {
+      useGodot(false);
+      expect(resolveGodotBinding(), isA<MockGodotBinding>());
+      expect(godotLive, isFalse);
+      useGodot(true);
+      expect(debugGodotBindingOverride, isNull);
     });
   });
 

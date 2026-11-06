@@ -61,7 +61,7 @@ func TestAPlatformsAndroidAppIsOfferedOnceBuilt(t *testing.T) {
 	}
 
 	if err := f.s.RecordPlatformClient(f.ctx, created.ID, models.PlatformClient{FileID: "f1", Version: "1.0.0", Size: 42, SHA256: "abc",
-		AppID: "io.aseman.platform.acme", BuiltBy: f.me.String()}); err != nil {
+		AppID: "io.aseman.platform.acme", Godot: true, BuiltBy: f.me.String()}); err != nil {
 		t.Fatal(err)
 	}
 	c, err := f.s.PlatformClientFile(f.ctx, "acme")
@@ -73,7 +73,7 @@ func TestAPlatformsAndroidAppIsOfferedOnceBuilt(t *testing.T) {
 		t.Fatal(err)
 	}
 	android, _ := pub["client"].(map[string]any)["android"].(*ClientView)
-	if android == nil || android.URL != "/v1/platforms/acme/client/android.apk" || android.Version != "1.0.0" {
+	if android == nil || android.URL != "/v1/platforms/acme/client/android.apk" || android.Version != "1.0.0" || !android.Godot {
 		t.Fatalf("public client: %+v", pub["client"])
 	}
 	frontend, _ := pub["frontend"].(map[string]any)
@@ -81,7 +81,7 @@ func TestAPlatformsAndroidAppIsOfferedOnceBuilt(t *testing.T) {
 		t.Fatalf("public frontend: %+v", frontend)
 	}
 	target, _ = f.s.PlatformClientTarget(f.ctx, f.me, "", "acme")
-	if target.Client == nil || target.Client.AppID != "io.aseman.platform.acme" {
+	if target.Client == nil || target.Client.AppID != "io.aseman.platform.acme" || !target.Client.Godot {
 		t.Fatalf("a rebuild keeps the app id: %+v", target.Client)
 	}
 	if err := f.s.RecordPlatformClient(f.ctx, created.ID, models.PlatformClient{}); errs.CodeOf(err) != errs.CodeInvalidArgument {

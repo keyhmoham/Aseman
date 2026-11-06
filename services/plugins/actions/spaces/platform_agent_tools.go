@@ -184,6 +184,8 @@ func (s *Service) platformPublishTool(ctx context.Context, spaceID, roomID ident
 		Platform string `json:"platform"`
 		// Android is false to publish without building the platform's app.
 		Android *bool `json:"android"`
+		// Godot turns the embedded Godot engine (3D) on in that app.
+		Godot *bool `json:"godot"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
 		return "", errs.InvalidArgument(`platform_publish takes {"dir", "platform"?, "org"?}`)
@@ -222,7 +224,7 @@ func (s *Service) platformPublishTool(ctx context.Context, spaceID, roomID ident
 	}
 	// An Elpian frontend gets the platform's own Android app.
 	if ui, _ := frontend["ui"].(string); ui != appuiWeb && (in.Android == nil || *in.Android) && slug != "" {
-		build, err := s.startClientBuildFor(ctx, person, in.Org, slug, models.PlatformClientOptions{Room: roomID.String(), Agent: agentName})
+		build, err := s.startClientBuildFor(ctx, person, in.Org, slug, models.PlatformClientOptions{Room: roomID.String(), Agent: agentName, Godot: in.Godot})
 		switch {
 		case err != nil:
 			out["android"] = map[string]any{"state": "not started", "error": err.Error()}
@@ -256,16 +258,17 @@ func (s *Service) platformClientBuildTool(ctx context.Context, roomID identity.I
 		Version  string `json:"version"`
 		Accent   string `json:"accent"`
 		NodeURL  string `json:"node_url"`
+		Godot    *bool  `json:"godot"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
-		return "", errs.InvalidArgument(`platform_client_build takes {"platform"?, "org"?, "name"?, "app_id"?, "version"?, "accent"?, "node_url"?}`)
+		return "", errs.InvalidArgument(`platform_client_build takes {"platform"?, "org"?, "name"?, "app_id"?, "version"?, "accent"?, "node_url"?, "godot"?}`)
 	}
 	person, err := s.toolPerson(ctx)
 	if err != nil {
 		return "", err
 	}
 	build, err := s.startClientBuildFor(ctx, person, in.Org, in.Platform, models.PlatformClientOptions{
-		Name: in.Name, AppID: in.AppID, Version: in.Version, Accent: in.Accent, NodeURL: in.NodeURL, Room: roomID.String(), Agent: agentName,
+		Name: in.Name, AppID: in.AppID, Version: in.Version, Accent: in.Accent, NodeURL: in.NodeURL, Godot: in.Godot, Room: roomID.String(), Agent: agentName,
 	})
 	if err != nil {
 		return "", err

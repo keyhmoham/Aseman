@@ -120,6 +120,7 @@ func Builtins() []Tool {
 			"platform": str("The platform's slug (or id); default: the person's only platform. Name it when the person has several."),
 			"org":      str("The organization (id or \"personal\"); default: the one with the person's platform."),
 			"android":  boolean("Build the platform's Android app for an Elpian frontend (default true)."),
+			"godot":    boolean("Put the embedded Godot engine in that app, for an Elpian frontend with 3D Scene3D scenes (default false: off, a Scene3D shows its placeholder)."),
 		}, "dir"),
 		tool("platform_client_build", "Build the person's platform its own Android app: the lightweight Elpian client, with its published Elpian frontend's address in it, as an APK anyone can download.", "Call after platform_publish (which starts it for an Elpian frontend) to build it again: a new version, another name, accent or app id. It runs on the frontend space's computer, detached, for minutes (the first build on a computer downloads Flutter and the Android SDK). When it is done the APK is posted in this room with its download address (/v1/platforms/<slug>/client/android.apk on the node's public address), and the platform's page offers it. The app opens the frontend full screen, signs people in to the platform's own accounts, and wakes the platform's computer whenever it is opened, anywhere. A web frontend needs no app: its people open its address in any browser. It acts as the person (an owner or admin of the platform's organization).", `{"platform":"acme"}`, map[string]any{
 			"platform": str("The platform's slug (or id); default: the person's only platform."),
@@ -129,6 +130,7 @@ func Builtins() []Tool {
 			"version":  str("The version people see, major.minor.patch (default: one past the last build)."),
 			"accent":   str("The app's accent color, #RRGGBB."),
 			"node_url": str("The node's public address phones reach (default: the node's own, ASEMAN_PUBLIC_URL)."),
+			"godot":    boolean("Turn the embedded Godot engine on (true) or off (false) in the app, for 3D Scene3D scenes. Off by default; a rebuild keeps the last build's choice. On makes the APK much larger (it is built for arm64 only) and needs the engine's artifacts on the computer."),
 		}),
 		tool("platform_client_status", "How the build of the person's platform's Android app stands, and its download address once it is built.", "Use after platform_publish or platform_client_build: state building (with the step), done (with url), failed (with error and the build's last output) or none.", `{"platform":"acme"}`, map[string]any{
 			"platform": str("The platform's slug (or id); default: the person's only platform."),

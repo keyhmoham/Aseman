@@ -92,6 +92,9 @@ func TestAPlatformsAndroidAppIsBuiltStoredAndRecorded(t *testing.T) {
 			t.Fatalf("the build command lacks %s: %s", want, start)
 		}
 	}
+	if strings.Contains(start, "--godot") || build.Godot {
+		t.Fatalf("Godot is off unless asked for: %s", start)
+	}
 	// A second ask while it builds joins it.
 	if again, _ := s.StartPlatformClientBuild(ctx, person, target, models.PlatformClientOptions{}); again.State != "building" || len(builder.commands) != 1 {
 		t.Fatalf("a second build started: %+v", again)
@@ -199,5 +202,57 @@ func TestAPlatformAppNeedsAnElpianFrontendAndAPublicNode(t *testing.T) {
 	}
 	if nextClientVersion("") != "1.0.0" || nextClientVersion("2.3.9") != "2.3.10" || nextClientVersion("x") != "1.0.0" {
 		t.Fatal("versions")
+	}
+}
+
+// Godot is off by default; asking turns it on, and a rebuild keeps the last
+// build's choice until it is turned off again.
+func TestAPlatformAppTurnsGodotOnOnlyWhenAsked(t *testing.T) {
+	t.Setenv("ASEMAN_PUBLIC_URL", "https://aseman.example")
+	s, ctx := fileToolHarness(t)
+	person := directPerson(t, s, ctx, "00000000000000010000000000000001", "founder")
+	sp, err := s.CreateSpace(ctx, person, "studio", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var commands []string
+	s.clientExecFn = func(_ context.Context, _ identity.ID, command string) (string, error) {
+		if strings.Contains(command, "nohup") {
+			commands = append(commands, command)
+			return "exit=0\nstarted\n", nil
+		}
+		return "exit=0\nrunning=0\n{\"state\":\"failed\",\"error\":\"stop\"}\n", nil
+	}
+	s.clientPollEvery = time.Millisecond
+	target := models.PlatformClientTarget{PlatformID: "pf1", Slug: "acme", Name: "Acme", ProxyID: "p1", SpaceID: sp.ID.String(), UI: "elpian"}
+	on, off := true, false
+	build := func(tg models.PlatformClientTarget, godot *bool) models.PlatformClientBuild {
+		t.Helper()
+		b, err := s.StartPlatformClientBuild(ctx, person, tg, models.PlatformClientOptions{Godot: godot})
+		if err != nil {
+			t.Fatal(err)
+		}
+		deadline := time.Now().Add(2 * time.Second)
+		for st, _ := s.PlatformClientBuildStatus(ctx, person, tg); st.State == "building"; st, _ = s.PlatformClientBuildStatus(ctx, person, tg) {
+			if time.Now().After(deadline) {
+				t.Fatal("the build never ended")
+			}
+			time.Sleep(time.Millisecond)
+		}
+		return b
+	}
+	if b := build(target, nil); b.Godot || strings.Contains(commands[0], "--godot") {
+		t.Fatalf("first build: %+v %s", b, commands[0])
+	}
+	if b := build(target, &on); !b.Godot || !strings.Contains(commands[1], "'--godot'") {
+		t.Fatalf("turned on: %+v %s", b, commands[1])
+	}
+	withGodot := target
+	withGodot.Client = &models.PlatformClient{Version: "1.0.0", Godot: true}
+	if b := build(withGodot, nil); !b.Godot || !strings.Contains(commands[2], "'--godot'") {
+		t.Fatalf("a rebuild keeps Godot on: %+v %s", b, commands[2])
+	}
+	if b := build(withGodot, &off); b.Godot || strings.Contains(commands[3], "--godot") {
+		t.Fatalf("turned off: %+v %s", b, commands[3])
 	}
 }

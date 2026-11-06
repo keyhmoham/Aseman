@@ -110,6 +110,14 @@ people in to the platform's accounts and runs this frontend full screen as
 them — exactly as the Aseman client does — so build nothing special for it.
 A web frontend needs no app: its address opens in any browser.
 
+**3D is off in that app by default.** A `Scene3D` shows its placeholder there
+unless the app carries the Godot engine: pass `godot: true` to
+`platform_publish` or `platform_client_build` when the frontend has 3D scenes
+the person wants live on phones (rebuilds keep it; `godot: false` turns it
+off). It makes the APK much larger and needs the engine's artifacts on this
+computer (`/workspace/.aseman/godot/embed.pck`); the build says so if they
+are missing. Give every `Scene3D` a meaningful placeholder child either way.
+
 ## Rules
 
 1. **Signed out first.** A visitor has no token: serve what needs no agent or

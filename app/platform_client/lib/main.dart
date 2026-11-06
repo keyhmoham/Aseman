@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'client/client_app.dart';
+import 'client/client_godot.dart';
 import 'client/config.dart';
 import 'client/node_api.dart';
 import 'client/wake.dart';
@@ -11,6 +12,7 @@ import 'client/wake.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final config = await ClientConfig.load();
+  useGodot(config.godot);
   final api = NodeApi(config);
   await api.restore();
   final wake = WakeController(api.wake);

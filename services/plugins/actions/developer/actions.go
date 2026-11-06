@@ -297,9 +297,17 @@ func BuildActions(s *Service) []api.Action {
 		return map[string]any{"platform": view}, err
 	})
 	scoped("platform_client_build", "Build the platform's own Android app (the lightweight Elpian client) for its published frontend", func(ctx context.Context, caller identity.ID, sc Scope, in map[string]json.RawMessage) (any, error) {
-		build, err := s.BuildPlatformClient(ctx, sc, caller, str(in, "platform"), models.PlatformClientOptions{
+		opts := models.PlatformClientOptions{
 			Name: str(in, "name"), AppID: str(in, "app_id"), Version: str(in, "version"), Accent: str(in, "accent"),
-		})
+		}
+		if raw, ok := in["godot"]; ok && len(raw) > 0 && string(raw) != "null" {
+			var on bool
+			if err := json.Unmarshal(raw, &on); err != nil {
+				return nil, errs.InvalidArgument("godot is true or false")
+			}
+			opts.Godot = &on
+		}
+		build, err := s.BuildPlatformClient(ctx, sc, caller, str(in, "platform"), opts)
 		return map[string]any{"build": build}, err
 	})
 	scoped("platform_client_status", "How the latest build of the platform's Android app stands", func(ctx context.Context, caller identity.ID, sc Scope, in map[string]json.RawMessage) (any, error) {

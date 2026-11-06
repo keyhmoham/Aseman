@@ -11,8 +11,13 @@ import 'package:flutter/services.dart';
 ///
 /// ```json
 /// {"node": "https://aseman.example", "platform": "acme", "name": "Acme",
-///  "frontend": "https://aseman.example/v1/platforms/acme/app/", "accent": "#4F5BD5"}
+///  "frontend": "https://aseman.example/v1/platforms/acme/app/", "accent": "#4F5BD5",
+///  "godot": false}
 /// ```
+///
+/// `godot` says whether this build carries the embedded Godot engine behind
+/// the Elpian `Scene3D` widget (off unless the build turned it on: the
+/// engine is large). Without it a `Scene3D` shows its placeholder.
 ///
 /// `frontend` is the address of the frontend (the platform's door to the
 /// Elpian app's proxy); `node` and `platform` follow from it when left out.
@@ -25,6 +30,7 @@ class ClientConfig {
     required this.platform,
     required this.name,
     this.accent,
+    this.godot = false,
   });
 
   /// The node's origin, e.g. `https://aseman.example` (no trailing slash).
@@ -38,6 +44,9 @@ class ClientConfig {
 
   /// The accent color (ARGB), or null for the default.
   final int? accent;
+
+  /// Whether this build carries the Godot engine (3D `Scene3D` scenes).
+  final bool godot;
 
   static final RegExp _slug = RegExp(r'^[a-z][a-z0-9-]{1,47}$');
   static final RegExp _door = RegExp(r'^(.*)/v1/platforms/([a-z][a-z0-9-]{1,47})/app/?$');
@@ -59,6 +68,7 @@ class ClientConfig {
     String frontendOverride = '',
     String nodeOverride = '',
     String platformOverride = '',
+    bool godotOverride = false,
   }) {
     var node = '${json['node'] ?? ''}'.trim();
     var platform = '${json['platform'] ?? ''}'.trim().toLowerCase();
@@ -83,6 +93,7 @@ class ClientConfig {
       platform: platform,
       name: name.isEmpty ? platform : name,
       accent: parseColor('${json['accent'] ?? ''}'),
+      godot: godotOverride || json['godot'] == true,
     );
   }
 
@@ -97,6 +108,7 @@ class ClientConfig {
   static const _frontendDefine = String.fromEnvironment('ASEMAN_FRONTEND_URL');
   static const _nodeDefine = String.fromEnvironment('ASEMAN_NODE_URL');
   static const _platformDefine = String.fromEnvironment('ASEMAN_PLATFORM');
+  static const _godotDefine = bool.fromEnvironment('ASEMAN_GODOT');
 
   /// The config this build carries.
   static Future<ClientConfig> load([AssetBundle? bundle]) async {
@@ -111,6 +123,7 @@ class ClientConfig {
     return ClientConfig.fromJson(json,
         frontendOverride: _frontendDefine,
         nodeOverride: _nodeDefine,
-        platformOverride: _platformDefine);
+        platformOverride: _platformDefine,
+        godotOverride: _godotDefine);
   }
 }

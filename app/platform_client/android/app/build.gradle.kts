@@ -15,6 +15,9 @@ fun props(name: String): Properties = Properties().apply {
 }
 val client = props("client.properties")
 val signing = props("key.properties")
+// The ABIs this build is for: Flutter's --target-platform limits only its own
+// libraries, and a plugin's AAR (the Godot engine's) would bring every ABI.
+val abis = client.getProperty("abis", "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
 android {
     namespace = "io.aseman.aseman_platform_client"
@@ -30,10 +33,18 @@ android {
         applicationId = client.getProperty("applicationId", "io.aseman.platform.example")
         manifestPlaceholders["appLabel"] = client.getProperty("label", "Aseman platform")
         manifestPlaceholders["cleartext"] = client.getProperty("cleartext", "false")
+        // (Flutter fills abiFilters with every ABI it knows: ours replace them.)
+        if (abis.isNotEmpty()) ndk { abiFilters.clear(); abiFilters += abis }
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+    }
+
+    // Native libraries compressed in the APK: a download half the size (they
+    // are unpacked once, at install).
+    packaging {
+        jniLibs { useLegacyPackaging = true }
     }
 
     signingConfigs {

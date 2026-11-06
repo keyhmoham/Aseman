@@ -434,8 +434,8 @@ namespace itself stays closed to agents:
 | --- | --- |
 | `platform_setup {name, slug, org_name?, org?}` | makes (or reuses) a team organization by name, or uses `org` / the personal one, and a platform in it: reused when the organization has one with that slug, else made (an organization may have several) |
 | `app_developer_access {dir, platform?, org?, platform_api?}` | a developer key of that organization, bound to the platform (`platform`, or the person's only one) (models: read, chat: write, platform collection: write) written into the app's `.aseman/server.env` (`ASEMAN_DEVELOPER_KEY`, `ASEMAN_DEVELOPER_API_URL` = node `/dev/v1`, `ASEMAN_PLATFORM`); the agent never sees it; calling again revokes and replaces it; rebuilds keep it |
-| `platform_publish {dir, platform?, org?, android?}` | publishes the app `appui_publish` verified as the platform's frontend and answers its address; for an Elpian frontend it also starts the platform's Android app (below) unless `android` is false |
-| `platform_client_build {platform?, org?, name?, app_id?, version?, accent?, node_url?}` | builds the platform's Android app again (a new version, name, accent or app id) |
+| `platform_publish {dir, platform?, org?, android?, godot?}` | publishes the app `appui_publish` verified as the platform's frontend and answers its address; for an Elpian frontend it also starts the platform's Android app (below) unless `android` is false (`godot: true` puts the Godot engine in it) |
+| `platform_client_build {platform?, org?, name?, app_id?, version?, accent?, node_url?, godot?}` | builds the platform's Android app again (a new version, name, accent or app id) |
 | `platform_client_status {platform?, org?}` | how that build stands (`building` with its step, `done` with the download address, `failed` with the error and the build's last output) |
 
 The server SDKs' `Aseman.developer()` uses the key (`models`, `chat`,
@@ -514,8 +514,9 @@ the Elpian app's proxy, `<ASEMAN_PUBLIC_URL>/v1/platforms/<slug>/app/`.
    (`ASEMAN_MAVEN_MIRROR` names a mirror of it), and, without a baked
    toolchain, storage.googleapis.com and dl.google.com. A build wants about
    4 GB of memory and, with the toolchain, 6 GB of disk on the computer
-   (`sandbox.memory_mb`, `sandbox.disk_mb`); the APK (arm and arm64) is
-   about 48 MB, within the 64 MB a stored file may be.
+   (`sandbox.memory_mb`, `sandbox.disk_mb`); the APK (arm and arm64,
+   native libraries compressed) is about 23 MB — about 32 MB for arm64
+   with Godot — within the 64 MB a stored file may be.
 3. The node looks at the build every 15 s (which keeps the computer awake for
    it), then stores the APK as a file of the space, records it on the
    platform (`dev_platforms.client_*`) and, when an agent asked, posts it in
@@ -523,6 +524,21 @@ the Elpian app's proxy, `<ASEMAN_PUBLIC_URL>/v1/platforms/<slug>/app/`.
 4. Anyone downloads it at **`/v1/platforms/<slug>/client/android.apk`**, signed
    in or not, while the computer sleeps too. The public `platform_frontend`
    names it (`client.android`) and the wake door (`frontend.wake`).
+
+**Godot (3D) is off by default.** An app built as above carries no Godot
+engine: a `Scene3D` in the frontend shows its placeholder, and the APK stays
+small. The agent (`godot: true` on `platform_publish` or
+`platform_client_build`) or the person (the console's **3D scenes (Godot
+engine)** switch, or `developer.platform_client_build {godot: true}`) turns
+it on; a rebuild keeps the last build's choice until it is turned off
+(`godot: false`), and the platform records it (`client.android.godot`). A
+Godot build adds the Godot plugin (`app/packages/elpian_godot_native`) and
+the engine's artifacts to the APK — `embed.pck` and the GDExtension's
+`jniLibs/<abi>/libelpian_godot.*.so`, taken from
+`/workspace/.aseman/godot` or `/opt/aseman-godot` (the sandbox image's
+`--build-context aseman-godot=<dir>`) — and is built for arm64 only (the
+engine adds tens of MB per ABI). Without the artifacts it fails and says
+so; the package's README says how to make them.
 
 Opening the app (or bringing it back) wakes the platform's computer; people
 sign in to and up on the platform's own accounts in it, and the frontend

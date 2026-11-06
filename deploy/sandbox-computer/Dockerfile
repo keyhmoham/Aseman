@@ -23,6 +23,12 @@ FROM ${TOOL_RUNTIME_IMAGE} AS tool-runtime
 # Without that context this empty stage stands in and the image has no kit:
 # platform_client_build then says so.
 FROM scratch AS aseman-app
+# The Godot engine's artifacts for a platform app that turns Godot on
+# (embed.pck, and jniLibs/<abi>/libelpian_godot.*.so; see
+# app/packages/elpian_godot_native/README.md), as the build context named
+# aseman-godot. Without it this empty stage stands in: Godot is off by
+# default, and a build that turns it on then looks in /workspace/.aseman/godot.
+FROM scratch AS aseman-godot
 FROM public.ecr.aws/docker/library/node:22-bookworm AS platform-client
 COPY --from=aseman-app / /src/app/
 RUN if [ -x /src/app/platform_client/tool/assemble.sh ]; then \
@@ -88,6 +94,7 @@ RUN chmod +x /usr/local/bin/aseman-appui /opt/aseman-appui/elpian/elpian-cli.mjs
 # SDK into /opt/aseman-toolchain; --build-arg WITH_ANDROID_TOOLCHAIN=1 bakes
 # them into the image instead (a few GB, but builds start at once).
 COPY --from=platform-client /out /opt/aseman-platform-client
+COPY --from=aseman-godot / /opt/aseman-godot/
 COPY platform-client/aseman-platform-client /usr/local/bin/aseman-platform-client
 ENV ASEMAN_PLATFORM_CLIENT_SRC=/opt/aseman-platform-client ASEMAN_TOOLCHAIN=/opt/aseman-toolchain
 ARG WITH_ANDROID_TOOLCHAIN=0

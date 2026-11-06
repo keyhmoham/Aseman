@@ -24,6 +24,18 @@
   / `platform_client_status`; publishing an Elpian frontend from the console
   starts a build too. The public `platform_frontend` names the client and the
   wake door.
+- **Godot in a platform's app: off by default, on when asked.** The
+  lightweight client carries no Godot engine unless the build turns it on:
+  a `Scene3D` shows its placeholder. `godot: true` on `platform_publish` /
+  `platform_client_build`, the console's **3D scenes (Godot engine)**
+  switch, or `aseman-platform-client --godot` adds the Godot plugin and the
+  engine's artifacts (`embed.pck`, the GDExtension; from
+  `/workspace/.aseman/godot` or the image's `aseman-godot` context) and
+  builds for arm64; a rebuild keeps the last choice, and the platform
+  records it.
+  The app's native libraries are now compressed and limited to the ABIs the
+  build is for (Flutter's own filter let a plugin's every ABI in): the
+  default APK went from 48 MB to 23 MB, and a Godot one is 32 MB.
 - **A sleeping platform wakes for whoever opens it.** Waking is no longer a
   side effect inside the space: `/v1/platforms/<slug>/app/_aseman/wake`
   (GET or POST, no sign-in, `?wait=` up to 25 s) wakes the frontend's

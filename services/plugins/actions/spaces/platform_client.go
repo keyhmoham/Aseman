@@ -74,6 +74,7 @@ type clientBuild struct {
 	node    string
 	version string
 	appID   string
+	godot   bool
 	started time.Time
 
 	mu     sync.Mutex
@@ -212,6 +213,13 @@ func (s *Service) StartPlatformClientBuild(ctx context.Context, person identity.
 		return models.PlatformClientBuild{}, errs.InvalidArgument("accent is a color like #4F5BD5")
 	}
 	room, _ := identity.Parse(strings.TrimSpace(opts.Room))
+	// Godot is off unless asked for; a rebuild keeps what the last build had.
+	godot := false
+	if opts.Godot != nil {
+		godot = *opts.Godot
+	} else if target.Client != nil {
+		godot = target.Client.Godot
+	}
 
 	s.clientBuildMu.Lock()
 	if s.clientBuilds == nil {
@@ -223,8 +231,8 @@ func (s *Service) StartPlatformClientBuild(ctx context.Context, person identity.
 	}
 	b := &clientBuild{
 		target: target, person: person, space: space, room: room, agent: strings.TrimSpace(opts.Agent),
-		node: node, version: version, appID: appID, started: time.Now(), done: make(chan struct{}),
-		status: models.PlatformClientBuild{Platform: target.Slug, State: "building", Step: "starting", Version: version,
+		node: node, version: version, appID: appID, godot: godot, started: time.Now(), done: make(chan struct{}),
+		status: models.PlatformClientBuild{Platform: target.Slug, State: "building", Step: "starting", Version: version, Godot: godot,
 			Started: time.Now().UTC().Format(time.RFC3339)},
 	}
 	s.clientBuilds[target.Slug] = b
@@ -236,6 +244,9 @@ func (s *Service) StartPlatformClientBuild(ctx context.Context, person identity.
 		"--name", name, "--app-id", appID, "--version", version, "--build-number", strconv.FormatInt(time.Now().Unix()/60, 10)}
 	if accent != "" {
 		args = append(args, "--accent", accent)
+	}
+	if godot {
+		args = append(args, "--godot")
 	}
 	quoted := make([]string, len(args))
 	for i, a := range args {
@@ -272,7 +283,7 @@ func (s *Service) PlatformClientBuildStatus(ctx context.Context, person identity
 	}
 	out := models.PlatformClientBuild{Platform: target.Slug, State: "none"}
 	if c := target.Client; c != nil {
-		out.State, out.Version, out.Size, out.Started = "done", c.Version, c.Size, c.BuiltAt
+		out.State, out.Version, out.Size, out.Started, out.Godot = "done", c.Version, c.Size, c.BuiltAt, c.Godot
 		if node, err := publicNodeURL(""); err == nil {
 			out.URL = platformClientURL(node, target.Slug)
 		} else {
@@ -431,7 +442,7 @@ func (s *Service) collectClient(ctx context.Context, b *clientBuild, look client
 		return
 	}
 	rec := models.PlatformClient{FileID: file.ID.String(), Version: b.version, Size: int64(len(data)), SHA256: digest,
-		AppID: b.appID, BuiltBy: b.person.String(), BuiltAt: time.Now().UTC().Format(time.RFC3339)}
+		AppID: b.appID, Godot: b.godot, BuiltBy: b.person.String(), BuiltAt: time.Now().UTC().Format(time.RFC3339)}
 	if err := s.recordClient(ctx, b.target.PlatformID, rec); err != nil {
 		fail("the built app could not be recorded on the platform: " + err.Error())
 		return

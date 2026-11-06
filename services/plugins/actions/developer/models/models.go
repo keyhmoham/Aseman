@@ -75,13 +75,16 @@ type Platform struct {
 	// (spaces/platform_client.go) and stored as a file of that space. Anyone
 	// downloads it at /v1/platforms/<slug>/client/android.apk. Empty
 	// ClientFileID: none built yet.
-	ClientFileID  string      `db:"client_file_id" json:"client_file_id,omitempty"`
-	ClientVersion string      `db:"client_version" json:"client_version,omitempty"`
-	ClientSize    int64       `db:"client_size" json:"client_size,omitempty"`
-	ClientSHA256  string      `db:"client_sha256" json:"client_sha256,omitempty"`
-	ClientAppID   string      `db:"client_app_id" json:"client_app_id,omitempty"`
-	ClientBy      identity.ID `db:"client_by" json:"client_by,omitempty"`
-	ClientAt      time.Time   `db:"client_at" json:"client_at,omitempty"`
+	ClientFileID  string `db:"client_file_id" json:"client_file_id,omitempty"`
+	ClientVersion string `db:"client_version" json:"client_version,omitempty"`
+	ClientSize    int64  `db:"client_size" json:"client_size,omitempty"`
+	ClientSHA256  string `db:"client_sha256" json:"client_sha256,omitempty"`
+	ClientAppID   string `db:"client_app_id" json:"client_app_id,omitempty"`
+	// ClientGodot: the app carries the embedded Godot engine (Elpian's 3D
+	// Scene3D). Off unless a build turned it on; rebuilds keep it.
+	ClientGodot bool        `db:"client_godot" json:"client_godot,omitempty"`
+	ClientBy    identity.ID `db:"client_by" json:"client_by,omitempty"`
+	ClientAt    time.Time   `db:"client_at" json:"client_at,omitempty"`
 }
 
 // Wiring is what an app built in a space is wired to: the space's agents it
@@ -170,6 +173,7 @@ type PlatformClient struct {
 	Size    int64  `json:"size"`
 	SHA256  string `json:"sha256"`
 	AppID   string `json:"app_id"`
+	Godot   bool   `json:"godot"`
 	BuiltBy string `json:"built_by"`
 	BuiltAt string `json:"built_at"`
 }
@@ -201,6 +205,9 @@ type PlatformClientOptions struct {
 	Version string `json:"version,omitempty"`
 	// Accent is the app's accent color, #RRGGBB.
 	Accent string `json:"accent,omitempty"`
+	// Godot turns the embedded Godot engine (Elpian's 3D Scene3D) on or off
+	// in the app. Nil: as the last build had it, off for the first.
+	Godot *bool `json:"godot,omitempty"`
 	// NodeURL is the node's public address the app reaches (default
 	// ASEMAN_PUBLIC_URL).
 	NodeURL string `json:"node_url,omitempty"`
@@ -219,6 +226,8 @@ type PlatformClientBuild struct {
 	Error   string `json:"error,omitempty"`
 	Log     string `json:"log,omitempty"`
 	Version string `json:"version,omitempty"`
+	// Godot: this build carries the embedded Godot engine.
+	Godot bool `json:"godot"`
 	// URL is where anyone downloads the client (once one is built).
 	URL     string `json:"url,omitempty"`
 	Size    int64  `json:"size,omitempty"`
@@ -444,7 +453,7 @@ func Models() []database.Model {
 			f("frontend_at", database.KindTime),
 			f("client_file_id", database.KindString), f("client_version", database.KindString),
 			f("client_size", database.KindInt64), f("client_sha256", database.KindString),
-			f("client_app_id", database.KindString), f("client_by", database.KindString),
+			f("client_app_id", database.KindString), f("client_godot", database.KindBool), f("client_by", database.KindString),
 			f("client_at", database.KindTime),
 			f("created_at", database.KindTime), f("updated_at", database.KindTime),
 		}},

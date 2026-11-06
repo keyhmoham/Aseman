@@ -223,11 +223,16 @@ func (s *Service) PublicFrontend(ctx context.Context, ref string) (map[string]an
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{"platform": map[string]any{"id": p.ID.String(), "slug": p.Slug, "name": p.Name}, "frontend": nil}
+	out := map[string]any{"platform": map[string]any{"id": p.ID.String(), "slug": p.Slug, "name": p.Name}, "frontend": nil, "client": nil}
 	if p.FrontendProxyID != "" {
 		out["frontend"] = map[string]any{
 			"title": p.FrontendTitle, "ui": p.FrontendUI, "entry": p.FrontendEntry, "url": PlatformFrontendPath(p.Slug),
+			// Anyone may wake the frontend's computer before using it.
+			"wake": PlatformFrontendPath(p.Slug) + "_aseman/wake",
 		}
+	}
+	if c := clientView(*p); c != nil {
+		out["client"] = map[string]any{"android": c}
 	}
 	return out, nil
 }

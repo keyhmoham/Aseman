@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aseman/aseman/internal/plugins/api"
@@ -49,6 +50,9 @@ type API struct {
 	// pageActions runs the actions a preview's page API calls (tests set
 	// it; nil is the kernel's router).
 	pageActions func(context.Context, string, string, *api.ActionRequest) (*api.ActionResponse, error)
+	// platformHolds is when each platform frontend last renewed its
+	// computer's lease (platform_app.go), by preview id.
+	platformHolds sync.Map
 }
 
 // New builds the API gateway.
@@ -92,6 +96,10 @@ func (a *API) Register(net network.Network) error {
 		}
 	}
 	if err := net.Handle(network.MethodGet, "/v1/platforms/{slug}/app", a.platformServe); err != nil {
+		return err
+	}
+	// A platform's own Android app, for anyone to install (platform_client.go).
+	if err := net.Handle(network.MethodGet, "/v1/platforms/{slug}/client/{file}", a.platformClientDownload); err != nil {
 		return err
 	}
 	// App servers in a sandbox use the space's agents and apps (app_api.go).

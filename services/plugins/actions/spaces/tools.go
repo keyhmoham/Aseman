@@ -63,6 +63,10 @@ func toolDetail(toolName string) string {
 		return "giving the app developer API access…"
 	case "platform_publish":
 		return "publishing the platform's frontend…"
+	case "platform_client_build":
+		return "building the platform's Android app…"
+	case "platform_client_status":
+		return "checking the platform's Android app…"
 	case "desk_state", "desk_arrange", "desk_close":
 		return "arranging the desk…"
 	default:
@@ -415,7 +419,11 @@ func (s *Service) ToolDispatch(ctx context.Context, spaceID, agentName, toolName
 	case toolName == "app_developer_access":
 		result, terr = s.appDeveloperAccessTool(ctx, id, argsJSON)
 	case toolName == "platform_publish":
-		result, terr = s.platformPublishTool(ctx, id, argsJSON)
+		result, terr = s.platformPublishTool(ctx, id, roomID, agentName, argsJSON)
+	case toolName == "platform_client_build":
+		result, terr = s.platformClientBuildTool(ctx, roomID, agentName, argsJSON)
+	case toolName == "platform_client_status":
+		result, terr = s.platformClientStatusTool(ctx, argsJSON)
 	case toolName == "desk_state":
 		result, terr = s.deskStateTool(ctx, id, roomID, argsJSON)
 	case toolName == "desk_arrange":

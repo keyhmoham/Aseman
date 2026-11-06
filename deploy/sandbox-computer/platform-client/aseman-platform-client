@@ -1,0 +1,308 @@
+#!/usr/bin/env bash
+# aseman-platform-client — builds a platform's lightweight Android client.
+#
+# The client (app/platform_client in the Aseman repository, assembled into
+# $ASEMAN_PLATFORM_CLIENT_SRC on this computer) holds only the Elpian engine
+# and what it needs to reach Aseman. A build names one platform's published
+# frontend — the platform's door to its Elpian app's proxy on the node — and
+# gives an APK that opens it full screen, signs people in to the platform's
+# own accounts, and wakes the platform's computer whenever it is opened.
+#
+#   aseman-platform-client build --frontend URL --out FILE.apk --state DIR \
+#       [--name NAME] [--app-id ID] [--version 1.0.0] [--build-number N] \
+#       [--accent '#RRGGBB'] [--keystore FILE.jks] [--abis arm,arm64] \
+#       [--godot [--godot-artifacts DIR]]
+#   aseman-platform-client status --state DIR
+#   aseman-platform-client toolchain        # prepare Flutter + the Android SDK only
+#
+# The node runs `build` detached (spaces: platform_client_build) and reads
+# DIR/status.json until it says done or failed; DIR/build.log has the output.
+#
+# Godot (the embedded 3D engine behind Elpian's Scene3D) is OFF unless --godot:
+# without it the APK carries no engine and a Scene3D shows its placeholder.
+# With it the Godot plugin (app/packages/elpian_godot_native) and the
+# engine's artifacts join the build: DIR/embed.pck (the packed op-sink
+# project) and, when present, DIR/jniLibs/<abi>/libelpian_godot.*.so (the
+# GDExtension), found at --godot-artifacts, $ASEMAN_GODOT_ARTIFACTS,
+# /workspace/.aseman/godot or /opt/aseman-godot (see that package's README
+# for how they are made). A Godot build defaults to arm64 only: the engine
+# adds tens of MB per ABI.
+# The first build on a computer downloads Flutter and the Android SDK (a few
+# GB, several minutes) into $ASEMAN_TOOLCHAIN unless the image carries them.
+set -uo pipefail
+
+SRC="${ASEMAN_PLATFORM_CLIENT_SRC:-/opt/aseman-platform-client}"
+TOOLS="${ASEMAN_TOOLCHAIN:-/opt/aseman-toolchain}"
+FLUTTER_VERSION="${ASEMAN_FLUTTER_VERSION:-3.44.0}"
+ANDROID_PLATFORM="${ASEMAN_ANDROID_PLATFORM:-android-36}"
+ANDROID_BUILD_TOOLS="${ASEMAN_ANDROID_BUILD_TOOLS:-36.0.0}"
+ANDROID_NDK="${ASEMAN_ANDROID_NDK:-28.2.13676358}"
+# A mirror of Maven Central for Gradle, for networks where it is rate limited
+# (e.g. https://maven-central.storage-download.googleapis.com/maven2).
+MAVEN_MIRROR="${ASEMAN_MAVEN_MIRROR:-}"
+CMDLINE_TOOLS_URL="${ASEMAN_ANDROID_CMDLINE_TOOLS_URL:-https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip}"
+
+STATE=""
+STATUS=""
+LOG=""
+
+die() { echo "aseman-platform-client: $*" >&2; exit 2; }
+
+json_escape() { jq -Rn --arg v "$1" '$v'; }
+
+# status STATE STEP [ERROR] — writes DIR/status.json (atomically).
+status() {
+  [ -n "$STATUS" ] || return 0
+  local state="$1" step="$2" error="${3:-}" tmp="$STATUS.tmp" extra="${EXTRA:-}"
+  [ -n "$extra" ] || extra='{}'
+  jq -n --arg state "$state" --arg step "$step" --arg error "$error" --arg started "${STARTED:-}" \
+    --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg apk "${OUT:-}" --arg version "${VERSION:-}" \
+    --arg build "${BUILD_NUMBER:-}" --arg app_id "${APP_ID:-}" --argjson extra "$extra" \
+    '{state:$state, step:$step, error:$error, started_at:$started, updated_at:$now, apk:$apk,
+      version:$version, build_number:$build, app_id:$app_id} + $extra' > "$tmp" && mv -f "$tmp" "$STATUS"
+}
+
+fail() {
+  local why="$1"
+  local tail_log=""
+  [ -n "$LOG" ] && [ -f "$LOG" ] && tail_log="$(tail -n 25 "$LOG" | cut -c1-300)"
+  EXTRA="$(jq -n --arg log "$tail_log" '{log:$log}')" status failed "${STEP:-build}" "$why"
+  echo "aseman-platform-client: $why" >&2
+  exit 1
+}
+
+step() { STEP="$1"; status building "$1"; echo "== $1" >> "${LOG:-/dev/null}"; }
+
+run() { "$@" >> "${LOG:-/dev/stderr}" 2>&1; }
+
+# The egress proxy, as Java tools want it.
+proxy_host() { local p="${HTTPS_PROXY:-${https_proxy:-}}"; p="${p#*://}"; p="${p#*@}"; p="${p%%/*}"; echo "${p%%:*}"; }
+proxy_port() { local p="${HTTPS_PROXY:-${https_proxy:-}}"; p="${p#*://}"; p="${p#*@}"; p="${p%%/*}"; case "$p" in *:*) echo "${p##*:}" ;; *) echo 443 ;; esac; }
+
+java_ok() { command -v java >/dev/null 2>&1 && [ "$(java -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | head -1)" -ge 17 ] 2>/dev/null; }
+
+toolchain() {
+  mkdir -p "$TOOLS"
+  if ! java_ok; then
+    step "installing Java 17"
+    run apt-get update && run apt-get install -y --no-install-recommends openjdk-17-jdk-headless || fail "Java 17 could not be installed (needs the Debian mirrors)"
+  fi
+  if command -v flutter >/dev/null 2>&1; then
+    FLUTTER="$(command -v flutter)"
+  else
+    FLUTTER="$TOOLS/flutter/bin/flutter"
+    if [ ! -x "$FLUTTER" ]; then
+      step "downloading Flutter $FLUTTER_VERSION"
+      run curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz" -o "$TOOLS/flutter.tar.xz" \
+        || fail "Flutter could not be downloaded (storage.googleapis.com)"
+      run tar -xJf "$TOOLS/flutter.tar.xz" -C "$TOOLS" || fail "Flutter could not be unpacked"
+      rm -f "$TOOLS/flutter.tar.xz"
+    fi
+  fi
+  git config --global --add safe.directory '*' 2>/dev/null || true
+  export PATH="$(dirname "$FLUTTER"):$PATH"
+  SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$TOOLS/android-sdk}}"
+  local manager="$SDK/cmdline-tools/latest/bin/sdkmanager"
+  if [ ! -x "$manager" ]; then
+    step "downloading the Android SDK tools"
+    mkdir -p "$SDK/cmdline-tools"
+    run curl -fsSL "$CMDLINE_TOOLS_URL" -o "$TOOLS/cmdline-tools.zip" || fail "the Android SDK tools could not be downloaded (dl.google.com)"
+    rm -rf "$SDK/cmdline-tools/latest" "$SDK/cmdline-tools/cmdline-tools"
+    run unzip -q "$TOOLS/cmdline-tools.zip" -d "$SDK/cmdline-tools" || fail "the Android SDK tools could not be unpacked"
+    mv "$SDK/cmdline-tools/cmdline-tools" "$SDK/cmdline-tools/latest"
+    rm -f "$TOOLS/cmdline-tools.zip"
+  fi
+  local proxy=()
+  if [ -n "$(proxy_host)" ]; then proxy=(--proxy=http "--proxy_host=$(proxy_host)" "--proxy_port=$(proxy_port)"); fi
+  if [ ! -d "$SDK/platforms/$ANDROID_PLATFORM" ] || [ ! -d "$SDK/build-tools/$ANDROID_BUILD_TOOLS" ] || [ ! -d "$SDK/ndk/$ANDROID_NDK" ]; then
+    step "installing the Android SDK ($ANDROID_PLATFORM)"
+    (yes 2>/dev/null | "$manager" "--sdk_root=$SDK" "${proxy[@]}" --licenses) >> "$LOG" 2>&1 || true
+    run "$manager" "--sdk_root=$SDK" "${proxy[@]}" "platform-tools" "platforms;$ANDROID_PLATFORM" "build-tools;$ANDROID_BUILD_TOOLS" "ndk;$ANDROID_NDK" \
+      || fail "the Android SDK could not be installed (dl.google.com)"
+  fi
+  export ANDROID_HOME="$SDK" ANDROID_SDK_ROOT="$SDK"
+  run "$FLUTTER" config --no-analytics --android-sdk "$SDK" || true
+  # Flutter's Android engine artifacts (once per toolchain).
+  run "$FLUTTER" precache --android || true
+  local init="${GRADLE_USER_HOME:-$HOME/.gradle}/init.d/aseman-maven-mirror.gradle"
+  if [ -n "$MAVEN_MIRROR" ]; then
+    mkdir -p "$(dirname "$init")"
+    cat > "$init" <<GRADLE
+// Written by aseman-platform-client: Maven Central through $MAVEN_MIRROR.
+def asemanMirror = "$MAVEN_MIRROR"
+def asemanUseMirror = { repos ->
+  repos.withType(MavenArtifactRepository).configureEach { r ->
+    if (r.url.toString().startsWith("https://repo.maven.apache.org/maven2")) { r.url = asemanMirror }
+  }
+}
+beforeSettings { s ->
+  asemanUseMirror(s.pluginManagement.repositories)
+  asemanUseMirror(s.dependencyResolutionManagement.repositories)
+}
+allprojects {
+  asemanUseMirror(buildscript.repositories)
+  asemanUseMirror(repositories)
+}
+GRADLE
+  else
+    rm -f "$init"
+  fi
+}
+
+# godot_artifacts — the first directory with Godot's embed.pck.
+godot_artifacts() {
+  local d
+  for d in "$GODOT_ARTIFACTS" "${ASEMAN_GODOT_ARTIFACTS:-}" /workspace/.aseman/godot /opt/aseman-godot; do
+    [ -n "$d" ] && [ -f "$d/embed.pck" ] && { echo "$d"; return 0; }
+  done
+  return 1
+}
+
+cmd_status() {
+  [ -n "$STATE" ] || die "status needs --state DIR"
+  if [ -f "$STATE/status.json" ]; then cat "$STATE/status.json"; else echo '{"state":"none"}'; fi
+}
+
+cmd_build() {
+  [ -n "$FRONTEND" ] || die "build needs --frontend URL (https://node/v1/platforms/<slug>/app/)"
+  [ -n "$OUT" ] || die "build needs --out FILE.apk"
+  [ -n "$STATE" ] || die "build needs --state DIR"
+  local re='^(https?://[^/]+(/[^?#]*)?)/v1/platforms/([a-z][a-z0-9-]{1,47})/app/?$'
+  [[ "$FRONTEND" =~ $re ]] || die "--frontend is a platform's door: https://<node>/v1/platforms/<slug>/app/"
+  local node="${BASH_REMATCH[1]}" slug="${BASH_REMATCH[3]}"
+  NAME="${NAME:-$slug}"
+  APP_ID="${APP_ID:-io.aseman.platform.${slug//-/_}}"
+  [[ "$APP_ID" =~ ^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$ ]] || die "--app-id is a Java package name, e.g. com.example.shop"
+  VERSION="${VERSION:-1.0.0}"
+  BUILD_NUMBER="${BUILD_NUMBER:-$(date -u +%s | cut -c1-9)}"
+  mkdir -p "$STATE" "$(dirname "$OUT")"
+  STATUS="$STATE/status.json"
+  LOG="$STATE/build.log"
+  : > "$LOG"
+  STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  trap 'fail "the build was interrupted"' INT TERM
+  local godot_art=""
+  if [ "$GODOT" = "1" ]; then
+    godot_art="$(godot_artifacts)" || fail "Godot is on, but this computer has no Godot engine artifacts (an embed.pck) in --godot-artifacts, \$ASEMAN_GODOT_ARTIFACTS, /workspace/.aseman/godot or /opt/aseman-godot: export them (app/packages/elpian_godot_native/README.md) or build without Godot"
+  fi
+  [ -f "$SRC/pubspec.yaml" ] && [ -f "$SRC/lib/src/elpian/elpian.dart" ] \
+    || fail "this computer has no platform client kit at $SRC (its image predates it, or was built without the app's sources)"
+
+  toolchain
+
+  step "preparing the project"
+  local work="$STATE/project"
+  rm -rf "$work"
+  cp -a "$SRC" "$work" || fail "the client could not be copied"
+  local godot_json=false
+  [ "$GODOT" = "1" ] && godot_json=true
+  jq -n --arg node "$node" --arg platform "$slug" --arg name "$NAME" --arg frontend "$FRONTEND" --arg accent "${ACCENT:-}" \
+    --argjson godot "$godot_json" \
+    '{node:$node, platform:$platform, name:$name, frontend:$frontend, accent:$accent, godot:$godot}' > "$work/assets/client.json"
+  local defines=()
+  if [ "$GODOT" = "1" ]; then
+    step "adding the Godot engine"
+    local pkg="$work/packages/elpian_godot_native"
+    [ -f "$pkg/pubspec.yaml" ] || fail "this computer's client kit has no Godot plugin (packages/elpian_godot_native)"
+    mkdir -p "$pkg/android/src/main/assets/godot"
+    cp -f "$godot_art/embed.pck" "$pkg/android/src/main/assets/godot/embed.pck" || fail "the Godot artifacts could not be copied"
+    if [ -d "$godot_art/jniLibs" ]; then
+      mkdir -p "$pkg/android/src/main/jniLibs"
+      cp -R "$godot_art/jniLibs/." "$pkg/android/src/main/jniLibs/" || fail "the Godot extension could not be copied"
+    fi
+    # The plugin joins the app only now: an app without Godot pays nothing.
+    awk '{print} /^dependencies:/ && !done {print "  aseman_elpian_godot:"; print "    path: packages/elpian_godot_native"; done=1}' \
+      "$work/pubspec.yaml" > "$work/pubspec.yaml.tmp" && mv "$work/pubspec.yaml.tmp" "$work/pubspec.yaml"
+    grep -q '^  aseman_elpian_godot:' "$work/pubspec.yaml" || fail "the Godot plugin could not be added to the client"
+    defines+=(--dart-define=ASEMAN_GODOT=true)
+  fi
+  local cleartext=false
+  case "$node" in http://*) cleartext=true ;; esac
+  local targets="" android_abis=""
+  local default_abis=arm,arm64
+  [ "$GODOT" = "1" ] && default_abis=arm64
+  IFS=',' read -ra abis <<< "${ABIS:-$default_abis}"
+  for a in "${abis[@]}"; do
+    case "$a" in
+      arm) targets="${targets:+$targets,}android-arm"; android_abis="${android_abis:+$android_abis,}armeabi-v7a" ;;
+      arm64) targets="${targets:+$targets,}android-arm64"; android_abis="${android_abis:+$android_abis,}arm64-v8a" ;;
+      x64) targets="${targets:+$targets,}android-x64"; android_abis="${android_abis:+$android_abis,}x86_64" ;;
+      *) fail "unknown ABI $a (arm, arm64, x64)" ;;
+    esac
+  done
+  {
+    echo "applicationId=$APP_ID"
+    # A properties file reads backslashes and line breaks specially.
+    printf 'label=%s\n' "$(printf '%s' "$NAME" | tr -d '\r\n' | sed 's/\\/\\\\/g')"
+    echo "cleartext=$cleartext"
+    echo "abis=$android_abis"
+  } > "$work/android/client.properties"
+  printf 'flutter.sdk=%s\nsdk.dir=%s\n' "$(cd "$(dirname "$FLUTTER")/.." && pwd)" "$SDK" > "$work/android/local.properties"
+  if [ -n "$(proxy_host)" ]; then
+    printf '\nsystemProp.https.proxyHost=%s\nsystemProp.https.proxyPort=%s\nsystemProp.http.proxyHost=%s\nsystemProp.http.proxyPort=%s\n' \
+      "$(proxy_host)" "$(proxy_port)" "$(proxy_host)" "$(proxy_port)" >> "$work/android/gradle.properties"
+  fi
+
+  # One key signs every version of this platform's app, so an update installs
+  # over the one before. It is kept next to the APK, in the project's files.
+  KEYSTORE="${KEYSTORE:-$(dirname "$OUT")/$slug-signing.jks}"
+  local keyprops="$KEYSTORE.properties"
+  if [ ! -f "$KEYSTORE" ] || [ ! -f "$keyprops" ]; then
+    step "making the platform's signing key"
+    local pass
+    pass="$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | cut -c1-24)"
+    rm -f "$KEYSTORE"
+    run keytool -genkeypair -noprompt -keystore "$KEYSTORE" -storetype PKCS12 -alias platform -keyalg RSA -keysize 2048 \
+      -validity 10000 -storepass "$pass" -keypass "$pass" -dname "CN=$(printf '%s' "$NAME" | tr -d ',=+<>#;"\\'), O=Aseman platform $slug" \
+      || fail "the signing key could not be made"
+    printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=platform\n' "$pass" "$pass" > "$keyprops"
+    chmod 600 "$KEYSTORE" "$keyprops"
+  fi
+  { cat "$keyprops"; echo "storeFile=$KEYSTORE"; } > "$work/android/key.properties"
+
+  step "fetching packages"
+  (cd "$work" && run "$FLUTTER" pub get) || fail "the client's packages could not be fetched (pub.dev)"
+
+  step "building the APK"
+  (cd "$work" && run "$FLUTTER" build apk --release --target-platform "$targets" --build-name "$VERSION" --build-number "$BUILD_NUMBER" "${defines[@]}") \
+    || fail "the APK did not build"
+  local apk="$work/build/app/outputs/flutter-apk/app-release.apk"
+  [ -f "$apk" ] || fail "the build made no APK"
+  cp -f "$apk" "$OUT" || fail "the APK could not be saved to $OUT"
+  local size sha
+  size="$(stat -c %s "$OUT")"
+  sha="$(sha256sum "$OUT" | cut -d' ' -f1)"
+  # The project and its build are big; the APK and the key are what stay.
+  rm -rf "$work"
+  EXTRA="$(jq -n --argjson size "$size" --arg sha "$sha" --arg name "$NAME" --arg platform "$slug" --arg node "$node" \
+    --argjson godot "$godot_json" '{size:$size, sha256:$sha, name:$name, platform:$platform, node:$node, godot:$godot}')" status done "built"
+  echo "built $OUT ($size bytes)"
+}
+
+COMMAND="${1:-}"
+[ $# -gt 0 ] && shift
+FRONTEND="" OUT="" NAME="" APP_ID="" VERSION="" BUILD_NUMBER="" ACCENT="" KEYSTORE="" ABIS="" GODOT=0 GODOT_ARTIFACTS=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --frontend) FRONTEND="$2"; shift 2 ;;
+    --out) OUT="$2"; shift 2 ;;
+    --state) STATE="$2"; shift 2 ;;
+    --name) NAME="$2"; shift 2 ;;
+    --app-id) APP_ID="$2"; shift 2 ;;
+    --version) VERSION="$2"; shift 2 ;;
+    --build-number) BUILD_NUMBER="$2"; shift 2 ;;
+    --accent) ACCENT="$2"; shift 2 ;;
+    --keystore) KEYSTORE="$2"; shift 2 ;;
+    --abis) ABIS="$2"; shift 2 ;;
+    --godot) GODOT=1; shift ;;
+    --godot-artifacts) GODOT_ARTIFACTS="$2"; shift 2 ;;
+    -h|--help) sed -n '2,31p' "$0"; exit 0 ;;
+    *) die "unknown option $1" ;;
+  esac
+done
+case "$COMMAND" in
+  build) cmd_build ;;
+  status) cmd_status ;;
+  toolchain) LOG=/dev/stderr; toolchain; echo "flutter: $FLUTTER"; echo "android sdk: $SDK" ;;
+  *) sed -n '2,31p' "$0"; exit 2 ;;
+esac

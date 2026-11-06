@@ -54,6 +54,9 @@ type Service struct {
 	// Frontends is the spaces namespace's side of platform frontends (the
 	// host bridge when nil; replaced in tests).
 	Frontends FrontendSpaces
+	// Clients is the spaces namespace's side of platform clients (the host
+	// bridge when nil; replaced in tests).
+	Clients ClientSpaces
 	// VMs finds the provider of a kind of machine (the kernel's, replaced in tests).
 	VMs func(vmm.Type) vmm.VMM
 	// FS stores files (the kernel's, replaced in tests).

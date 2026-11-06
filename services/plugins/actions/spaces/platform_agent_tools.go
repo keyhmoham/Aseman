@@ -5,7 +5,11 @@ package spaces
 //	platform_setup        an organization and one of its platforms (made or reused)
 //	app_developer_access  a developer API key of that organization, written
 //	                      into one app's server settings (never the page)
-//	platform_publish      a verified app as the platform's frontend
+//	platform_publish      a verified app as the platform's frontend (and,
+//	                      for an Elpian one, starts its Android app's build)
+//	platform_client_build the platform's own Android app: the lightweight
+//	                      Elpian client built for its frontend
+//	platform_client_status how that build stands, and its download address
 //
 // Each acts as the person whose request the agent's turn serves (appOwner),
 // never as the agent, through the developer namespace's own checks; the
@@ -172,12 +176,16 @@ func (s *Service) setAppServerEnv(ctx context.Context, spaceID identity.ID, dir 
 }
 
 // platformPublishTool implements platform_publish.
-func (s *Service) platformPublishTool(ctx context.Context, spaceID identity.ID, argsJSON string) (string, error) {
+func (s *Service) platformPublishTool(ctx context.Context, spaceID, roomID identity.ID, agentName, argsJSON string) (string, error) {
 	var in struct {
 		Dir      string `json:"dir"`
 		Proxy    string `json:"proxy"`
 		Org      string `json:"org"`
 		Platform string `json:"platform"`
+		// Android is false to publish without building the platform's app.
+		Android *bool `json:"android"`
+		// Godot turns the embedded Godot engine (3D) on in that app.
+		Godot *bool `json:"godot"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
 		return "", errs.InvalidArgument(`platform_publish takes {"dir", "platform"?, "org"?}`)
@@ -206,11 +214,98 @@ func (s *Service) platformPublishTool(ctx context.Context, spaceID identity.ID, 
 	}
 	frontend, _ := view["frontend"].(map[string]any)
 	url, _ := frontend["url"].(string)
-	b, _ := json.Marshal(map[string]any{
+	slug, _ := view["slug"].(string)
+	out := map[string]any{
 		"platform": view,
 		"url":      url,
 		"next": "Tell the person their platform is live: its people open " + url + " on this node (or the platform's own Aseman client, built with ASEMAN_PLATFORM=" +
-			strings.TrimSuffix(strings.TrimPrefix(url, "/v1/platforms/"), "/app/") + "). Its use of this space's agents and apps runs as the person and is billed to them; it reaches only what the app is wired to.",
+			strings.TrimSuffix(strings.TrimPrefix(url, "/v1/platforms/"), "/app/") + "). Its use of this space's agents and apps runs as the person and is billed to them; it reaches only what the app is wired to. " +
+			"Whoever opens it, from anywhere, wakes this space's computer when it is asleep.",
+	}
+	// An Elpian frontend gets the platform's own Android app.
+	if ui, _ := frontend["ui"].(string); ui != appuiWeb && (in.Android == nil || *in.Android) && slug != "" {
+		build, err := s.startClientBuildFor(ctx, person, in.Org, slug, models.PlatformClientOptions{Room: roomID.String(), Agent: agentName, Godot: in.Godot})
+		switch {
+		case err != nil:
+			out["android"] = map[string]any{"state": "not started", "error": err.Error()}
+		default:
+			out["android"] = build
+			out["next"] = out["next"].(string) + " Its Android app is building on this computer (" + build.State + "): when it is done it is posted in this room with its download address; " +
+				"platform_client_status tells how it stands. Tell the person it is on its way."
+		}
+	}
+	b, _ := json.Marshal(out)
+	return string(b), nil
+}
+
+// startClientBuildFor starts building the Android app of [person]'s
+// platform [platformRef] (or the only one in [orgRef]).
+func (s *Service) startClientBuildFor(ctx context.Context, person identity.ID, orgRef, platformRef string, opts models.PlatformClientOptions) (models.PlatformClientBuild, error) {
+	var target models.PlatformClientTarget
+	if err := bridge.Invoke(ctx, s.K, "developer", "PlatformClientTarget", []any{ctx, person, orgRef, platformRef}, &target); err != nil {
+		return models.PlatformClientBuild{}, err
+	}
+	return s.StartPlatformClientBuild(ctx, person, target, opts)
+}
+
+// platformClientBuildTool implements platform_client_build.
+func (s *Service) platformClientBuildTool(ctx context.Context, roomID identity.ID, agentName, argsJSON string) (string, error) {
+	var in struct {
+		Org      string `json:"org"`
+		Platform string `json:"platform"`
+		Name     string `json:"name"`
+		AppID    string `json:"app_id"`
+		Version  string `json:"version"`
+		Accent   string `json:"accent"`
+		NodeURL  string `json:"node_url"`
+		Godot    *bool  `json:"godot"`
+	}
+	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
+		return "", errs.InvalidArgument(`platform_client_build takes {"platform"?, "org"?, "name"?, "app_id"?, "version"?, "accent"?, "node_url"?, "godot"?}`)
+	}
+	person, err := s.toolPerson(ctx)
+	if err != nil {
+		return "", err
+	}
+	build, err := s.startClientBuildFor(ctx, person, in.Org, in.Platform, models.PlatformClientOptions{
+		Name: in.Name, AppID: in.AppID, Version: in.Version, Accent: in.Accent, NodeURL: in.NodeURL, Godot: in.Godot, Room: roomID.String(), Agent: agentName,
 	})
+	if err != nil {
+		return "", err
+	}
+	out := map[string]any{"build": build}
+	switch build.State {
+	case "building":
+		out["next"] = "The app is building on the frontend space's computer: minutes, and the first build on a computer longer (it downloads Flutter and the Android SDK). " +
+			"When it is done it is posted in this room with its download address; platform_client_status tells how it stands meanwhile. Tell the person it is on its way."
+	case "failed":
+		out["next"] = "The build did not start or failed: tell the person why (build.error)."
+	}
+	b, _ := json.Marshal(out)
+	return string(b), nil
+}
+
+// platformClientStatusTool implements platform_client_status.
+func (s *Service) platformClientStatusTool(ctx context.Context, argsJSON string) (string, error) {
+	var in struct {
+		Org      string `json:"org"`
+		Platform string `json:"platform"`
+	}
+	if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
+		return "", errs.InvalidArgument(`platform_client_status takes {"platform"?, "org"?}`)
+	}
+	person, err := s.toolPerson(ctx)
+	if err != nil {
+		return "", err
+	}
+	var target models.PlatformClientTarget
+	if err := bridge.Invoke(ctx, s.K, "developer", "PlatformClientTarget", []any{ctx, person, in.Org, in.Platform}, &target); err != nil {
+		return "", err
+	}
+	build, err := s.PlatformClientBuildStatus(ctx, person, target)
+	if err != nil {
+		return "", err
+	}
+	b, _ := json.Marshal(map[string]any{"build": build})
 	return string(b), nil
 }

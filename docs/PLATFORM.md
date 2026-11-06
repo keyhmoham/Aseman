@@ -191,7 +191,8 @@ The platform collection exposes every registered **non-admin** product action (e
 | `/tools/v1/runtime/host` | Managed/installed tool backends calling back into the platform |
 | `/v1/proxy/{id}/*` | An app's preview (space members); its page API at `_aseman/api/*` |
 | `/appapi/v1/{op}` | An app's server using its space's agents and apps (user token or app key) |
-| `/v1/platforms/{slug}/app/*` | A platform's published frontend (§8.3) |
+| `/v1/platforms/{slug}/app/*` | A platform's published frontend (§8.3); `_aseman/wake` wakes its computer for anyone |
+| `/v1/platforms/{slug}/client/android.apk` | A platform's own Android app, for anyone to install (§8.3) |
 
 ### 4.4 Other HTTP doors
 
@@ -433,14 +434,17 @@ namespace itself stays closed to agents:
 | --- | --- |
 | `platform_setup {name, slug, org_name?, org?}` | makes (or reuses) a team organization by name, or uses `org` / the personal one, and a platform in it: reused when the organization has one with that slug, else made (an organization may have several) |
 | `app_developer_access {dir, platform?, org?, platform_api?}` | a developer key of that organization, bound to the platform (`platform`, or the person's only one) (models: read, chat: write, platform collection: write) written into the app's `.aseman/server.env` (`ASEMAN_DEVELOPER_KEY`, `ASEMAN_DEVELOPER_API_URL` = node `/dev/v1`, `ASEMAN_PLATFORM`); the agent never sees it; calling again revokes and replaces it; rebuilds keep it |
-| `platform_publish {dir, platform?, org?}` | publishes the app `appui_publish` verified as the platform's frontend and answers its address |
+| `platform_publish {dir, platform?, org?, android?, godot?}` | publishes the app `appui_publish` verified as the platform's frontend and answers its address; for an Elpian frontend it also starts the platform's Android app (below) unless `android` is false (`godot: true` puts the Godot engine in it) |
+| `platform_client_build {platform?, org?, name?, app_id?, version?, accent?, node_url?, godot?}` | builds the platform's Android app again (a new version, name, accent or app id) |
+| `platform_client_status {platform?, org?}` | how that build stands (`building` with its step, `done` with the download address, `failed` with the error and the build's last output) |
 
 The server SDKs' `Aseman.developer()` uses the key (`models`, `chat`,
 `platform(namespace, action, body)`, `catalog`); `DEVELOPER.md` in the project
 says when (a model call no agent is meant for, the platform's own product
 surface) and the wiring check refuses the key in page code or written into
-source. Governance classifies `platform_publish` as a send and the other two
-as writes, so a space's approval rules apply.
+source. Governance classifies `platform_publish` and `platform_client_build`
+as sends, `platform_setup` and `app_developer_access` as writes and
+`platform_client_status` as a read, so a space's approval rules apply.
 
 **End to end.** `internal/plugins/host/testdata/platform` boots a whole node
 from the native plugins and proves the flow: a person's Builder agent, through
@@ -463,7 +467,85 @@ The gateway serves it at **`/v1/platforms/{slug}/app/`**:
 | Who may use it | the platform's accounts, the organization's members, and main Aseman when bridged (`main_access`) |
 | Its server | gets `X-Aseman-Platform*` and, for a signed-in person, a **platform user token** (`X-Aseman-User-Token`) |
 | Agents and apps | page and server calls run as — and are billed to — **the person who published the frontend**, name the platform's person on the usage record (`via`), and reach **only the wired** agents, apps and microtools; desk windows and space files are not served |
-| Asleep | the first request that finds the service down wakes the computer as the publisher |
+| Asleep | woken for whoever opens it, from anywhere, as the publisher (who pays for the computer): see *Waking* below |
+
+**Waking.** A platform's frontend runs on a space's computer, and the
+computer sleeps when idle. Waking it is not a space mechanism: the
+platform's people (and visitors who have not signed in) are not the space's,
+and they open the frontend from any device. So the gateway wakes it for
+anyone (`spaces/platform_wake.go`):
+
+| | |
+| --- | --- |
+| `GET`/`POST _aseman/wake` | no sign-in: starts a wake unless the app answers, and reports `{state: ready \| waking \| failed, ready, error, retry_after_ms}`; `?wait=<s>` (≤ 25) waits for it. The platform's clients call it when opened and when brought back |
+| A request that finds the app down | starts the wake (or joins the one under way) and waits up to 25 s; a browser opening a page gets a *waking up* page after 3 s that asks `_aseman/wake` and reloads when the app answers; anything else a `503` with `Retry-After` |
+| One wake at a time | per frontend, shared by everyone who arrives meanwhile; a failed wake (say, the publisher's wallet cannot pay for the computer) is reported for 15 s instead of retried by each visitor |
+| Kept awake | each request the frontend serves renews the computer's lease (at most every 20 s), so it does not fall asleep under its people |
+
+An Elpian program's host (`ElpianAppHost.onAsleep`) wakes the computer and
+sends a request again when the app answers 503 mid-session.
+
+**A platform's own Android app.** An Elpian frontend gets a lightweight app
+of its own: `app/platform_client`, the Elpian engine, the UI kit and the
+Elpian host the Aseman client runs frontends with (264 files of the app,
+listed in `app/platform_client/tool/shared.txt` and copied in by
+`tool/assemble.sh` — the engine is the app's own, never a fork), plus
+sign-in to the platform's accounts and the wake above; nothing else of
+Aseman (no workspace, no Elpian VM native library, no Godot). Its
+`assets/client.json` names the frontend's address — the platform's door to
+the Elpian app's proxy, `<ASEMAN_PUBLIC_URL>/v1/platforms/<slug>/app/`.
+
+1. `platform_publish` (by an agent) or **Frontend → Publish** (in the
+   console) starts the build for an Elpian frontend;
+   `platform_client_build`, or **Android app → Build** in the console, builds
+   it again.
+2. It runs on the frontend space's computer, detached (it takes minutes,
+   and the computer runs one command at a time for everyone):
+   `aseman-platform-client build` (`deploy/sandbox-computer/platform-client`)
+   copies the client kit the sandbox image carries
+   (`/opt/aseman-platform-client`), writes the platform's address, name,
+   accent and Android application id (default `io.aseman.platform.<slug>`,
+   kept across builds), and signs with the platform's own key
+   (`/workspace/.aseman/platform-clients/<slug>/`, made on the first build),
+   so every version installs over the one before. The first build on a
+   computer downloads Flutter and the Android SDK into `/opt/aseman-toolchain`;
+   `--build-arg WITH_ANDROID_TOOLCHAIN=1` bakes them into the image. The
+   computer's network must reach pub.dev, Google's Maven and Maven Central
+   (`ASEMAN_MAVEN_MIRROR` names a mirror of it), and, without a baked
+   toolchain, storage.googleapis.com and dl.google.com. A build wants about
+   4 GB of memory and, with the toolchain, 6 GB of disk on the computer
+   (`sandbox.memory_mb`, `sandbox.disk_mb`); the APK (arm and arm64,
+   native libraries compressed) is about 23 MB — about 32 MB for arm64
+   with Godot — within the 64 MB a stored file may be.
+3. The node looks at the build every 15 s (which keeps the computer awake for
+   it), then stores the APK as a file of the space, records it on the
+   platform (`dev_platforms.client_*`) and, when an agent asked, posts it in
+   the room with its download address.
+4. Anyone downloads it at **`/v1/platforms/<slug>/client/android.apk`**, signed
+   in or not, while the computer sleeps too. The public `platform_frontend`
+   names it (`client.android`) and the wake door (`frontend.wake`).
+
+**Godot (3D) is off by default.** An app built as above carries no Godot
+engine: a `Scene3D` in the frontend shows its placeholder, and the APK stays
+small. The agent (`godot: true` on `platform_publish` or
+`platform_client_build`) or the person (the console's **3D scenes (Godot
+engine)** switch, or `developer.platform_client_build {godot: true}`) turns
+it on; a rebuild keeps the last build's choice until it is turned off
+(`godot: false`), and the platform records it (`client.android.godot`). A
+Godot build adds the Godot plugin (`app/packages/elpian_godot_native`) and
+the engine's artifacts to the APK — `embed.pck` and the GDExtension's
+`jniLibs/<abi>/libelpian_godot.*.so`, taken from
+`/workspace/.aseman/godot` or `/opt/aseman-godot` (the sandbox image's
+`--build-context aseman-godot=<dir>`) — and is built for arm64 only (the
+engine adds tens of MB per ABI). Without the artifacts it fails and says
+so; the package's README says how to make them.
+
+Opening the app (or bringing it back) wakes the platform's computer; people
+sign in to and up on the platform's own accounts in it, and the frontend
+runs full screen as them. A web frontend needs no app: its people open its
+address in any browser, which wakes the computer the same way. The node
+needs `ASEMAN_PUBLIC_URL` (a phone must reach it); an agent may name another
+address with `node_url`.
 
 **A platform's own client.** Build the Aseman client for one platform with
 `--dart-define=ASEMAN_PLATFORM=<slug>` (the web image: `docker build
@@ -487,7 +569,7 @@ Aseman and on a platform are two accounts.
 2. Create a platform (`slug`).
 3. Point your client at the node API; register/login with `platform: "<slug>"`.
 4. Optionally use the developer host for models/computers and `POST /v1/platform/{ns}/{action}` for automation as the key creator.
-5. Or skip writing a client: have a space's agents build the frontend and publish it (§8.3).
+5. Or skip writing a client: have a space's agents build the frontend and publish it (§8.3). An Elpian frontend gets the platform's own Android app, downloadable at `/v1/platforms/<slug>/client/android.apk`.
 6. Or describe the whole product as one workflow installer document and run it (`docs/WORKFLOWS.md`): every step above, repeatable.
 7. Ask the node admin to **Bridge to Aseman** only if you want shared discovery with the main app.
 

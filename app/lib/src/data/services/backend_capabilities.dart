@@ -104,6 +104,8 @@ abstract final class BackendCapabilities {
       'org_rename',
       'orgs_list',
       'platform_catalog',
+      'platform_client_build',
+      'platform_client_status',
       'platform_create',
       'platform_delete',
       'platform_frontend',

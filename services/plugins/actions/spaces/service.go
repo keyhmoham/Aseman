@@ -105,6 +105,24 @@ type Service struct {
 
 	// hireFn replaces installing a marketplace listing in agent_hire (tests).
 	hireFn func(ctx context.Context, owner, listingID, spaceID identity.ID) (identity.ID, error)
+
+	// frontendWakes are the wakes of published platform frontends' computers,
+	// one per preview (platform_wake.go); guarded by frontendWakeMu.
+	frontendWakeMu sync.Mutex
+	frontendWakes  map[identity.ID]*frontendWake
+	// wakeOpenFn replaces ProxyOpen in those wakes (tests).
+	wakeOpenFn func(ctx context.Context, id, actor identity.ID) (map[string]any, error)
+
+	// clientBuilds are the builds of platforms' Android clients this node
+	// watches, by platform slug (platform_client.go); guarded by clientBuildMu.
+	clientBuildMu sync.Mutex
+	clientBuilds  map[string]*clientBuild
+	// Replacements in tests: the computer's shell, reading a file of it, the
+	// developer namespace's record, and how often a build is looked at.
+	clientExecFn    func(ctx context.Context, space identity.ID, command string) (string, error)
+	clientReadFn    func(ctx context.Context, space identity.ID, path string) ([]byte, error)
+	clientRecordFn  func(ctx context.Context, platformID string, c devmodels.PlatformClient) error
+	clientPollEvery time.Duration
 }
 
 // roomActivity is the live status of the agent currently working in a room.

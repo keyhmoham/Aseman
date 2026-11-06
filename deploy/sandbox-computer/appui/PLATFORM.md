@@ -101,9 +101,11 @@ and other requests a `503` with `Retry-After` (a client may also call
 
 For an Elpian frontend, `platform_publish` also starts building the
 platform's app: a lightweight Android client with only the Elpian engine and
-what it needs to reach Aseman, and this frontend's address in it. It builds
-on this computer for minutes (the first time longer) and is posted in the
-room with its download address, `/v1/platforms/<slug>/client/android.apk`.
+what it needs to reach Aseman, and this frontend's address in it. This
+computer carries that app prebuilt, so making it only writes this platform
+into it and signs it (seconds; a Godot build compiles it with Flutter and
+takes minutes), and it is posted in the room with its download address,
+`/v1/platforms/<slug>/client/android.apk`.
 `platform_client_status` tells how it stands; `platform_client_build` builds
 it again (a new `version`, `name`, `accent` or `app_id`). The app signs
 people in to the platform's accounts and runs this frontend full screen as

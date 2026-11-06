@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# aseman-platform-client — builds a platform's lightweight Android client.
+# aseman-platform-client — makes a platform's lightweight Android client.
 #
 # The client (app/platform_client in the Aseman repository, assembled into
 # $ASEMAN_PLATFORM_CLIENT_SRC on this computer) holds only the Elpian engine
@@ -11,28 +11,51 @@
 #   aseman-platform-client build --frontend URL --out FILE.apk --state DIR \
 #       [--name NAME] [--app-id ID] [--version 1.0.0] [--build-number N] \
 #       [--accent '#RRGGBB'] [--keystore FILE.jks] [--abis arm,arm64] \
-#       [--godot [--godot-artifacts DIR]]
+#       [--godot [--godot-artifacts DIR]] [--full]
 #   aseman-platform-client status --state DIR
-#   aseman-platform-client toolchain        # prepare Flutter + the Android SDK only
+#   aseman-platform-client template --out DIR   # build the prebuilt client (the image does)
+#   aseman-platform-client toolchain            # prepare Flutter + the Android SDK only
 #
 # The node runs `build` detached (spaces: platform_client_build) and reads
 # DIR/status.json until it says done or failed; DIR/build.log has the output.
 #
+# Prebuilt: the sandbox image carries the client already built
+# ($ASEMAN_PLATFORM_CLIENT_APK/template.apk, made by `template` when the image
+# is built), so a build is a few seconds of post-processing, not a Flutter
+# build: apkpatch.py writes the platform's assets/client.json (the frontend's
+# address, name, accent) and, in the binary manifest, its application id,
+# label, version and cleartext flag, and keeps only the asked ABIs; the APK is
+# aligned as zipalign does and signed with the platform's key by apksigner
+# (then verified). The app reads all of it at start: nothing compiled in the
+# template names a platform. --full (or a computer without the template)
+# builds with Flutter instead, as a Godot build always does.
+#
 # Godot (the embedded 3D engine behind Elpian's Scene3D) is OFF unless --godot:
 # without it the APK carries no engine and a Scene3D shows its placeholder.
 # With it the Godot plugin (app/packages/elpian_godot_native) and the
-# engine's artifacts join the build: DIR/embed.pck (the packed op-sink
+# engine's artifacts join a Flutter build: DIR/embed.pck (the packed op-sink
 # project) and, when present, DIR/jniLibs/<abi>/libelpian_godot.*.so (the
 # GDExtension), found at --godot-artifacts, $ASEMAN_GODOT_ARTIFACTS,
 # /workspace/.aseman/godot or /opt/aseman-godot (see that package's README
 # for how they are made). A Godot build defaults to arm64 only: the engine
 # adds tens of MB per ABI.
-# The first build on a computer downloads Flutter and the Android SDK (a few
-# GB, several minutes) into $ASEMAN_TOOLCHAIN unless the image carries them.
+# A Flutter build on a computer first downloads Flutter and the Android SDK (a
+# few GB, several minutes) into $ASEMAN_TOOLCHAIN unless the image carries them.
 set -uo pipefail
 
 SRC="${ASEMAN_PLATFORM_CLIENT_SRC:-/opt/aseman-platform-client}"
 TOOLS="${ASEMAN_TOOLCHAIN:-/opt/aseman-toolchain}"
+# The prebuilt client (template.apk, template.json, apksigner.jar).
+TEMPLATE_DIR="${ASEMAN_PLATFORM_CLIENT_APK:-/opt/aseman-platform-client-apk}"
+# The application id the prebuilt client is built with, renamed per platform.
+TEMPLATE_APP_ID="io.aseman.platform.template"
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+APKPATCH="${ASEMAN_APKPATCH:-}"
+if [ -z "$APKPATCH" ]; then
+  for f in "$HERE/apkpatch.py" /usr/local/lib/aseman-platform-client/apkpatch.py; do
+    [ -f "$f" ] && { APKPATCH="$f"; break; }
+  done
+fi
 FLUTTER_VERSION="${ASEMAN_FLUTTER_VERSION:-3.44.0}"
 ANDROID_PLATFORM="${ASEMAN_ANDROID_PLATFORM:-android-36}"
 ANDROID_BUILD_TOOLS="${ASEMAN_ANDROID_BUILD_TOOLS:-36.0.0}"
@@ -79,7 +102,9 @@ run() { "$@" >> "${LOG:-/dev/stderr}" 2>&1; }
 proxy_host() { local p="${HTTPS_PROXY:-${https_proxy:-}}"; p="${p#*://}"; p="${p#*@}"; p="${p%%/*}"; echo "${p%%:*}"; }
 proxy_port() { local p="${HTTPS_PROXY:-${https_proxy:-}}"; p="${p#*://}"; p="${p#*@}"; p="${p%%/*}"; case "$p" in *:*) echo "${p##*:}" ;; *) echo 443 ;; esac; }
 
-java_ok() { command -v java >/dev/null 2>&1 && [ "$(java -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | head -1)" -ge 17 ] 2>/dev/null; }
+# A Flutter build needs a JDK 17+ (javac); signing a prebuilt APK, only a runtime.
+java_ok() { command -v javac >/dev/null 2>&1 && [ "$(javac -version 2>&1 | sed -n 's/^javac \([0-9]*\).*/\1/p' | head -1)" -ge 17 ] 2>/dev/null; }
+jre_ok() { command -v java >/dev/null 2>&1 && command -v keytool >/dev/null 2>&1; }
 
 toolchain() {
   mkdir -p "$TOOLS"
@@ -163,25 +188,60 @@ cmd_status() {
   if [ -f "$STATE/status.json" ]; then cat "$STATE/status.json"; else echo '{"state":"none"}'; fi
 }
 
-cmd_build() {
-  [ -n "$FRONTEND" ] || die "build needs --frontend URL (https://node/v1/platforms/<slug>/app/)"
-  [ -n "$OUT" ] || die "build needs --out FILE.apk"
-  [ -n "$STATE" ] || die "build needs --state DIR"
-  local re='^(https?://[^/]+(/[^?#]*)?)/v1/platforms/([a-z][a-z0-9-]{1,47})/app/?$'
-  [[ "$FRONTEND" =~ $re ]] || die "--frontend is a platform's door: https://<node>/v1/platforms/<slug>/app/"
-  local node="${BASH_REMATCH[1]}" slug="${BASH_REMATCH[3]}"
-  NAME="${NAME:-$slug}"
-  APP_ID="${APP_ID:-io.aseman.platform.${slug//-/_}}"
-  [[ "$APP_ID" =~ ^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$ ]] || die "--app-id is a Java package name, e.g. com.example.shop"
-  VERSION="${VERSION:-1.0.0}"
-  BUILD_NUMBER="${BUILD_NUMBER:-$(date -u +%s | cut -c1-9)}"
-  mkdir -p "$STATE" "$(dirname "$OUT")"
-  STATUS="$STATE/status.json"
-  LOG="$STATE/build.log"
-  : > "$LOG"
-  STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  trap 'fail "the build was interrupted"' INT TERM
-  local godot_art=""
+# abi_list — ABIS (arm, arm64, x64) as Flutter targets (TARGETS) and Android ABIs (ANDROID_ABIS).
+abi_list() {
+  TARGETS="" ANDROID_ABIS=""
+  local a abis
+  IFS=',' read -ra abis <<< "$1"
+  for a in "${abis[@]}"; do
+    case "$a" in
+      arm) TARGETS="${TARGETS:+$TARGETS,}android-arm"; ANDROID_ABIS="${ANDROID_ABIS:+$ANDROID_ABIS,}armeabi-v7a" ;;
+      arm64) TARGETS="${TARGETS:+$TARGETS,}android-arm64"; ANDROID_ABIS="${ANDROID_ABIS:+$ANDROID_ABIS,}arm64-v8a" ;;
+      x64) TARGETS="${TARGETS:+$TARGETS,}android-x64"; ANDROID_ABIS="${ANDROID_ABIS:+$ANDROID_ABIS,}x86_64" ;;
+      *) fail "unknown ABI $a (arm, arm64, x64)" ;;
+    esac
+  done
+  [ -n "$ANDROID_ABIS" ] || fail "no ABI"
+}
+
+# client_json FILE — what this build is for, as the app reads it at start.
+client_json() {
+  local godot_json=false
+  [ "$GODOT" = "1" ] && godot_json=true
+  jq -n --arg node "$NODE" --arg platform "$SLUG" --arg name "$NAME" --arg frontend "$FRONTEND" --arg accent "${ACCENT:-}" \
+    --argjson godot "$godot_json" \
+    '{node:$node, platform:$platform, name:$name, frontend:$frontend, accent:$accent, godot:$godot}' > "$1"
+}
+
+# label — the app's name on the phone (one line).
+label() { printf '%s' "$NAME" | tr -d '\r\n'; }
+
+# ensure_keystore — the platform's signing key. One key signs every version
+# of this platform's app, so an update installs over the one before. It is
+# kept next to the APK, in the project's files.
+ensure_keystore() {
+  KEYSTORE="${KEYSTORE:-$(dirname "$OUT")/$SLUG-signing.jks}"
+  KEYPROPS="$KEYSTORE.properties"
+  if [ ! -f "$KEYSTORE" ] || [ ! -f "$KEYPROPS" ]; then
+    step "making the platform's signing key"
+    local pass
+    pass="$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | cut -c1-24)"
+    rm -f "$KEYSTORE"
+    run keytool -genkeypair -noprompt -keystore "$KEYSTORE" -storetype PKCS12 -alias platform -keyalg RSA -keysize 2048 \
+      -validity 10000 -storepass "$pass" -keypass "$pass" -dname "CN=$(printf '%s' "$NAME" | tr -d ',=+<>#;"\\'), O=Aseman platform $SLUG" \
+      || fail "the signing key could not be made"
+    printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=platform\n' "$pass" "$pass" > "$KEYPROPS"
+    chmod 600 "$KEYSTORE" "$KEYPROPS"
+  fi
+}
+
+keyprop() { sed -n "s/^$1=//p" "$KEYPROPS" | head -1 | tr -d '\r'; }
+
+# flutter_build APK — builds the client with Flutter into APK (the project
+# in $STATE/project, removed after). Signed with the platform's key when
+# KEYPROPS is set, else the debug key (the template: re-signed per platform).
+flutter_build() {
+  local out_apk="$1" godot_art=""
   if [ "$GODOT" = "1" ]; then
     godot_art="$(godot_artifacts)" || fail "Godot is on, but this computer has no Godot engine artifacts (an embed.pck) in --godot-artifacts, \$ASEMAN_GODOT_ARTIFACTS, /workspace/.aseman/godot or /opt/aseman-godot: export them (app/packages/elpian_godot_native/README.md) or build without Godot"
   fi
@@ -194,11 +254,7 @@ cmd_build() {
   local work="$STATE/project"
   rm -rf "$work"
   cp -a "$SRC" "$work" || fail "the client could not be copied"
-  local godot_json=false
-  [ "$GODOT" = "1" ] && godot_json=true
-  jq -n --arg node "$node" --arg platform "$slug" --arg name "$NAME" --arg frontend "$FRONTEND" --arg accent "${ACCENT:-}" \
-    --argjson godot "$godot_json" \
-    '{node:$node, platform:$platform, name:$name, frontend:$frontend, accent:$accent, godot:$godot}' > "$work/assets/client.json"
+  client_json "$work/assets/client.json"
   local defines=()
   if [ "$GODOT" = "1" ]; then
     step "adding the Godot engine"
@@ -216,72 +272,186 @@ cmd_build() {
     grep -q '^  aseman_elpian_godot:' "$work/pubspec.yaml" || fail "the Godot plugin could not be added to the client"
     defines+=(--dart-define=ASEMAN_GODOT=true)
   fi
-  local cleartext=false
-  case "$node" in http://*) cleartext=true ;; esac
-  local targets="" android_abis=""
-  local default_abis=arm,arm64
-  [ "$GODOT" = "1" ] && default_abis=arm64
-  IFS=',' read -ra abis <<< "${ABIS:-$default_abis}"
-  for a in "${abis[@]}"; do
-    case "$a" in
-      arm) targets="${targets:+$targets,}android-arm"; android_abis="${android_abis:+$android_abis,}armeabi-v7a" ;;
-      arm64) targets="${targets:+$targets,}android-arm64"; android_abis="${android_abis:+$android_abis,}arm64-v8a" ;;
-      x64) targets="${targets:+$targets,}android-x64"; android_abis="${android_abis:+$android_abis,}x86_64" ;;
-      *) fail "unknown ABI $a (arm, arm64, x64)" ;;
-    esac
-  done
   {
     echo "applicationId=$APP_ID"
     # A properties file reads backslashes and line breaks specially.
-    printf 'label=%s\n' "$(printf '%s' "$NAME" | tr -d '\r\n' | sed 's/\\/\\\\/g')"
-    echo "cleartext=$cleartext"
-    echo "abis=$android_abis"
+    printf 'label=%s\n' "$(label | sed 's/\\/\\\\/g')"
+    echo "cleartext=$CLEARTEXT"
+    echo "abis=$ANDROID_ABIS"
   } > "$work/android/client.properties"
   printf 'flutter.sdk=%s\nsdk.dir=%s\n' "$(cd "$(dirname "$FLUTTER")/.." && pwd)" "$SDK" > "$work/android/local.properties"
   if [ -n "$(proxy_host)" ]; then
     printf '\nsystemProp.https.proxyHost=%s\nsystemProp.https.proxyPort=%s\nsystemProp.http.proxyHost=%s\nsystemProp.http.proxyPort=%s\n' \
       "$(proxy_host)" "$(proxy_port)" "$(proxy_host)" "$(proxy_port)" >> "$work/android/gradle.properties"
   fi
-
-  # One key signs every version of this platform's app, so an update installs
-  # over the one before. It is kept next to the APK, in the project's files.
-  KEYSTORE="${KEYSTORE:-$(dirname "$OUT")/$slug-signing.jks}"
-  local keyprops="$KEYSTORE.properties"
-  if [ ! -f "$KEYSTORE" ] || [ ! -f "$keyprops" ]; then
-    step "making the platform's signing key"
-    local pass
-    pass="$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | cut -c1-24)"
-    rm -f "$KEYSTORE"
-    run keytool -genkeypair -noprompt -keystore "$KEYSTORE" -storetype PKCS12 -alias platform -keyalg RSA -keysize 2048 \
-      -validity 10000 -storepass "$pass" -keypass "$pass" -dname "CN=$(printf '%s' "$NAME" | tr -d ',=+<>#;"\\'), O=Aseman platform $slug" \
-      || fail "the signing key could not be made"
-    printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=platform\n' "$pass" "$pass" > "$keyprops"
-    chmod 600 "$KEYSTORE" "$keyprops"
+  if [ -n "${KEYPROPS:-}" ]; then
+    { cat "$KEYPROPS"; echo "storeFile=$KEYSTORE"; } > "$work/android/key.properties"
   fi
-  { cat "$keyprops"; echo "storeFile=$KEYSTORE"; } > "$work/android/key.properties"
 
   step "fetching packages"
   (cd "$work" && run "$FLUTTER" pub get) || fail "the client's packages could not be fetched (pub.dev)"
 
   step "building the APK"
-  (cd "$work" && run "$FLUTTER" build apk --release --target-platform "$targets" --build-name "$VERSION" --build-number "$BUILD_NUMBER" "${defines[@]}") \
+  (cd "$work" && run "$FLUTTER" build apk --release --target-platform "$TARGETS" --build-name "$VERSION" --build-number "$BUILD_NUMBER" "${defines[@]}") \
     || fail "the APK did not build"
   local apk="$work/build/app/outputs/flutter-apk/app-release.apk"
   [ -f "$apk" ] || fail "the build made no APK"
-  cp -f "$apk" "$OUT" || fail "the APK could not be saved to $OUT"
-  local size sha
-  size="$(stat -c %s "$OUT")"
-  sha="$(sha256sum "$OUT" | cut -d' ' -f1)"
+  cp -f "$apk" "$out_apk" || fail "the APK could not be saved to $out_apk"
   # The project and its build are big; the APK and the key are what stay.
   rm -rf "$work"
-  EXTRA="$(jq -n --argjson size "$size" --arg sha "$sha" --arg name "$NAME" --arg platform "$slug" --arg node "$node" \
-    --argjson godot "$godot_json" '{size:$size, sha256:$sha, name:$name, platform:$platform, node:$node, godot:$godot}')" status done "built"
-  echo "built $OUT ($size bytes)"
+}
+
+# apksigner_jar — apksigner (the Android SDK's, pure Java): the image's copy
+# beside the template, else a toolchain's.
+apksigner_jar() {
+  local j
+  for j in "$TEMPLATE_DIR/apksigner.jar" "${ANDROID_HOME:-$TOOLS/android-sdk}/build-tools/$ANDROID_BUILD_TOOLS/lib/apksigner.jar" \
+           "$TOOLS"/android-sdk/build-tools/*/lib/apksigner.jar; do
+    [ -f "$j" ] && { echo "$j"; return 0; }
+  done
+  return 1
+}
+
+# template_ok — the image carries the prebuilt client, and what packs it.
+template_ok() {
+  [ -f "$TEMPLATE_DIR/template.apk" ] && [ -f "$TEMPLATE_DIR/template.json" ] && [ -n "$APKPATCH" ] \
+    && command -v python3 >/dev/null 2>&1 && apksigner_jar >/dev/null
+}
+
+# pack — the platform's APK from the prebuilt client: its client.json and
+# manifest written in (apkpatch.py), aligned, signed with its key (apksigner
+# sign, after aligning: the signature covers the whole file), verified.
+pack() {
+  local tid unsigned="$STATE/unsigned.apk" signed="$STATE/signed.apk" cj="$STATE/client.json"
+  tid="$(jq -r '.app_id // empty' "$TEMPLATE_DIR/template.json")"
+  [ -n "$tid" ] || tid="$TEMPLATE_APP_ID"
+  if ! jre_ok; then
+    step "installing Java"
+    run apt-get update && run apt-get install -y --no-install-recommends openjdk-17-jre-headless || fail "Java could not be installed (needs the Debian mirrors)"
+  fi
+  ensure_keystore
+
+  step "writing the platform into the app"
+  rm -f "$unsigned" "$signed" "$cj"
+  client_json "$cj"
+  run python3 -I "$APKPATCH" patch "$TEMPLATE_DIR/template.apk" "$unsigned" --template-app-id "$tid" --client-json "$cj" \
+    --app-id "$APP_ID" --label "$(label)" --version-name "$VERSION" --version-code "$BUILD_NUMBER" \
+    --cleartext "$CLEARTEXT" --abis "$ANDROID_ABIS" || fail "the platform could not be written into the app"
+
+  step "signing the app"
+  local jar storepass keypass alias
+  jar="$(apksigner_jar)"
+  alias="$(keyprop keyAlias)"
+  storepass="$(mktemp)" keypass="$(mktemp)"
+  chmod 600 "$storepass" "$keypass"
+  keyprop storePassword > "$storepass"
+  keyprop keyPassword > "$keypass"
+  # Passwords from files: never on a command line others can read.
+  run java -jar "$jar" sign --ks "$KEYSTORE" --ks-type PKCS12 --ks-key-alias "${alias:-platform}" \
+    --ks-pass "file:$storepass" --key-pass "file:$keypass" --out "$signed" "$unsigned"
+  local signed_ok=$?
+  local want_cert=""
+  [ "$signed_ok" = 0 ] && want_cert="$(keytool -exportcert -rfc -keystore "$KEYSTORE" -storetype PKCS12 -alias "${alias:-platform}" \
+    -storepass:file "$storepass" 2>>"$LOG" | sed '/-----/d' | tr -d '\r\n' | base64 -d 2>/dev/null | sha256sum | cut -d' ' -f1)"
+  rm -f "$storepass" "$keypass"
+  [ "$signed_ok" = 0 ] || fail "the app could not be signed"
+
+  step "verifying the app"
+  local certs
+  certs="$(java -jar "$jar" verify --verbose --print-certs "$signed" 2>>"$LOG")" || { echo "$certs" >> "$LOG"; fail "the signed app does not verify"; }
+  echo "$certs" >> "$LOG"
+  [ -n "$want_cert" ] && grep -qi "certificate SHA-256 digest: $want_cert" <<< "$certs" \
+    || fail "the app is not signed with the platform's key"
+  local info
+  info="$(python3 -I "$APKPATCH" inspect "$signed" 2>>"$LOG")" || fail "the signed app could not be read back"
+  jq -e --arg id "$APP_ID" --arg frontend "$FRONTEND" --arg version "$VERSION" --argjson code "$BUILD_NUMBER" \
+    '.manifest.package == $id and .manifest.versionName == $version and .manifest.versionCode == $code
+     and .client.frontend == $frontend and (.unaligned | length) == 0 and .resources_arsc_stored' <<< "$info" >/dev/null \
+    || { echo "$info" >> "$LOG"; fail "the signed app does not say what was written into it"; }
+  mv -f "$signed" "$OUT.tmp" && mv -f "$OUT.tmp" "$OUT" || fail "the APK could not be saved to $OUT"
+  rm -f "$unsigned" "$cj"
+}
+
+cmd_build() {
+  [ -n "$FRONTEND" ] || die "build needs --frontend URL (https://node/v1/platforms/<slug>/app/)"
+  [ -n "$OUT" ] || die "build needs --out FILE.apk"
+  [ -n "$STATE" ] || die "build needs --state DIR"
+  local re='^(https?://[^/]+(/[^?#]*)?)/v1/platforms/([a-z][a-z0-9-]{1,47})/app/?$'
+  [[ "$FRONTEND" =~ $re ]] || die "--frontend is a platform's door: https://<node>/v1/platforms/<slug>/app/"
+  NODE="${BASH_REMATCH[1]}" SLUG="${BASH_REMATCH[3]}"
+  NAME="${NAME:-$SLUG}"
+  APP_ID="${APP_ID:-io.aseman.platform.${SLUG//-/_}}"
+  [[ "$APP_ID" =~ ^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$ ]] || die "--app-id is a Java package name, e.g. com.example.shop"
+  VERSION="${VERSION:-1.0.0}"
+  [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || die "--version is like 1.2.0"
+  BUILD_NUMBER="${BUILD_NUMBER:-$(( $(date -u +%s) / 60 ))}"
+  [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]{0,9}$ ]] && [ "$BUILD_NUMBER" -le 2100000000 ] || die "--build-number is 1..2100000000"
+  CLEARTEXT=false
+  case "$NODE" in http://*) CLEARTEXT=true ;; esac
+  mkdir -p "$STATE" "$(dirname "$OUT")"
+  STATUS="$STATE/status.json"
+  LOG="$STATE/build.log"
+  : > "$LOG"
+  STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  trap 'fail "the build was interrupted"' INT TERM
+  local default_abis=arm,arm64
+  [ "$GODOT" = "1" ] && default_abis=arm64
+  abi_list "${ABIS:-$default_abis}"
+
+  local how=prebuilt
+  if [ "$GODOT" = "1" ] || [ "$FULL" = "1" ] || ! template_ok; then how=flutter; fi
+  echo "== making the app: $how" >> "$LOG"
+  if [ "$how" = prebuilt ]; then
+    pack
+  else
+    ensure_keystore
+    flutter_build "$OUT"
+  fi
+  local size sha godot_json=false
+  [ "$GODOT" = "1" ] && godot_json=true
+  size="$(stat -c %s "$OUT")"
+  sha="$(sha256sum "$OUT" | cut -d' ' -f1)"
+  EXTRA="$(jq -n --argjson size "$size" --arg sha "$sha" --arg name "$NAME" --arg platform "$SLUG" --arg node "$NODE" \
+    --argjson godot "$godot_json" --arg how "$how" \
+    '{size:$size, sha256:$sha, name:$name, platform:$platform, node:$node, godot:$godot, made_by:$how}')" status done "built"
+  echo "built $OUT ($size bytes, $how)"
+}
+
+# cmd_template — the prebuilt client, built once with Flutter (the sandbox
+# image does it): a release APK for every ABI, named for no platform (its
+# client.json is empty: opened as is, it says so), with an application id
+# that only its manifest carries (checked), so `build` renames it per
+# platform. Writes DIR/template.apk, DIR/template.json and DIR/apksigner.jar.
+cmd_template() {
+  [ -n "$OUT" ] || die "template needs --out DIR"
+  local dir="$OUT"
+  mkdir -p "$dir"
+  STATE="${STATE:-$(mktemp -d)}"
+  mkdir -p "$STATE"
+  LOG="${LOG:-/dev/stderr}"
+  NODE="" SLUG="" FRONTEND="" ACCENT="" NAME="Aseman platform" GODOT=0
+  APP_ID="$TEMPLATE_APP_ID" VERSION="1.0.0" BUILD_NUMBER=1 CLEARTEXT=false KEYPROPS=""
+  abi_list "${ABIS:-arm,arm64,x64}"
+  [ -n "$APKPATCH" ] || fail "apkpatch.py is missing"
+  flutter_build "$dir/template.apk.tmp"
+  run python3 -I "$APKPATCH" check-template "$dir/template.apk.tmp" --app-id "$TEMPLATE_APP_ID" \
+    || fail "the built client cannot be a template (see above)"
+  local jar
+  jar="$(apksigner_jar)" || fail "the Android SDK has no apksigner"
+  if [ "$jar" != "$dir/apksigner.jar" ]; then cp -f "$jar" "$dir/apksigner.jar" || fail "apksigner could not be copied"; fi
+  mv -f "$dir/template.apk.tmp" "$dir/template.apk"
+  jq -n --arg app_id "$TEMPLATE_APP_ID" --arg flutter "$FLUTTER_VERSION" --arg build_tools "$ANDROID_BUILD_TOOLS" \
+    --arg abis "$ANDROID_ABIS" --arg sha "$(sha256sum "$dir/template.apk" | cut -d' ' -f1)" \
+    --arg built "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{app_id:$app_id, flutter:$flutter, build_tools:$build_tools, abis:($abis|split(",")), sha256:$sha, built_at:$built}' \
+    > "$dir/template.json"
+  echo "template: $dir/template.apk ($(stat -c %s "$dir/template.apk") bytes)"
 }
 
 COMMAND="${1:-}"
 [ $# -gt 0 ] && shift
-FRONTEND="" OUT="" NAME="" APP_ID="" VERSION="" BUILD_NUMBER="" ACCENT="" KEYSTORE="" ABIS="" GODOT=0 GODOT_ARTIFACTS=""
+FRONTEND="" OUT="" NAME="" APP_ID="" VERSION="" BUILD_NUMBER="" ACCENT="" KEYSTORE="" KEYPROPS="" ABIS="" GODOT=0 GODOT_ARTIFACTS="" FULL=0
+NODE="" SLUG="" CLEARTEXT=false TARGETS="" ANDROID_ABIS=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --frontend) FRONTEND="$2"; shift 2 ;;
@@ -296,13 +466,15 @@ while [ $# -gt 0 ]; do
     --abis) ABIS="$2"; shift 2 ;;
     --godot) GODOT=1; shift ;;
     --godot-artifacts) GODOT_ARTIFACTS="$2"; shift 2 ;;
-    -h|--help) sed -n '2,31p' "$0"; exit 0 ;;
+    --full) FULL=1; shift ;;
+    -h|--help) sed -n '2,43p' "$0"; exit 0 ;;
     *) die "unknown option $1" ;;
   esac
 done
 case "$COMMAND" in
   build) cmd_build ;;
   status) cmd_status ;;
+  template) cmd_template ;;
   toolchain) LOG=/dev/stderr; toolchain; echo "flutter: $FLUTTER"; echo "android sdk: $SDK" ;;
-  *) sed -n '2,31p' "$0"; exit 2 ;;
+  *) sed -n '2,43p' "$0"; exit 2 ;;
 esac

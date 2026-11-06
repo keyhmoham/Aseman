@@ -499,26 +499,50 @@ the Elpian app's proxy, `<ASEMAN_PUBLIC_URL>/v1/platforms/<slug>/app/`.
    console) starts the build for an Elpian frontend;
    `platform_client_build`, or **Android app → Build** in the console, builds
    it again.
-2. It runs on the frontend space's computer, detached (it takes minutes,
-   and the computer runs one command at a time for everyone):
-   `aseman-platform-client build` (`deploy/sandbox-computer/platform-client`)
-   copies the client kit the sandbox image carries
-   (`/opt/aseman-platform-client`), writes the platform's address, name,
-   accent and Android application id (default `io.aseman.platform.<slug>`,
-   kept across builds), and signs with the platform's own key
-   (`/workspace/.aseman/platform-clients/<slug>/`, made on the first build),
-   so every version installs over the one before. The first build on a
-   computer downloads Flutter and the Android SDK into `/opt/aseman-toolchain`;
-   `--build-arg WITH_ANDROID_TOOLCHAIN=1` bakes them into the image. The
-   computer's network must reach pub.dev, Google's Maven and Maven Central
-   (`ASEMAN_MAVEN_MIRROR` names a mirror of it), and, without a baked
-   toolchain, storage.googleapis.com and dl.google.com. A build wants about
-   4 GB of memory and, with the toolchain, 6 GB of disk on the computer
-   (`sandbox.memory_mb`, `sandbox.disk_mb`); the APK (arm and arm64,
-   native libraries compressed) is about 23 MB — about 32 MB for arm64
-   with Godot — within the 64 MB a stored file may be.
-3. The node looks at the build every 15 s (which keeps the computer awake for
-   it), then stores the APK as a file of the space, records it on the
+2. It runs on the frontend space's computer, detached:
+   `aseman-platform-client build` (`deploy/sandbox-computer/platform-client`).
+   **The sandbox image carries the client already built**
+   (`/opt/aseman-platform-client-apk/template.apk`: a release APK for arm,
+   arm64 and x64 named for no platform, built with Flutter once, when the
+   image is built — the `platform-client-apk` stage, on amd64), so a build
+   is a post-processing step of seconds, not a Flutter build:
+   `apkpatch.py` writes the platform into a copy — `assets/client.json` (the
+   frontend's address, the name, the accent: all the app reads at start)
+   and, in the binary `AndroidManifest.xml`, the Android application id
+   (default `io.aseman.platform.<slug>`, kept across builds; with every
+   provider authority and permission named after it, as aapt2's
+   `--rename-manifest-package` does, so two platforms' apps install side by
+   side), the label, `versionCode` / `versionName` and
+   `usesCleartextTraffic` (for a node on plain http) — keeps only the asked
+   ABIs (arm and arm64 by default), drops the template's signature and
+   aligns the APK as `zipalign -P 16 4` does (`resources.arsc` stays stored
+   and aligned, as Android 11+ requires). `apksigner sign` (the Android SDK's,
+   copied into the image; a JRE runs it) then signs it with the platform's
+   own key (`/workspace/.aseman/platform-clients/<slug>/`, made on the first
+   build), so every version installs over the one before — signing comes
+   after aligning because an APK Signature Scheme v2+ signature covers the
+   whole file — and `apksigner verify` checks it, the certificate is checked
+   to be the platform's, and the manifest and `client.json` are read back.
+   When the image is built, `aseman-platform-client template` checks that
+   the template's application id is nowhere but its manifest (so renaming it
+   there renames the app). `--build-arg PREBUILD_PLATFORM_CLIENT=0` leaves
+   the template out (the stage needs dl.google.com, storage.googleapis.com,
+   pub.dev and Maven).
+
+   **A Godot build** (below), `--full`, or a computer whose image has no
+   template builds with Flutter instead (minutes): it copies the client kit
+   (`/opt/aseman-platform-client`), writes the same settings and builds. Its
+   first build on a computer downloads Flutter and the Android SDK into
+   `/opt/aseman-toolchain`; `--build-arg WITH_ANDROID_TOOLCHAIN=1` bakes them
+   into the image. Its network must reach pub.dev, Google's Maven and Maven
+   Central (`ASEMAN_MAVEN_MIRROR` names a mirror of it), and, without a baked
+   toolchain, storage.googleapis.com and dl.google.com; it wants about 4 GB
+   of memory and, with the toolchain, 6 GB of disk on the computer
+   (`sandbox.memory_mb`, `sandbox.disk_mb`). The APK (arm and arm64, native
+   libraries compressed) is about 23 MB — about 32 MB for arm64 with Godot —
+   within the 64 MB a stored file may be.
+3. The node looks at the build after 3 s, then every 15 s (which keeps the
+   computer awake for it), then stores the APK as a file of the space, records it on the
    platform (`dev_platforms.client_*`) and, when an agent asked, posts it in
    the room with its download address.
 4. Anyone downloads it at **`/v1/platforms/<slug>/client/android.apk`**, signed

@@ -276,7 +276,8 @@ func (s *Service) platformClientBuildTool(ctx context.Context, roomID identity.I
 	out := map[string]any{"build": build}
 	switch build.State {
 	case "building":
-		out["next"] = "The app is building on the frontend space's computer: minutes, and the first build on a computer longer (it downloads Flutter and the Android SDK). " +
+		out["next"] = "The app is being made on the frontend space's computer: usually under a minute (the computer carries the app prebuilt and writes this platform into it); " +
+			"with Godot, or on a computer without the prebuilt app, it builds with Flutter and takes minutes. " +
 			"When it is done it is posted in this room with its download address; platform_client_status tells how it stands meanwhile. Tell the person it is on its way."
 	case "failed":
 		out["next"] = "The build did not start or failed: tell the person why (build.error)."

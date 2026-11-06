@@ -26,8 +26,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"net/url"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -101,22 +99,6 @@ func clientDir(slug string) string   { return "/workspace/.aseman/platform-clien
 func clientAPK(slug string) string   { return clientDir(slug) + "/" + slug + ".apk" }
 func clientState(slug string) string { return "/tmp/aseman-platform-client/" + slug }
 
-// publicNodeURL is the address phones reach this node at.
-func publicNodeURL(asked string) (string, error) {
-	raw := strings.TrimRight(strings.TrimSpace(asked), "/")
-	if raw == "" {
-		raw = strings.TrimRight(strings.TrimSpace(os.Getenv("ASEMAN_PUBLIC_URL")), "/")
-	}
-	if raw == "" {
-		return "", errs.New(errs.CodeUnavailable, "this node has no public address (ASEMAN_PUBLIC_URL), so a phone could not reach it: ask the node's admin to set it, or name it with node_url")
-	}
-	u, err := url.Parse(raw)
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
-		return "", errs.InvalidArgument("the node's public address must be an http(s) origin, e.g. https://aseman.example")
-	}
-	return raw, nil
-}
-
 // PlatformClientURL is where anyone downloads platform [slug]'s client.
 func platformClientURL(node, slug string) string {
 	return node + "/v1/platforms/" + slug + "/client/android.apk"
@@ -176,7 +158,7 @@ func (s *Service) StartPlatformClientBuild(ctx context.Context, person identity.
 	if _, err := s.SpaceMembership(ctx, space, person); err != nil {
 		return models.PlatformClientBuild{}, errs.Permission("the app is built on the computer of the frontend's space, and you are not a member of it")
 	}
-	node, err := publicNodeURL(opts.NodeURL)
+	node, err := s.publicNodeURL(ctx, person, opts.NodeURL)
 	if err != nil {
 		return models.PlatformClientBuild{}, err
 	}
@@ -284,7 +266,7 @@ func (s *Service) PlatformClientBuildStatus(ctx context.Context, person identity
 	out := models.PlatformClientBuild{Platform: target.Slug, State: "none"}
 	if c := target.Client; c != nil {
 		out.State, out.Version, out.Size, out.Started, out.Godot = "done", c.Version, c.Size, c.BuiltAt, c.Godot
-		if node, err := publicNodeURL(""); err == nil {
+		if node, err := s.publicNodeURL(ctx, person, ""); err == nil {
 			out.URL = platformClientURL(node, target.Slug)
 		} else {
 			out.URL = "/v1/platforms/" + target.Slug + "/client/android.apk"

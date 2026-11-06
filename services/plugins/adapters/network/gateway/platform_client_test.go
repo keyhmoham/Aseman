@@ -32,7 +32,9 @@ func (s *clientSpaces) GetFile(_ context.Context, id identity.ID) (*filedata.Fil
 	}
 	return s.file, nil
 }
-func (s *clientSpaces) ReadFileBytes(context.Context, *filedata.File) ([]byte, error) { return s.data, nil }
+func (s *clientSpaces) ReadFileBytes(context.Context, *filedata.File) ([]byte, error) {
+	return s.data, nil
+}
 
 func clientRequest(slug, file string) *network.Request {
 	params, _ := json.Marshal(map[string]string{"slug": slug, "file": file})

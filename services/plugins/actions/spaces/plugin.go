@@ -21,6 +21,9 @@ func NewPlugin() api.Plugin {
 		s.Routines = routineManagerBridge{K: d.Kernel}
 		s.Msg = messagePortBridge{K: d.Kernel}
 		var cfg struct {
+			Node struct {
+				URL string `json:"url"`
+			}
 			Sandbox struct {
 				Backend  string  `json:"backend"`
 				Image    string  `json:"image"`
@@ -32,6 +35,7 @@ func NewPlugin() api.Plugin {
 		if err := bridge.GlobalConfig(d, &cfg); err != nil {
 			return module.Instance{}, err
 		}
+		s.NodeURL = cfg.Node.URL
 		s.SandboxBackend = cfg.Sandbox.Backend
 		s.SandboxImage = cfg.Sandbox.Image
 		s.SandboxResources = bot.ResourceProfile{CPU: cfg.Sandbox.CPU, Memory: cfg.Sandbox.MemoryMB, Disk: cfg.Sandbox.DiskMB}

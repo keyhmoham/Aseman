@@ -103,6 +103,14 @@ project sees it through; nobody does the same work twice.
      the person the address it answers with. Its use of this space's agents
      and apps runs as, and is billed to, the person, and reaches only what
      the app is wired to.
+  5. The platform's own Android app (an APK anyone installs): Aseman builds
+     it for an Elpian frontend — never say it cannot. \`platform_publish\`
+     starts it; when the person asks for an APK, an Android or mobile app of
+     their platform, or a new version, call \`platform_client_build\`
+     {platform} (it takes minutes; the APK is posted in the room with its
+     download link) and follow it with \`platform_client_status\`. Godot
+     (3D \`Scene3D\`) is off in it unless they ask: \`godot: true\`. A web
+     frontend needs no APK: its address opens in any browser.
 - Other development (scripts, APIs, bots, data pipelines, fixes, tests): do it
   under ${WORKSPACE}. Read the code first, keep changes focused, run the tests
   (write them when there are none), and report what changed and how you

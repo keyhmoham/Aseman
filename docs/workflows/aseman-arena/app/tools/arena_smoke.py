@@ -6,6 +6,9 @@ a match is played and its result is rated; the room is closed again.
 
     arena_smoke.py http://127.0.0.1:8080            # prints arena-smoke-ok
     arena_smoke.py http://127.0.0.1:8080 --forge    # also: the Forge agent builds a game (forge-demo-ok)
+    arena_smoke.py --stop-old /workspace/apps/aseman-arena
+        stops an Arena server left running by an earlier install (its files
+        replaced underneath it), so the preview starts the new one
     arena_smoke.py http://127.0.0.1:8080 --wait 240 --games 2 [--agent]
         waits until the server answers with that many games (and the Forge
         agent connected), printing arena-ready — or, when it does not, exactly
@@ -19,6 +22,9 @@ import urllib.error
 import urllib.request
 
 USER = {"X-Aseman-User": "system:smoke", "X-Aseman-User-Handle": "arena-smoke"}
+
+# The server is on this computer: never go through its egress proxy.
+urllib.request.install_opener(urllib.request.build_opener(urllib.request.ProxyHandler({})))
 
 
 def call(base, method, path, body=None, raw=False):
@@ -59,7 +65,38 @@ def wait(base, seconds, games, agent):
     return 1
 
 
+def stop_old(app_dir):
+    """Stops `python3 server.py` processes running in [app_dir] (also when
+    the folder was replaced: their working directory then reads
+    "<dir> (deleted)")."""
+    import os
+    import signal
+    app_dir = os.path.realpath(app_dir)
+    stopped = []
+    for pid in filter(str.isdigit, os.listdir("/proc")):
+        try:
+            cmd = open("/proc/%s/cmdline" % pid, "rb").read().split(b"\0")
+            cwd = os.readlink("/proc/%s/cwd" % pid)
+        except OSError:
+            continue
+        if int(pid) == os.getpid() or not any(c.endswith(b"server.py") for c in cmd):
+            continue
+        if cwd.replace(" (deleted)", "") != app_dir:
+            continue
+        try:
+            os.kill(int(pid), signal.SIGTERM)
+            stopped.append(pid)
+        except OSError:
+            pass
+    if stopped:
+        time.sleep(1.5)
+    print("arena-stopped: %s" % (", ".join(stopped) or "none running"))
+    return 0
+
+
 def main():
+    if "--stop-old" in sys.argv:
+        return stop_old(sys.argv[sys.argv.index("--stop-old") + 1])
     base = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8080"
     if "--wait" in sys.argv:
         a = sys.argv

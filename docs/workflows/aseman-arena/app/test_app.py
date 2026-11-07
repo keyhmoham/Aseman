@@ -182,6 +182,7 @@ class Api(unittest.TestCase):
         self.assertTrue(chess["official"])
         self.assertEqual(chess["launch"]["pack"], "https://arena.example/v1/platforms/arena/app/games/arena-chess/arena-chess.pck?v=abcdef012345")
         self.assertEqual(chess["launch"]["scene"], "res://arena/chess/main.tscn")
+        self.assertEqual(chess["launch"]["pack_path"], "games/arena-chess/arena-chess.pck?v=abcdef012345")
         self.ok("GET", "api/leaderboard")
         self.ok("GET", "api/rooms")
         code, out = self.call("GET", "api/garage")

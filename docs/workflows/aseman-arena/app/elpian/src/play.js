@@ -8,7 +8,7 @@ function startMatch(slug, roomId, choices) {
   app.set({ launching: true });
   var path = roomId ? "rooms/" + roomId + "/matches" : "matches";
   apiPost(path, Object.assign({ game: slug }, choices || {})).then(function (out) {
-    app.set({ launching: false, play: { launch: out.launch, match: out.match, room: roomId || "", scene: gameScene(out.launch, (app.state.cfg || {}).asset_base || ""), progress: null, error: null, result: null, outcome: null, submitting: false } });
+    app.set({ launching: false, play: { launch: out.launch, match: out.match, room: roomId || "", scene: gameScene(out.launch, assetBase()), progress: null, error: null, result: null, outcome: null, submitting: false } });
     push({ name: "play" });
   }).catch(function (e) { app.set({ launching: false }); app.fail(e); });
 }
@@ -36,7 +36,7 @@ function playView(s, app) {
 function patchPlay(p) { app.set({ play: Object.assign({}, app.state.play, p) }); }
 
 function playPlaceholder(s, app, p, g) {
-  var base = (s.cfg || {}).asset_base || "";
+  var base = assetBase();
   var web = p.launch.web && base ? base + p.launch.web : "";
   return box({ gradient: { colors: [hex(g.accent, "#6aa8ff"), "#0b1020"], begin: "topLeft", end: "bottomRight" }, padding: "20", alignItems: "center", justifyContent: "center" }, [
     C([{ type: "Icon", props: { icon: "sports_esports", size: 44, style: { color: "#ffffff" } } },

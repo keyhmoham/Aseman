@@ -397,13 +397,21 @@ func (a *API) forwardProxy(ctx context.Context, req *network.Request, p *proxy.P
 	for k, v := range fw.headers {
 		upReq.Header.Set(k, v)
 	}
-	client := &http.Client{Timeout: 120 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	resp, err := client.Do(upReq)
+	resp, err := proxyClient.Do(upReq)
 	if err != nil {
 		return nil, errs.Wrap(errs.CodeUnavailable, err, "proxy upstream")
 	}
-	defer resp.Body.Close()
+	// What the gateway does not rewrite (a game's engine and packs, models,
+	// images, media) streams through as it comes: any size, however long the
+	// download takes on a slow connection.
+	if ctype := resp.Header.Get("Content-Type"); ctype != "" && !proxyRewritable(ctype) {
+		return a.streamProxy(resp, p, fw, ctype), nil
+	}
+	// Pages, scripts and styles are read whole to be rewritten, within limits.
+	stop := time.AfterFunc(proxyReadTimeout, func() { resp.Body.Close() })
 	body, err := io.ReadAll(io.LimitReader(resp.Body, (32<<20)+1))
+	stop.Stop()
+	resp.Body.Close()
 	if err != nil {
 		return nil, errs.Wrap(errs.CodeUnavailable, err, "read proxy response")
 	}
@@ -448,6 +456,64 @@ func (a *API) forwardProxy(ctx context.Context, req *network.Request, p *proxy.P
 		Header: hdr,
 		Body:   body,
 	}, nil
+}
+
+// proxyReadTimeout bounds waiting for an upstream's answer, and reading one
+// the gateway buffers (a streamed one takes as long as it takes).
+const proxyReadTimeout = 120 * time.Second
+
+// proxyClient forwards preview requests; it never follows redirects (the
+// page's own Location goes back to the browser, rewritten).
+var proxyClient = &http.Client{
+	Transport: func() http.RoundTripper {
+		t := http.DefaultTransport.(*http.Transport).Clone()
+		t.ResponseHeaderTimeout = proxyReadTimeout
+		return t
+	}(),
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+}
+
+// proxyRewritable reports whether the gateway rewrites a response of this
+// type (and so must read it whole): HTML, CSS, JavaScript, JSON and text.
+func proxyRewritable(ctype string) bool {
+	c := strings.ToLower(ctype)
+	return strings.Contains(c, "html") || strings.Contains(c, "css") || strings.Contains(c, "javascript") ||
+		strings.Contains(c, "json") || strings.HasPrefix(c, "text/")
+}
+
+// streamProxy answers with an upstream response as it arrives.
+func (a *API) streamProxy(resp *http.Response, p *proxy.Proxy, fw proxyForward, ctype string) *network.Response {
+	hdr := map[string]string{
+		"Content-Type":                ctype,
+		"Access-Control-Allow-Origin": "*",
+		"Cache-Control":               "no-store",
+	}
+	if cc := resp.Header.Get("Cache-Control"); cc != "" {
+		hdr["Cache-Control"] = cc
+	}
+	for _, name := range []string{"Content-Length", "ETag", "Last-Modified", "Vary"} {
+		if v := resp.Header.Get(name); v != "" {
+			hdr[name] = v
+		}
+	}
+	if location := resp.Header.Get("Location"); location != "" {
+		if strings.HasPrefix(location, "/") && !strings.HasPrefix(location, "//") && !strings.HasPrefix(location, p.GatewayPath()) {
+			location = p.GatewayPath() + strings.TrimLeft(location, "/")
+		}
+		hdr["Location"] = location
+	}
+	if fw.cookie != "" {
+		hdr["Set-Cookie"] = fw.cookie
+	}
+	return &network.Response{
+		Status: resp.StatusCode,
+		Header: hdr,
+		Stream: func(_ context.Context, w io.Writer) error {
+			defer resp.Body.Close()
+			_, err := io.Copy(w, resp.Body)
+			return err
+		},
+	}
 }
 
 // rewriteProxyAssets rewrites absolute root asset references (e.g. /_next/...,

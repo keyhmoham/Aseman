@@ -42,7 +42,7 @@ function lightNodes(list) {
 /* The person's 3D home. trophies: unlocked achievements; games: the store's
  * games, shown as arcade cabinets along the wall. */
 function garageScene(garage, games) {
-  var L = garage.layout, base = garage.asset_base || "", me = garage.me || {}, sh = L.shell;
+  var L = garage.layout, base = assetBase() || garage.asset_base || "", me = garage.me || {}, sh = L.shell;
   var nodes = shellNodes(sh);
   L.items.forEach(function (it) {
     nodes.push({ type: "model", id: it.id, src: modelSrc(base, it.file), version: MODEL_VERSION, position: it.position, rotation: it.rotation, scale: it.scale });
@@ -130,7 +130,8 @@ function roomScene(room, base) {
  * A client without the 3D engine (the web client) runs the game's browser
  * build (`web`) in its place; its events come back the same way. */
 function gameScene(launch, base) {
-  var pack = { type: "pack", id: "game", src: launch.pack, scene: launch.scene, version: launch.version, params: launch.params };
+  var src = base && launch.pack_path ? base + launch.pack_path : launch.pack;
+  var pack = { type: "pack", id: "game", src: src, scene: launch.scene, version: launch.version, params: launch.params };
   if (launch.embed && base) pack.web = base + launch.embed;
   return { nodes: [pack] };
 }

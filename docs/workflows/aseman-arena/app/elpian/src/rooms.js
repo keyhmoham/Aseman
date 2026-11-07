@@ -136,7 +136,7 @@ function loadRoom(id) {
 }
 
 function showRoom(r) {
-  app.set({ room: r, roomScene: roomScene(r, (app.state.cfg || {}).asset_base || "") });
+  app.set({ room: r, roomScene: roomScene(r, assetBase()) });
   pollRoom();
 }
 

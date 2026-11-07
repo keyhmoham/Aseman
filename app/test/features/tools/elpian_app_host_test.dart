@@ -46,6 +46,17 @@ void main() {
     }
   });
 
+  test('the program learns its own address as the client reaches it', () {
+    final h = host(MockClient((_) async => http.Response('{}', 200)));
+    expect(h.appUrl, 'https://node.example$page');
+    final env = unwrap(h.handlers()['aseman.env']!('aseman.env', '') as String) as Map;
+    expect(env['appUrl'], 'https://node.example$page');
+    expect(env['display'], 'full');
+    final platform = ElpianAppHost(baseUrl: 'https://arena.example', page: '/v1/platforms/arena/app', headers: () => {},
+        env: () => {}, settle: (_) async {}, client: MockClient((_) async => http.Response('{}', 200)));
+    expect(platform.appUrl, 'https://arena.example/v1/platforms/arena/app/');
+  });
+
   test('requests are accepted at once and settled when the answer comes', () async {
     final seen = <http.Request>[];
     final settled = Completer<Map<String, dynamic>>();

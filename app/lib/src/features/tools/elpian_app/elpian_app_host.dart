@@ -13,7 +13,8 @@ import '../elpian/host_values.dart';
 /// The program's SDK (`aseman-elpian.js`) speaks this protocol:
 ///
 ///   * `aseman.env` → `{display, theme: {mode, accent, colors}, user, space,
-///     room, title}`
+///     room, title, appUrl}` (`appUrl`: the app's own address as this client
+///     reaches it)
 ///   * `aseman.request` `{id, target, op | path, method, query, body,
 ///     headers, timeoutMs}` → `{accepted}` at once; the answer comes later
 ///     through [settle] (the program's `__asemanSettle`) as `{id, ok, status,
@@ -78,7 +79,7 @@ class ElpianAppHost {
   };
 
   Map<String, HostCallHandler> handlers() => {
-        'aseman.env': (_, __) => HostValues.reply('object', env()),
+        'aseman.env': (_, __) => HostValues.reply('object', {...env(), 'appUrl': appUrl}),
         'aseman.request': _request,
         'aseman.compact': _compact,
         'aseman.expand': (_, __) {
@@ -128,6 +129,15 @@ class ElpianAppHost {
     if (v is String) v = HostValues.decode(v);
     if (v is List && v.isNotEmpty) v = v.first;
     return v is Map ? v.cast<String, dynamic>() : null;
+  }
+
+  /// The app's own address as this client reaches it, absolute (ends with
+  /// `/`): what the program builds addresses of its own files from, e.g. for
+  /// a Scene3D's models and game packs, which the engine downloads itself.
+  String get appUrl {
+    final root = '${baseUrl.replaceFirst(RegExp(r'/+$'), '')}$page';
+    final abs = Uri.base.resolve(root).toString();
+    return abs.endsWith('/') ? abs : '$abs/';
   }
 
   /// Where a request goes. Only the app's own preview: never another site,

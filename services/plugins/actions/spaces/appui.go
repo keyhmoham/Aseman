@@ -666,6 +666,22 @@ func (s *Service) appuiPublishTool(ctx context.Context, spaceID, roomID identity
 	if t := strings.TrimSpace(in.Title); t != "" {
 		job.Title = t
 	}
+	// An app written by hand (no appui_create) gets its key here, as
+	// appui_create would have given it: the key is the app's record, which
+	// background calls and platform_publish (a platform's frontend) need.
+	if !job.HasKey {
+		if owner := appOwner(ctx); !owner.IsZero() && !s.isBotAccount(ctx, owner) {
+			deskRoom, _ := identity.Parse(job.Place.Room)
+			key, kerr := s.IssueAppKey(opCtx, spaceID, deskRoom, owner, dir, job.Title)
+			if kerr != nil {
+				return "", kerr
+			}
+			if err := s.writeAppServerEnv(opCtx, spaceID, dir, key); err != nil {
+				return "", err
+			}
+			job.HasKey = true
+		}
+	}
 	if k := strings.TrimSpace(in.Kind); k != "" {
 		kind, kerr := appuiKind(k)
 		if kerr != nil {

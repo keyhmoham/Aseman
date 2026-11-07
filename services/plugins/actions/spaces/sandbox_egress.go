@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/aseman/aseman/internal/plugins/bridge"
 	"github.com/aseman/aseman/internal/plugins/identity"
@@ -52,6 +54,30 @@ func (s *Service) sandboxEnv() map[string]string {
 	return env
 }
 
+// egressRecheck is how often a running computer's proxy is checked again.
+const egressRecheck = 30 * time.Second
+
+var (
+	egressMu      sync.Mutex
+	egressChecked = map[string]time.Time{}
+)
+
+// egressDue reports whether [spaceID]'s proxy is due a check, and marks it
+// checked now.
+func (s *Service) egressDue(spaceID identity.ID) bool {
+	if !s.egressEnabled() {
+		return false
+	}
+	egressMu.Lock()
+	defer egressMu.Unlock()
+	key := spaceID.String()
+	if time.Since(egressChecked[key]) < egressRecheck {
+		return false
+	}
+	egressChecked[key] = time.Now()
+	return true
+}
+
 // ensureEgress starts the computer's proxy with what it needs to read the
 // project's policy from the node.
 func (s *Service) ensureEgress(ctx context.Context, spaceID identity.ID) {
@@ -71,7 +97,8 @@ func (s *Service) ensureEgress(ctx context.Context, spaceID identity.ID) {
 		"ASEMAN_EGRESS_URL":   strings.TrimRight(node, "/") + "/governance/v1/egress?space=" + url.QueryEscape(spaceID.String()),
 		"ASEMAN_EGRESS_TOKEN": token,
 	}
+	// Already running: the runner leaves it as it is (one inspect).
 	if err := s.SandboxSidecar(ctx, spaceID, "egress", egressImage(), env); err != nil {
-		s.L.Warn("egress proxy not started", "space", spaceID.String(), "error", err)
+		s.L.Warn("egress proxy not started: the computer reaches nothing outside the node until it is", "space", spaceID.String(), "image", egressImage(), "error", err)
 	}
 }

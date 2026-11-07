@@ -184,7 +184,10 @@ class App:
             "tags": m.get("tags", []), "version": g["version"], "accent": m.get("accent", "#6aa8ff"), "mode": m.get("mode", ""),
             "players": m.get("players", {}), "official": bool(g["official"]), "status": g["status"], "plays": g["plays"],
             "rating": self.store.rating_summary(g["slug"]), "settings": m.get("settings", {}),
-            "launch": {"pack": "%sgames/%s/%s?v=%s" % (base, g["slug"], m["pack"], v), "scene": m["scene"], "version": v,
+            # pack_path is relative to the app's own address: clients put it on
+            # the address they reach the platform at (pack is the configured one).
+            "launch": {"pack": "%sgames/%s/%s?v=%s" % (base, g["slug"], m["pack"], v), "pack_path": "games/%s/%s?v=%s" % (g["slug"], m["pack"], v),
+                       "scene": m["scene"], "version": v,
                        "web": "games/%s/%s" % (g["slug"], m.get("web", "")) if m.get("web") else ""},
             "icon": "games/%s/icon.svg" % g["slug"],
         }

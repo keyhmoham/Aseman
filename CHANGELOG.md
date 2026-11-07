@@ -34,6 +34,17 @@
   page instead of the placeholder, and the page's `postMessage({arena: …})`
   events arrive as the same `gameevent`; the loader no longer tries to
   fetch packs or models without an engine.
+- **Big files stream through app previews and platform doors.** The
+  gateway read every proxied response whole and refused anything past
+  32 MiB, so a game's engine (`index.wasm`, ~35 MB) or a large pack never
+  arrived. What it does not rewrite (binaries, media, models, wasm) now
+  streams through as it comes, with its length and caching headers and no
+  whole-request time limit; pages, scripts and styles are read and rewritten
+  as before.
+- **An Elpian app knows its own address.** `Aseman.env().appUrl` is the
+  app's address as this client reaches it, so a program builds the
+  addresses the 3D engine downloads from on it instead of on a configured
+  host name (`localhost` on a phone reaches the phone).
 - **A hand-built app can be a platform's frontend.** `READY.json` (or
   `JOB.json`) may say `"audience": "platform"`, and `appui_publish` now
   gives an app written without `appui_create` its app key (and

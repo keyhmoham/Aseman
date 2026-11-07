@@ -353,7 +353,7 @@ function add(event, app) {                         // event is plain JSON
 | `Aseman.conversation(agent)` | `.send(text)` keeps the history in the program |
 | `Aseman.call(tool, microtool, args)` | a space app's microtool: its unwrapped result (often a markdown string) |
 | `Aseman.agents()`, `Aseman.tools()`, `Aseman.microtools(tool)`, `Aseman.context()` | discovery |
-| `Aseman.env()` | `{display: full\|compact\|sheet, widget: {size, shape} (compact), theme: {mode, accent, colors}, viewport, user, space, room, title}`; `Aseman.onEnv(fn)` on change (the app re-renders by itself) |
+| `Aseman.env()` | `{display: full\|compact\|sheet, widget: {size, shape} (compact), theme: {mode, accent, colors}, viewport, user, space, room, title, appUrl}` (`appUrl`: the app's own address as this device reaches it, ending in `/` — build absolute addresses of your server's files on it, e.g. a `Scene3D`'s models and packs); `Aseman.onEnv(fn)` on change (the app re-renders by itself) |
 | `Aseman.viewport()` | `{width, height, sizeClass: compact\|medium\|expanded, orientation}`: the space the app is drawn in (phones are `compact`, < 600 wide; desk windows usually `expanded`, ≥ 840). The app re-renders when it changes: pick the layout from it (see Screen layout) |
 | `App.create({…, widget: {view, refresh, size, shape, refreshMs, static}})` | the phone widget (required; see The phone widget) |
 | `app.every(key, ms, fn)`, `app.isWidget()` | a timer (min 5 s); whether it is drawn as the widget now |
@@ -581,7 +581,8 @@ embedded page instead of the placeholder. The page's
 `window.parent.postMessage({arena: event}, '*')` arrives as the same
 `gameevent`, so one handler serves both.
 
-Addresses are absolute: build them from your server's public address. In
+Addresses are absolute: build them on `Aseman.env().appUrl` (the app's own
+address as this device reaches it), never on a configured host name. In
 the headless driver a `Scene3D` draws its placeholder; fire its events with
 `{do: "fire", target: {key: "game"}, event: "gameevent", data: {…}}`.
 

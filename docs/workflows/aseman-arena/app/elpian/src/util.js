@@ -57,3 +57,13 @@ function hex(c, fallback) { return /^#[0-9a-fA-F]{6}$/.test(String(c || "")) ? c
 
 // A unique key for the handler of a list item.
 function hk(prefix, id) { return prefix + "_" + String(id).replace(/[^a-zA-Z0-9_]/g, "_"); }
+
+// Where this app's own files are, as this device reaches the platform: the
+// client's appUrl (the address the app was opened at), else the server's
+// configured public address. Models and game packs are downloaded by the 3D
+// engine itself from addresses built on it.
+function assetBase() {
+  var e = Aseman.env() || {};
+  if (e.appUrl) return String(e.appUrl).replace(/\/?$/, "/");
+  return ((typeof app !== "undefined" && app.state && app.state.cfg) || {}).asset_base || "";
+}

@@ -22,12 +22,20 @@
 ///
 /// The whole build is issued inside one explicit batch, so a scene of any size
 /// costs a single crossing.
+///
+/// Two node types load from an address at run time (see `scene_assets.dart`):
+/// `{"type": "model", "src": "…/chair.glb"}` (a glTF model) and
+/// `{"type": "pack", "src": "…/game.pck", "scene": "res://…/main.tscn",
+/// "params": {…}}` (a Godot resource pack — a whole game — mounted and
+/// instanced). Both build an empty `Node3D` at once and fill it when the asset
+/// arrives.
 library;
 
 import 'package:aseman/src/elpian/core/lenient.dart';
 import 'godot_controller.dart';
 import 'godot_object.dart';
 import 'godot_values.dart';
+import 'scene_assets.dart';
 
 /// The result of building a DSL scene: the created nodes, addressable by the
 /// `id` the DSL gave them.
@@ -56,9 +64,13 @@ class GodotScene {
 
 /// Builds a scene from its JSON description.
 class SceneDsl {
-  SceneDsl(this.controller);
+  SceneDsl(this.controller, {SceneAssets? assets})
+      : assets = assets ?? SceneAssets(controller);
 
   final GodotController controller;
+
+  /// Loads the `model` and `pack` nodes' assets.
+  final SceneAssets assets;
 
   /// Build [json] under the controller's root.
   ///
@@ -191,6 +203,21 @@ class SceneDsl {
           scale: spec['scale'],
           visible: looseBool(spec['visible']),
         );
+      case 'model':
+      case 'pack':
+        node = controller.g3.node(
+          position: spec['position'],
+          rotation: spec['rotation'],
+          scale: spec['scale'] is num
+              ? [spec['scale'], spec['scale'], spec['scale']]
+              : spec['scale'],
+          visible: looseBool(spec['visible']),
+        );
+        if (type == 'model') {
+          assets.loadModel(node, spec);
+        } else {
+          assets.loadPack(node, spec);
+        }
       case 'camera':
         node = _camera(spec);
       case 'light':

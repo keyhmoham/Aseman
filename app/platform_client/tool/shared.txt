@@ -49,6 +49,7 @@ src/elpian/godot/godot_web_surface.dart
 src/elpian/godot/godot_web_surface_web.dart
 src/elpian/godot/protocol.dart
 src/elpian/godot/scene3d_widget.dart
+src/elpian/godot/scene_assets.dart
 src/elpian/godot/scene_dsl.dart
 src/elpian/godot/scene_taps.dart
 src/elpian/html_widgets/html_a.dart

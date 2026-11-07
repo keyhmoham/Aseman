@@ -1,0 +1,27 @@
+; Aseman Arena — Chess. A Godot 4.3 project: played in the browser (Web
+; export) and inside the Aseman client's Scene3D (this project's files
+; exported as a resource pack, mounted under res://arena/chess/).
+
+config_version=5
+
+[application]
+
+config/name="Arena Chess"
+config/description="Chess against an AI opponent, on a marble board."
+run/main_scene="res://arena/chess/main.tscn"
+config/features=PackedStringArray("4.3")
+config/icon="res://arena/chess/icon.svg"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=800
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+anti_aliasing/quality/msaa_3d=2
+textures/vram_compression/import_etc2_astc=true

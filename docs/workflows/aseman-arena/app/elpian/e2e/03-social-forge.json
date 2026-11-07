@@ -1,0 +1,27 @@
+{
+  "name": "social tabs and forging a game with the Forge agent",
+  "viewport": "phone",
+  "steps": [
+    { "do": "select", "target": { "key": "nav" }, "value": "Social" },
+    { "expect": { "text": "Friends, messages and alerts" } },
+    { "do": "type", "target": { "key": "social_find" }, "text": "nobody-here" },
+    { "do": "tap", "target": { "key": "social_find_go" } },
+    { "expect": { "request": { "method": "GET", "path": "api/users" } } },
+    { "do": "select", "target": { "key": "social_tabs" }, "value": "Messages" },
+    { "do": "select", "target": { "key": "social_tabs" }, "value": "Alerts" },
+    { "expect": { "request": { "method": "POST", "path": "api/notifications" } } },
+    { "do": "select", "target": { "key": "nav" }, "value": "Garage" },
+    { "do": "tap", "target": { "key": "garage_forge" } },
+    { "expect": { "text": "Make a game by talking" } },
+    { "do": "tap", "target": { "key": "forge_new" } },
+    { "do": "type", "target": { "key": "ng_title" }, "text": "Roof Racer" },
+    { "do": "tap", "target": { "key": "ng_genre_racing" } },
+    { "do": "type", "target": { "key": "ng_brief" }, "text": "A neon racing game on rooftops against three AI drivers who draft and block." },
+    { "do": "tap", "target": { "key": "ng_start" } },
+    { "expect": { "text": "Roof Racer", "request": { "method": "POST", "path": "api/forge" } } },
+    { "do": "wait", "ms": 6000 },
+    { "expect": { "text": "A neon racing game on rooftops" } },
+    { "do": "tap", "target": { "key": "forge_back" } },
+    { "expect": { "text": "Your projects" } }
+  ]
+}

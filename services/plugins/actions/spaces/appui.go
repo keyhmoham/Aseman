@@ -645,10 +645,16 @@ func (s *Service) appuiPublishTool(ctx context.Context, spaceID, roomID identity
 			Port  int    `json:"port"`
 			Mode  string `json:"mode"`
 			UI    string `json:"ui"`
+			// Audience lets a hand-built app say it is a platform's frontend.
+			Audience string `json:"audience"`
 		}
 		_ = json.Unmarshal([]byte(raw), &j)
+		audience, aerr := appuiAudience(j.Audience, "")
+		if aerr != nil {
+			return "", aerr
+		}
 		desk, arrange := appuiDeskPlace(roomID, roomID, "")
-		job = appuiJob{ID: path.Base(dir), Title: j.Title, Port: j.Port, Mode: j.Mode, UI: j.UI, Place: appuiPlace{Room: desk}}
+		job = appuiJob{ID: path.Base(dir), Title: j.Title, Port: j.Port, Mode: j.Mode, UI: j.UI, Audience: audience, Place: appuiPlace{Room: desk}}
 		if !arrange.IsZero() {
 			job.Place.ArrangeRoom = arrange.String()
 		}

@@ -1,0 +1,25 @@
+{
+  "slug": "arena-chess",
+  "title": "Arena Chess",
+  "version": "1.0.0",
+  "tagline": "Classical chess on a marble board, against an AI that grows with you.",
+  "description": "The complete Laws of Chess — castling, en passant, promotion, check, checkmate and stalemate, the fifty- and seventy-five-move rules, threefold and fivefold repetition, insufficient material — on Poly Haven's marble Staunton set. The AI opponent searches with alpha-beta, a transposition table and quiescence, from a forgiving level 1 to a club-strength level 5. Take back, offer or claim a draw, resign, play with a clock, and keep the PGN.",
+  "genre": "board",
+  "tags": ["chess", "strategy", "classic", "3d"],
+  "mode": "single-player vs AI",
+  "players": {"humans": 1, "ai": 1},
+  "engine": "godot-4.3",
+  "scene": "res://arena/chess/main.tscn",
+  "pack": "arena-chess.pck",
+  "web": "web/index.html",
+  "icon": "res://arena/chess/icon.svg",
+  "accent": "#6aa8ff",
+  "settings": {
+    "level": {"type": "integer", "min": 1, "max": 5, "default": 3, "label": "AI level"},
+    "player_color": {"type": "enum", "values": ["white", "black", "random"], "default": "white", "label": "Your pieces"},
+    "time_control": {"type": "enum", "values": ["none", "3+2", "5+3", "10+5", "15+10"], "default": "none", "label": "Clock"}
+  },
+  "scoring": "100 points for a win, 40 for a draw, 10 for a loss, times the AI level; take-backs cost 15 each. Rated games move an Elo rating against the level's rating (level 1 = 800 … level 5 = 1800).",
+  "controls": ["Tap or click a piece, then its square", "Right-drag or two-finger drag to turn the board, scroll or pinch to zoom", "F flips, U takes back"],
+  "credits": [{"what": "Chess Set model", "who": "Riley Queen / Poly Haven", "license": "CC0 1.0", "url": "https://polyhaven.com/a/chess_set"}]
+}

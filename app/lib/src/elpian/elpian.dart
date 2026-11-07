@@ -42,5 +42,6 @@ export 'godot/godot_object.dart';
 export 'godot/godot_values.dart';
 export 'godot/protocol.dart';
 export 'godot/scene3d_widget.dart';
+export 'godot/scene_assets.dart';
 export 'godot/scene_dsl.dart';
 export 'godot/scene_taps.dart';

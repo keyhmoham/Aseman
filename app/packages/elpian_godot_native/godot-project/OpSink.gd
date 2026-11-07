@@ -79,6 +79,11 @@ func _process(_dt: float) -> void:
 		_bridge.call("report", _summarize())
 
 func _ensure_camera() -> void:
+	# A world that already shows through a camera of its own (a game mounted
+	# from a resource pack switches between its cameras) is left alone.
+	var vp := get_viewport()
+	if vp != null and vp.get_camera_3d() != null and vp.get_camera_3d().is_inside_tree():
+		return
 	var cam = _find_camera(_sink)
 	if cam != null and not cam.current:
 		cam.make_current()

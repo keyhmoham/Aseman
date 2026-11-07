@@ -1,0 +1,76 @@
+{
+  "about": "The 3D models Aseman Arena uses, where they come from and under what licence. fetch_assets.py downloads them at build time (they are not checked in). Every source is CC0 (public domain): Poly Haven's models, Kenney's models in his starter kits, Quaternius' RobotExpressive.",
+  "sources": {
+    "polyhaven": {"name": "Poly Haven", "url": "https://polyhaven.com/models", "license": "CC0 1.0", "api": "https://api.polyhaven.com/files/{id}"},
+    "kenney-city": {"name": "Kenney — Starter Kit City Builder", "url": "https://github.com/KenneyNL/Starter-Kit-City-Builder", "license": "CC0 1.0 (models), MIT (code)", "extra": ["Textures/colormap.png"], "base": "https://raw.githubusercontent.com/KenneyNL/Starter-Kit-City-Builder/4535092b740b378b700efd9df9e27a631815b84a/models/"},
+    "kenney-racing": {"name": "Kenney — Starter Kit Racing", "url": "https://github.com/KenneyNL/Starter-Kit-Racing", "license": "CC0 1.0 (models), MIT (code)", "extra": ["Textures/colormap.png"], "base": "https://raw.githubusercontent.com/KenneyNL/Starter-Kit-Racing/2f2e5f2646dda89cb21d4e8539bab60c6e955dc8/models/"},
+    "kenney-fps": {"name": "Kenney — Starter Kit FPS", "url": "https://github.com/KenneyNL/Starter-Kit-FPS", "license": "CC0 1.0 (models), MIT (code)", "extra": ["Textures/colormap.png"], "base": "https://raw.githubusercontent.com/KenneyNL/Starter-Kit-FPS/185fd2326d74a5cf858cffc616f87cf9696f9cc0/models/"},
+    "quaternius": {"name": "Quaternius (Tomás Laulhé) — RobotExpressive, via three.js", "url": "https://github.com/mrdoob/three.js/tree/r170/examples/models/gltf/RobotExpressive", "license": "CC0 1.0", "base": "https://raw.githubusercontent.com/mrdoob/three.js/r170/examples/models/gltf/RobotExpressive/"}
+  },
+  "targets": {
+    "chess": {
+      "dest": "chess/arena/chess/models",
+      "items": [
+        {"source": "polyhaven", "id": "chess_set", "as": "chess_set", "format": "gltf"}
+      ]
+    },
+    "city-strike": {
+      "dest": "city-strike/arena/city_strike/models",
+      "items": [
+        {"source": "quaternius", "file": "RobotExpressive.glb", "as": "robot.glb"},
+        {"source": "kenney-fps", "file": "blaster.glb", "as": "blaster.glb"},
+        {"source": "kenney-fps", "file": "blaster-repeater.glb", "as": "blaster-repeater.glb"},
+        {"source": "kenney-city", "file": "building-small-a.glb", "as": "building-small-a.glb"},
+        {"source": "kenney-city", "file": "building-small-b.glb", "as": "building-small-b.glb"},
+        {"source": "kenney-city", "file": "building-small-c.glb", "as": "building-small-c.glb"},
+        {"source": "kenney-city", "file": "building-small-d.glb", "as": "building-small-d.glb"},
+        {"source": "kenney-city", "file": "building-garage.glb", "as": "building-garage.glb"},
+        {"source": "kenney-city", "file": "road-straight.glb", "as": "road-straight.glb"},
+        {"source": "kenney-city", "file": "road-straight-lightposts.glb", "as": "road-straight-lightposts.glb"},
+        {"source": "kenney-city", "file": "road-intersection.glb", "as": "road-intersection.glb"},
+        {"source": "kenney-city", "file": "pavement.glb", "as": "pavement.glb"},
+        {"source": "kenney-city", "file": "pavement-fountain.glb", "as": "pavement-fountain.glb"},
+        {"source": "kenney-city", "file": "grass-trees.glb", "as": "grass-trees.glb"},
+        {"source": "kenney-city", "file": "grass-trees-tall.glb", "as": "grass-trees-tall.glb"},
+        {"source": "kenney-racing", "file": "vehicle-truck-red.glb", "as": "vehicle-truck-red.glb"},
+        {"source": "kenney-racing", "file": "vehicle-truck-yellow.glb", "as": "vehicle-truck-yellow.glb"},
+        {"source": "kenney-racing", "file": "vehicle-truck-green.glb", "as": "vehicle-truck-green.glb"},
+        {"source": "kenney-racing", "file": "vehicle-truck-purple.glb", "as": "vehicle-truck-purple.glb"},
+        {"source": "kenney-racing", "file": "vehicle-motorcycle.glb", "as": "vehicle-motorcycle.glb"},
+        {"source": "polyhaven", "id": "covered_car", "as": "covered_car", "format": "gltf"},
+        {"source": "polyhaven", "id": "metal_trash_can", "as": "metal_trash_can", "format": "gltf"},
+        {"source": "polyhaven", "id": "modular_street_seating", "as": "street_seating", "format": "gltf"},
+        {"source": "polyhaven", "id": "old_tyre", "as": "old_tyre", "format": "gltf"},
+        {"source": "polyhaven", "id": "exterior_aircon_unit", "as": "aircon_unit", "format": "gltf"},
+        {"source": "polyhaven", "id": "barrel_03", "as": "barrel", "format": "gltf"},
+        {"source": "polyhaven", "id": "cardboard_box_01", "as": "cardboard_box", "format": "gltf"}
+      ]
+    },
+    "garage": {
+      "dest": "../public/assets/models",
+      "about": "The person's 3D home (garage or lab) in the Aseman client's Scene3D: single-file glb, loaded at run time.",
+      "items": [
+        {"source": "polyhaven", "id": "rollershutter_door", "as": "rollershutter_door.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "covered_car", "as": "covered_car.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "metal_tool_chest", "as": "tool_chest.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "industrial_storage_cart", "as": "storage_cart.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "metal_office_desk", "as": "office_desk.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "modern_arm_chair_01", "as": "arm_chair.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "Television_01", "as": "television.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "gaming_console", "as": "gaming_console.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "gamepad", "as": "gamepad.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "hanging_industrial_lamp", "as": "hanging_lamp.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "old_tyre", "as": "old_tyre.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "cardboard_box_01", "as": "cardboard_box.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "potted_plant_04", "as": "potted_plant.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "chemistry_set", "as": "chemistry_set.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "industrial_microscope", "as": "microscope.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "retro_multimeter", "as": "multimeter.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "classic_laptop", "as": "laptop.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "Shelf_01", "as": "shelf.glb", "format": "glb"},
+        {"source": "polyhaven", "id": "chess_set", "as": "chess_set.glb", "format": "glb"},
+        {"source": "quaternius", "file": "RobotExpressive.glb", "as": "robot.glb"}
+      ]
+    }
+  }
+}

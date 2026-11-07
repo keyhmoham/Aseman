@@ -39,10 +39,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/lenient.dart';
+import '../core/node_events.dart';
 import '../models/elpian_node.dart';
 import 'godot_binding.dart';
 import 'godot_controller.dart';
 import 'godot_object.dart';
+import 'scene_assets.dart';
 // The web viewport is selected at compile time; off the web the stub compiles
 // instead, so `dart:ui_web` never reaches a native build.
 import 'godot_web_surface.dart'
@@ -55,11 +57,16 @@ import 'scene_taps.dart';
 /// Create one in your `State` and dispose it there; passing the same controller
 /// to a rebuilt `Scene3D` keeps the world alive.
 class GodotSceneController extends ChangeNotifier {
-  GodotSceneController({GodotBinding? binding})
-      : godot = GodotController(binding: binding);
+  GodotSceneController({GodotBinding? binding, SceneAssetEvent? onAssetEvent})
+      : godot = GodotController(binding: binding) {
+    assets = SceneAssets(godot, onEvent: (type, data) => onAssetEvent?.call(type, data));
+  }
 
   /// The full engine API — `create`, `singleton`, `g3`, batching, callbacks.
   final GodotController godot;
+
+  /// Loads the scene's `model` and `pack` nodes and reports on them.
+  late final SceneAssets assets;
 
   GodotScene? _scene;
   bool _disposed = false;
@@ -84,7 +91,7 @@ class GodotSceneController extends ChangeNotifier {
     for (final root in _scene?.roots ?? const <GodotObject>[]) {
       root.queueFree();
     }
-    final built = SceneDsl(godot).build(json);
+    final built = SceneDsl(godot, assets: assets).build(json);
     _adopt(built);
     return built;
   }
@@ -93,6 +100,11 @@ class GodotSceneController extends ChangeNotifier {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    // Games stop (arena_stop) and the world goes with the widget.
+    assets.dispose();
+    for (final root in _scene?.roots ?? const <GodotObject>[]) {
+      root.queueFree();
+    }
     godot.dispose();
     super.dispose();
   }
@@ -110,7 +122,12 @@ class Scene3D extends StatefulWidget {
     this.height,
     this.clickable = false,
     this.tapProps,
+    this.onEvent,
   });
+
+  /// Asset and game events: `assetprogress`, `assetload`, `asseterror` and
+  /// `gameevent` (a mounted game's `arena_event`), with their data.
+  final SceneAssetEvent? onEvent;
 
   /// The controller to drive this scene. When null the widget owns one for its
   /// lifetime.
@@ -142,7 +159,13 @@ class Scene3D extends StatefulWidget {
   static Widget build(ElpianNode node, List<Widget> children) {
     final props = node.props;
     final scene = props['initialScene'] ?? props['scene'] ?? props['world'];
+    final events = NodeEvents(node);
     return Scene3D(
+      onEvent: node.events == null
+          ? null
+          : (type, data) {
+              if (events.has(type)) events.emit(type, data: data);
+            },
       key: node.key == null ? null : ValueKey(node.key),
       initialScene: scene is Map
           ? scene.map((k, v) => MapEntry('$k', v))
@@ -168,7 +191,10 @@ class _Scene3DState extends State<Scene3D> {
   @override
   void initState() {
     super.initState();
-    if (widget.controller == null) _owned = GodotSceneController();
+    if (widget.controller == null) {
+      _owned = GodotSceneController(
+          onAssetEvent: (type, data) => widget.onEvent?.call(type, data));
+    }
     // Attaching touches the platform channel, so it must not run during build.
     WidgetsBinding.instance.addPostFrameCallback((_) => _attach());
   }
@@ -181,7 +207,7 @@ class _Scene3DState extends State<Scene3D> {
     final json = widget.initialScene;
     GodotScene? built;
     if (json != null && controller.scene == null) {
-      built = SceneDsl(controller.godot).build(json);
+      built = SceneDsl(controller.godot, assets: controller.assets).build(json);
       controller._adopt(built);
     }
 

@@ -229,7 +229,7 @@ export const TYPES = {
   LoadingIndicator: { category: "content", children: "none", summary: "the M3E morphing loading indicator", props: { size: t("number", "default 48"), contained: t("flag", "on a tonal circle") } },
   Canvas: { category: "content", children: "none", events: ["resize"], surface: true, summary: "vector drawing by canvas commands; without width/height it fills its space (300 where unbounded); `resize` {width, height}", props: { commands: t("array"), width: t("number"), height: t("number"), backgroundColor: t("color") } },
   CachedCanvas: { category: "content", children: "none", summary: "a canvas that keeps its drawing across renders", props: { commands: t("array"), width: t("number"), height: t("number"), backgroundColor: t("color"), contextId: t("string"), id: t("string") } },
-  Scene3D: { category: "content", children: "many", summary: "an embedded 3D scene (Godot)", props: { scene: t("any"), world: t("any"), initialScene: t("any"), width: t("num"), height: t("num"), clickable: t("flag") } },
+  Scene3D: { category: "content", children: "many", events: ["gameevent", "assetload", "asseterror", "assetprogress"], surface: true, summary: "an embedded 3D scene (Godot): environment, camera, lights, nodes; `model` nodes load a glb by src, `pack` nodes mount a Godot resource pack (a game) and run its scene; `gameevent` carries the game's arena_event JSON", props: { scene: t("any"), world: t("any"), initialScene: t("any"), width: t("num"), height: t("num"), clickable: t("flag") } },
 
   // ── Material 3 Expressive controls ────────────────────────────────────────
   Button: {

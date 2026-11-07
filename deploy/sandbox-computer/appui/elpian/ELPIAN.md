@@ -538,8 +538,45 @@ renders.
 | `Dismissible`, `Draggable`, `DragTarget`, `Hero` | swipe, drag and drop, shared transitions |
 | `MathExpression`, `Math` | `latex` / `expression` |
 | `Canvas`, `CachedCanvas` | `commands` (`{type, params}`: `beginPath`, `moveTo`/`lineTo` `{x, y}`, `setStrokeStyle` `{color}`, `setLineWidth` `{width}`, `setLineCap` `{cap}`, `stroke`, `fillRect`, `fillCircle`, `fillText`, …), `width`, `height` (`Canvas` without them fills its box: put it in an `Expanded`), `backgroundColor`: vector drawing, clipped to the canvas. `resize` `{width, height}`; draw with `drag*` / `pointer*` events at `e.localPosition` (see Touch) |
-| `Scene3D` (also `scene3d`) | an embedded 3D scene (Godot) |
+| `Scene3D` (also `scene3d`) | an embedded 3D scene (Godot): `scene` `{environment, camera, lights, nodes}` (see 3D scenes); events `assetprogress` `{id, loaded, total}`, `assetload` `{id, kind}`, `asseterror` `{id, message}`, `gameevent` (a mounted game's own events). Give it a placeholder child; it is a surface (never inside a scroll) |
 | `AnimatedContainer`, `AnimatedOpacity`, `AnimatedCrossFade` (`showFirst`), `AnimatedSwitcher` (`transitionType`), `AnimatedAlign`, `AnimatedPadding`, `AnimatedPositioned`, `AnimatedScale`, `AnimatedRotation`, `AnimatedSlide`, `AnimatedSize`, `FadeTransition`, `SlideTransition`, `ScaleTransition`, `RotationTransition`, `SizeTransition` (`axis`), `StaggeredAnimation`, `Shimmer`, `Pulse`, `AnimatedGradient` | motion: animate when their style changes between renders (`transitionDuration`, `animationName`, …) |
+
+### 3D scenes
+
+A `Scene3D` builds its world from `scene` and rebuilds it only when `scene`
+changes (keep it the same object across renders while nothing changes):
+
+```js
+{ type: "Scene3D", key: "home", props: { scene: {
+    environment: { bg: "#10141d", ambient: "#8894b0", ambientEnergy: 0.7 },
+    camera: { position: [0, 3.2, 7], rotation: [-16, 0, 0], fov: 55 },
+    lights: [{ type: "directional", shadow: true, rotation: [-50, -30, 0] },
+             { type: "omni", position: [0, 3, 0], range: 8, color: "#ffd9a0" }],
+    nodes: [
+      { type: "mesh", shape: "box", size: [8, 0.1, 8], color: "#3a3f48" },           // shapes: box sphere cylinder capsule plane prism torus
+      { type: "model", id: "car", src: s.base + "assets/models/covered_car.glb",       // a glb, fetched and cached on the device
+        position: [-1.5, 0, 0], rotation: [0, 30, 0], scale: 1 },
+    ] } },
+  events: { assetload: app.handler("loaded", onLoaded), asseterror: app.handler("err", onError) },
+  children: [{ type: "Text", props: { text: "3D needs the Godot engine" } }] }   // the placeholder
+```
+
+A **`pack`** node mounts a Godot 4.3 resource pack (`.pck`) and instances
+one of its scenes — a whole game runs inside the `Scene3D`. Its `params` go
+to the scene's `arena_start(params)`; its `arena_event(json)` signal arrives
+as `gameevent` with the JSON's fields (`{type: "result", outcome: "win", …}`).
+`version` names the cached copy (a new version downloads again):
+
+```js
+{ type: "Scene3D", key: "game", props: { scene: { nodes: [
+    { type: "pack", id: "chess", src: s.base + "games/arena-chess/arena-chess.pck",
+      scene: "res://arena/chess/main.tscn", version: "1.0.0", params: { level: 3 } } ] } },
+  events: { gameevent: app.handler("game", onGameEvent), assetprogress: app.handler("dl", onProgress) } }
+```
+
+Addresses are absolute: build them from your server's public address. In
+the headless driver a `Scene3D` draws its placeholder; fire its events with
+`{do: "fire", target: {key: "game"}, event: "gameevent", data: {…}}`.
 
 HTML-named nodes (`div`, `p`, `h1`…`h6`, `span`, `button`, `input`, `ul`,
 `li`, `table`, …) also render, but prefer the Flutter nodes and the UI kit:

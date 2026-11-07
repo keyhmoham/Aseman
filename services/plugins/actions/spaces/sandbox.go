@@ -355,8 +355,14 @@ func (s *Service) SandboxStart(ctx context.Context, spaceID identity.ID) (*bot.B
 		// Starting a computer costs time and money: record what asked for it.
 		s.L.Info("sandbox started", "space", spaceID.String(), "for", startedFor(), "agent", vmm.ExecutionFrom(ctx).AgentID)
 		s.provideDesktopScript(ctx, rec)
-		// The proxy joins the computer's network namespace each time the
-		// computer starts (a computer recreated has a new namespace).
+	}
+	// The proxy joins the computer's network namespace each time the
+	// computer starts (a computer recreated has a new namespace). A computer
+	// can also come back without the node starting it (its container restarted
+	// by Docker or by hand, the proxy exited): it would point at a proxy that
+	// is not there and reach nothing, so a running computer's proxy is checked
+	// again too, at most every egressRecheck.
+	if !wasRunning || s.egressDue(spaceID) {
 		s.ensureEgress(ctx, spaceID)
 	}
 	s.touch(spaceID)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"regexp"
+	"time"
 
 	"github.com/aseman/aseman/pkg/errs"
 )
@@ -26,14 +27,29 @@ func (a *Adapter) EnsureSidecar(ctx context.Context, vmID, name, image string, e
 	if err := a.ensureRunning(ctx, cid); err != nil {
 		return err
 	}
+	vmStarted := ""
+	if b, err := a.do(ctx, http.MethodGet, "/containers/"+cid+"/json", nil); err == nil {
+		var vm struct {
+			State struct {
+				StartedAt string `json:"StartedAt"`
+			} `json:"State"`
+		}
+		if json.Unmarshal(b, &vm) == nil {
+			vmStarted = vm.State.StartedAt
+		}
+	}
 	container := "aseman-sidecar-" + vmID + "-" + name
 	if b, err := a.do(ctx, http.MethodGet, "/containers/"+container+"/json", nil); err == nil {
 		var state struct {
 			State struct {
-				Running bool `json:"Running"`
+				Running   bool   `json:"Running"`
+				StartedAt string `json:"StartedAt"`
 			} `json:"State"`
 		}
-		if json.Unmarshal(b, &state) == nil && state.State.Running {
+		// Running, and joined to the computer as it runs now: a sidecar
+		// started before the computer's current start holds the namespace
+		// of its previous run, where nothing reaches it.
+		if json.Unmarshal(b, &state) == nil && state.State.Running && !sidecarStale(state.State.StartedAt, vmStarted) {
 			return nil
 		}
 		// Joined to a namespace that may no longer exist (the sandbox was
@@ -79,4 +95,15 @@ func (a *Adapter) RemoveSidecar(ctx context.Context, vmID, name string) error {
 		return nil
 	}
 	return a.remove(ctx, container, true)
+}
+
+// sidecarStale reports whether a sidecar started before its computer's
+// current start (RFC 3339 times as Docker reports them).
+func sidecarStale(sidecarStarted, vmStarted string) bool {
+	sc, err1 := time.Parse(time.RFC3339Nano, sidecarStarted)
+	vm, err2 := time.Parse(time.RFC3339Nano, vmStarted)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	return sc.Before(vm)
 }

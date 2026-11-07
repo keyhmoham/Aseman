@@ -126,7 +126,11 @@ function roomScene(room, base) {
   };
 }
 
-/* A game, mounted from its pack and started with its launch parameters. */
-function gameScene(launch) {
-  return { nodes: [{ type: "pack", id: "game", src: launch.pack, scene: launch.scene, version: launch.version, params: launch.params }] };
+/* A game, mounted from its pack and started with its launch parameters.
+ * A client without the 3D engine (the web client) runs the game's browser
+ * build (`web`) in its place; its events come back the same way. */
+function gameScene(launch, base) {
+  var pack = { type: "pack", id: "game", src: launch.pack, scene: launch.scene, version: launch.version, params: launch.params };
+  if (launch.embed && base) pack.web = base + launch.embed;
+  return { nodes: [pack] };
 }

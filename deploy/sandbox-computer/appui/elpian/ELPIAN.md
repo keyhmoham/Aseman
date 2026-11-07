@@ -574,6 +574,13 @@ as `gameevent` with the JSON's fields (`{type: "result", outcome: "win", …}`).
   events: { gameevent: app.handler("game", onGameEvent), assetprogress: app.handler("dl", onProgress) } }
 ```
 
+A client without the 3D engine (the web client; a platform app built
+without Godot) cannot mount a pack: give the `pack` node `web`, the address
+of the game's own browser build, and the `Scene3D` runs it there as an
+embedded page instead of the placeholder. The page's
+`window.parent.postMessage({arena: event}, '*')` arrives as the same
+`gameevent`, so one handler serves both.
+
 Addresses are absolute: build them from your server's public address. In
 the headless driver a `Scene3D` draws its placeholder; fire its events with
 `{do: "fire", target: {key: "game"}, event: "gameevent", data: {…}}`.

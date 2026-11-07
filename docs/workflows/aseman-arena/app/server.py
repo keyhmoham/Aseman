@@ -256,13 +256,18 @@ class App:
         params = dict(settings, player_name=user["name"], match=match["id"], token=match["token"],
                       report_url=self.asset_base() + "api/matches/%s/result" % match["id"] if self.asset_base() else "")
         view = self.game_view(game, uid)
-        web = ""
+        web = embed = ""
         if view["launch"]["web"]:
             web = view["launch"]["web"] + "?" + "&".join("%s=%s" % (k, quote(str(v))) for k, v in params.items() if v != "")
+            # Embedded in the app (a client without the 3D engine runs the
+            # browser build in the Scene3D): the app reports the result, so
+            # the page gets neither the token nor where to send it.
+            embed = view["launch"]["web"] + "?" + "&".join("%s=%s" % (k, quote(str(v))) for k, v in params.items()
+                                                          if v != "" and k not in ("token", "report_url"))
         if room:
             self.store.post(room["id"], uid, "%s started %s" % (user["handle"], m["title"]), kind="system")
         return {"match": {"id": match["id"], "token": match["token"], "game": game["slug"], "settings": settings},
-                "launch": dict(view["launch"], params=params, web=web)}
+                "launch": dict(view["launch"], params=params, web=web, embed=embed)}
 
     def finish(self, mid, body):
         match = self.store.match(mid)

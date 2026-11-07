@@ -1,0 +1,5 @@
+.cache/
+chess/arena/chess/models/
+city-strike/arena/city_strike/models/
+*/.godot/
+*/build/

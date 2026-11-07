@@ -1,0 +1,28 @@
+{
+  "slug": "city-strike",
+  "title": "City Strike",
+  "version": "1.0.0",
+  "tagline": "Hold the city against AI squads, wave after wave.",
+  "description": "A third-person shooter across a city of glass towers, shops, parking lots and a fountain plaza. AI squads see, hear and talk to each other; they patrol, flank, strafe, break for cover behind cars and street furniture, and hunt down your last position. Clear every wave to secure the city — supply drops between waves, headshots and accuracy count.",
+  "genre": "shooter",
+  "tags": ["shooter", "third-person", "action", "city", "3d"],
+  "mode": "single-player vs AI",
+  "players": {"humans": 1, "ai": "3–14 per wave"},
+  "engine": "godot-4.3",
+  "scene": "res://arena/city_strike/main.tscn",
+  "pack": "city-strike.pck",
+  "web": "web/index.html",
+  "icon": "res://arena/city_strike/icon.svg",
+  "accent": "#ff9a5c",
+  "settings": {
+    "difficulty": {"type": "integer", "min": 1, "max": 5, "default": 3, "label": "Difficulty"},
+    "waves": {"type": "integer", "min": 1, "max": 6, "default": 3, "label": "Waves"}
+  },
+  "scoring": "100 points a kill (150 a headshot), 250 a cleared wave, times the difficulty; accuracy adds up to a fifth.",
+  "controls": ["WASD to move, Shift to sprint, Space to jump", "Mouse to look, left button to fire, right to aim, R to reload", "Gamepad: sticks, triggers, A jump, X reload", "Touch: left thumb moves, right side looks, on-screen fire / aim / reload / jump"],
+  "credits": [
+    {"what": "RobotExpressive character", "who": "Tomás Laulhé (Quaternius)", "license": "CC0 1.0", "url": "https://quaternius.com"},
+    {"what": "City, vehicle and blaster models", "who": "Kenney", "license": "CC0 1.0", "url": "https://kenney.nl"},
+    {"what": "Street props and covered car", "who": "Poly Haven", "license": "CC0 1.0", "url": "https://polyhaven.com/models"}
+  ]
+}

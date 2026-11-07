@@ -29,9 +29,12 @@
   Elpian program as `gameevent` (`assetprogress`, `assetload`,
   `asseterror` too). A `Scene3D` that goes away stops its games; the
   embedded engine leaves a world with its own camera alone.
-- **A hand-built app names its audience.** `READY.json` (or `JOB.json`)
-  may say `"audience": "platform"`, so an app written without
-  `appui_create` publishes as a platform's frontend.
+- **A hand-built app can be a platform's frontend.** `READY.json` (or
+  `JOB.json`) may say `"audience": "platform"`, and `appui_publish` now
+  gives an app written without `appui_create` its app key (and
+  `.aseman/server.env`) for the person publishing it, as `appui_create`
+  would have: the key is the app's record, so `platform_publish` finds it
+  instead of answering "the app … is not published yet".
 
 - **A platform's Android app in seconds: prebuilt, then post-processed.**
   The sandbox image now carries the platform client already built

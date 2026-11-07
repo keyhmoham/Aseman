@@ -39,6 +39,8 @@ src/elpian/css/json_stylesheet_parser.dart
 src/elpian/css/stylesheet.dart
 src/elpian/diagnostics/elpian_trace.dart
 src/elpian/elpian.dart
+src/elpian/godot/game_messages.dart
+src/elpian/godot/game_messages_web.dart
 src/elpian/godot/godot_binding.dart
 src/elpian/godot/godot_binding_stub.dart
 src/elpian/godot/godot_binding_web.dart

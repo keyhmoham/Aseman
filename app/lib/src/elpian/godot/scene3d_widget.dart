@@ -40,10 +40,13 @@ import 'package:flutter/services.dart';
 
 import '../core/lenient.dart';
 import '../core/node_events.dart';
+import '../html_widgets/html_embedded_content.dart';
 import '../models/elpian_node.dart';
 import 'godot_binding.dart';
 import 'godot_controller.dart';
 import 'godot_object.dart';
+import 'game_messages.dart'
+    if (dart.library.js_interop) 'game_messages_web.dart';
 import 'scene_assets.dart';
 // The web viewport is selected at compile time; off the web the stub compiles
 // instead, so `dart:ui_web` never reaches a native build.
@@ -178,6 +181,23 @@ class Scene3D extends StatefulWidget {
     );
   }
 
+  /// The browser build a `pack` node names (`web`), for a client without
+  /// the engine: the game runs there as a web page instead of the
+  /// placeholder. Returns `{id, url}` or null.
+  static Map<String, String>? webFallbackOf(Map<String, Object?>? scene) {
+    final nodes = scene?['nodes'];
+    if (nodes is! List) return null;
+    for (final n in nodes) {
+      if (n is Map && n['type'] == 'pack') {
+        final url = looseStr(n['web']) ?? '';
+        if (url.isNotEmpty) {
+          return {'id': looseStr(n['id']) ?? 'game', 'url': url};
+        }
+      }
+    }
+    return null;
+  }
+
   @override
   State<Scene3D> createState() => _Scene3DState();
 }
@@ -187,6 +207,35 @@ class _Scene3DState extends State<Scene3D> {
   bool _attached = false;
 
   GodotSceneController get _controller => widget.controller ?? _owned!;
+  void Function()? _stopMessages;
+  String? _listeningTo;
+
+  /// Without the engine, a pack's browser build runs in an embedded page;
+  /// its events are relayed as the node's `gameevent`.
+  void _syncWebFallback() {
+    final fallback = _controller.isLive ? null : Scene3D.webFallbackOf(widget.initialScene);
+    final url = fallback?['url'];
+    if (url == _listeningTo) return;
+    _stopMessages?.call();
+    _stopMessages = null;
+    _listeningTo = url;
+    if (fallback == null || url == null) return;
+    final uri = Uri.base.resolve(url);
+    final id = fallback['id']!;
+    _stopMessages = listenGameMessages(uri.hasAuthority ? uri.origin : '', (event) {
+      if (!mounted) return;
+      widget.onEvent?.call('gameevent', {
+        'id': id,
+        if (event is Map) ...event.map((k, v) => MapEntry('$k', v)) else 'value': event,
+      });
+    });
+    // Reported after this frame: this can run inside a build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _listeningTo == url) {
+        widget.onEvent?.call('assetload', {'id': id, 'src': url, 'kind': 'web'});
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -196,7 +245,10 @@ class _Scene3DState extends State<Scene3D> {
           onAssetEvent: (type, data) => widget.onEvent?.call(type, data));
     }
     // Attaching touches the platform channel, so it must not run during build.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _attach());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _attach();
+      if (mounted) _syncWebFallback();
+    });
   }
 
   Future<void> _attach() async {
@@ -235,6 +287,7 @@ class _Scene3DState extends State<Scene3D> {
       _controller.replaceScene(next);
       widget.onReady?.call(_controller.scene!);
     }
+    _syncWebFallback();
   }
 
   /// Structural comparison of two scene descriptions.
@@ -251,6 +304,8 @@ class _Scene3DState extends State<Scene3D> {
 
   @override
   void dispose() {
+    _stopMessages?.call();
+    _stopMessages = null;
     // Only tear down a controller this widget created; a caller-supplied one
     // outlives the widget by design.
     _owned?.dispose();
@@ -268,9 +323,17 @@ class _Scene3DState extends State<Scene3D> {
 
   @override
   Widget build(BuildContext context) {
+    final fallback = _controller.isLive ? null : Scene3D.webFallbackOf(widget.initialScene);
     Widget surface = _controller.isLive
         ? _viewport()
-        : (widget.placeholder ?? const _Scene3DPlaceholder());
+        : fallback != null
+            ? HtmlEmbeddedContent(
+                key: ValueKey(fallback['url']),
+                url: fallback['url']!,
+                label: 'game',
+                attributes: const {'allow': 'fullscreen; gamepad; autoplay', 'allowfullscreen': ''},
+              )
+            : (widget.placeholder ?? const _Scene3DPlaceholder());
 
     if (widget.clickable) {
       surface = GestureDetector(onTap: _handleTap, child: surface);

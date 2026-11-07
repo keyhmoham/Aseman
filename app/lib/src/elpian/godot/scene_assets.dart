@@ -91,6 +91,8 @@ class SceneAssets {
 
   /// Loads the glTF at [spec]'s `src` under [holder].
   Future<GodotObject?> loadModel(GodotObject holder, Map<String, Object?> spec) async {
+    // No engine, nothing to load into (the Scene3D shows its placeholder).
+    if (!controller.isLive) return null;
     final src = looseStr(spec['src']) ?? '';
     final id = looseStr(spec['id']) ?? src;
     if (src.isEmpty) {
@@ -139,6 +141,9 @@ class SceneAssets {
   /// Mounts the pack at [spec]'s `src`, instances its `scene` under
   /// [holder] and starts it with `params`.
   Future<GodotObject?> loadPack(GodotObject holder, Map<String, Object?> spec) async {
+    // No engine: the Scene3D runs the pack's browser build (`web`) or shows
+    // its placeholder instead.
+    if (!controller.isLive) return null;
     final src = looseStr(spec['src']) ?? '';
     final scenePath = looseStr(spec['scene']) ?? '';
     final id = looseStr(spec['id']) ?? src;

@@ -29,6 +29,11 @@
   Elpian program as `gameevent` (`assetprogress`, `assetload`,
   `asseterror` too). A `Scene3D` that goes away stops its games; the
   embedded engine leaves a world with its own camera alone.
+  Where there is no engine (the web client), a `pack` node with `web` — the
+  game's browser build — runs that build in the `Scene3D` as an embedded
+  page instead of the placeholder, and the page's `postMessage({arena: …})`
+  events arrive as the same `gameevent`; the loader no longer tries to
+  fetch packs or models without an engine.
 - **A hand-built app can be a platform's frontend.** `READY.json` (or
   `JOB.json`) may say `"audience": "platform"`, and `appui_publish` now
   gives an app written without `appui_create` its app key (and

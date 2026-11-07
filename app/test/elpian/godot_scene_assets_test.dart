@@ -1,4 +1,7 @@
 import 'package:aseman/src/elpian/elpian.dart';
+import 'package:aseman/src/elpian/html_widgets/html_embedded_content.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// An engine stand-in that answers the calls the asset loader makes, so the
@@ -20,8 +23,9 @@ class ScriptedBinding implements GodotBinding {
   @override
   GodotSignalDispatch? onSignal;
 
+  // It stands in for a running engine.
   @override
-  bool get isLive => false;
+  bool get isLive => true;
 
   @override
   void post(List<Op> batch) => batch.forEach(_apply);
@@ -164,5 +168,40 @@ void main() {
     await settle();
     expect(errors.map((e) => e['id']), containsAll(['g', 'bad', 'm']));
     expect(errors.firstWhere((e) => e['id'] == 'g')['message'], contains('HTTP 404'));
+  });
+
+  test('a pack names its browser build for clients without the engine', () {
+    expect(Scene3D.webFallbackOf(null), isNull);
+    expect(Scene3D.webFallbackOf({'nodes': [{'type': 'model', 'src': 'x.glb'}]}), isNull);
+    expect(Scene3D.webFallbackOf({'nodes': [{'type': 'pack', 'id': 'game', 'src': 'a.pck', 'scene': 'res://m.tscn'}]}), isNull);
+    expect(Scene3D.webFallbackOf({'nodes': [{'type': 'pack', 'id': 'game', 'src': 'a.pck', 'scene': 'res://m.tscn', 'web': 'https://x/games/a/web/index.html?level=2'}]}),
+        {'id': 'game', 'url': 'https://x/games/a/web/index.html?level=2'});
+  });
+
+  testWidgets('without the engine, a pack with a browser build shows the game, not the placeholder', (tester) async {
+    debugGodotBindingOverride = MockGodotBinding();
+    // A desktop client: the embedded page is drawn as a link card there (on
+    // phones it is a web view, which tests have no implementation of).
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    addTearDown(() => debugGodotBindingOverride = null);
+    final events = <String>[];
+    await tester.pumpWidget(MaterialApp(home: Scene3D(
+      initialScene: const {'nodes': [{'type': 'pack', 'id': 'game', 'src': 'https://x/a.pck', 'scene': 'res://m.tscn', 'web': 'https://x/games/a/web/index.html'}]},
+      placeholder: const Text('no engine'),
+      onEvent: (type, data) => events.add('$type:${data['kind'] ?? ''}'),
+    )));
+    await tester.pump();
+    expect(find.text('no engine'), findsNothing);
+    expect(find.byType(HtmlEmbeddedContent), findsOneWidget);
+    expect(events, contains('assetload:web'));
+    // Without one it is the placeholder, as before.
+    await tester.pumpWidget(MaterialApp(home: Scene3D(
+      key: const ValueKey('b'),
+      initialScene: const {'nodes': [{'type': 'pack', 'id': 'game', 'src': 'https://x/a.pck', 'scene': 'res://m.tscn'}]},
+      placeholder: const Text('no engine'),
+    )));
+    await tester.pump();
+    expect(find.text('no engine'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
   });
 }

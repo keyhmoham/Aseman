@@ -8,7 +8,7 @@ function startMatch(slug, roomId, choices) {
   app.set({ launching: true });
   var path = roomId ? "rooms/" + roomId + "/matches" : "matches";
   apiPost(path, Object.assign({ game: slug }, choices || {})).then(function (out) {
-    app.set({ launching: false, play: { launch: out.launch, match: out.match, room: roomId || "", scene: gameScene(out.launch), progress: null, error: null, result: null, outcome: null, submitting: false } });
+    app.set({ launching: false, play: { launch: out.launch, match: out.match, room: roomId || "", scene: gameScene(out.launch, (app.state.cfg || {}).asset_base || ""), progress: null, error: null, result: null, outcome: null, submitting: false } });
     push({ name: "play" });
   }).catch(function (e) { app.set({ launching: false }); app.fail(e); });
 }
@@ -41,7 +41,7 @@ function playPlaceholder(s, app, p, g) {
   return box({ gradient: { colors: [hex(g.accent, "#6aa8ff"), "#0b1020"], begin: "topLeft", end: "bottomRight" }, padding: "20", alignItems: "center", justifyContent: "center" }, [
     C([{ type: "Icon", props: { icon: "sports_esports", size: 44, style: { color: "#ffffff" } } },
        T(g.title, "headlineSmallEmphasized", { style: { color: "#ffffff" }, textAlign: "center" }),
-       T("This device has no 3D engine for games. Play this match in your browser — its result still counts.", "bodyMedium", { style: { color: "#ffffffcc" }, textAlign: "center" }),
+       T("This device cannot run the game here. Play this match in your browser — its result still counts.", "bodyMedium", { style: { color: "#ffffffcc" }, textAlign: "center" }),
        web ? { type: "Markdown", props: { text: "[Play " + g.title + " in the browser](" + web + ")" } } : null],
       { alignItems: "center", gap: "10" })]);
 }

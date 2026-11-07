@@ -143,6 +143,8 @@ class App:
         self.chat_limit = RateLimit(12, 15)
         self.garages = json.load(open(os.path.join(DATA, "garages.json"), encoding="utf-8"))
         self.threads = {}
+        self._games_seen = None
+        self._games_checked = 0.0
         self.sync_games()
 
     # ------------------------------------------------------------------
@@ -168,6 +170,49 @@ class App:
                 self.store.upsert_game(m, {"dir": os.path.join(root, slug)}, "published", "", official=True)
                 found.append(slug)
         return found
+
+    def games_signature(self):
+        """What is in the build folder now: each game.json and when it changed."""
+        root = self.cfg["games_dir"]
+        out = []
+        if os.path.isdir(root):
+            for slug in sorted(os.listdir(root)):
+                path = os.path.join(root, slug, "game.json")
+                try:
+                    out.append((slug, os.path.getmtime(path)))
+                except OSError:
+                    pass
+        return tuple(out)
+
+    def maybe_sync(self):
+        """Games built (or rebuilt) after the server started reach the store:
+        the build folder is looked at again, at most every few seconds."""
+        now_t = time.time()
+        if now_t - self._games_checked < 3:
+            return
+        self._games_checked = now_t
+        sig = self.games_signature()
+        if sig != self._games_seen:
+            self._games_seen = sig
+            self.sync_games()
+
+    def refresh_connection(self):
+        """Reads the settings and secrets again while the Forge agent is not
+        connected (the secrets file can be written after the server started)."""
+        if self.client.ready or not isinstance(self.client, forge.Client):
+            return
+        fresh = load_config()
+        for k in ("key", "api_url", "space", "forge_bot", "forge_room", "secrets_file", "internal_token"):
+            if fresh.get(k):
+                self.cfg[k] = fresh[k]
+        self.client = forge.Client(self.cfg["api_url"], self.cfg["key"], self.cfg["space"], self.cfg["forge_bot"], self.cfg["forge_room"])
+
+    def agent_missing(self):
+        """What the Forge agent's connection lacks, by name (empty: connected)."""
+        c = self.cfg
+        return [name for name, ok in (("developer key (secrets file %s)" % (c.get("secrets_file") or "not set"), c.get("key")),
+                                      ("developer API address", c.get("api_url")), ("space", c.get("space")),
+                                      ("Forge agent", c.get("forge_bot"))) if not ok]
 
     def game_dir(self, game):
         return game["files"].get("dir", "")
@@ -557,8 +602,12 @@ def handler_for(app):
         def api(self, method, path, q):
             s = app.store
             parts = path.split("/")
+            app.maybe_sync()
             if path == "healthz":
-                return {"ok": True, "agent": app.client.ready, "games": len(s.games()), "product": app.cfg["product"]}
+                app.refresh_connection()
+                return {"ok": True, "agent": app.client.ready, "agent_missing": app.agent_missing() if not app.client.ready else [],
+                        "games": len(s.games()), "games_dir": app.cfg["games_dir"],
+                        "built": [slug for slug, _ in app.games_signature()], "product": app.cfg["product"]}
             if parts[0] == "internal":
                 self.internal()
                 if path == "internal/games/sync" and method == "POST":

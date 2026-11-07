@@ -6,6 +6,10 @@ a match is played and its result is rated; the room is closed again.
 
     arena_smoke.py http://127.0.0.1:8080            # prints arena-smoke-ok
     arena_smoke.py http://127.0.0.1:8080 --forge    # also: the Forge agent builds a game (forge-demo-ok)
+    arena_smoke.py http://127.0.0.1:8080 --wait 240 --games 2 [--agent]
+        waits until the server answers with that many games (and the Forge
+        agent connected), printing arena-ready — or, when it does not, exactly
+        what is missing, and exits 1
 """
 
 import json
@@ -29,8 +33,39 @@ def call(base, method, path, body=None, raw=False):
         sys.exit("arena-smoke-failed: %s %s → %d %s" % (method, path, e.code, e.read()[:300].decode(errors="replace")))
 
 
+def wait(base, seconds, games, agent):
+    """Polls /healthz until it is ready; on time-out says why it is not."""
+    deadline = time.time() + seconds
+    last, err = None, ""
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(base.rstrip("/") + "/healthz", timeout=5) as r:
+                last = json.loads(r.read().decode())
+            err = ""
+            if last.get("games", 0) >= games and (not agent or last.get("agent")):
+                print("arena-ready: %d games, Forge agent %s" % (last["games"], "connected" if last.get("agent") else "not connected"))
+                return 0
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            err = str(e)
+        time.sleep(3)
+    if last is None:
+        print("arena-not-ready: the server does not answer at %s (%s). Is it running? Read its log: the preview's start command is "
+              "'cd <app dir> && python3 server.py'." % (base, err or "no answer"))
+    elif last.get("games", 0) < games:
+        print("arena-not-ready: the store has %d of %d games. Built in %s: %s. Run games/build.sh and check its output."
+              % (last.get("games", 0), games, last.get("games_dir"), ", ".join(last.get("built") or []) or "nothing"))
+    else:
+        print("arena-not-ready: the Forge agent is not connected; missing: %s." % ", ".join(last.get("agent_missing") or ["?"]))
+    return 1
+
+
 def main():
     base = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8080"
+    if "--wait" in sys.argv:
+        a = sys.argv
+        seconds = int(a[a.index("--wait") + 1])
+        games = int(a[a.index("--games") + 1]) if "--games" in a else 2
+        return wait(base, seconds, games, "--agent" in a)
     games = {g["slug"]: g for g in call(base, "GET", "api/store")["games"]}
     for slug in ("arena-chess", "city-strike"):
         if slug not in games:

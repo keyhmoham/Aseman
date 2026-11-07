@@ -446,6 +446,22 @@ class Api(unittest.TestCase):
         self.assertEqual(r.status, 200, r.read()[:200])
         c.close()
 
+    def test_13_games_built_after_start(self):
+        """A game built after the server started reaches the store without
+        a restart, and health says what it sees."""
+        root = self.app.cfg["games_dir"]
+        late = dict(CHESS, slug="late-game", title="Late Game", pack="late-game.pck")
+        os.makedirs(os.path.join(root, "late-game"), exist_ok=True)
+        open(os.path.join(root, "late-game", "late-game.pck"), "wb").write(b"GDPC")
+        json.dump(late, open(os.path.join(root, "late-game", "game.json"), "w"))
+        self.app._games_checked = 0
+        health = self.ok("GET", "healthz")
+        self.assertIn("late-game", health["built"])
+        self.assertIn("late-game", [g["slug"] for g in self.ok("GET", "api/store")["games"]])
+        self.assertEqual(health["agent_missing"], [])
+        shutil.rmtree(os.path.join(root, "late-game"))
+        self.app.store.x("DELETE FROM games WHERE slug='late-game'")
+
     def test_10_social_achievements(self):
         for h in ("m1", "m2", "m3", "m4", "m5"):
             self.ok("GET", "api/me", user=h)

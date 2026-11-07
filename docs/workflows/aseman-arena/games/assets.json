@@ -47,7 +47,7 @@
       ]
     },
     "garage": {
-      "dest": "app/public/assets/models",
+      "dest": "../public/assets/models",
       "about": "The person's 3D home (garage or lab) in the Aseman client's Scene3D: single-file glb, loaded at run time.",
       "items": [
         {"source": "polyhaven", "id": "rollershutter_door", "as": "rollershutter_door.glb", "format": "glb"},

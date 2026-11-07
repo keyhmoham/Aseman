@@ -16,6 +16,11 @@ A complete example: [`docs/workflows/fullstack-product.json`](workflows/fullstac
 An agentic product: [`docs/workflows/study-planner.json`](workflows/study-planner.json)
 — a study planner whose plans are written by a custom Planner agent the
 workflow creates ([`study-planner/README.md`](workflows/study-planner/README.md)).
+A whole platform: [`docs/workflows/aseman-arena.json`](workflows/aseman-arena.json)
+— a 3D gaming platform with players' garages, rooms bound to games, two
+Godot games against AI built from source, leaderboards, friends and a Game
+Forge agent that builds new games with the players
+([`aseman-arena/README.md`](workflows/aseman-arena/README.md)).
 Editors: [`docs/workflows/workflow.schema.json`](workflows/workflow.schema.json)
 (JSON Schema 2020-12; point `"$schema"` at it for completion and checking).
 **Writing one well** (patterns, pitfalls, a checklist — for models and

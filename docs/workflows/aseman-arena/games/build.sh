@@ -52,6 +52,7 @@ build_one() {
     done
   fi
   mkdir -p "$OUT/$slug"
+  cp "$HERE/$dir"/arena/*/icon.svg "$OUT/$slug/icon.svg"
   "$GODOT" --headless --path "$HERE/$dir" --export-pack "Web" "$OUT/$slug/$slug.pck" 2>&1 | quiet | grep -i "error" || true
   test -s "$OUT/$slug/$slug.pck" || { echo "no pack for $slug" >&2; exit 1; }
   if [ "$WEB" = 1 ]; then

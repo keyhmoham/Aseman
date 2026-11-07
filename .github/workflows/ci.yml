@@ -89,6 +89,45 @@ jobs:
           node $KIT/check.mjs elpian/app.js --apps $RUNNER_TEMP/APPS.json --server http://127.0.0.1:8787
           node $KIT/drive.mjs run elpian/e2e --dir . --bundle elpian/app.js --server http://127.0.0.1:8787
 
+  aseman-arena:
+    name: Aseman Arena workflow (server, games, Elpian frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      # The platform's server: rules, rooms, matches, ratings, social, store, Forge.
+      - run: python3 test_app.py
+        working-directory: docs/workflows/aseman-arena/app
+      # The workflow document carries exactly this source; both games follow
+      # the game contract the Forge holds every game to.
+      - run: python3 docs/workflows/aseman-arena/bundle.py --check
+      - run: |
+          python3 app/tools/arena_forge.py check --dir games/chess
+          python3 app/tools/arena_forge.py check --dir games/city-strike
+        working-directory: docs/workflows/aseman-arena
+      # The games: Godot 4.3 headless tests and pack exports, with their own
+      # stand-in models (no asset hosts needed).
+      - name: Games (Godot 4.3, headless)
+        working-directory: docs/workflows/aseman-arena/games
+        run: ./build.sh all --offline --no-web --out "$RUNNER_TEMP/arena-games"
+      # The Elpian frontend on QuickJS and its end-to-end scenarios, against a
+      # fresh server.
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: deploy/tool-runtime/package-lock.json }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: deploy/tool-runtime
+      - name: Elpian frontend
+        working-directory: docs/workflows/aseman-arena/app
+        run: |
+          KIT=../../../../deploy/sandbox-computer/appui/elpian
+          node $KIT/bundle.mjs .
+          ARENA_QUIET=1 PORT=8788 DATA_DIR=$RUNNER_TEMP/arena GAMES_DIR=$RUNNER_TEMP/arena-games ASSET_BASE=http://127.0.0.1:8788/ python3 server.py &
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8788/healthz && break; sleep 0.5; done
+          echo '{"apps":[],"agents":[]}' > $RUNNER_TEMP/APPS.json
+          node $KIT/check.mjs elpian/app.js --apps $RUNNER_TEMP/APPS.json --server http://127.0.0.1:8788
+          node $KIT/drive.mjs run elpian/e2e --dir . --bundle elpian/app.js --server http://127.0.0.1:8788
+
   app:
     name: App (Flutter)
     runs-on: ubuntu-latest

@@ -2,6 +2,37 @@
 
 ## Unreleased: the workflow installer
 
+- **Aseman Arena: a 3D gaming platform, brought up by one workflow.**
+  `docs/workflows/aseman-arena.json` creates the organization, its
+  platform and server key, a project with the **Game Forge** agent (players
+  chat with it to build Godot games against AI opponents, which it tests,
+  exports and submits with `tools/arena_forge.py`), a Steward and a QA
+  tester; builds the two official games from source (`games/build.sh`:
+  CC0 models from `games/assets.json`, the Godot 4.3 editor and only the
+  Web templates, headless tests, resource packs and Web exports); installs
+  the platform's server (rooms bound to games, matches with one-time tokens
+  and plausibility checks, Elo ratings, levels, achievements, weekly
+  boards, friends, direct messages, the store with reviews, the Forge) and
+  proves it end to end (`tools/arena_smoke.py`); and publishes its native
+  Elpian frontend — each player's 3D garage or lab, the rooms grid, room
+  venues in 3D, the games mounted in `Scene3D` — as the platform's
+  frontend with its Android app (Godot on). **Arena Chess**: the complete
+  Laws of Chess (perft-checked) and a PVS/alpha-beta AI with five levels on
+  Poly Haven's marble set. **City Strike**: a third-person shooter in a
+  generated city against AI squads that see, hear, talk, take cover and
+  hunt. `deploy.sh` installs or updates it; CI runs the server's tests, the
+  games' headless tests and the frontend's end-to-end scenarios.
+- **Scene3D loads models and whole games by address.** The scene DSL's new
+  `model` node loads a glTF (cached on the device under its address and
+  version) and `pack` mounts a Godot resource pack, instances its scene,
+  starts it with `arena_start(params)` and reports its `arena_event` to the
+  Elpian program as `gameevent` (`assetprogress`, `assetload`,
+  `asseterror` too). A `Scene3D` that goes away stops its games; the
+  embedded engine leaves a world with its own camera alone.
+- **A hand-built app names its audience.** `READY.json` (or `JOB.json`)
+  may say `"audience": "platform"`, so an app written without
+  `appui_create` publishes as a platform's frontend.
+
 - **A platform's Android app in seconds: prebuilt, then post-processed.**
   The sandbox image now carries the platform client already built
   (`/opt/aseman-platform-client-apk/template.apk`, built with Flutter once,

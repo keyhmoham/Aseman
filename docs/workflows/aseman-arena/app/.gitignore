@@ -1,0 +1,5 @@
+.data/
+config.json
+elpian/app.js
+games/
+__pycache__/

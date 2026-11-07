@@ -1,0 +1,60 @@
+{
+  "garage": {
+    "title": "Workshop Garage",
+    "about": "A two-car workshop: roller door, the covered project car, the tool chest, the gaming corner with its TV and console, a trophy shelf.",
+    "shell": {"size": [9, 3.6, 8], "floor": "#4a4740", "walls": "#6b6358", "trim": "#2c2a26", "accent": "#ffd166", "bg": "#15130f", "ambient": "#b9a88a"},
+    "camera": {"position": [0.4, 2.5, 6.2], "rotation": [-14, 0, 0], "fov": 58},
+    "lights": [
+      {"type": "omni", "position": [-1.6, 3.1, -0.6], "range": 9, "energy": 1.4, "color": "#ffe2a6"},
+      {"type": "omni", "position": [2.4, 2.9, 1.8], "range": 7, "energy": 0.9, "color": "#cfe0ff"},
+      {"type": "directional", "rotation": [-55, -35, 0], "energy": 0.35, "shadow": true}
+    ],
+    "items": [
+      {"id": "door", "file": "rollershutter_door.glb", "position": [-1.2, 0, -3.95], "rotation": [0, 0, 0], "scale": 1.0},
+      {"id": "car", "file": "covered_car.glb", "position": [-1.5, 0, -1.0], "rotation": [0, 18, 0], "scale": 1.0},
+      {"id": "chest", "file": "tool_chest.glb", "position": [3.9, 0, -3.3], "rotation": [0, -90, 0], "scale": 1.0},
+      {"id": "cart", "file": "storage_cart.glb", "position": [2.4, 0, -3.5], "rotation": [0, 0, 0], "scale": 1.0},
+      {"id": "tyre1", "file": "old_tyre.glb", "position": [-4.0, 0, -3.3], "rotation": [0, 10, 0], "scale": 1.0},
+      {"id": "tyre2", "file": "old_tyre.glb", "position": [-4.0, 0.24, -3.3], "rotation": [0, 40, 0], "scale": 1.0},
+      {"id": "boxes", "file": "cardboard_box.glb", "position": [-4.0, 0, 2.6], "rotation": [0, 25, 0], "scale": 1.0},
+      {"id": "desk", "file": "office_desk.glb", "position": [3.6, 0, 0.6], "rotation": [0, -90, 0], "scale": 1.0},
+      {"id": "tv", "file": "television.glb", "position": [3.75, 0.76, 0.6], "rotation": [0, -90, 0], "scale": 1.0},
+      {"id": "console", "file": "gaming_console.glb", "position": [3.55, 0.76, 1.25], "rotation": [0, -90, 0], "scale": 1.0},
+      {"id": "pad", "file": "gamepad.glb", "position": [3.35, 0.77, -0.05], "rotation": [0, -60, 0], "scale": 1.0},
+      {"id": "chair", "file": "arm_chair.glb", "position": [1.7, 0, 0.9], "rotation": [0, 90, 0], "scale": 1.0},
+      {"id": "lamp", "file": "hanging_lamp.glb", "position": [-1.6, 2.4, -0.6], "rotation": [0, 0, 0], "scale": 1.0},
+      {"id": "plant", "file": "potted_plant.glb", "position": [4.0, 0, 3.4], "rotation": [0, 0, 0], "scale": 1.0},
+      {"id": "shelf", "file": "shelf.glb", "position": [-4.25, 0, 0.4], "rotation": [0, 90, 0], "scale": 1.0}
+    ],
+    "spots": {"avatar": [0.3, 0, 1.1], "avatar_turn": 15, "trophies": [-4.05, 1.35, 0.4], "trophies_axis": "z", "screen": [3.7, 1.45, 0.6]}
+  },
+  "lab": {
+    "title": "Research Lab",
+    "about": "An AI research lab: benches with the chemistry set and microscope, a laptop rig, a chess set mid-game, a trophy shelf and a reading chair.",
+    "shell": {"size": [9, 3.4, 8], "floor": "#8f9aa3", "walls": "#b9c3ca", "trim": "#56636d", "accent": "#5ce1c2", "bg": "#0e1a1c", "ambient": "#8fa9b8"},
+    "camera": {"position": [0.2, 2.4, 6.0], "rotation": [-15, 0, 0], "fov": 58},
+    "lights": [
+      {"type": "omni", "position": [-2.0, 3.0, -1.0], "range": 9, "energy": 0.9, "color": "#e8fbff"},
+      {"type": "omni", "position": [2.2, 3.0, 0.8], "range": 9, "energy": 0.8, "color": "#d8fff4"},
+      {"type": "directional", "rotation": [-60, 30, 0], "energy": 0.4, "shadow": true}
+    ],
+    "items": [
+      {"id": "bench1", "file": "office_desk.glb", "position": [-2.4, 0, -3.3], "rotation": [0, 0, 0], "scale": 1.0},
+      {"id": "chem", "file": "chemistry_set.glb", "position": [-2.6, 0.76, -3.35], "rotation": [0, 0, 0], "scale": 1.0},
+      {"id": "scope", "file": "microscope.glb", "position": [-1.75, 0.76, -3.3], "rotation": [0, -20, 0], "scale": 1.0},
+      {"id": "bench2", "file": "office_desk.glb", "position": [1.0, 0, -3.3], "rotation": [0, 0, 0], "scale": 1.0},
+      {"id": "laptop", "file": "laptop.glb", "position": [0.8, 0.76, -3.3], "rotation": [0, 0, 0], "scale": 1.0},
+      {"id": "meter", "file": "multimeter.glb", "position": [1.55, 0.76, -3.25], "rotation": [0, -30, 0], "scale": 1.0},
+      {"id": "desk3", "file": "office_desk.glb", "position": [3.6, 0, 0.6], "rotation": [0, -90, 0], "scale": 1.0},
+      {"id": "chess", "file": "chess_set.glb", "position": [3.55, 0.76, 0.6], "rotation": [0, 0, 0], "scale": 1.0},
+      {"id": "cart", "file": "storage_cart.glb", "position": [3.6, 0, -3.3], "rotation": [0, -90, 0], "scale": 1.0},
+      {"id": "chair", "file": "arm_chair.glb", "position": [1.9, 0, 1.0], "rotation": [0, 90, 0], "scale": 1.0},
+      {"id": "lamp1", "file": "hanging_lamp.glb", "position": [-2.0, 2.3, -1.6], "rotation": [0, 0, 0], "scale": 1.0},
+      {"id": "lamp2", "file": "hanging_lamp.glb", "position": [1.6, 2.3, -1.6], "rotation": [0, 0, 0], "scale": 1.0},
+      {"id": "plant", "file": "potted_plant.glb", "position": [-4.0, 0, 3.3], "rotation": [0, 0, 0], "scale": 1.0},
+      {"id": "shelf", "file": "shelf.glb", "position": [-4.25, 0, 0.4], "rotation": [0, 90, 0], "scale": 1.0},
+      {"id": "console", "file": "gaming_console.glb", "position": [-4.0, 0, -1.6], "rotation": [0, 60, 0], "scale": 1.0}
+    ],
+    "spots": {"avatar": [-0.4, 0, 0.9], "avatar_turn": 15, "trophies": [-4.05, 1.35, 0.4], "trophies_axis": "z", "screen": [-0.6, 1.8, -3.95]}
+  }
+}

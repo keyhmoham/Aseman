@@ -1,0 +1,212 @@
+[
+  {
+    "id": "t01",
+    "from": "tehran",
+    "to": "mashhad",
+    "points": 12,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t02",
+    "from": "tehran",
+    "to": "tabriz",
+    "points": 8,
+    "difficulty": "medium"
+  },
+  {
+    "id": "t03",
+    "from": "tehran",
+    "to": "isfahan",
+    "points": 5,
+    "difficulty": "easy"
+  },
+  {
+    "id": "t04",
+    "from": "tehran",
+    "to": "shiraz",
+    "points": 10,
+    "difficulty": "medium"
+  },
+  {
+    "id": "t05",
+    "from": "isfahan",
+    "to": "mashhad",
+    "points": 14,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t06",
+    "from": "tabriz",
+    "to": "mashhad",
+    "points": 16,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t07",
+    "from": "rasht",
+    "to": "ahvaz",
+    "points": 13,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t08",
+    "from": "bandar_abbas",
+    "to": "tehran",
+    "points": 15,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t09",
+    "from": "shiraz",
+    "to": "mashhad",
+    "points": 17,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t10",
+    "from": "qazvin",
+    "to": "yazd",
+    "points": 8,
+    "difficulty": "medium"
+  },
+  {
+    "id": "t11",
+    "from": "hamedan",
+    "to": "kerman",
+    "points": 12,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t12",
+    "from": "bushehr",
+    "to": "mashhad",
+    "points": 18,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t13",
+    "from": "urmia",
+    "to": "tehran",
+    "points": 9,
+    "difficulty": "medium"
+  },
+  {
+    "id": "t14",
+    "from": "gorgan",
+    "to": "isfahan",
+    "points": 10,
+    "difficulty": "medium"
+  },
+  {
+    "id": "t15",
+    "from": "kermanshah",
+    "to": "shiraz",
+    "points": 11,
+    "difficulty": "medium"
+  },
+  {
+    "id": "t16",
+    "from": "zahedan",
+    "to": "tehran",
+    "points": 16,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t17",
+    "from": "chabahar",
+    "to": "mashhad",
+    "points": 20,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t18",
+    "from": "kashan",
+    "to": "bandar_abbas",
+    "points": 12,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t19",
+    "from": "sari",
+    "to": "qom",
+    "points": 6,
+    "difficulty": "easy"
+  },
+  {
+    "id": "t20",
+    "from": "ardabil",
+    "to": "isfahan",
+    "points": 11,
+    "difficulty": "medium"
+  },
+  {
+    "id": "t21",
+    "from": "birjand",
+    "to": "shiraz",
+    "points": 13,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t22",
+    "from": "ahvaz",
+    "to": "mashhad",
+    "points": 17,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t23",
+    "from": "yazd",
+    "to": "tabriz",
+    "points": 14,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t24",
+    "from": "bandar_torkaman",
+    "to": "bushehr",
+    "points": 15,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t25",
+    "from": "maragheh",
+    "to": "kerman",
+    "points": 16,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t26",
+    "from": "semnan",
+    "to": "ahvaz",
+    "points": 11,
+    "difficulty": "medium"
+  },
+  {
+    "id": "t27",
+    "from": "qom",
+    "to": "zahedan",
+    "points": 15,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t28",
+    "from": "khorramabad",
+    "to": "mashhad",
+    "points": 14,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t29",
+    "from": "arak",
+    "to": "chabahar",
+    "points": 16,
+    "difficulty": "hard"
+  },
+  {
+    "id": "t30",
+    "from": "neyshabur",
+    "to": "shiraz",
+    "points": 13,
+    "difficulty": "hard"
+  }
+]

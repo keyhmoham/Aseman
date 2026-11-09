@@ -1,0 +1,7 @@
+{
+  "files": [
+    "src/util.js",
+    "src/data.js",
+    "src/main.js"
+  ]
+}

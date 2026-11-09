@@ -6,7 +6,34 @@
 /// app's backend VM.
 library;
 
-import 'package:aseman/src/elpian/core/lenient.dart';
+// Local lenient readers — keep this domain file free of the Elpian engine
+// so the always-on API client does not pull ~30k LOC into the web entry chunk.
+String? _looseStr(Object? v) =>
+    v is String ? v : (v is num || v is bool ? '$v' : null);
+
+num? _looseNum(Object? v) {
+  if (v is num) return v;
+  if (v is String) {
+    final s = v.trim();
+    return num.tryParse(s) ??
+        num.tryParse(s.replaceFirst(RegExp(r'[a-z%]+$'), ''));
+  }
+  return null;
+}
+
+bool? _looseBool(Object? v) {
+  if (v is bool) return v;
+  if (v is num) return v != 0;
+  if (v is String) {
+    switch (v.trim().toLowerCase()) {
+      case 'true' || 'yes' || '1':
+        return true;
+      case 'false' || 'no' || '0' || '':
+        return false;
+    }
+  }
+  return null;
+}
 
 class DeskWidgetDsl {
   const DeskWidgetDsl({
@@ -33,13 +60,13 @@ class DeskWidgetDsl {
     final dsl = entry['dsl'];
     final d = dsl is Map<String, dynamic> ? dsl : <String, dynamic>{};
     return DeskWidgetDsl(
-      botId: (looseStr(entry['bot_id'])) ?? (looseStr(d['bot_id'])) ?? '',
-      name: (looseStr(entry['name'])) ?? '',
-      kind: (looseStr(entry['kind'])) ?? 'tool',
-      status: (looseStr(entry['status'])) ?? '',
-      title: (looseStr(d['title'])) ?? (looseStr(entry['name'])) ?? 'Widget',
-      version: (looseNum(d['version']))?.toInt() ?? 1,
-      refreshSec: (looseNum(d['refresh_sec']))?.toInt() ?? 10,
+      botId: (_looseStr(entry['bot_id'])) ?? (_looseStr(d['bot_id'])) ?? '',
+      name: (_looseStr(entry['name'])) ?? '',
+      kind: (_looseStr(entry['kind'])) ?? 'tool',
+      status: (_looseStr(entry['status'])) ?? '',
+      title: (_looseStr(d['title'])) ?? (_looseStr(entry['name'])) ?? 'Widget',
+      version: (_looseNum(d['version']))?.toInt() ?? 1,
+      refreshSec: (_looseNum(d['refresh_sec']))?.toInt() ?? 10,
       rows: DslRow.listFrom(d['rows']),
     );
   }
@@ -80,13 +107,13 @@ class DslRow {
   final DslAction? submit;
 
   factory DslRow.fromJson(Map<String, dynamic> json) => DslRow(
-        type: looseStr(json['type']) ?? 'label',
-        label: looseStr(json['label']) ?? '',
-        text: looseStr(json['text']) ?? '',
+        type: _looseStr(json['type']) ?? 'label',
+        label: _looseStr(json['label']) ?? '',
+        text: _looseStr(json['text']) ?? '',
         value: json['value'],
-        delta: looseStr(json['delta']) ?? '',
-        color: looseStr(json['color']) ?? '',
-        icon: looseStr(json['icon']) ?? '',
+        delta: _looseStr(json['delta']) ?? '',
+        color: _looseStr(json['color']) ?? '',
+        icon: _looseStr(json['icon']) ?? '',
         data: (json['data'] as List?)
                 ?.whereType<num>()
                 .map((e) => e.toDouble())
@@ -97,9 +124,9 @@ class DslRow {
                 .map((e) => DslRow.fromJson(e.cast<String, dynamic>()))
                 .toList() ??
             const [],
-        min: (looseNum(json['min']))?.toDouble() ?? 0,
-        max: (looseNum(json['max']))?.toDouble() ?? 0,
-        toggle: looseBool(json['toggle']) ?? false,
+        min: (_looseNum(json['min']))?.toDouble() ?? 0,
+        max: (_looseNum(json['max']))?.toDouble() ?? 0,
+        toggle: _looseBool(json['toggle']) ?? false,
         action: _action(json['action']),
         submit: _action(json['submit']),
       );
@@ -132,10 +159,10 @@ class DslAction {
   final String confirm;
 
   factory DslAction.fromJson(Map<String, dynamic> json) => DslAction(
-        op: looseStr(json['op']) ?? '',
+        op: _looseStr(json['op']) ?? '',
         args: (json['args'] as Map?)?.cast<String, dynamic>() ?? const {},
-        label: looseStr(json['label']) ?? '',
-        confirm: looseStr(json['confirm']) ?? '',
+        label: _looseStr(json['label']) ?? '',
+        confirm: _looseStr(json['confirm']) ?? '',
       );
 
   /// Renders a copy of this action with `{{placeholder}}` values substituted

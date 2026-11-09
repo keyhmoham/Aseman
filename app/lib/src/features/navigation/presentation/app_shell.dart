@@ -1,9 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
 import '../../assistant/assistant.dart';
 import '../../gadgets/presentation/gadgets_controller.dart';
-import '../../home/presentation/workspace_screen.dart';
+import '../../home/presentation/workspace_screen.dart' deferred as workspace;
 import '../../search_feed/presentation/rich_post_content.dart';
 import '../../search_feed/presentation/search_feed_screen.dart';
 
@@ -34,16 +36,22 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     // A post's author (or a shared post's original author) opens their
     // profile wherever the post shows.
-    PostLinks.openAccount = (context, accountId, handle) => showAccountProfile(
-      context,
-      widget.dependencies,
-      accountId: accountId,
-      handle: handle,
-    );
+    PostLinks.openAccount = (context, accountId, handle) {
+      unawaited(() async {
+        await workspace.loadLibrary();
+        if (!context.mounted) return;
+        workspace.showAccountProfile(
+          context,
+          widget.dependencies,
+          accountId: accountId,
+          handle: handle,
+        );
+      }());
+    };
     // On a desktop where the person let agents use this computer, keep
     // answering them.
     hostAgentFor(widget.dependencies).restore().ignore();
-    _firstDay();
+    unawaited(_firstDay());
   }
 
   /// On a person's first day the lead greets them in their home chat and
@@ -66,7 +74,7 @@ class _AppShellState extends State<AppShell> {
     _workspace = name;
     _initialRoom = null;
     _initialRoomId = null;
-    _pushWorkspace();
+    unawaited(_pushWorkspace());
   }
 
   /// Opens [name] with the room from the home chats list already selected.
@@ -74,41 +82,48 @@ class _AppShellState extends State<AppShell> {
     _workspace = name;
     _initialRoom = roomName;
     _initialRoomId = roomId;
-    _pushWorkspace();
+    unawaited(_pushWorkspace());
   }
 
   /// Pushes the workspace desk above Home. Zero-duration route so each page
   /// still owns its own panel motion (same as the old page swap).
-  void _pushWorkspace() {
+  ///
+  /// The workspace library is deferred so Pulse/login do not download the
+  /// desk + tools + Elpian stack until a space is opened.
+  Future<void> _pushWorkspace() async {
+    await workspace.loadLibrary();
+    if (!mounted) return;
     final navigator = Navigator.of(context);
     // Avoid stacking a second desk if Home somehow fires again while one is
     // already open; pop back to Home first, then push the requested desk.
     if (navigator.canPop()) {
       navigator.popUntil((route) => route.isFirst);
     }
-    navigator
-        .push<void>(
-      PageRouteBuilder<void>(
-        settings: const RouteSettings(name: 'workspace'),
-        opaque: true,
-        // Drop Home's subtree while a workspace covers it so only the desk is
-        // mounted (same as the old page swap); popping rebuilds Home.
-        maintainState: false,
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            WorkspaceScreen(
-          key: const ValueKey('workspace-desk'),
-          dependencies: widget.dependencies,
-          initialWorkspace: _workspace,
-          initialRoom: _initialRoom,
-          initialRoomId: _initialRoomId,
-          onBackToFeed: _popToHome,
-          onWorkspaceChanged: _setWorkspace,
+    unawaited(
+      navigator
+          .push<void>(
+        PageRouteBuilder<void>(
+          settings: const RouteSettings(name: 'workspace'),
+          opaque: true,
+          // Drop Home's subtree while a workspace covers it so only the desk is
+          // mounted (same as the old page swap); popping rebuilds Home.
+          maintainState: false,
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              workspace.WorkspaceScreen(
+            key: const ValueKey('workspace-desk'),
+            dependencies: widget.dependencies,
+            initialWorkspace: _workspace,
+            initialRoom: _initialRoom,
+            initialRoomId: _initialRoomId,
+            onBackToFeed: _popToHome,
+            onWorkspaceChanged: _setWorkspace,
+          ),
         ),
-      ),
-    )
-        .whenComplete(_onReturnedHome);
+      )
+          .whenComplete(_onReturnedHome),
+    );
   }
 
   /// After any pop back to Home (Home control or system back), land on chats

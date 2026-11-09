@@ -13,7 +13,7 @@ import 'features/auth/presentation/auth_screen.dart';
 import 'features/calls/call_overlay.dart';
 import 'features/gadgets/presentation/gadgets_overlay.dart';
 import 'features/navigation/presentation/app_shell.dart';
-import 'features/platform/platform_home.dart';
+import 'features/platform/platform_home.dart' deferred as platform;
 
 class AsemanApp extends StatefulWidget {
   const AsemanApp({super.key, required this.dependencies});
@@ -48,13 +48,14 @@ class _AsemanAppState extends State<AsemanApp> {
 
   Future<void> _restoreTheme() async {
     try {
+      // Theme mode + pack gate first paint; halo rings can fill in after.
       await Future.wait([
         settings.restore(),
         themePacks.restore(),
-        HaloRingCache.restore(),
       ]);
       // Drop orphan palette ids after a pack swap or store install.
       settings.syncPaletteToPack(themePacks.pack);
+      unawaited(HaloRingCache.restore());
     } finally {
       WidgetsBinding.instance.allowFirstFrame();
     }
@@ -107,11 +108,50 @@ class _AsemanAppState extends State<AsemanApp> {
                 ),
               ),
               // A platform's client opens on the platform's frontend.
+              // Deferred so main Aseman builds do not ship PlatformHome's
+              // Elpian host in the initial JS chunk.
               home: PlatformMode.active
-                  ? PlatformHome(dependencies: widget.dependencies)
+                  ? _DeferredPlatformHome(dependencies: widget.dependencies)
                   : AppShell(dependencies: widget.dependencies),
             ),
           ),
         ),
       );
+}
+
+class _DeferredPlatformHome extends StatefulWidget {
+  const _DeferredPlatformHome({required this.dependencies});
+
+  final AppDependencies dependencies;
+
+  @override
+  State<_DeferredPlatformHome> createState() => _DeferredPlatformHomeState();
+}
+
+class _DeferredPlatformHomeState extends State<_DeferredPlatformHome> {
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    platform.loadLibrary().then((_) {
+      if (mounted) setState(() => _ready = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_ready) {
+      return const Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    return platform.PlatformHome(dependencies: widget.dependencies);
+  }
 }

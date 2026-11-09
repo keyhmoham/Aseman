@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../data/services/aseman_service.dart';
 import '../../computer/preview_view.dart';
 import '../../desk/presentation/desk_controller.dart';
-import '../../tools/elpian_app/elpian_app_view.dart';
+import '../../tools/elpian_app/elpian_app_view.dart' deferred as elpian_app;
 import '../data/gadgets_api.dart';
 import 'gadgets_controller.dart';
 
@@ -56,7 +57,7 @@ class GadgetView extends StatelessWidget {
       page: page,
       embed: 'gadget',
       frameless: true,
-      content: (_) => ElpianAppView(
+      content: (_) => _DeferredElpianAppView(
         key: ValueKey('gadget-elpian-view-${gadget.id}'),
         service: service,
         page: page,
@@ -65,6 +66,62 @@ class GadgetView extends StatelessWidget {
         roomId: roomId,
         title: title,
       ),
+    );
+  }
+}
+
+/// Loads the Elpian app host library the first time a native gadget opens.
+class _DeferredElpianAppView extends StatefulWidget {
+  const _DeferredElpianAppView({
+    super.key,
+    required this.service,
+    required this.page,
+    required this.entry,
+    required this.spaceId,
+    required this.roomId,
+    required this.title,
+  });
+
+  final AsemanService service;
+  final String page;
+  final String entry;
+  final String spaceId;
+  final String roomId;
+  final String title;
+
+  @override
+  State<_DeferredElpianAppView> createState() => _DeferredElpianAppViewState();
+}
+
+class _DeferredElpianAppViewState extends State<_DeferredElpianAppView> {
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    elpian_app.loadLibrary().then((_) {
+      if (mounted) setState(() => _ready = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_ready) {
+      return const Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    return elpian_app.ElpianAppView(
+      service: widget.service,
+      page: widget.page,
+      entry: widget.entry,
+      spaceId: widget.spaceId,
+      roomId: widget.roomId,
+      title: widget.title,
     );
   }
 }

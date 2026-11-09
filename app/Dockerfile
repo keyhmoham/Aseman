@@ -24,9 +24,24 @@ ARG DEVELOPER_API_BASE=""
 # A platform's own client: its slug. People sign in to that platform's
 # accounts and open its published frontend. Empty: main Aseman.
 ARG ASEMAN_PLATFORM=""
-RUN flutter build web --release --no-web-resources-cdn --dart-define=API_BASE_URL=same-origin \
-    --dart-define=DEVELOPER_API_BASE=${DEVELOPER_API_BASE} \
-    --dart-define=ASEMAN_PLATFORM=${ASEMAN_PLATFORM}
+# Release web: tree-shake unused icons, self-host CanvasKit (paired with
+# long-cache nginx rules), and keep dart-defines for same-origin API.
+# Optional Wasm build (smaller/faster start when plugins allow) via
+#   docker build --build-arg WEB_RENDERER=wasm ...
+ARG WEB_RENDERER=canvaskit
+RUN if [ "$WEB_RENDERER" = "wasm" ]; then \
+      flutter build web --release --wasm --no-web-resources-cdn \
+        --tree-shake-icons \
+        --dart-define=API_BASE_URL=same-origin \
+        --dart-define=DEVELOPER_API_BASE=${DEVELOPER_API_BASE} \
+        --dart-define=ASEMAN_PLATFORM=${ASEMAN_PLATFORM}; \
+    else \
+      flutter build web --release --no-web-resources-cdn \
+        --tree-shake-icons \
+        --dart-define=API_BASE_URL=same-origin \
+        --dart-define=DEVELOPER_API_BASE=${DEVELOPER_API_BASE} \
+        --dart-define=ASEMAN_PLATFORM=${ASEMAN_PLATFORM}; \
+    fi
 
 FROM nginx:1.29-alpine
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf

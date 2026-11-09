@@ -15,6 +15,7 @@ import 'dart:typed_data';
 
 export 'vm_types.dart' show VmExecResult;
 import 'vm_types.dart';
+import '../web_runtime_loader.dart';
 
 // ── JS interop bindings ──────────────────────────────────────────────
 
@@ -87,16 +88,20 @@ class ElpianVmApi {
   /// ask the same question on either platform.
   static bool get isAvailable => _wasmAvailable;
 
-  static const _wasmMissing = 'Elpian WASM module is not loaded. Ensure '
-      'assets/assets/elpian/web_runtime/elpian_wasm_loader.js is included in '
-      'web/index.html, then build wasm with: cd rust/crates/elpian-vm && wasm-pack build --target web';
+  static const _wasmMissing = 'Elpian WASM module is not loaded. The web '
+      'runtime is imported on demand; if this persists, rebuild wasm with: '
+      'cd rust/crates/elpian-vm && wasm-pack build --target web';
 
   static Future<void> initVmSystem() async {
-    // The wasm-bindgen module and Flutter bootstrap are fetched in parallel.
-    // A fast manifest response can reach here before the module script has
-    // exposed its globals, so wait briefly instead of permanently marking the
-    // runtime unavailable after the first race.
+    // Load the wasm-bindgen module the first time a guest needs it (kept off
+    // the Flutter/CanvasKit critical path). Retry briefly while the dynamic
+    // import finishes exposing globals.
     Object? lastError;
+    try {
+      await ensureElpianWebRuntimes();
+    } catch (error) {
+      lastError = error;
+    }
     for (var attempt = 0; attempt < 100; attempt++) {
       try {
         _wasmInit();

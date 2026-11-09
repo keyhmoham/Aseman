@@ -1,0 +1,10 @@
+.deploy/
+**/__pycache__/
+**/.godot/
+**/build/
+**/models/
+**/.cache/
+app/elpian/app.js
+app/elpian/widget.js
+app/.data/
+*.pck

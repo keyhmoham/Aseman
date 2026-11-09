@@ -8,6 +8,9 @@ import 'package:video_player/video_player.dart';
 import '../../../elpian/core/media_file.dart';
 import '../../../shared/widgets/audio_waveform.dart';
 import '../../../shared/widgets/skeleton.dart';
+import 'play_badge.dart';
+
+export 'play_badge.dart' show PlayBadge;
 
 String _clock(Duration d) {
   final h = d.inHours, m = d.inMinutes % 60, s = d.inSeconds % 60;
@@ -239,28 +242,6 @@ class _VideoViewState extends State<_VideoView> {
       ),
     );
   }
-}
-
-/// The round translucent play button drawn over a video.
-class PlayBadge extends StatelessWidget {
-  const PlayBadge({super.key, this.size = 56});
-  final double size;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      color: Colors.black.withValues(alpha: .5),
-      shape: BoxShape.circle,
-      border: Border.all(color: Colors.white.withValues(alpha: .85), width: 2),
-    ),
-    child: Icon(
-      Icons.play_arrow_rounded,
-      color: Colors.white,
-      size: size * .62,
-    ),
-  );
 }
 
 /// An audio file, played from its bytes: a cover, its name and controls.

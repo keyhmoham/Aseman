@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../data/models/uploaded_file.dart';
 import '../../../shared/widgets/network_content_image.dart';
-import '../../files/presentation/media_players.dart' show PlayBadge;
+import '../../files/presentation/play_badge.dart';
 import '../../rooms/presentation/widgets/media_preview_screen.dart';
 import '../../rooms/presentation/widgets/shared_file_viewer.dart';
 

@@ -443,7 +443,12 @@ class _MachineFace extends StatelessWidget {
                 ),
               ],
             ),
-            child: Image.asset('assets/images/only_orb.png'),
+            child: Image.asset(
+              'assets/images/only_orb.webp',
+              width: 168,
+              height: 168,
+              filterQuality: FilterQuality.medium,
+            ),
           ),
         ),
       ),

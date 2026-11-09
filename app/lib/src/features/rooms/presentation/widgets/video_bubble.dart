@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../../data/models/uploaded_file.dart';
-import '../../../files/presentation/media_players.dart' show PlayBadge;
+import '../../../files/presentation/play_badge.dart';
 import 'shared_file_viewer.dart';
 
 /// A video as a card: its first frame (where the platform can show it) under

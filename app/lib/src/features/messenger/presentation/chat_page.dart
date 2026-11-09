@@ -22,12 +22,12 @@ import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/sky_ui.dart';
 import '../../brain/brain_avatar.dart';
 import '../../brain/brain_voice.dart';
-import '../../calls/call_page.dart';
+import '../../calls/call_page.dart' deferred as call_page;
 import '../../desk/data/desk_api.dart';
 import '../../desk/presentation/desk_controller.dart';
 import '../../gadgets/presentation/gadgets_overlay.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
-import 'dm_desk_panel.dart';
+import 'dm_desk_panel.dart' deferred as dm_desk;
 import 'dm_facility_sheet.dart';
 import 'report_dialog.dart';
 import 'widgets/brain_proposals.dart';
@@ -479,23 +479,31 @@ class _ChatPageState extends State<ChatPage> {
       IconButton(
         tooltip: 'Voice call',
         icon: const Icon(Icons.call_outlined),
-        onPressed: () => startDirectCall(
-          context,
-          widget.dependencies,
-          peerId: peer.id,
-          peerLabel: chat.title,
-        ),
+        onPressed: () async {
+          await call_page.loadLibrary();
+          if (!mounted) return;
+          await call_page.startDirectCall(
+            context,
+            widget.dependencies,
+            peerId: peer.id,
+            peerLabel: chat.title,
+          );
+        },
       ),
       IconButton(
         tooltip: 'Video call',
         icon: const Icon(Icons.videocam_outlined),
-        onPressed: () => startDirectCall(
-          context,
-          widget.dependencies,
-          peerId: peer.id,
-          peerLabel: chat.title,
-          video: true,
-        ),
+        onPressed: () async {
+          await call_page.loadLibrary();
+          if (!mounted) return;
+          await call_page.startDirectCall(
+            context,
+            widget.dependencies,
+            peerId: peer.id,
+            peerLabel: chat.title,
+            video: true,
+          );
+        },
       ),
     ];
   }
@@ -707,7 +715,7 @@ class _ChatPageState extends State<ChatPage> {
               controller: _pages,
               onPageChanged: (v) => setState(() => _surface = v),
               children: [
-                DmDeskPanel(
+                _DeferredDmDeskPanel(
                   dependencies: widget.dependencies,
                   controller: _desk,
                   spaceId: chat.spaceId,
@@ -1189,6 +1197,65 @@ class ChatAvatar extends StatelessWidget {
         borderRadius: corners,
         fallback: room,
       ),
+    );
+  }
+}
+
+/// Loads the DM desk (tools / Elpian / computer) only when the Desk tab is
+/// painted — keeps that stack out of the Pulse/chats entry chunk.
+class _DeferredDmDeskPanel extends StatefulWidget {
+  const _DeferredDmDeskPanel({
+    required this.dependencies,
+    required this.controller,
+    required this.spaceId,
+    required this.roomId,
+    required this.title,
+    this.topInset = 0,
+    this.bottomInset = 0,
+  });
+
+  final AppDependencies dependencies;
+  final DeskController controller;
+  final String spaceId;
+  final String roomId;
+  final String title;
+  final double topInset;
+  final double bottomInset;
+
+  @override
+  State<_DeferredDmDeskPanel> createState() => _DeferredDmDeskPanelState();
+}
+
+class _DeferredDmDeskPanelState extends State<_DeferredDmDeskPanel> {
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    dm_desk.loadLibrary().then((_) {
+      if (mounted) setState(() => _ready = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_ready) {
+      return const Center(
+        child: SizedBox(
+          width: 28,
+          height: 28,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    return dm_desk.DmDeskPanel(
+      dependencies: widget.dependencies,
+      controller: widget.controller,
+      spaceId: widget.spaceId,
+      roomId: widget.roomId,
+      title: widget.title,
+      topInset: widget.topInset,
+      bottomInset: widget.bottomInset,
     );
   }
 }

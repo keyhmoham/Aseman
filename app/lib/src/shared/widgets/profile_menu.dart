@@ -10,11 +10,14 @@ import '../../core/theme/shell_layout.dart';
 import '../../core/theme/shell_layout_builder.dart';
 import '../../core/theme/theme_ui_spec.dart';
 import '../../features/account/presentation/account_panel.dart';
-import '../../features/admin/presentation/admin_screen.dart';
-import '../../features/developer/presentation/developer_console.dart';
-import '../../features/market/presentation/bots_store_screen.dart';
+import '../../features/admin/presentation/admin_screen.dart' deferred as admin;
+import '../../features/developer/presentation/developer_console.dart'
+    deferred as developer;
+import '../../features/market/presentation/bots_store_screen.dart'
+    deferred as market;
 import '../../features/messenger/presentation/messenger_panel.dart';
-import '../../features/settings/presentation/settings_screen.dart';
+import '../../features/settings/presentation/settings_screen.dart'
+    deferred as settings_ui;
 import 'avatar_editor.dart';
 import 'overlay_panels.dart';
 import 'sky_ui.dart';
@@ -106,21 +109,31 @@ Future<void> dispatchProfileAction(
 ) async {
   switch (action) {
     case ProfileAction.store:
-      await showBotsStore(context, dependencies);
+      await market.loadLibrary();
+      if (!context.mounted) return;
+      await market.showBotsStore(context, dependencies);
     case ProfileAction.wallet:
       await showAccountPanel(context, dependencies, AccountArea.wallet);
     case ProfileAction.messages:
       await showMessenger(context, dependencies);
     case ProfileAction.developer:
+      await developer.loadLibrary();
+      if (!context.mounted) return;
       await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => DeveloperConsole(service: dependencies.service)));
+          builder: (_) =>
+              developer.DeveloperConsole(service: dependencies.service)));
     case ProfileAction.admin:
+      await admin.loadLibrary();
+      if (!context.mounted) return;
       await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => AdminScreen(dependencies: dependencies),
+        builder: (_) => admin.AdminScreen(dependencies: dependencies),
       ));
     case ProfileAction.settings:
+      await settings_ui.loadLibrary();
+      if (!context.mounted) return;
       await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => SettingsScreen(dependencies: dependencies)));
+          builder: (_) =>
+              settings_ui.SettingsScreen(dependencies: dependencies)));
     case ProfileAction.logout:
       await dependencies.sessionController.logout();
   }

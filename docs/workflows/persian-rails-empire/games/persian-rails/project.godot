@@ -1,0 +1,38 @@
+; Persian Rails Empire — Godot 4.3
+; 2.5D Iran map board game vs AI. Runs as Web export and as a Scene3D pack.
+
+config_version=5
+
+[application]
+
+config/name="امپراتوری راه‌آهن پارس"
+config/description="Persian Rails Empire — route-building on Iran's map"
+run/main_scene="res://arena/persian_rails/shell.tscn"
+config/features=PackedStringArray("4.3")
+config/icon="res://arena/persian_rails/icon.svg"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=800
+window/size/window_width_override=1280
+window/size/window_height_override=800
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=0
+
+[internationalization]
+
+locale/fallback="fa"
+
+[gui]
+
+theme/default_font_multichannel_signed_distance_field=false
+common/snap_controls_to_pixels=true
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+anti_aliasing/quality/msaa_3d=2
+textures/vram_compression/import_etc2_astc=true

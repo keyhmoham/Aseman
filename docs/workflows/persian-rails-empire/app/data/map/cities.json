@@ -1,0 +1,443 @@
+[
+  {
+    "id": "tabriz",
+    "name_fa": "تبریز",
+    "name_en": "Tabriz",
+    "region": "northwest",
+    "x": -5.55,
+    "z": -4.05,
+    "tags": [
+      "بازار",
+      "کوهستان"
+    ],
+    "lat": 38.0962,
+    "lon": 46.2738
+  },
+  {
+    "id": "maragheh",
+    "name_fa": "مراغه",
+    "name_en": "Maragheh",
+    "region": "northwest",
+    "x": -5.85,
+    "z": -2.65,
+    "tags": [
+      "رصدخانه"
+    ],
+    "lat": 37.389,
+    "lon": 46.237
+  },
+  {
+    "id": "zanjan",
+    "name_fa": "زنجان",
+    "name_en": "Zanjan",
+    "region": "northwest",
+    "x": -4.25,
+    "z": -1.85,
+    "tags": [
+      "چاقو"
+    ],
+    "lat": 36.6736,
+    "lon": 48.4787
+  },
+  {
+    "id": "urmia",
+    "name_fa": "ارومیه",
+    "name_en": "Urmia",
+    "region": "northwest",
+    "x": -7.35,
+    "z": -3.35,
+    "tags": [
+      "دریاچه"
+    ],
+    "lat": 37.5527,
+    "lon": 45.0761
+  },
+  {
+    "id": "ardabil",
+    "name_fa": "اردبیل",
+    "name_en": "Ardabil",
+    "region": "northwest",
+    "x": -3.65,
+    "z": -3.25,
+    "tags": [
+      "چشمه"
+    ],
+    "lat": 38.2498,
+    "lon": 48.2933
+  },
+  {
+    "id": "rasht",
+    "name_fa": "رشت",
+    "name_en": "Rasht",
+    "region": "north",
+    "x": -2.55,
+    "z": -2.45,
+    "tags": [
+      "جنگل",
+      "باران"
+    ],
+    "lat": 37.2808,
+    "lon": 49.5832
+  },
+  {
+    "id": "sari",
+    "name_fa": "ساری",
+    "name_en": "Sari",
+    "region": "north",
+    "x": -0.35,
+    "z": -2.25,
+    "tags": [
+      "جلگه"
+    ],
+    "lat": 36.5633,
+    "lon": 53.0601
+  },
+  {
+    "id": "gorgan",
+    "name_fa": "گرگان",
+    "name_en": "Gorgan",
+    "region": "north",
+    "x": 1.55,
+    "z": -2.85,
+    "tags": [
+      "هیرکانی"
+    ],
+    "lat": 36.8427,
+    "lon": 54.435
+  },
+  {
+    "id": "bandar_torkaman",
+    "name_fa": "بندرترکمن",
+    "name_en": "Bandar Torkaman",
+    "region": "north",
+    "x": 2.55,
+    "z": -3.15,
+    "tags": [
+      "بندر"
+    ],
+    "lat": 36.9019,
+    "lon": 54.0729
+  },
+  {
+    "id": "tehran",
+    "name_fa": "تهران",
+    "name_en": "Tehran",
+    "region": "center",
+    "x": -1.25,
+    "z": -1.05,
+    "tags": [
+      "پایتخت",
+      "صنعت"
+    ],
+    "lat": 35.6892,
+    "lon": 51.389
+  },
+  {
+    "id": "qazvin",
+    "name_fa": "قزوین",
+    "name_en": "Qazvin",
+    "region": "center",
+    "x": -2.85,
+    "z": -1.35,
+    "tags": [
+      "دروازه"
+    ],
+    "lat": 36.2688,
+    "lon": 50.0041
+  },
+  {
+    "id": "qom",
+    "name_fa": "قم",
+    "name_en": "Qom",
+    "region": "center",
+    "x": -2.05,
+    "z": -0.15,
+    "tags": [
+      "زیارت"
+    ],
+    "lat": 34.6416,
+    "lon": 50.8746
+  },
+  {
+    "id": "kashan",
+    "name_fa": "کاشان",
+    "name_en": "Kashan",
+    "region": "center",
+    "x": -1.35,
+    "z": 1.05,
+    "tags": [
+      "باغ",
+      "گل"
+    ],
+    "lat": 33.985,
+    "lon": 51.41
+  },
+  {
+    "id": "isfahan",
+    "name_fa": "اصفهان",
+    "name_en": "Isfahan",
+    "region": "center",
+    "x": -1.15,
+    "z": 2.35,
+    "tags": [
+      "نقش‌جهان",
+      "پل"
+    ],
+    "lat": 32.6539,
+    "lon": 51.666
+  },
+  {
+    "id": "yazd",
+    "name_fa": "یزد",
+    "name_en": "Yazd",
+    "region": "center",
+    "x": 0.85,
+    "z": 2.85,
+    "tags": [
+      "قنات",
+      "بادگیر"
+    ],
+    "lat": 31.8974,
+    "lon": 54.3569
+  },
+  {
+    "id": "semnan",
+    "name_fa": "سمنان",
+    "name_en": "Semnan",
+    "region": "center",
+    "x": 1.05,
+    "z": -0.85,
+    "tags": [
+      "کویر"
+    ],
+    "lat": 35.5769,
+    "lon": 53.392
+  },
+  {
+    "id": "shahroud",
+    "name_fa": "شاهرود",
+    "name_en": "Shahroud",
+    "region": "center",
+    "x": 2.45,
+    "z": -1.65,
+    "tags": [
+      "راه"
+    ],
+    "lat": 36.4182,
+    "lon": 54.9763
+  },
+  {
+    "id": "kermanshah",
+    "name_fa": "کرمانشاه",
+    "name_en": "Kermanshah",
+    "region": "west",
+    "x": -5.85,
+    "z": 0.15,
+    "tags": [
+      "کوهستان",
+      "پل"
+    ],
+    "lat": 34.3142,
+    "lon": 47.065
+  },
+  {
+    "id": "hamedan",
+    "name_fa": "همدان",
+    "name_en": "Hamedan",
+    "region": "west",
+    "x": -4.35,
+    "z": -0.35,
+    "tags": [
+      "تاریخ"
+    ],
+    "lat": 34.7983,
+    "lon": 48.5146
+  },
+  {
+    "id": "arak",
+    "name_fa": "اراک",
+    "name_en": "Arak",
+    "region": "west",
+    "x": -3.15,
+    "z": 0.75,
+    "tags": [
+      "صنعت"
+    ],
+    "lat": 34.0917,
+    "lon": 49.6892
+  },
+  {
+    "id": "khorramabad",
+    "name_fa": "خرم‌آباد",
+    "name_en": "Khorramabad",
+    "region": "west",
+    "x": -4.45,
+    "z": 1.25,
+    "tags": [
+      "قلعه"
+    ],
+    "lat": 33.4878,
+    "lon": 48.3558
+  },
+  {
+    "id": "ahvaz",
+    "name_fa": "اهواز",
+    "name_en": "Ahvaz",
+    "region": "west",
+    "x": -3.95,
+    "z": 3.15,
+    "tags": [
+      "رود",
+      "صنعت"
+    ],
+    "lat": 31.3183,
+    "lon": 48.6706
+  },
+  {
+    "id": "mashhad",
+    "name_fa": "مشهد",
+    "name_en": "Mashhad",
+    "region": "east",
+    "x": 5.85,
+    "z": -2.05,
+    "tags": [
+      "زیارت",
+      "تجارت"
+    ],
+    "lat": 36.2605,
+    "lon": 59.6168
+  },
+  {
+    "id": "neyshabur",
+    "name_fa": "نیشابور",
+    "name_en": "Neyshabur",
+    "region": "east",
+    "x": 4.75,
+    "z": -1.75,
+    "tags": [
+      "شعر"
+    ],
+    "lat": 36.2133,
+    "lon": 58.7958
+  },
+  {
+    "id": "sabzevar",
+    "name_fa": "سبزوار",
+    "name_en": "Sabzevar",
+    "region": "east",
+    "x": 3.65,
+    "z": -1.85,
+    "tags": [
+      "راه"
+    ],
+    "lat": 36.2126,
+    "lon": 57.6819
+  },
+  {
+    "id": "birjand",
+    "name_fa": "بیرجند",
+    "name_en": "Birjand",
+    "region": "east",
+    "x": 4.65,
+    "z": 1.35,
+    "tags": [
+      "بیابان"
+    ],
+    "lat": 32.8649,
+    "lon": 59.2262
+  },
+  {
+    "id": "zahedan",
+    "name_fa": "زاهدان",
+    "name_en": "Zahedan",
+    "region": "east",
+    "x": 5.75,
+    "z": 3.85,
+    "tags": [
+      "مرز"
+    ],
+    "lat": 29.4963,
+    "lon": 60.8629
+  },
+  {
+    "id": "shiraz",
+    "name_fa": "شیراز",
+    "name_en": "Shiraz",
+    "region": "south",
+    "x": -0.75,
+    "z": 4.35,
+    "tags": [
+      "باغ",
+      "شعر"
+    ],
+    "lat": 29.5918,
+    "lon": 52.5837
+  },
+  {
+    "id": "bushehr",
+    "name_fa": "بوشهر",
+    "name_en": "Bushehr",
+    "region": "south",
+    "x": -2.25,
+    "z": 4.85,
+    "tags": [
+      "بندر"
+    ],
+    "lat": 28.9234,
+    "lon": 50.8203
+  },
+  {
+    "id": "bandar_abbas",
+    "name_fa": "بندرعباس",
+    "name_en": "Bandar Abbas",
+    "region": "south",
+    "x": 2.25,
+    "z": 6.15,
+    "tags": [
+      "بندر",
+      "تجارت"
+    ],
+    "lat": 27.1865,
+    "lon": 56.2808
+  },
+  {
+    "id": "kerman",
+    "name_fa": "کرمان",
+    "name_en": "Kerman",
+    "region": "south",
+    "x": 2.95,
+    "z": 3.55,
+    "tags": [
+      "کویر"
+    ],
+    "lat": 30.2832,
+    "lon": 57.0788
+  },
+  {
+    "id": "bam",
+    "name_fa": "بم",
+    "name_en": "Bam",
+    "region": "south",
+    "x": 4.15,
+    "z": 4.45,
+    "tags": [
+      "ارگ"
+    ],
+    "lat": 29.106,
+    "lon": 58.357
+  },
+  {
+    "id": "chabahar",
+    "name_fa": "چابهار",
+    "name_en": "Chabahar",
+    "region": "south",
+    "x": 5.55,
+    "z": 7.15,
+    "tags": [
+      "بندر",
+      "اقیانوس"
+    ],
+    "lat": 25.2919,
+    "lon": 60.643
+  }
+]

@@ -1,0 +1,83 @@
+{
+  "slug": "persian-rails",
+  "title": "امپراتوری راه‌آهن پارس",
+  "title_en": "Persian Rails Empire",
+  "version": "1.6.8",
+  "tagline": "شهرهای ایران را با راه‌آهن دوستانه به هم وصل کن",
+  "description": "بازی خانوادگی مسیرسازی روی نقشه واقعی‌تر ایران: کارت رنگی بردار، مسیر بساز، قرارداد مقصد کامل کن و با حریف هوشمند رقابت کن. مرزها، دریاها و جای شهرها بر پایه جغرافیای واقعی‌اند؛ مسیرهای سناریویی با برچسب مشخص شده‌اند.",
+  "genre": "board",
+  "tags": [
+    "iran",
+    "trains",
+    "strategy",
+    "farsi",
+    "2.5d",
+    "family"
+  ],
+  "mode": "single-player vs AI",
+  "players": {
+    "humans": 1,
+    "ai": 1
+  },
+  "engine": "godot-4.3",
+  "scene": "res://arena/persian_rails/shell.tscn",
+  "pack": "persian-rails.pck",
+  "web": "web/index.html",
+  "icon": "res://arena/persian_rails/icon.svg",
+  "accent": "#156a87",
+  "settings": {
+    "level": {
+      "type": "integer",
+      "min": 1,
+      "max": 3,
+      "default": 2,
+      "label": "سطح حریف"
+    },
+    "ai_count": {
+      "type": "integer",
+      "min": 1,
+      "max": 3,
+      "default": 1,
+      "label": "تعداد حریف"
+    },
+    "wagons": {
+      "type": "integer",
+      "min": 30,
+      "max": 45,
+      "default": 45,
+      "label": "تعداد واگن"
+    }
+  },
+  "scoring": "امتیاز مسیر بر اساس طول، قراردادهای مقصد تکمیل‌شده منهای ناقص، و پاداش طولانی‌ترین شبکه پیوسته.",
+  "controls": [
+    "لمس شهر یا مسیر",
+    "کشیدن برای جابه‌جایی نقشه",
+    "دو انگشت برای زوم"
+  ],
+  "credits": [
+    {
+      "what": "Train Kit models",
+      "who": "Kenney",
+      "license": "CC0 1.0",
+      "url": "https://kenney.nl/assets/train-kit"
+    },
+    {
+      "what": "Vazirmatn UI FD font",
+      "who": "Saber Rastikerdar / Vazirmatn Project",
+      "license": "OFL-1.1",
+      "url": "https://github.com/rastikerdar/vazirmatn"
+    },
+    {
+      "what": "Map & culture texts",
+      "who": "Persian Rails Empire",
+      "license": "Original",
+      "url": ""
+    },
+    {
+      "what": "Iran borders, seas & lakes GeoJSON",
+      "who": "OpenStreetMap / Nominatim",
+      "license": "ODbL",
+      "url": "https://www.openstreetmap.org/copyright"
+    }
+  ]
+}

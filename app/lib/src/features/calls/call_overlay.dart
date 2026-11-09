@@ -1,17 +1,17 @@
 import 'dart:async';
-import '../../core/theme/app_shape.dart';
 
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_shape.dart';
 import '../../core/theme/theme_chrome.dart';
 import '../../core/theme/theme_roles.dart';
 import '../../core/theme/theme_ui_spec.dart';
 import '../../shared/widgets/avatar_face.dart';
 import '../../shared/widgets/sky_ui.dart';
 import '../../shared/widgets/theme_slot_host.dart';
-import 'call_page.dart';
+import 'call_page.dart' deferred as call_page;
 import 'call_service.dart';
 
 /// Host wrapper that polls for incoming calls while signed in and shows an
@@ -99,7 +99,9 @@ class _CallOverlayState extends State<CallOverlay> {
       if (!mounted) return;
       final video = call['video'] == true ||
           (res['call'] is Map && (res['call'] as Map)['video'] == true);
-      await CallPage.open(
+      await call_page.loadLibrary();
+      if (!mounted) return;
+      await call_page.CallPage.open(
         context,
         dependencies: widget.dependencies,
         callId: id,

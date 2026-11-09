@@ -9,20 +9,75 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Aseman</title>
   <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <!-- Kick off Flutter bootstrap as early as possible (critical path only).
+       Elpian/QuickJS WASM runtimes load on first use — not here — so they
+       do not compete with CanvasKit / main.dart.js for bandwidth. -->
+  <link rel="preload" href="flutter_bootstrap.js" as="script">
 
-  <!-- Elpian VM and QuickJS web runtimes (assets/elpian, see lib/src/elpian). Without
-       these the QuickJS/wasm guests cannot boot in the browser and apps
-       fail with "QuickJS web runtime not loaded". -->
-  <script type="module" src="assets/assets/elpian/web_runtime/elpian_wasm_loader.js"></script>
-  <script type="module" src="assets/assets/elpian/web_runtime/quickjs_web_runtime.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #07111f;
+      color: #e8eef7;
+      font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    /* Plain HTML splash: paints before Flutter/CanvasKit finish downloading. */
+    #aseman-boot {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 18px;
+      background: radial-gradient(ellipse at 50% 35%, #0d1c30 0%, #07111f 70%);
+      z-index: 9999;
+      transition: opacity 180ms ease-out;
+      pointer-events: none;
+    }
+    #aseman-boot.aseman-boot-hide {
+      opacity: 0;
+    }
+    #aseman-boot .mark {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    #aseman-boot .ring {
+      width: 28px;
+      height: 28px;
+      border: 2px solid rgba(54, 167, 255, 0.25);
+      border-top-color: #36a7ff;
+      border-radius: 50%;
+      animation: aseman-spin 0.75s linear infinite;
+    }
+    @keyframes aseman-spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
+  <div id="aseman-boot" aria-busy="true" aria-live="polite">
+    <div class="mark">Aseman</div>
+    <div class="ring" role="progressbar" aria-label="Loading"></div>
+  </div>
+
   <script>
     // The Flutter view handles right-click. Block the browser menu on the
     // whole page, including before the app finishes booting.
     document.addEventListener('contextmenu', function (event) {
       event.preventDefault();
     }, true);
+
+    // Drop the HTML splash once Flutter paints its first frame.
+    window.addEventListener('flutter-first-frame', function () {
+      var boot = document.getElementById('aseman-boot');
+      if (!boot) return;
+      boot.classList.add('aseman-boot-hide');
+      setTimeout(function () { boot.remove(); }, 220);
+    });
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>

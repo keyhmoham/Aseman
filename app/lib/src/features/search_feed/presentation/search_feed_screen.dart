@@ -24,10 +24,10 @@ import '../../../shared/widgets/sky_ui.dart';
 import '../../../shared/widgets/theme_slot_host.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../../shared/widgets/workspace_panel_motion.dart';
-import '../../admin/presentation/admin_screen.dart';
+import '../../admin/presentation/admin_screen.dart' deferred as admin;
 import '../../assistant/assistant.dart';
 import '../../desk/presentation/widgets_library.dart';
-import '../../home/presentation/workspace_screen.dart' show showExplore;
+import '../../home/presentation/explore_launcher.dart';
 import '../../messenger/presentation/chat_page.dart';
 import '../../messenger/presentation/messenger_panel.dart';
 import '../domain/feed_post.dart';
@@ -571,12 +571,17 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
           ),
           onOpenAdmin: !widget.dependencies.sessionController.isAdmin
               ? null
-              : () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        AdminScreen(dependencies: widget.dependencies),
-                  ),
-                ),
+              : () async {
+                  await admin.loadLibrary();
+                  if (!context.mounted) return;
+                  await Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => admin.AdminScreen(
+                        dependencies: widget.dependencies,
+                      ),
+                    ),
+                  );
+                },
           onOpenWidgetsLibrary: () => showWidgetsLibrary(
             context,
             widget.dependencies,

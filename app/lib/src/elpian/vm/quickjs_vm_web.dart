@@ -9,6 +9,7 @@ import '../diagnostics/elpian_trace.dart';
 import 'elpian_vm.dart';
 import 'governance/host_side_governor.dart';
 import 'vm_runtime_client.dart';
+import 'web_runtime_loader.dart';
 
 class QuickJsVm implements VmRuntimeClient {
   final String machineId;
@@ -46,9 +47,12 @@ class QuickJsVm implements VmRuntimeClient {
     },
   );
 
-  static Future<void> initialize() async {}
+  static Future<void> initialize() async {
+    await ensureElpianWebRuntimes();
+  }
 
   static Future<QuickJsVm> fromCode(String machineId, String code) async {
+    await ensureElpianWebRuntimes();
     final vm = QuickJsVm(machineId: machineId);
     vm._bootstrapHostBridge();
     await vm._initMachine();
@@ -136,8 +140,8 @@ class QuickJsVm implements VmRuntimeClient {
     final quickJs = globalContext['elpianQuickJs'];
     if (quickJs == null) {
       throw StateError(
-        'QuickJS web runtime not loaded. Ensure '
-        'assets/assets/elpian/web_runtime/quickjs_web_runtime.js is included in your web index.html.',
+        'QuickJS web runtime not loaded. Call QuickJsVm.initialize() / '
+        'fromCode first so the on-demand web runtime can import.',
       );
     }
 

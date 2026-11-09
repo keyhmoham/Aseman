@@ -20,7 +20,7 @@ import '../../desk/presentation/card_window.dart';
 import '../../desk/presentation/compact_desk.dart';
 import '../../desk/presentation/frontend_presentation.dart';
 import '../../desk/presentation/tool_avatar.dart';
-import '../../home/presentation/workspace_screen.dart' show DeskSurfaceContent;
+import '../../home/presentation/desk_surface_entry.dart';
 import '../../tools/runtime/tool_media.dart';
 
 /// A pinned window from one room, as the feed's toolbox lists it.

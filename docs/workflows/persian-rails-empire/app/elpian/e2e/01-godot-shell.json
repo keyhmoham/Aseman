@@ -1,0 +1,12 @@
+{
+  "name": "میزبان نازک گودو — لود شِل",
+  "viewport": "phone",
+  "steps": [
+    { "expect": { "text": "گودو" } },
+    { "do": "fire", "target": { "key": "shell" }, "event": "assetprogress", "data": { "id": "shell", "loaded": 50, "total": 100 } },
+    { "expect": { "text": "٪" } },
+    { "do": "fire", "target": { "key": "shell" }, "event": "asseterror", "data": { "message": "موتور گودو لود نشد" } },
+    { "expect": { "text": "لود نشد" } },
+    { "do": "tap", "target": { "key": "open_web" } }
+  ]
+}

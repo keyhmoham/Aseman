@@ -56,4 +56,8 @@ async function loadElpianWasm() {
   }
 }
 
-loadElpianWasm();
+// Exposed for on-demand boot (see web_runtime_loader_web.dart). Do not
+// auto-start here — loading from index.html raced Flutter/CanvasKit and
+// cost ~1.2 MB on the critical path even when no Elpian guest was open.
+globalThis.ensureElpianWasm = loadElpianWasm;
+globalThis.loadElpianWasm = loadElpianWasm;

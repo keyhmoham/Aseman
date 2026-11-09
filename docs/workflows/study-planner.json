@@ -1,7 +1,7 @@
 {
  "$schema": "./workflow.schema.json",
  "aseman_workflow": "1",
- "name": "study-planner",
+ "name": "aseman-study-planner",
  "description": "Brings up آسمان‌درس, an agentic study planner for Iranian school students: an organization with its platform and server key, a project with a custom Planner agent that writes every student's plan and counsel, a Curator agent for the official curriculum, and the web app (wizard, today page, Jalali calendar, timetable and charts) installed, tested and served — then proves the agent makes a real plan.",
  "version": "1.0.0",
  "inputs": {
@@ -14,7 +14,7 @@
   },
   "slug": {
    "type": "string",
-   "default": "aseman-dars",
+   "default": "aseman-lesson-helper",
    "pattern": "^[a-z][a-z0-9-]{2,30}$",
    "description": "Latin name for folders, the platform and the key"
   },

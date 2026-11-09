@@ -98,7 +98,7 @@ Map<String, dynamic> adminFixtures() {
           'label': 'Admin password changed from the default value',
           'status': 'fail',
           'detail': 'The node still accepts the default admin password.',
-          'fix': 'Set ASEMAN_ADMIN_PASSWORD and restart the node.'
+          'fix': 'Set DECILLION_ADMIN_PASSWORD and restart the node.'
         },
         {
           'group': 'Payments',

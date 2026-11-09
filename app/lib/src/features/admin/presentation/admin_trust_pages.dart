@@ -338,7 +338,7 @@ class _GoogleAdminState extends _FormState<_GoogleAdmin> {
                   child: const Padding(
                     padding: EdgeInsets.all(12),
                     child: Text(
-                      'Talking to a fake Google (ASEMAN_GOOGLE_FAKE_URL): for development only.',
+                      'Talking to a fake Google (DECILLION_FAKE_GOOGLE_URL): for development only.',
                       style: TextStyle(fontSize: 13),
                     ),
                   ),
@@ -466,7 +466,7 @@ class _ChannelsAdminState extends _FormState<_ChannelsAdmin> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'People link their Slack, Teams or phone number in Settings → Connections, then talk to their agents, answer approvals and get their brief there.',
+          'People link their Telegram, Slack, Teams or phone number in Settings → Connections, then talk to their agents, answer approvals and get their brief there.',
           style: TextStyle(
             fontSize: 13,
             height: 1.35,
@@ -474,6 +474,19 @@ class _ChannelsAdminState extends _FormState<_ChannelsAdmin> {
           ),
         ),
         const SizedBox(height: 16),
+        AdminSectionCard(
+          title: 'Telegram',
+          icon: Icons.send_rounded,
+          trailing: jsonMap(d['telegram'])['enabled'] == true
+              ? const AdminStatusPill('live')
+              : const AdminStatusPill('disabled'),
+          child: Text(
+            jsonMap(d['telegram'])['enabled'] == true
+                ? 'The bot @${jsonMap(d['telegram'])['app_id']} is set up in the node\'s environment.'
+                : 'Set DECILLION_TELEGRAM_BOT_TOKEN, DECILLION_TELEGRAM_BOT_USERNAME and DECILLION_TELEGRAM_WEBHOOK_SECRET on the node to offer Telegram.',
+          ),
+        ),
+        const SizedBox(height: 12),
         for (final p in _providers.entries) ...[
           AdminSectionCard(
             title: p.value.$1,

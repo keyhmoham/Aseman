@@ -93,7 +93,7 @@ void main() {
 
   test('handler names that are not identifiers are called by lookup', () {
     expect(native.QuickJsVm.callee('__app0_key_\$f7\$'), '__app0_key_\$f7\$');
-    expect(native.QuickJsVm.callee('Aseman.settle'), 'Aseman.settle');
+    expect(native.QuickJsVm.callee('Decillion.settle'), 'Decillion.settle');
     expect(native.QuickJsVm.callee('on press'), 'globalThis["on press"]');
   });
 }

@@ -1,7 +1,7 @@
 /*
- * Aseman Elpian SDK: what an Elpian App UI program uses to render, react to
+ * Decillion Elpian SDK: what an Elpian App UI program uses to render, react to
  * people, and reach its space (agents, apps) and its own server. Runs on the
- * Elpian QuickJS runtime the Aseman client hosts (no DOM, no fetch, no
+ * Elpian QuickJS runtime the Decillion client hosts (no DOM, no fetch, no
  * modules). See ELPIAN.md.
  *
  *   App.create({ state, view(state, app), init(app), widget })  render loop
@@ -9,18 +9,18 @@
  *     shape, refreshMs} (or just a view function): drawn instead of `view`
  *     when the app is shown as a widget, its live data refreshed on a timer
  *   app.set(patch) / app.render() / app.handler(key, fn) / app.input(key, field)
- *   Aseman.ask / askJSON / conversation / call / agents / tools / microtools /
+ *   Decillion.ask / askJSON / conversation / call / agents / tools / microtools /
  *     context / fetch (the app's own server) / env / compact / expand
  *
  * Every request is asynchronous: it returns a Task (then / catch / finally),
  * settled when the host answers, so the screen never freezes on a long agent
  * ask. Host protocol (the client and `check.mjs` implement it):
  *   askHost('render', treeJSON)
- *   askHost('aseman.env', '')                    -> {display, theme, user, ...}
- *   askHost('aseman.request', requestJSON)       -> {accepted}; later the host
- *     calls __asemanSettle({id, ok, status, data, error})
- *   askHost('aseman.compact', summaryJSON) / askHost('aseman.expand', '')
- *   host -> __asemanEnv(env) when the theme, display or viewport changes
+ *   askHost('decillion.env', '')                    -> {display, theme, user, ...}
+ *   askHost('decillion.request', requestJSON)       -> {accepted}; later the host
+ *     calls __decillionSettle({id, ok, status, data, error})
+ *   askHost('decillion.compact', summaryJSON) / askHost('decillion.expand', '')
+ *   host -> __decillionEnv(env) when the theme, display or viewport changes
  */
 (function (root) {
   "use strict";
@@ -150,21 +150,21 @@
     return out;
   };
 
-  function AsemanError(message, status, op) {
-    this.name = "AsemanError";
+  function DecillionError(message, status, op) {
+    this.name = "DecillionError";
     this.message = message || "request failed";
     this.status = status || 0;
     this.op = op || "";
   }
-  AsemanError.prototype = Object.create(Error.prototype);
-  AsemanError.prototype.constructor = AsemanError;
+  DecillionError.prototype = Object.create(Error.prototype);
+  DecillionError.prototype.constructor = DecillionError;
 
   // ── requests ─────────────────────────────────────────────────────────────
 
   var pending = {};
   var nextId = 1;
 
-  // request sends one request to the host: target "aseman" (the space's
+  // request sends one request to the host: target "decillion" (the space's
   // page API op) or "app" (a path of the app's own server).
   function request(target, what, opts) {
     opts = opts || {};
@@ -175,36 +175,36 @@
       id: id,
       target: target,
       method: opts.method || (opts.body !== undefined ? "POST" : "GET"),
-      timeoutMs: opts.timeoutMs || (target === "aseman" && what === "ask" ? 360000 : 120000),
+      timeoutMs: opts.timeoutMs || (target === "decillion" && what === "ask" ? 360000 : 120000),
     };
-    if (target === "aseman") req.op = what;
+    if (target === "decillion") req.op = what;
     else req.path = what;
     if (opts.body !== undefined) req.body = opts.body;
     if (opts.query) req.query = opts.query;
     if (opts.headers) req.headers = opts.headers;
     var accepted;
     try {
-      accepted = ask("aseman.request", JSON.stringify(req));
+      accepted = ask("decillion.request", JSON.stringify(req));
     } catch (e) {
       delete pending[id];
-      task._settle("rejected", new AsemanError(String((e && e.message) || e), 0, what));
+      task._settle("rejected", new DecillionError(String((e && e.message) || e), 0, what));
       return task;
     }
     if (accepted && accepted.error) {
       delete pending[id];
-      task._settle("rejected", new AsemanError(accepted.error, accepted.status, what));
+      task._settle("rejected", new DecillionError(accepted.error, accepted.status, what));
     }
     return task;
   }
 
   // The host settles a request: {id, ok, status, data, error}.
-  root.__asemanSettle = function (raw) {
+  root.__decillionSettle = function (raw) {
     var r = hostValue(raw);
     if (!r || !r.id || !pending[r.id]) return;
     var p = pending[r.id];
     delete pending[r.id];
     if (r.ok) p.task._settle("fulfilled", r.data);
-    else p.task._settle("rejected", new AsemanError(r.error || "request failed", r.status, p.op));
+    else p.task._settle("rejected", new DecillionError(r.error || "request failed", r.status, p.op));
   };
 
   // ── the space and the app's server ───────────────────────────────────────
@@ -215,7 +215,7 @@
   function currentEnv() {
     if (!env) {
       try {
-        env = ask("aseman.env", "") || {};
+        env = ask("decillion.env", "") || {};
       } catch (e) {
         env = {};
       }
@@ -223,7 +223,7 @@
     return env;
   }
 
-  root.__asemanEnv = function (raw) {
+  root.__decillionEnv = function (raw) {
     env = hostValue(raw) || {};
     for (var i = 0; i < envListeners.length; i++) {
       try {
@@ -254,11 +254,11 @@
         }
       }
     }
-    throw new AsemanError("the agent's reply has no JSON", 0, "ask");
+    throw new DecillionError("the agent's reply has no JSON", 0, "ask");
   }
 
-  var Aseman = {
-    Error: AsemanError,
+  var Decillion = {
+    Error: DecillionError,
     Task: Task,
     plain: plain,
     event: eventOf,
@@ -291,17 +291,17 @@
       envListeners.push(fn);
     },
 
-    context: function (opts) { return request("aseman", "context", opts); },
-    tools: function (opts) { return request("aseman", "tools", opts).then(function (o) { return (o && o.tools) || []; }); },
+    context: function (opts) { return request("decillion", "context", opts); },
+    tools: function (opts) { return request("decillion", "tools", opts).then(function (o) { return (o && o.tools) || []; }); },
     microtools: function (tool, opts) {
-      return request("aseman", "microtools", merge(opts, { query: { tool: tool } })).then(function (o) { return (o && o.microtools) || []; });
+      return request("decillion", "microtools", merge(opts, { query: { tool: tool } })).then(function (o) { return (o && o.microtools) || []; });
     },
-    agents: function (opts) { return request("aseman", "agents", opts).then(function (o) { return (o && o.agents) || []; }); },
+    agents: function (opts) { return request("decillion", "agents", opts).then(function (o) { return (o && o.agents) || []; }); },
 
     // A space app's microtool: resolves to its unwrapped result (often a
     // text/markdown string, sometimes an object).
     call: function (tool, microtool, args, opts) {
-      return request("aseman", "call", merge(opts, { body: { tool: tool, microtool: microtool, args: args || {} } }))
+      return request("decillion", "call", merge(opts, { body: { tool: tool, microtool: microtool, args: args || {} } }))
         .then(function (o) { return o ? o.result : o; });
     },
 
@@ -312,13 +312,13 @@
       opts = opts || {};
       var body = { agent: agent, prompt: prompt };
       if (opts.history && opts.history.length) body.history = opts.history;
-      return request("aseman", "ask", merge(opts, { body: body }));
+      return request("decillion", "ask", merge(opts, { body: body }));
     },
 
     askJSON: function (agent, prompt, data, opts) {
       var text = prompt + (data !== undefined ? "\n\nData (JSON):\n" + safeStringify(data) : "") +
         "\n\nAnswer only with JSON, no prose.";
-      return Aseman.ask(agent, text, opts).then(function (r) { return parseJSON(r && r.reply); });
+      return Decillion.ask(agent, text, opts).then(function (r) { return parseJSON(r && r.reply); });
     },
 
     // A multi-turn conversation with one agent, kept in the program.
@@ -328,7 +328,7 @@
         history: function () { return turns.slice(); },
         reset: function () { turns.length = 0; },
         send: function (prompt, sendOpts) {
-          return Aseman.ask(agent, prompt, merge(sendOpts, { history: turns })).then(function (r) {
+          return Decillion.ask(agent, prompt, merge(sendOpts, { history: turns })).then(function (r) {
             var reply = (r && r.reply) || "";
             turns.push({ role: "user", content: prompt }, { role: "assistant", content: reply });
             return reply;
@@ -339,14 +339,14 @@
 
     // The app's own server (its backend in the sandbox): path relative to
     // the app, e.g. "api/orders". Resolves to {status, ok, json, text}.
-    // The server sees the person using the app (X-Aseman-User-Token).
+    // The server sees the person using the app (X-Decillion-User-Token).
     fetch: function (path, opts) {
       opts = opts || {};
       return request("app", String(path || "").replace(/^\/+/, ""), opts).then(function (r) {
         if (opts.raw) return r;
         if (r && !r.ok) {
           var msg = (r.json && (r.json.error || r.json.message)) || r.text || ("HTTP " + r.status);
-          throw new AsemanError(String(msg).slice(0, 300), r.status, path);
+          throw new DecillionError(String(msg).slice(0, 300), r.status, path);
         }
         return r;
       });
@@ -355,14 +355,14 @@
     // The compact widget on phones (see ELPIAN.md): {title, value, …}.
     compact: function (summary) {
       try {
-        ask("aseman.compact", JSON.stringify(summary || {}));
+        ask("decillion.compact", JSON.stringify(summary || {}));
       } catch (e) {
         /* not shown as a widget */
       }
     },
     expand: function () {
       try {
-        ask("aseman.expand", "");
+        ask("decillion.expand", "");
       } catch (e) {
         /* nothing to expand */
       }
@@ -399,7 +399,7 @@
     this.rendering = false;
     this.dirty = false;
     this.prefix = "__app" + handlerCount++ + "_";
-    Aseman.onEnv(function () { app.render(); });
+    Decillion.onEnv(function () { app.render(); });
   }
 
   // An event as handlers read it: plain JSON with its `data` fields also at
@@ -507,7 +507,7 @@
     var w = this.widgetSpec();
     if (!w || this.widgetStarted || !this.isWidget()) return;
     this.widgetStarted = true;
-    Aseman.compact({ view: "self", size: w.size || "medium", shape: w.shape || "card", static: !!w.static });
+    Decillion.compact({ view: "self", size: w.size || "medium", shape: w.shape || "card", static: !!w.static });
     var refresh = typeof w.refresh === "function" ? w.refresh : this.spec.init;
     if (typeof refresh === "function") {
       this.every("widget_refresh", w.refreshMs || 60000, function (app) {
@@ -594,8 +594,8 @@
 
   // Snapshot and restore of the first app's state (JSON): check.mjs uses them
   // to explore the app's states (fire every handler from every state).
-  root.__asemanSnapshot = function () {
-    var a = (root.__asemanApps || [])[0];
+  root.__decillionSnapshot = function () {
+    var a = (root.__decillionApps || [])[0];
     if (!a) return null;
     try {
       return JSON.stringify({ s: a.state, e: a.error || null });
@@ -603,8 +603,8 @@
       return null;
     }
   };
-  root.__asemanRestore = function (json) {
-    var a = (root.__asemanApps || [])[0];
+  root.__decillionRestore = function (json) {
+    var a = (root.__decillionApps || [])[0];
     if (!a) return;
     var v = JSON.parse(json);
     a.state = v.s;
@@ -615,10 +615,10 @@
   App.create = function (spec) {
     if (!spec || typeof spec.view !== "function") throw new Error("App.create needs view(state, app)");
     var app = new App(spec);
-    (root.__asemanApps || (root.__asemanApps = [])).push(app);
+    (root.__decillionApps || (root.__decillionApps = [])).push(app);
     app.render();
     app.startWidget();
-    Aseman.onEnv(function () { app.startWidget(); });
+    Decillion.onEnv(function () { app.startWidget(); });
     if (typeof spec.init === "function") {
       try {
         spec.init(app);
@@ -629,7 +629,7 @@
     return app;
   };
 
-  root.Aseman = Aseman;
+  root.Decillion = Decillion;
   root.App = App;
   root.Task = Task;
 })(typeof globalThis !== "undefined" ? globalThis : this);

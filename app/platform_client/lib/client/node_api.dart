@@ -72,7 +72,7 @@ class Session {
   final String handle;
 }
 
-/// How far waking the frontend's computer has got (`_aseman/wake`).
+/// How far waking the frontend's computer has got (`_decillion/wake`).
 class WakeReport {
   const WakeReport({required this.state, this.error = '', this.retryAfter = const Duration(seconds: 2)});
 
@@ -141,7 +141,7 @@ class NodeApi {
   /// Asks the frontend's computer to wake, waiting up to [wait]. Anyone may,
   /// so it carries no session: one that ended must not stop the wake.
   Future<WakeReport> wake({Duration wait = const Duration(seconds: 10)}) async {
-    final uri = Uri.parse('${config.frontendUrl}_aseman/wake?wait=${wait.inSeconds}');
+    final uri = Uri.parse('${config.frontendUrl}_decillion/wake?wait=${wait.inSeconds}');
     final http.Response res;
     try {
       res = await _http.post(uri).timeout(wait + _timeout);

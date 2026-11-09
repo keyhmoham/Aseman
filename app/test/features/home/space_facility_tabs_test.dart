@@ -234,7 +234,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('AssistBot').last);
     await tester.pumpAndSettle();
-    expect(service.calls.last, 'read .aseman/agents/agent-1/AGENTS.md');
+    expect(service.calls.last, 'read .decillion/agents/agent-1/AGENTS.md');
     expect(find.text('# Own notes'), findsOneWidget);
   });
 

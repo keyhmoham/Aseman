@@ -12,6 +12,7 @@ class ConnectionsPanel extends StatelessWidget {
   final AppDependencies dependencies;
 
   static const _channelNames = {
+    'telegram': 'Telegram',
     'slack': 'Slack',
     'teams': 'Microsoft Teams',
     'twilio': 'SMS',
@@ -72,7 +73,7 @@ class ConnectionsPanel extends StatelessWidget {
         .where((k) => offered[k] == true)
         .toList();
     return PanelSection(
-      title: 'Slack, Teams and SMS',
+      title: 'Telegram, Slack, Teams and SMS',
       subtitle:
           'Talk to your agents, answer approvals and get your brief where you already are.',
       children: [
@@ -85,7 +86,7 @@ class ConnectionsPanel extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             secondary: const Icon(Icons.forum_outlined),
             title: Text(
-              '${_channelNames[b['provider']] ?? b['provider']} · ${b['external']}',
+              '${_channelNames[b['provider']] ?? b['provider']} · ${'${b['name'] ?? ''}'.isNotEmpty ? b['name'] : b['external']}',
             ),
             subtitle: const Text('Send me briefs and finished tasks here'),
             value: b['notify'] == true,
@@ -155,6 +156,12 @@ class ConnectionsPanel extends StatelessWidget {
                             letterSpacing: 1,
                           ),
                         ),
+                        if ('${out['url'] ?? ''}'.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          const Text('Or, for Telegram, open this link and press Start:'),
+                          const SizedBox(height: 4),
+                          SelectableText('${out['url']}'),
+                        ],
                       ],
                     ),
                     actions: [

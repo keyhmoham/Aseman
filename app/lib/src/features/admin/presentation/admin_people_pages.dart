@@ -922,17 +922,17 @@ Widget _buildChatReportsPage(_AppPageContentState state) {
                           borderRadius: BorderRadius.circular(AppShape.controlOf(state.context)),
                         ),
                         leading: AdminAvatar(
-                          person(r['accused']),
+                          person(r['reported']),
                           icon: Icons.flag_rounded,
                           size: 40,
-                          avatar: _avatarOf(r['accused']),
+                          avatar: _avatarOf(r['reported']),
                         ),
                         title: Text(
                           '${_humanKey('${r['reason'] ?? 'other'}')} · ${r['kind'] == 'message' ? 'a message' : 'a chat'}',
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                         subtitle: Text(
-                          'About ${person(r['accused'])} · by ${person(r['reporter'])} · ${_date(r['created_at'])}',
+                          'About ${person(r['reported'])} · by ${person(r['reporter'])} · ${_date(r['created_at'])}',
                         ),
                         trailing: AdminStatusPill('${r['status'] ?? 'open'}'),
                         childrenPadding: const EdgeInsets.fromLTRB(
@@ -944,7 +944,7 @@ Widget _buildChatReportsPage(_AppPageContentState state) {
                         children: [
                           AdminKeyValue(
                             'Where',
-                            r['direct'] == true
+                            r['direct'] == true || r['room_id'] == null
                                 ? 'Direct chat'
                                 : '${r['space_name'] ?? 'Room'}',
                           ),
@@ -953,7 +953,7 @@ Widget _buildChatReportsPage(_AppPageContentState state) {
                           if (r['resolved_by'] != null)
                             AdminKeyValue(
                               'Decided by',
-                              '${person(r['resolved_by'])} · ${_date(r['resolved_at'])}',
+                              '${r['resolved_by'] is Map ? person(r['resolved_by']) : 'An admin'} · ${_date(r['resolved_at'])}',
                             ),
                           const SizedBox(height: 8),
                           Align(

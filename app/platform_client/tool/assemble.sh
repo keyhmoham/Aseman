@@ -8,13 +8,13 @@
 #
 #   tool/assemble.sh                 # in place (lib/src, assets/elpian), for development
 #   tool/assemble.sh <out-dir>       # a standalone copy at <out-dir>
-#   ASEMAN_APP=<app-dir> tool/assemble.sh <out-dir>   # the app is elsewhere
+#   DECILLION_APP=<app-dir> tool/assemble.sh <out-dir>   # the app is elsewhere
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-app="${ASEMAN_APP:-$(cd "$here/.." && pwd)}"
+app="${DECILLION_APP:-$(cd "$here/.." && pwd)}"
 out="${1:-$here}"
 list="$here/tool/shared.txt"
-[ -f "$app/lib/src/elpian/elpian.dart" ] || { echo "assemble: no Aseman app at $app (set ASEMAN_APP)" >&2; exit 1; }
+[ -f "$app/lib/src/elpian/elpian.dart" ] || { echo "assemble: no Aseman app at $app (set DECILLION_APP)" >&2; exit 1; }
 
 if [ "$out" != "$here" ]; then
   mkdir -p "$out"

@@ -1,9 +1,9 @@
 import 'package:flutter/services.dart';
 
 /// Loads the stock Aseman Elpian SDK plus a thin theme shim that exposes
-/// `Aseman.api(namespace, action, body)` → `target: "core"` for theme panels.
+/// `Decillion.api(namespace, action, body)` → `target: "core"` for theme panels.
 abstract final class ThemeElpianSdk {
-  static const assetPath = 'assets/elpian/aseman-elpian.js';
+  static const assetPath = 'assets/elpian/decillion-elpian.js';
 
   static String? _cached;
 
@@ -28,8 +28,8 @@ abstract final class ThemeElpianSdk {
   static const _themeShim = r'''
 (function (root) {
   "use strict";
-  var Aseman = root.Aseman;
-  if (!Aseman) return;
+  var Decillion = root.Decillion;
+  if (!Decillion) return;
 
   function ask(api, payload) {
     if (typeof root.askHost !== "function") throw new Error("askHost missing");
@@ -79,7 +79,7 @@ abstract final class ThemeElpianSdk {
   Task.prototype.catch = function (fail) { return this.then(null, fail); };
 
   // Full platform API as the signed-in person.
-  Aseman.api = function (namespace, action, body, opts) {
+  Decillion.api = function (namespace, action, body, opts) {
     opts = opts || {};
     var task = new Task();
     var id = "core" + Date.now().toString(36) + Math.floor(Math.random() * 1e6);
@@ -94,7 +94,7 @@ abstract final class ThemeElpianSdk {
       timeoutMs: opts.timeoutMs || 120000
     };
     try {
-      var accepted = ask("aseman.request", JSON.stringify(req));
+      var accepted = ask("decillion.request", JSON.stringify(req));
       if (accepted && accepted.error) {
         delete pending[id];
         task._settle("rejected", new Error(accepted.error));
@@ -106,8 +106,8 @@ abstract final class ThemeElpianSdk {
     return task;
   };
 
-  var prevSettle = root.__asemanSettle;
-  root.__asemanSettle = function (raw) {
+  var prevSettle = root.__decillionSettle;
+  root.__decillionSettle = function (raw) {
     var r = raw;
     if (typeof r === "string") {
       try { r = JSON.parse(r); } catch (e) {}
@@ -124,9 +124,9 @@ abstract final class ThemeElpianSdk {
     if (typeof prevSettle === "function") prevSettle(raw);
   };
 
-  Aseman.navigate = function (intent) {
+  Decillion.navigate = function (intent) {
     try {
-      ask("aseman.navigate", JSON.stringify(intent || {}));
+      ask("decillion.navigate", JSON.stringify(intent || {}));
       return true;
     } catch (e) {
       return false;

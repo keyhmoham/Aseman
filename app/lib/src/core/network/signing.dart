@@ -20,9 +20,9 @@ class RequestSigner {
   /// 64-byte Ed25519 private key as 128 hex chars (seed || public).
   final String _privateKeyHex;
 
-  static const _nonceHeader = 'X-Aseman-Nonce';
-  static const _timestampHeader = 'X-Aseman-Timestamp';
-  static const _signatureHeader = 'X-Aseman-Signature';
+  static const _nonceHeader = 'X-Decillion-Nonce';
+  static const _timestampHeader = 'X-Decillion-Timestamp';
+  static const _signatureHeader = 'X-Decillion-Signature';
 
   static const headerNonce = _nonceHeader;
   static const headerTimestamp = _timestampHeader;

@@ -55,7 +55,7 @@ flutter:
   assets:
     - assets/images/
     # The Elpian VM (WebAssembly) and QuickJS runtimes for the web build.
-    - assets/elpian/aseman-elpian.js
+    - assets/elpian/decillion-elpian.js
     - assets/elpian/web_runtime/quickjs_web_runtime.js
     - assets/elpian/web_runtime/elpian_wasm_loader.js
     - assets/elpian/web_runtime/vendor/quickjs-emscripten.mjs

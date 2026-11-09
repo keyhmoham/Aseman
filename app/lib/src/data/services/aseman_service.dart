@@ -194,7 +194,7 @@ class AsemanService implements BackendService {
     final base = client.baseUrl.replaceFirst(RegExp(r'/+$'), '');
     final res = await http
         .post(Uri.parse(
-            '$base/v1/platforms/$slug/app/_aseman/wake?wait=${wait.inSeconds}'))
+            '$base/v1/platforms/$slug/app/_decillion/wake?wait=${wait.inSeconds}'))
         .timeout(wait + const Duration(seconds: 30));
     final decoded = res.body.isEmpty ? null : jsonDecode(res.body);
     final map =

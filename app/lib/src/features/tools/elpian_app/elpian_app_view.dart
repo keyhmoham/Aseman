@@ -84,13 +84,13 @@ class _ElpianAppViewState extends State<ElpianAppView> {
     final encoded = jsonEncode(_env);
     if (_code != null && _envSent.isNotEmpty && encoded != _envSent) {
       _envSent = encoded;
-      _vm.callFunction('__asemanEnv', input: encoded);
+      _vm.callFunction('__decillionEnv', input: encoded);
     }
   }
 
   /// Called from layout with the space the program gets: a new size reaches
   /// the program after the frame (it lays itself out for phones, tablets
-  /// and desk windows from `Aseman.env().viewport`).
+  /// and desk windows from `Decillion.env().viewport`).
   void _layoutAt(Size size) {
     if (!size.width.isFinite || !size.height.isFinite) return;
     final rounded = Size(size.width.roundToDouble(), size.height.roundToDouble());
@@ -135,7 +135,7 @@ class _ElpianAppViewState extends State<ElpianAppView> {
       headers: widget.service.authHeaders,
       env: () => _env,
       settle: (result) =>
-          _vm.callFunction('__asemanSettle', input: jsonEncode(result)),
+          _vm.callFunction('__decillionSettle', input: jsonEncode(result)),
       onCompact: _onCompact,
       onExpand: () => FrontendPresentation.maybeOf(context)?.onExpand?.call(),
       onAsleep: widget.onAsleep,

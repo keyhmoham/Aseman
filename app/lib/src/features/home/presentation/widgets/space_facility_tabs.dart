@@ -250,7 +250,7 @@ class _SpaceMemoryTabState extends State<SpaceMemoryTab> {
   bool _preview = false;
 
   String get _path =>
-      _agent.isEmpty ? 'AGENTS.md' : '.aseman/agents/$_agent/AGENTS.md';
+      _agent.isEmpty ? 'AGENTS.md' : '.decillion/agents/$_agent/AGENTS.md';
   bool get _dirty => !_loading && _text.text != _saved;
 
   @override

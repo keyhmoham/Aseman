@@ -66,10 +66,10 @@ void main() {
     expect((theme['scheme'] as Map)['primary'], '#c7bfff');
     final url = Uri.parse(webPageUrl(service, _page, theme));
     expect(url.path, _page);
-    expect(url.queryParameters['aseman_theme'], 'dark');
-    expect(url.queryParameters['aseman_embed'], 'desk');
-    expect(url.queryParameters['aseman_accent'], '#8b7bff');
-    final scheme = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(url.queryParameters['aseman_scheme']!))));
+    expect(url.queryParameters['decillion_theme'], 'dark');
+    expect(url.queryParameters['decillion_embed'], 'desk');
+    expect(url.queryParameters['decillion_accent'], '#8b7bff');
+    final scheme = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(url.queryParameters['decillion_scheme']!))));
     expect(scheme['surface'], '#111119');
     expect(() => webPageUrl(service, 'https://evil.example/', theme), throwsFormatException);
   });

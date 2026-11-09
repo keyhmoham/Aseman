@@ -68,7 +68,7 @@ void main() {
       }));
       api.session = const Session(token: 'ended', accountId: 'a1', handle: 'sam');
       final report = await api.wake(wait: const Duration(seconds: 5));
-      expect(seen.single.url.toString(), 'https://n/v1/platforms/acme/app/_aseman/wake?wait=5');
+      expect(seen.single.url.toString(), 'https://n/v1/platforms/acme/app/_decillion/wake?wait=5');
       expect(seen.single.method, 'POST');
       expect(seen.single.headers.containsKey('Authorization'), isFalse);
       expect(report.state, 'waking');

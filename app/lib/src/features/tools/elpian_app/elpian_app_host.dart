@@ -149,7 +149,7 @@ class ElpianAppHost {
       case 'decillion':
         final op = '${req['op'] ?? ''}';
         if (!ops.contains(op)) {
-          throw FormatException('unknown Aseman op "$op"');
+          throw FormatException('unknown Decillion op "$op"');
         }
         rest = '_decillion/api/$op';
       case 'app':

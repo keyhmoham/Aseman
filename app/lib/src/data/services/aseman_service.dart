@@ -243,6 +243,7 @@ class AsemanService implements BackendService {
 
   Future<List<Workspace>> fetchSpaces({int limit = 100, int offset = 0}) async {
     final resp = await client.call('spaces', 'space_list', body: {
+      'kind': 'workspace',
       'limit': limit,
       if (offset > 0) 'offset': offset,
     });

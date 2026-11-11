@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/deferred/deferred_loader.dart';
 import '../../desk/domain/desk_models.dart';
 import 'workspace_screen.dart' deferred as workspace;
+
+/// The workspace library a desk surface draws with, loaded on first use.
+final _workspaceDesk = DeferredLoader(() => workspace.loadLibrary());
+
+/// Loads what a desk surface draws with.
+Future<void> loadDeskSurfaces() async => _workspaceDesk.ensure();
 
 /// Lazy [DeskSurfaceContent] so the feed canvas does not pull the full
 /// workspace + Elpian desk stack until a desk surface is actually painted.
@@ -30,9 +37,13 @@ class _DeskSurfaceContentState extends State<DeskSurfaceContent> {
   @override
   void initState() {
     super.initState();
-    workspace.loadLibrary().then((_) {
-      if (mounted) setState(() => _ready = true);
-    });
+    // Loaded already: draw the surface in this frame.
+    _ready = _workspaceDesk.isLoaded;
+    if (!_ready) {
+      _workspaceDesk.ensure()?.then((_) {
+        if (mounted) setState(() => _ready = true);
+      }).ignore();
+    }
   }
 
   @override

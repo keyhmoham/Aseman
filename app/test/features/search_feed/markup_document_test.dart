@@ -76,6 +76,17 @@ void main() {
     expect(c.text, 'ship this now');
   });
 
+  test('formatting snaps a selection to whole words', () {
+    expect(MarkupTextController.wordSpan('ship this now', 4, 7), (5, 9));
+    expect(MarkupTextController.wordSpan('Docs lag', 0, 3), (0, 4));
+    expect(MarkupTextController.wordSpan('a b', 1, 2), (1, 2)); // a space only
+    expect(MarkupTextController.wordSpan('naïve café', 1, 9), (0, 10));
+    final c = MarkupTextController(text: 'one two')
+      ..selection = const TextSelection(baseOffset: 0, extentOffset: 3);
+    c.toggleWrap('_', '_');
+    expect(c.text, '_one_ two');
+  });
+
   test('a forwarded post renders as a card naming its author', () {
     final md = forwardedPostMarkup(
       id: 'p1',

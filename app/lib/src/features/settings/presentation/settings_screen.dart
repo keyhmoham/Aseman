@@ -774,56 +774,68 @@ class _AccountCard extends StatelessWidget {
             identity: accountId,
             onChanged: dependencies!.sessionController.setAvatar,
           );
+    final identity = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '@$handle',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 20,
+            letterSpacing: -.3,
+            fontWeight: FontWeight.w900,
+            color: scheme.onSurface,
+          ),
+        ),
+        Text(
+          accountId.isEmpty ? 'Signed out' : accountId,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+        ),
+      ],
+    );
+    final actions = Wrap(
+      spacing: AppSpacing.xs,
+      runSpacing: AppSpacing.xs,
+      alignment: WrapAlignment.end,
+      children: [
+        OutlinedButton(
+          onPressed: dependencies == null ? null : onProfile,
+          child: const Text('Profile'),
+        ),
+        FilledButton(
+          onPressed: dependencies == null ? null : onManage,
+          child: const Text('Account'),
+        ),
+      ],
+    );
     return SoftCard(
       padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          avatar,
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '@$handle',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 20,
-                    letterSpacing: -.3,
-                    fontWeight: FontWeight.w900,
-                    color: scheme.onSurface,
-                  ),
-                ),
-                Text(
-                  accountId.isEmpty ? 'Signed out' : accountId,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Wrap(
-            spacing: AppSpacing.xs,
-            runSpacing: AppSpacing.xs,
-            alignment: WrapAlignment.end,
+      // A narrow card (a phone) puts the buttons under the name: beside it
+      // they cannot wrap and would push past the card's edge.
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final narrow = constraints.maxWidth < 420;
+          final header = Row(
             children: [
-              OutlinedButton(
-                onPressed: dependencies == null ? null : onProfile,
-                child: const Text('Profile'),
-              ),
-              FilledButton(
-                onPressed: dependencies == null ? null : onManage,
-                child: const Text('Account'),
-              ),
+              avatar,
+              const SizedBox(width: AppSpacing.md),
+              Expanded(child: identity),
+              if (!narrow) ...[const SizedBox(width: AppSpacing.xs), actions],
             ],
-          ),
-        ],
+          );
+          if (!narrow) return header;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              header,
+              const SizedBox(height: AppSpacing.md),
+              Align(alignment: AlignmentDirectional.centerEnd, child: actions),
+            ],
+          );
+        },
       ),
     );
   }

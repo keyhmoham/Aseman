@@ -1,5 +1,8 @@
 part of 'workspace_screen.dart';
 
+/// The Explore panel's key: where its search, sections and results are (for
+/// tests and anything that needs to tell it from the page under it).
+const exploreKey = ValueKey('explore');
 
 /// Opens Explore from the feed: a search across Aseman with no space scope,
 /// so it has no "in this space" tab. [onOpenSpace] opens a space the user is
@@ -12,6 +15,7 @@ Future<void> showExplore(
 }) => showFloatingPanel(
   context,
   _SearchPanel(
+    key: exploreKey,
     workspace: '',
     dependencies: dependencies,
     feed: true,
@@ -24,6 +28,7 @@ Future<void> showExplore(
 
 class _SearchPanel extends StatefulWidget {
   const _SearchPanel({
+    super.key,
     required this.workspace,
     this.spaceId = '',
     this.dependencies,

@@ -82,10 +82,40 @@ IconData adminToneIcon(AdminTone tone) => switch (tone) {
       AdminTone.neutral => Icons.radio_button_unchecked_rounded,
     };
 
+/// How many distinct series colours [adminPalette] gives.
+const adminPaletteSize = 6;
+
 /// Categorical colours for chart series, in a fixed order so the same slot
-/// always means the same colour on a page.
-List<Color> adminPalette(BuildContext context) =>
-    ThemeRoles.identityPool(context);
+/// always means the same colour on a page. The admin pages chart up to
+/// [adminPaletteSize] series side by side, so the palette is the theme's
+/// identity accent and distinct roles of its scheme — never a single colour
+/// (a pack's identity pool may be just one) and never the same colour twice
+/// (a unified pack's secondary is its accent): a missing slot is the accent
+/// turned around the colour wheel.
+List<Color> adminPalette(BuildContext context) {
+  final scheme = Theme.of(context).colorScheme;
+  final identity = ThemeRoles.identity(context, 'admin');
+  final palette = <Color>[];
+  void add(Color c) {
+    if (!palette.contains(c)) palette.add(c);
+  }
+
+  for (final c in [
+    identity,
+    scheme.tertiary,
+    scheme.secondary,
+    AppColors.successOf(context),
+    AppColors.warningOf(context),
+    AppColors.dangerOf(context),
+  ]) {
+    add(c);
+  }
+  final hsl = HSLColor.fromColor(identity);
+  for (var turn = 1; palette.length < adminPaletteSize; turn++) {
+    add(hsl.withHue((hsl.hue + turn * 360 / adminPaletteSize) % 360).toColor());
+  }
+  return palette.take(adminPaletteSize).toList();
+}
 
 /// A key figure. [progress] adds a thin meter under the value, [footer] any
 /// small visual (a sparkline, a stacked bar).

@@ -27,13 +27,20 @@ import '../../../shared/widgets/workspace_panel_motion.dart';
 import '../../admin/presentation/admin_screen.dart' deferred as admin;
 import '../../assistant/assistant.dart';
 import '../../desk/presentation/widgets_library.dart';
-import '../../home/presentation/explore_launcher.dart';
+import '../../home/presentation/workspace_entry.dart';
 import '../../messenger/presentation/chat_page.dart';
 import '../../messenger/presentation/messenger_panel.dart';
 import '../domain/feed_post.dart';
 import 'feed_post_card.dart';
 import 'post_editor.dart';
 import 'search_feed_view_model.dart';
+import '../../../core/deferred/deferred_loader.dart';
+
+/// The admin console, loaded when an administrator first opens it.
+final _adminConsole = DeferredLoader(() => admin.loadLibrary());
+
+/// Loads the admin console the feed opens.
+Future<void> loadFeedAdminConsole() async => _adminConsole.ensure();
 
 /// Landing page. On a wide screen the chats sit in the left rail, Aseman
 /// (chat + desk) in the center, and Explore (posts) in the right rail. On a
@@ -572,7 +579,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
           onOpenAdmin: !widget.dependencies.sessionController.isAdmin
               ? null
               : () async {
-                  await admin.loadLibrary();
+                  await _adminConsole.ensure();
                   if (!context.mounted) return;
                   await Navigator.of(context).push(
                     MaterialPageRoute<void>(

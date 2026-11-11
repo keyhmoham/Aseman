@@ -16,7 +16,7 @@ import '../../fake_aseman_service.dart';
 
 Finder profileAvatar() => find.descendant(
   of: find.byType(WorkspaceHeader),
-  matching: find.byType(CircleAvatar),
+  matching: find.byTooltip(WorkspaceHeader.profileTooltip),
 );
 
 Future<void> openAtlas(WidgetTester tester) async {

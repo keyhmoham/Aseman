@@ -1,5 +1,6 @@
 import 'package:aseman/src/core/theme/app_surfaces.dart';
 import 'package:aseman/src/core/theme/app_theme.dart';
+import 'package:aseman/src/core/theme/aseman_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -9,7 +10,9 @@ void main() {
     ('light', AppTheme.lightWith(Colors.teal)),
   ]) {
     test('$name theme gives every modal surface the same colour and scrim', () {
-      final overlay = AppSurfaces.overlay(theme.colorScheme);
+      // The pack's tokens set the overlay opacity (Sky: its own per mode).
+      final tokens = theme.extension<AsemanTokens>();
+      final overlay = AppSurfaces.overlay(theme.colorScheme, tokens: tokens);
       expect(theme.dialogTheme.backgroundColor, overlay);
       // Sheets / drawers paint [GlassSurface] themselves; chrome stays clear.
       expect(theme.bottomSheetTheme.backgroundColor, Colors.transparent);
@@ -26,7 +29,9 @@ void main() {
       expect(theme.bottomSheetTheme.modalBarrierColor, AppSurfaces.barrier);
       expect(theme.dialogTheme.shape, AppSurfaces.overlayShape);
       expect(theme.bottomSheetTheme.shape, AppSurfaces.sheetShape);
-      expect(theme.cardTheme.color, AppSurfaces.card(theme.colorScheme));
+      // In-page cards follow the pack's card recipe: Sky keeps them quiet,
+      // a solid surface.
+      expect(theme.cardTheme.color, theme.colorScheme.surface);
     });
 
     test('$name FABs use soft mist wash with a hairline rim', () {
@@ -143,10 +148,14 @@ void main() {
   });
 
   test('light glass stays translucent', () {
-    final scheme = AppTheme.light.colorScheme;
-    expect(AppSurfaces.card(scheme).a, AppSurfaces.cardAlpha);
-    expect(AppSurfaces.overlay(scheme).a, AppSurfaces.overlayAlpha);
-    expect(AppSurfaces.card(scheme).a, lessThan(.75));
-    expect(AppSurfaces.overlay(scheme).a, lessThan(.85));
+    final theme = AppTheme.light;
+    final tokens = theme.extension<AsemanTokens>()!;
+    final scheme = theme.colorScheme;
+    // The opacities are the pack's (Sky light: cards .96, modal chrome .88).
+    expect(AppSurfaces.card(scheme, tokens: tokens).a, tokens.cardAlpha);
+    expect(AppSurfaces.overlay(scheme, tokens: tokens).a, tokens.overlayAlpha);
+    expect(tokens.cardAlpha, lessThan(1));
+    // Modal chrome is more see-through than a card.
+    expect(tokens.overlayAlpha, lessThan(tokens.cardAlpha));
   });
 }

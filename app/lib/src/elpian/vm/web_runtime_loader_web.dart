@@ -2,11 +2,7 @@ import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
-/// Same-origin module URLs (Flutter asset catalog nests under `assets/`).
-const _wasmLoader =
-    'assets/assets/elpian/web_runtime/elpian_wasm_loader.js';
-const _quickJsRuntime =
-    'assets/assets/elpian/web_runtime/quickjs_web_runtime.js';
+import 'web_runtime_assets.dart';
 
 Future<void>? _loading;
 
@@ -16,8 +12,8 @@ Future<void> ensureElpianWebRuntimes() => _loading ??= _ensure();
 
 Future<void> _ensure() async {
   await Future.wait([
-    _importModule(_wasmLoader),
-    _importModule(_quickJsRuntime),
+    for (final asset in ElpianWebRuntimeAssets.all)
+      _importModule(ElpianWebRuntimeAssets.url(asset)),
   ]);
 
   final ensure = globalContext.getProperty('ensureElpianWasm'.toJS);

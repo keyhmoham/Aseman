@@ -13,6 +13,13 @@ import '../../shared/widgets/sky_ui.dart';
 import '../../shared/widgets/theme_slot_host.dart';
 import 'call_page.dart' deferred as call_page;
 import 'call_service.dart';
+import '../../core/deferred/deferred_loader.dart';
+
+/// The call screen, loaded when a call is first answered.
+final _callPage = DeferredLoader(() => call_page.loadLibrary());
+
+/// Loads the screen an answered call opens.
+Future<void> loadIncomingCallScreen() async => _callPage.ensure();
 
 /// Host wrapper that polls for incoming calls while signed in and shows an
 /// Accept / Decline banner when one is ringing.
@@ -99,7 +106,7 @@ class _CallOverlayState extends State<CallOverlay> {
       if (!mounted) return;
       final video = call['video'] == true ||
           (res['call'] is Map && (res['call'] as Map)['video'] == true);
-      await call_page.loadLibrary();
+      await _callPage.ensure();
       if (!mounted) return;
       await call_page.CallPage.open(
         context,

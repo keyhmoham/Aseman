@@ -7,6 +7,8 @@ import 'package:aseman/src/app.dart';
 import 'package:aseman/src/features/search_feed/presentation/search_feed_screen.dart';
 import 'package:aseman/src/app_dependencies.dart';
 import 'package:aseman/src/data/models/space.dart';
+import 'package:aseman/src/features/home/presentation/workspace_screen.dart'
+    show exploreKey;
 import 'package:aseman/src/shared/widgets/glass_surface.dart';
 import 'package:aseman/src/shared/widgets/workspace_header.dart';
 
@@ -30,7 +32,7 @@ void main() {
   /// Profile avatar in the floating app bar (desktop only; phones use You).
   Finder profileAvatar() => find.descendant(
     of: find.byType(WorkspaceHeader),
-    matching: find.byType(CircleAvatar),
+    matching: find.byTooltip(WorkspaceHeader.profileTooltip),
   );
 
   /// Opens the phone You tab (replaces the app-bar avatar on compact widths).
@@ -205,25 +207,26 @@ void main() {
     expect(find.text('Explore Aseman'), findsNothing);
 
     // Explore sits over the feed, whose side panels list the same names.
-    Finder inExplore(String text) => find.text(text).last;
+    Finder inExplore(String text) =>
+        find.descendant(of: find.byKey(exploreKey), matching: find.text(text));
     await tester.enterText(find.byType(TextField).last, 'a');
     await tester.pumpAndSettle();
     expect(inExplore('maya'), findsOneWidget);
 
-    await tester.tap(find.text('Chats').last);
+    await tester.tap(inExplore('Chats'));
     await tester.pumpAndSettle();
     expect(inExplore('Maya Chen'), findsOneWidget);
 
-    await tester.tap(find.text('Spaces').last);
+    await tester.tap(inExplore('Spaces'));
     await tester.pumpAndSettle();
     expect(inExplore('Atlas Collective'), findsOneWidget);
 
-    await tester.tap(find.text('Agents').last);
+    await tester.tap(inExplore('Agents'));
     await tester.pumpAndSettle();
     expect(inExplore('AlphaBot'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).last, 'home');
-    await tester.tap(find.text('Posts').last);
+    await tester.tap(inExplore('Posts'));
     await tester.pumpAndSettle();
     expect(
       inExplore('Private update inside the Home workspace.'),
@@ -243,11 +246,12 @@ void main() {
     await tester.pumpAndSettle();
 
     // Explore sits over the feed, whose side panels list the same names.
-    Finder inExplore(String text) => find.text(text).last;
+    Finder inExplore(String text) =>
+        find.descendant(of: find.byKey(exploreKey), matching: find.text(text));
     // The feed's search bar opens Explore.
     await tester.tap(find.text('Search Aseman…'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Chats').last);
+    await tester.tap(inExplore('Chats'));
     await tester.pumpAndSettle();
     await tester.tap(inExplore('Maya Chen'));
     await tester.pumpAndSettle();
@@ -256,7 +260,7 @@ void main() {
     await tester.tap(find.byTooltip('Close').last);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Spaces').last);
+    await tester.tap(inExplore('Spaces'));
     await tester.pumpAndSettle();
     await tester.tap(inExplore('Atlas Collective'));
     await tester.pumpAndSettle();
@@ -363,14 +367,9 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ASEMAN'));
-    await tester.pumpAndSettle();
+    // Opening Atlas lands on its general room (its desk, then its chat).
     await openAtlas(tester);
-    expect(find.text('My desk'), findsOneWidget);
-
-    // Open the "general" room so the room chat shows.
-    await tester.tap(find.text('general'));
-    await tester.pumpAndSettle();
+    expect(find.text('general desk'), findsOneWidget);
     expect(find.text('Live room'), findsOneWidget);
 
     // Open the mention picker and mention AssistBot.
@@ -555,11 +554,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ASEMAN'));
-    await tester.pumpAndSettle();
     await openAtlas(tester);
-    await tester.tap(find.text('general'));
-    await tester.pumpAndSettle();
 
     // The message body and the attached document preview render.
     expect(find.text('See attached'), findsOneWidget);
@@ -607,8 +602,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ASEMAN'));
-    await tester.pumpAndSettle();
     await openAtlas(tester);
 
     // Docs tab shows the text file.
@@ -636,8 +629,6 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ASEMAN'));
-    await tester.pumpAndSettle();
     await openAtlas(tester);
 
     // Open the Agents tab (Atlas has AssistBot installed).
@@ -666,8 +657,6 @@ void main() {
     await tester.pumpWidget(AsemanApp(dependencies: app()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ASEMAN'));
-    await tester.pumpAndSettle();
     await openAtlas(tester);
 
     // Open the search/discover panel (the left panel's search button).
@@ -726,11 +715,7 @@ void main() {
       AsemanApp(dependencies: AppDependencies.withService(service)),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('ASEMAN'));
-    await tester.pumpAndSettle();
     await openAtlas(tester);
-    await tester.tap(find.text('general'));
-    await tester.pumpAndSettle();
 
     // The log renders as a collapsed section header, not a chat bubble.
     expect(find.text('Plan'), findsOneWidget);
@@ -763,16 +748,16 @@ void main() {
     // The backend reports that the dev agent is currently working.
     service.workingAgent = 'dev';
 
+    // A working agent's indicator animates indefinitely (in the chats list
+    // too), so pump fixed durations instead of pumpAndSettle, which never
+    // settles while the animation repeats.
     await tester.pumpWidget(
       AsemanApp(dependencies: AppDependencies.withService(service)),
     );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('ASEMAN'));
-    await tester.pumpAndSettle();
-    await openAtlas(tester);
-    await tester.tap(find.text('general'));
-    // The indicator animates indefinitely, so pump fixed durations instead of
-    // pumpAndSettle (which never settles while the animation repeats).
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.text('Atlas Collective').first);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.text('general').first);
     await tester.pump(const Duration(seconds: 1));
 
     expect(find.text('dev'), findsOneWidget);
@@ -808,11 +793,7 @@ void main() {
       AsemanApp(dependencies: AppDependencies.withService(service)),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('ASEMAN'));
-    await tester.pumpAndSettle();
     await openAtlas(tester);
-    await tester.tap(find.text('general'));
-    await tester.pumpAndSettle();
 
     expect(find.textContaining('Landing Page'), findsOneWidget);
     expect(find.text('Open on the desk'), findsOneWidget);
@@ -830,11 +811,7 @@ void main() {
       AsemanApp(dependencies: AppDependencies.withService(service)),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('ASEMAN'));
-    await tester.pumpAndSettle();
     await openAtlas(tester);
-    await tester.tap(find.text('general'));
-    await tester.pumpAndSettle();
 
     // Open the designer from the composer.
     await tester.tap(find.byTooltip('Design a message'));

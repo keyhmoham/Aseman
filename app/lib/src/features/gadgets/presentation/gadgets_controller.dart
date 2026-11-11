@@ -55,6 +55,12 @@ class GadgetsController extends ChangeNotifier {
   String _spaceId = '';
   Timer? _poll;
   int _epoch = 0;
+  bool _disposed = false;
+
+  /// The on-screen surfaces showing a space's gadgets, oldest first: the
+  /// newest decides the space (a direct chat floating over a workspace),
+  /// and when it goes the one under it takes the controller back.
+  final List<GadgetsLease> _leases = [];
 
   List<GadgetInfo> get gadgets => _gadgets;
   String get spaceId => _spaceId;
@@ -96,8 +102,27 @@ class GadgetsController extends ChangeNotifier {
   GadgetState layoutOf(String gadgetId) =>
       _layout[gadgetId] ?? const GadgetState();
 
+  /// Claims the controller for [spaceId] while a surface showing that
+  /// space's gadgets is on screen. Surfaces take a lease when they mount and
+  /// [GadgetsLease.release] it when they go — never from `build`, where two
+  /// surfaces of different spaces would retarget each other every frame.
+  GadgetsLease lease(String spaceId) {
+    final lease = GadgetsLease._(this, spaceId);
+    _leases.add(lease);
+    attach(spaceId: spaceId);
+    return lease;
+  }
+
+  void _release(GadgetsLease lease) {
+    final wasCurrent = _leases.isNotEmpty && identical(_leases.last, lease);
+    _leases.remove(lease);
+    if (_disposed || !wasCurrent) return;
+    attach(spaceId: _leases.isEmpty ? '' : _leases.last.spaceId);
+  }
+
   /// Start (or retarget) loading. Empty [spaceId] loads only account gadgets.
   void attach({String spaceId = ''}) {
+    if (_disposed) return;
     final changed = spaceId != _spaceId;
     _spaceId = spaceId;
     _poll?.cancel();
@@ -124,7 +149,7 @@ class GadgetsController extends ChangeNotifier {
     }
     try {
       final list = await _api.list(spaceId: _spaceId);
-      if (epoch != _epoch) return;
+      if (_disposed || epoch != _epoch) return;
       error = null;
       _gadgets = list;
       // Drop layout for gadgets that disappeared; keep positions for the rest.
@@ -140,10 +165,10 @@ class GadgetsController extends ChangeNotifier {
         );
       }
     } catch (e) {
-      if (epoch != _epoch) return;
+      if (_disposed || epoch != _epoch) return;
       error = e;
     } finally {
-      if (epoch == _epoch) {
+      if (!_disposed && epoch == _epoch) {
         loading = false;
         notifyListeners();
       }
@@ -201,8 +226,27 @@ class GadgetsController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _poll?.cancel();
+    _leases.clear();
     super.dispose();
+  }
+}
+
+/// A surface's claim on the [GadgetsController] for its space
+/// ([GadgetsController.lease]).
+class GadgetsLease {
+  GadgetsLease._(this._controller, this.spaceId);
+
+  final GadgetsController _controller;
+  final String spaceId;
+  bool _released = false;
+
+  /// Gives the controller back to the surface under this one (once).
+  void release() {
+    if (_released) return;
+    _released = true;
+    _controller._release(this);
   }
 }
 

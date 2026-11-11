@@ -592,11 +592,15 @@ class MarkupTextController extends TextEditingController {
   /// Wraps the selection in [left] and [right], or unwraps it when it is
   /// already wrapped. With nothing selected, inserts the marks around
   /// [placeholder] and selects it.
+  ///
+  /// A selection is formatted by whole words, as word processors do: the
+  /// spaces at its ends are left out and a word it cuts into is taken whole
+  /// (`**` around " th" of "ship this" bolds "this", not " th").
   void toggleWrap(String left, String right, {String placeholder = 'text'}) {
     final t = text;
     var sel = selection;
     if (!sel.isValid) sel = TextSelection.collapsed(offset: t.length);
-    final start = sel.start, end = sel.end;
+    final (start, end) = wordSpan(t, sel.start, sel.end);
     // Unwrap a selection whose marks sit just outside it…
     if (start >= left.length &&
         end + right.length <= t.length &&
@@ -640,6 +644,34 @@ class MarkupTextController extends TextEditingController {
         extentOffset: start + left.length + inner.length,
       ),
     );
+  }
+
+  static final _wordChar = RegExp(r'[\p{L}\p{N}\p{M}_]', unicode: true);
+
+  /// The range [start]–[end] of [text] snapped to whole words: whitespace
+  /// at its ends dropped, and widened to the start and end of a word it cuts
+  /// into. An empty or all-space range stays where it is.
+  static (int, int) wordSpan(String text, int start, int end) {
+    if (start >= end) return (start, end);
+    var s = start, e = end;
+    while (s < e && text[s].trim().isEmpty) {
+      s++;
+    }
+    while (e > s && text[e - 1].trim().isEmpty) {
+      e--;
+    }
+    if (s == e) return (start, end);
+    while (s > 0 &&
+        _wordChar.hasMatch(text[s - 1]) &&
+        _wordChar.hasMatch(text[s])) {
+      s--;
+    }
+    while (e < text.length &&
+        _wordChar.hasMatch(text[e]) &&
+        _wordChar.hasMatch(text[e - 1])) {
+      e++;
+    }
+    return (s, e);
   }
 
   /// Replaces the selection with [snippet] and puts the caret after it.

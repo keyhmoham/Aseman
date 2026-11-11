@@ -2,7 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/aseman_tokens.dart';
 import '../../core/theme/theme_ui_spec.dart';
+import '../../core/deferred/deferred_loader.dart';
 import 'theme_elpian_surface.dart' deferred as theme_surface;
+
+/// The Elpian theme surface library, loaded on first use (once).
+final _themeSurface = DeferredLoader(() => theme_surface.loadLibrary());
+
+/// Loads the Elpian theme surface library.
+Future<void> loadThemeSurfaces() async => _themeSurface.ensure();
 
 /// Reads the active pack's [ThemeUiSpec].
 ThemeUiSpec themeUiOf(BuildContext context) =>
@@ -85,12 +92,15 @@ class _DeferredThemePanelState extends State<_DeferredThemePanel> {
   @override
   void initState() {
     super.initState();
-    _load();
+    // Loaded already: draw the panel in this frame, with no flash of the
+    // built-in UI.
+    _ready = _themeSurface.isLoaded;
+    if (!_ready) _load();
   }
 
   Future<void> _load() async {
     try {
-      await theme_surface.loadLibrary();
+      await _themeSurface.ensure();
       if (mounted) setState(() => _ready = true);
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -235,9 +245,12 @@ class _DeferredThemeIslandState extends State<_DeferredThemeIsland> {
   @override
   void initState() {
     super.initState();
-    theme_surface.loadLibrary().then((_) {
-      if (mounted) setState(() => _ready = true);
-    });
+    _ready = _themeSurface.isLoaded;
+    if (!_ready) {
+      _themeSurface.ensure()?.then((_) {
+        if (mounted) setState(() => _ready = true);
+      }).ignore();
+    }
   }
 
   @override

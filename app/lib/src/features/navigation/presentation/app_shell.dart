@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../assistant/assistant.dart';
 import '../../gadgets/presentation/gadgets_controller.dart';
-import '../../home/presentation/workspace_screen.dart' deferred as workspace;
+import '../../home/presentation/workspace_entry.dart' as workspace_entry;
 import '../../search_feed/presentation/rich_post_content.dart';
 import '../../search_feed/presentation/search_feed_screen.dart';
 
@@ -37,16 +37,12 @@ class _AppShellState extends State<AppShell> {
     // A post's author (or a shared post's original author) opens their
     // profile wherever the post shows.
     PostLinks.openAccount = (context, accountId, handle) {
-      unawaited(() async {
-        await workspace.loadLibrary();
-        if (!context.mounted) return;
-        workspace.showAccountProfile(
-          context,
-          widget.dependencies,
-          accountId: accountId,
-          handle: handle,
-        );
-      }());
+      unawaited(workspace_entry.showAccountProfile(
+        context,
+        widget.dependencies,
+        accountId: accountId,
+        handle: handle,
+      ));
     };
     // On a desktop where the person let agents use this computer, keep
     // answering them.
@@ -91,7 +87,7 @@ class _AppShellState extends State<AppShell> {
   /// The workspace library is deferred so Pulse/login do not download the
   /// desk + tools + Elpian stack until a space is opened.
   Future<void> _pushWorkspace() async {
-    await workspace.loadLibrary();
+    await workspace_entry.loadWorkspace();
     if (!mounted) return;
     final navigator = Navigator.of(context);
     // Avoid stacking a second desk if Home somehow fires again while one is
@@ -111,7 +107,7 @@ class _AppShellState extends State<AppShell> {
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
           pageBuilder: (context, animation, secondaryAnimation) =>
-              workspace.WorkspaceScreen(
+              workspace_entry.workspaceScreen(
             key: const ValueKey('workspace-desk'),
             dependencies: widget.dependencies,
             initialWorkspace: _workspace,

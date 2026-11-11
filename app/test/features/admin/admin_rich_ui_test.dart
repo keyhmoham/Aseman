@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aseman/src/features/account/presentation/account_hub_content.dart';
 import 'package:aseman/src/features/account/presentation/account_panel.dart';
 import 'package:aseman/src/features/admin/presentation/admin_page_content.dart';
+import 'package:aseman/src/core/theme/app_theme.dart';
 import 'package:aseman/src/features/admin/presentation/admin_widgets.dart';
 
 void main() {
@@ -196,7 +197,8 @@ void main() {
         notificationsSupported: false,
       ),
     );
-    expect(find.text('Available balance'), findsOneWidget);
+    // Metric labels read in capitals, like the section titles.
+    expect(find.text('AVAILABLE BALANCE'), findsOneWidget);
     expect(find.text('Add credits'), findsOneWidget);
     expect(find.text('WALLET ACTIVITY'), findsOneWidget);
     expect(find.text('Top-up'), findsOneWidget);
@@ -204,5 +206,24 @@ void main() {
     expect(find.text('Credits that expire'), findsOneWidget);
     expect(find.textContaining('Welcome credits'), findsNWidgets(2));
     expect(find.text('Promo · expired 1 Feb 2026'), findsOneWidget);
+  });
+
+  testWidgets('admin charts get a distinct colour for every series slot', (
+    tester,
+  ) async {
+    late List<Color> palette;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.darkWith(const Color(0xFF8B7BFF)),
+        home: Builder(
+          builder: (context) {
+            palette = adminPalette(context);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    expect(palette, hasLength(adminPaletteSize));
+    expect(palette.toSet(), hasLength(adminPaletteSize));
   });
 }

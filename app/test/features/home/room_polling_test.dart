@@ -10,6 +10,7 @@ import 'package:aseman/src/data/models/space.dart';
 import 'package:aseman/src/features/rooms/domain/room_work.dart';
 
 import '../../fake_aseman_service.dart';
+import '../../navigation.dart';
 
 typedef _Page = ({
   List<RoomMessage> messages,
@@ -78,12 +79,7 @@ void main() {
     await tester.pumpWidget(
         AsemanApp(dependencies: AppDependencies.withService(service)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('ASEMAN'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Collective').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('general'));
-    await tester.pumpAndSettle();
+    await openSpaceRoom(tester);
   }
 
   testWidgets('the room\'s Work button shows what its agents did',
@@ -170,7 +166,7 @@ void main() {
         reason: 'Do not overlap polls for one room');
     await tester.tap(find.text('Ideas'));
     await tester.pumpAndSettle();
-    expect(find.text('Macro room content'), findsOneWidget);
+    expect(find.text('Ideas room content'), findsOneWidget);
     expect(tester.widget<TextField>(composer).controller!.text, isEmpty);
     pending.complete((
       messages: [_message('late', 'a1', 'Late general response')],
@@ -179,7 +175,7 @@ void main() {
       hasMore: false,
     ));
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.text('Macro room content'), findsOneWidget);
+    expect(find.text('Ideas room content'), findsOneWidget);
     expect(find.text('Late general response'), findsNothing);
     expect(find.text('old-worker'), findsNothing);
     await tester.pumpWidget(const SizedBox());

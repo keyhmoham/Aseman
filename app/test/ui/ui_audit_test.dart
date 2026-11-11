@@ -27,7 +27,7 @@ import '../features/admin/admin_fixtures.dart' show loadFonts;
 
 Finder profileAvatar() => find.descendant(
   of: find.byType(WorkspaceHeader),
-  matching: find.byType(CircleAvatar),
+  matching: find.byTooltip(WorkspaceHeader.profileTooltip),
 );
 
 Future<void> openProfile(WidgetTester tester, {required bool phone}) async {
@@ -396,9 +396,23 @@ void main() {
           ),
         );
       }, roomService());
+      // On a phone the feed is the Explore tab (the app opens on Chats).
+      Future<void> openFeed() async {
+        if (!phone) return;
+        await tester.tap(
+          find.descendant(
+            of: find.byType(HomeTabBar),
+            matching: find.text('Explore'),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
       await app('feed_following', () async {
+        await openFeed();
         await tester.tap(find.text('Following').first);
       });
+      // Spaces and Chats: the chats list's filter (a phone's Chats tab).
       await app('feed_spaces', () async {
         await tester.tap(find.text('Spaces').first);
       });
@@ -406,9 +420,8 @@ void main() {
         await tester.tap(find.text('Chats').first);
       });
       await app('feed_explore', () async {
-        await tester.tap(
-          find.text('Search Aseman…'),
-        );
+        await openFeed();
+        await tester.tap(find.text('Search Aseman…'));
         await tester.pumpAndSettle();
         await tester.enterText(find.byType(TextField).last, 'a');
       });

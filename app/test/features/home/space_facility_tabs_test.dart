@@ -8,6 +8,8 @@ import 'package:aseman/src/features/home/presentation/widgets/space_facility_tab
 
 import '../../fake_aseman_service.dart';
 
+import '../../navigation.dart';
+
 /// Answers the facility tabs' actions and records what they sent.
 class _Service extends FakeAsemanService {
   final calls = <String>[];
@@ -272,10 +274,7 @@ void main() {
       AsemanApp(dependencies: AppDependencies.withService(_Service())),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('ASEMAN'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Collective').last);
-    await tester.pumpAndSettle();
+    await openSpaceRoom(tester);
 
     await tester.tap(find.byTooltip('Apps'));
     await tester.pumpAndSettle();

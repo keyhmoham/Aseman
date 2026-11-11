@@ -126,33 +126,43 @@ class GlassSurface extends StatelessWidget {
     final radius = _resolveRadius(context, borderRadius);
     final shape = _shape(context, borderRadius ?? radius);
     final sigma = blur ?? AppSurfaces.blurSigmaResolved(tokens);
-    final useBlur = (blur != null && blur! > 0) ||
-        (blur == null && ThemeChrome.wantsGlassBlur(context));
     final overlayA = AppSurfaces.overlayAlphaResolved(tokens);
     final cardA = AppSurfaces.cardAlphaResolved(tokens);
+    // Modal chrome (sheets, drawers, floating panels) is asked for with the
+    // overlay opacity and follows the pack's sheet recipe; anything else is
+    // an in-page card and follows its card recipe. A pack can keep cards
+    // quiet and opaque while its overlays stay frosted glass.
+    final overlay =
+        alpha != null &&
+        (alpha == overlayA || alpha == AppSurfaces.overlayAlpha);
+    final slot = overlay ? 'sheet' : 'card';
+    final recipe = tokens?.control(slot);
+    final useBlur =
+        (blur != null && blur! > 0) ||
+        (blur == null && ThemeChrome.wantsGlassBlur(context, slot: slot));
     final standard = color == null && AppSurfaces.standardAlpha(alpha, tokens);
     final light = scheme.brightness == Brightness.light && standard;
-    final solidFill = card?.fill == FillKind.solid ||
-        card?.fill == FillKind.outline ||
+    final solidFill =
+        recipe?.fill == FillKind.solid ||
+        recipe?.fill == FillKind.outline ||
         !useBlur;
     final fill = solidFill
         ? (color ??
-            (card?.fill == FillKind.solid
-                ? scheme.surface
-                : AppSurfaces.card(scheme, tokens: tokens)))
+              (recipe?.fill == FillKind.solid
+                  ? scheme.surface
+                  : AppSurfaces.card(scheme, tokens: tokens)))
         : (light
-                ? AppSurfaces.tint(scheme)
-                : (color ?? scheme.surfaceContainerHigh))
-            .withValues(
-              alpha: light
-                  ? AppSurfaces.tintAlpha(
-                      scheme,
-                      overlay: alpha == overlayA ||
-                          alpha == AppSurfaces.overlayAlpha,
-                      tokens: tokens,
-                    )
-                  : (alpha ?? cardA),
-            );
+                  ? AppSurfaces.tint(scheme)
+                  : (color ?? scheme.surfaceContainerHigh))
+              .withValues(
+                alpha: light
+                    ? AppSurfaces.tintAlpha(
+                        scheme,
+                        overlay: overlay,
+                        tokens: tokens,
+                      )
+                    : (alpha ?? cardA),
+              );
 
     Widget body = Material(
       color: fill,

@@ -295,6 +295,27 @@ services:
     ports:
       - "${WEB_PORT:-3000}:80"
 
+  # The Flutter web app alone, on a Decillion node elsewhere instead of this
+  # stack's (`./aseman.sh up --decillion`): nothing else is built or started.
+  # Its nginx forwards /v1, /fed and /healthz to DECILLION_API_URL (default
+  # https://preview.decillionai.com) on the app's own origin.
+  web-decillion:
+    profiles: [decillion]
+    build:
+      context: ./app
+      args:
+        DEVELOPER_API_BASE: ${DEVELOPER_API_BASE:-${DEVELOPER_DOMAIN:+https://${DEVELOPER_DOMAIN}/v1}}
+    image: aseman/flutter-web:latest
+    restart: unless-stopped
+    environment:
+      DECILLION_API_URL: ${DECILLION_API_URL:-https://preview.decillionai.com}
+      DECILLION_API_HOST: ${DECILLION_API_HOST:-preview.decillionai.com}
+      NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx
+    volumes:
+      - ./app/deploy/api.decillion.conf.template:/etc/nginx/templates/aseman-api.conf.template:ro
+    ports:
+      - "${WEB_PORT:-3000}:80"
+
   # Workload identity (SPIFFE/SPIRE), optional: docker compose --profile spire up
   # (deploy/spire/README.md).
   spire-server:

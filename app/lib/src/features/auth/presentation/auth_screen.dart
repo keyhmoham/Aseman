@@ -8,6 +8,7 @@ import '../../../core/network/session_controller.dart';
 import '../../../core/platform/platform_mode.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/theme_pack_controller.dart';
+import '../../../data/services/aseman_service.dart' show AuthConfig;
 import '../../../shared/widgets/app_brand.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
@@ -124,7 +125,18 @@ class _AuthScreenState extends State<AuthScreen>
   final emailController = TextEditingController();
   final accountController = TextEditingController();
   final passwordController = TextEditingController();
+  final inviteController = TextEditingController();
   bool _obscure = true;
+
+  /// How the node takes new people (`auth.config`): open, by invite code or
+  /// closed, and whether a new account verifies its email before signing in.
+  AuthConfig _config = const AuthConfig();
+
+  bool get _creating => tabs.index == 1 && !_config.signupClosed;
+
+  /// The invite code a sign-up (or a first Google / Apple sign-in) carries.
+  String get _inviteCode =>
+      _creating && _config.inviteOnly ? inviteController.text.trim() : '';
   bool _providersLoading = true;
   bool _googleEnabled = false;
   List<String> _ssoProviders = const [];
@@ -146,8 +158,9 @@ class _AuthScreenState extends State<AuthScreen>
         if (!tabs.indexIsChanging && mounted) setState(() {});
       });
     _googleTokens = FederatedSignIn.instance.googleTokens.listen(_finishGoogle);
-    _googleErrors =
-        FederatedSignIn.instance.googleErrors.listen(_providerError);
+    _googleErrors = FederatedSignIn.instance.googleErrors.listen(
+      _providerError,
+    );
     _loadProviders();
     _loadSso();
   }
@@ -179,13 +192,14 @@ class _AuthScreenState extends State<AuthScreen>
 
   void _snack(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
   Future<void> _sso() async {
     final email = await _textDialog(
-        title: 'Continue with single sign-on', label: 'Work email');
+      title: 'Continue with single sign-on',
+      label: 'Work email',
+    );
     if (email == null || email.trim().isEmpty || !mounted) return;
     try {
       await signInWithSso(context, widget.dependencies, email.trim());
@@ -201,6 +215,7 @@ class _AuthScreenState extends State<AuthScreen>
     emailController.dispose();
     accountController.dispose();
     passwordController.dispose();
+    inviteController.dispose();
     _googleTokens?.cancel();
     _googleErrors?.cancel();
     super.dispose();
@@ -212,15 +227,34 @@ class _AuthScreenState extends State<AuthScreen>
     FocusScope.of(context).unfocus();
     final controller = session;
     final bool ok;
-    if (tabs.index == 0) {
+    if (!_creating) {
       ok = await controller.login(
-          accountController.text.trim(), passwordController.text);
+        accountController.text.trim(),
+        passwordController.text,
+      );
+      // A node that verifies emails refuses an account that has not been:
+      // send the code and take it here.
+      if (!ok && mounted && _needsVerification(controller.error)) {
+        final account = accountController.text.trim();
+        await _verifyEmail(email: account.contains('@') ? account : null);
+        return;
+      }
     } else {
+      if (_config.inviteOnly && inviteController.text.trim().isEmpty) {
+        _snack('Enter your invite code to create an account.');
+        return;
+      }
       ok = await controller.register(
         handleController.text.trim(),
         emailController.text.trim(),
         passwordController.text,
+        inviteCode: _inviteCode,
+        verifyFirst: _config.emailVerify,
       );
+      if (ok && _config.emailVerify && mounted) {
+        await _verifyEmail(email: emailController.text.trim());
+        return;
+      }
     }
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -229,18 +263,27 @@ class _AuthScreenState extends State<AuthScreen>
     }
   }
 
+  static bool _needsVerification(String? error) {
+    final e = (error ?? '').toLowerCase();
+    return e.contains('verify your email') ||
+        e.contains('email address before signing in');
+  }
+
   Future<void> _loadProviders() async {
     try {
-      final value = await widget.dependencies.service
-          .invokeAction('auth', 'config') as Map?;
-      final google = value?['google'] == true;
-      final clientId = '${value?['google_client_id'] ?? ''}'.trim();
+      final config = await widget.dependencies.service.authConfig();
+      if (mounted) {
+        setState(() => _config = config);
+        if (config.signupClosed) tabs.index = 0;
+      }
+      final google = config.google;
+      final clientId = config.googleClientId;
       var googleReady = false;
       if (google && clientId.isNotEmpty) {
         await FederatedSignIn.instance.initializeGoogle(clientId);
         googleReady = true;
       }
-      var apple = value?['apple'] == true;
+      var apple = config.apple;
       if (apple) apple = await FederatedSignIn.instance.appleAvailable();
       if (!mounted) return;
       setState(() {
@@ -255,17 +298,19 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   Future<void> _finishGoogle(String token) async {
-    final ok = await session.oauth('google', token);
+    final ok = await session.oauth('google', token, inviteCode: _inviteCode);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(session.error ?? 'Sign-in failed')));
+        SnackBar(content: Text(session.error ?? 'Sign-in failed')),
+      );
     }
   }
 
   void _providerError(Object error) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('Google sign-in failed: $error')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Google sign-in failed: $error')));
   }
 
   Future<void> _googleOAuth() async {
@@ -279,15 +324,17 @@ class _AuthScreenState extends State<AuthScreen>
   Future<void> _appleOAuth() async {
     try {
       final token = await FederatedSignIn.instance.authenticateApple();
-      final ok = await session.oauth('apple', token);
+      final ok = await session.oauth('apple', token, inviteCode: _inviteCode);
       if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(session.error ?? 'Sign-in failed')));
+          SnackBar(content: Text(session.error ?? 'Sign-in failed')),
+        );
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Apple sign-in failed: $error')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Apple sign-in failed: $error')));
       }
     }
   }
@@ -310,11 +357,13 @@ class _AuthScreenState extends State<AuthScreen>
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, controller.text),
-              child: const Text('Continue')),
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Continue'),
+          ),
         ],
       ),
     );
@@ -326,54 +375,78 @@ class _AuthScreenState extends State<AuthScreen>
     final email = await _textDialog(title: 'Reset password', label: 'Email');
     if (email == null || email.trim().isEmpty || !mounted) return;
     try {
-      await widget.dependencies.service.invokeAction('auth', 'password_forgot',
-          body: {'email': email.trim(), ...PlatformMode.authField});
+      await widget.dependencies.service.invokeAction(
+        'auth',
+        'password_forgot',
+        body: {'email': email.trim(), ...PlatformMode.authField},
+      );
       if (!mounted) return;
       final code = await _textDialog(title: 'Verification code', label: 'Code');
       if (code == null || code.trim().isEmpty || !mounted) return;
       final password = await _textDialog(
-          title: 'Choose a new password', label: 'New password', obscure: true);
+        title: 'Choose a new password',
+        label: 'New password',
+        obscure: true,
+      );
       if (password == null || password.isEmpty || !mounted) return;
-      await widget.dependencies.service
-          .invokeAction('auth', 'password_reset', body: {
-        'email': email.trim(),
-        'code': code.trim(),
-        'password': password,
-        ...PlatformMode.authField,
-      });
+      await widget.dependencies.service.invokeAction(
+        'auth',
+        'password_reset',
+        body: {
+          'email': email.trim(),
+          'code': code.trim(),
+          'password': password,
+          ...PlatformMode.authField,
+        },
+      );
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Password updated. You can sign in now.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password updated. You can sign in now.'),
+          ),
+        );
     } catch (error) {
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Password reset failed: $error')));
+          SnackBar(content: Text('Password reset failed: $error')),
+        );
     }
   }
 
-  Future<void> _verifyEmail() async {
-    final email = emailController.text.trim().isNotEmpty
+  /// Sends a verification code to [email] (asked for when not given) and
+  /// takes it; with the password typed, a verified account is signed in.
+  Future<void> _verifyEmail({String? email}) async {
+    email ??= emailController.text.trim().isNotEmpty
         ? emailController.text.trim()
         : await _textDialog(title: 'Verify email', label: 'Email');
     if (email == null || email.isEmpty || !mounted) return;
     try {
-      await widget.dependencies.service
-          .invokeAction('auth', 'send_verification',
-              body: {'email': email, ...PlatformMode.authField});
+      final delivery = await widget.dependencies.service.sendVerification(
+        email,
+      );
       if (!mounted) return;
-      final code =
-          await _textDialog(title: 'Verify email', label: '6-digit code');
+      final code = await _textDialog(
+        title: 'Verify email',
+        label: delivery == 'log'
+            ? '6-digit code (ask the node\'s administrator)'
+            : '6-digit code sent to $email',
+      );
       if (code == null || code.isEmpty || !mounted) return;
       final verified = await widget.dependencies.service.verifyEmail(
-          email: email, code: code, password: passwordController.text);
+        email: email,
+        code: code,
+        password: passwordController.text,
+      );
       if (verified != null) await session.adopt(verified);
       if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Email verified')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Email verified')));
     } catch (error) {
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Verification failed: $error')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Verification failed: $error')));
     }
   }
 
@@ -398,14 +471,14 @@ class _AuthScreenState extends State<AuthScreen>
                       Text(
                         PlatformMode.active
                             ? (_platform?.name.isNotEmpty == true
-                                ? _platform!.name
-                                : PlatformMode.slug)
+                                  ? _platform!.name
+                                  : PlatformMode.slug)
                             : 'Aseman',
-                        style:
-                            Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: -0.5,
-                                ),
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                            ),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -413,8 +486,8 @@ class _AuthScreenState extends State<AuthScreen>
                             ? 'Sign in or create your account'
                             : 'Your federated agentic workspace',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       const SizedBox(height: 28),
                       _panel(context),
@@ -443,134 +516,159 @@ class _AuthScreenState extends State<AuthScreen>
       radius: AppShape.card,
       elevated: true,
       padding: const EdgeInsets.all(20),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        SegmentedTabBar(
-          controller: tabs,
-          labels: const ['Log in', 'Create account'],
-          icons: const [Icons.login_rounded, Icons.person_add_alt_rounded],
-        ),
-        const SizedBox(height: 20),
-        if (tabs.index == 0) ...[
-          TextField(
-            controller: accountController,
-            textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(
-              labelText: 'Handle or email',
-              prefixIcon: Icon(Icons.person_outline),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // A node that takes no new people offers only signing in.
+          if (!_config.signupClosed)
+            SegmentedTabBar(
+              controller: tabs,
+              labels: const ['Log in', 'Create account'],
+              icons: const [Icons.login_rounded, Icons.person_add_alt_rounded],
             ),
-          ),
-          const SizedBox(height: 12),
-        ] else ...[
-          TextField(
-            controller: handleController,
-            textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(
-              labelText: 'Handle',
-              prefixIcon: Icon(Icons.alternate_email),
+          const SizedBox(height: 20),
+          if (!_creating) ...[
+            TextField(
+              controller: accountController,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(
+                labelText: 'Handle or email',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: emailController,
-            textInputAction: TextInputAction.next,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'Email',
-              prefixIcon: Icon(Icons.mail_outline),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-        TextField(
-          controller: passwordController,
-          obscureText: _obscure,
-          onSubmitted: (_) => _submit(),
-          decoration: InputDecoration(
-            labelText: 'Password',
-            prefixIcon: const Icon(Icons.lock_outline),
-            suffixIcon: IconButton(
-              icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
-              onPressed: () => setState(() => _obscure = !_obscure),
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: FilledButton(
-            onPressed: session.isBusy ? null : _submit,
-            child: Text(tabs.index == 0 ? 'Log in' : 'Create account'),
-          ),
-        ),
-        if (tabs.index == 0)
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-                onPressed: _forgotPassword,
-                child: const Text('Forgot password?')),
-          )
-        else
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-                onPressed: _verifyEmail, child: const Text('Verify email')),
-          ),
-        if (_providersLoading ||
-            _googleEnabled ||
-            _appleEnabled ||
-            _ssoProviders.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          const Row(children: [
-            Expanded(child: Divider()),
-            Padding(
-                padding: EdgeInsets.symmetric(horizontal: 10),
-                child: Text('OR')),
-            Expanded(child: Divider())
-          ]),
-          const SizedBox(height: 10),
-          if (_providersLoading) ...const [
-            SkeletonField(height: 48),
-            SizedBox(height: 10),
-            SkeletonField(height: 48),
+            const SizedBox(height: 12),
           ] else ...[
-            if (_googleEnabled)
-              SizedBox(
-                width: double.infinity,
-                child: buildGoogleSignInButton(
-                  ready: _googleReady,
-                  busy: session.isBusy,
-                  onPressed: _googleOAuth,
+            TextField(
+              controller: handleController,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(
+                labelText: 'Handle',
+                prefixIcon: Icon(Icons.alternate_email),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: emailController,
+              textInputAction: TextInputAction.next,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                prefixIcon: Icon(Icons.mail_outline),
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (_config.inviteOnly) ...[
+              TextField(
+                controller: inviteController,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Invite code',
+                  helperText: 'This node takes new people by invitation',
+                  prefixIcon: Icon(Icons.key_outlined),
                 ),
               ),
-            if (_googleEnabled && _appleEnabled) const SizedBox(height: 10),
-            if (_appleEnabled)
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton.icon(
-                  onPressed: session.isBusy ? null : _appleOAuth,
-                  icon: const Icon(Icons.apple),
-                  label: const Text('Continue with Apple'),
-                ),
+              const SizedBox(height: 12),
+            ],
+          ],
+          TextField(
+            controller: passwordController,
+            obscureText: _obscure,
+            onSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              labelText: 'Password',
+              prefixIcon: const Icon(Icons.lock_outline),
+              suffixIcon: IconButton(
+                icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+                onPressed: () => setState(() => _obscure = !_obscure),
               ),
-            if (_ssoProviders.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton.icon(
-                  onPressed: session.isBusy ? null : _sso,
-                  icon: const Icon(Icons.business_rounded),
-                  label: Text(_ssoProviders.length == 1
-                      ? 'Continue with ${_ssoProviders.first}'
-                      : 'Continue with single sign-on'),
-                ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton(
+              onPressed: session.isBusy ? null : _submit,
+              child: Text(_creating ? 'Create account' : 'Log in'),
+            ),
+          ),
+          if (!_creating)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _forgotPassword,
+                child: const Text('Forgot password?'),
               ),
+            )
+          else
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _verifyEmail,
+                child: const Text('Verify email'),
+              ),
+            ),
+          if (_providersLoading ||
+              _googleEnabled ||
+              _appleEnabled ||
+              _ssoProviders.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Row(
+              children: [
+                Expanded(child: Divider()),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('OR'),
+                ),
+                Expanded(child: Divider()),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (_providersLoading) ...const [
+              SkeletonField(height: 48),
+              SizedBox(height: 10),
+              SkeletonField(height: 48),
+            ] else ...[
+              if (_googleEnabled)
+                SizedBox(
+                  width: double.infinity,
+                  child: buildGoogleSignInButton(
+                    ready: _googleReady,
+                    busy: session.isBusy,
+                    onPressed: _googleOAuth,
+                  ),
+                ),
+              if (_googleEnabled && _appleEnabled) const SizedBox(height: 10),
+              if (_appleEnabled)
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: session.isBusy ? null : _appleOAuth,
+                    icon: const Icon(Icons.apple),
+                    label: const Text('Continue with Apple'),
+                  ),
+                ),
+              if (_ssoProviders.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: session.isBusy ? null : _sso,
+                    icon: const Icon(Icons.business_rounded),
+                    label: Text(
+                      _ssoProviders.length == 1
+                          ? 'Continue with ${_ssoProviders.first}'
+                          : 'Continue with single sign-on',
+                    ),
+                  ),
+                ),
+              ],
             ],
           ],
         ],
-      ]),
+      ),
     );
   }
 }

@@ -426,10 +426,12 @@ abstract final class BackendCapabilities {
       'respond',
     ],
     'tools': [
+      'app_rpc',
       'broker_add',
       'broker_presets',
       'commands_list',
       'connection_set',
+      'frontend_get',
       'gadget_list',
       'gadget_remove',
       'invoke',
@@ -441,7 +443,12 @@ abstract final class BackendCapabilities {
       'mcp_samples',
       'mcp_update',
       'oauth_exchange',
-      'oauth_prepare'
+      'oauth_prepare',
+      'tool_create',
+      'tool_delete',
+      'tool_get',
+      'tool_microtools',
+      'tool_update',
     ],
     'usage': [
       'list',

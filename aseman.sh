@@ -1,11 +1,14 @@
 #!/usr/bin/env sh
 # One-command launcher for the full Aseman stack.
 #
-#   ./aseman.sh up [--no-web] [--hot-reload|--no-hot-reload] [config.yml]
+#   ./aseman.sh up [--no-web] [--hot-reload|--no-hot-reload] [--decillion] [config.yml]
 #       build + start the stack (detached).
 #       Hot reload is on by default: the Flutter app is served in debug mode
 #       and reloads when its source changes. --no-hot-reload serves the
 #       release web image instead. --no-web skips the Flutter client.
+#       --decillion builds and starts the Flutter web app alone (release
+#       build; no Aseman node, database or other containers) on a Decillion
+#       node as its API: https://preview.decillionai.com, or DECILLION_API_URL.
 #   ./aseman.sh down                         stop the stack (data volumes are kept)
 #   ./aseman.sh logs [service]               follow logs
 #   ./aseman.sh ps                           show service status
@@ -32,12 +35,14 @@ case "$cmd" in
   up)
     no_web=false
     hot_reload=true
+    decillion=false
     cfg=""
     while [ $# -gt 0 ]; do
       case "$1" in
         --no-web|--api-only) no_web=true ;;
         --hot-reload) hot_reload=true ;;
         --no-hot-reload) hot_reload=false ;;
+        --decillion) decillion=true ;;
         -*) echo "unknown option: $1" >&2; exit 2 ;;
         *)
           if [ -n "$cfg" ]; then
@@ -49,6 +54,33 @@ case "$cmd" in
       esac
       shift
     done
+
+    if [ "$decillion" = true ]; then
+      if [ "$no_web" = true ] || [ -n "$cfg" ]; then
+        echo "--decillion starts only the web app: it takes no --no-web or config file" >&2
+        exit 2
+      fi
+      DECILLION_API_URL="${DECILLION_API_URL:-https://preview.decillionai.com}"
+      DECILLION_API_URL="${DECILLION_API_URL%/}"
+      case "$DECILLION_API_URL" in
+        http://*|https://*) ;;
+        *) echo "DECILLION_API_URL must be an http(s) URL: $DECILLION_API_URL" >&2; exit 2 ;;
+      esac
+      DECILLION_API_HOST="${DECILLION_API_URL#*://}"
+      DECILLION_API_HOST="${DECILLION_API_HOST%%/*}"
+      DECILLION_API_HOST="${DECILLION_API_HOST%%:*}"
+      export DECILLION_API_URL DECILLION_API_HOST
+      # One app on the web port: this stack's own client steps aside.
+      docker compose stop web >/dev/null 2>&1 || true
+      docker compose --profile decillion up -d --build web-decillion
+      echo
+      echo "Flutter client:   http://localhost:${WEB_PORT:-3000} (release build)"
+      echo "Decillion API:    $DECILLION_API_URL (through the client's own origin)"
+      echo "Sign in with an account of that node. ./aseman.sh down stops it."
+      exit 0
+    fi
+    # The stack's own client takes the web port back from a --decillion one.
+    docker compose --profile decillion stop web-decillion >/dev/null 2>&1 || true
 
     if [ -n "$cfg" ]; then
       [ -f "$cfg" ] || { echo "config file not found: $cfg" >&2; exit 1; }
@@ -92,8 +124,9 @@ case "$cmd" in
     echo "Admin login:      handle = node.name from the config, password = \${ASEMAN_ADMIN_PASSWORD:-changeme}"
     echo "Then open Admin console -> LLM to add LLM providers, models and prices."
     ;;
-  down) docker compose down "$@" ;;
-  logs) docker compose logs -f "$@" ;;
-  ps)   docker compose ps "$@" ;;
-  *)    echo "usage: $0 {up [--no-web] [--hot-reload|--no-hot-reload] [config.yml]|down|logs [service]|ps}" >&2; exit 2 ;;
+  # --profile decillion: the --decillion web app (web-decillion) too.
+  down) docker compose --profile decillion down "$@" ;;
+  logs) docker compose --profile decillion logs -f "$@" ;;
+  ps)   docker compose --profile decillion ps "$@" ;;
+  *)    echo "usage: $0 {up [--no-web] [--hot-reload|--no-hot-reload] [--decillion] [config.yml]|down|logs [service]|ps}" >&2; exit 2 ;;
 esac
